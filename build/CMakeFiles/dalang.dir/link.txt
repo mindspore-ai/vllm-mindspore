@@ -1,0 +1,1 @@
+/usr/bin/g++  -O0 -Wall -g2 -ggdb CMakeFiles/dalang.dir/test/main.cc.o -o dalang  lexer/liblexer_obj.a parser/libparser_obj.a 

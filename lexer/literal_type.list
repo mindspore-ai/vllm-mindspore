@@ -1,0 +1,6 @@
+TYPE(int)
+TYPE(float)
+TYPE(str)
+TYPE(list)
+TYPE(set)
+TYPE(dict)

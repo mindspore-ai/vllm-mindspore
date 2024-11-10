@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblexer_obj.a CMakeFiles/lexer_obj.dir/comment.cc.o CMakeFiles/lexer_obj.dir/identifier.cc.o CMakeFiles/lexer_obj.dir/keyword.cc.o CMakeFiles/lexer_obj.dir/lexer.cc.o CMakeFiles/lexer_obj.dir/literal.cc.o CMakeFiles/lexer_obj.dir/operator.cc.o CMakeFiles/lexer_obj.dir/separator.cc.o CMakeFiles/lexer_obj.dir/token.cc.o
+/usr/bin/ranlib liblexer_obj.a

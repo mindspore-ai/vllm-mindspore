@@ -1,0 +1,6 @@
+TOKEN(Keyword)
+TOKEN(Identifier)
+TOKEN(Literal)
+TOKEN(Separator)
+TOKEN(Operator)
+TOKEN(Comment)

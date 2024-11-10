@@ -1,0 +1,28 @@
+#!dalang
+
+// Just a da-lang sample code.
+
+function bar(flag):
+  hint1 = "Hello, World."
+  hint2 = 'Hello, DaLang.'
+
+  if flag:
+    print(hint1)
+  else:
+    print(hint2)
+
+
+function foo(flag=true):
+  x = 6
+  y = 4
+  z = 2
+
+  bar(flag)
+
+  if flag:
+    return x + y / z
+  else:
+    return (x - y) * 2
+
+
+foo() # Call foo function directly.
