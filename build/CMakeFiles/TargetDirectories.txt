@@ -1,9 +1,0 @@
-/home/zqh/repo/DaLang/build/CMakeFiles/dalang.dir
-/home/zqh/repo/DaLang/build/CMakeFiles/edit_cache.dir
-/home/zqh/repo/DaLang/build/CMakeFiles/rebuild_cache.dir
-/home/zqh/repo/DaLang/build/lexer/CMakeFiles/lexer_obj.dir
-/home/zqh/repo/DaLang/build/lexer/CMakeFiles/edit_cache.dir
-/home/zqh/repo/DaLang/build/lexer/CMakeFiles/rebuild_cache.dir
-/home/zqh/repo/DaLang/build/parser/CMakeFiles/parser_obj.dir
-/home/zqh/repo/DaLang/build/parser/CMakeFiles/edit_cache.dir
-/home/zqh/repo/DaLang/build/parser/CMakeFiles/rebuild_cache.dir

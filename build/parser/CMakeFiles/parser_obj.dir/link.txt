@@ -1,2 +1,0 @@
-/usr/bin/ar qc libparser_obj.a CMakeFiles/parser_obj.dir/ast_node.cc.o CMakeFiles/parser_obj.dir/parser.cc.o
-/usr/bin/ranlib libparser_obj.a

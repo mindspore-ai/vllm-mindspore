@@ -17,9 +17,9 @@ SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 include_directories(${PROJECT_SOURCE_DIR})
+include_directories(${PROJECT_SOURCE_DIR}/src)
 
-add_subdirectory(lexer)
-add_subdirectory(parser)
+add_subdirectory(src)
 
 # Test for dalang
 add_executable(dalang test/main.cc)

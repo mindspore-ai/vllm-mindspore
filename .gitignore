@@ -1,0 +1,35 @@
+# GIT IGNORE
+# git check-ignore -v files
+# git rm --cached -r build/
+# Build files
+build/
+
+# Cmake files
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+**.make
+**.yaml
+
+# Dynamic libraries
+*.so
+*.so.*
+*.dylib
+
+# Static libraries
+*.la
+*.lai
+*.a
+*.lib
+
+# Object files
+*.o
+
+# IDE
+.vscode
+.idea
+
+# Python files
+*__pycache__*
+.pytest_cache
