@@ -1,0 +1,32 @@
+#!dalang
+
+// Just a da-lang sample code.
+
+function bar() {
+  hint = 'Hello, DaLang.'
+  print(hint)
+}
+
+function foo(x, y, z){
+  bar()
+
+  function baz() {
+    print("I'm baz")
+  }
+
+  function qux() {
+    function thud() {
+      return 'thud'
+    }
+    print("I'm " + thud())
+  }
+
+  baz()
+  qux()
+  return (x - y) * 2
+}
+
+x = 6
+y = 4
+z = 2
+foo(x, y, z) # Call foo function directly.

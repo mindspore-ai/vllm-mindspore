@@ -19,7 +19,7 @@ void RunLexerTest(const char *filename) {
 
 void RunParserTest(const char *filename) {
   auto parser = parser::Parser(filename);
-  auto stmts = parser.ParseStmts(); // unused.
+  parser.ParseCode();
   parser.DumpAst();
 }
 

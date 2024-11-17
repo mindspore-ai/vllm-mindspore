@@ -1,0 +1,15 @@
+#!dalang
+
+function foo(x, y, z){
+  function baz() {
+    name = 'baz~~'
+    print(name)
+  }
+  baz()
+  return (x - y) * 2
+}
+
+x = 6
+y = 4
+z = 2
+foo(x, y, z) # Call foo function directly.

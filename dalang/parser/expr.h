@@ -1,150 +1,21 @@
-#ifndef __PARSER_AST_NODE_H__
-#define __PARSER_AST_NODE_H__
+#ifndef __PARSER_EXPR_H__
+#define __PARSER_EXPR_H__
 
 #include <vector>
 
 #include "common/common.h"
 #include "lexer/token.h"
+#include "parser/ast_node.h"
 
 using namespace lexer;
 
 namespace parser {
-typedef struct ExprNode *ExprPtr;
-typedef const struct ExprNode *ExprConstPtr;
-
-typedef std::vector<ExprPtr> Exprs;
-typedef std::vector<ExprPtr> *ExprsPtr;
-typedef const std::vector<ExprPtr> *ExprsConstPtr;
-
-typedef struct StmtNode *StmtPtr;
-typedef const struct StmtNode *StmtConstPtr;
-
-typedef std::vector<StmtPtr> Stmts;
-typedef std::vector<StmtPtr> *StmtsPtr;
-typedef const std::vector<StmtPtr> *StmtsConstPtr;
-
-// Expr pool.
-ExprPtr NewExpr();
-void ClearExprPool();
-ExprsConstPtr ExprList();
-void ClearExprListMemory(ExprPtr expr);
-
-// Stmt pool.
-StmtPtr NewStmt();
-void ClearStmtPool();
-StmtsConstPtr StmtList();
-
-// Statement type.
-enum StmtType {
-  StmtType_Expr,
-  StmtType_Assign,
-  StmtType_Return,
-  StmtType_Function,
-  StmtType_Class,
-  StmtType_If,
-  StmtType_While,
-  StmtType_For,
-  StmtType_Break,
-  StmtType_Continue,
-  StmtType_Pass,
-  StmtType_Import,
-  StmtType_End,
-};
-
-// Statement node type.
-typedef struct StmtNode {
-  StmtType type = StmtType_End;
-  union {
-    struct {
-      ExprConstPtr value{nullptr};
-    } Expr;
-    struct {
-      ExprConstPtr target{nullptr};
-      ExprConstPtr value{nullptr};
-    } Assign;
-    struct {
-      ExprConstPtr value{nullptr};
-    } Return;
-  } stmt;
-  int lineStart;
-  int lineEnd;
-  int columnStart;
-  int columnEnd;
-} Stmt;
-
-namespace StmtPattern {
-namespace ExpressionPattern {
-static inline bool Match(TokenConstPtr token) { return true; }
-} // namespace ExpressionPattern
-
-namespace AssignPattern {
-static inline bool Match(TokenConstPtr token) {
-  if (token->type == TokenType_Operator && token->data.op == OpId_Assign) {
-    return true;
-  }
-  return false;
-}
-} // namespace AssignPattern
-
-namespace ReturnPattern {
-static inline bool Match(TokenConstPtr token) {
-  if (token->type == TokenType_Keyword && token->data.kw == KwId_return) {
-    return true;
-  }
-  return false;
-}
-} // namespace ReturnPattern
-} // namespace StmtPattern
-
-enum ExprType {
-  ExprType_Binary,
-  ExprType_Unary,
-  ExprType_Attribute,
-  ExprType_Subscript,
-  ExprType_List,
-  ExprType_Call,
-  ExprType_Name,
-  ExprType_Literal,
-  ExprType_End,
-};
-
-typedef struct ExprNode {
-  ExprType type = ExprType_End;
-  union {
-    struct {
-      OpId op;
-      ExprConstPtr left{nullptr};
-      ExprConstPtr right{nullptr};
-    } Binary;
-    struct {
-      OpId op;
-      ExprConstPtr operand{nullptr};
-    } Unary;
-    struct {
-      const std::string *name{nullptr};
-    } Name;
-    struct {
-      LtId kind;
-      const std::string *value{nullptr};
-    } Literal;
-    struct {
-      size_t len{0};
-      ExprConstPtr *values{nullptr};
-    } List;
-    struct {
-      ExprConstPtr func{nullptr};
-      ExprConstPtr list{nullptr};
-    } Call;
-  } expr;
-  int lineStart;
-  int lineEnd;
-  int columnStart;
-  int columnEnd;
-} Expr;
-
 namespace ExprPattern {
 namespace LogicalPattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Operator &&
       (token->data.op == OpId_LogicalOr || token->data.op == OpId_LogicalAnd ||
        token->data.op == OpId_ShiftRight || token->data.op == OpId_ShiftLeft)) {
@@ -156,6 +27,9 @@ static inline bool Match(TokenConstPtr token) {
 
 namespace ComparisonPattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Operator &&
       (token->data.op == OpId_Equal || token->data.op == OpId_GreaterEqual ||
        token->data.op == OpId_LessEqual || token->data.op == OpId_GreaterThan ||
@@ -168,6 +42,9 @@ static inline bool Match(TokenConstPtr token) {
 
 namespace AdditivePattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Operator &&
       (token->data.op == OpId_Add || token->data.op == OpId_Sub)) {
     return true;
@@ -178,6 +55,9 @@ static inline bool Match(TokenConstPtr token) {
 
 namespace MultiplicativePattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Operator &&
       (token->data.op == OpId_Mul || token->data.op == OpId_Div)) {
     return true;
@@ -188,6 +68,9 @@ static inline bool Match(TokenConstPtr token) {
 
 namespace UnaryPattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Operator && token->data.op == OpId_Sub) {
     return true;
   }
@@ -205,6 +88,9 @@ static inline bool Match(TokenConstPtr token) { return false; }
 
 namespace GroupPattern {
 static inline bool MatchStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Separator &&
       token->data.sp == SpId_LeftParenthesis) {
     return true;
@@ -213,6 +99,9 @@ static inline bool MatchStart(TokenConstPtr token) {
 }
 
 static inline bool MatchSplit(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Separator && token->data.sp == SpId_Comma) {
     return true;
   }
@@ -220,6 +109,9 @@ static inline bool MatchSplit(TokenConstPtr token) {
 }
 
 static inline bool MatchEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Separator &&
       token->data.sp == SpId_RightParenthesis) {
     return true;
@@ -228,6 +120,9 @@ static inline bool MatchEnd(TokenConstPtr token) {
 }
 
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (MatchStart(token) || MatchSplit(token) || MatchEnd(token)) {
     return true;
   }
@@ -237,6 +132,9 @@ static inline bool Match(TokenConstPtr token) {
 
 namespace PrimaryPattern {
 static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Keyword || token->type == TokenType_Identifier ||
       token->type == TokenType_Literal || token->type == TokenType_Comment) {
     return true;
@@ -245,6 +143,9 @@ static inline bool Match(TokenConstPtr token) {
 }
 
 static inline bool MatchKeyword(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Keyword) {
     return true;
   }
@@ -252,6 +153,9 @@ static inline bool MatchKeyword(TokenConstPtr token) {
 }
 
 static inline bool MatchIdentifier(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Identifier) {
     return true;
   }
@@ -259,6 +163,9 @@ static inline bool MatchIdentifier(TokenConstPtr token) {
 }
 
 static inline bool MatchLiteral(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Literal) {
     return true;
   }
@@ -266,6 +173,9 @@ static inline bool MatchLiteral(TokenConstPtr token) {
 }
 
 static inline bool MatchComment(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
   if (token->type == TokenType_Comment) {
     return true;
   }
@@ -274,39 +184,15 @@ static inline bool MatchComment(TokenConstPtr token) {
 } // namespace PrimaryPattern
 } // namespace ExprPattern
 
-static inline StmtPtr MakeExprStmt(ExprConstPtr expr) {
-  StmtPtr stmt = NewStmt();
-  stmt->type = StmtType_Expr;
-  stmt->stmt.Expr.value = expr;
-  stmt->lineStart = expr->lineStart;
-  stmt->lineEnd = expr->lineEnd;
-  stmt->columnStart = expr->columnStart;
-  stmt->columnEnd = expr->columnEnd;
-  return stmt;
-}
-
-static inline StmtPtr MakeAssignStmt(ExprConstPtr target, ExprConstPtr value) {
-  StmtPtr stmt = NewStmt();
-  stmt->type = StmtType_Assign;
-  stmt->stmt.Assign.target = target;
-  stmt->stmt.Assign.value = value;
-  stmt->lineStart = target->lineStart;
-  stmt->lineEnd = value->lineEnd;
-  stmt->columnStart = target->columnStart;
-  stmt->columnEnd = value->columnEnd;
-  return stmt;
-}
-
-static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
-  StmtPtr stmt = NewStmt();
-  stmt->type = StmtType_Return;
-  stmt->stmt.Return.value = value;
-  stmt->lineStart = value->lineStart;
-  stmt->lineEnd = value->lineEnd;
-  stmt->columnStart = value->columnStart;
-  stmt->columnEnd = value->columnEnd;
-  return stmt;
-}
+#ifdef DEBUG
+#define RETURN_AND_TRACE_EXPR_NODE(expr)                                       \
+  LOG_OUT << "TRACE EXPR: " << ToString(expr) << ", lineno: [("                \
+          << expr->lineStart << ',' << expr->columnStart << ")~("              \
+          << expr->lineEnd << ',' << expr->columnEnd << "))" << LOG_ENDL;      \
+  return expr
+#else
+#define RETURN_AND_TRACE_EXPR_NODE(expr) return expr
+#endif
 
 static inline ExprPtr MakeBinaryExpr(TokenConstPtr op, ExprConstPtr left,
                                      ExprConstPtr right) {
@@ -319,7 +205,7 @@ static inline ExprPtr MakeBinaryExpr(TokenConstPtr op, ExprConstPtr left,
   expr->lineEnd = right->lineEnd;
   expr->columnStart = left->columnStart;
   expr->columnEnd = right->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
 static inline ExprPtr MakeUnaryExpr(TokenConstPtr op, ExprConstPtr operand) {
@@ -331,7 +217,7 @@ static inline ExprPtr MakeUnaryExpr(TokenConstPtr op, ExprConstPtr operand) {
   expr->lineEnd = operand->lineEnd;
   expr->columnStart = op->columnStart;
   expr->columnEnd = operand->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
 static inline ExprPtr MakeNameExpr(TokenConstPtr name) {
@@ -342,7 +228,7 @@ static inline ExprPtr MakeNameExpr(TokenConstPtr name) {
   expr->lineEnd = name->lineEnd;
   expr->columnStart = name->columnStart;
   expr->columnEnd = name->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
 static inline ExprPtr MakeLiteralExpr(TokenConstPtr literal) {
@@ -353,7 +239,7 @@ static inline ExprPtr MakeLiteralExpr(TokenConstPtr literal) {
   expr->lineEnd = literal->lineEnd;
   expr->columnStart = literal->columnStart;
   expr->columnEnd = literal->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
 static inline ExprPtr MakeListExpr(TokenConstPtr start, TokenConstPtr end,
@@ -370,7 +256,7 @@ static inline ExprPtr MakeListExpr(TokenConstPtr start, TokenConstPtr end,
   expr->lineEnd = end->lineEnd;
   expr->columnStart = start->columnStart;
   expr->columnEnd = end->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
 static inline ExprPtr MakeCallExpr(ExprConstPtr func, ExprConstPtr group) {
@@ -382,11 +268,8 @@ static inline ExprPtr MakeCallExpr(ExprConstPtr func, ExprConstPtr group) {
   expr->lineEnd = group->lineEnd;
   expr->columnStart = func->columnStart;
   expr->columnEnd = group->columnEnd;
-  return expr;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
 }
-
-const std::string ToString(StmtConstPtr stmt);
-const std::string ToString(ExprConstPtr expr);
 } // namespace parser
 
-#endif // __PARSER_AST_NODE_H__
+#endif // __PARSER_EXPR_H__

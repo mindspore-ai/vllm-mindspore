@@ -1,0 +1,5 @@
+
+function foo() {
+  res = (x + y / z + 13, 2)
+  print(res)
+}

@@ -7,13 +7,24 @@
 namespace lexer {
 #define TOKEN(T) #T,
 const char *_tokens_str[] = {
+    "Invalid",
 #include "token_type.list"
+    "ContStr",
+    "End",
 };
 #undef TOKEN
 
-const char *ToStr(TokenConstPtr token) { return _tokens_str[token->type]; }
+const char *ToStr(TokenConstPtr token) {
+  if (token == nullptr) {
+    return "Token[null]";
+  }
+  return _tokens_str[token->type];
+}
 
 std::string ToString(TokenConstPtr token) {
+  if (token == nullptr) {
+    return "Token[null]";
+  }
   std::stringstream ss;
   ss << '[' << ToStr(token) << ": ";
   if (token->type == TokenType_Operator) {
@@ -28,6 +39,8 @@ std::string ToString(TokenConstPtr token) {
     ss << token->data.str;
   } else if (token->type == TokenType_Comment) {
     ss << token->data.str;
+  } else if (token->type == TokenType_Invalid) {
+    ss << '\'' << token->name << '\'';
   } else {
     ss << "?";
   }

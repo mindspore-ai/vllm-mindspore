@@ -38,9 +38,19 @@ StmtPtr NewStmt() {
   return gStmtPool.back();
 }
 
+void ClearStmtBodyMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Function && stmt->stmt.Function.len != 0 &&
+      stmt->stmt.Function.body != nullptr) {
+    free(stmt->stmt.Function.body);
+    stmt->stmt.Function.body = nullptr;
+    stmt->stmt.Function.len = 0;
+  }
+}
+
 void ClearStmtPool() {
-  for (StmtPtr Stmt : gStmtPool) {
-    free(Stmt);
+  for (StmtPtr stmt : gStmtPool) {
+    ClearStmtBodyMemory(stmt);
+    free(stmt);
   }
   gStmtPool.clear();
 }
@@ -52,6 +62,8 @@ const std::string ToString(StmtConstPtr stmt) {
     return "[return]";
   } else if (stmt->type == StmtType_Assign) {
     return "[=]";
+  } else if (stmt->type == StmtType_Function) {
+    return "[function]";
   } else if (stmt->type == StmtType_Expr) {
     return "[Expr]";
   }
@@ -59,6 +71,9 @@ const std::string ToString(StmtConstPtr stmt) {
 }
 
 const std::string ToString(ExprConstPtr expr) {
+  if (expr == nullptr) {
+    return "Expr[null]";
+  }
   if (expr->type == ExprType_Binary) {
     return "Binary[" + std::string(ToStr(expr->expr.Binary.op)) + "]";
   } else if (expr->type == ExprType_Unary) {
@@ -71,7 +86,7 @@ const std::string ToString(ExprConstPtr expr) {
   } else if (expr->type == ExprType_List) {
     return "List[len:" + std::to_string(expr->expr.List.len) + "]";
   } else if (expr->type == ExprType_Call) {
-    return "Call[func:" + ToString(expr->expr.Call.func) + "]";
+    return "Call[function:" + ToString(expr->expr.Call.func) + "]";
   }
   return "?";
 }

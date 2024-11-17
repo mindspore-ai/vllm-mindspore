@@ -1,12 +1,15 @@
 #include "lexer.h"
 
+#include <filesystem>
 #include <fstream>
 
 #undef DEBUG
 
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
-    : filename_{filename}, file_{nullptr}, eof_{false} {
+    : filename_{std::filesystem::canonical(std::filesystem::path(filename))
+                    .string()},
+      file_{nullptr}, eof_{false} {
   OpenFile(filename);
 }
 
@@ -92,13 +95,21 @@ const Token Lexer::TokenInLine() {
     pos_ += token.name.size();
     return token;
   }
-  return Token{.type = TokenType_End};
+
+  // Not match any excepted token, return a invalid token and move on.
+  Token invalidToken = Token{.type = TokenType_Invalid};
+  if (!IsLineEnd()) {
+    invalidToken.name = line_.at(pos_);
+  }
+  SetLineInfo(&invalidToken);
+  ++pos_;
+  return invalidToken;
 }
 
 void Lexer::OpenFile(const std::string &filename) {
   file_.open(filename);
   if ((file_.rdstate() & std::ifstream::failbit) != 0) {
-    LOG_ERROR << "Fail to open " << filename << LOG_ENDL;
+    CompileMessage(filename, "warning: fail to open file.");
     exit(-1);
   }
 }
@@ -115,7 +126,7 @@ const std::string &Lexer::ReadLine() {
 #endif
     eof_ = true;
   } else if ((file_.rdstate() & std::ifstream::failbit) != 0) {
-    LOG_ERROR << "Fail to read line for " << filename_ << LOG_ENDL;
+    CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");
     exit(-1);
   }
   ++lineno_;
@@ -157,12 +168,14 @@ Token Lexer::GetLiteral() {
     return tok;
   }
   // String across multiple lines.
+  int lineno = lineno_;
+  int pos = pos_;
   while (true) {
     if (eof_) {
       // Exception here.
-      LOG_ERROR
-          << "Unexcepted end of file during scanning multiple lines string."
-          << LOG_ENDL;
+      CompileMessage(filename_, lineno, pos,
+                     "warning: unexcepted end of file during "
+                     "scanning multiple lines string.");
       exit(1);
     }
     ReadLine();

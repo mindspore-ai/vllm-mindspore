@@ -3,9 +3,15 @@
 
 #include "parser/ast_node.h"
 #include "parser/ast_visitor.h"
+#include "parser/expr.h"
 #include "parser/parser.h"
+#include "parser/stmt.h"
 
 namespace parser {
+Parser::Parser(const std::string &filename)
+    : lexer_{Lexer(filename)},
+      filename_{std::filesystem::canonical(std::filesystem::path(filename))
+                    .string()} {}
 ExprPtr Parser::ParseExpr() { return ParseLogical(); }
 
 ExprPtr Parser::ParseLogical() {
@@ -105,32 +111,36 @@ ExprPtr Parser::ParseGroup() {
   if (ExprPattern::GroupPattern::Match(CurrentToken())) {
     Exprs elements;
     if (ExprPattern::GroupPattern::MatchStart(CurrentToken())) {
-      TokenConstPtr start = GetToken();
+      TokenConstPtr start = GetToken(); // (
       ExprPtr expr = ParseExpr();
       if (expr != nullptr) { // Not empty list.
         // The first element.
         (void)elements.emplace_back(expr);
 
         while (ExprPattern::GroupPattern::MatchSplit(CurrentToken())) {
-          TokenConstPtr split = GetToken(); // unused.
-          // The middle elements.
+          RemoveToken(); // ,
+          // The middle and last elements.
           expr = ParseExpr();
-          (void)elements.emplace_back(expr);
-        }
-
-        // The last element.
-        expr = ParseExpr();
-        if (expr != nullptr) {
-          (void)elements.emplace_back(expr);
+          if (expr != nullptr) {
+            (void)elements.emplace_back(expr);
+          } else { // Abnormal group expression.
+            std::stringstream ss;
+            ss << "warning: invalid list. unexcepted token: ";
+            ss << (Finish() ? ToString(PreviousToken())
+                            : ToString(CurrentToken()));
+            CompileMessage(LineString(), ss.str());
+            exit(1);
+          }
         }
       }
       if (ExprPattern::GroupPattern::MatchEnd(CurrentToken())) {
-        TokenConstPtr end = GetToken();
+        TokenConstPtr end = GetToken(); // )
         return MakeListExpr(start, end, elements);
       } else { // Abnormal group expression.
-        CompileMessage(LineString(), std::string("warning: invalid list: ") +
-                                         ToStr(CurrentToken()));
-        GetToken(); // unused.
+        std::stringstream ss;
+        ss << "warning: invalid list ending. unrecognized token: ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
         exit(1);
       }
     }
@@ -149,20 +159,19 @@ ExprPtr Parser::ParsePrimary() {
       return expr;
     }
     if (ExprPattern::PrimaryPattern::MatchKeyword(CurrentToken())) {
-      CompileMessage(LineString(),
-                     std::string("warning: not support keyword: ") +
-                         ToStr(CurrentToken()->data.kw));
-      GetToken(); // unused.
-      exit(1);
+      return nullptr;
     } else if (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {
-      CompileMessage(LineString(),
-                     "notice: ignored comment: " + CurrentToken()->name);
-      GetToken(); // unused.
+      std::stringstream ss;
+      ss << "notice: ignored comment: " + CurrentToken()->name;
+      CompileMessage(LineString(), ss.str());
+      RemoveToken();
     }
   }
-  // CompileMessage(LineString(),
-  //                std::string("notice: wrong DaLang code. token: ") +
-  //                    ToString(CurrentToken()));
+#ifdef DEBUG
+  LOG_OUT << LineString()
+          << ", not match nothing, token: " << ToString(CurrentToken())
+          << LOG_ENDL;
+#endif
   return nullptr;
 }
 
@@ -203,7 +212,7 @@ StmtPtr Parser::ParseAssign() {
   }
   if (StmtPattern::AssignPattern::Match(CurrentToken())) {
     ExprConstPtr target = stmt->stmt.Expr.value;
-    TokenConstPtr assign = GetToken(); // unused.
+    RemoveToken(); // =
     ExprConstPtr value = ParseExpr();
     if (value == nullptr) {
       return nullptr;
@@ -215,25 +224,82 @@ StmtPtr Parser::ParseAssign() {
 
 StmtPtr Parser::ParseReturn() {
   if (StmtPattern::ReturnPattern::Match(CurrentToken())) {
-    TokenConstPtr return_ = GetToken(); // unused.
+    RemoveToken(); // return
     ExprConstPtr value = ParseExpr();
     return MakeReturnStmt(value);
   }
   return nullptr;
 }
 
-StmtsPtr Parser::ParseStmts() {
-  while (!Finish()) {
-    TokenConstPtr lastToken = CurrentToken();
-    StmtPtr stmt = ParseStmt();
-    if (stmt != nullptr) {
-      stmts_.emplace_back(stmt);
-    } else if (lastToken == CurrentToken()) { // Infinite loop, exit.
-      CompileMessage(LineString(),
-                     std::string("warning: can not handle token: ") +
-                         ToString(CurrentToken()));
+StmtPtr Parser::ParserFunctionDef() {
+  // function
+  if (StmtPattern::FunctionPattern::Match(CurrentToken())) {
+    RemoveToken(); // function
+    ExprConstPtr id = ParseIdentifier();
+    ExprConstPtr args = ParseExpr();
+    // {
+    if (!StmtPattern::FunctionPattern::MatchStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid function definition, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
       exit(1);
     }
+    RemoveToken(); // {
+    Stmts stmts;
+    (void)ParseStmts(&stmts); // Not check result.
+    // }
+    if (!StmtPattern::FunctionPattern::MatchEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid function definition, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // }
+    return MakeFunctionStmt(id, args, nullptr, stmts);
+  }
+  return nullptr;
+}
+
+StmtPtr Parser::ParserBlock() {
+  StmtPtr stmt = ParseStmt();
+  if (stmt != nullptr) {
+    return stmt;
+  }
+  if (Finish()) {
+    return nullptr;
+  }
+  return ParserFunctionDef();
+}
+
+bool Parser::ParseStmts(StmtsPtr stmts) {
+  while (!Finish()) {
+    TokenConstPtr lastToken = CurrentToken();
+    StmtPtr stmt = ParserBlock();
+    if (stmt != nullptr) {
+      stmts->emplace_back(stmt);
+    } else if (lastToken == CurrentToken()) { // Infinite loop, break.
+      return false;
+    } else {
+#ifdef DEBUG
+      LOG_OUT << "notice: handle partial tokens. last token: "
+              << LineString(lastToken) << ": " << ToString(lastToken)
+              << ", current token: " << LineString(CurrentToken()) << ": "
+              << ToString(CurrentToken()) << LOG_ENDL;
+#endif
+    }
+  }
+  return true;
+}
+
+StmtsPtr Parser::ParseCode() {
+  if (!ParseStmts(&stmts_)) {
+    std::stringstream ss;
+    ss << "warning: can not handle token: ";
+    ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+    CompileMessage(LineString(), ss.str());
+    exit(1);
   }
   return &stmts_;
 }
@@ -243,7 +309,7 @@ void Parser::DumpAst() {
   public:
     void visit(StmtsConstPtr stmts) override {
       if (stmts != nullptr) {
-        LOG_OUT << "*Stmts {" << LOG_ENDL;
+        LOG_OUT << "*Code {" << LOG_ENDL;
       }
       NodeVisitor::visit(stmts); // Call parent visit here.
       if (stmts != nullptr) {
@@ -280,26 +346,27 @@ void Parser::DumpAst() {
 }
 
 const std::string Parser::LineString(TokenConstPtr token) {
-  return std::filesystem::canonical(std::filesystem::path(filename_)).string() +
-         ':' + std::to_string(token->lineStart) + ':' +
+  return filename_ + ':' + std::to_string(token->lineStart) + ':' +
          std::to_string(token->columnStart + 1);
 }
 
 const std::string Parser::LineString() {
-  return std::filesystem::canonical(std::filesystem::path(filename_)).string() +
-         ':' + std::to_string(CurrentToken()->lineStart) + ':' +
-         std::to_string(CurrentToken()->columnStart + 1);
+  TokenConstPtr token;
+  if (Finish()) {
+    token = PreviousToken();
+  } else {
+    token = CurrentToken();
+  }
+  return LineString(token);
 }
 
 const std::string Parser::LineString(ExprConstPtr expr) {
-  return std::filesystem::canonical(std::filesystem::path(filename_)).string() +
-         ':' + std::to_string(expr->lineStart) + ':' +
+  return filename_ + ':' + std::to_string(expr->lineStart) + ':' +
          std::to_string(expr->columnStart + 1);
 }
 
 const std::string Parser::LineString(StmtConstPtr stmt) {
-  return std::filesystem::canonical(std::filesystem::path(filename_)).string() +
-         ':' + std::to_string(stmt->lineStart) + ':' +
+  return filename_ + ':' + std::to_string(stmt->lineStart) + ':' +
          std::to_string(stmt->columnStart + 1);
 }
 } // namespace parser

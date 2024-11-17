@@ -17,10 +17,10 @@ SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 include_directories(${PROJECT_SOURCE_DIR})
-include_directories(${PROJECT_SOURCE_DIR}/src)
+include_directories(${PROJECT_SOURCE_DIR}/dalang)
 
-add_subdirectory(src)
+add_subdirectory(dalang)
 
-# Test for dalang
-add_executable(dalang test/main.cc)
-target_link_libraries(dalang lexer_obj parser_obj)
+# Test for da-lang
+add_executable(da test/main.cc)
+target_link_libraries(da lexer_obj parser_obj)

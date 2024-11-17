@@ -28,6 +28,12 @@ public:
     } else if (stmt->type == StmtType_Assign) {
       visit(stmt->stmt.Assign.target);
       visit(stmt->stmt.Assign.value);
+    } else if (stmt->type == StmtType_Function) {
+      visit(stmt->stmt.Function.name);
+      visit(stmt->stmt.Function.args);
+      for (size_t i = 0; i < stmt->stmt.Function.len; ++i) {
+        visit(stmt->stmt.Function.body[i]);
+      }
     } else if (stmt->type == StmtType_Expr) {
       visit(stmt->stmt.Expr.value);
     }

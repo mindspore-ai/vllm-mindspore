@@ -10,7 +10,8 @@
 
 static inline void CompileMessage(const std::string &filename, const int line,
                                   const int col, const std::string &msg) {
-  LOG_ERROR << filename << ':' << line << ':' << col << ": " << msg << LOG_ENDL;
+  LOG_ERROR << filename << ':' << line << ':' << (col + 1) << ": " << msg
+            << LOG_ENDL;
 }
 
 static inline void CompileMessage(const std::string &line_info,
