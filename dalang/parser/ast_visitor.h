@@ -40,6 +40,14 @@ public:
       for (size_t i = 0; i < stmt->stmt.Class.len; ++i) {
         Visit(stmt->stmt.Class.body[i]);
       }
+    } else if (stmt->type == StmtType_If) {
+      Visit(stmt->stmt.If.condition);
+      for (size_t i = 0; i < stmt->stmt.If.ifLen; ++i) {
+        Visit(stmt->stmt.If.ifBody[i]);
+      }
+      for (size_t i = 0; i < stmt->stmt.If.elseLen; ++i) {
+        Visit(stmt->stmt.If.elseBody[i]);
+      }
     } else if (stmt->type == StmtType_Expr) {
       Visit(stmt->stmt.Expr.value);
     }

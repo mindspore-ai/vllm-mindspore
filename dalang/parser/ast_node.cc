@@ -56,10 +56,27 @@ void ClearStmtClassBodyMemory(StmtPtr stmt) {
   }
 }
 
+void ClearStmtIfMemory(StmtPtr stmt) {
+  if (stmt->type != StmtType_If) {
+    return;
+  }
+  if (stmt->stmt.If.ifLen != 0 && stmt->stmt.If.ifBody != nullptr) {
+    free(stmt->stmt.If.ifBody);
+    stmt->stmt.If.ifBody = nullptr;
+    stmt->stmt.If.ifLen = 0;
+  }
+  if (stmt->stmt.If.elseLen != 0 && stmt->stmt.If.elseBody != nullptr) {
+    free(stmt->stmt.If.elseBody);
+    stmt->stmt.If.elseBody = nullptr;
+    stmt->stmt.If.elseLen = 0;
+  }
+}
+
 void ClearStmtPool() {
   for (StmtPtr stmt : gStmtPool) {
     ClearStmtFunctionBodyMemory(stmt);
     ClearStmtClassBodyMemory(stmt);
+    ClearStmtIfMemory(stmt);
     free(stmt);
   }
   gStmtPool.clear();
@@ -76,6 +93,8 @@ const std::string ToString(StmtConstPtr stmt) {
     return "Function";
   } else if (stmt->type == StmtType_Class) {
     return "Class";
+  } else if (stmt->type == StmtType_If) {
+    return "If";
   } else if (stmt->type == StmtType_Expr) {
     return "Expr";
   }

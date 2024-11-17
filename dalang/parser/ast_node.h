@@ -77,6 +77,22 @@ typedef struct StmtNode {
       size_t len{0};
       StmtConstPtr *body{nullptr};
     } Class;
+    struct {
+      ExprConstPtr condition{nullptr};
+      size_t ifLen{0};
+      StmtConstPtr *ifBody{nullptr};
+      size_t elseLen{0};
+      StmtConstPtr *elseBody{nullptr};
+    } If;
+    struct {
+      ExprConstPtr element{nullptr};
+      ExprConstPtr iterator{nullptr};
+      StmtConstPtr *body{nullptr};
+    } For;
+    struct {
+      ExprConstPtr condition{nullptr};
+      StmtConstPtr *body{nullptr};
+    } While;
   } stmt;
   int lineStart;
   int lineEnd;

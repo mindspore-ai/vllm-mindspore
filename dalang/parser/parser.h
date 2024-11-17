@@ -32,12 +32,12 @@ public:
   ExprPtr ParseLiteral();
 
   // Parse statement.
-  StmtPtr ParseStmt();
   StmtPtr ParseStmtExpr();
   StmtPtr ParseAssign();
   StmtPtr ParseReturn();
   StmtPtr ParserFunctionDef();
   StmtPtr ParserClassDef();
+  StmtPtr ParseIf();
   StmtPtr ParserBlock();
 
   // Parse statements.

@@ -15,9 +15,11 @@ Parser::Parser(const std::string &filename)
 ExprPtr Parser::ParseExpr() {
   // Ignore all comments.
   while (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {
+#ifdef DEBUG
     std::stringstream ss;
     ss << "notice: ignored comment: " + CurrentToken()->name;
     CompileMessage(LineString(), ss.str());
+#endif
     RemoveToken();
   }
   return ParseLogical();
@@ -220,14 +222,6 @@ ExprPtr Parser::ParseLiteral() {
   return nullptr;
 }
 
-StmtPtr Parser::ParseStmt() {
-  StmtPtr return_stmt = ParseReturn();
-  if (return_stmt != nullptr) {
-    return return_stmt;
-  }
-  return ParseAssign();
-}
-
 StmtPtr Parser::ParseStmtExpr() {
   ExprPtr value = ParseExpr();
   if (value == nullptr) {
@@ -324,27 +318,95 @@ StmtPtr Parser::ParserClassDef() {
   return nullptr;
 }
 
+StmtPtr Parser::ParseIf() {
+  // if
+  if (StmtPattern::IfPattern::MatchIf(CurrentToken())) {
+    RemoveToken();                        // if
+    ExprConstPtr condition = ParseExpr(); // condition
+    if (condition == nullptr) {
+      std::stringstream ss;
+      ss << "warning: invalid if statement, expected a condition expression: ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    // {
+    if (!StmtPattern::IfPattern::MatchBodyStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid if statement, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // {
+    Stmts ifBodyStmts;
+    (void)ParseStmts(&ifBodyStmts); // Not check result.
+    // }
+    if (!StmtPattern::IfPattern::MatchBodyEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid if statement, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // }
+
+    // else
+    Stmts elseBodyStmts;
+    if (StmtPattern::IfPattern::MatchElse(CurrentToken())) {
+      RemoveToken(); // else
+      // {
+      if (!StmtPattern::IfPattern::MatchBodyStart(CurrentToken())) {
+        std::stringstream ss;
+        ss << "warning: invalid else statement, expected '{': ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
+        exit(1);
+      }
+      RemoveToken();                    // {
+      (void)ParseStmts(&elseBodyStmts); // Not check result.
+      // }
+      if (!StmtPattern::IfPattern::MatchBodyEnd(CurrentToken())) {
+        std::stringstream ss;
+        ss << "warning: invalid else statement, expected '}': ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
+        exit(1);
+      }
+      RemoveToken(); // }
+    }
+    return MakeIfStmt(condition, ifBodyStmts, elseBodyStmts);
+  }
+  return nullptr;
+}
+
 StmtPtr Parser::ParserBlock() {
-  // Statements.
-  StmtPtr stmt = ParseStmt();
-  if (stmt != nullptr) {
+  // Return statement.
+  StmtPtr stmt = ParseReturn();
+  if (stmt != nullptr || Finish()) {
     return stmt;
   }
-  if (Finish()) {
-    return nullptr;
+  // Assign statement.
+  stmt = ParseAssign();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
   }
-
   // Class definition.
   stmt = ParserClassDef();
-  if (stmt != nullptr) {
+  if (stmt != nullptr || Finish()) {
     return stmt;
   }
-  if (Finish()) {
-    return nullptr;
-  }
-
   // Function definition.
-  return ParserFunctionDef();
+  stmt = ParserFunctionDef();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // If statement.
+  stmt = ParseIf();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  return nullptr;
 }
 
 bool Parser::ParseStmts(StmtsPtr stmts) {
@@ -387,7 +449,9 @@ void Parser::DumpAst() {
       if (stmts != nullptr) {
         ss_ << "*Code [" << LOG_ENDL;
       }
+
       NodeVisitor::Visit(stmts); // Call parent Visit here.
+
       if (stmts != nullptr) {
         ss_ << ']' << LOG_ENDL;
       }
@@ -458,7 +522,7 @@ void Parser::DumpAst() {
       --step_;
     }
 
-    const std::string str() { return ss_.str(); }
+    const std::string dump() { return ss_.str(); }
 
   private:
     bool snapline_{false};
@@ -467,7 +531,7 @@ void Parser::DumpAst() {
   };
   auto visitor = DumpNodeVisitor();
   visitor.Visit(&stmts_);
-  LOG_OUT << visitor.str();
+  LOG_OUT << visitor.dump();
 }
 
 const std::string Parser::LineString(TokenConstPtr token) {

@@ -102,6 +102,112 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   return false;
 }
 } // namespace ClassPattern
+
+namespace IfPattern {
+static inline bool MatchIf(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_if) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchElse(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_else) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace IfPattern
+
+namespace ForPattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_for) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace ForPattern
+
+namespace WhilePattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_while) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace WhilePattern
 } // namespace StmtPattern
 
 #ifdef DEBUG
@@ -183,6 +289,46 @@ static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
   stmt->lineEnd = body.back()->lineEnd;
   stmt->columnStart = id->columnStart;
   stmt->columnEnd = body.back()->columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeIfStmt(ExprConstPtr cond, Stmts &ifBody,
+                                 Stmts &elseBody) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_If;
+  stmt->stmt.If.condition = cond;
+  stmt->stmt.If.ifLen = ifBody.size();
+  stmt->stmt.If.ifBody =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * ifBody.size());
+  for (size_t i = 0; i < ifBody.size(); ++i) {
+    stmt->stmt.If.ifBody[i] = ifBody[i];
+  }
+  stmt->stmt.If.elseLen = elseBody.size();
+  stmt->stmt.If.elseBody =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * elseBody.size());
+  for (size_t i = 0; i < elseBody.size(); ++i) {
+    stmt->stmt.If.elseBody[i] = elseBody[i];
+  }
+  stmt->lineStart = cond->lineStart;
+  int lineEnd;
+  if (!elseBody.empty()) {
+    lineEnd = elseBody.back()->lineEnd;
+  } else if (!ifBody.empty()) {
+    lineEnd = ifBody.back()->lineEnd;
+  } else {
+    lineEnd = cond->lineEnd;
+  }
+  stmt->lineEnd = lineEnd;
+  stmt->columnStart = cond->columnStart;
+  int columnEnd;
+  if (!elseBody.empty()) {
+    columnEnd = elseBody.back()->columnEnd;
+  } else if (!ifBody.empty()) {
+    columnEnd = ifBody.back()->columnEnd;
+  } else {
+    columnEnd = cond->columnEnd;
+  }
+  stmt->columnEnd = columnEnd;
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 } // namespace parser
