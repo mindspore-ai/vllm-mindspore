@@ -68,10 +68,15 @@ typedef struct StmtNode {
     struct {
       ExprConstPtr name{nullptr};
       ExprConstPtr args{nullptr};
-      ExprConstPtr return_{nullptr};
       size_t len{0};
       StmtConstPtr *body{nullptr};
     } Function;
+    struct {
+      ExprConstPtr name{nullptr};
+      ExprConstPtr bases{nullptr};
+      size_t len{0};
+      StmtConstPtr *body{nullptr};
+    } Class;
   } stmt;
   int lineStart;
   int lineEnd;
@@ -115,9 +120,13 @@ typedef struct ExprNode {
       ExprConstPtr *values{nullptr};
     } List;
     struct {
-      ExprConstPtr func{nullptr};
+      ExprConstPtr function{nullptr};
       ExprConstPtr list{nullptr};
     } Call;
+    struct {
+      ExprConstPtr entity{nullptr};
+      ExprConstPtr attribute{nullptr};
+    } Attribute;
   } expr;
   int lineStart;
   int lineEnd;

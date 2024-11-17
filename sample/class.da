@@ -1,0 +1,31 @@
+#!dalang
+
+// Just a da-lang sample code.
+class foo(bar, baz) {
+  function foo(x, y, z){
+    this.x = 6
+    this.y = 4
+    this.z = 2
+  }
+
+  function qux() {
+    hint = 'Hello, DaLang.'
+    print(hint)
+    return this
+  }
+}
+
+foo_obj = foo(x, y, z) # Create a foo object.
+container = object()
+container.val = foo_obj
+container.val.qux()
+
+# Combination of call and attribute.
+foo().qux().x.y.z.__class__()
+x.y.z().a.b.c()
+x().y().z()
+x.y().z()
+x.y().z
+x().y.z()
+a.b.c.z.y.x()
+

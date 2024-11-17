@@ -9,56 +9,65 @@
 namespace parser {
 class NodeVisitor {
 public:
-  virtual void visit(StmtsConstPtr stmts) {
+  virtual void Visit(StmtsConstPtr stmts) {
     if (stmts == nullptr) {
       LOG_ERROR << "Null stmts node." << LOG_ENDL;
       return;
     }
     for (StmtConstPtr stmt : *stmts) {
-      visit(stmt);
+      Visit(stmt);
     }
   }
-  virtual void visit(StmtConstPtr stmt) {
+  virtual void Visit(StmtConstPtr stmt) {
     if (stmt == nullptr) {
       LOG_ERROR << "Null stmt node." << LOG_ENDL;
     } else if (stmt->type == StmtType_End) {
       LOG_ERROR << "Invalid stmt node." << LOG_ENDL;
     } else if (stmt->type == StmtType_Return) {
-      visit(stmt->stmt.Return.value);
+      Visit(stmt->stmt.Return.value);
     } else if (stmt->type == StmtType_Assign) {
-      visit(stmt->stmt.Assign.target);
-      visit(stmt->stmt.Assign.value);
+      Visit(stmt->stmt.Assign.target);
+      Visit(stmt->stmt.Assign.value);
     } else if (stmt->type == StmtType_Function) {
-      visit(stmt->stmt.Function.name);
-      visit(stmt->stmt.Function.args);
+      Visit(stmt->stmt.Function.name);
+      Visit(stmt->stmt.Function.args);
       for (size_t i = 0; i < stmt->stmt.Function.len; ++i) {
-        visit(stmt->stmt.Function.body[i]);
+        Visit(stmt->stmt.Function.body[i]);
+      }
+    } else if (stmt->type == StmtType_Class) {
+      Visit(stmt->stmt.Class.name);
+      Visit(stmt->stmt.Class.bases);
+      for (size_t i = 0; i < stmt->stmt.Class.len; ++i) {
+        Visit(stmt->stmt.Class.body[i]);
       }
     } else if (stmt->type == StmtType_Expr) {
-      visit(stmt->stmt.Expr.value);
+      Visit(stmt->stmt.Expr.value);
     }
   }
-  virtual void visit(ExprConstPtr expr) {
+  virtual void Visit(ExprConstPtr expr) {
     if (expr == nullptr) {
       LOG_ERROR << "Null expr node." << LOG_ENDL;
     } else if (expr->type == ExprType_End) {
       LOG_ERROR << "Invalid expr node." << LOG_ENDL;
     } else if (expr->type == ExprType_Binary) {
-      visit(expr->expr.Binary.left);
-      visit(expr->expr.Binary.right);
+      Visit(expr->expr.Binary.left);
+      Visit(expr->expr.Binary.right);
     } else if (expr->type == ExprType_Unary) {
-      visit(expr->expr.Unary.operand);
+      Visit(expr->expr.Unary.operand);
     } else if (expr->type == ExprType_Name) {
       // No expr.
     } else if (expr->type == ExprType_Literal) {
       // No expr.
     } else if (expr->type == ExprType_List) {
       for (size_t i = 0; i < expr->expr.List.len; ++i) {
-        visit(expr->expr.List.values[i]);
+        Visit(expr->expr.List.values[i]);
       }
     } else if (expr->type == ExprType_Call) {
-      visit(expr->expr.Call.func);
-      visit(expr->expr.Call.list);
+      Visit(expr->expr.Call.function);
+      Visit(expr->expr.Call.list);
+    } else if (expr->type == ExprType_Attribute) {
+      Visit(expr->expr.Attribute.entity);
+      Visit(expr->expr.Attribute.attribute);
     } else {
       // No expr.
     }

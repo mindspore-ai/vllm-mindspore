@@ -2,14 +2,38 @@
 
 // Just a da-lang sample code.
 
-function bar(flag) {
+function bar(flag, times) {
   hint1 = "Hello, World."
   hint2 = 'Hello, DaLang.'
 
-  if flag:
-    print(hint1)
-  else:
-    print(hint2)
+  for _ : times {
+    if flag {
+      print(hint1)
+      print(' from bar\n')
+    } else {
+      print(hint2)
+      print(" from bar\n")
+    }
+  }
+}
+
+class thud() {}
+
+class qux(thud) {
+  function baz(flag, times) {
+    hint1 = "Hello, World."
+    hint2 = 'Hello, DaLang.'
+
+    i = 0
+    while i < times {
+      ++i
+      if flag {
+        print(hint1 + ' from baz\n')
+      } else {
+        print(hint2 + " from baz\n")
+      }
+    }
+  }
 }
 
 function foo(flag=true) {
@@ -17,12 +41,14 @@ function foo(flag=true) {
   y = 4
   z = 2
 
-  bar(flag)
+  bar(flag, 2)
+  qux().baz(flag, 3)
 
-  if flag:
+  if flag {
     return x + y / z
-  else:
+  } else {
     return (x - y) * 2
+  }
 }
 
 foo() # Call foo function directly.

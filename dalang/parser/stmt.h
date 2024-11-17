@@ -50,7 +50,7 @@ static inline bool Match(TokenConstPtr token) {
   return false;
 }
 
-static inline bool MatchStart(TokenConstPtr token) {
+static inline bool MatchBodyStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
@@ -60,7 +60,7 @@ static inline bool MatchStart(TokenConstPtr token) {
   return false;
 }
 
-static inline bool MatchEnd(TokenConstPtr token) {
+static inline bool MatchBodyEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
@@ -70,6 +70,38 @@ static inline bool MatchEnd(TokenConstPtr token) {
   return false;
 }
 } // namespace FunctionPattern
+
+namespace ClassPattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_class) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace ClassPattern
 } // namespace StmtPattern
 
 #ifdef DEBUG
@@ -117,17 +149,35 @@ static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
 }
 
 static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, ExprConstPtr args,
-                                       ExprConstPtr return_, Stmts &body) {
+                                       Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Function;
   stmt->stmt.Function.name = id;
   stmt->stmt.Function.args = args;
-  stmt->stmt.Function.return_ = return_;
   stmt->stmt.Function.len = body.size();
   stmt->stmt.Function.body =
       (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Function.body[i] = body[i];
+  }
+  stmt->lineStart = id->lineStart;
+  stmt->lineEnd = body.back()->lineEnd;
+  stmt->columnStart = id->columnStart;
+  stmt->columnEnd = body.back()->columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
+                                    Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_Class;
+  stmt->stmt.Class.name = id;
+  stmt->stmt.Class.bases = bases;
+  stmt->stmt.Class.len = body.size();
+  stmt->stmt.Class.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.Class.body[i] = body[i];
   }
   stmt->lineStart = id->lineStart;
   stmt->lineEnd = body.back()->lineEnd;

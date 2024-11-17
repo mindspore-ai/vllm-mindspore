@@ -38,7 +38,7 @@ StmtPtr NewStmt() {
   return gStmtPool.back();
 }
 
-void ClearStmtBodyMemory(StmtPtr stmt) {
+void ClearStmtFunctionBodyMemory(StmtPtr stmt) {
   if (stmt->type == StmtType_Function && stmt->stmt.Function.len != 0 &&
       stmt->stmt.Function.body != nullptr) {
     free(stmt->stmt.Function.body);
@@ -47,9 +47,19 @@ void ClearStmtBodyMemory(StmtPtr stmt) {
   }
 }
 
+void ClearStmtClassBodyMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Class && stmt->stmt.Class.len != 0 &&
+      stmt->stmt.Class.body != nullptr) {
+    free(stmt->stmt.Class.body);
+    stmt->stmt.Class.body = nullptr;
+    stmt->stmt.Class.len = 0;
+  }
+}
+
 void ClearStmtPool() {
   for (StmtPtr stmt : gStmtPool) {
-    ClearStmtBodyMemory(stmt);
+    ClearStmtFunctionBodyMemory(stmt);
+    ClearStmtClassBodyMemory(stmt);
     free(stmt);
   }
   gStmtPool.clear();
@@ -59,34 +69,38 @@ StmtsConstPtr StmtList() { return &gStmtPool; }
 
 const std::string ToString(StmtConstPtr stmt) {
   if (stmt->type == StmtType_Return) {
-    return "[return]";
+    return "Return";
   } else if (stmt->type == StmtType_Assign) {
-    return "[=]";
+    return "Assign";
   } else if (stmt->type == StmtType_Function) {
-    return "[function]";
+    return "Function";
+  } else if (stmt->type == StmtType_Class) {
+    return "Class";
   } else if (stmt->type == StmtType_Expr) {
-    return "[Expr]";
+    return "Expr";
   }
   return "...";
 }
 
 const std::string ToString(ExprConstPtr expr) {
   if (expr == nullptr) {
-    return "Expr[null]";
+    return "Expr{null}";
   }
   if (expr->type == ExprType_Binary) {
-    return "Binary[" + std::string(ToStr(expr->expr.Binary.op)) + "]";
+    return "Binary{" + std::string(ToStr(expr->expr.Binary.op)) + "}";
   } else if (expr->type == ExprType_Unary) {
-    return "Unary[" + std::string(ToStr(expr->expr.Unary.op)) + "]";
+    return "Unary{" + std::string(ToStr(expr->expr.Unary.op)) + "}";
   } else if (expr->type == ExprType_Name) {
-    return "Name[" + *expr->expr.Name.name + "]";
+    return "Name{" + *expr->expr.Name.name + "}";
   } else if (expr->type == ExprType_Literal) {
-    return "Literal[" + std::string(ToStr(expr->expr.Literal.kind)) + "/" +
-           *expr->expr.Literal.value + "]";
+    return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + "/" +
+           *expr->expr.Literal.value + "}";
   } else if (expr->type == ExprType_List) {
-    return "List[len:" + std::to_string(expr->expr.List.len) + "]";
+    return "List{len:" + std::to_string(expr->expr.List.len) + "}";
   } else if (expr->type == ExprType_Call) {
-    return "Call[function:" + ToString(expr->expr.Call.func) + "]";
+    return "Call";
+  } else if (expr->type == ExprType_Attribute) {
+    return "Attribute";
   }
   return "?";
 }

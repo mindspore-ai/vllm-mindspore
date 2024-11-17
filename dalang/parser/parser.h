@@ -23,8 +23,9 @@ public:
   ExprPtr ParseAdditive();
   ExprPtr ParseMultiplicative();
   ExprPtr ParseUnary();
-  ExprPtr ParseAttribute();
-  ExprPtr ParseCall();
+  ExprPtr ParseCallAndAttribute();
+  ExprPtr ParseAttribute(ExprPtr entity);
+  ExprPtr ParseCall(ExprPtr func);
   ExprPtr ParseGroup();
   ExprPtr ParsePrimary();
   ExprPtr ParseIdentifier();
@@ -36,6 +37,7 @@ public:
   StmtPtr ParseAssign();
   StmtPtr ParseReturn();
   StmtPtr ParserFunctionDef();
+  StmtPtr ParserClassDef();
   StmtPtr ParserBlock();
 
   // Parse statements.

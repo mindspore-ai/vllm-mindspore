@@ -12,7 +12,16 @@ Parser::Parser(const std::string &filename)
     : lexer_{Lexer(filename)},
       filename_{std::filesystem::canonical(std::filesystem::path(filename))
                     .string()} {}
-ExprPtr Parser::ParseExpr() { return ParseLogical(); }
+ExprPtr Parser::ParseExpr() {
+  // Ignore all comments.
+  while (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {
+    std::stringstream ss;
+    ss << "notice: ignored comment: " + CurrentToken()->name;
+    CompileMessage(LineString(), ss.str());
+    RemoveToken();
+  }
+  return ParseLogical();
+}
 
 ExprPtr Parser::ParseLogical() {
   ExprPtr left = ParseComparison();
@@ -78,33 +87,57 @@ ExprPtr Parser::ParseMultiplicative() {
   return left;
 }
 
-ExprPtr Parser::ParseUnary() { return ParseAttribute(); }
-ExprPtr Parser::ParseAttribute() { return ParseCall(); }
+ExprPtr Parser::ParseUnary() { return ParseCallAndAttribute(); }
 
-ExprPtr Parser::ParseCall() {
-  size_t reservedPos = TokenPos();
-  // To match call pattern.
-  ExprPtr func = ParseIdentifier();
-  ExprPtr group = ParseGroup();
-  // Match group but not call.
-  if (func == nullptr && group != nullptr) {
-    return group;
+ExprPtr Parser::ParseCallAndAttribute() {
+  ExprPtr expr = ParseIdentifier();
+  if (expr == nullptr) {
+    expr = ParseGroup();
+    if (expr != nullptr) {
+      return expr;
+    }
+    expr = ParsePrimary();
+    return expr;
+  }
+  // Start parse call and attribute combination.
+  ExprPtr call = expr;
+  while (true) {
+    call = ParseCall(call);
+    ExprPtr attr = ParseAttribute(call);
+    if (attr == call) {
+      return call;
+    }
+    call = attr;
+  }
+}
+
+// Return input as output if not match any token.
+ExprPtr Parser::ParseAttribute(ExprPtr entity) {
+  if (entity == nullptr) {
+    return nullptr;
+  }
+  ExprPtr attr = entity;
+  while (ExprPattern::AttributePattern::Match(CurrentToken())) {
+    RemoveToken(); // .
+    ExprPtr id = ParseIdentifier();
+    attr = MakeAttributeExpr(attr, id);
+  }
+  return attr;
+}
+
+// Return input as output if not match any token.
+ExprPtr Parser::ParseCall(ExprPtr func) {
+  if (func == nullptr) {
+    return nullptr;
   }
   // If continuous call. such as [func][list]...[list]
-  while (func != nullptr && group != nullptr) {
-    func = MakeCallExpr(func, group);
-    group = ParseGroup();
+  while (true) {
+    ExprPtr group = ParseGroup();
     if (group == nullptr) {
       return func;
     }
+    func = MakeCallExpr(func, group);
   }
-  // Not match call or list, revert the token position, clear list expr memory
-  // and re-parse for primary.
-  SetTokenPos(reservedPos);
-  if (group != nullptr) {
-    ClearExprListMemory(group);
-  }
-  return ParsePrimary();
 }
 
 ExprPtr Parser::ParseGroup() {
@@ -160,11 +193,6 @@ ExprPtr Parser::ParsePrimary() {
     }
     if (ExprPattern::PrimaryPattern::MatchKeyword(CurrentToken())) {
       return nullptr;
-    } else if (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {
-      std::stringstream ss;
-      ss << "notice: ignored comment: " + CurrentToken()->name;
-      CompileMessage(LineString(), ss.str());
-      RemoveToken();
     }
   }
 #ifdef DEBUG
@@ -177,6 +205,9 @@ ExprPtr Parser::ParsePrimary() {
 
 ExprPtr Parser::ParseIdentifier() {
   if (ExprPattern::PrimaryPattern::MatchIdentifier(CurrentToken())) {
+    return MakeNameExpr(GetToken());
+  }
+  if (ExprPattern::PrimaryPattern::MatchKeywordThis(CurrentToken())) {
     return MakeNameExpr(GetToken());
   }
   return nullptr;
@@ -238,7 +269,7 @@ StmtPtr Parser::ParserFunctionDef() {
     ExprConstPtr id = ParseIdentifier();
     ExprConstPtr args = ParseExpr();
     // {
-    if (!StmtPattern::FunctionPattern::MatchStart(CurrentToken())) {
+    if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken())) {
       std::stringstream ss;
       ss << "warning: invalid function definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
@@ -249,7 +280,7 @@ StmtPtr Parser::ParserFunctionDef() {
     Stmts stmts;
     (void)ParseStmts(&stmts); // Not check result.
     // }
-    if (!StmtPattern::FunctionPattern::MatchEnd(CurrentToken())) {
+    if (!StmtPattern::FunctionPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
       ss << "warning: invalid function definition, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
@@ -257,12 +288,44 @@ StmtPtr Parser::ParserFunctionDef() {
       exit(1);
     }
     RemoveToken(); // }
-    return MakeFunctionStmt(id, args, nullptr, stmts);
+    return MakeFunctionStmt(id, args, stmts);
+  }
+  return nullptr;
+}
+
+StmtPtr Parser::ParserClassDef() {
+  // class
+  if (StmtPattern::ClassPattern::Match(CurrentToken())) {
+    RemoveToken(); // class
+    ExprConstPtr id = ParseIdentifier();
+    ExprConstPtr bases = ParseExpr();
+    // {
+    if (!StmtPattern::ClassPattern::MatchBodyStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid class definition, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // {
+    Stmts stmts;
+    (void)ParseStmts(&stmts); // Not check result.
+    // }
+    if (!StmtPattern::ClassPattern::MatchBodyEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid class definition, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // }
+    return MakeClassStmt(id, bases, stmts);
   }
   return nullptr;
 }
 
 StmtPtr Parser::ParserBlock() {
+  // Statements.
   StmtPtr stmt = ParseStmt();
   if (stmt != nullptr) {
     return stmt;
@@ -270,6 +333,17 @@ StmtPtr Parser::ParserBlock() {
   if (Finish()) {
     return nullptr;
   }
+
+  // Class definition.
+  stmt = ParserClassDef();
+  if (stmt != nullptr) {
+    return stmt;
+  }
+  if (Finish()) {
+    return nullptr;
+  }
+
+  // Function definition.
   return ParserFunctionDef();
 }
 
@@ -307,42 +381,93 @@ StmtsPtr Parser::ParseCode() {
 void Parser::DumpAst() {
   class DumpNodeVisitor : public NodeVisitor {
   public:
-    void visit(StmtsConstPtr stmts) override {
+    DumpNodeVisitor(bool snapline = false) : snapline_{snapline} {}
+
+    void Visit(StmtsConstPtr stmts) override {
       if (stmts != nullptr) {
-        LOG_OUT << "*Code {" << LOG_ENDL;
+        ss_ << "*Code [" << LOG_ENDL;
       }
-      NodeVisitor::visit(stmts); // Call parent visit here.
+      NodeVisitor::Visit(stmts); // Call parent Visit here.
       if (stmts != nullptr) {
-        LOG_OUT << "}" << LOG_ENDL;
+        ss_ << ']' << LOG_ENDL;
       }
     }
-    void visit(StmtConstPtr stmt) override {
+
+    void Visit(StmtConstPtr stmt) override {
       ++step_;
-      if (stmt != nullptr) {
-        const size_t indent = step_ * 4;
+      if (snapline_) {
+        std::stringstream ss_indent;
+        ss_indent << '|';
+        for (size_t i = 0; i < step_ - 1; ++i) {
+          ss_indent << "    " << '|';
+        }
+        ss_ << ss_indent.str() << "-Stmt/"
+            << (stmt != nullptr ? ToString(stmt) : "null") << LOG_ENDL;
+      } else {
+        const size_t indent = (step_ - 1) * 4;
         constexpr char indent_char = ' ';
-        LOG_OUT << std::string(indent, indent_char) << "|-Stmt/"
-                << ToString(stmt) << LOG_ENDL;
+        ss_ << std::string(indent, indent_char) << "Stmt/"
+            << (stmt != nullptr ? ToString(stmt) : "null") << '(' << LOG_ENDL;
       }
-      NodeVisitor::visit(stmt); // Call parent visit here.
-      --step_;
-    }
-    void visit(ExprConstPtr expr) override {
-      ++step_;
-      if (expr != nullptr) {
-        const size_t indent = step_ * 4;
-        constexpr char indent_char = ' ';
-        LOG_OUT << std::string(indent, indent_char) << "|-Expr/"
-                << ToString(expr) << LOG_ENDL;
+
+      NodeVisitor::Visit(stmt); // Call parent Visit here.
+
+      if (!snapline_) {
+        ss_.seekp(-1, ss_.cur); // Remove a '\n'
+        ss_ << ')' << LOG_ENDL;
       }
-      NodeVisitor::visit(expr); // Call parent visit here.
       --step_;
     }
 
+    void Visit(ExprConstPtr expr) override {
+      ++step_;
+      if (snapline_) {
+        std::stringstream ss_indent;
+        ss_indent << '|';
+        for (size_t i = 0; i < step_ - 1; ++i) {
+          ss_indent << "    " << '|';
+        }
+        ss_ << ss_indent.str() << "-Expr/"
+            << (expr != nullptr ? ToString(expr) : "null") << LOG_ENDL;
+      } else {
+        const size_t indent = (step_ - 1) * 4;
+        constexpr char indent_char = ' ';
+        ss_ << std::string(indent, indent_char) << "Expr/"
+            << (expr != nullptr ? ToString(expr) : "null");
+        if (expr->type == ExprType_List) {
+          ss_ << '[' << LOG_ENDL;
+        } else if (expr->type != ExprType_Name &&
+                   expr->type != ExprType_Literal) {
+          ss_ << '(' << LOG_ENDL;
+        }
+      }
+
+      NodeVisitor::Visit(expr); // Call parent Visit here.
+
+      if (!snapline_) {
+        if (expr->type == ExprType_List) {
+          ss_.seekp(-1, ss_.cur); // Remove a '\n'
+          ss_ << ']';
+        } else if (expr->type != ExprType_Name &&
+                   expr->type != ExprType_Literal) {
+          ss_.seekp(-1, ss_.cur); // Remove a '\n'
+          ss_ << ')';
+        }
+        ss_ << LOG_ENDL;
+      }
+      --step_;
+    }
+
+    const std::string str() { return ss_.str(); }
+
   private:
+    bool snapline_{false};
     size_t step_{0};
+    std::stringstream ss_;
   };
-  DumpNodeVisitor().visit(&stmts_);
+  auto visitor = DumpNodeVisitor();
+  visitor.Visit(&stmts_);
+  LOG_OUT << visitor.str();
 }
 
 const std::string Parser::LineString(TokenConstPtr token) {

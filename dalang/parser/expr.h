@@ -83,7 +83,15 @@ static inline bool Match(TokenConstPtr token) { return false; }
 } // namespace CallPattern
 
 namespace AttributePattern {
-static inline bool Match(TokenConstPtr token) { return false; }
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Dot) {
+    return true;
+  }
+  return false;
+}
 } // namespace AttributePattern
 
 namespace GroupPattern {
@@ -147,6 +155,17 @@ static inline bool MatchKeyword(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Keyword) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchKeywordThis(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword &&
+      (token->data.kw == KwId_this || token->data.kw == KwId_self)) {
     return true;
   }
   return false;
@@ -262,12 +281,25 @@ static inline ExprPtr MakeListExpr(TokenConstPtr start, TokenConstPtr end,
 static inline ExprPtr MakeCallExpr(ExprConstPtr func, ExprConstPtr group) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_Call;
-  expr->expr.Call.func = func;
+  expr->expr.Call.function = func;
   expr->expr.Call.list = group;
   expr->lineStart = func->lineStart;
   expr->lineEnd = group->lineEnd;
   expr->columnStart = func->columnStart;
   expr->columnEnd = group->columnEnd;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
+}
+
+static inline ExprPtr MakeAttributeExpr(ExprConstPtr entity,
+                                        ExprConstPtr attribute) {
+  ExprPtr expr = NewExpr();
+  expr->type = ExprType_Attribute;
+  expr->expr.Attribute.entity = entity;
+  expr->expr.Attribute.attribute = attribute;
+  expr->lineStart = entity->lineStart;
+  expr->lineEnd = attribute->lineEnd;
+  expr->columnStart = entity->columnStart;
+  expr->columnEnd = attribute->columnEnd;
   RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 } // namespace parser

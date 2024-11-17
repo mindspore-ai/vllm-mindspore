@@ -1,0 +1,11 @@
+#!dalang
+
+# Combination of call and attribute.
+foo().qux().x.y.z.__class__()
+x.y.z().a.b.c()
+x(a, b).y().z
+x.y(a, b, c).z()
+x.y().z
+x().y.z()
+a.b.c.z.y.x()
+a.b()().c.z(v1)(v1, v2)(v1, v2, v3).y.x()
