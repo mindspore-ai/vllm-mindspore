@@ -29,8 +29,17 @@ static inline int Char2Int(char c) {
 }
 
 Token FindLiteral(const char *start) {
+  // Boolean
+  int pos = MatchBoolean(start);
+  if (pos != 0) {
+    Token token{.type = TokenType_Literal};
+    token.data.lt = LiteralId_bool;
+    token.name.assign(start, pos);
+    LOG_OUT << "boolean: " << token.name << LOG_ENDL;
+    return token;
+  }
   // Decimal digital
-  int pos = MatchDecimal(start);
+  pos = MatchDecimal(start);
   if (pos != 0) {
     Token token{.type = TokenType_Literal};
     token.data.lt = LiteralId_int; // TODO.

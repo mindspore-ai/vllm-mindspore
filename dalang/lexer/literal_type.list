@@ -1,3 +1,4 @@
+TYPE(bool)
 TYPE(int)
 TYPE(float)
 TYPE(str)

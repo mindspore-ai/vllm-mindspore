@@ -1,6 +1,8 @@
 #ifndef __LEXER_LITERAL_H__
 #define __LEXER_LITERAL_H__
 
+#include <cstring>
+
 #define TYPE(K) LiteralId_##K,
 typedef enum LiteralId {
   LiteralId_Invalid,
@@ -10,6 +12,19 @@ typedef enum LiteralId {
 #undef TYPE
 
 namespace lexer {
+static inline int MatchBoolean(const char *start) {
+  int pos = 0;
+  const char *matchPos = strstr(start, "true");
+  if (matchPos == start) {
+    return 4;
+  }
+  matchPos = strstr(start, "false");
+  if (matchPos == start) {
+    return 5;
+  }
+  return pos;
+}
+
 static inline int MatchDecimal(const char *start) {
   int pos = 0;
   while (start[pos] != '\0') {

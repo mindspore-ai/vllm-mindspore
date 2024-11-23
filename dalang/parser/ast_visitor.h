@@ -34,7 +34,7 @@ public:
       Visit(stmt->stmt.AugAssign.value);
     } else if (stmt->type == StmtType_Function) {
       Visit(stmt->stmt.Function.name);
-      Visit(stmt->stmt.Function.args);
+      VisitList(stmt->stmt.Function.argsLen, stmt->stmt.Function.args);
       VisitList(stmt->stmt.Function.len, stmt->stmt.Function.body);
     } else if (stmt->type == StmtType_Class) {
       Visit(stmt->stmt.Class.name);

@@ -73,7 +73,8 @@ typedef struct StmtNode {
     } Return;
     struct {
       ExprConstPtr name{nullptr};
-      ExprConstPtr args{nullptr};
+      size_t argsLen{0};
+      StmtConstPtr *args{nullptr};
       size_t len{0};
       StmtConstPtr *body{nullptr};
     } Function;

@@ -65,6 +65,38 @@ static inline bool Match(TokenConstPtr token) {
   return false;
 }
 
+static inline bool MatchArgsStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_LeftParenthesis) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchArgsSeparator(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Comma) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchArgsEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_RightParenthesis) {
+    return true;
+  }
+  return false;
+}
+
 static inline bool MatchBodyStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
@@ -307,12 +339,17 @@ static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, ExprConstPtr args,
-                                       Stmts &body) {
+static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, const Stmts &args,
+                                       const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Function;
   stmt->stmt.Function.name = id;
-  stmt->stmt.Function.args = args;
+  stmt->stmt.Function.argsLen = args.size();
+  stmt->stmt.Function.args =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
+  for (size_t i = 0; i < args.size(); ++i) {
+    stmt->stmt.Function.args[i] = args[i];
+  }
   stmt->stmt.Function.len = body.size();
   stmt->stmt.Function.body =
       (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
@@ -327,7 +364,7 @@ static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, ExprConstPtr args,
 }
 
 static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
-                                    Stmts &body) {
+                                    const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Class;
   stmt->stmt.Class.name = id;
@@ -357,8 +394,8 @@ static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeIfStmt(ExprConstPtr cond, Stmts &ifBody,
-                                 Stmts &elseBody) {
+static inline StmtPtr MakeIfStmt(ExprConstPtr cond, const Stmts &ifBody,
+                                 const Stmts &elseBody) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_If;
   stmt->stmt.If.condition = cond;
@@ -398,7 +435,7 @@ static inline StmtPtr MakeIfStmt(ExprConstPtr cond, Stmts &ifBody,
 }
 
 static inline StmtPtr MakeForStmt(ExprConstPtr elem, ExprConstPtr iter,
-                                  Stmts &body) {
+                                  const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_For;
   stmt->stmt.For.element = elem;
@@ -428,7 +465,7 @@ static inline StmtPtr MakeForStmt(ExprConstPtr elem, ExprConstPtr iter,
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeWhileStmt(ExprConstPtr cond, Stmts &body) {
+static inline StmtPtr MakeWhileStmt(ExprConstPtr cond, const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_While;
   stmt->stmt.While.condition = cond;

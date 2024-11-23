@@ -38,6 +38,7 @@ public:
   StmtPtr ParseAssign();
   StmtPtr ParseAugAssign();
   StmtPtr ParseReturn();
+  Stmts ParserFunctionArgs();
   StmtPtr ParserFunctionDef();
   StmtPtr ParserClassDef();
   StmtPtr ParseIf();

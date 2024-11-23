@@ -121,7 +121,7 @@ ExprPtr Parser::ParseCallAndAttribute() {
   }
   // Start parse call and attribute combination.
   ExprPtr call = expr;
-  while (true) {
+  for (EVER) {
     call = ParseCall(call);
     ExprPtr attr = ParseAttribute(call);
     if (attr == call) {
@@ -151,7 +151,7 @@ ExprPtr Parser::ParseCall(ExprPtr func) {
     return nullptr;
   }
   // If continuous call. such as [func][list]...[list]
-  while (true) {
+  for (EVER) {
     ExprPtr group = ParseGroup();
     if (group == nullptr) {
       return func;
@@ -297,12 +297,45 @@ StmtPtr Parser::ParseReturn() {
   return nullptr;
 }
 
+Stmts Parser::ParserFunctionArgs() {
+  Stmts args;
+  // (
+  if (StmtPattern::FunctionPattern::MatchArgsStart(CurrentToken())) {
+    RemoveToken(); // (
+    for (EVER) {
+      StmtPtr arg = ParseAssign();
+      if (arg == nullptr) {
+        arg = ParseStmtExpr();
+      }
+      if (arg == nullptr) {
+        break;
+      }
+      (void)args.emplace_back(arg);
+      // )
+      if (StmtPattern::FunctionPattern::MatchArgsEnd(CurrentToken())) {
+        RemoveToken(); // )
+        break;
+      }
+      // ,
+      if (!StmtPattern::FunctionPattern::MatchArgsSeparator(CurrentToken())) {
+        std::stringstream ss;
+        ss << "warning: invalid function arguments, expected ',' or ')': ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
+        exit(1);
+      }
+      RemoveToken(); // ,
+    }
+  }
+  return args;
+}
+
 StmtPtr Parser::ParserFunctionDef() {
   // function
   if (StmtPattern::FunctionPattern::Match(CurrentToken())) {
     RemoveToken(); // function
     ExprConstPtr id = ParseIdentifier();
-    ExprConstPtr args = ParseExpr();
+    Stmts args = ParserFunctionArgs();
     // {
     if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken())) {
       std::stringstream ss;
@@ -570,7 +603,7 @@ bool Parser::ParseStmts(StmtsPtr stmts) {
     TokenConstPtr lastToken = CurrentToken();
     StmtPtr stmt = ParserBlock();
     if (stmt != nullptr) {
-      stmts->emplace_back(stmt);
+      (void)stmts->emplace_back(stmt);
     } else if (lastToken == CurrentToken()) { // Infinite loop, break.
       return false;
     } else {

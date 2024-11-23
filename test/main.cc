@@ -3,7 +3,7 @@
 
 void RunLexerTest(const char *filename) {
   auto lexer = lexer::Lexer(filename);
-  while (true) {
+  for (EVER) {
     auto token = lexer.NextToken();
     if (token.type == lexer::TokenType_End) {
       LOG_OUT << "No token anymore" << LOG_ENDL;

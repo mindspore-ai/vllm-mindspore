@@ -32,7 +32,7 @@ const std::vector<Token> &Lexer::Tokens() {
   if (scanned_) {
     return tokens_;
   }
-  while (true) {
+  for (EVER) {
     auto token = NextToken();
     if (token.type == TokenType_End) {
 #ifdef DEBUG
@@ -168,7 +168,7 @@ Token Lexer::GetLiteral() {
   // String across multiple lines.
   int lineno = lineno_;
   int pos = pos_;
-  while (true) {
+  for (EVER) {
     if (eof_) {
       // Exception here.
       CompileMessage(filename_, lineno, pos,

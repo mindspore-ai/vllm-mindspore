@@ -38,6 +38,15 @@ StmtPtr NewStmt() {
   return gStmtPool.back();
 }
 
+void ClearStmtFunctionArgsMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Function && stmt->stmt.Function.argsLen != 0 &&
+      stmt->stmt.Function.args != nullptr) {
+    free(stmt->stmt.Function.args);
+    stmt->stmt.Function.args = nullptr;
+    stmt->stmt.Function.argsLen = 0;
+  }
+}
+
 void ClearStmtFunctionBodyMemory(StmtPtr stmt) {
   if (stmt->type == StmtType_Function && stmt->stmt.Function.len != 0 &&
       stmt->stmt.Function.body != nullptr) {
@@ -72,11 +81,36 @@ void ClearStmtIfMemory(StmtPtr stmt) {
   }
 }
 
+void ClearStmtForMemory(StmtPtr stmt) {
+  if (stmt->type != StmtType_For) {
+    return;
+  }
+  if (stmt->stmt.For.len != 0 && stmt->stmt.For.body != nullptr) {
+    free(stmt->stmt.For.body);
+    stmt->stmt.For.body = nullptr;
+    stmt->stmt.For.len = 0;
+  }
+}
+
+void ClearStmtWhileMemory(StmtPtr stmt) {
+  if (stmt->type != StmtType_While) {
+    return;
+  }
+  if (stmt->stmt.While.len != 0 && stmt->stmt.While.body != nullptr) {
+    free(stmt->stmt.While.body);
+    stmt->stmt.While.body = nullptr;
+    stmt->stmt.While.len = 0;
+  }
+}
+
 void ClearStmtPool() {
   for (StmtPtr stmt : gStmtPool) {
+    ClearStmtFunctionArgsMemory(stmt);
     ClearStmtFunctionBodyMemory(stmt);
     ClearStmtClassBodyMemory(stmt);
     ClearStmtIfMemory(stmt);
+    ClearStmtForMemory(stmt);
+    ClearStmtWhileMemory(stmt);
     free(stmt);
   }
   gStmtPool.clear();

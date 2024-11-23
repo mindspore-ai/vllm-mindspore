@@ -8,6 +8,10 @@
 #define LOG_ERROR std::cerr
 #define LOG_ENDL std::endl
 
+#define EVER                                                                   \
+  ;                                                                            \
+  ;
+
 static inline void CompileMessage(const std::string &filename, const int line,
                                   const int col, const std::string &msg) {
   LOG_ERROR << filename << ':' << line << ':' << (col + 1) << ": " << msg
