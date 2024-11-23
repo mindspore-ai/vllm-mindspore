@@ -40,6 +40,8 @@ public:
   StmtPtr ParserFunctionDef();
   StmtPtr ParserClassDef();
   StmtPtr ParseIf();
+  StmtPtr ParseFor();
+  StmtPtr ParseWhile();
   StmtPtr ParserBlock();
 
   // Parse statements.

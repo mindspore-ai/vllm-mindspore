@@ -156,6 +156,16 @@ static inline bool Match(TokenConstPtr token) {
   return false;
 }
 
+static inline bool MatchIteratorSeparator(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Colon) {
+    return true;
+  }
+  return false;
+}
+
 static inline bool MatchBodyStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
@@ -247,10 +257,12 @@ static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Return;
   stmt->stmt.Return.value = value;
-  stmt->lineStart = value->lineStart;
-  stmt->lineEnd = value->lineEnd;
-  stmt->columnStart = value->columnStart;
-  stmt->columnEnd = value->columnEnd;
+  if (value != nullptr) {
+    stmt->lineStart = value->lineStart;
+    stmt->lineEnd = value->lineEnd;
+    stmt->columnStart = value->columnStart;
+    stmt->columnEnd = value->columnEnd;
+  }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
@@ -286,9 +298,21 @@ static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
     stmt->stmt.Class.body[i] = body[i];
   }
   stmt->lineStart = id->lineStart;
-  stmt->lineEnd = body.back()->lineEnd;
+  int lineEnd;
+  if (body.empty()) {
+    lineEnd = id->lineEnd;
+  } else {
+    lineEnd = body.back()->lineEnd;
+  }
+  stmt->lineEnd = lineEnd;
   stmt->columnStart = id->columnStart;
-  stmt->columnEnd = body.back()->columnEnd;
+  int columnEnd;
+  if (body.empty()) {
+    columnEnd = id->columnEnd;
+  } else {
+    columnEnd = body.back()->columnEnd;
+  }
+  stmt->columnEnd = columnEnd;
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
@@ -325,6 +349,66 @@ static inline StmtPtr MakeIfStmt(ExprConstPtr cond, Stmts &ifBody,
     columnEnd = elseBody.back()->columnEnd;
   } else if (!ifBody.empty()) {
     columnEnd = ifBody.back()->columnEnd;
+  } else {
+    columnEnd = cond->columnEnd;
+  }
+  stmt->columnEnd = columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeForStmt(ExprConstPtr elem, ExprConstPtr iter,
+                                  Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_For;
+  stmt->stmt.For.element = elem;
+  stmt->stmt.For.iterator = iter;
+  stmt->stmt.For.len = body.size();
+  stmt->stmt.For.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.For.body[i] = body[i];
+  }
+  stmt->lineStart = elem->lineStart;
+  int lineEnd;
+  if (!body.empty()) {
+    lineEnd = body.back()->lineEnd;
+  } else {
+    lineEnd = iter->lineEnd;
+  }
+  stmt->lineEnd = lineEnd;
+  stmt->columnStart = elem->columnStart;
+  int columnEnd;
+  if (!body.empty()) {
+    columnEnd = body.back()->columnEnd;
+  } else {
+    columnEnd = iter->columnEnd;
+  }
+  stmt->columnEnd = columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeWhileStmt(ExprConstPtr cond, Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_While;
+  stmt->stmt.While.condition = cond;
+  stmt->stmt.While.len = body.size();
+  stmt->stmt.While.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.While.body[i] = body[i];
+  }
+  stmt->lineStart = cond->lineStart;
+  int lineEnd;
+  if (!body.empty()) {
+    lineEnd = body.back()->lineEnd;
+  } else {
+    lineEnd = cond->lineEnd;
+  }
+  stmt->lineEnd = lineEnd;
+  stmt->columnStart = cond->columnStart;
+  int columnEnd;
+  if (!body.empty()) {
+    columnEnd = body.back()->columnEnd;
   } else {
     columnEnd = cond->columnEnd;
   }

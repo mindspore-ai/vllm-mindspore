@@ -1,0 +1,31 @@
+#!da
+
+// Just a da-lang sample code.
+
+function foo() {
+  x = (1, 3, 5)
+  if x.empty() {
+    return
+  }
+  for elem : x {
+    if elem > 0{
+      print(elem)
+    }
+  }
+  count = 0
+  i = 0
+  while x.get(i) < x.get(i + 1) {
+    for el : x {
+      if (el >= 5) {
+        count = count + 1
+        print(el)
+        if (count > 3) {
+          //break
+          return
+        }
+      }
+    }
+  }
+}
+
+foo() # Call foo function directly.

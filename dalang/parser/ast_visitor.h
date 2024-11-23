@@ -41,6 +41,13 @@ public:
       Visit(stmt->stmt.If.condition);
       VisitList(stmt->stmt.If.ifLen, stmt->stmt.If.ifBody);
       VisitList(stmt->stmt.If.elseLen, stmt->stmt.If.elseBody);
+    } else if (stmt->type == StmtType_For) {
+      Visit(stmt->stmt.For.element);
+      Visit(stmt->stmt.For.iterator);
+      VisitList(stmt->stmt.For.len, stmt->stmt.For.body);
+    } else if (stmt->type == StmtType_While) {
+      Visit(stmt->stmt.While.condition);
+      VisitList(stmt->stmt.While.len, stmt->stmt.While.body);
     } else if (stmt->type == StmtType_Expr) {
       Visit(stmt->stmt.Expr.value);
     }

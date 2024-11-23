@@ -87,10 +87,12 @@ typedef struct StmtNode {
     struct {
       ExprConstPtr element{nullptr};
       ExprConstPtr iterator{nullptr};
+      size_t len{0};
       StmtConstPtr *body{nullptr};
     } For;
     struct {
       ExprConstPtr condition{nullptr};
+      size_t len{0};
       StmtConstPtr *body{nullptr};
     } While;
   } stmt;

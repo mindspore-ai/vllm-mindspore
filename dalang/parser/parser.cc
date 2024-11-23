@@ -406,6 +406,98 @@ StmtPtr Parser::ParseIf() {
   return nullptr;
 }
 
+StmtPtr Parser::ParseFor() {
+  // for
+  if (StmtPattern::ForPattern::Match(CurrentToken())) {
+    RemoveToken();                      // for
+    ExprConstPtr element = ParseExpr(); // element
+    if (element == nullptr) {
+      std::stringstream ss;
+      ss << "warning: invalid for statement, expected an element expression: ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    // :
+    if (!StmtPattern::ForPattern::MatchIteratorSeparator(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid for statement, expected ':': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken();                       // :
+    ExprConstPtr iterator = ParseExpr(); // iterator
+    if (iterator == nullptr) {
+      std::stringstream ss;
+      ss << "warning: invalid for statement, expected an iterator expression: ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    // {
+    if (!StmtPattern::ForPattern::MatchBodyStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid for statement, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // {
+    Stmts stmts;
+    (void)ParseStmts(&stmts); // Not check result.
+    // }
+    if (!StmtPattern::ForPattern::MatchBodyEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid for statement, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // }
+    return MakeForStmt(element, iterator, stmts);
+  }
+  return nullptr;
+}
+
+StmtPtr Parser::ParseWhile() {
+  // while
+  if (StmtPattern::WhilePattern::Match(CurrentToken())) {
+    RemoveToken();                   // while
+    ExprConstPtr cond = ParseExpr(); // condition
+    if (cond == nullptr) {
+      std::stringstream ss;
+      ss << "warning: invalid while statement, expected a condition "
+            "expression: ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    // {
+    if (!StmtPattern::WhilePattern::MatchBodyStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid while statement, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // {
+    Stmts stmts;
+    (void)ParseStmts(&stmts); // Not check result.
+    // }
+    if (!StmtPattern::WhilePattern::MatchBodyEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid while statement, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(1);
+    }
+    RemoveToken(); // }
+    return MakeWhileStmt(cond, stmts);
+  }
+  return nullptr;
+}
+
 StmtPtr Parser::ParserBlock() {
   // Return statement.
   StmtPtr stmt = ParseReturn();
@@ -429,6 +521,16 @@ StmtPtr Parser::ParserBlock() {
   }
   // If statement.
   stmt = ParseIf();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // If statement.
+  stmt = ParseFor();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // If statement.
+  stmt = ParseWhile();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
@@ -472,7 +574,7 @@ void Parser::DumpAst() {
   public:
     void Visit(StmtsConstPtr stmts) override {
       if (stmts != nullptr) {
-        ss_ << "*Code [" << LOG_ENDL;
+        ss_ << "*Code[" << LOG_ENDL;
       }
 
       NodeVisitor::Visit(stmts); // Call parent Visit here.
@@ -502,13 +604,15 @@ void Parser::DumpAst() {
       constexpr char indent_char = ' ';
       ss_ << std::string(indent, indent_char) << "Expr/"
           << (expr != nullptr ? ToString(expr) : "null");
-      if (expr->type != ExprType_Name && expr->type != ExprType_Literal) {
+      if (expr != nullptr && expr->type != ExprType_Name &&
+          expr->type != ExprType_Literal) {
         ss_ << '(' << LOG_ENDL;
       }
 
       NodeVisitor::Visit(expr); // Call parent Visit here.
 
-      if (expr->type != ExprType_Name && expr->type != ExprType_Literal) {
+      if (expr != nullptr && expr->type != ExprType_Name &&
+          expr->type != ExprType_Literal) {
         ss_.seekp(-1, ss_.cur); // Remove a '\n'
         ss_ << ')';
       }

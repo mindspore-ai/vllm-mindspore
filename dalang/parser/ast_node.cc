@@ -95,6 +95,10 @@ const std::string ToString(StmtConstPtr stmt) {
     return "Class";
   } else if (stmt->type == StmtType_If) {
     return "If";
+  } else if (stmt->type == StmtType_For) {
+    return "For";
+  } else if (stmt->type == StmtType_While) {
+    return "While";
   } else if (stmt->type == StmtType_Expr) {
     return "Expr";
   }

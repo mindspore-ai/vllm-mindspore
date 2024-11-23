@@ -1,0 +1,14 @@
+#!da
+
+// Just a da-lang sample code.
+
+function foo() {
+  x = (1, 3, 5)
+  i = 0
+  while i < x.len() {
+    i = i + 1
+    print(x.get(i))
+  }
+}
+
+foo() # Call foo function directly.

@@ -1,0 +1,12 @@
+#!da
+
+// Just a da-lang sample code.
+
+function foo() {
+  x = (1, 3, 5)
+  for elem : x {
+    print(elem)
+  }
+}
+
+foo() # Call foo function directly.
