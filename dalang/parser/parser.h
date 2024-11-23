@@ -18,14 +18,16 @@ public:
 
   // Parse expression.
   ExprPtr ParseExpr();
+  ExprPtr ParseLogicalOr();
+  ExprPtr ParseLogicalAnd();
   ExprPtr ParseLogical();
   ExprPtr ParseComparison();
   ExprPtr ParseAdditive();
   ExprPtr ParseMultiplicative();
   ExprPtr ParseUnary();
-  ExprPtr ParseCallAndAttribute();
   ExprPtr ParseAttribute(ExprPtr entity);
   ExprPtr ParseCall(ExprPtr func);
+  ExprPtr ParseCallAndAttribute();
   ExprPtr ParseGroup();
   ExprPtr ParsePrimary();
   ExprPtr ParseIdentifier();

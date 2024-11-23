@@ -106,14 +106,14 @@ const std::string ToString(ExprConstPtr expr) {
     return "Expr{null}";
   }
   if (expr->type == ExprType_Binary) {
-    return "Binary{" + std::string(ToStr(expr->expr.Binary.op)) + "}";
+    return std::string(ToStr(expr->expr.Binary.op));
   } else if (expr->type == ExprType_Unary) {
-    return "Unary{" + std::string(ToStr(expr->expr.Unary.op)) + "}";
+    return std::string(ToStr(expr->expr.Unary.op));
   } else if (expr->type == ExprType_Name) {
-    return "Name{" + *expr->expr.Name.name + "}";
+    return "Name{" + *expr->expr.Name.identifier + "}";
   } else if (expr->type == ExprType_Literal) {
-    return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + "/" +
-           *expr->expr.Literal.value + "}";
+    return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + '/' +
+           *expr->expr.Literal.value + '}';
   } else if (expr->type == ExprType_List) {
     return "List{len:" + std::to_string(expr->expr.List.len) + "}";
   } else if (expr->type == ExprType_Call) {

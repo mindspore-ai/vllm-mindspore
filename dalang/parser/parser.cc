@@ -25,7 +25,23 @@ ExprPtr Parser::ParseExpr() {
   return ParseLogical();
 }
 
-ExprPtr Parser::ParseLogical() {
+ExprPtr Parser::ParseLogicalOr() {
+  ExprPtr left = ParseComparison();
+  if (left == nullptr) {
+    return nullptr;
+  }
+  while (ExprPattern::LogicalPattern::MatchOr(CurrentToken())) {
+    TokenConstPtr op = GetToken();
+    ExprPtr right = ParseLogicalAnd();
+    if (right == nullptr) {
+      return nullptr;
+    }
+    left = MakeBinaryExpr(op, left, right);
+  }
+  return left;
+}
+
+ExprPtr Parser::ParseLogicalAnd() {
   ExprPtr left = ParseComparison();
   if (left == nullptr) {
     return nullptr;
@@ -40,6 +56,8 @@ ExprPtr Parser::ParseLogical() {
   }
   return left;
 }
+
+ExprPtr Parser::ParseLogical() { return ParseLogicalOr(); }
 
 ExprPtr Parser::ParseComparison() {
   ExprPtr left = ParseAdditive();
@@ -355,6 +373,14 @@ StmtPtr Parser::ParseIf() {
     Stmts elseBodyStmts;
     if (StmtPattern::IfPattern::MatchElse(CurrentToken())) {
       RemoveToken(); // else
+
+      // else if
+      if (StmtPattern::IfPattern::MatchIf(CurrentToken())) {
+        auto elseIfStmt = ParseIf();
+        (void)elseBodyStmts.emplace_back(elseIfStmt);
+        return MakeIfStmt(condition, ifBodyStmts, elseBodyStmts);
+      }
+
       // {
       if (!StmtPattern::IfPattern::MatchBodyStart(CurrentToken())) {
         std::stringstream ss;
@@ -440,11 +466,10 @@ StmtsPtr Parser::ParseCode() {
   return &stmts_;
 }
 
+constexpr int indentLen = 2;
 void Parser::DumpAst() {
   class DumpNodeVisitor : public NodeVisitor {
   public:
-    DumpNodeVisitor(bool snapline = false) : snapline_{snapline} {}
-
     void Visit(StmtsConstPtr stmts) override {
       if (stmts != nullptr) {
         ss_ << "*Code [" << LOG_ENDL;
@@ -459,73 +484,64 @@ void Parser::DumpAst() {
 
     void Visit(StmtConstPtr stmt) override {
       ++step_;
-      if (snapline_) {
-        std::stringstream ss_indent;
-        ss_indent << '|';
-        for (size_t i = 0; i < step_ - 1; ++i) {
-          ss_indent << "    " << '|';
-        }
-        ss_ << ss_indent.str() << "-Stmt/"
-            << (stmt != nullptr ? ToString(stmt) : "null") << LOG_ENDL;
-      } else {
-        const size_t indent = (step_ - 1) * 4;
-        constexpr char indent_char = ' ';
-        ss_ << std::string(indent, indent_char) << "Stmt/"
-            << (stmt != nullptr ? ToString(stmt) : "null") << '(' << LOG_ENDL;
-      }
+      const size_t indent = (step_ - 1) * indentLen;
+      constexpr char indent_char = ' ';
+      ss_ << std::string(indent, indent_char) << "Stmt/"
+          << (stmt != nullptr ? ToString(stmt) : "null") << '(' << LOG_ENDL;
 
       NodeVisitor::Visit(stmt); // Call parent Visit here.
 
-      if (!snapline_) {
-        ss_.seekp(-1, ss_.cur); // Remove a '\n'
-        ss_ << ')' << LOG_ENDL;
-      }
+      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_ << ')' << LOG_ENDL;
       --step_;
     }
 
     void Visit(ExprConstPtr expr) override {
       ++step_;
-      if (snapline_) {
-        std::stringstream ss_indent;
-        ss_indent << '|';
-        for (size_t i = 0; i < step_ - 1; ++i) {
-          ss_indent << "    " << '|';
-        }
-        ss_ << ss_indent.str() << "-Expr/"
-            << (expr != nullptr ? ToString(expr) : "null") << LOG_ENDL;
-      } else {
-        const size_t indent = (step_ - 1) * 4;
-        constexpr char indent_char = ' ';
-        ss_ << std::string(indent, indent_char) << "Expr/"
-            << (expr != nullptr ? ToString(expr) : "null");
-        if (expr->type == ExprType_List) {
-          ss_ << '[' << LOG_ENDL;
-        } else if (expr->type != ExprType_Name &&
-                   expr->type != ExprType_Literal) {
-          ss_ << '(' << LOG_ENDL;
-        }
+      const size_t indent = (step_ - 1) * indentLen;
+      constexpr char indent_char = ' ';
+      ss_ << std::string(indent, indent_char) << "Expr/"
+          << (expr != nullptr ? ToString(expr) : "null");
+      if (expr->type != ExprType_Name && expr->type != ExprType_Literal) {
+        ss_ << '(' << LOG_ENDL;
       }
 
       NodeVisitor::Visit(expr); // Call parent Visit here.
 
-      if (!snapline_) {
-        if (expr->type == ExprType_List) {
-          ss_.seekp(-1, ss_.cur); // Remove a '\n'
-          ss_ << ']';
-        } else if (expr->type != ExprType_Name &&
-                   expr->type != ExprType_Literal) {
-          ss_.seekp(-1, ss_.cur); // Remove a '\n'
-          ss_ << ')';
-        }
-        ss_ << LOG_ENDL;
+      if (expr->type != ExprType_Name && expr->type != ExprType_Literal) {
+        ss_.seekp(-1, ss_.cur); // Remove a '\n'
+        ss_ << ')';
       }
+      ss_ << LOG_ENDL;
       --step_;
+    }
+
+    virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) override {
+      ++step_;
+      const size_t indent = (step_ - 1) * indentLen;
+      constexpr char indent_char = ' ';
+      ss_ << std::string(indent, indent_char) << "Body[" << LOG_ENDL;
+
+      NodeVisitor::VisitList(len, stmtPtr); // Call parent Visit here.
+
+      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_ << ']' << LOG_ENDL;
+      --step_;
+    }
+
+    virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override {
+      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_ << "[" << LOG_ENDL;
+
+      NodeVisitor::VisitList(len, exprPtr); // Call parent Visit here.
+
+      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_ << ']' << LOG_ENDL;
     }
 
     const std::string dump() { return ss_.str(); }
 
   private:
-    bool snapline_{false};
     size_t step_{0};
     std::stringstream ss_;
   };

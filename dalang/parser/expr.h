@@ -17,8 +17,27 @@ static inline bool Match(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_LogicalOr || token->data.op == OpId_LogicalAnd ||
-       token->data.op == OpId_ShiftRight || token->data.op == OpId_ShiftLeft)) {
+      (token->data.op == OpId_LogicalOr || token->data.op == OpId_LogicalAnd)) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchOr(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator && token->data.op == OpId_LogicalOr) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchAnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator && token->data.op == OpId_LogicalAnd) {
     return true;
   }
   return false;
@@ -242,7 +261,7 @@ static inline ExprPtr MakeUnaryExpr(TokenConstPtr op, ExprConstPtr operand) {
 static inline ExprPtr MakeNameExpr(TokenConstPtr name) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_Name;
-  expr->expr.Name.name = &name->name;
+  expr->expr.Name.identifier = &name->name;
   expr->lineStart = name->lineStart;
   expr->lineEnd = name->lineEnd;
   expr->columnStart = name->columnStart;

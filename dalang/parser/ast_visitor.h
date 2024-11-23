@@ -18,6 +18,7 @@ public:
       Visit(stmt);
     }
   }
+
   virtual void Visit(StmtConstPtr stmt) {
     if (stmt == nullptr) {
       LOG_ERROR << "Null stmt node." << LOG_ENDL;
@@ -31,27 +32,20 @@ public:
     } else if (stmt->type == StmtType_Function) {
       Visit(stmt->stmt.Function.name);
       Visit(stmt->stmt.Function.args);
-      for (size_t i = 0; i < stmt->stmt.Function.len; ++i) {
-        Visit(stmt->stmt.Function.body[i]);
-      }
+      VisitList(stmt->stmt.Function.len, stmt->stmt.Function.body);
     } else if (stmt->type == StmtType_Class) {
       Visit(stmt->stmt.Class.name);
       Visit(stmt->stmt.Class.bases);
-      for (size_t i = 0; i < stmt->stmt.Class.len; ++i) {
-        Visit(stmt->stmt.Class.body[i]);
-      }
+      VisitList(stmt->stmt.Class.len, stmt->stmt.Class.body);
     } else if (stmt->type == StmtType_If) {
       Visit(stmt->stmt.If.condition);
-      for (size_t i = 0; i < stmt->stmt.If.ifLen; ++i) {
-        Visit(stmt->stmt.If.ifBody[i]);
-      }
-      for (size_t i = 0; i < stmt->stmt.If.elseLen; ++i) {
-        Visit(stmt->stmt.If.elseBody[i]);
-      }
+      VisitList(stmt->stmt.If.ifLen, stmt->stmt.If.ifBody);
+      VisitList(stmt->stmt.If.elseLen, stmt->stmt.If.elseBody);
     } else if (stmt->type == StmtType_Expr) {
       Visit(stmt->stmt.Expr.value);
     }
   }
+
   virtual void Visit(ExprConstPtr expr) {
     if (expr == nullptr) {
       LOG_ERROR << "Null expr node." << LOG_ENDL;
@@ -67,9 +61,7 @@ public:
     } else if (expr->type == ExprType_Literal) {
       // No expr.
     } else if (expr->type == ExprType_List) {
-      for (size_t i = 0; i < expr->expr.List.len; ++i) {
-        Visit(expr->expr.List.values[i]);
-      }
+      VisitList(expr->expr.List.len, expr->expr.List.values);
     } else if (expr->type == ExprType_Call) {
       Visit(expr->expr.Call.function);
       Visit(expr->expr.Call.list);
@@ -78,6 +70,18 @@ public:
       Visit(expr->expr.Attribute.attribute);
     } else {
       // No expr.
+    }
+  }
+
+  virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) {
+    for (size_t i = 0; i < len; ++i) {
+      Visit(stmtPtr[i]);
+    }
+  }
+
+  virtual void VisitList(size_t len, ExprConstPtr *exprPtr) {
+    for (size_t i = 0; i < len; ++i) {
+      Visit(exprPtr[i]);
     }
   }
 };

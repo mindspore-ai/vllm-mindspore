@@ -125,7 +125,7 @@ typedef struct ExprNode {
       ExprConstPtr operand{nullptr};
     } Unary;
     struct {
-      const std::string *name{nullptr};
+      const std::string *identifier{nullptr};
     } Name;
     struct {
       LtId kind;
