@@ -249,6 +249,7 @@ StmtPtr Parser::ParseStmtExpr() {
 }
 
 StmtPtr Parser::ParseAssign() {
+  size_t reservedTokenPos = TokenPos();
   StmtPtr stmt = ParseStmtExpr();
   if (stmt == nullptr) {
     return nullptr;
@@ -262,7 +263,29 @@ StmtPtr Parser::ParseAssign() {
     }
     return MakeAssignStmt(target, value);
   }
-  return stmt;
+  SetTokenPos(reservedTokenPos);
+  return nullptr;
+}
+
+// Augmented Assign, such as +=, -=, *=, /=, %=
+StmtPtr Parser::ParseAugAssign() {
+  size_t reservedTokenPos = TokenPos();
+  // Left target.
+  StmtPtr stmt = ParseStmtExpr();
+  if (stmt == nullptr) {
+    return nullptr;
+  }
+  if (StmtPattern::AugAssignPattern::Match(CurrentToken())) {
+    OpId op = GetToken()->data.op; // .=
+    ExprConstPtr value = ParseExpr();
+    if (value == nullptr) {
+      return nullptr;
+    }
+    ExprConstPtr target = stmt->stmt.Expr.value;
+    return MakeAugAssignStmt(target, op, value);
+  }
+  SetTokenPos(reservedTokenPos);
+  return nullptr;
 }
 
 StmtPtr Parser::ParseReturn() {
@@ -509,6 +532,11 @@ StmtPtr Parser::ParserBlock() {
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
+  // Augmented Assign statement.
+  stmt = ParseAugAssign();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
   // Class definition.
   stmt = ParserClassDef();
   if (stmt != nullptr || Finish()) {
@@ -534,7 +562,7 @@ StmtPtr Parser::ParserBlock() {
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
-  return nullptr;
+  return ParseStmtExpr();
 }
 
 bool Parser::ParseStmts(StmtsPtr stmts) {

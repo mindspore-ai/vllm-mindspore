@@ -38,6 +38,7 @@ StmtsConstPtr StmtList();
 enum StmtType {
   StmtType_Expr,
   StmtType_Assign,
+  StmtType_AugAssign,
   StmtType_Return,
   StmtType_Function,
   StmtType_Class,
@@ -62,6 +63,11 @@ typedef struct StmtNode {
       ExprConstPtr target{nullptr};
       ExprConstPtr value{nullptr};
     } Assign;
+    struct {
+      ExprConstPtr target{nullptr};
+      OpId op;
+      ExprConstPtr value{nullptr};
+    } AugAssign;
     struct {
       ExprConstPtr value{nullptr};
     } Return;

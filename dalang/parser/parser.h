@@ -36,6 +36,7 @@ public:
   // Parse statement.
   StmtPtr ParseStmtExpr();
   StmtPtr ParseAssign();
+  StmtPtr ParseAugAssign();
   StmtPtr ParseReturn();
   StmtPtr ParserFunctionDef();
   StmtPtr ParserClassDef();

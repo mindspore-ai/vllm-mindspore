@@ -27,6 +27,21 @@ static inline bool Match(TokenConstPtr token) {
 }
 } // namespace AssignPattern
 
+namespace AugAssignPattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator &&
+      (token->data.op == OpId_AddAssign || token->data.op == OpId_SubAssign ||
+       token->data.op == OpId_MulAssign || token->data.op == OpId_DivAssign ||
+       token->data.op == OpId_ModAssign)) {
+    return true;
+  }
+  return false;
+}
+} // namespace AugAssignPattern
+
 namespace ReturnPattern {
 static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
@@ -246,6 +261,32 @@ static inline StmtPtr MakeAssignStmt(ExprConstPtr target, ExprConstPtr value) {
   stmt->type = StmtType_Assign;
   stmt->stmt.Assign.target = target;
   stmt->stmt.Assign.value = value;
+  stmt->lineStart = target->lineStart;
+  stmt->lineEnd = value->lineEnd;
+  stmt->columnStart = target->columnStart;
+  stmt->columnEnd = value->columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeAugAssignStmt(ExprConstPtr target, OpId op,
+                                        ExprConstPtr value) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_AugAssign;
+  stmt->stmt.AugAssign.target = target;
+  if (op == OpId_AddAssign) {
+    stmt->stmt.AugAssign.op = OpId_Add;
+  } else if (op == OpId_SubAssign) {
+    stmt->stmt.AugAssign.op = OpId_Sub;
+  } else if (op == OpId_MulAssign) {
+    stmt->stmt.AugAssign.op = OpId_Mul;
+  } else if (op == OpId_DivAssign) {
+    stmt->stmt.AugAssign.op = OpId_Div;
+  } else if (op == OpId_ModAssign) {
+    stmt->stmt.AugAssign.op = OpId_Mod;
+  } else {
+    return nullptr;
+  }
+  stmt->stmt.AugAssign.value = value;
   stmt->lineStart = target->lineStart;
   stmt->lineEnd = value->lineEnd;
   stmt->columnStart = target->columnStart;

@@ -89,6 +89,8 @@ const std::string ToString(StmtConstPtr stmt) {
     return "Return";
   } else if (stmt->type == StmtType_Assign) {
     return "Assign";
+  } else if (stmt->type == StmtType_AugAssign) {
+    return "AugAssign{" + std::string(ToStr(stmt->stmt.AugAssign.op)) + '}';
   } else if (stmt->type == StmtType_Function) {
     return "Function";
   } else if (stmt->type == StmtType_Class) {

@@ -78,7 +78,8 @@ static inline bool Match(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_Mul || token->data.op == OpId_Div)) {
+      (token->data.op == OpId_Mul || token->data.op == OpId_Div ||
+       token->data.op == OpId_Mod)) {
     return true;
   }
   return false;

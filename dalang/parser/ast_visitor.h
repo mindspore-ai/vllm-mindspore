@@ -29,6 +29,9 @@ public:
     } else if (stmt->type == StmtType_Assign) {
       Visit(stmt->stmt.Assign.target);
       Visit(stmt->stmt.Assign.value);
+    } else if (stmt->type == StmtType_AugAssign) {
+      Visit(stmt->stmt.AugAssign.target);
+      Visit(stmt->stmt.AugAssign.value);
     } else if (stmt->type == StmtType_Function) {
       Visit(stmt->stmt.Function.name);
       Visit(stmt->stmt.Function.args);

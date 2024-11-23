@@ -6,8 +6,10 @@ NameToOpId _operators[] = {
     {"==", OpId_Equal},        {"!=", OpId_NotEqual},  {"<=", OpId_LessEqual},
     {">=", OpId_GreaterEqual}, {"||", OpId_LogicalOr}, {"&&", OpId_LogicalAnd},
     {">>", OpId_ShiftRight},   {"<<", OpId_ShiftLeft}, {"<", OpId_LessThan},
-    {">", OpId_GreaterThan},   {"+", OpId_Add},        {"-", OpId_Sub},
-    {"*", OpId_Mul},           {"/", OpId_Div},        {"=", OpId_Assign},
+    {">", OpId_GreaterThan},   {"+=", OpId_AddAssign}, {"-=", OpId_SubAssign},
+    {"*=", OpId_MulAssign},    {"/=", OpId_DivAssign}, {"%=", OpId_ModAssign},
+    {"=", OpId_Assign},        {"+", OpId_Add},        {"-", OpId_Sub},
+    {"*", OpId_Mul},           {"/", OpId_Div},        {"%", OpId_Mod},
 };
 
 Token TraverseOpTable(const char *start) {

@@ -26,7 +26,7 @@ class qux(thud) {
 
     i = 0
     while i < times {
-      ++i
+      i += 1
       if flag {
         print(hint1 + ' from baz\n')
       } else {

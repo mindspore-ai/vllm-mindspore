@@ -3,8 +3,6 @@
 #include <filesystem>
 #include <fstream>
 
-#undef DEBUG
-
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
     : filename_{std::filesystem::canonical(std::filesystem::path(filename))

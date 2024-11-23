@@ -1,0 +1,5 @@
+res += x + y / z + 13
+res -= 3
+res *= 6
+res /= 2
+res %= 2
