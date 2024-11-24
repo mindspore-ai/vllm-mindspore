@@ -39,15 +39,17 @@ public:
   StmtPtr ParseAugAssign();
   StmtPtr ParseReturn();
   Stmts ParserFunctionArgs();
-  StmtPtr ParserFunctionDef();
-  StmtPtr ParserClassDef();
+  StmtPtr ParseFunctionDef();
+  StmtPtr ParseClassDef();
   StmtPtr ParseIf();
   StmtPtr ParseFor();
   StmtPtr ParseWhile();
-  StmtPtr ParserBlock();
+  StmtPtr ParseBlock();
+  StmtPtr ParserCode();
+  StmtPtr ParseModule();
 
   // Parse statements.
-  StmtsPtr ParseCode();
+  StmtPtr ParseCode();
 
   void DumpAst();
 
@@ -96,14 +98,34 @@ private:
 
   bool ParseStmts(StmtsPtr stmts);
 
-  const std::string LineString(TokenConstPtr token);
-  const std::string LineString();
-  const std::string LineString(ExprConstPtr expr);
-  const std::string LineString(StmtConstPtr stmt);
+  const std::string LineString(TokenConstPtr token) {
+    return filename_ + ':' + std::to_string(token->lineStart) + ':' +
+           std::to_string(token->columnStart + 1);
+  }
+
+  const std::string LineString() {
+    TokenConstPtr token;
+    if (Finish()) {
+      token = PreviousToken();
+    } else {
+      token = CurrentToken();
+    }
+    return LineString(token);
+  }
+
+  const std::string LineString(ExprConstPtr expr) {
+    return filename_ + ':' + std::to_string(expr->lineStart) + ':' +
+           std::to_string(expr->columnStart + 1);
+  }
+
+  const std::string LineString(StmtConstPtr stmt) {
+    return filename_ + ':' + std::to_string(stmt->lineStart) + ':' +
+           std::to_string(stmt->columnStart + 1);
+  }
 
   Lexer lexer_;
   std::string filename_;
-  Stmts stmts_;
+  StmtPtr module_;
   size_t tokenPos_{0};
 };
 } // namespace parser

@@ -35,27 +35,22 @@ void ClearStmtPool();
 StmtsConstPtr StmtList();
 
 // Statement type.
+#define STMT(type) StmtType_##type,
 enum StmtType {
-  StmtType_Expr,
-  StmtType_Assign,
-  StmtType_AugAssign,
-  StmtType_Return,
-  StmtType_Function,
-  StmtType_Class,
-  StmtType_If,
-  StmtType_While,
-  StmtType_For,
-  StmtType_Break,
-  StmtType_Continue,
-  StmtType_Pass,
-  StmtType_Import,
+  StmtType_Invalid,
+#include "stmt.list"
   StmtType_End,
 };
+#undef STMT
 
 // Statement node type.
 typedef struct StmtNode {
   StmtType type = StmtType_End;
   union {
+    struct {
+      size_t len{0};
+      StmtConstPtr *body{nullptr};
+    } Module;
     struct {
       ExprConstPtr value{nullptr};
     } Expr;
@@ -85,6 +80,10 @@ typedef struct StmtNode {
       StmtConstPtr *body{nullptr};
     } Class;
     struct {
+      size_t len{0};
+      StmtConstPtr *body{nullptr};
+    } Block;
+    struct {
       ExprConstPtr condition{nullptr};
       size_t ifLen{0};
       StmtConstPtr *ifBody{nullptr};
@@ -103,23 +102,19 @@ typedef struct StmtNode {
       StmtConstPtr *body{nullptr};
     } While;
   } stmt;
-  int lineStart;
-  int lineEnd;
-  int columnStart;
-  int columnEnd;
+  int lineStart{-1};
+  int lineEnd{-1};
+  int columnStart{-1};
+  int columnEnd{-1};
 } Stmt;
 
+#define EXPR(type) ExprType_##type,
 enum ExprType {
-  ExprType_Binary,
-  ExprType_Unary,
-  ExprType_Attribute,
-  ExprType_Subscript,
-  ExprType_List,
-  ExprType_Call,
-  ExprType_Name,
-  ExprType_Literal,
+  ExprType_Invalid,
+#include "expr.list"
   ExprType_End,
 };
+#undef EXPR
 
 typedef struct ExprNode {
   ExprType type = ExprType_End;

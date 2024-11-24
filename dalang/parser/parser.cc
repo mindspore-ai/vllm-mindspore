@@ -217,8 +217,7 @@ ExprPtr Parser::ParsePrimary() {
   }
 #ifdef DEBUG
   LOG_OUT << LineString()
-          << ", not match nothing, token: " << ToString(CurrentToken())
-          << LOG_ENDL;
+          << ", not match nothing, token: " << ToString(CurrentToken());
 #endif
   return nullptr;
 }
@@ -307,10 +306,9 @@ Stmts Parser::ParserFunctionArgs() {
       if (arg == nullptr) {
         arg = ParseStmtExpr();
       }
-      if (arg == nullptr) {
-        break;
+      if (arg != nullptr) {
+        (void)args.emplace_back(arg);
       }
-      (void)args.emplace_back(arg);
       // )
       if (StmtPattern::FunctionPattern::MatchArgsEnd(CurrentToken())) {
         RemoveToken(); // )
@@ -330,7 +328,7 @@ Stmts Parser::ParserFunctionArgs() {
   return args;
 }
 
-StmtPtr Parser::ParserFunctionDef() {
+StmtPtr Parser::ParseFunctionDef() {
   // function
   if (StmtPattern::FunctionPattern::Match(CurrentToken())) {
     RemoveToken(); // function
@@ -361,7 +359,7 @@ StmtPtr Parser::ParserFunctionDef() {
   return nullptr;
 }
 
-StmtPtr Parser::ParserClassDef() {
+StmtPtr Parser::ParseClassDef() {
   // class
   if (StmtPattern::ClassPattern::Match(CurrentToken())) {
     RemoveToken(); // class
@@ -390,6 +388,27 @@ StmtPtr Parser::ParserClassDef() {
     return MakeClassStmt(id, bases, stmts);
   }
   return nullptr;
+}
+
+StmtPtr Parser::ParseBlock() {
+  // block
+  // {
+  if (!StmtPattern::BlockPattern::MatchBodyStart(CurrentToken())) {
+    return nullptr;
+  }
+  RemoveToken(); // {
+  Stmts stmts;
+  (void)ParseStmts(&stmts); // Not check result.
+  // }
+  if (!StmtPattern::BlockPattern::MatchBodyEnd(CurrentToken())) {
+    std::stringstream ss;
+    ss << "warning: invalid code block, expected '}': ";
+    ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+    CompileMessage(LineString(), ss.str());
+    exit(1);
+  }
+  RemoveToken(); // }
+  return MakeBlockStmt(stmts);
 }
 
 StmtPtr Parser::ParseIf() {
@@ -554,7 +573,7 @@ StmtPtr Parser::ParseWhile() {
   return nullptr;
 }
 
-StmtPtr Parser::ParserBlock() {
+StmtPtr Parser::ParserCode() {
   // Return statement.
   StmtPtr stmt = ParseReturn();
   if (stmt != nullptr || Finish()) {
@@ -571,12 +590,12 @@ StmtPtr Parser::ParserBlock() {
     return stmt;
   }
   // Class definition.
-  stmt = ParserClassDef();
+  stmt = ParseClassDef();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
   // Function definition.
-  stmt = ParserFunctionDef();
+  stmt = ParseFunctionDef();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
@@ -585,13 +604,18 @@ StmtPtr Parser::ParserBlock() {
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
-  // If statement.
+  // For statement.
   stmt = ParseFor();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
-  // If statement.
+  // While statement.
   stmt = ParseWhile();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // Block statement.
+  stmt = ParseBlock();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }
@@ -601,7 +625,7 @@ StmtPtr Parser::ParserBlock() {
 bool Parser::ParseStmts(StmtsPtr stmts) {
   while (!Finish()) {
     TokenConstPtr lastToken = CurrentToken();
-    StmtPtr stmt = ParserBlock();
+    StmtPtr stmt = ParserCode();
     if (stmt != nullptr) {
       (void)stmts->emplace_back(stmt);
     } else if (lastToken == CurrentToken()) { // Infinite loop, break.
@@ -611,51 +635,45 @@ bool Parser::ParseStmts(StmtsPtr stmts) {
       LOG_OUT << "notice: handle partial tokens. last token: "
               << LineString(lastToken) << ": " << ToString(lastToken)
               << ", current token: " << LineString(CurrentToken()) << ": "
-              << ToString(CurrentToken()) << LOG_ENDL;
+              << ToString(CurrentToken());
 #endif
     }
   }
   return true;
 }
 
-StmtsPtr Parser::ParseCode() {
-  if (!ParseStmts(&stmts_)) {
+StmtPtr Parser::ParseModule() {
+  Stmts stmts;
+  if (!ParseStmts(&stmts)) {
     std::stringstream ss;
     ss << "warning: can not handle token: ";
     ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
     CompileMessage(LineString(), ss.str());
     exit(1);
   }
-  return &stmts_;
+  return MakeModuleStmt(stmts);
+}
+
+StmtPtr Parser::ParseCode() {
+  module_ = ParseModule();
+  return module_;
 }
 
 constexpr int indentLen = 2;
 void Parser::DumpAst() {
   class DumpNodeVisitor : public NodeVisitor {
   public:
-    void Visit(StmtsConstPtr stmts) override {
-      if (stmts != nullptr) {
-        ss_ << "*Code[" << LOG_ENDL;
-      }
-
-      NodeVisitor::Visit(stmts); // Call parent Visit here.
-
-      if (stmts != nullptr) {
-        ss_ << ']' << LOG_ENDL;
-      }
-    }
-
     void Visit(StmtConstPtr stmt) override {
       ++step_;
       const size_t indent = (step_ - 1) * indentLen;
       constexpr char indent_char = ' ';
-      ss_ << std::string(indent, indent_char) << "Stmt/"
-          << (stmt != nullptr ? ToString(stmt) : "null") << '(' << LOG_ENDL;
+      ss_ << std::string(indent, indent_char) << "$"
+          << (stmt != nullptr ? ToString(stmt) : "null") << '(' << ENDL;
 
       NodeVisitor::Visit(stmt); // Call parent Visit here.
 
       ss_.seekp(-1, ss_.cur); // Remove a '\n'
-      ss_ << ')' << LOG_ENDL;
+      ss_ << ')' << ENDL;
       --step_;
     }
 
@@ -663,11 +681,11 @@ void Parser::DumpAst() {
       ++step_;
       const size_t indent = (step_ - 1) * indentLen;
       constexpr char indent_char = ' ';
-      ss_ << std::string(indent, indent_char) << "Expr/"
+      ss_ << std::string(indent, indent_char) << "!"
           << (expr != nullptr ? ToString(expr) : "null");
       if (expr != nullptr && expr->type != ExprType_Name &&
           expr->type != ExprType_Literal) {
-        ss_ << '(' << LOG_ENDL;
+        ss_ << '(' << ENDL;
       }
 
       NodeVisitor::Visit(expr); // Call parent Visit here.
@@ -677,7 +695,7 @@ void Parser::DumpAst() {
         ss_.seekp(-1, ss_.cur); // Remove a '\n'
         ss_ << ')';
       }
-      ss_ << LOG_ENDL;
+      ss_ << ENDL;
       --step_;
     }
 
@@ -685,23 +703,23 @@ void Parser::DumpAst() {
       ++step_;
       const size_t indent = (step_ - 1) * indentLen;
       constexpr char indent_char = ' ';
-      ss_ << std::string(indent, indent_char) << "Body[" << LOG_ENDL;
+      ss_ << std::string(indent, indent_char) << "Body[" << ENDL;
 
       NodeVisitor::VisitList(len, stmtPtr); // Call parent Visit here.
 
       ss_.seekp(-1, ss_.cur); // Remove a '\n'
-      ss_ << ']' << LOG_ENDL;
+      ss_ << ']' << ENDL;
       --step_;
     }
 
     virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override {
       ss_.seekp(-1, ss_.cur); // Remove a '\n'
-      ss_ << "[" << LOG_ENDL;
+      ss_ << "[" << ENDL;
 
       NodeVisitor::VisitList(len, exprPtr); // Call parent Visit here.
 
       ss_.seekp(-1, ss_.cur); // Remove a '\n'
-      ss_ << ']' << LOG_ENDL;
+      ss_ << ']' << ENDL;
     }
 
     const std::string dump() { return ss_.str(); }
@@ -711,32 +729,7 @@ void Parser::DumpAst() {
     std::stringstream ss_;
   };
   auto visitor = DumpNodeVisitor();
-  visitor.Visit(&stmts_);
-  LOG_OUT << visitor.dump();
-}
-
-const std::string Parser::LineString(TokenConstPtr token) {
-  return filename_ + ':' + std::to_string(token->lineStart) + ':' +
-         std::to_string(token->columnStart + 1);
-}
-
-const std::string Parser::LineString() {
-  TokenConstPtr token;
-  if (Finish()) {
-    token = PreviousToken();
-  } else {
-    token = CurrentToken();
-  }
-  return LineString(token);
-}
-
-const std::string Parser::LineString(ExprConstPtr expr) {
-  return filename_ + ':' + std::to_string(expr->lineStart) + ':' +
-         std::to_string(expr->columnStart + 1);
-}
-
-const std::string Parser::LineString(StmtConstPtr stmt) {
-  return filename_ + ':' + std::to_string(stmt->lineStart) + ':' +
-         std::to_string(stmt->columnStart + 1);
+  visitor.Visit(module_);
+  LOG_OUT << '\n' << visitor.dump();
 }
 } // namespace parser

@@ -36,7 +36,7 @@ const std::vector<Token> &Lexer::Tokens() {
     auto token = NextToken();
     if (token.type == TokenType_End) {
 #ifdef DEBUG
-      LOG_OUT << "No token anymore" << LOG_ENDL;
+      LOG_OUT << "No token anymore";
 #endif
       break;
     }
@@ -44,8 +44,7 @@ const std::vector<Token> &Lexer::Tokens() {
       continue;
     }
 #ifdef DEBUG
-    LOG_OUT << "# token: " << token.name << "\t\t\t[" << ToStr(&token) << "]"
-            << LOG_ENDL;
+    LOG_OUT << "# token: " << token.name << "\t\t\t[" << ToStr(&token) << "]";
 #endif
     tokens_.emplace_back(std::move(token));
   }
@@ -116,11 +115,11 @@ const std::string &Lexer::ReadLine() {
   pos_ = 0;
   std::getline(file_, line_);
 #ifdef DEBUG
-  LOG_OUT << "-------------line-------------: \"" << line_ << "\"" << LOG_ENDL;
+  LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
 #endif
   if ((file_.rdstate() & std::ifstream::eofbit) != 0) {
 #ifdef DEBUG
-    LOG_OUT << "Reach end of file for " << filename_ << LOG_ENDL;
+    LOG_OUT << "Reach end of file for " << filename_;
 #endif
     eof_ = true;
   } else if ((file_.rdstate() & std::ifstream::failbit) != 0) {

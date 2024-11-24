@@ -9,21 +9,11 @@
 namespace parser {
 class NodeVisitor {
 public:
-  virtual void Visit(StmtsConstPtr stmts) {
-    if (stmts == nullptr) {
-      LOG_ERROR << "Null stmts node." << LOG_ENDL;
-      return;
-    }
-    for (StmtConstPtr stmt : *stmts) {
-      Visit(stmt);
-    }
-  }
-
   virtual void Visit(StmtConstPtr stmt) {
     if (stmt == nullptr) {
-      LOG_ERROR << "Null stmt node." << LOG_ENDL;
+      LOG_ERROR << "Null stmt node.";
     } else if (stmt->type == StmtType_End) {
-      LOG_ERROR << "Invalid stmt node." << LOG_ENDL;
+      LOG_ERROR << "Invalid stmt node.";
     } else if (stmt->type == StmtType_Return) {
       Visit(stmt->stmt.Return.value);
     } else if (stmt->type == StmtType_Assign) {
@@ -40,6 +30,8 @@ public:
       Visit(stmt->stmt.Class.name);
       Visit(stmt->stmt.Class.bases);
       VisitList(stmt->stmt.Class.len, stmt->stmt.Class.body);
+    } else if (stmt->type == StmtType_Block) {
+      VisitList(stmt->stmt.Block.len, stmt->stmt.Block.body);
     } else if (stmt->type == StmtType_If) {
       Visit(stmt->stmt.If.condition);
       VisitList(stmt->stmt.If.ifLen, stmt->stmt.If.ifBody);
@@ -53,14 +45,16 @@ public:
       VisitList(stmt->stmt.While.len, stmt->stmt.While.body);
     } else if (stmt->type == StmtType_Expr) {
       Visit(stmt->stmt.Expr.value);
+    } else if (stmt->type == StmtType_Module) {
+      VisitList(stmt->stmt.Module.len, stmt->stmt.Module.body);
     }
   }
 
   virtual void Visit(ExprConstPtr expr) {
     if (expr == nullptr) {
-      LOG_ERROR << "Null expr node." << LOG_ENDL;
+      LOG_ERROR << "Null expr node.";
     } else if (expr->type == ExprType_End) {
-      LOG_ERROR << "Invalid expr node." << LOG_ENDL;
+      LOG_ERROR << "Invalid expr node.";
     } else if (expr->type == ExprType_Binary) {
       Visit(expr->expr.Binary.left);
       Visit(expr->expr.Binary.right);
@@ -94,6 +88,8 @@ public:
       Visit(exprPtr[i]);
     }
   }
+
+  virtual ~NodeVisitor() {}
 };
 } // namespace parser
 

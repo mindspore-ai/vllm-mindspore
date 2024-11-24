@@ -150,6 +150,28 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
 }
 } // namespace ClassPattern
 
+namespace BlockPattern {
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace BlockPattern
+
 namespace IfPattern {
 static inline bool MatchIf(TokenConstPtr token) {
   if (token == nullptr) {
@@ -271,7 +293,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
 #define RETURN_AND_TRACE_STMT_NODE(stmt)                                       \
   LOG_OUT << "TRACE STMT: " << ToString(stmt) << ", lineno: [("                \
           << stmt->lineStart << ',' << stmt->columnStart << ")~("              \
-          << stmt->lineEnd << ',' << stmt->columnEnd << "))" << LOG_ENDL;      \
+          << stmt->lineEnd << ',' << stmt->columnEnd << "))";                  \
   return stmt
 #else
 #define RETURN_AND_TRACE_STMT_NODE(stmt) return stmt
@@ -357,9 +379,13 @@ static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, const Stmts &args,
     stmt->stmt.Function.body[i] = body[i];
   }
   stmt->lineStart = id->lineStart;
-  stmt->lineEnd = body.back()->lineEnd;
+  if (!body.empty()) {
+    stmt->lineEnd = body.back()->lineEnd;
+  }
   stmt->columnStart = id->columnStart;
-  stmt->columnEnd = body.back()->columnEnd;
+  if (!body.empty()) {
+    stmt->columnEnd = body.back()->columnEnd;
+  }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
@@ -391,6 +417,25 @@ static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
     columnEnd = body.back()->columnEnd;
   }
   stmt->columnEnd = columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeBlockStmt(const Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_Block;
+  stmt->stmt.Block.len = body.size();
+  stmt->stmt.Block.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.Block.body[i] = body[i];
+  }
+
+  if (!body.empty()) {
+    stmt->lineStart = body.front()->lineStart;
+    stmt->lineEnd = body.back()->lineEnd;
+    stmt->columnStart = body.front()->columnStart;
+    stmt->columnEnd = body.back()->columnEnd;
+  }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
@@ -491,6 +536,24 @@ static inline StmtPtr MakeWhileStmt(ExprConstPtr cond, const Stmts &body) {
     columnEnd = cond->columnEnd;
   }
   stmt->columnEnd = columnEnd;
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeModuleStmt(const Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_Module;
+  stmt->stmt.Module.len = body.size();
+  stmt->stmt.Module.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.Module.body[i] = body[i];
+  }
+  if (!body.empty()) {
+    stmt->lineStart = body.front()->lineStart;
+    stmt->lineEnd = body.back()->lineEnd;
+    stmt->columnStart = body.front()->columnStart;
+    stmt->columnEnd = body.back()->columnEnd;
+  }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 } // namespace parser

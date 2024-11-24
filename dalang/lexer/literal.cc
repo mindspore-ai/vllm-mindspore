@@ -35,7 +35,7 @@ Token FindLiteral(const char *start) {
     Token token{.type = TokenType_Literal};
     token.data.lt = LiteralId_bool;
     token.name.assign(start, pos);
-    LOG_OUT << "boolean: " << token.name << LOG_ENDL;
+    LOG_OUT << "boolean: " << token.name;
     return token;
   }
   // Decimal digital
@@ -62,7 +62,7 @@ Token FindLiteral(const char *start) {
     return token;
   } else {
 #ifdef DEBUG
-    LOG_OUT << "match nothing, " << start << LOG_ENDL;
+    LOG_OUT << "match nothing, " << start;
 #endif
   }
   return Token{.type = TokenType_End};

@@ -65,6 +65,15 @@ void ClearStmtClassBodyMemory(StmtPtr stmt) {
   }
 }
 
+void ClearStmtBlockBodyMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Block && stmt->stmt.Block.len != 0 &&
+      stmt->stmt.Block.body != nullptr) {
+    free(stmt->stmt.Block.body);
+    stmt->stmt.Block.body = nullptr;
+    stmt->stmt.Block.len = 0;
+  }
+}
+
 void ClearStmtIfMemory(StmtPtr stmt) {
   if (stmt->type != StmtType_If) {
     return;
@@ -103,11 +112,23 @@ void ClearStmtWhileMemory(StmtPtr stmt) {
   }
 }
 
+void ClearStmtModuleMemory(StmtPtr stmt) {
+  if (stmt->type != StmtType_Module) {
+    return;
+  }
+  if (stmt->stmt.Module.len != 0 && stmt->stmt.Module.body != nullptr) {
+    free(stmt->stmt.Module.body);
+    stmt->stmt.Module.body = nullptr;
+    stmt->stmt.Module.len = 0;
+  }
+}
+
 void ClearStmtPool() {
   for (StmtPtr stmt : gStmtPool) {
     ClearStmtFunctionArgsMemory(stmt);
     ClearStmtFunctionBodyMemory(stmt);
     ClearStmtClassBodyMemory(stmt);
+    ClearStmtBlockBodyMemory(stmt);
     ClearStmtIfMemory(stmt);
     ClearStmtForMemory(stmt);
     ClearStmtWhileMemory(stmt);
@@ -129,6 +150,8 @@ const std::string ToString(StmtConstPtr stmt) {
     return "Function";
   } else if (stmt->type == StmtType_Class) {
     return "Class";
+  } else if (stmt->type == StmtType_Block) {
+    return "Block";
   } else if (stmt->type == StmtType_If) {
     return "If";
   } else if (stmt->type == StmtType_For) {
@@ -137,6 +160,8 @@ const std::string ToString(StmtConstPtr stmt) {
     return "While";
   } else if (stmt->type == StmtType_Expr) {
     return "Expr";
+  } else if (stmt->type == StmtType_Module) {
+    return "Module";
   }
   return "...";
 }

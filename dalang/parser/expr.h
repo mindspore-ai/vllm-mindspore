@@ -227,7 +227,7 @@ static inline bool MatchComment(TokenConstPtr token) {
 #define RETURN_AND_TRACE_EXPR_NODE(expr)                                       \
   LOG_OUT << "TRACE EXPR: " << ToString(expr) << ", lineno: [("                \
           << expr->lineStart << ',' << expr->columnStart << ")~("              \
-          << expr->lineEnd << ',' << expr->columnEnd << "))" << LOG_ENDL;      \
+          << expr->lineEnd << ',' << expr->columnEnd << "))";                  \
   return expr
 #else
 #define RETURN_AND_TRACE_EXPR_NODE(expr) return expr
