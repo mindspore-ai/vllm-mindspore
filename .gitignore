@@ -33,3 +33,6 @@ Makefile
 # Python files
 *__pycache__*
 .pytest_cache
+
+# Hidden files
+.*

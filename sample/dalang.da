@@ -8,8 +8,8 @@ function bar(flag, times) {
 
   for _ : times {
     if flag {
-      print(hint1)
-      print(' from bar\n')
+     print(hint1)
+     print(' from bar\n')
     } else {
       print(hint2)
       print(" from bar\n")
@@ -20,9 +20,10 @@ function bar(flag, times) {
 class thud() {}
 
 class qux(thud) {
-  function baz(flag, times) {
+  function baz(flag,
+               times) {
     hint1 = "Hello, World."
-    hint2 = 'Hello, DaLang.'
+  hint2 = 'Hello, DaLang.'
 
     i = 0
     while i < times {
@@ -38,17 +39,18 @@ class qux(thud) {
 
 function foo(flag=true) {
   x = 6
-  y = 4
+ y = 4
   z = 2
 
   bar(flag, 2)
   qux().baz(flag, 3)
 
-  if flag {
-    return x + y / z
+  if flag { return x + y / z
   } else {
     return (x - y) * 2
   }
 }
 
-foo() # Call foo function directly.
+function main() {
+  foo() # Call foo function directly.
+}

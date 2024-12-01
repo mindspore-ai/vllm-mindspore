@@ -23,4 +23,4 @@ add_subdirectory(dalang)
 
 # Test for da-lang
 add_executable(da test/main.cc)
-target_link_libraries(da lexer_obj parser_obj)
+target_link_libraries(da lexer_obj parser_obj ir_obj)
