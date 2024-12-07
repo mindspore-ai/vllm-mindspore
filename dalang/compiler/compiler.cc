@@ -197,18 +197,20 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
   if (expr->type != ExprType_Literal) {
     return false;
   }
+  auto kind = expr->expr.Literal.kind;
   const auto &value = *expr->expr.Literal.value;
   LOG_OUT << "value: " << value;
   InstCall load = {.inst = Inst_LoadConst,
                    .offset = static_cast<ssize_t>(constantPool_.size())};
-  constantPool_.emplace_back(value);
+  Constant cons = {.type = static_cast<ConstType>(kind), .value = value};
+  constantPool_.emplace_back(cons);
   AddInstruction(load);
   return true;
 }
 
 void Compiler::Dump() {
-  std::cout << "Instructions: " << std::endl;
-  std::cout << "---------- " << std::endl;
+  std::cout << "instructions: " << std::endl;
+  std::cout << "-----" << std::endl;
   for (size_t i = 0; i < instructions_.size(); ++i) {
     const auto &inst = instructions_[i];
     std::cout << '#' << i << ":\t" << GetInstStr(inst.inst);
@@ -216,24 +218,25 @@ void Compiler::Dump() {
       std::cout << "\t" << inst.offset << " (" << variablePool_[inst.offset]
                 << ')';
     } else if (inst.inst == Inst_LoadConst) {
-      std::cout << "\t" << inst.offset << " (" << constantPool_[inst.offset]
-                << ')';
+      std::cout << "\t" << inst.offset << " (";
+      std::cout << constantPool_[inst.offset].value << ')';
     }
     std::cout << std::endl;
   }
   std::cout << std::endl;
-  std::cout << "Variables: " << std::endl;
-  std::cout << "---------- " << std::endl;
+  std::cout << "variables: " << std::endl;
+  std::cout << "-----" << std::endl;
   for (size_t i = 0; i < variablePool_.size(); ++i) {
     const auto &var = variablePool_[i];
     std::cout << '#' << i << ":\t" << var << std::endl;
   }
   std::cout << std::endl;
-  std::cout << "Constants: " << std::endl;
-  std::cout << "---------- " << std::endl;
+  std::cout << "constants: " << std::endl;
+  std::cout << "-----" << std::endl;
   for (size_t i = 0; i < constantPool_.size(); ++i) {
     const auto &cons = constantPool_[i];
-    std::cout << '#' << i << ":\t" << cons << std::endl;
+    std::cout << '#' << i << ":\t" << cons.value << '\t'
+              << ToStr(static_cast<LtId>(cons.type)) << std::endl;
   }
   std::cout << std::endl;
 }

@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-#define TYPE(K) LiteralId_##K,
+#define TYPE(T) LiteralId_##T,
 typedef enum LiteralId {
   LiteralId_Invalid,
 #include "literal_type.list"

@@ -26,6 +26,20 @@ struct InstCall {
 typedef InstCall *InstCallPtr;
 typedef const InstCall *InstCallConstPtr;
 
+#define TYPE(T) ConstType_##T,
+enum ConstType {
+  Invalid,
+#include "lexer/literal_type.list"
+  End,
+};
+#undef TYPE
+
+struct Constant {
+  ConstType type;
+  std::string value;
+};
+typedef Constant *ConstantPtr;
+
 class Compiler;
 class CompilerNodeVisitor;
 using StmtHandlerFunction = bool (Compiler::*)(StmtConstPtr);
@@ -91,7 +105,7 @@ private:
   Parser parser_;
 
   std::vector<std::string> variablePool_;
-  std::vector<std::string> constantPool_;
+  std::vector<Constant> constantPool_;
 
   std::vector<InstCall> instructions_;
   std::unordered_map<StmtType, StmtHandlerFunction> stmtHandlers_;
