@@ -1,4 +1,4 @@
-#include "ir/compiler.h"
+#include "compiler/compiler.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 
@@ -24,8 +24,9 @@ void RunParserTest(const char *filename) {
 }
 
 void RunCompilerTest(const char *filename) {
-  auto compiler = ir::Compiler(filename);
+  auto compiler = compiler::Compiler(filename);
   compiler.Compile();
+  compiler.Dump();
 }
 
 int main(int argc, char **argv) {
