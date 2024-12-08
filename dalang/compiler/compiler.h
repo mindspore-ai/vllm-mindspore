@@ -22,6 +22,7 @@ typedef enum OperatorId {
 struct InstCall {
   Inst inst;
   ssize_t offset;
+  ssize_t lineno;
 };
 typedef InstCall *InstCallPtr;
 typedef const InstCall *InstCallConstPtr;
@@ -67,6 +68,7 @@ public:
   std::vector<InstCall> instructions() const { return instructions_; }
   void AddInstruction(const InstCall &inst) {
     instructions_.emplace_back(inst);
+    lastLineno_ = inst.lineno;
   }
 
   void Dump();
@@ -102,12 +104,15 @@ private:
   bool CompileLiteral(ExprConstPtr expr);
 
 private:
+  ssize_t FindVariableNameIndex(const std::string &name);
+
   Parser parser_;
 
   std::vector<std::string> variablePool_;
   std::vector<Constant> constantPool_;
 
   std::vector<InstCall> instructions_;
+  ssize_t lastLineno_;
   std::unordered_map<StmtType, StmtHandlerFunction> stmtHandlers_;
   std::unordered_map<ExprType, ExprHandlerFunction> exprHandlers_;
 

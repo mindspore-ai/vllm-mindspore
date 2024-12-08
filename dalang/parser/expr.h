@@ -275,6 +275,7 @@ static inline ExprPtr MakeLiteralExpr(TokenConstPtr literal) {
   expr->type = ExprType_Literal;
   expr->expr.Literal.kind = literal->data.lt;
   expr->expr.Literal.value = &literal->name;
+  expr->lineStart = literal->lineStart;
   expr->lineEnd = literal->lineEnd;
   expr->columnStart = literal->columnStart;
   expr->columnEnd = literal->columnEnd;
