@@ -9,6 +9,8 @@ Token FindComment(const char *start, size_t len) {
     return Token{.type = TokenType_End};
   }
   Token token{.type = TokenType_Comment};
+  token.start = start;
+  token.len = len;
   token.name.assign(start, len);
   return token;
 }

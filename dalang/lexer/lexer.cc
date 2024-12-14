@@ -1,5 +1,6 @@
 #include "lexer.h"
 
+#include <cassert>
 #include <filesystem>
 #include <fstream>
 
@@ -62,34 +63,40 @@ const Token Lexer::TokenInLine() {
 
   Token token = GetComment();
   if (token.type != TokenType_End) {
-    pos_ += token.name.size();
+    assert(token.len == token.name.size());
+    pos_ += token.len;
     return token;
   }
   token = GetOperator();
   if (token.type != TokenType_End) {
-    pos_ += token.name.size();
+    assert(token.len == token.name.size());
+    pos_ += token.len;
     return token;
   }
   token = GetSeparator();
   if (token.type != TokenType_End) {
-    pos_ += token.name.size();
+    assert(token.len == token.name.size());
+    pos_ += token.len;
     return token;
   }
   token = GetKeyword();
   if (token.type != TokenType_End) {
-    pos_ += token.name.size();
+    assert(token.len == token.name.size());
+    pos_ += token.len;
     return token;
   }
   token = GetLiteral();
   if (token.type != TokenType_End) {
     if (token.lineStart == token.lineEnd) { // Not multiple lines.
-      pos_ += token.name.size();
+      assert(token.len >= token.name.size());
+      pos_ += token.len;
     }
     return token;
   }
   token = GetIdentifier();
   if (token.type != TokenType_End) {
-    pos_ += token.name.size();
+    assert(token.len == token.name.size());
+    pos_ += token.len;
     return token;
   }
 
@@ -161,6 +168,12 @@ Token Lexer::GetKeyword() {
 Token Lexer::GetLiteral() {
   Token tok = FindLiteral(line_.c_str() + pos_);
   SetLineInfo(&tok);
+  if (tok.type == TokenType_Invalid) {
+    // Exception here.
+    CompileMessage(filename_, lineno_, pos_,
+                   "warning: unexcepted literal string format.");
+    exit(1);
+  }
   if (tok.type != TokenType_ContinuousString) {
     return tok;
   }

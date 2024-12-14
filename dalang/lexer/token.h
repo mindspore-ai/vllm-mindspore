@@ -34,6 +34,8 @@ typedef struct Token {
   int columnStart;
   int columnEnd;
   std::string name;
+  const char *start;
+  size_t len;
 
   bool IsSeparatorSpace() const {
     return type == TokenType_Separator && data.sp == SpId_Space;

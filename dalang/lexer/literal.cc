@@ -4,6 +4,16 @@
 #include "token.h"
 
 namespace lexer {
+#define TYPE(T) #T,
+const char *_types_str[] = {
+    "Invalid",
+#include "literal_type.list"
+    "End",
+};
+#undef TYPE
+
+const char *ToStr(LtId ltid) { return _types_str[ltid]; }
+
 std::unordered_set<char> _decimal = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 };
@@ -15,7 +25,8 @@ std::unordered_set<char> _alphabets = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 };
 
-static inline int Char2Int(char c) {
+namespace {
+int Char2Int(char c) {
   if (c >= '0' && c <= '9') {
     return c - '0';
   } else if (c >= 'a' && c <= 'f') {
@@ -28,21 +39,107 @@ static inline int Char2Int(char c) {
   }
 }
 
+size_t StartsWithLiteralType(const char *literal, size_t *count) {
+  for (size_t i = LiteralId_Invalid + 1; i < LiteralId_End; ++i) {
+    if (strstr(literal, _types_str[i]) == literal) {
+      *count = strlen(_types_str[i]);
+      return i;
+    }
+  }
+  *count = 0;
+  return 0;
+}
+
+LtId MatchLiteralType(const char *start, size_t *matchCount) {
+  int pos = SkipWhiteSpace(start);
+  char c = start[pos];
+  if (c != ':') {
+    // No literal type, set int type in default.
+    return LiteralId_int;
+  }
+  ++pos; // ':'
+  pos += SkipWhiteSpace(start + pos);
+  // Start to match literal type string.
+  size_t count;
+  auto matchIndex = StartsWithLiteralType(start + pos, &count);
+  if (count == 0 || matchIndex >= LiteralId_End ||
+      matchIndex <= LiteralId_Invalid) {
+    return LiteralId_Invalid;
+  }
+  pos += count;
+  *matchCount = pos;
+  return (LtId)matchIndex;
+}
+
+int MatchBoolean(const char *start) {
+  int pos = 0;
+  const char *matchPos = strstr(start, "true");
+  if (matchPos == start) {
+    return 4;
+  }
+  matchPos = strstr(start, "false");
+  if (matchPos == start) {
+    return 5;
+  }
+  return pos;
+}
+
+int MatchDecimal(const char *start) {
+  int pos = 0;
+  while (start[pos] != '\0') {
+    char c = start[pos];
+    if (c >= '0' && c <= '9') {
+      ++pos;
+    } else {
+      return pos;
+    }
+  }
+  return pos;
+}
+
+const char *MatchString(const char *start, char *startChar) {
+  int pos = 0;
+  char c = start[pos];
+  if (c == '\0') {
+    return nullptr;
+  }
+  if (c == '\'' || c == '\"') {
+    *startChar = c;
+    ++pos;
+    while (start[pos] != '\0' && start[pos] != c) {
+      ++pos;
+    }
+    if (start[pos] == c) { // Found a string.
+      return start + pos;
+    }
+  }
+  return nullptr;
+}
+} // namespace
+
 Token FindLiteral(const char *start) {
   // Boolean
   int pos = MatchBoolean(start);
   if (pos != 0) {
     Token token{.type = TokenType_Literal};
     token.data.lt = LiteralId_bool;
+    token.start = start;
+    token.len = pos;
     token.name.assign(start, pos);
-    LOG_OUT << "boolean: " << token.name;
     return token;
   }
   // Decimal digital
   pos = MatchDecimal(start);
   if (pos != 0) {
     Token token{.type = TokenType_Literal};
-    token.data.lt = LiteralId_int; // TODO.
+    size_t count = 0;
+    LtId li = MatchLiteralType(start + pos, &count);
+    if (li == LiteralId_Invalid || li == LiteralId_End) {
+      return Token{.type = TokenType_Invalid, .start = start + pos, .len = 0};
+    }
+    token.data.lt = li;
+    token.start = start;
+    token.len = pos + count;
     token.name.assign(start, pos);
     return token;
   }
@@ -53,11 +150,15 @@ Token FindLiteral(const char *start) {
   if (matchEnd != nullptr) {
     Token token{.type = TokenType_Literal};
     token.data.lt = LiteralId_str;
+    token.start = start;
+    token.len = matchEnd - start + 1;
     token.name.assign(start, matchEnd - start + 1);
     return token;
   } else if (startStr != '\0') { // String across multiple lines.
     Token token{.type = TokenType_ContinuousString};
     token.data.str = &startStr;
+    token.start = start;
+    token.len = strlen(start);
     token.name.assign(start);
     return token;
   } else {
@@ -65,16 +166,6 @@ Token FindLiteral(const char *start) {
     LOG_OUT << "match nothing, " << start;
 #endif
   }
-  return Token{.type = TokenType_End};
+  return Token{.type = TokenType_End, .start = start, .len = 0};
 }
-
-#define TYPE(T) #T,
-const char *_types_str[] = {
-    "Invalid",
-#include "literal_type.list"
-    "End",
-};
-#undef TYPE
-
-const char *ToStr(LtId ltid) { return _types_str[ltid]; }
 } // namespace lexer

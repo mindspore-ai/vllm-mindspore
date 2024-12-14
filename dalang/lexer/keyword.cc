@@ -16,6 +16,8 @@ Token TraverseKwTable(const char *start) {
     const auto &kw = _keywords[pos];
     auto t = Token{.type = TokenType_Keyword};
     t.data.kw = kw.id;
+    t.start = start;
+    t.len = strlen(kw.name);
     t.name.assign(kw.name, strlen(kw.name));
     return t;
   }

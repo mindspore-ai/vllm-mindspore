@@ -27,6 +27,8 @@ Token TraverseSpTable(const char *start) {
     const auto &sp = _separators[pos];
     auto t = Token{.type = TokenType_Separator};
     t.data.sp = sp.id;
+    t.start = start;
+    t.len = strlen(sp.name);
     t.name.assign(sp.name, strlen(sp.name));
     return t;
   }

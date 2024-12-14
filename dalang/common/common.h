@@ -8,13 +8,22 @@
 
 class Cout {
 public:
-  Cout() = default;
-  ~Cout() { std::cout << std::endl; }
+  Cout(bool enabled = true) : enabled_{enabled} {}
+  ~Cout() {
+    if (enabled_) {
+      std::cout << std::endl;
+    }
+  }
 
   template <typename T> Cout &operator<<(const T &val) noexcept {
-    std::cout << val;
+    if (enabled_) {
+      std::cout << val;
+    }
     return *this;
   }
+
+private:
+  bool enabled_;
 };
 
 class Cerr {
@@ -32,9 +41,10 @@ static inline std::string GetTime() {
   auto t = time(0);
   const tm *lt = localtime(&t);
   std::stringstream ss;
-  ss << (lt->tm_year + 1900) << '-' << lt->tm_mon << '-' << std::setfill('0')
-     << std::setw(2) << lt->tm_mday << ' ' << std::setw(2) << lt->tm_hour << ':'
-     << std::setw(2) << lt->tm_min << ':' << std::setw(2) << lt->tm_sec;
+  ss << (lt->tm_year + 1900) << '-' << (lt->tm_mon + 1) << '-'
+     << std::setfill('0') << std::setw(2) << lt->tm_mday << ' ' << std::setw(2)
+     << lt->tm_hour << ':' << std::setw(2) << lt->tm_min << ':' << std::setw(2)
+     << lt->tm_sec;
   return ss.str();
 }
 
@@ -44,6 +54,8 @@ static inline std::string GetTime() {
 #define LOG_ERROR                                                              \
   Cerr() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' '            \
          << __FUNCTION__ << "] error: "
+#define LOG_NO_OUT Cout(false)
+
 #define ENDL std::endl
 
 #define TO_STR(s) #s
@@ -68,6 +80,7 @@ static inline void CompileMessage(const std::string &line_info,
   std::cout << line_info << ": " << msg << '\n';
 }
 
+// Skip blank, return blank count.
 static inline size_t SkipWhiteSpace(const char *str) {
   size_t pos = 0;
   while (str[pos] != '\0') {

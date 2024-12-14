@@ -1,5 +1,8 @@
 #include "compiler/compiler.h"
 
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
+
 #include <algorithm>
 
 #define TO_STR(s) #s
@@ -69,10 +72,10 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   InstCall call = {
       .inst = Inst_StoreName,
       .offset =
-          (index == -1 ? static_cast<ssize_t>(variablePool_.size()) : index),
+          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
       .lineno = lineno};
   if (index == -1) { // Not used before.
-    variablePool_.emplace_back(targetName);
+    symbolPool_.emplace_back(targetName);
   }
   AddInstruction(call);
   return true;
@@ -96,7 +99,7 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
   const auto lineno = returnVal->lineStart;
   InstCall ret = {.inst = Inst_ReturnVal, .offset = 0, .lineno = lineno};
   AddInstruction(ret);
-  return false;
+  return true;
 }
 
 bool Compiler::CompileFunction(StmtConstPtr stmt) {
@@ -117,10 +120,10 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   InstCall funcBegin = {
       .inst = Inst_FuncBegin,
       .offset =
-          (index == -1 ? static_cast<ssize_t>(variablePool_.size()) : index),
+          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
       .lineno = lineno};
   if (index == -1) { // Not used before.
-    variablePool_.emplace_back(funcName);
+    symbolPool_.emplace_back(funcName);
   }
   AddInstruction(funcBegin);
 
@@ -286,10 +289,10 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   InstCall load = {
       .inst = Inst_LoadName,
       .offset =
-          (index == -1 ? static_cast<ssize_t>(variablePool_.size()) : index),
+          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
       .lineno = lineno};
   if (index == -1) { // Not used before.
-    variablePool_.emplace_back(name);
+    symbolPool_.emplace_back(name);
   }
   AddInstruction(load);
   return true;
@@ -316,11 +319,11 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
 
 // Return -1 if not found.
 ssize_t Compiler::FindVariableNameIndex(const std::string &name) {
-  auto iter = std::find(variablePool_.cbegin(), variablePool_.cend(), name);
-  if (iter == variablePool_.cend()) {
+  auto iter = std::find(symbolPool_.cbegin(), symbolPool_.cend(), name);
+  if (iter == symbolPool_.cend()) {
     return -1;
   }
-  auto index = std::distance(variablePool_.cbegin(), iter);
+  auto index = std::distance(symbolPool_.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found variable, index should not be negative " << index
               << ", name: " << name;
@@ -350,7 +353,7 @@ void Compiler::Dump() {
     // Print variable names or constants.
     if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName ||
         inst.inst == Inst_FuncBegin || inst.inst == Inst_FuncEnd) {
-      std::cout << "\t\t" << inst.offset << " (" << variablePool_[inst.offset]
+      std::cout << "\t\t" << inst.offset << " (" << symbolPool_[inst.offset]
                 << ')';
     } else if (inst.inst == Inst_LoadConst) {
       std::cout << "\t\t" << inst.offset << " (";
@@ -359,10 +362,10 @@ void Compiler::Dump() {
     std::cout << std::endl;
   }
   std::cout << std::endl;
-  std::cout << "variables: " << std::endl;
+  std::cout << "symbols: " << std::endl;
   std::cout << "-----" << std::endl;
-  for (size_t i = 0; i < variablePool_.size(); ++i) {
-    const auto &var = variablePool_[i];
+  for (size_t i = 0; i < symbolPool_.size(); ++i) {
+    const auto &var = symbolPool_[i];
     std::cout << i << "\t\t" << var << std::endl;
   }
   std::cout << std::endl;

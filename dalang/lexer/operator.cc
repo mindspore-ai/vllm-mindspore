@@ -19,6 +19,8 @@ Token TraverseOpTable(const char *start) {
     const auto &op = _operators[pos];
     auto t = Token{.type = TokenType_Operator};
     t.data.op = op.id;
+    t.start = start;
+    t.len = strlen(op.name);
     t.name.assign(op.name, strlen(op.name));
     return t;
   }

@@ -10,6 +10,8 @@ Token FindIdentifier(const char *start) {
     return Token{.type = TokenType_End};
   }
   Token token{.type = TokenType_Identifier};
+  token.start = start;
+  token.len = pos;
   token.name.assign(start, pos);
   return token;
 }

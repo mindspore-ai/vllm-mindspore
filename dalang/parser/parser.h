@@ -51,6 +51,8 @@ public:
   // Parse statements.
   StmtPtr ParseCode();
 
+  const std::string &filename() const { return filename_; }
+
   void DumpAst();
 
 private:

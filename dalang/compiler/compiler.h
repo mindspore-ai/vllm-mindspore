@@ -12,7 +12,7 @@ namespace compiler {
 using namespace parser;
 
 #define INSTRUCTION(I) Inst_##I,
-typedef enum OperatorId {
+typedef enum InstType {
   Inst_Invalid,
 #include "compiler/instruction.list"
   Inst_End,
@@ -65,11 +65,16 @@ public:
     return (this->*exprHandlers_[expr->type])(expr);
   }
 
-  std::vector<InstCall> instructions() const { return instructions_; }
+  const std::vector<InstCall> &instructions() const { return instructions_; }
   void AddInstruction(const InstCall &inst) {
     instructions_.emplace_back(inst);
     lastLineno_ = inst.lineno;
   }
+
+  const std::vector<std::string> &symbolPool() const { return symbolPool_; }
+  const std::vector<Constant> &constantPool() const { return constantPool_; }
+
+  const std::string &filename() const { return parser_.filename(); }
 
   void Dump();
 
@@ -108,7 +113,7 @@ private:
 
   Parser parser_;
 
-  std::vector<std::string> variablePool_;
+  std::vector<std::string> symbolPool_;
   std::vector<Constant> constantPool_;
 
   std::vector<InstCall> instructions_;
