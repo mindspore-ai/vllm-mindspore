@@ -1,0 +1,10 @@
+x = 1
+y = 6:float
+z = 3:int
+l = 2 + 5:int
+m = x + y / z
+n = m * 100:int
+
+a = m + n / l
+b = a / 3
+return b

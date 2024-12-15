@@ -1,6 +1,7 @@
 #include "compiler/compiler.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
+#include "vm/vm.h"
 
 void RunLexerTest(const char *filename) {
   auto lexer = lexer::Lexer(filename);
@@ -29,21 +30,37 @@ void RunCompilerTest(const char *filename) {
   compiler.Dump();
 }
 
+void RunCompilerAndVmTest(const char *filename) {
+  auto compiler = compiler::Compiler(filename);
+  compiler.Compile();
+  compiler.Dump();
+
+  auto vm = vm::VM(&compiler);
+  vm.Run();
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     std::cerr << "Need a file name" << std::endl;
     return -1;
   }
   auto filename = argv[1];
-  LOG_OUT << "filename: " << filename;
+  LOG_OUT << "\nfilename: " << filename;
   constexpr auto test_lexer = false;
   if (test_lexer) {
     RunLexerTest(filename);
   }
-  constexpr auto test_parser = true;
+  constexpr auto test_parser = false;
   if (test_parser) {
     RunParserTest(filename);
   }
-  RunCompilerTest(filename);
+  constexpr auto test_compiler = false;
+  if (test_compiler) {
+    RunCompilerTest(filename);
+  }
+  constexpr auto test_vm = true;
+  if (test_vm) {
+    RunCompilerAndVmTest(filename);
+  }
   return 0;
 }
