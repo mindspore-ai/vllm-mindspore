@@ -150,16 +150,19 @@ Token FindLiteral(const char *start) {
   if (matchEnd != nullptr) {
     Token token{.type = TokenType_Literal};
     token.data.lt = LiteralId_str;
-    token.start = start;
-    token.len = matchEnd - start + 1;
-    token.name.assign(start, matchEnd - start + 1);
+    const auto strStart = start + 1;         // No ' or ".
+    const auto strLen = matchEnd - strStart; // No ' or ".
+    token.start = strStart;
+    token.len = strLen;
+    token.name.assign(strStart, strLen);
     return token;
   } else if (startStr != '\0') { // String across multiple lines.
     Token token{.type = TokenType_ContinuousString};
     token.data.str = &startStr;
-    token.start = start;
-    token.len = strlen(start);
-    token.name.assign(start);
+    const auto strStart = start + 1; // No ' or ".
+    token.start = strStart;
+    token.len = strlen(strStart);
+    token.name.assign(strStart);
     return token;
   } else {
 #ifdef DEBUG

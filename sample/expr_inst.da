@@ -3,5 +3,6 @@ y = 6
 z = 3
 m = x + y / z
 n = m * 100
-str = 'No.' + n
-print(str)
+str = 'No.' + n + '\n'
+s = '"' + str + '"' + "\n"
+return s

@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <fstream>
 
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
+
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
     : filename_{std::filesystem::canonical(std::filesystem::path(filename))
@@ -55,7 +58,7 @@ const std::vector<Token> &Lexer::Tokens() {
 
 const Token Lexer::TokenInLine() {
   if (skipWhiteSpace_) {
-    pos_ += SkipWhiteSpace(line_.c_str() + pos_);
+    column_ += SkipWhiteSpace(line_.c_str() + column_);
     if (IsLineEnd()) {
       return Token{.type = TokenType_End};
     }
@@ -64,49 +67,52 @@ const Token Lexer::TokenInLine() {
   Token token = GetComment();
   if (token.type != TokenType_End) {
     assert(token.len == token.name.size());
-    pos_ += token.len;
+    column_ += token.len;
     return token;
   }
   token = GetOperator();
   if (token.type != TokenType_End) {
     assert(token.len == token.name.size());
-    pos_ += token.len;
+    column_ += token.len;
     return token;
   }
   token = GetSeparator();
   if (token.type != TokenType_End) {
     assert(token.len == token.name.size());
-    pos_ += token.len;
+    column_ += token.len;
     return token;
   }
   token = GetKeyword();
   if (token.type != TokenType_End) {
     assert(token.len == token.name.size());
-    pos_ += token.len;
+    column_ += token.len;
     return token;
   }
   token = GetLiteral();
   if (token.type != TokenType_End) {
     if (token.lineStart == token.lineEnd) { // Not multiple lines.
       assert(token.len >= token.name.size());
-      pos_ += token.len;
+      column_ += token.len;
+      if (token.data.lt == LiteralId_str) {
+        column_ += 2; // Swallow two ' or " for string literal.
+      }
     }
     return token;
   }
   token = GetIdentifier();
   if (token.type != TokenType_End) {
     assert(token.len == token.name.size());
-    pos_ += token.len;
+    column_ += token.len;
     return token;
   }
 
   // Not match any excepted token, return a invalid token and move on.
   Token invalidToken = Token{.type = TokenType_Invalid};
   if (!IsLineEnd()) {
-    invalidToken.name = line_.at(pos_);
+    invalidToken.name = line_.at(column_);
   }
   SetLineInfo(&invalidToken);
-  ++pos_;
+  ++column_;
   return invalidToken;
 }
 
@@ -119,7 +125,7 @@ void Lexer::OpenFile(const std::string &filename) {
 }
 
 const std::string &Lexer::ReadLine() {
-  pos_ = 0;
+  column_ = 0;
   std::getline(file_, line_);
 #ifdef DEBUG
   LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
@@ -138,39 +144,39 @@ const std::string &Lexer::ReadLine() {
 }
 
 bool Lexer::IsLineEnd() const {
-  return line_.empty() || pos_ == line_.length();
+  return line_.empty() || column_ == line_.length();
 }
 
 void Lexer::SetLineInfo(TokenPtr token) {
   token->lineStart = token->lineEnd = lineno_;
-  token->columnStart = pos_;
-  token->columnEnd = pos_ + token->name.size();
+  token->columnStart = column_;
+  token->columnEnd = column_ + token->name.size();
 }
 
 Token Lexer::GetOperator() {
-  Token tok = TraverseOpTable(line_.c_str() + pos_);
+  Token tok = TraverseOpTable(line_.c_str() + column_);
   SetLineInfo(&tok);
   return tok;
 }
 
 Token Lexer::GetSeparator() {
-  Token tok = TraverseSpTable(line_.c_str() + pos_);
+  Token tok = TraverseSpTable(line_.c_str() + column_);
   SetLineInfo(&tok);
   return tok;
 }
 
 Token Lexer::GetKeyword() {
-  Token tok = TraverseKwTable(line_.c_str() + pos_);
+  Token tok = TraverseKwTable(line_.c_str() + column_);
   SetLineInfo(&tok);
   return tok;
 }
 
 Token Lexer::GetLiteral() {
-  Token tok = FindLiteral(line_.c_str() + pos_);
+  Token tok = FindLiteral(line_.c_str() + column_);
   SetLineInfo(&tok);
   if (tok.type == TokenType_Invalid) {
     // Exception here.
-    CompileMessage(filename_, lineno_, pos_,
+    CompileMessage(filename_, lineno_, column_,
                    "warning: unexcepted literal string format.");
     exit(1);
   }
@@ -179,26 +185,26 @@ Token Lexer::GetLiteral() {
   }
   // String across multiple lines.
   int lineno = lineno_;
-  int pos = pos_;
+  int column = column_;
   for (EVER) {
     if (eof_) {
       // Exception here.
-      CompileMessage(filename_, lineno, pos,
+      CompileMessage(filename_, lineno, column,
                      "warning: unexcepted end of file during "
                      "scanning multiple lines string.");
       exit(1);
     }
     ReadLine();
-    const char *pos = strchr(line_.c_str(), *tok.data.str);
-    if (pos != nullptr) { // Found the end of string.
+    const char *column = strchr(line_.c_str(), *tok.data.str);
+    if (column != nullptr) { // Found the end of string.
       tok.name.append(1, '\n');
-      auto len = pos - line_.c_str() + 1;
+      auto len = column - line_.c_str(); // No ' or ".
       tok.name.append(line_.c_str(), len);
       tok.type = TokenType_Literal;
       tok.data.lt = LiteralId_str;
       tok.lineEnd = lineno_;
-      tok.columnEnd = pos - line_.c_str();
-      pos_ += len;
+      tok.columnEnd = column - line_.c_str();
+      column_ += len + 1; // With ' or ".
       return tok;
     } else {
       tok.name.append(1, '\n');
@@ -209,13 +215,13 @@ Token Lexer::GetLiteral() {
 }
 
 Token Lexer::GetIdentifier() {
-  Token tok = FindIdentifier(line_.c_str() + pos_);
+  Token tok = FindIdentifier(line_.c_str() + column_);
   SetLineInfo(&tok);
   return tok;
 }
 
 Token Lexer::GetComment() {
-  Token tok = FindComment(line_.c_str() + pos_, line_.length() - pos_);
+  Token tok = FindComment(line_.c_str() + column_, line_.length() - column_);
   SetLineInfo(&tok);
   return tok;
 }

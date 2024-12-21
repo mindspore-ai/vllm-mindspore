@@ -3,6 +3,7 @@
 
 #include <iomanip>
 #include <limits>
+#include <set>
 
 #include "compiler/compiler.h"
 
@@ -32,39 +33,65 @@ struct Slot {
   } value;
 };
 
-inline std::string ToString(const Slot &slot) {
-  if (slot.type == SlotBool) {
-    return slot.value.str_;
+inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
+  switch (slot.type) {
+  case SlotBool: {
+    ss << (slot.value.bool_ ? "true" : "false");
+    break;
   }
-  if (slot.type == SlotInt) {
-    return std::to_string(slot.value.int_);
+  case SlotInt: {
+    ss << std::to_string(slot.value.int_);
+    break;
   }
-  if (slot.type == SlotFloat) {
-    std::stringstream ss;
+  case SlotFloat: {
     ss << std::setprecision(std::numeric_limits<double>::max_digits10)
        << slot.value.float_;
-    return ss.str();
+    break;
   }
-  if (slot.type == SlotString) {
-    return slot.value.str_;
+  case SlotString: {
+    ss << slot.value.str_;
+    break;
   }
-  if (slot.type == SlotFunction) {
-    std::stringstream ss;
-    ss << "function: " << slot.value.addr;
-    return ss.str();
+  case SlotFunction: {
+    ss << "function:" << slot.value.addr;
+    break;
   }
-  if (slot.type == SlotClass) {
-    std::stringstream ss;
-    ss << "class: " << slot.value.addr;
-    return ss.str();
+  case SlotClass: {
+    ss << "class:" << slot.value.addr;
+    break;
   }
-  if (slot.type == SlotRefName) {
-    std::stringstream ss;
-    ss << "ref: " << slot.value.addr;
-    return ss.str();
+  case SlotRefName: {
+    ss << "ref:" << slot.value.addr;
+    break;
   }
-  return "unknown";
+  default:
+    // unknown
+    ss << "<unknown>";
+  }
 }
+
+inline std::string ToString(const Slot &slot) {
+  std::stringstream ss;
+  GetSlotStr(slot, ss);
+  return ss.str();
+}
+
+class StringPool {
+public:
+  const char *Intern(const char *str) {
+    return stringPool_.emplace(str).first->c_str();
+  }
+
+  const char *Intern(const std::string &str) {
+    return stringPool_.emplace(str).first->c_str();
+  }
+  const char *Intern(const std::string &&str) {
+    return stringPool_.emplace(std::move(str)).first->c_str();
+  }
+
+private:
+  std::set<std::string> stringPool_;
+};
 
 class VM {
 public:
@@ -92,6 +119,8 @@ public:
 
   void Run();
 
+  StringPool &stringPool() { return stringPool_; }
+
 private:
   const std::vector<InstCall> &insts() const {
     CHECK_NULL(instsPtr_);
@@ -115,10 +144,15 @@ private:
            std::to_string(currentInstPtr_->lineno);
   }
 
+  Slot ConvertConstType(ConstType type, const std::string &value);
+  Slot ConvertConstType(const Constant &cons);
+
   Compiler *compiler_{nullptr};
   const std::vector<InstCall> *instsPtr_{nullptr};
   const std::vector<std::string> *symsPtr_{nullptr};
   const std::vector<Constant> *constsPtr_{nullptr};
+
+  StringPool stringPool_;
 
   std::vector<Slot> stack_;
   std::unordered_map<std::string, Slot> nameMap_;
@@ -138,7 +172,7 @@ private:
     if (lhs.type == SlotInt && rhs.type == SlotInt) {                          \
       auto lhsVal = lhs.value.int_;                                            \
       auto rhsVal = rhs.value.int_;                                            \
-      if (rhsVal == 0) {                                                       \
+      if (rhsVal == 0 && strcmp(#OpSymbol, "/") == 0) {                        \
         CompileMessage(LineString(), "error: should not div 0");               \
         exit(1);                                                               \
       }                                                                        \
@@ -146,12 +180,11 @@ private:
       Slot slot;                                                               \
       slot.type = SlotInt;                                                     \
       slot.value.int_ = res;                                                   \
-      stack_.emplace_back(slot);                                               \
-      LOG_OUT << "result: " << res;                                            \
+      stack_.emplace_back(std::move(slot));                                    \
     } else if (lhs.type == SlotFloat && rhs.type == SlotFloat) {               \
       auto lhsVal = lhs.value.float_;                                          \
       auto rhsVal = rhs.value.float_;                                          \
-      if (rhsVal == 0) {                                                       \
+      if (rhsVal == 0.0 && strcmp(#OpSymbol, "/") == 0) {                      \
         CompileMessage(LineString(), "error: should not div 0");               \
         exit(1);                                                               \
       }                                                                        \
@@ -159,12 +192,11 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
-      stack_.emplace_back(slot);                                               \
-      LOG_OUT << "result: " << res;                                            \
+      stack_.emplace_back(std::move(slot));                                    \
     } else if (lhs.type == SlotInt && rhs.type == SlotFloat) {                 \
       auto lhsVal = lhs.value.int_;                                            \
       auto rhsVal = rhs.value.float_;                                          \
-      if (rhsVal == 0) {                                                       \
+      if (rhsVal == 0.0 && strcmp(#OpSymbol, "/") == 0) {                      \
         CompileMessage(LineString(), "error: should not div 0");               \
         exit(1);                                                               \
       }                                                                        \
@@ -173,11 +205,10 @@ private:
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
       stack_.emplace_back(slot);                                               \
-      LOG_OUT << "result: " << res;                                            \
     } else if (lhs.type == SlotFloat && rhs.type == SlotInt) {                 \
       auto lhsVal = lhs.value.float_;                                          \
       auto rhsVal = rhs.value.int_;                                            \
-      if (rhsVal == 0) {                                                       \
+      if (rhsVal == 0 && strcmp(#OpSymbol, "/") == 0) {                        \
         CompileMessage(LineString(), "error: should not div 0");               \
         exit(1);                                                               \
       }                                                                        \
@@ -185,8 +216,21 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
-      stack_.emplace_back(slot);                                               \
-      LOG_OUT << "result: " << res;                                            \
+      stack_.emplace_back(std::move(slot));                                    \
+    } else if (lhs.type == SlotString || rhs.type == SlotString) {             \
+      if (strcmp(#OpSymbol, "+") != 0) {                                       \
+        CompileMessage(LineString(),                                           \
+                       "error: only support '+' for string operation.");       \
+        exit(1);                                                               \
+      }                                                                        \
+      std::stringstream ss;                                                    \
+      GetSlotStr(lhs, ss);                                                     \
+      GetSlotStr(rhs, ss);                                                     \
+      Slot slot;                                                               \
+      slot.type = SlotString;                                                  \
+      const char *str = stringPool().Intern(std::move(ss.str()));              \
+      slot.value.str_ = str;                                                   \
+      stack_.emplace_back(std::move(slot));                                    \
     } else {                                                                   \
       CompileMessage(LineString(),                                             \
                      "error: only support int or float binary operation.");    \

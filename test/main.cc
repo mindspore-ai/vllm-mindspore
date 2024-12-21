@@ -3,6 +3,9 @@
 #include "parser/parser.h"
 #include "vm/vm.h"
 
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
+
 void RunLexerTest(const char *filename) {
   auto lexer = lexer::Lexer(filename);
   for (EVER) {
@@ -33,8 +36,6 @@ void RunCompilerTest(const char *filename) {
 void RunCompilerAndVmTest(const char *filename) {
   auto compiler = compiler::Compiler(filename);
   compiler.Compile();
-  compiler.Dump();
-
   auto vm = vm::VM(&compiler);
   vm.Run();
 }

@@ -2,40 +2,62 @@
 #include "vm/vm.h"
 
 #include "common/common.h"
+#include <algorithm>
 
 #undef LOG_OUT
 #define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
-Slot ConvertConstType(ConstType type, const std::string &value) {
+void ReplaceStr(std::string &dst, const char *oldStr, size_t oldStrLen,
+                const char *newStr) {
+  std::string::size_type pos = 0;
+  while ((pos = dst.find(oldStr)) != std::string::npos) {
+    dst.replace(pos, oldStrLen, newStr);
+  }
+}
+
+void ConvertEscapeChar(std::string &str) {
+  ReplaceStr(str, "\\n", 2, "\n");
+  ReplaceStr(str, "\\r", 2, "\r");
+  ReplaceStr(str, "\\t", 2, "\t");
+}
+} // namespace
+
+Slot VM::ConvertConstType(ConstType type, const std::string &value) {
   Slot slot;
   switch (type) {
-  case ConstType_bool:
+  case ConstType_bool: {
     slot.type = SlotBool;
     slot.value.bool_ = value == "true" ? true : false;
     return slot;
-  case ConstType_int:
+  }
+  case ConstType_int: {
     slot.type = SlotInt;
     slot.value.int_ = std::stoi(value);
     return slot;
-  case ConstType_float:
+  }
+  case ConstType_float: {
     slot.type = SlotFloat;
     slot.value.float_ = std::stof(value);
     return slot;
-  case ConstType_str:
+  }
+  case ConstType_str: {
     slot.type = SlotString;
-    slot.value.str_ = value.c_str();
+    std::string val = value;
+    ConvertEscapeChar(val);
+    const char *strPtr = stringPool().Intern(std::move(val));
+    slot.value.str_ = strPtr;
     return slot;
+  }
   default:
     throw std::runtime_error("Unexcepted constant");
   }
 }
 
-Slot ConvertConstType(const Constant &cons) {
+Slot VM::ConvertConstType(const Constant &cons) {
   return ConvertConstType(cons.type, cons.value);
 }
-} // namespace
 
 // Load the constants by index from const pool.
 void VM::InstLoadConst(ssize_t offset) {

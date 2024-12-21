@@ -37,7 +37,7 @@ private:
   std::ifstream file_;
   std::string line_;
   size_t lineno_{0};
-  size_t pos_{0};
+  size_t column_{0};
   bool eof_{false};
   bool skipWhiteSpace_{false};
   bool scanned_{false};
