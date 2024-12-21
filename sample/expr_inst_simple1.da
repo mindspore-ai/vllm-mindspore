@@ -3,7 +3,7 @@ y = 99
 z = 3
 l = 2 + 5
 m = x + y / z
-n = m * 199
+n = m * 199:float
 a = m + n / l
 b = a / 3
-return b
+return b + '\n'

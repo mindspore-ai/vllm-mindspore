@@ -5,4 +5,4 @@ m = x + y / z
 n = m * 100
 str = 'No.' + n + '\n'
 s = '"' + str + '"' + "\n"
-return s + "\\中华人民共和国\n"
+return s + $0

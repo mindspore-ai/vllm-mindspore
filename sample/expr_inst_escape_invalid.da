@@ -1,0 +1,8 @@
+x = 1
+y = 6
+z = 3
+m = x + y / z
+n = m * 100
+str = '清华：\str: ' + '\tyou \can do it\n' + n + '\n\'
+s = '"' + str + '\r' + '"' + "\n"
+return s + "\\中华人民共和国\n" + '\t\\Can \you read this?\n\t\\Yes\n\'

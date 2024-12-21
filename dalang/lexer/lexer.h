@@ -33,6 +33,8 @@ private:
   Token GetIdentifier();
   Token GetComment();
 
+  std::string UnescapeString(const std::string &str);
+
   std::string filename_;
   std::ifstream file_;
   std::string line_;

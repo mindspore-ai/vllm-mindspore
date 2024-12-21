@@ -147,6 +147,8 @@ private:
   Slot ConvertConstType(ConstType type, const std::string &value);
   Slot ConvertConstType(const Constant &cons);
 
+  bool ReplaceEscapeStr(std::string &dst);
+
   Compiler *compiler_{nullptr};
   const std::vector<InstCall> *instsPtr_{nullptr};
   const std::vector<std::string> *symsPtr_{nullptr};

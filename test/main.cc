@@ -36,6 +36,7 @@ void RunCompilerTest(const char *filename) {
 void RunCompilerAndVmTest(const char *filename) {
   auto compiler = compiler::Compiler(filename);
   compiler.Compile();
+  compiler.Dump();
   auto vm = vm::VM(&compiler);
   vm.Run();
 }

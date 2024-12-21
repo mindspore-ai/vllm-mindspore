@@ -97,6 +97,9 @@ const Token Lexer::TokenInLine() {
         column_ += 2; // Swallow two ' or " for string literal.
       }
     }
+    if (token.data.lt == LiteralId_str) {
+      token.name = std::move(UnescapeString(token.name));
+    }
     return token;
   }
   token = GetIdentifier();
@@ -224,5 +227,79 @@ Token Lexer::GetComment() {
   Token tok = FindComment(line_.c_str() + column_, line_.length() - column_);
   SetLineInfo(&tok);
   return tok;
+}
+
+std::string Lexer::UnescapeString(const std::string &str) {
+  if (str.find('\\') == std::string::npos) {
+    return str;
+  }
+  std::stringstream ss;
+  std::string::const_iterator it = str.cbegin();
+  while (it != str.cend()) {
+    char c = *it++;
+    if (c == '\\') {
+      if (it == str.cend()) {
+        // Invalid or unsupported escape sequence.
+        auto invalidPos =
+            std::distance(str.cbegin(), it - 1); // The position of /
+        constexpr auto quotSize = 1;
+        auto colPos = column_ - (str.size() - invalidPos) - quotSize;
+        std::stringstream ss;
+        ss << "error: unexpected string literal: '" << str
+           << "', position: " << invalidPos << ", col: " << colPos;
+        CompileMessage(filename_, lineno_, colPos, ss.str());
+        exit(1);
+      }
+      // https://en.cppreference.com/w/cpp/language/escape
+      switch (*it++) {
+      case '\'':
+        c = '\'';
+        break;
+      case '"':
+        c = '\"';
+        break;
+      case '?':
+        c = '\?';
+        break;
+      case '\\':
+        c = '\\';
+        break;
+      case 'a':
+        c = '\a';
+        break;
+      case 'b':
+        c = '\b';
+        break;
+      case 'f':
+        c = '\f';
+        break;
+      case 'n':
+        c = '\n';
+        break;
+      case 'r':
+        c = '\r';
+        break;
+      case 't':
+        c = '\t';
+        break;
+      case 'v':
+        c = '\v';
+        break;
+      default:
+        // Invalid or unsupported escape sequence.
+        auto invalidPos =
+            std::distance(str.cbegin(), it - 2); // The position of /
+        constexpr auto quotSize = 1;
+        auto colPos = column_ - (str.size() - invalidPos) - quotSize;
+        std::stringstream ss;
+        ss << "error: unexpected string literal: '" << str
+           << "', position: " << invalidPos << ", col: " << colPos;
+        CompileMessage(filename_, lineno_, colPos, ss.str());
+        exit(1);
+      }
+    }
+    ss << c;
+  }
+  return ss.str();
 }
 } // namespace lexer

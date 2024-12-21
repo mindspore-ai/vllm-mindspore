@@ -16,13 +16,37 @@ void ReplaceStr(std::string &dst, const char *oldStr, size_t oldStrLen,
     dst.replace(pos, oldStrLen, newStr);
   }
 }
-
-void ConvertEscapeChar(std::string &str) {
-  ReplaceStr(str, "\\n", 2, "\n");
-  ReplaceStr(str, "\\r", 2, "\r");
-  ReplaceStr(str, "\\t", 2, "\t");
-}
 } // namespace
+
+bool VM::ReplaceEscapeStr(std::string &dst) {
+  constexpr auto escapeSize = 4;
+  const char *escapes[] = {"\\\\", "\\n", "\\r", "\\t"};
+  const char *results[] = {"\\", "\n", "\r", "\t"};
+  std::string::size_type pos = 0;
+  for (EVER) {
+    pos = dst.find('\\', pos);
+    if (pos == std::string::npos) {
+      return true;
+    }
+    if (pos + 1 == dst.size()) { // Meet a last '\'
+      return false;
+    }
+    std::string::size_type oldPos = pos;
+    for (size_t i = 0; i < escapeSize; ++i) {
+      auto escChar = escapes[i][1];
+      if (dst[pos + 1] == escChar) {
+        dst.replace(pos, strlen(escapes[i]), results[i]);
+        LOG_OUT << "replace " << escapes[i] << " with " << results[i];
+        pos += strlen(results[i]);
+        break;
+      }
+    }
+    if (oldPos == pos) { // Not match any escape.
+      return false;
+    }
+  }
+  return true;
+}
 
 Slot VM::ConvertConstType(ConstType type, const std::string &value) {
   Slot slot;
@@ -44,9 +68,7 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
   }
   case ConstType_str: {
     slot.type = SlotString;
-    std::string val = value;
-    ConvertEscapeChar(val);
-    const char *strPtr = stringPool().Intern(std::move(val));
+    const char *strPtr = stringPool().Intern(value);
     slot.value.str_ = strPtr;
     return slot;
   }
