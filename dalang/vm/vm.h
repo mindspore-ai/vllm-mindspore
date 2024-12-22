@@ -10,6 +10,10 @@
 namespace vm {
 using namespace compiler;
 
+class VM;
+using InstHandlerFunction = void (VM::*)(ssize_t);
+using InstHandlerFunctions = std::unordered_map<InstType, InstHandlerFunction>;
+
 enum SlotType {
   SlotInvalid,
   SlotRefName,
@@ -181,9 +185,9 @@ private:
 
   std::vector<Frame> frames_; // Block, function or module stack.
 
-  using InstHandlerFunction = void (VM::*)(ssize_t);
-  std::unordered_map<InstType, InstHandlerFunction> instHandlers_;
   const InstCall *currentInstPtr_{nullptr};
+
+  InstHandlerFunctions instHandlers_; // Notice: Do not change.
 };
 
 #define BINARY_OP(OpName, OpSymbol)                                            \

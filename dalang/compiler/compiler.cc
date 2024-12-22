@@ -72,7 +72,7 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   CallExprHandler(stmt->stmt.Assign.value);
   // Make call.
   const auto lineno = target->lineStart;
-  const auto index = FindVariableNameIndex(targetName);
+  const auto index = FindSymbolIndex(targetName);
   InstCall call = {
       .inst = Inst_StoreName,
       .offset =
@@ -120,7 +120,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   const auto funcName = *(name->expr.Name.identifier);
   LOG_OUT << "func name: " << funcName;
   const auto lineno = name->lineStart;
-  const auto index = FindVariableNameIndex(funcName);
+  const auto index = FindSymbolIndex(funcName);
   InstCall funcBegin = {
       .inst = Inst_FuncBegin,
       .offset =
@@ -289,7 +289,7 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   }
   const auto &name = *expr->expr.Name.identifier;
   const auto lineno = expr->lineStart;
-  const auto index = FindVariableNameIndex(name);
+  const auto index = FindSymbolIndex(name);
   InstCall load = {
       .inst = Inst_LoadName,
       .offset =
@@ -312,25 +312,51 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
   const auto &value = *expr->expr.Literal.value;
   LOG_OUT << "value: " << value;
   const auto lineno = expr->lineStart;
+  const auto index = FindConstantIndex(value);
   InstCall load = {.inst = Inst_LoadConst,
-                   .offset = static_cast<ssize_t>(constantPool_.size()),
+                   .offset = index != -1
+                                 ? index
+                                 : static_cast<ssize_t>(constantPool_.size()),
                    .lineno = lineno};
-  Constant cons = {.type = static_cast<ConstType>(kind), .value = value};
-  constantPool_.emplace_back(cons);
+  if (index == -1) { // Not used before.
+    Constant cons = {.type = static_cast<ConstType>(kind), .value = value};
+    constantPool_.emplace_back(cons);
+  }
   AddInstruction(load);
   return true;
 }
 
 // Return -1 if not found.
-ssize_t Compiler::FindVariableNameIndex(const std::string &name) {
+ssize_t Compiler::FindSymbolIndex(const std::string &name) {
   auto iter = std::find(symbolPool_.cbegin(), symbolPool_.cend(), name);
   if (iter == symbolPool_.cend()) {
     return -1;
   }
   auto index = std::distance(symbolPool_.cbegin(), iter);
   if (index < 0) {
-    LOG_ERROR << "Not found variable, index should not be negative " << index
+    LOG_ERROR << "Not found symbol, index should not be negative " << index
               << ", name: " << name;
+    exit(1);
+  }
+  return index;
+}
+
+// Return -1 if not found.
+ssize_t Compiler::FindConstantIndex(const std::string &str) {
+  auto iter = std::find_if(constantPool_.cbegin(), constantPool_.cend(),
+                           [&str](const Constant &cons) {
+                             if (cons.value == str) {
+                               return true;
+                             }
+                             return false;
+                           });
+  if (iter == constantPool_.cend()) {
+    return -1;
+  }
+  auto index = std::distance(constantPool_.cbegin(), iter);
+  if (index < 0) {
+    LOG_ERROR << "Not found constant, index should not be negative " << index
+              << ", str: " << str;
     exit(1);
   }
   return index;
@@ -361,7 +387,15 @@ void Compiler::Dump() {
                 << ')';
     } else if (inst.inst == Inst_LoadConst) {
       std::cout << "\t\t" << inst.offset << " (";
-      std::cout << constantPool_[inst.offset].value << ')';
+      const auto &cons = constantPool_[inst.offset];
+      if (cons.type == ConstType_str) {
+        std::cout << "'";
+      }
+      std::cout << cons.value;
+      if (cons.type == ConstType_str) {
+        std::cout << "'";
+      }
+      std::cout << ')';
     }
     std::cout << std::endl;
   }
@@ -377,8 +411,15 @@ void Compiler::Dump() {
   std::cout << "-----" << std::endl;
   for (size_t i = 0; i < constantPool_.size(); ++i) {
     const auto &cons = constantPool_[i];
-    std::cout << i << "\t\t" << cons.value << '\t'
-              << ToStr(static_cast<LtId>(cons.type)) << std::endl;
+    std::cout << i << "\t\t";
+    if (cons.type == ConstType_str) {
+      std::cout << "'";
+    }
+    std::cout << cons.value;
+    if (cons.type == ConstType_str) {
+      std::cout << "'";
+    }
+    std::cout << '\t' << ToStr(static_cast<LtId>(cons.type)) << std::endl;
   }
   std::cout << std::endl;
 }

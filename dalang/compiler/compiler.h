@@ -19,14 +19,6 @@ typedef enum InstType {
 } Inst;
 #undef INSTRUCTION
 
-struct InstCall {
-  Inst inst;
-  ssize_t offset;
-  ssize_t lineno;
-};
-typedef InstCall *InstCallPtr;
-typedef const InstCall *InstCallConstPtr;
-
 #define TYPE(T) ConstType_##T,
 enum ConstType {
   Invalid,
@@ -35,18 +27,26 @@ enum ConstType {
 };
 #undef TYPE
 
+class Compiler;
+class CompilerNodeVisitor;
+using StmtHandlerFunction = bool (Compiler::*)(StmtConstPtr);
+using ExprHandlerFunction = bool (Compiler::*)(ExprConstPtr);
+using StmtHandlerFunctions = std::unordered_map<StmtType, StmtHandlerFunction>;
+using ExprHandlerFunctions = std::unordered_map<ExprType, ExprHandlerFunction>;
+
+struct InstCall {
+  Inst inst;
+  ssize_t offset;
+  ssize_t lineno;
+};
+typedef InstCall *InstCallPtr;
+typedef const InstCall *InstCallConstPtr;
+
 struct Constant {
   ConstType type;
   std::string value;
 };
 typedef Constant *ConstantPtr;
-
-class Compiler;
-class CompilerNodeVisitor;
-using StmtHandlerFunction = bool (Compiler::*)(StmtConstPtr);
-using ExprHandlerFunction = bool (Compiler::*)(ExprConstPtr);
-
-const char *GetInstStr(Inst inst);
 
 class Compiler {
 public:
@@ -109,7 +109,8 @@ private:
   bool CompileLiteral(ExprConstPtr expr);
 
 private:
-  ssize_t FindVariableNameIndex(const std::string &name);
+  ssize_t FindSymbolIndex(const std::string &name);
+  ssize_t FindConstantIndex(const std::string &str);
 
   Parser parser_;
 
@@ -118,10 +119,10 @@ private:
 
   std::vector<InstCall> instructions_;
   ssize_t lastLineno_;
-  std::unordered_map<StmtType, StmtHandlerFunction> stmtHandlers_;
-  std::unordered_map<ExprType, ExprHandlerFunction> exprHandlers_;
-
   CompilerNodeVisitor *walker_;
+
+  StmtHandlerFunctions stmtHandlers_; // Notice: Do not change.
+  ExprHandlerFunctions exprHandlers_; // Notice: Do not change.
 };
 
 class CompilerNodeVisitor : public NodeVisitor {
@@ -159,6 +160,7 @@ private:
   Compiler *compiler_;
 };
 
+const char *GetInstStr(Inst inst);
 } // namespace compiler
 
 #endif // __PARSER_COMPILER_COMPILER_H__
