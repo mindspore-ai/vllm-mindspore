@@ -47,6 +47,10 @@ bool Compiler::CompileExpr(StmtConstPtr stmt) {
   CHECK_NULL(stmt->stmt.Expr.value);
   LOG_OUT << ToString(stmt) << "/" << ToString(stmt->stmt.Expr.value);
   CallExprHandler(stmt->stmt.Expr.value);
+  const auto lineno = stmt->lineStart;
+  InstCall pop = {.inst = Inst_PopTop, .offset = 0, .lineno = lineno};
+  AddInstruction(pop);
+  return true;
   return true;
 }
 

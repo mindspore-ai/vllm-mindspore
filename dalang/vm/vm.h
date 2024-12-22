@@ -33,6 +33,20 @@ struct Slot {
   } value;
 };
 
+enum FrameType {
+  FrameInvalid,
+  FrameBlock,
+  FrameFunction,
+  FrameModule,
+  FrameMax
+};
+
+struct Frame {
+  FrameType type;
+  std::vector<Slot> slots;                     // Slot stack.
+  std::unordered_map<std::string, Slot> names; // Name map.
+};
+
 inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
   switch (slot.type) {
   case SlotBool: {
@@ -101,11 +115,15 @@ public:
         symsPtr_{&compiler->symbolPool()},
         constsPtr_{&compiler->constantPool()} {
     InitInstructionHandlers();
+    auto topFrame = Frame{.type = FrameModule};
+    frames_.emplace_back(topFrame);
   }
+  virtual ~VM() = default;
 
   void InstLoadConst(ssize_t offset);
   void InstLoadName(ssize_t offset);
   void InstStoreName(ssize_t offset);
+  void InstPopTop(ssize_t offset);
   void InstBinaryAdd(ssize_t offset);
   void InstBinarySub(ssize_t offset);
   void InstBinaryMul(ssize_t offset);
@@ -118,6 +136,11 @@ public:
   void InstClassEnd(ssize_t offset);
 
   void Run();
+
+  std::vector<Slot> &stack() { return frames_.back().slots; }
+  std::unordered_map<std::string, Slot> &names() {
+    return frames_.back().names;
+  }
 
   StringPool &stringPool() { return stringPool_; }
 
@@ -156,8 +179,7 @@ private:
 
   StringPool stringPool_;
 
-  std::vector<Slot> stack_;
-  std::unordered_map<std::string, Slot> nameMap_;
+  std::vector<Frame> frames_; // Block, function or module stack.
 
   using InstHandlerFunction = void (VM::*)(ssize_t);
   std::unordered_map<InstType, InstHandlerFunction> instHandlers_;
@@ -167,10 +189,10 @@ private:
 #define BINARY_OP(OpName, OpSymbol)                                            \
   void VM::InstBinary##OpName(ssize_t offset) {                                \
     LOG_OUT << "offset: " << offset;                                           \
-    const auto &rhs = std::move(stack_.back());                                \
-    stack_.pop_back();                                                         \
-    const auto &lhs = std::move(stack_.back());                                \
-    stack_.pop_back();                                                         \
+    const auto &rhs = std::move(stack().back());                               \
+    stack().pop_back();                                                        \
+    const auto &lhs = std::move(stack().back());                               \
+    stack().pop_back();                                                        \
     if (lhs.type == SlotInt && rhs.type == SlotInt) {                          \
       auto lhsVal = lhs.value.int_;                                            \
       auto rhsVal = rhs.value.int_;                                            \
@@ -182,7 +204,7 @@ private:
       Slot slot;                                                               \
       slot.type = SlotInt;                                                     \
       slot.value.int_ = res;                                                   \
-      stack_.emplace_back(std::move(slot));                                    \
+      stack().emplace_back(std::move(slot));                                   \
     } else if (lhs.type == SlotFloat && rhs.type == SlotFloat) {               \
       auto lhsVal = lhs.value.float_;                                          \
       auto rhsVal = rhs.value.float_;                                          \
@@ -194,7 +216,7 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
-      stack_.emplace_back(std::move(slot));                                    \
+      stack().emplace_back(std::move(slot));                                   \
     } else if (lhs.type == SlotInt && rhs.type == SlotFloat) {                 \
       auto lhsVal = lhs.value.int_;                                            \
       auto rhsVal = rhs.value.float_;                                          \
@@ -206,7 +228,7 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
-      stack_.emplace_back(slot);                                               \
+      stack().emplace_back(slot);                                              \
     } else if (lhs.type == SlotFloat && rhs.type == SlotInt) {                 \
       auto lhsVal = lhs.value.float_;                                          \
       auto rhsVal = rhs.value.int_;                                            \
@@ -218,7 +240,7 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
-      stack_.emplace_back(std::move(slot));                                    \
+      stack().emplace_back(std::move(slot));                                   \
     } else if (lhs.type == SlotString || rhs.type == SlotString) {             \
       if (strcmp(#OpSymbol, "+") != 0) {                                       \
         CompileMessage(LineString(),                                           \
@@ -232,7 +254,7 @@ private:
       slot.type = SlotString;                                                  \
       const char *str = stringPool().Intern(std::move(ss.str()));              \
       slot.value.str_ = str;                                                   \
-      stack_.emplace_back(std::move(slot));                                    \
+      stack().emplace_back(std::move(slot));                                   \
     } else {                                                                   \
       CompileMessage(LineString(),                                             \
                      "error: only support int or float binary operation.");    \

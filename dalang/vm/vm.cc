@@ -85,31 +85,37 @@ Slot VM::ConvertConstType(const Constant &cons) {
 void VM::InstLoadConst(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
   const auto &cons = consts()[offset];
-  stack_.emplace_back(ConvertConstType(cons));
+  stack().emplace_back(ConvertConstType(cons));
 }
 
 // Load a value by name which stored before.
 void VM::InstLoadName(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
   const auto &name = syms()[offset];
-  auto iter = nameMap_.find(name);
-  if (iter == nameMap_.cend()) {
+  auto iter = names().find(name);
+  if (iter == names().cend()) {
     CompileMessage(LineString(), "error: not defined symbol: '" + name + "'");
     exit(1);
   }
-  stack_.emplace_back(iter->second);
+  stack().emplace_back(iter->second);
 }
 
-// Store a slot by name for latish load
+// Store a slot by name for latish load.
 void VM::InstStoreName(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
   const auto &name = syms()[offset];
-  auto iter = nameMap_.find(name);
-  if (iter != nameMap_.cend()) {
+  auto iter = names().find(name);
+  if (iter != names().cend()) {
     CompileMessage(LineString(), "warning: covered symbol: '" + name + "'");
   }
-  nameMap_[name] = std::move(stack_.back());
-  stack_.pop_back();
+  names()[name] = std::move(stack().back());
+  stack().pop_back();
+}
+
+// Just pop up the top slot.
+void VM::InstPopTop(ssize_t offset) {
+  LOG_OUT << "offset: " << offset;
+  stack().pop_back();
 }
 
 BINARY_OP(Add, +) // VM::InstBinaryAdd
@@ -138,12 +144,13 @@ void VM::Run() {
     }
     currentInstPtr_ = &inst;
     (this->*instHandlers_[inst.inst])(inst.offset);
-    LOG_OUT << "stack size: " << stack_.size();
+    LOG_OUT << "stack size: " << stack().size();
   }
 
   // Print the value if Return exists.
-  if (stack_.size() == 1 && currentInstPtr_->inst == Inst_ReturnVal) {
-    std::cout << ToString(stack_.back());
+  if (frames_.size() == 1 && stack().size() == 1 &&
+      currentInstPtr_->inst == Inst_ReturnVal) {
+    std::cout << ToString(stack().back());
   }
 }
 

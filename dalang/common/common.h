@@ -1,10 +1,13 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <codecvt>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <locale>
 #include <sstream>
+#include <string>
 
 class Cout {
 public:
@@ -110,5 +113,15 @@ int FindNameIndex(const char *str, T *table, size_t tableSize) {
     }
   }
   return -1;
+}
+
+inline std::wstring StringToWString(const std::string &str) {
+  std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+  return converter.from_bytes(str);
+}
+
+inline std::string WStringToString(const std::wstring &wstr) {
+  std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+  return converter.to_bytes(wstr);
 }
 #endif // __COMMON_H__
