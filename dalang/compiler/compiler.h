@@ -35,18 +35,27 @@ using StmtHandlerFunctions = std::unordered_map<StmtType, StmtHandlerFunction>;
 using ExprHandlerFunctions = std::unordered_map<ExprType, ExprHandlerFunction>;
 
 struct InstCall {
-  Inst inst;
-  ssize_t offset;
-  ssize_t lineno;
+  Inst inst;      // Instruction type.
+  ssize_t offset; // Extra information. Such as contant pool index, jump offset,
+                  // and so on.
+  ssize_t lineno; // Instruction lineno in the code.
 };
 typedef InstCall *InstCallPtr;
 typedef const InstCall *InstCallConstPtr;
 
 struct Constant {
-  ConstType type;
-  std::string value;
+  ConstType type;    // Constant type.
+  std::string value; // Constant value.
 };
 typedef Constant *ConstantPtr;
+
+struct Function {
+  std::string name;              // Function name.
+  ssize_t offset;                // Offset of function first instruction.
+  std::vector<std::string> args; // Parameter names.
+  std::vector<std::string> defs; // Parameter default values.
+};
+typedef Function *FunctionPtr;
 
 class Compiler {
 public:
@@ -65,18 +74,23 @@ public:
     return (this->*exprHandlers_[expr->type])(expr);
   }
 
+  const std::vector<std::string> &symbolPool() const { return symbolPool_; }
+  const std::vector<Constant> &constantPool() const { return constantPool_; }
+  const std::vector<Function> &functionPool() const { return functionPool_; }
   const std::vector<InstCall> &instructions() const { return instructions_; }
+
   void AddInstruction(const InstCall &inst) {
     instructions_.emplace_back(inst);
     lastLineno_ = inst.lineno;
   }
 
-  const std::vector<std::string> &symbolPool() const { return symbolPool_; }
-  const std::vector<Constant> &constantPool() const { return constantPool_; }
-
   const std::string &filename() const { return parser_.filename(); }
 
   void Dump();
+
+  ssize_t FindSymbolIndex(const std::string &name);
+  ssize_t FindConstantIndex(const std::string &str);
+  ssize_t FindFunctionIndex(const std::string &name);
 
 private:
   void InitCompileHandlers();
@@ -109,17 +123,17 @@ private:
   bool CompileLiteral(ExprConstPtr expr);
 
 private:
-  ssize_t FindSymbolIndex(const std::string &name);
-  ssize_t FindConstantIndex(const std::string &str);
-
   Parser parser_;
+  CompilerNodeVisitor *walker_;
+  ssize_t lastLineno_;
 
+  // Compile result records start.
+  // Do serialization or deserialization of them for compilation reuse.
   std::vector<std::string> symbolPool_;
   std::vector<Constant> constantPool_;
-
+  std::vector<Function> functionPool_;
   std::vector<InstCall> instructions_;
-  ssize_t lastLineno_;
-  CompilerNodeVisitor *walker_;
+  // Compile result records end.
 
   StmtHandlerFunctions stmtHandlers_; // Notice: Do not change.
   ExprHandlerFunctions exprHandlers_; // Notice: Do not change.

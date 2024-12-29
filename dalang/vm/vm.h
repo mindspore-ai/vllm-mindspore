@@ -30,6 +30,7 @@ struct Slot {
   SlotType type;
   union {
     void *addr;
+    ssize_t offset;
     bool bool_;
     ssize_t int_;
     double float_;
@@ -115,9 +116,10 @@ class VM {
 public:
   VM() = delete;
   VM(Compiler *compiler)
-      : compiler_{compiler}, instsPtr_{&compiler->instructions()},
-        symsPtr_{&compiler->symbolPool()},
-        constsPtr_{&compiler->constantPool()} {
+      : compiler_{compiler}, symsPtr_{&compiler->symbolPool()},
+        constsPtr_{&compiler->constantPool()},
+        funcsPtr_{&compiler->functionPool()},
+        instsPtr_{&compiler->instructions()} {
     InitInstructionHandlers();
     auto topFrame = Frame{.type = FrameModule};
     frames_.emplace_back(topFrame);
@@ -149,9 +151,9 @@ public:
   StringPool &stringPool() { return stringPool_; }
 
 private:
-  const std::vector<InstCall> &insts() const {
-    CHECK_NULL(instsPtr_);
-    return *instsPtr_;
+  const std::vector<Function> &funcs() const {
+    CHECK_NULL(funcsPtr_);
+    return *funcsPtr_;
   }
 
   const std::vector<std::string> &syms() const {
@@ -164,11 +166,15 @@ private:
     return *constsPtr_;
   }
 
+  const std::vector<InstCall> &insts() const {
+    CHECK_NULL(instsPtr_);
+    return *instsPtr_;
+  }
+
   void InitInstructionHandlers();
 
   std::string LineString() {
-    return compiler_->filename() + ':' +
-           std::to_string(currentInstPtr_->lineno);
+    return compiler_->filename() + ':' + std::to_string(insts()[pc_].lineno);
   }
 
   Slot ConvertConstType(ConstType type, const std::string &value);
@@ -176,16 +182,20 @@ private:
 
   bool ReplaceEscapeStr(std::string &dst);
 
+  bool SkipFuncDefine(const InstCall &inst, size_t &funcDefDepth);
+
   Compiler *compiler_{nullptr};
-  const std::vector<InstCall> *instsPtr_{nullptr};
+
   const std::vector<std::string> *symsPtr_{nullptr};
   const std::vector<Constant> *constsPtr_{nullptr};
+  const std::vector<Function> *funcsPtr_{nullptr};
+  const std::vector<InstCall> *instsPtr_{nullptr};
 
   StringPool stringPool_;
 
   std::vector<Frame> frames_; // Block, function or module stack.
 
-  const InstCall *currentInstPtr_{nullptr};
+  size_t pc_{0};
 
   InstHandlerFunctions instHandlers_; // Notice: Do not change.
 };
@@ -265,6 +275,5 @@ private:
       exit(1);                                                                 \
     }                                                                          \
   }
-
 } // namespace vm
 #endif // __VM_VM_H__

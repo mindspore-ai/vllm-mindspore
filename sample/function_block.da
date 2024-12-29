@@ -7,7 +7,11 @@ function foo(x, y, z=0){
   return (x - y) * z
 }
 
+function bar(z) {
 x = 6
 y = 4
+foo(x, y, z)
+}
+
 z = 2
-foo(x, y, z) # Call foo function directly.
+bar(z)  # Call foo function directly.

@@ -120,17 +120,18 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   const auto funcName = *(name->expr.Name.identifier);
   LOG_OUT << "func name: " << funcName;
   const auto lineno = name->lineStart;
-  const auto index = FindSymbolIndex(funcName);
-  InstCall funcBegin = {
-      .inst = Inst_FuncBegin,
-      .offset =
-          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
-      .lineno = lineno};
-  if (index == -1) { // Not used before.
-    symbolPool_.emplace_back(funcName);
+  const auto index = FindFunctionIndex(funcName);
+  if (index != -1) {
+    CompileMessage(parser_.filename(), lineno, name->columnStart,
+                   "error: duplicate function name '" + funcName + "'.");
+    exit(1);
   }
+  InstCall funcBegin = {.inst = Inst_FuncBegin,
+                        .offset = static_cast<ssize_t>(functionPool_.size()),
+                        .lineno = lineno};
   AddInstruction(funcBegin);
-
+  Function func{.name = funcName,
+                .offset = static_cast<ssize_t>(instructions_.size())};
   // Function parameters.
   LOG_OUT << "func args len: " << funcStmt.argsLen;
   for (size_t i = 0; i < funcStmt.argsLen; ++i) {
@@ -140,7 +141,8 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
         argStmt->stmt.Expr.value->type == ExprType_Name) {
       const auto &argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       LOG_OUT << "param: " << argName;
-      // CallExprHandler(argStmt->stmt.Expr.value);
+      func.args.emplace_back(argName);
+      func.defs.emplace_back("");
     } else if (argStmt->type == StmtType_Assign &&
                argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
@@ -148,9 +150,20 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
       const auto &defaultParam = *literal.value;
       LOG_OUT << "default param: " << argName << ": " << defaultParam;
-      // CallExprHandler(argStmt->stmt.Assign.target);
+      func.args.emplace_back(argName);
+      func.defs.emplace_back(defaultParam);
+    } else {
+      CompileMessage(parser_.filename(), lineno, name->columnStart,
+                     "error: invalid function parameters.");
     }
   }
+  functionPool_.emplace_back(std::move(func));
+  // Also insert function name into the symbol table.
+  const auto symIndex = FindSymbolIndex(funcName);
+  if (symIndex == -1) { // Not used before.
+    symbolPool_.emplace_back(funcName);
+  }
+
   // Function body.
   LOG_OUT << "func body len: " << funcStmt.len;
   for (size_t i = 0; i < funcStmt.len; ++i) {
@@ -362,6 +375,27 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
   return index;
 }
 
+// Return -1 if not found.
+ssize_t Compiler::FindFunctionIndex(const std::string &name) {
+  auto iter = std::find_if(functionPool_.cbegin(), functionPool_.cend(),
+                           [&name](const Function &func) {
+                             if (func.name == name) {
+                               return true;
+                             }
+                             return false;
+                           });
+  if (iter == functionPool_.cend()) {
+    return -1;
+  }
+  auto index = std::distance(functionPool_.cbegin(), iter);
+  if (index < 0) {
+    LOG_ERROR << "Not found function, index should not be negative " << index
+              << ", function: " << name;
+    exit(1);
+  }
+  return index;
+}
+
 void Compiler::Dump() {
   std::cout << "instructions: " << std::endl;
   std::cout << "-----" << std::endl;
@@ -381,10 +415,12 @@ void Compiler::Dump() {
     // Print instruction.
     std::cout << GetInstStr(inst.inst);
     // Print variable names or constants.
-    if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName ||
-        inst.inst == Inst_FuncBegin || inst.inst == Inst_FuncEnd) {
+    if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName) {
       std::cout << "\t\t" << inst.offset << " (" << symbolPool_[inst.offset]
                 << ')';
+    } else if (inst.inst == Inst_FuncBegin || inst.inst == Inst_FuncEnd) {
+      std::cout << "\t\t" << inst.offset << " ("
+                << functionPool_[inst.offset].name << ')';
     } else if (inst.inst == Inst_LoadConst) {
       std::cout << "\t\t" << inst.offset << " (";
       const auto &cons = constantPool_[inst.offset];
@@ -400,6 +436,7 @@ void Compiler::Dump() {
     std::cout << std::endl;
   }
   std::cout << std::endl;
+
   std::cout << "symbols: " << std::endl;
   std::cout << "-----" << std::endl;
   for (size_t i = 0; i < symbolPool_.size(); ++i) {
@@ -407,6 +444,7 @@ void Compiler::Dump() {
     std::cout << i << "\t\t" << var << std::endl;
   }
   std::cout << std::endl;
+
   std::cout << "constants: " << std::endl;
   std::cout << "-----" << std::endl;
   for (size_t i = 0; i < constantPool_.size(); ++i) {
@@ -420,6 +458,33 @@ void Compiler::Dump() {
       std::cout << "'";
     }
     std::cout << '\t' << ToStr(static_cast<LtId>(cons.type)) << std::endl;
+  }
+  std::cout << std::endl;
+
+  std::cout << "functions: " << std::endl;
+  std::cout << "-----" << std::endl;
+  for (size_t i = 0; i < functionPool_.size(); ++i) {
+    const auto &func = functionPool_[i];
+    std::cout << i << "\t\t";
+
+    std::cout << func.name << "(";
+    if (func.args.size() != func.defs.size()) {
+      std::cout << "\n\nerror: parameters count is not equal to defaults count."
+                << std::endl;
+      exit(1);
+    }
+    for (size_t i = 0; i < func.args.size(); ++i) {
+      const auto &arg = func.args[i];
+      const auto &def = func.defs[i];
+      std::cout << arg;
+      if (!def.empty()) {
+        std::cout << '=' << def;
+      }
+      if (i != func.args.size() - 1) {
+        std::cout << ", ";
+      }
+    }
+    std::cout << ")" << std::endl;
   }
   std::cout << std::endl;
 }
