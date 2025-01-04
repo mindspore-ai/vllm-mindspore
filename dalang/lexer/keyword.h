@@ -4,7 +4,6 @@
 namespace lexer {
 #define KEYWORD(K) KwId_##K,
 typedef enum KeywordId {
-  KwId_Invalid,
 #include "keyword.list"
   KwId_End
 } KwId;

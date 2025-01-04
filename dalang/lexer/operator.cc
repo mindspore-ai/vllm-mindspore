@@ -29,7 +29,6 @@ Token TraverseOpTable(const char *start) {
 
 #define OPERATOR(T) #T,
 const char *_operators_str[] = {
-    "Invalid",
 #include "operator.list"
     "End",
 };

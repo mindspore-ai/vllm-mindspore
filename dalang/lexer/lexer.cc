@@ -110,7 +110,7 @@ const Token Lexer::TokenInLine() {
   }
 
   // Not match any excepted token, return a invalid token and move on.
-  Token invalidToken = Token{.type = TokenType_Invalid};
+  Token invalidToken = Token{.type = TokenType_End};
   if (!IsLineEnd()) {
     invalidToken.name = line_.at(column_);
   }
@@ -177,7 +177,7 @@ Token Lexer::GetKeyword() {
 Token Lexer::GetLiteral() {
   Token tok = FindLiteral(line_.c_str() + column_);
   SetLineInfo(&tok);
-  if (tok.type == TokenType_Invalid) {
+  if (tok.type == TokenType_InvalidString) {
     // Exception here.
     CompileMessage(filename_, lineno_, column_,
                    "warning: unexcepted literal string format.");

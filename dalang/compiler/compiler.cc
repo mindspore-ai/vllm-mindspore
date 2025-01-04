@@ -8,14 +8,13 @@
 #define TO_STR(s) #s
 #define INSTRUCTION(I) TO_STR(I),
 const char *_insts[]{// Inst strings.
-                     "Invalid",
 #include "compiler/instruction.list"
                      "End"};
 #undef INSTRUCTION
 
 namespace compiler {
 const char *GetInstStr(Inst inst) {
-  if (inst <= Inst_Invalid || inst >= Inst_End) {
+  if (inst >= Inst_End) {
     LOG_ERROR << "inst is abnormal, " << inst << ", " << Inst_End;
   }
   return _insts[inst];
@@ -24,6 +23,8 @@ const char *GetInstStr(Inst inst) {
 Compiler::Compiler(const std::string &filename)
     : parser_{Parser(filename)}, walker_{new CompilerNodeVisitor(this)} {
   InitCompileHandlers();
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(Code{.name = parser_.filename()});
 }
 
 Compiler::~Compiler() { delete walker_; }
@@ -73,13 +74,14 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   // Make call.
   const auto lineno = target->lineStart;
   const auto index = FindSymbolIndex(targetName);
-  InstCall call = {
-      .inst = Inst_StoreName,
-      .offset =
-          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
-      .lineno = lineno};
+  InstCall call = {.inst = Inst_StoreName,
+                   .offset =
+                       (index == -1 ? static_cast<ssize_t>(
+                                          symbolPool(CurrentCodeIndex()).size())
+                                    : index),
+                   .lineno = lineno};
   if (index == -1) { // Not used before.
-    symbolPool_.emplace_back(targetName);
+    symbolPool(CurrentCodeIndex()).emplace_back(targetName);
   }
   AddInstruction(call);
   return true;
@@ -101,7 +103,9 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
   CallExprHandler(returnVal);
   // Make return.
   const auto lineno = returnVal->lineStart;
-  InstCall ret = {.inst = Inst_ReturnVal, .offset = 0, .lineno = lineno};
+  InstCall ret = {.inst = Inst_ReturnVal,
+                  .offset = 0, // .offset is 0, means explicit return.
+                  .lineno = lineno};
   AddInstruction(ret);
   return true;
 }
@@ -120,18 +124,18 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   const auto funcName = *(name->expr.Name.identifier);
   LOG_OUT << "func name: " << funcName;
   const auto lineno = name->lineStart;
-  const auto index = FindFunctionIndex(funcName);
-  if (index != -1) {
-    CompileMessage(parser_.filename(), lineno, name->columnStart,
-                   "error: duplicate function name '" + funcName + "'.");
-    exit(1);
+  // Insert function name into the symbol table.
+  auto funcSymIndex = FindSymbolIndex(funcName);
+  if (funcSymIndex == -1) { // Not used before.
+    funcSymIndex = symbolPool(CurrentCodeIndex()).size();
+    symbolPool(CurrentCodeIndex()).emplace_back(funcName);
   }
-  InstCall funcBegin = {.inst = Inst_FuncBegin,
-                        .offset = static_cast<ssize_t>(functionPool_.size()),
-                        .lineno = lineno};
-  AddInstruction(funcBegin);
-  Function func{.name = funcName,
-                .offset = static_cast<ssize_t>(instructions_.size())};
+
+  InstCall defineFunc = {.inst = Inst_DefineFunc,
+                         .offset = static_cast<ssize_t>(codes().size()),
+                         .lineno = lineno};
+  AddInstruction(defineFunc);
+  Code code{.name = funcName};
   // Function parameters.
   LOG_OUT << "func args len: " << funcStmt.argsLen;
   for (size_t i = 0; i < funcStmt.argsLen; ++i) {
@@ -141,8 +145,8 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
         argStmt->stmt.Expr.value->type == ExprType_Name) {
       const auto &argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       LOG_OUT << "param: " << argName;
-      func.args.emplace_back(argName);
-      func.defs.emplace_back("");
+      code.args.emplace_back(argName);
+      code.defs.emplace_back("");
     } else if (argStmt->type == StmtType_Assign &&
                argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
@@ -150,20 +154,17 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
       const auto &defaultParam = *literal.value;
       LOG_OUT << "default param: " << argName << ": " << defaultParam;
-      func.args.emplace_back(argName);
-      func.defs.emplace_back(defaultParam);
+      code.args.emplace_back(argName);
+      code.defs.emplace_back(defaultParam);
     } else {
       CompileMessage(parser_.filename(), lineno, name->columnStart,
                      "error: invalid function parameters.");
     }
   }
-  functionPool_.emplace_back(std::move(func));
-  // Also insert function name into the symbol table.
-  const auto symIndex = FindSymbolIndex(funcName);
-  if (symIndex == -1) { // Not used before.
-    symbolPool_.emplace_back(funcName);
-  }
 
+  // Push the function.
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(std::move(code));
   // Function body.
   LOG_OUT << "func body len: " << funcStmt.len;
   for (size_t i = 0; i < funcStmt.len; ++i) {
@@ -171,10 +172,23 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
     CallStmtHandler(stmt);
     LOG_OUT << "func body[" << i << "]: " << ToString(stmt);
   }
+  // Make extra return if no explicit return.
+  if (lastInst_.inst != Inst_ReturnVal) {
+    InstCall ret = {.inst = Inst_ReturnVal,
+                    .offset = -1, // .offset is not 0, means implicit return.
+                    .lineno = lineno};
+    AddInstruction(ret);
+  }
+  codeStack_.pop();
 
-  InstCall funcEnd = {
-      .inst = Inst_FuncEnd, .offset = funcBegin.offset, .lineno = lastLineno_};
-  AddInstruction(funcEnd);
+  // Store the function with name.
+  // const auto funcSymIndex = FindSymbolIndex(funcName);
+  InstCall storeFunc = {
+      .inst = Inst_StoreName, .offset = funcSymIndex, .lineno = lineno};
+  // if (funcSymIndex == -1) { // Not used before.
+  //   symbolPool().emplace_back(funcName);
+  // }
+  AddInstruction(storeFunc);
   return true;
 }
 
@@ -303,13 +317,14 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   const auto &name = *expr->expr.Name.identifier;
   const auto lineno = expr->lineStart;
   const auto index = FindSymbolIndex(name);
-  InstCall load = {
-      .inst = Inst_LoadName,
-      .offset =
-          (index == -1 ? static_cast<ssize_t>(symbolPool_.size()) : index),
-      .lineno = lineno};
+  InstCall load = {.inst = Inst_LoadName,
+                   .offset =
+                       (index == -1 ? static_cast<ssize_t>(
+                                          symbolPool(CurrentCodeIndex()).size())
+                                    : index),
+                   .lineno = lineno};
   if (index == -1) { // Not used before.
-    symbolPool_.emplace_back(name);
+    symbolPool(CurrentCodeIndex()).emplace_back(name);
   }
   AddInstruction(load);
   return true;
@@ -329,11 +344,12 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
   InstCall load = {.inst = Inst_LoadConst,
                    .offset = index != -1
                                  ? index
-                                 : static_cast<ssize_t>(constantPool_.size()),
+                                 : static_cast<ssize_t>(
+                                       constantPool(CurrentCodeIndex()).size()),
                    .lineno = lineno};
   if (index == -1) { // Not used before.
     Constant cons = {.type = static_cast<ConstType>(kind), .value = value};
-    constantPool_.emplace_back(cons);
+    constantPool(CurrentCodeIndex()).emplace_back(cons);
   }
   AddInstruction(load);
   return true;
@@ -341,11 +357,13 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
 
 // Return -1 if not found.
 ssize_t Compiler::FindSymbolIndex(const std::string &name) {
-  auto iter = std::find(symbolPool_.cbegin(), symbolPool_.cend(), name);
-  if (iter == symbolPool_.cend()) {
+  auto &currentSymbolPool = symbolPool(CurrentCodeIndex());
+  auto iter =
+      std::find(currentSymbolPool.cbegin(), currentSymbolPool.cend(), name);
+  if (iter == currentSymbolPool.cend()) {
     return -1;
   }
-  auto index = std::distance(symbolPool_.cbegin(), iter);
+  auto index = std::distance(currentSymbolPool.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found symbol, index should not be negative " << index
               << ", name: " << name;
@@ -356,17 +374,19 @@ ssize_t Compiler::FindSymbolIndex(const std::string &name) {
 
 // Return -1 if not found.
 ssize_t Compiler::FindConstantIndex(const std::string &str) {
-  auto iter = std::find_if(constantPool_.cbegin(), constantPool_.cend(),
-                           [&str](const Constant &cons) {
-                             if (cons.value == str) {
-                               return true;
-                             }
-                             return false;
-                           });
-  if (iter == constantPool_.cend()) {
+  auto &currentConstantPool = constantPool(CurrentCodeIndex());
+  auto iter =
+      std::find_if(currentConstantPool.cbegin(), currentConstantPool.cend(),
+                   [&str](const Constant &cons) {
+                     if (cons.value == str) {
+                       return true;
+                     }
+                     return false;
+                   });
+  if (iter == currentConstantPool.cend()) {
     return -1;
   }
-  auto index = std::distance(constantPool_.cbegin(), iter);
+  auto index = std::distance(currentConstantPool.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found constant, index should not be negative " << index
               << ", str: " << str;
@@ -375,55 +395,70 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
   return index;
 }
 
-// Return -1 if not found.
-ssize_t Compiler::FindFunctionIndex(const std::string &name) {
-  auto iter = std::find_if(functionPool_.cbegin(), functionPool_.cend(),
-                           [&name](const Function &func) {
-                             if (func.name == name) {
-                               return true;
-                             }
-                             return false;
-                           });
-  if (iter == functionPool_.cend()) {
-    return -1;
-  }
-  auto index = std::distance(functionPool_.cbegin(), iter);
-  if (index < 0) {
-    LOG_ERROR << "Not found function, index should not be negative " << index
-              << ", function: " << name;
-    exit(1);
-  }
-  return index;
-}
-
 void Compiler::Dump() {
-  std::cout << "instructions: " << std::endl;
-  std::cout << "-----" << std::endl;
-  ssize_t lastLineno = -1;
-  for (size_t i = 0; i < instructions_.size(); ++i) {
-    const auto &inst = instructions_[i];
-    // Print lineno.
-    if (lastLineno != inst.lineno) {
-      if (lastLineno != -1) { // Print blank line between lines.
+
+  for (size_t codeIndex = 0; codeIndex < codes().size(); ++codeIndex) {
+    const auto &code = codes()[codeIndex];
+    std::cout << "--------------------" << std::endl;
+    std::cout << "code: " << code.name << std::endl;
+    if (!code.args.empty()) {
+      std::cout << "arguments: " << std::endl;
+      for (size_t i = 0; i < code.args.size(); ++i) {
+        const auto &arg = code.args[i];
+        const auto &def = code.defs[i];
+        std::cout << i << "\t\t" << arg;
+        if (!def.empty()) {
+          std::cout << "\t" << def;
+        }
         std::cout << std::endl;
       }
-      lastLineno = inst.lineno;
-      std::cout << lastLineno;
     }
-    // Print instruction number.
-    std::cout << '\t' << std::setw(8) << std::right << i << ' ';
-    // Print instruction.
-    std::cout << GetInstStr(inst.inst);
-    // Print variable names or constants.
-    if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName) {
-      std::cout << "\t\t" << inst.offset << " (" << symbolPool_[inst.offset]
-                << ')';
-    } else if (inst.inst == Inst_FuncBegin || inst.inst == Inst_FuncEnd) {
-      std::cout << "\t\t" << inst.offset << " ("
-                << functionPool_[inst.offset].name << ')';
-    } else if (inst.inst == Inst_LoadConst) {
-      std::cout << "\t\t" << inst.offset << " (";
-      const auto &cons = constantPool_[inst.offset];
+
+    std::cout << "instructions: " << std::endl;
+    ssize_t lastLineno = -1;
+    for (size_t i = 0; i < code.insts.size(); ++i) {
+      const auto &inst = code.insts[i];
+      // Print lineno.
+      if (lastLineno != inst.lineno) {
+        if (lastLineno != -1) { // Print blank line between lines.
+          std::cout << std::endl;
+        }
+        lastLineno = inst.lineno;
+        std::cout << lastLineno;
+      }
+      // Print instruction number.
+      std::cout << '\t' << std::setw(8) << std::right << i << ' ';
+      // Print instruction.
+      std::cout << GetInstStr(inst.inst);
+      // Print variable names or constants.
+      if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName) {
+        std::cout << "\t\t" << inst.offset << " ("
+                  << symbolPool(codeIndex)[inst.offset] << ')';
+      } else if (inst.inst == Inst_LoadConst) {
+        std::cout << "\t\t" << inst.offset << " (";
+        const auto &cons = constantPool(codeIndex)[inst.offset];
+        if (cons.type == ConstType_str) {
+          std::cout << "'";
+        }
+        std::cout << cons.value;
+        if (cons.type == ConstType_str) {
+          std::cout << "'";
+        }
+        std::cout << ')';
+      }
+      std::cout << std::endl;
+    }
+
+    std::cout << "symbols: " << std::endl;
+    for (size_t i = 0; i < code.symbols.size(); ++i) {
+      const auto &var = code.symbols[i];
+      std::cout << i << "\t\t" << var << std::endl;
+    }
+
+    std::cout << "constants: " << std::endl;
+    for (size_t i = 0; i < code.constants.size(); ++i) {
+      const auto &cons = code.constants[i];
+      std::cout << i << "\t\t";
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
@@ -431,62 +466,9 @@ void Compiler::Dump() {
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
-      std::cout << ')';
+      std::cout << '\t' << ToStr(static_cast<LtId>(cons.type)) << std::endl;
     }
-    std::cout << std::endl;
   }
-  std::cout << std::endl;
-
-  std::cout << "symbols: " << std::endl;
-  std::cout << "-----" << std::endl;
-  for (size_t i = 0; i < symbolPool_.size(); ++i) {
-    const auto &var = symbolPool_[i];
-    std::cout << i << "\t\t" << var << std::endl;
-  }
-  std::cout << std::endl;
-
-  std::cout << "constants: " << std::endl;
-  std::cout << "-----" << std::endl;
-  for (size_t i = 0; i < constantPool_.size(); ++i) {
-    const auto &cons = constantPool_[i];
-    std::cout << i << "\t\t";
-    if (cons.type == ConstType_str) {
-      std::cout << "'";
-    }
-    std::cout << cons.value;
-    if (cons.type == ConstType_str) {
-      std::cout << "'";
-    }
-    std::cout << '\t' << ToStr(static_cast<LtId>(cons.type)) << std::endl;
-  }
-  std::cout << std::endl;
-
-  std::cout << "functions: " << std::endl;
-  std::cout << "-----" << std::endl;
-  for (size_t i = 0; i < functionPool_.size(); ++i) {
-    const auto &func = functionPool_[i];
-    std::cout << i << "\t\t";
-
-    std::cout << func.name << "(";
-    if (func.args.size() != func.defs.size()) {
-      std::cout << "\n\nerror: parameters count is not equal to defaults count."
-                << std::endl;
-      exit(1);
-    }
-    for (size_t i = 0; i < func.args.size(); ++i) {
-      const auto &arg = func.args[i];
-      const auto &def = func.defs[i];
-      std::cout << arg;
-      if (!def.empty()) {
-        std::cout << '=' << def;
-      }
-      if (i != func.args.size() - 1) {
-        std::cout << ", ";
-      }
-    }
-    std::cout << ")" << std::endl;
-  }
-  std::cout << std::endl;
 }
 
 #define STMT(type) stmtHandlers_[StmtType_##type] = &Compiler::Compile##type;

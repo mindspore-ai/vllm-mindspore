@@ -3,7 +3,6 @@
 
 namespace lexer {
 NameToSpId _separators[] = {
-    {"Invalid", SpId_Invalid},
     {" ", SpId_Space},
     {"(", SpId_LeftParenthesis},
     {")", SpId_RightParenthesis},

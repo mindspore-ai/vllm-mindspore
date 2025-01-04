@@ -5,7 +5,6 @@
 
 #define TYPE(T) LiteralId_##T,
 typedef enum LiteralId {
-  LiteralId_Invalid,
 #include "literal_type.list"
   LiteralId_End
 } LtId;

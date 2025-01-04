@@ -4,8 +4,8 @@
 #include "common/common.h"
 #include <algorithm>
 
-// #undef LOG_OUT
-// #define LOG_OUT LOG_NO_OUT
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
@@ -86,37 +86,46 @@ void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
   LOG_OUT << "offset: " << offset << ", value: " << cons.value << " ("
           << cons.type << ")";
-  stack().emplace_back(ConvertConstType(cons));
+  CurrentStack().emplace_back(ConvertConstType(cons));
 }
 
 // Load a value by name which stored before.
 void VM::InstLoadName(ssize_t offset) {
   const auto &name = syms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
-  auto iter = names().find(name);
-  if (iter == names().cend()) {
+  auto *slot = FindLoadedName(name);
+  if (slot == nullptr) {
+    // Not found in all namespaces.
     CompileMessage(LineString(), "error: not defined symbol: '" + name + "'.");
     exit(1);
   }
-  stack().emplace_back(iter->second);
+  CurrentStack().emplace_back(*slot);
 }
 
 // Store a slot by name for latish load.
 void VM::InstStoreName(ssize_t offset) {
+  if (CurrentStack().empty()) {
+    CompileMessage(LineString(), "error: stack is empty.");
+    exit(1);
+  }
   const auto &name = syms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
-  auto iter = names().find(name);
-  if (iter != names().cend()) {
-    CompileMessage(LineString(), "warning: covered symbol: '" + name + "'.");
-  }
-  names()[name] = std::move(stack().back());
-  stack().pop_back();
+  // auto iter = names().find(name);
+  // if (iter != names().cend()) {
+  //   CompileMessage(LineString(), "warning: covered symbol: '" + name + "'.");
+  // }
+  // Just cover the name.
+  names()[name] = std::move(CurrentStack().back());
+  CurrentStack().pop_back();
 }
 
 // Just pop up the top slot.
 void VM::InstPopTop(ssize_t offset) {
-  LOG_OUT << "offset: " << offset;
-  stack().pop_back();
+  LOG_OUT << "offset: " << offset << ", return value: "
+          << (CurrentStack().empty() ? "<null>"
+                                     : ToString(CurrentStack().back()))
+          << ", stack size: " << CurrentStack().size();
+  CurrentStack().clear();
 }
 
 BINARY_OP(Add, +) // VM::InstBinaryAdd
@@ -125,27 +134,42 @@ BINARY_OP(Mul, *) // VM::InstBinaryMul
 BINARY_OP(Div, /) // VM::InstBinaryDiv
 
 void VM::InstCallFunc(ssize_t offset) {
-  LOG_OUT << "offset: " << offset;
-  const auto &funcName = stack().front();
-  if (funcName.type != SlotFunction) {
+  const auto &funcNameSlot = CurrentStack().front();
+  if (funcNameSlot.type != SlotFunction || CurrentStack().size() <= 1) {
     CompileMessage(compiler_->filename(), 0, 0,
-                   "error: invalid function name. slot: " + ToString(funcName));
+                   "error: invalid function name. slot: " +
+                       ToString(funcNameSlot));
     exit(1);
   }
-  const auto &func = funcs()[funcName.value.offset];
-  // Bind the arguments and parameters.
-  auto argsSize = stack().size() - 1;
+
+  // Get callee function information.
+  const auto codeIndex = funcNameSlot.value.offset;
+  const auto &func = codes()[codeIndex];
+  LOG_OUT << "offset: " << offset << ", name: " << func.name;
+  // To bind the arguments and parameters.
+  auto argsSize = CurrentStack().size() - 1;
   auto paramsSize = func.args.size();
   if (argsSize > paramsSize) {
-    CompileMessage(
-        compiler_->filename(), 0, 0,
-        "error: function arguments size should not exceed parameters size.");
+    std::stringstream ss;
+    ss << "error: function arguments size(" << argsSize
+       << ") should not exceed parameters size(" << paramsSize << ").";
+    CompileMessage(compiler_->filename(), 0, 0, ss.str());
+    exit(1);
   }
+
+  // Create new function frame in advance.
+  auto newFuncFrame =
+      Frame{.type = FrameFunction, .code = funcNameSlot.value.offset};
+
+  // Move all arguments from caller stack into callee names map.
   for (size_t i = 0; i < argsSize; ++i) {
     auto argIndex = i + 1; // Not include function name;
-    const auto &arg = stack()[argIndex];
-    names()[func.args[i]] = std::move(arg);
+    const auto &arg = CurrentStack()[argIndex];
+    newFuncFrame.names[func.args[i]] = std::move(arg);
   }
+  CurrentStack().clear();
+
+  // Append default parameters in callee names map.
   if (argsSize < paramsSize) {
     // for (size_t i = argsSize; i < paramsSize; ++i) {
     //   names()[func.args[i]] = std::move(Slot{.type=SlotInt,
@@ -154,14 +178,32 @@ void VM::InstCallFunc(ssize_t offset) {
     LOG_ERROR << "Not support default parameter by now";
   }
 
-  stack().clear();
-  pc_ = func.offset;
+  // Push a new frame for function call.
+  frames_.emplace_back(newFuncFrame);
 }
 
-void VM::InstReturnVal(ssize_t offset) { LOG_OUT << "offset: " << offset; }
+void VM::InstReturnVal(ssize_t offset) {
+  const auto &slot = CurrentStack().front();
+  LOG_OUT << "offset: " << offset << ", return value: "
+          << (CurrentStack().empty() ? "<null>"
+                                     : ToString(CurrentStack().back()))
+          << ", stack size: " << CurrentStack().size();
+  if (frames_.size() <= 1) {
+    CompileMessage(compiler_->filename(), 0, 0,
+                   "error: only one frame left, can not return anymore.");
+    exit(1);
+  }
+  // If explicit return, move the value into previous frame stack.
+  if (offset == 0) {
+    auto &prevFrame = frames_.rbegin()[1];
+    prevFrame.slots.emplace_back(std::move(slot));
+  }
+  // Just pop the frame.
+  frames_.pop_back();
+}
 
-void VM::InstFuncBegin(ssize_t offset) {
-  const auto &func = funcs()[offset];
+void VM::InstDefineFunc(ssize_t offset) {
+  const auto &func = codes()[offset];
   LOG_OUT << "offset: " << offset << ", function: " << func.name;
   auto iter = names().find(func.name);
   if (iter != names().cend()) {
@@ -171,72 +213,49 @@ void VM::InstFuncBegin(ssize_t offset) {
   }
   Slot funcSlot{.type = SlotFunction};
   funcSlot.value.offset = offset;
-  names()[func.name] = std::move(funcSlot);
+  CurrentStack().emplace_back(std::move(funcSlot));
 }
 
-void VM::InstFuncEnd(ssize_t offset) {
-  const auto &func = funcs()[offset];
-  LOG_OUT << "offset: " << offset << ", function: " << func.name;
-}
-
-void VM::InstClassBegin(ssize_t offset) { LOG_OUT << "offset: " << offset; }
-
-void VM::InstClassEnd(ssize_t offset) { LOG_OUT << "offset: " << offset; }
-
-bool VM::SkipFuncDefine(const InstCall &inst, size_t &funcDefDepth) {
-  if (inst.inst == Inst_FuncBegin) {
-    InstFuncBegin(inst.offset);
-    ++funcDefDepth;
-    return true;
-  }
-  if (inst.inst == Inst_FuncEnd) {
-    if (funcDefDepth == 0) {
-      CompileMessage(LineString(),
-                     "error: invalid function definition. no function begin?");
-      exit(1);
+// Return nullptr if not found.
+const Slot *VM::FindLoadedName(const std::string &str) {
+  for (auto iter = frames_.crbegin(); iter != frames_.crend(); ++iter) {
+    auto nameIter = iter->names.find(str);
+    if (nameIter != iter->names.cend()) {
+      return &nameIter->second;
     }
-    InstFuncEnd(inst.offset);
-    --funcDefDepth;
-    return true;
   }
-  if (funcDefDepth > 0) {
-    return true;
-  }
-  return false;
+  return nullptr;
 }
 
 void VM::Run() {
-  size_t funcDefDepth = 0;
-  size_t offset = 0;
-  while (offset < insts().size()) {
-    const auto &inst = insts()[offset];
-    if (inst.inst >= instHandlers_.size()) {
-      LOG_ERROR << "instruction handler list size is less than input "
-                   "inst type.";
-      exit(1);
-    }
-    // Jump the function definition.
-    if (SkipFuncDefine(inst, funcDefDepth)) {
-      ++offset;
-      LOG_OUT << "skip func def, stack size: " << stack().size()
-              << ", offset: " << offset;
-      continue;
-    }
+  auto topFrame = Frame{.type = FrameModule, .code = 0};
+  frames_.emplace_back(topFrame);
+  while (!frames_.empty()) {
+    // Run in current frame.
+    while (CurrentPc() < insts().size()) {
+      const auto &inst = insts()[CurrentPc()];
+      if (inst.inst >= instHandlers_.size()) {
+        LOG_ERROR << "instruction handler list size is less than input "
+                     "inst type: "
+                  << inst.inst << " >= " << instHandlers_.size();
+        exit(1);
+      }
+      ++CurrentPc();
 
-    pc_ = offset;
-    (this->*instHandlers_[inst.inst])(inst.offset);
-    if (pc_ == offset) {
-      ++offset;
-    } else {
-      offset = pc_;
-    }
-    LOG_OUT << "stack size: " << stack().size() << ", offset: " << offset;
-  }
+      // Print the value if Return exists in the module.
+      if (frames_.size() == 1 && CurrentStack().size() == 1 &&
+          inst.inst == Inst_ReturnVal && inst.offset == 0) {
+        std::cout << ToString(CurrentStack().back());
+        break;
+      }
 
-  // Print the value if Return exists.
-  if (frames_.size() == 1 && stack().size() == 1 &&
-      insts()[pc_].inst == Inst_ReturnVal) {
-    std::cout << ToString(stack().back());
+      (this->*instHandlers_[inst.inst])(inst.offset);
+      LOG_OUT << "frame size: " << frames_.size()
+              << ", stack size: " << CurrentStack().size()
+              << ", inst size: " << insts().size() << ", pc: " << CurrentPc();
+    }
+    // Pop exhausted frame.
+    frames_.pop_back();
   }
 }
 

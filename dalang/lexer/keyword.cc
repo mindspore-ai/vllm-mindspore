@@ -26,7 +26,6 @@ Token TraverseKwTable(const char *start) {
 
 #define KEYWORD(T) #T,
 const char *_keywords_str[] = {
-    "Invalid",
 #include "keyword.list"
     "End",
 };

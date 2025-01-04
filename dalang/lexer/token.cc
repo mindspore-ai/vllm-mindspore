@@ -7,9 +7,9 @@
 namespace lexer {
 #define TOKEN(T) #T,
 const char *_tokens_str[] = {
-    "Invalid",
 #include "token_type.list"
     "ContStr",
+    "InvalidStr"
     "End",
 };
 #undef TOKEN
@@ -39,7 +39,7 @@ std::string ToString(TokenConstPtr token) {
     ss << token->data.str;
   } else if (token->type == TokenType_Comment) {
     ss << token->data.str;
-  } else if (token->type == TokenType_Invalid) {
+  } else if (token->type == TokenType_End) {
     ss << '\'' << token->name << '\'';
   } else {
     ss << "?";

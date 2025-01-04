@@ -3,7 +3,6 @@
 
 #define OPERATOR(O) OpId_##O,
 typedef enum OperatorId {
-  OpId_Invalid,
 #include "lexer/operator.list"
   OpId_End,
 } OpId;

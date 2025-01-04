@@ -37,7 +37,6 @@ StmtsConstPtr StmtList();
 // Statement type.
 #define STMT(type) StmtType_##type,
 enum StmtType {
-  StmtType_Invalid,
 #include "stmt.list"
   StmtType_End,
 };
@@ -110,7 +109,6 @@ typedef struct StmtNode {
 
 #define EXPR(type) ExprType_##type,
 enum ExprType {
-  ExprType_Invalid,
 #include "expr.list"
   ExprType_End,
 };

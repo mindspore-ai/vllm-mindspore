@@ -59,7 +59,7 @@ static inline std::string GetTime() {
          << __FUNCTION__ << "] error: "
 #define LOG_NO_OUT Cout(false)
 
-#define ENDL std::endl
+#define ENDL '\n'
 
 #define TO_STR(s) #s
 #define CHECK_NULL(a)                                                          \

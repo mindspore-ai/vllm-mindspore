@@ -730,6 +730,6 @@ void Parser::DumpAst() {
   };
   auto visitor = DumpNodeVisitor();
   visitor.Visit(module_);
-  LOG_OUT << '\n' << visitor.dump();
+  std::cout << visitor.dump();
 }
 } // namespace parser

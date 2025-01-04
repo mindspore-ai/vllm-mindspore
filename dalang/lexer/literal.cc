@@ -6,7 +6,6 @@
 namespace lexer {
 #define TYPE(T) #T,
 const char *_types_str[] = {
-    "Invalid",
 #include "literal_type.list"
     "End",
 };
@@ -40,7 +39,7 @@ int Char2Int(char c) {
 }
 
 size_t StartsWithLiteralType(const char *literal, size_t *count) {
-  for (size_t i = LiteralId_Invalid + 1; i < LiteralId_End; ++i) {
+  for (size_t i = 0; i < LiteralId_End; ++i) {
     if (strstr(literal, _types_str[i]) == literal) {
       *count = strlen(_types_str[i]);
       return i;
@@ -62,9 +61,8 @@ LtId MatchLiteralType(const char *start, size_t *matchCount) {
   // Start to match literal type string.
   size_t count;
   auto matchIndex = StartsWithLiteralType(start + pos, &count);
-  if (count == 0 || matchIndex >= LiteralId_End ||
-      matchIndex <= LiteralId_Invalid) {
-    return LiteralId_Invalid;
+  if (count == 0 || matchIndex >= LiteralId_End) {
+    return LiteralId_End;
   }
   pos += count;
   *matchCount = pos;
@@ -134,8 +132,9 @@ Token FindLiteral(const char *start) {
     Token token{.type = TokenType_Literal};
     size_t count = 0;
     LtId li = MatchLiteralType(start + pos, &count);
-    if (li == LiteralId_Invalid || li == LiteralId_End) {
-      return Token{.type = TokenType_Invalid, .start = start + pos, .len = 0};
+    if (li == LiteralId_End) {
+      return Token{
+          .type = TokenType_InvalidString, .start = start + pos, .len = 0};
     }
     token.data.lt = li;
     token.start = start;

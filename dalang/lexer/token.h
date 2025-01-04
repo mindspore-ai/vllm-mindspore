@@ -13,9 +13,9 @@
 namespace lexer {
 #define TOKEN(T) TokenType_##T,
 typedef enum TokenType {
-  TokenType_Invalid,
 #include "token_type.list"
   TokenType_ContinuousString,
+  TokenType_InvalidString,
   TokenType_End,
 } TokenType;
 #undef TOKEN

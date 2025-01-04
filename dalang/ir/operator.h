@@ -6,7 +6,6 @@
 namespace ir {
 #define OPERATOR(O) Op_##O,
 typedef enum Operator {
-  Op_Invalid,
 #include "lexer/operator.list"
   Op_End,
 } Op;

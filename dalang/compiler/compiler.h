@@ -1,6 +1,7 @@
 #ifndef __PARSER_COMPILER_COMPILER_H__
 #define __PARSER_COMPILER_COMPILER_H__
 
+#include <stack>
 #include <unordered_map>
 #include <vector>
 
@@ -13,7 +14,6 @@ using namespace parser;
 
 #define INSTRUCTION(I) Inst_##I,
 typedef enum InstType {
-  Inst_Invalid,
 #include "compiler/instruction.list"
   Inst_End,
 } Inst;
@@ -21,7 +21,6 @@ typedef enum InstType {
 
 #define TYPE(T) ConstType_##T,
 enum ConstType {
-  Invalid,
 #include "lexer/literal_type.list"
   End,
 };
@@ -49,13 +48,15 @@ struct Constant {
 };
 typedef Constant *ConstantPtr;
 
-struct Function {
-  std::string name;              // Function name.
-  ssize_t offset;                // Offset of function first instruction.
-  std::vector<std::string> args; // Parameter names.
-  std::vector<std::string> defs; // Parameter default values.
+struct Code {
+  std::vector<std::string> symbols; // Symbol pool in the namespace.
+  std::vector<Constant> constants;  // Constant pool in the namespace.
+  std::vector<InstCall> insts;      // Instructions in the namespace.
+  std::string name;                 // Function name or module name.
+  std::vector<std::string> args;    // Parameter names.
+  std::vector<std::string> defs;    // Parameter default values.
 };
-typedef Function *FunctionPtr;
+typedef Code *CodePtr;
 
 class Compiler {
 public:
@@ -74,14 +75,22 @@ public:
     return (this->*exprHandlers_[expr->type])(expr);
   }
 
-  const std::vector<std::string> &symbolPool() const { return symbolPool_; }
-  const std::vector<Constant> &constantPool() const { return constantPool_; }
-  const std::vector<Function> &functionPool() const { return functionPool_; }
-  const std::vector<InstCall> &instructions() const { return instructions_; }
-
+  size_t CurrentCodeIndex() { return codeStack_.top(); }
+  Code &CurrentCode() { return codes_[codeStack_.top()]; }
+  Code &code(size_t index) { return codes_[index]; }
+  const std::vector<Code> &codes() const { return codes_; }
+  std::vector<std::string> &symbolPool(size_t index) {
+    return code(index).symbols;
+  }
+  std::vector<Constant> &constantPool(size_t index) {
+    return code(index).constants;
+  }
+  std::vector<InstCall> &instructions(size_t index) {
+    return code(index).insts;
+  }
   void AddInstruction(const InstCall &inst) {
-    instructions_.emplace_back(inst);
-    lastLineno_ = inst.lineno;
+    CurrentCode().insts.emplace_back(inst);
+    lastInst_ = inst;
   }
 
   const std::string &filename() const { return parser_.filename(); }
@@ -90,7 +99,6 @@ public:
 
   ssize_t FindSymbolIndex(const std::string &name);
   ssize_t FindConstantIndex(const std::string &str);
-  ssize_t FindFunctionIndex(const std::string &name);
 
 private:
   void InitCompileHandlers();
@@ -125,15 +133,13 @@ private:
 private:
   Parser parser_;
   CompilerNodeVisitor *walker_;
-  ssize_t lastLineno_;
+  InstCall lastInst_;
 
   // Compile result records start.
   // Do serialization or deserialization of them for compilation reuse.
-  std::vector<std::string> symbolPool_;
-  std::vector<Constant> constantPool_;
-  std::vector<Function> functionPool_;
-  std::vector<InstCall> instructions_;
+  std::vector<Code> codes_;
   // Compile result records end.
+  std::stack<size_t> codeStack_;
 
   StmtHandlerFunctions stmtHandlers_; // Notice: Do not change.
   ExprHandlerFunctions exprHandlers_; // Notice: Do not change.
@@ -145,7 +151,6 @@ public:
   virtual void Visit(StmtConstPtr stmt) override {
     if (stmt == nullptr) {
     } else if (stmt->type == StmtType_End) {
-    } else if (stmt->type == StmtType_Invalid) {
     }
     if (!compiler_->CallStmtHandler(stmt)) {
       NodeVisitor::Visit(stmt);
@@ -155,7 +160,6 @@ public:
   virtual void Visit(ExprConstPtr expr) override {
     if (expr == nullptr) {
     } else if (expr->type == ExprType_End) {
-    } else if (expr->type == ExprType_Invalid) {
     }
     if (!compiler_->CallExprHandler(expr)) {
       NodeVisitor::Visit(expr);

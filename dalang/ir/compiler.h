@@ -81,7 +81,6 @@ public:
   virtual void Visit(StmtConstPtr stmt) override {
     if (stmt == nullptr) {
     } else if (stmt->type == StmtType_End) {
-    } else if (stmt->type == StmtType_Invalid) {
     }
     if (!compiler_->CallStmtHandler(compiler_->ns(), stmt)) {
       NodeVisitor::Visit(stmt);
@@ -91,7 +90,6 @@ public:
   virtual void Visit(ExprConstPtr expr) override {
     if (expr == nullptr) {
     } else if (expr->type == ExprType_End) {
-    } else if (expr->type == ExprType_Invalid) {
     }
     if (!compiler_->CallExprHandler(compiler_->ns(), expr)) {
       NodeVisitor::Visit(expr);
