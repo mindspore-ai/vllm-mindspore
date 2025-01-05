@@ -198,8 +198,40 @@ bool Compiler::CompileClass(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileBlock(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
   LOG_OUT << ToString(stmt);
-  return false;
+  if (stmt->type != StmtType_Block) {
+    return false;
+  }
+
+  // Push the block code.
+  auto codeIndex = codes_.size();
+  Code code{.name = "block{#" + std::to_string(codeIndex) + "}"};
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(std::move(code));
+  // Block body.
+  const auto &blockStmt = stmt->stmt.Block;
+  const auto lineno = stmt->lineStart;
+  LOG_OUT << "block body len: " << blockStmt.len;
+  for (size_t i = 0; i < blockStmt.len; ++i) {
+    const auto &stmt = blockStmt.body[i];
+    CallStmtHandler(stmt);
+    LOG_OUT << "block body[" << i << "]: " << ToString(stmt);
+  }
+  // Make extra return if no explicit return.
+  if (lastInst_.inst != Inst_ReturnVal) {
+    InstCall ret = {.inst = Inst_ReturnVal,
+                    .offset = -1, // .offset is not 0, means implicit return.
+                    .lineno = lineno};
+    AddInstruction(ret);
+  }
+  codeStack_.pop();
+
+  InstCall enterBlock = {.inst = Inst_EnterBlock,
+                         .offset = static_cast<ssize_t>(codeIndex),
+                         .lineno = lineno};
+  AddInstruction(enterBlock);
+  return true;
 }
 
 bool Compiler::CompileIf(StmtConstPtr stmt) {
@@ -396,7 +428,6 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
 }
 
 void Compiler::Dump() {
-
   for (size_t codeIndex = 0; codeIndex < codes().size(); ++codeIndex) {
     const auto &code = codes()[codeIndex];
     std::cout << "--------------------" << std::endl;
@@ -445,6 +476,8 @@ void Compiler::Dump() {
           std::cout << "'";
         }
         std::cout << ')';
+      } else if (inst.inst == Inst_EnterBlock) {
+        std::cout << "\t\t" << inst.offset;
       }
       std::cout << std::endl;
     }

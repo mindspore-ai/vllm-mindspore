@@ -4,8 +4,8 @@
 #include "common/common.h"
 #include <algorithm>
 
-#undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+// #undef LOG_OUT
+// #define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
@@ -93,6 +93,7 @@ void VM::InstLoadConst(ssize_t offset) {
 void VM::InstLoadName(ssize_t offset) {
   const auto &name = syms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
+  // Find the name from current frame and upper frames, one frame by one frame.
   auto *slot = FindLoadedName(name);
   if (slot == nullptr) {
     // Not found in all namespaces.
@@ -110,16 +111,26 @@ void VM::InstStoreName(ssize_t offset) {
   }
   const auto &name = syms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
-  // auto iter = names().find(name);
-  // if (iter != names().cend()) {
-  //   CompileMessage(LineString(), "warning: covered symbol: '" + name + "'.");
-  // }
-  // Just cover the name.
-  names()[name] = std::move(CurrentStack().back());
+  auto iter = names().find(name);
+  if (iter == names().cend()) {
+    // First declared name in current frame.
+    LOG_OUT << "no defined symbol: '" + name + "' in current frame.";
+    Slot *slot = FindLoadedName(name);
+    if (slot == nullptr) {
+      // Create a new variable and store into it.
+      names()[name] = std::move(CurrentStack().back());
+    } else {
+      // Store the value into upper frame's names.
+      *slot = std::move(CurrentStack().back());
+    }
+  } else {
+    // Already used name.
+    names()[name] = std::move(CurrentStack().back());
+  }
   CurrentStack().pop_back();
 }
 
-// Just pop up the top slot.
+// Just pop up all the slots.
 void VM::InstPopTop(ssize_t offset) {
   LOG_OUT << "offset: " << offset << ", return value: "
           << (CurrentStack().empty() ? "<null>"
@@ -133,6 +144,9 @@ BINARY_OP(Sub, -) // VM::InstBinarySub
 BINARY_OP(Mul, *) // VM::InstBinaryMul
 BINARY_OP(Div, /) // VM::InstBinaryDiv
 
+// Call a function by function slot and argument slots, and create a new frame.
+// The first(reverse stack) slot is function object created by DefineFunc
+// instruction. The left slot is arguments.
 void VM::InstCallFunc(ssize_t offset) {
   const auto &funcNameSlot = CurrentStack().front();
   if (funcNameSlot.type != SlotFunction || CurrentStack().size() <= 1) {
@@ -182,6 +196,10 @@ void VM::InstCallFunc(ssize_t offset) {
   frames_.emplace_back(newFuncFrame);
 }
 
+// Return the top slot to previous frame.
+//   offset (0): explicit return set by user.
+//   offset (not 0): the compiler append it for every function implicitly, if no
+//   return set by user.
 void VM::InstReturnVal(ssize_t offset) {
   const auto &slot = CurrentStack().front();
   LOG_OUT << "offset: " << offset << ", return value: "
@@ -202,6 +220,8 @@ void VM::InstReturnVal(ssize_t offset) {
   frames_.pop_back();
 }
 
+// Make a function object slot and push into the stack.
+// Usually, a StoreName instruction is followed, to bind a function name.
 void VM::InstDefineFunc(ssize_t offset) {
   const auto &func = codes()[offset];
   LOG_OUT << "offset: " << offset << ", function: " << func.name;
@@ -216,11 +236,23 @@ void VM::InstDefineFunc(ssize_t offset) {
   CurrentStack().emplace_back(std::move(funcSlot));
 }
 
+// Push a new frame for block.
+// The code of block can be accessed by offset.
+void VM::InstEnterBlock(ssize_t offset) {
+  const auto &block = codes()[offset];
+  LOG_OUT << "offset: " << offset << ", block: " << block.name;
+
+  // Create new frame for block.
+  auto blockFrame = Frame{.type = FrameBlock, .code = offset};
+  // Push a new frame for function call.
+  frames_.emplace_back(blockFrame);
+}
+
 // Return nullptr if not found.
-const Slot *VM::FindLoadedName(const std::string &str) {
-  for (auto iter = frames_.crbegin(); iter != frames_.crend(); ++iter) {
+Slot *VM::FindLoadedName(const std::string &str) {
+  for (auto iter = frames_.rbegin(); iter != frames_.rend(); ++iter) {
     auto nameIter = iter->names.find(str);
-    if (nameIter != iter->names.cend()) {
+    if (nameIter != iter->names.end()) {
       return &nameIter->second;
     }
   }

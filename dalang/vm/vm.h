@@ -115,6 +115,9 @@ public:
   }
   virtual ~VM() = default;
 
+  void Run();
+
+private:
   void InstLoadConst(ssize_t offset);
   void InstLoadName(ssize_t offset);
   void InstStoreName(ssize_t offset);
@@ -126,8 +129,7 @@ public:
   void InstCallFunc(ssize_t offset);
   void InstReturnVal(ssize_t offset);
   void InstDefineFunc(ssize_t offset);
-
-  void Run();
+  void InstEnterBlock(ssize_t offset);
 
   size_t &CurrentPc() { return frames_.back().pc; }
   std::vector<Slot> &CurrentStack() { return frames_.back().slots; }
@@ -137,7 +139,6 @@ public:
 
   StringPool &stringPool() { return stringPool_; }
 
-private:
   const std::vector<Code> &codes() const {
     CHECK_NULL(codesPtr_);
     return *codesPtr_;
@@ -157,7 +158,8 @@ private:
     return codes()[frames_.back().code].insts;
   }
 
-  const Slot *FindLoadedName(const std::string &str);
+  Slot *FindLoadedName(const std::string &str);
+  bool SetLoadedName(const std::string &str, Slot &&slot);
 
   void InitInstructionHandlers();
 

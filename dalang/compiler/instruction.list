@@ -1,11 +1,12 @@
-INSTRUCTION(LoadConst)
-INSTRUCTION(LoadName)
-INSTRUCTION(StoreName)
-INSTRUCTION(PopTop)
-INSTRUCTION(BinaryAdd)
-INSTRUCTION(BinarySub)
-INSTRUCTION(BinaryMul)
-INSTRUCTION(BinaryDiv)
-INSTRUCTION(CallFunc)
-INSTRUCTION(ReturnVal)
-INSTRUCTION(DefineFunc)
+INSTRUCTION(LoadConst)  // Load a const value from contant table.
+INSTRUCTION(LoadName)   // Load a value by name from symbol table.
+INSTRUCTION(StoreName)  // Store the value by name into symbol table.
+INSTRUCTION(PopTop)     // Pop up all from the stack.
+INSTRUCTION(BinaryAdd)  // Do binary add operation.
+INSTRUCTION(BinarySub)  // Do binary sub operation.
+INSTRUCTION(BinaryMul)  // Do binary mul operation.
+INSTRUCTION(BinaryDiv)  // Do binary div operation.
+INSTRUCTION(CallFunc)   // Call function with new frame, and bind the arguments.
+INSTRUCTION(ReturnVal)  // Return the value to caller frame.
+INSTRUCTION(DefineFunc) // Make a new function with context.
+INSTRUCTION(EnterBlock) // Enter a block with context.
