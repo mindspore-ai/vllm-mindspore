@@ -110,7 +110,8 @@ private:
 class VM {
 public:
   VM() = delete;
-  VM(Compiler *compiler) : compiler_{compiler}, codesPtr_{&compiler->codes()} {
+  VM(Compiler *compiler)
+      : codesPtr_{&compiler->codes()}, filename_{compiler->filename()} {
     InitInstructionHandlers();
   }
   virtual ~VM() = default;
@@ -165,9 +166,9 @@ private:
 
   void InitInstructionHandlers();
 
+  const std::string &filename() const { return filename_; }
   std::string LineString() {
-    return compiler_->filename() + ':' +
-           std::to_string(insts()[CurrentPc() - 1].lineno);
+    return filename() + ':' + std::to_string(insts()[CurrentPc() - 1].lineno);
   }
 
   Slot ConvertConstType(ConstType type, const std::string &value);
@@ -177,9 +178,9 @@ private:
 
   bool SkipFuncDefine(const InstCall &inst, size_t &funcDefDepth);
 
-  Compiler *compiler_{nullptr};
-
   const std::vector<Code> *codesPtr_{nullptr};
+
+  std::string filename_;
 
   StringPool stringPool_;
 

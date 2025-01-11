@@ -65,6 +65,9 @@ public:
 
   void Compile();
 
+  const std::string &filename() const { return parser_.filename(); }
+  const std::vector<Code> &codes() const { return codes_; }
+
   // Return true if stmt was handled, otherwise return false.
   bool CallStmtHandler(StmtConstPtr stmt) {
     return (this->*stmtHandlers_[stmt->type])(stmt);
@@ -75,30 +78,7 @@ public:
     return (this->*exprHandlers_[expr->type])(expr);
   }
 
-  size_t CurrentCodeIndex() { return codeStack_.top(); }
-  Code &CurrentCode() { return codes_[codeStack_.top()]; }
-  Code &code(size_t index) { return codes_[index]; }
-  const std::vector<Code> &codes() const { return codes_; }
-  std::vector<std::string> &symbolPool(size_t index) {
-    return code(index).symbols;
-  }
-  std::vector<Constant> &constantPool(size_t index) {
-    return code(index).constants;
-  }
-  std::vector<InstCall> &instructions(size_t index) {
-    return code(index).insts;
-  }
-  void AddInstruction(const InstCall &inst) {
-    CurrentCode().insts.emplace_back(inst);
-    lastInst_ = inst;
-  }
-
-  const std::string &filename() const { return parser_.filename(); }
-
   void Dump();
-
-  ssize_t FindSymbolIndex(const std::string &name);
-  ssize_t FindConstantIndex(const std::string &str);
 
 private:
   void InitCompileHandlers();
@@ -132,16 +112,37 @@ private:
   bool CompileName(ExprConstPtr expr);
   bool CompileLiteral(ExprConstPtr expr);
 
+  size_t CurrentCodeIndex() { return codeStack_.top(); }
+  Code &CurrentCode() { return codes_[codeStack_.top()]; }
+  Code &code(size_t index) { return codes_[index]; }
+
+  std::vector<std::string> &symbolPool(size_t index) {
+    return code(index).symbols;
+  }
+  std::vector<Constant> &constantPool(size_t index) {
+    return code(index).constants;
+  }
+  std::vector<InstCall> &instructions(size_t index) {
+    return code(index).insts;
+  }
+  void AddInstruction(const InstCall &inst) {
+    CurrentCode().insts.emplace_back(inst);
+    lastInst_ = inst;
+  }
+
+  ssize_t FindSymbolIndex(const std::string &name);
+  ssize_t FindConstantIndex(const std::string &str);
+
 private:
   Parser parser_;
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
+  std::stack<size_t> codeStack_;
 
   // Compile result records start.
   // Do serialization or deserialization of them for compilation reuse.
   std::vector<Code> codes_;
   // Compile result records end.
-  std::stack<size_t> codeStack_;
 
   StmtHandlerFunctions stmtHandlers_; // Notice: Do not change.
   ExprHandlerFunctions exprHandlers_; // Notice: Do not change.

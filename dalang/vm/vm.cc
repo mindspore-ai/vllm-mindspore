@@ -4,8 +4,8 @@
 #include "common/common.h"
 #include <algorithm>
 
-#undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+// #undef LOG_OUT
+// #define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
@@ -152,7 +152,7 @@ void VM::InstCallFunc(ssize_t offset) {
   const auto &funcNameSlot = CurrentStack().front();
   if (funcNameSlot.type != SlotFunction || CurrentStack().size() < 1) {
     CompileMessage(
-        compiler_->filename(), 0, 0,
+        filename(), 0, 0,
         "error: invalid function name. slot: " + ToString(funcNameSlot) +
             ", stack size: " + std::to_string(CurrentStack().size()));
     exit(1);
@@ -174,7 +174,7 @@ void VM::InstCallFunc(ssize_t offset) {
       std::stringstream ss;
       ss << "error: function arguments size(" << argsSize
          << ") should not exceed parameters size(" << paramsSize << ").";
-      CompileMessage(compiler_->filename(), 0, 0, ss.str());
+      CompileMessage(filename(), 0, 0, ss.str());
       exit(1);
     }
 
@@ -211,7 +211,7 @@ void VM::InstReturnVal(ssize_t offset) {
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
   if (frames_.size() <= 1) {
-    CompileMessage(compiler_->filename(), 0, 0,
+    CompileMessage(filename(), 0, 0,
                    "error: only one frame left, can not return anymore.");
     exit(1);
   }
@@ -273,11 +273,12 @@ void VM::InstStdCin(ssize_t offset) {
   }
 
   // Get input.
-  static std::string str;
+  std::string str;
   getline(std::cin, str);
   CHECK_NULL(slot);
   slot->type = SlotString;
-  slot->value.str_ = str.c_str();
+  const char *strPtr = stringPool().Intern(std::move(str));
+  slot->value.str_ = strPtr;
 }
 
 // Output to standard output stream.
@@ -287,7 +288,7 @@ void VM::InstStdCout(ssize_t offset) {
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
   if (CurrentStack().size() < 1) {
-    CompileMessage(compiler_->filename(), 0, 0,
+    CompileMessage(filename(), 0, 0,
                    "error: no slot left, can not output by stdout.");
     exit(1);
   }

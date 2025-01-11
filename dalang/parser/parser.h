@@ -16,6 +16,14 @@ public:
     ClearStmtPool();
   }
 
+  // Parse statements.
+  StmtPtr ParseCode();
+
+  const std::string &filename() const { return filename_; }
+
+  void DumpAst();
+
+private:
   // Parse expression.
   ExprPtr ParseExpr();
   ExprPtr ParseLogicalOr();
@@ -49,14 +57,6 @@ public:
   StmtPtr ParserCode();
   StmtPtr ParseModule();
 
-  // Parse statements.
-  StmtPtr ParseCode();
-
-  const std::string &filename() const { return filename_; }
-
-  void DumpAst();
-
-private:
   TokenConstPtr PreviousToken() {
     if (tokenPos_ - 1 >= lexer_.Tokens().size()) {
       return nullptr;
