@@ -136,6 +136,16 @@ NsPtr Compiler::CompileImport(NsConstPtr ns, StmtConstPtr stmt) {
   return nullptr;
 }
 
+NsPtr Compiler::CompileStdCin(NsConstPtr ns, StmtConstPtr stmt) {
+  LOG_OUT << ToString(stmt);
+  return nullptr;
+}
+
+NsPtr Compiler::CompileStdCout(NsConstPtr ns, StmtConstPtr stmt) {
+  LOG_OUT << ToString(stmt);
+  return nullptr;
+}
+
 NodePtr Compiler::CompileBinary(NsConstPtr ns, ExprConstPtr expr) {
   LOG_OUT << ToString(expr);
   return nullptr;

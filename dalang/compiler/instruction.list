@@ -10,3 +10,5 @@ INSTRUCTION(CallFunc)   // Call function with new frame, and bind the arguments.
 INSTRUCTION(ReturnVal)  // Return the value to caller frame.
 INSTRUCTION(DefineFunc) // Make a new function with context.
 INSTRUCTION(EnterBlock) // Enter a block with context.
+INSTRUCTION(StdCin)     // Input from standard input stream.
+INSTRUCTION(StdCout)    // Output to standard output stream.

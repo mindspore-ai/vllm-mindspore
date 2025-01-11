@@ -32,6 +32,10 @@ public:
       VisitList(stmt->stmt.Class.len, stmt->stmt.Class.body);
     } else if (stmt->type == StmtType_Block) {
       VisitList(stmt->stmt.Block.len, stmt->stmt.Block.body);
+    } else if (stmt->type == StmtType_StdCin) {
+      Visit(stmt->stmt.StdCin.value);
+    } else if (stmt->type == StmtType_StdCout) {
+      Visit(stmt->stmt.StdCout.value);
     } else if (stmt->type == StmtType_If) {
       Visit(stmt->stmt.If.condition);
       VisitList(stmt->stmt.If.ifLen, stmt->stmt.If.ifBody);

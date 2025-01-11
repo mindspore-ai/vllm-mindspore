@@ -269,6 +269,49 @@ bool Compiler::CompileImport(StmtConstPtr stmt) {
   return false;
 }
 
+bool Compiler::CompileStdCin(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
+  LOG_OUT << ToString(stmt);
+  if (stmt->type != StmtType_StdCin) {
+    return false;
+  }
+  // Handle stdin variable.
+  const auto &in = stmt->stmt.StdCin.value;
+  if (in->type != ExprType_Name) {
+    return false;
+  }
+  const auto &name = *in->expr.Name.identifier;
+  const auto lineno = in->lineStart;
+  const auto index = FindSymbolIndex(name);
+  InstCall stdcin = {.inst = Inst_StdCin,
+                     .offset = (index == -1
+                                    ? static_cast<ssize_t>(
+                                          symbolPool(CurrentCodeIndex()).size())
+                                    : index),
+                     .lineno = lineno};
+  if (index == -1) { // Not used before.
+    symbolPool(CurrentCodeIndex()).emplace_back(name);
+  }
+  AddInstruction(stdcin);
+  return true;
+}
+
+bool Compiler::CompileStdCout(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
+  LOG_OUT << ToString(stmt);
+  if (stmt->type != StmtType_StdCout) {
+    return false;
+  }
+  // Handle stdout value.
+  const auto &stdoutVal = stmt->stmt.StdCout.value;
+  CallExprHandler(stdoutVal);
+  // Make stdout instruction.
+  const auto lineno = stdoutVal->lineStart;
+  InstCall stdcout = {.inst = Inst_StdCout, .offset = 0, .lineno = lineno};
+  AddInstruction(stdcout);
+  return true;
+}
+
 bool Compiler::CompileBinary(ExprConstPtr expr) {
   CHECK_NULL(expr);
   LOG_OUT << ToString(expr);
@@ -464,6 +507,9 @@ void Compiler::Dump() {
       // Print variable names or constants.
       if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName) {
         std::cout << "\t\t" << inst.offset << " ("
+                  << symbolPool(codeIndex)[inst.offset] << ')';
+      } else if (inst.inst == Inst_StdCin) {
+        std::cout << "\t\t\t" << inst.offset << " ("
                   << symbolPool(codeIndex)[inst.offset] << ')';
       } else if (inst.inst == Inst_LoadConst) {
         std::cout << "\t\t" << inst.offset << " (";

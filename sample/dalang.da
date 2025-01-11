@@ -54,3 +54,6 @@ function foo(flag=true) {
 function main() {
   foo() # Call foo function directly.
 }
+
+<: main <: '\n'
+<: main() <: '\n'

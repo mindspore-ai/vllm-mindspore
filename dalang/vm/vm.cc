@@ -4,8 +4,8 @@
 #include "common/common.h"
 #include <algorithm>
 
-// #undef LOG_OUT
-// #define LOG_OUT LOG_NO_OUT
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
@@ -100,6 +100,7 @@ void VM::InstLoadName(ssize_t offset) {
     CompileMessage(LineString(), "error: not defined symbol: '" + name + "'.");
     exit(1);
   }
+  LOG_OUT << "load: " << ToString(*slot);
   CurrentStack().emplace_back(*slot);
 }
 
@@ -149,10 +150,11 @@ BINARY_OP(Div, /) // VM::InstBinaryDiv
 // instruction. The left slot is arguments.
 void VM::InstCallFunc(ssize_t offset) {
   const auto &funcNameSlot = CurrentStack().front();
-  if (funcNameSlot.type != SlotFunction || CurrentStack().size() <= 1) {
-    CompileMessage(compiler_->filename(), 0, 0,
-                   "error: invalid function name. slot: " +
-                       ToString(funcNameSlot));
+  if (funcNameSlot.type != SlotFunction || CurrentStack().size() < 1) {
+    CompileMessage(
+        compiler_->filename(), 0, 0,
+        "error: invalid function name. slot: " + ToString(funcNameSlot) +
+            ", stack size: " + std::to_string(CurrentStack().size()));
     exit(1);
   }
 
@@ -160,36 +162,38 @@ void VM::InstCallFunc(ssize_t offset) {
   const auto codeIndex = funcNameSlot.value.offset;
   const auto &func = codes()[codeIndex];
   LOG_OUT << "offset: " << offset << ", name: " << func.name;
-  // To bind the arguments and parameters.
-  auto argsSize = CurrentStack().size() - 1;
-  auto paramsSize = func.args.size();
-  if (argsSize > paramsSize) {
-    std::stringstream ss;
-    ss << "error: function arguments size(" << argsSize
-       << ") should not exceed parameters size(" << paramsSize << ").";
-    CompileMessage(compiler_->filename(), 0, 0, ss.str());
-    exit(1);
-  }
-
   // Create new function frame in advance.
   auto newFuncFrame =
       Frame{.type = FrameFunction, .code = funcNameSlot.value.offset};
 
-  // Move all arguments from caller stack into callee names map.
-  for (size_t i = 0; i < argsSize; ++i) {
-    auto argIndex = i + 1; // Not include function name;
-    const auto &arg = CurrentStack()[argIndex];
-    newFuncFrame.names[func.args[i]] = std::move(arg);
-  }
-  CurrentStack().clear();
+  if (CurrentStack().size() > 1) { // Has arguments.
+    // To bind the arguments and parameters.
+    auto argsSize = CurrentStack().size() - 1;
+    auto paramsSize = func.args.size();
+    if (argsSize > paramsSize) {
+      std::stringstream ss;
+      ss << "error: function arguments size(" << argsSize
+         << ") should not exceed parameters size(" << paramsSize << ").";
+      CompileMessage(compiler_->filename(), 0, 0, ss.str());
+      exit(1);
+    }
 
-  // Append default parameters in callee names map.
-  if (argsSize < paramsSize) {
-    // for (size_t i = argsSize; i < paramsSize; ++i) {
-    //   names()[func.args[i]] = std::move(Slot{.type=SlotInt,
-    //   .value.int_=func.defs[i]});
-    // }
-    LOG_ERROR << "Not support default parameter by now";
+    // Move all arguments from caller stack into callee names map.
+    for (size_t i = 0; i < argsSize; ++i) {
+      auto argIndex = i + 1; // Not include function name;
+      const auto &arg = CurrentStack()[argIndex];
+      newFuncFrame.names[func.args[i]] = std::move(arg);
+    }
+    CurrentStack().clear();
+
+    // Append default parameters in callee names map.
+    if (argsSize < paramsSize) {
+      // for (size_t i = argsSize; i < paramsSize; ++i) {
+      //   names()[func.args[i]] = std::move(Slot{.type=SlotInt,
+      //   .value.int_=func.defs[i]});
+      // }
+      LOG_ERROR << "Not support default parameter by now";
+    }
   }
 
   // Push a new frame for function call.
@@ -243,9 +247,54 @@ void VM::InstEnterBlock(ssize_t offset) {
   LOG_OUT << "offset: " << offset << ", block: " << block.name;
 
   // Create new frame for block.
-  auto blockFrame = Frame{.type = FrameBlock, .code = offset};
+  auto blockFrame =
+      Frame{.type = FrameBlock, .code = static_cast<size_t>(offset)};
   // Push a new frame for function call.
   frames_.emplace_back(blockFrame);
+}
+
+// Input from standard input stream.
+void VM::InstStdCin(ssize_t offset) {
+  Slot *slot = nullptr;
+  const auto &name = syms()[offset];
+  LOG_OUT << "offset: " << offset << ", name: " << name;
+  auto iter = names().find(name);
+  if (iter == names().cend()) {
+    // First declared name in current frame.
+    LOG_OUT << "no defined symbol: '" + name + "' in current frame.";
+    slot = FindLoadedName(name);
+    if (slot == nullptr) {
+      // Create a new variable and store into it.
+      slot = &names()[name];
+    }
+  } else {
+    // Already used name.
+    slot = &names()[name];
+  }
+
+  // Get input.
+  static std::string str;
+  getline(std::cin, str);
+  CHECK_NULL(slot);
+  slot->type = SlotString;
+  slot->value.str_ = str.c_str();
+}
+
+// Output to standard output stream.
+void VM::InstStdCout(ssize_t offset) {
+  LOG_OUT << "offset: " << offset << ", std out value: "
+          << (CurrentStack().empty() ? "<null>"
+                                     : ToString(CurrentStack().back()))
+          << ", stack size: " << CurrentStack().size();
+  if (CurrentStack().size() < 1) {
+    CompileMessage(compiler_->filename(), 0, 0,
+                   "error: no slot left, can not output by stdout.");
+    exit(1);
+  }
+  // Print the value.
+  const auto &slot = CurrentStack().front();
+  std::cout << ToString(slot);
+  CurrentStack().pop_back();
 }
 
 // Return nullptr if not found.

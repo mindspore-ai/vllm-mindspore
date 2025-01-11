@@ -130,6 +130,8 @@ private:
   void InstReturnVal(ssize_t offset);
   void InstDefineFunc(ssize_t offset);
   void InstEnterBlock(ssize_t offset);
+  void InstStdCin(ssize_t offset);
+  void InstStdCout(ssize_t offset);
 
   size_t &CurrentPc() { return frames_.back().pc; }
   std::vector<Slot> &CurrentStack() { return frames_.back().slots; }

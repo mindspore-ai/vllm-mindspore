@@ -287,6 +287,39 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   return false;
 }
 } // namespace WhilePattern
+
+namespace StdCinCoutPattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator &&
+      (token->data.op == OpId_StdCin || token->data.op == OpId_StdCout)) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchStdCin(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator && token->data.op == OpId_StdCin) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchStdCout(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Operator && token->data.op == OpId_StdCout) {
+    return true;
+  }
+  return false;
+}
+} // namespace StdCinCoutPattern
 } // namespace StmtPattern
 
 #ifdef DEBUG
@@ -435,6 +468,32 @@ static inline StmtPtr MakeBlockStmt(const Stmts &body) {
     stmt->lineEnd = body.back()->lineEnd;
     stmt->columnStart = body.front()->columnStart;
     stmt->columnEnd = body.back()->columnEnd;
+  }
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeStdCinStmt(ExprConstPtr value) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_StdCin;
+  stmt->stmt.StdCin.value = value;
+  if (value != nullptr) {
+    stmt->lineStart = value->lineStart;
+    stmt->lineEnd = value->lineEnd;
+    stmt->columnStart = value->columnStart;
+    stmt->columnEnd = value->columnEnd;
+  }
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeStdCoutStmt(ExprConstPtr value) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_StdCout;
+  stmt->stmt.StdCin.value = value;
+  if (value != nullptr) {
+    stmt->lineStart = value->lineStart;
+    stmt->lineEnd = value->lineEnd;
+    stmt->columnStart = value->columnStart;
+    stmt->columnEnd = value->columnEnd;
   }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }

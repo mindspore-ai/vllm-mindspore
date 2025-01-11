@@ -152,6 +152,10 @@ const std::string ToString(StmtConstPtr stmt) {
     return "Class";
   } else if (stmt->type == StmtType_Block) {
     return "Block";
+  } else if (stmt->type == StmtType_StdCin) {
+    return "StdCin";
+  } else if (stmt->type == StmtType_StdCout) {
+    return "StdCout";
   } else if (stmt->type == StmtType_If) {
     return "If";
   } else if (stmt->type == StmtType_For) {

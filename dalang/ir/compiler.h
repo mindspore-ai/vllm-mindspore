@@ -55,6 +55,8 @@ private:
   NsPtr CompileContinue(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompilePass(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileImport(NsConstPtr ns, StmtConstPtr stmt);
+  NsPtr CompileStdCin(NsConstPtr ns, StmtConstPtr stmt);
+  NsPtr CompileStdCout(NsConstPtr ns, StmtConstPtr stmt);
 
   // Compile expression.
   NodePtr CompileBinary(NsConstPtr ns, ExprConstPtr expr);

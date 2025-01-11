@@ -3,7 +3,9 @@
 function foo(x, y, z=0){
   function baz() {
     name = 'baz~~'
-    print(name)
+
+    <: name <:'\n'
+    <: 'x: ' <: x <: '\n'
   }
   baz()
   return (x - y) * 2

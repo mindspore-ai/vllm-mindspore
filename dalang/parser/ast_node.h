@@ -83,6 +83,12 @@ typedef struct StmtNode {
       StmtConstPtr *body{nullptr};
     } Block;
     struct {
+      ExprConstPtr value{nullptr};
+    } StdCin;
+    struct {
+      ExprConstPtr value{nullptr};
+    } StdCout;
+    struct {
       ExprConstPtr condition{nullptr};
       size_t ifLen{0};
       StmtConstPtr *ifBody{nullptr};

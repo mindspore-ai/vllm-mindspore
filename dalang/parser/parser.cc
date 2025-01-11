@@ -7,11 +7,15 @@
 #include "parser/parser.h"
 #include "parser/stmt.h"
 
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
+
 namespace parser {
 Parser::Parser(const std::string &filename)
     : lexer_{Lexer(filename)},
       filename_{std::filesystem::canonical(std::filesystem::path(filename))
                     .string()} {}
+
 ExprPtr Parser::ParseExpr() {
   // Ignore all comments.
   while (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {
@@ -573,6 +577,22 @@ StmtPtr Parser::ParseWhile() {
   return nullptr;
 }
 
+StmtPtr Parser::ParseStdCinCout() {
+  // >: or <:
+  if (StmtPattern::StdCinCoutPattern::Match(CurrentToken())) {
+    const bool isStdCin =
+        StmtPattern::StdCinCoutPattern::MatchStdCin(CurrentToken());
+    RemoveToken(); // >: or <:
+    ExprConstPtr value = ParseExpr();
+    if (isStdCin) {
+      return MakeStdCinStmt(value);
+    } else {
+      return MakeStdCoutStmt(value);
+    }
+  }
+  return nullptr;
+}
+
 StmtPtr Parser::ParserCode() {
   // Return statement.
   StmtPtr stmt = ParseReturn();
@@ -616,6 +636,11 @@ StmtPtr Parser::ParserCode() {
   }
   // Block statement.
   stmt = ParseBlock();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // Block std cin&cout.
+  stmt = ParseStdCinCout();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }

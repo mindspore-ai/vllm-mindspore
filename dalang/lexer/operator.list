@@ -1,21 +1,23 @@
-OPERATOR(Equal)
-OPERATOR(NotEqual)
-OPERATOR(LessEqual)
-OPERATOR(GreaterEqual)
-OPERATOR(LogicalOr)
-OPERATOR(LogicalAnd)
-OPERATOR(ShiftRight)
-OPERATOR(ShiftLeft)
-OPERATOR(LessThan)
-OPERATOR(GreaterThan)
-OPERATOR(AddAssign)
-OPERATOR(SubAssign)
-OPERATOR(MulAssign)
-OPERATOR(DivAssign)
-OPERATOR(ModAssign)
-OPERATOR(Assign)
-OPERATOR(Add)
-OPERATOR(Sub)
-OPERATOR(Mul)
-OPERATOR(Div)
-OPERATOR(Mod)
+OPERATOR(Equal)        // ==
+OPERATOR(NotEqual)     // !=
+OPERATOR(LessEqual)    // <=
+OPERATOR(GreaterEqual) // >=
+OPERATOR(LogicalOr)    // ||
+OPERATOR(LogicalAnd)   // &&
+OPERATOR(ShiftRight)   // >>
+OPERATOR(ShiftLeft)    // <<
+OPERATOR(LessThan)     // <
+OPERATOR(GreaterThan)  // >
+OPERATOR(AddAssign)    // +=
+OPERATOR(SubAssign)    // -=
+OPERATOR(MulAssign)    // *=
+OPERATOR(DivAssign)    // /=
+OPERATOR(ModAssign)    // %=
+OPERATOR(Assign)       // =
+OPERATOR(Add)          // +
+OPERATOR(Sub)          // -
+OPERATOR(Mul)          // *
+OPERATOR(Div)          // /
+OPERATOR(Mod)          // %
+OPERATOR(StdCin)       // <:
+OPERATOR(StdCout)      // >:

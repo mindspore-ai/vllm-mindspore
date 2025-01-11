@@ -2,20 +2,31 @@
 
 // Just a da-lang sample code.
 
+>:input
+
 function bar() {
   hint1 = "Hello, World."
   hint2 = 'Hello, DaLang.'
 
-  print(hint1)
-  print(hint2)
+  #print(hint1)
+  <: hint1 <: '\n'
+  #print(hint2)
+  <: hint2 <: '\n'
 }
 
 function foo(x, y, z){
+  #bar()
+  res = (x - y) * 2
   bar()
-  return (x - y) * 2
+  return res
 }
+
+
+<:input<:'\n\n'
 
 x = 6
 y = 4
 z = 2
-foo(x, y, z) # Call foo function directly.
+<: foo(x, y, z) # Call foo function directly.
+<: '\n'
+<: foo <: '\n'

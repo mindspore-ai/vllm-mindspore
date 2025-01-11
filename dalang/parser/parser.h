@@ -41,6 +41,7 @@ public:
   Stmts ParserFunctionArgs();
   StmtPtr ParseFunctionDef();
   StmtPtr ParseClassDef();
+  StmtPtr ParseStdCinCout();
   StmtPtr ParseIf();
   StmtPtr ParseFor();
   StmtPtr ParseWhile();

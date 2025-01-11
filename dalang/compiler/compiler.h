@@ -119,6 +119,8 @@ private:
   bool CompileContinue(StmtConstPtr stmt);
   bool CompilePass(StmtConstPtr stmt);
   bool CompileImport(StmtConstPtr stmt);
+  bool CompileStdCin(StmtConstPtr stmt);
+  bool CompileStdCout(StmtConstPtr stmt);
 
   // Compile expression.
   bool CompileBinary(ExprConstPtr expr);
