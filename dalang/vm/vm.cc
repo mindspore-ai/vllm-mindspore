@@ -4,8 +4,8 @@
 #include "common/common.h"
 #include <algorithm>
 
-// #undef LOG_OUT
-// #define LOG_OUT LOG_NO_OUT
+#undef LOG_OUT
+#define LOG_OUT LOG_NO_OUT
 
 namespace vm {
 namespace {
@@ -149,26 +149,32 @@ BINARY_OP(Div, /) // VM::InstBinaryDiv
 // The first(reverse stack) slot is function object created by DefineFunc
 // instruction. The left slot is arguments.
 void VM::InstCallFunc(ssize_t offset) {
-  const auto &funcNameSlot = CurrentStack().front();
-  if (funcNameSlot.type != SlotFunction || CurrentStack().size() < 1) {
+  // Found the function slot firstly.
+  auto funcIter =
+      std::find_if(CurrentStack().crbegin(), CurrentStack().crend(),
+                   [](const Slot &slot) { return slot.type == SlotFunction; });
+  if (funcIter == CurrentStack().crend() || CurrentStack().size() < 1) {
     CompileMessage(
         filename(), 0, 0,
-        "error: invalid function name. slot: " + ToString(funcNameSlot) +
+        "error: invalid function name. slot: " + ToString(*funcIter) +
             ", stack size: " + std::to_string(CurrentStack().size()));
     exit(1);
   }
+  const auto &funcNameSlot = *funcIter;
+  const auto argsSize =
+      static_cast<size_t>(std::distance(CurrentStack().crbegin(), funcIter));
 
   // Get callee function information.
   const auto codeIndex = funcNameSlot.value.offset;
   const auto &func = codes()[codeIndex];
-  LOG_OUT << "offset: " << offset << ", name: " << func.name;
+  LOG_OUT << "offset: " << offset << ", name: " << func.name
+          << ", id: " << frames_.size();
   // Create new function frame in advance.
   auto newFuncFrame =
       Frame{.type = FrameFunction, .code = funcNameSlot.value.offset};
 
-  if (CurrentStack().size() > 1) { // Has arguments.
+  if (argsSize > 0) { // Has arguments.
     // To bind the arguments and parameters.
-    auto argsSize = CurrentStack().size() - 1;
     auto paramsSize = func.args.size();
     if (argsSize > paramsSize) {
       std::stringstream ss;
@@ -179,12 +185,14 @@ void VM::InstCallFunc(ssize_t offset) {
     }
 
     // Move all arguments from caller stack into callee names map.
+    auto argStartIndex = CurrentStack().size() - argsSize;
     for (size_t i = 0; i < argsSize; ++i) {
-      auto argIndex = i + 1; // Not include function name;
-      const auto &arg = CurrentStack()[argIndex];
+      const auto &arg = CurrentStack()[argStartIndex + i];
       newFuncFrame.names[func.args[i]] = std::move(arg);
     }
-    CurrentStack().clear();
+    // Erase all arguments.
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
+                         CurrentStack().end());
 
     // Append default parameters in callee names map.
     if (argsSize < paramsSize) {
@@ -195,6 +203,8 @@ void VM::InstCallFunc(ssize_t offset) {
       LOG_ERROR << "Not support default parameter by now";
     }
   }
+  // Erase the function.
+  CurrentStack().pop_back();
 
   // Push a new frame for function call.
   frames_.emplace_back(newFuncFrame);
@@ -205,19 +215,21 @@ void VM::InstCallFunc(ssize_t offset) {
 //   offset (not 0): the compiler append it for every function implicitly, if no
 //   return set by user.
 void VM::InstReturnVal(ssize_t offset) {
-  const auto &slot = CurrentStack().front();
-  LOG_OUT << "offset: " << offset << ", return value: "
+  if (frames_.size() < 1) {
+    CompileMessage(filename(), 0, 0,
+                   "error: no frame left, can not return anymore.");
+    exit(1);
+  }
+  LOG_OUT << "offset: " << offset
+          << ", return from function, name: " << code().name
+          << ", id: " << (frames_.size() - 1) << ", value: "
           << (CurrentStack().empty() ? "<null>"
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
-  if (frames_.size() <= 1) {
-    CompileMessage(filename(), 0, 0,
-                   "error: only one frame left, can not return anymore.");
-    exit(1);
-  }
   // If explicit return, move the value into previous frame stack.
   if (offset == 0) {
     auto &prevFrame = frames_.rbegin()[1];
+    const auto &slot = CurrentStack().back();
     prevFrame.slots.emplace_back(std::move(slot));
   }
   // Just pop the frame.
@@ -251,6 +263,84 @@ void VM::InstEnterBlock(ssize_t offset) {
       Frame{.type = FrameBlock, .code = static_cast<size_t>(offset)};
   // Push a new frame for function call.
   frames_.emplace_back(blockFrame);
+}
+
+namespace {
+COMPARE_OP(==)
+COMPARE_OP(!=)
+COMPARE_OP(>)
+COMPARE_OP(<)
+COMPARE_OP(>=)
+COMPARE_OP(<=)
+} // namespace
+
+void VM::InstCompare(ssize_t offset) {
+  LOG_OUT << "offset: " << offset;
+  const auto &rhs = std::move(CurrentStack().back());
+  CurrentStack().pop_back();
+  const auto &lhs = std::move(CurrentStack().back());
+  CurrentStack().pop_back();
+
+  bool res;
+  if (offset == OpId_Equal) {
+    res = lhs == rhs;
+  } else if (offset == OpId_NotEqual) {
+    res = lhs != rhs;
+  } else if (offset == OpId_GreaterThan) {
+    res = lhs > rhs;
+  } else if (offset == OpId_LessThan) {
+    res = lhs < rhs;
+  } else if (offset == OpId_GreaterEqual) {
+    res = lhs >= rhs;
+  } else if (offset == OpId_LessEqual) {
+    res = lhs <= rhs;
+  }
+
+  Slot slot = {.type = SlotBool};
+  slot.value.bool_ = res;
+  LOG_OUT << "condition: " << res;
+  CurrentStack().emplace_back(std::move(slot));
+}
+
+// Change the pc to offset if the condition is true.
+void VM::InstJumpTrue(ssize_t offset) {
+  LOG_OUT << "offset: " << offset;
+  const auto &slot = CurrentStack().back();
+  if (slot.type != SlotBool) {
+    CompileMessage(LineString(), "error: the condition type is not bool: '" +
+                                     ToString(slot) + "'.");
+    exit(1);
+  }
+  if (slot.value.bool_) {
+    LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
+    CurrentPc() = offset;
+  }
+  CurrentStack().pop_back();
+}
+
+// Change the pc to offset if the condition is false.
+void VM::InstJumpFalse(ssize_t offset) {
+  LOG_OUT << "offset: " << offset;
+  const auto &slot = CurrentStack().back();
+  if (slot.type != SlotBool) {
+    CompileMessage(LineString(), "error: the condition type is not bool: '" +
+                                     ToString(slot) + "'.");
+    exit(1);
+  }
+  LOG_OUT << "condition: " << slot.value.bool_;
+  if (!slot.value.bool_) {
+    LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
+    CurrentPc() = offset;
+  }
+  CurrentStack().pop_back();
+}
+
+// Change the pc unconditionally.
+void VM::InstJump(ssize_t offset) {
+  LOG_OUT << "offset: " << offset;
+
+  LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
+  CurrentPc() = offset;
 }
 
 // Input from standard input stream.
@@ -293,7 +383,7 @@ void VM::InstStdCout(ssize_t offset) {
     exit(1);
   }
   // Print the value.
-  const auto &slot = CurrentStack().front();
+  const auto &slot = CurrentStack().back();
   std::cout << ToString(slot);
   CurrentStack().pop_back();
 }
@@ -332,12 +422,34 @@ void VM::Run() {
       }
 
       (this->*instHandlers_[inst.inst])(inst.offset);
+      if (frames_.empty()) {
+        // Finish.
+        LOG_OUT << "Run finish";
+        return;
+      }
       LOG_OUT << "frame size: " << frames_.size()
               << ", stack size: " << CurrentStack().size()
               << ", inst size: " << insts().size() << ", pc: " << CurrentPc();
+#ifdef DEBUG
+      DumpStack();
+#endif
     }
     // Pop exhausted frame.
     frames_.pop_back();
+  }
+}
+
+void VM::DumpStack() {
+  std::cout << "----------" << std::endl;
+  std::cout << "frame:" << std::endl;
+  for (size_t i = 0; i < frames_.size(); ++i) {
+    std::cout << "\t#" << i << ": " << codes()[frames_[i].code].name
+              << std::endl;
+  }
+  std::cout << "stack:" << std::endl;
+  for (size_t i = 0; i < CurrentStack().size(); ++i) {
+    const auto &slot = CurrentStack()[i];
+    std::cout << "\t#" << i << ": " << ToString(slot) << std::endl;
   }
 }
 

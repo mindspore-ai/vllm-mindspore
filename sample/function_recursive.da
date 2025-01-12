@@ -1,0 +1,13 @@
+#!dalang
+
+function foo(x, y){
+  z = x * y
+    if z > 100 {
+      return z
+    }
+  return foo(z, x)
+}
+
+x = 6
+y = 4
+return foo(x, y) # Call foo function directly.

@@ -127,10 +127,14 @@ private:
   void InstBinarySub(ssize_t offset);
   void InstBinaryMul(ssize_t offset);
   void InstBinaryDiv(ssize_t offset);
+  void InstCompare(ssize_t offset);
   void InstCallFunc(ssize_t offset);
   void InstReturnVal(ssize_t offset);
   void InstDefineFunc(ssize_t offset);
   void InstEnterBlock(ssize_t offset);
+  void InstJumpTrue(ssize_t offset);
+  void InstJumpFalse(ssize_t offset);
+  void InstJump(ssize_t offset);
   void InstStdCin(ssize_t offset);
   void InstStdCout(ssize_t offset);
 
@@ -178,6 +182,8 @@ private:
 
   bool SkipFuncDefine(const InstCall &inst, size_t &funcDefDepth);
 
+  void DumpStack();
+
   const std::vector<Code> *codesPtr_{nullptr};
 
   std::string filename_;
@@ -191,7 +197,6 @@ private:
 
 #define BINARY_OP(OpName, OpSymbol)                                            \
   void VM::InstBinary##OpName(ssize_t offset) {                                \
-    LOG_OUT << "offset: " << offset;                                           \
     const auto &rhs = std::move(CurrentStack().back());                        \
     CurrentStack().pop_back();                                                 \
     const auto &lhs = std::move(CurrentStack().back());                        \
@@ -207,6 +212,8 @@ private:
       Slot slot;                                                               \
       slot.type = SlotInt;                                                     \
       slot.value.int_ = res;                                                   \
+      LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
+              << ToString(rhs) << " = " << ToString(slot);                     \
       CurrentStack().emplace_back(std::move(slot));                            \
     } else if (lhs.type == SlotFloat && rhs.type == SlotFloat) {               \
       auto lhsVal = lhs.value.float_;                                          \
@@ -219,6 +226,8 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
+      LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
+              << ToString(rhs) << " = " << ToString(slot);                     \
       CurrentStack().emplace_back(std::move(slot));                            \
     } else if (lhs.type == SlotInt && rhs.type == SlotFloat) {                 \
       auto lhsVal = lhs.value.int_;                                            \
@@ -231,6 +240,8 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
+      LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
+              << ToString(rhs) << " = " << ToString(slot);                     \
       CurrentStack().emplace_back(slot);                                       \
     } else if (lhs.type == SlotFloat && rhs.type == SlotInt) {                 \
       auto lhsVal = lhs.value.float_;                                          \
@@ -243,6 +254,8 @@ private:
       Slot slot;                                                               \
       slot.type = SlotFloat;                                                   \
       slot.value.float_ = res;                                                 \
+      LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
+              << ToString(rhs) << " = " << ToString(slot);                     \
       CurrentStack().emplace_back(std::move(slot));                            \
     } else if (lhs.type == SlotString || rhs.type == SlotString) {             \
       if (strcmp(#OpSymbol, "+") != 0) {                                       \
@@ -257,12 +270,61 @@ private:
       slot.type = SlotString;                                                  \
       const char *str = stringPool().Intern(std::move(ss.str()));              \
       slot.value.str_ = str;                                                   \
+      LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
+              << ToString(rhs) << " = " << ToString(slot);                     \
       CurrentStack().emplace_back(std::move(slot));                            \
     } else {                                                                   \
       CompileMessage(LineString(),                                             \
-                     "error: only support int or float binary operation.");    \
+                     "error: only support int, float or string "               \
+                     "binary operation[" #OpSymbol "], but got {" +            \
+                         ToString(lhs) + ", " + ToString(rhs) + "}.");         \
       exit(1);                                                                 \
     }                                                                          \
   }
+
+#define COMPARE_OP(CompareOpSymbol)                                            \
+  bool operator CompareOpSymbol(const Slot &lhs, const Slot &rhs) {            \
+    if (lhs.type == SlotInt && rhs.type == SlotInt) {                          \
+      auto lhsVal = lhs.value.int_;                                            \
+      auto rhsVal = rhs.value.int_;                                            \
+      auto res = lhsVal CompareOpSymbol rhsVal;                                \
+      LOG_OUT << "compare II result: " << (res ? "true" : "false") << ", "     \
+              << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
+              << ToString(rhs);                                                \
+      return res;                                                              \
+    } else if (lhs.type == SlotFloat && rhs.type == SlotFloat) {               \
+      auto lhsVal = lhs.value.float_;                                          \
+      auto rhsVal = rhs.value.float_;                                          \
+      auto res = lhsVal CompareOpSymbol rhsVal;                                \
+      LOG_OUT << "compare FF result: " << (res ? "true" : "false") << ", "     \
+              << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
+              << ToString(rhs);                                                \
+      return res;                                                              \
+    } else if (lhs.type == SlotInt && rhs.type == SlotFloat) {                 \
+      auto lhsVal = lhs.value.int_;                                            \
+      auto rhsVal = rhs.value.float_;                                          \
+      auto res = ((double)lhsVal)CompareOpSymbol rhsVal;                       \
+      LOG_OUT << "compare IF result: " << (res ? "true" : "false") << ", "     \
+              << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
+              << ToString(rhs);                                                \
+      return res;                                                              \
+    } else if (lhs.type == SlotFloat && rhs.type == SlotInt) {                 \
+      auto lhsVal = lhs.value.float_;                                          \
+      auto rhsVal = rhs.value.int_;                                            \
+      auto res = lhsVal CompareOpSymbol((double)rhsVal);                       \
+      LOG_OUT << "compare FI result: " << (res ? "true" : "false") << ", "     \
+              << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
+              << ToString(rhs);                                                \
+      return res;                                                              \
+    } else if (lhs.type == SlotString || rhs.type == SlotString) {             \
+      auto res = strcmp(lhs.value.str_, rhs.value.str_) CompareOpSymbol 0;     \
+      LOG_OUT << "compare STR result: " << (res ? "true" : "false") << ", "    \
+              << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
+              << ToString(rhs);                                                \
+      return res;                                                              \
+    }                                                                          \
+    return false;                                                              \
+  }
+
 } // namespace vm
 #endif // __VM_VM_H__

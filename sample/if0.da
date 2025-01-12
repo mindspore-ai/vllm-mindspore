@@ -1,0 +1,21 @@
+#!da
+
+// Just a da-lang sample code.
+
+function foo(flag) {
+  x = 6
+  y = 4
+  z = 2
+
+  if flag {
+    <: '=======================' <: '\n'
+    return x + y / z
+  } else if x > y {
+    <: '-----------------------' <: '\n'
+    return (x - y) / z
+  } else {
+    return (x - y) * 2
+  }
+}
+
+<: 'result: ' <: foo(true) <: '\n' # Call foo function directly.

@@ -235,8 +235,55 @@ bool Compiler::CompileBlock(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileIf(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
   LOG_OUT << ToString(stmt);
-  return false;
+  if (stmt->type != StmtType_If) {
+    return false;
+  }
+  // Handle if condition.
+  const auto &cond = stmt->stmt.If.condition;
+  CallExprHandler(cond);
+
+  // Create a jump-false branch instruction.
+  InstCall jumpFalseInst = {.inst = Inst_JumpFalse,
+                            .offset = 0, // Set as else branch offset later.
+                            .lineno = cond->lineStart};
+  AddInstruction(jumpFalseInst);
+  const auto pendingJumpFalseIndex = CurrentCode().insts.size() - 1;
+
+  // Handle if body.
+  const auto ifLen = stmt->stmt.If.ifLen;
+  const auto &ifBody = stmt->stmt.If.ifBody;
+  for (size_t i = 0; i < ifLen; ++i) {
+    CallStmtHandler(ifBody[i]);
+  }
+  // Add jump instruction for true branch, skip false branch instructions.
+  const auto elseLen = stmt->stmt.If.elseLen;
+  bool hasLastStmtRetInIfBody =
+      (ifLen != 0 && ifBody[ifLen - 1]->type == StmtType_Return);
+  size_t pendingJumpIndex;
+  if (elseLen != 0 && !hasLastStmtRetInIfBody) {
+    InstCall jumpInst = {.inst = Inst_Jump,
+                         .offset = 0, // Set as if ending offset later.
+                         .lineno = cond->lineStart};
+    AddInstruction(jumpInst);
+    pendingJumpIndex = CurrentCode().insts.size() - 1;
+  }
+  // Set else offset to jump-false instruction offset.
+  CurrentCode().insts[pendingJumpFalseIndex].offset =
+      CurrentCode().insts.size();
+
+  // Handle else body.
+  const auto &elseBody = stmt->stmt.If.elseBody;
+  for (size_t i = 0; i < elseLen; ++i) {
+    CallStmtHandler(elseBody[i]);
+  }
+
+  // Set if ending offset to jump instruction offset.
+  if (elseLen != 0 && !hasLastStmtRetInIfBody) {
+    CurrentCode().insts[pendingJumpIndex].offset = CurrentCode().insts.size();
+  }
+  return true;
 }
 
 bool Compiler::CompileWhile(StmtConstPtr stmt) {
@@ -336,6 +383,16 @@ bool Compiler::CompileBinary(ExprConstPtr expr) {
   } else if (expr->expr.Binary.op == OpId_Div) {
     InstCall call = {.inst = Inst_BinaryDiv, .offset = 0, .lineno = lineno};
     AddInstruction(call);
+    return true;
+  } else if (expr->expr.Binary.op == OpId_Equal ||
+             expr->expr.Binary.op == OpId_NotEqual ||
+             expr->expr.Binary.op == OpId_GreaterThan ||
+             expr->expr.Binary.op == OpId_LessThan ||
+             expr->expr.Binary.op == OpId_GreaterEqual ||
+             expr->expr.Binary.op == OpId_LessEqual) {
+    InstCall compare = {
+        .inst = Inst_Compare, .offset = expr->expr.Binary.op, .lineno = lineno};
+    AddInstruction(compare);
     return true;
   }
   return false;
@@ -511,6 +568,27 @@ void Compiler::Dump() {
       } else if (inst.inst == Inst_StdCin) {
         std::cout << "\t\t\t" << inst.offset << " ("
                   << symbolPool(codeIndex)[inst.offset] << ')';
+      } else if (inst.inst == Inst_JumpTrue || inst.inst == Inst_JumpFalse) {
+        std::cout << "\t\t" << inst.offset;
+      } else if (inst.inst == Inst_Jump) {
+        std::cout << "\t\t\t" << inst.offset;
+      } else if (inst.inst == Inst_Compare) {
+        std::cout << "\t\t" << inst.offset << " (";
+        if (inst.offset == OpId_Equal) {
+          std::cout << "==" << ')';
+        } else if (inst.offset == OpId_NotEqual) {
+          std::cout << "!=" << ')';
+        } else if (inst.offset == OpId_GreaterThan) {
+          std::cout << ">" << ')';
+        } else if (inst.offset == OpId_LessThan) {
+          std::cout << "<" << ')';
+        } else if (inst.offset == OpId_GreaterEqual) {
+          std::cout << ">=" << ')';
+        } else if (inst.offset == OpId_LessEqual) {
+          std::cout << "<=" << ')';
+        } else {
+          std::cout << "error" << ')';
+        }
       } else if (inst.inst == Inst_LoadConst) {
         std::cout << "\t\t" << inst.offset << " (";
         const auto &cons = constantPool(codeIndex)[inst.offset];

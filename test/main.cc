@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
   if (test_lexer) {
     RunLexerTest(filename);
   }
-  constexpr auto test_parser = true;
+  constexpr auto test_parser = false;
   if (test_parser) {
     RunParserTest(filename);
   }

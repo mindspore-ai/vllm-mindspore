@@ -1,0 +1,13 @@
+#!dalang
+
+function foo(x, y){
+  z = x * y
+    if z > 1000000000 {
+      return z
+    }
+  return foo(z, x)
+}
+
+x = 6
+y = 4
+<: foo(x, y) <:'\n' # Call foo function directly.

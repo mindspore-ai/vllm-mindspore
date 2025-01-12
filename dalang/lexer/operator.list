@@ -1,13 +1,13 @@
 OPERATOR(Equal)        // ==
 OPERATOR(NotEqual)     // !=
-OPERATOR(LessEqual)    // <=
+OPERATOR(GreaterThan)  // >
+OPERATOR(LessThan)     // <
 OPERATOR(GreaterEqual) // >=
+OPERATOR(LessEqual)    // <=
 OPERATOR(LogicalOr)    // ||
 OPERATOR(LogicalAnd)   // &&
 OPERATOR(ShiftRight)   // >>
 OPERATOR(ShiftLeft)    // <<
-OPERATOR(LessThan)     // <
-OPERATOR(GreaterThan)  // >
 OPERATOR(AddAssign)    // +=
 OPERATOR(SubAssign)    // -=
 OPERATOR(MulAssign)    // *=
