@@ -22,6 +22,8 @@
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
 
+#undef DEBUG
+
 namespace vm {
 namespace {
 void ReplaceStr(std::string &dst, const char *oldStr, size_t oldStrLen,

@@ -315,8 +315,43 @@ bool Compiler::CompileIf(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileWhile(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
   LOG_OUT << ToString(stmt);
-  return false;
+  if (stmt->type != StmtType_While) {
+    return false;
+  }
+  // Handle if condition.
+  const auto condIndex = CurrentCode().insts.size();
+  const auto &cond = stmt->stmt.While.condition;
+  CallExprHandler(cond);
+
+  // Create a jump-false branch instruction.
+  InstCall jumpFalseInst = {
+      .inst = Inst_JumpFalse,
+      .offset = 0, // Set as the offset after jump-back instruction later.
+      .lineno = cond->lineStart};
+  AddInstruction(jumpFalseInst);
+  const auto pendingJumpFalseIndex = CurrentCode().insts.size() - 1;
+
+  // Handle if body.
+  const auto len = stmt->stmt.While.len;
+  const auto &body = stmt->stmt.While.body;
+  for (size_t i = 0; i < len; ++i) {
+    CallStmtHandler(body[i]);
+  }
+
+  // Just jump back to while start position.
+  InstCall jumpInst = {.inst = Inst_Jump,
+                       .offset = static_cast<ssize_t>(
+                           condIndex), // Set offset as while beginning.
+                       .lineno = cond->lineStart};
+  AddInstruction(jumpInst);
+
+  // Set jump-false offset just after jump-back instruction.
+  CurrentCode().insts[pendingJumpFalseIndex].offset =
+      CurrentCode().insts.size();
+
+  return true;
 }
 
 bool Compiler::CompileFor(StmtConstPtr stmt) {

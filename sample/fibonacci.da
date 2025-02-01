@@ -9,10 +9,13 @@ function fibonacci(n) {
 
 function main() {
     n = 10 : int
-    for i : n {
+    i = 0 : int
+    while i < n {
+      i = i + 1
       <: fibonacci(i) <: '\n'
     }
 }
 
-<: 'fib:\n' <: main()
+<: 'fib:\n'
+main()
 <: '\n'
