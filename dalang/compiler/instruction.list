@@ -17,7 +17,7 @@
 INSTRUCTION(LoadConst)  // Load a const value from contant table.
 INSTRUCTION(LoadName)   // Load a value by name from symbol table.
 INSTRUCTION(StoreName)  // Store the value by name into symbol table.
-INSTRUCTION(PopTop)     // Pop up all from the stack.
+INSTRUCTION(PopTop)     // Pop up the top from the stack.
 INSTRUCTION(BinaryAdd)  // Do binary add operation.
 INSTRUCTION(BinarySub)  // Do binary sub operation.
 INSTRUCTION(BinaryMul)  // Do binary mul operation.

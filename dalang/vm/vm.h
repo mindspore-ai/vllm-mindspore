@@ -31,6 +31,7 @@ using InstHandlerFunction = void (VM::*)(ssize_t);
 using InstHandlerFunctions = std::unordered_map<InstType, InstHandlerFunction>;
 
 enum SlotType {
+  SlotVoid,
   SlotRefName,
   SlotFunction,
   SlotClass,

@@ -128,11 +128,16 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
   }
   // Handle return value.
   const auto &returnVal = stmt->stmt.Return.value;
-  CallExprHandler(returnVal);
+  if (returnVal != nullptr) {
+    CallExprHandler(returnVal);
+  }
   // Make return.
-  const auto lineno = returnVal->lineStart;
+  const auto lineno = stmt->lineStart;
   InstCall ret = {.inst = Inst_ReturnVal,
-                  .offset = 0, // .offset is 0, means explicit return.
+                  .offset = (returnVal != nullptr
+                                 ? 0
+                                 : -1), // offset is 0, means return value.
+                                        // offset is not 0, means return void.
                   .lineno = lineno};
   AddInstruction(ret);
   return true;
@@ -203,7 +208,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   // Make extra return if no explicit return.
   if (lastInst_.inst != Inst_ReturnVal) {
     InstCall ret = {.inst = Inst_ReturnVal,
-                    .offset = -1, // .offset is not 0, means implicit return.
+                    .offset = -1, // offset is not 0, means return void.
                     .lineno = lineno};
     AddInstruction(ret);
   }
@@ -249,7 +254,7 @@ bool Compiler::CompileBlock(StmtConstPtr stmt) {
   // Make extra return if no explicit return.
   if (lastInst_.inst != Inst_ReturnVal) {
     InstCall ret = {.inst = Inst_ReturnVal,
-                    .offset = -1, // .offset is not 0, means implicit return.
+                    .offset = -1, // offset is not 0, means return void.
                     .lineno = lineno};
     AddInstruction(ret);
   }

@@ -148,13 +148,17 @@ void VM::InstStoreName(ssize_t offset) {
   CurrentStack().pop_back();
 }
 
-// Just pop up all the slots.
+// Just pop up the top slot.
 void VM::InstPopTop(ssize_t offset) {
   LOG_OUT << "offset: " << offset << ", return value: "
           << (CurrentStack().empty() ? "<null>"
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
-  CurrentStack().clear();
+  if (CurrentStack().empty()) {
+    CompileMessage(LineString(), "error: stack is empty.");
+    exit(EXIT_FAILURE);
+  }
+  CurrentStack().pop_back();
 }
 
 BINARY_OP(Add, +) // VM::InstBinaryAdd
@@ -243,11 +247,17 @@ void VM::InstReturnVal(ssize_t offset) {
           << (CurrentStack().empty() ? "<null>"
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
-  // If explicit return, move the value into previous frame stack.
+
   if (offset == 0) {
-    auto &prevFrame = frames_.rbegin()[1];
+    // If explicit return value, move the value into previous frame stack.
     const auto &slot = CurrentStack().back();
+    auto &prevFrame = frames_.rbegin()[1];
     prevFrame.slots.emplace_back(std::move(slot));
+  } else {
+    // Set a void slot for later pop top instruction.
+    Slot voidSlot = {.type = SlotVoid};
+    auto &prevFrame = frames_.rbegin()[1];
+    prevFrame.slots.emplace_back(std::move(voidSlot));
   }
   // Just pop the frame.
   frames_.pop_back();
