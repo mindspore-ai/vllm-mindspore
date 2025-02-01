@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef __PARSER_COMPILER_COMPILER_H__
 #define __PARSER_COMPILER_COMPILER_H__
 
@@ -61,11 +77,12 @@ typedef Code *CodePtr;
 class Compiler {
 public:
   explicit Compiler(const std::string &filename);
+  explicit Compiler(Parser *parser);
   ~Compiler();
 
   void Compile();
 
-  const std::string &filename() const { return parser_.filename(); }
+  const std::string &filename() const { return parser_->filename(); }
   const std::vector<Code> &codes() const { return codes_; }
 
   // Return true if stmt was handled, otherwise return false.
@@ -81,6 +98,7 @@ public:
   void Dump();
 
 private:
+  void Init();
   void InitCompileHandlers();
 
   // Compile statement.
@@ -134,7 +152,8 @@ private:
   ssize_t FindConstantIndex(const std::string &str);
 
 private:
-  Parser parser_;
+  Parser *parser_;
+  bool selfManagedParser_{false};
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
   std::stack<size_t> codeStack_;

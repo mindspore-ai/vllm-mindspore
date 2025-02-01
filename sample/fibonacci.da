@@ -9,32 +9,10 @@ function fibonacci(n) {
 
 function main() {
     n = 10 : int
-    # for i : n {
-    #     <: fibonacci(i)
-    # }
-    res = fibonacci(1)
-    <: res <: '\n'
-    res = fibonacci(2)
-    <: res <: '\n'
-    res = fibonacci(3)
-    <: res <: '\n'
-    res = fibonacci(4)
-    <: res <: '\n'
-    res = fibonacci(5)
-    <: res <: '\n'
-    res = fibonacci(6)
-    <: res <: '\n'
-    res = fibonacci(7)
-    <: res <: '\n'
-    res = fibonacci(8)
-    <: res <: '\n'
-    res = fibonacci(9)
-    <: res <: '\n'
-    res = fibonacci(10)
-    <: res <: '\n'
-    return res
+    for i : n {
+      <: fibonacci(i) <: '\n'
+    }
 }
 
-
-<: 'fib:\n' <: main() 
+<: 'fib:\n' <: main()
 <: '\n'

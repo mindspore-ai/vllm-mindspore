@@ -1,9 +1,27 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "compiler/compiler.h"
 
 #undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+#define LOG_OUT NO_LOG_OUT
 
 #include <algorithm>
+
+#include "common/common.h"
 
 #define TO_STR(s) #s
 #define INSTRUCTION(I) TO_STR(I),
@@ -21,19 +39,29 @@ const char *GetInstStr(Inst inst) {
 }
 
 Compiler::Compiler(const std::string &filename)
-    : parser_{Parser(filename)}, walker_{new CompilerNodeVisitor(this)} {
-  InitCompileHandlers();
-  codeStack_.emplace(codes_.size());
-  codes_.emplace_back(Code{.name = parser_.filename()});
+    : selfManagedParser_{true}, walker_{new CompilerNodeVisitor(this)} {
+  parser_ = new Parser(filename);
+  Init();
 }
 
-Compiler::~Compiler() { delete walker_; }
+Compiler::Compiler(Parser *parser)
+    : parser_{parser}, selfManagedParser_{false},
+      walker_{new CompilerNodeVisitor(this)} {
+  Init();
+}
+
+Compiler::~Compiler() {
+  if (selfManagedParser_) {
+    delete parser_;
+  }
+  delete walker_;
+}
 
 void Compiler::Compile() {
-  StmtPtr module = parser_.ParseCode();
+  StmtPtr module = parser_->ParseCode();
   if (walker_ == nullptr) {
     LOG_ERROR << "AST walker should not be null.";
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   walker_->Visit(module);
 }
@@ -65,7 +93,7 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   const auto &target = stmt->stmt.Assign.target;
   if (target->type != ExprType_Name) {
     LOG_ERROR << "Not a Name, but " << ToString(target);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   const auto &targetName = *target->expr.Name.identifier;
   LOG_OUT << "targetName: " << targetName;
@@ -157,7 +185,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
       code.args.emplace_back(argName);
       code.defs.emplace_back(defaultParam);
     } else {
-      CompileMessage(parser_.filename(), lineno, name->columnStart,
+      CompileMessage(parser_->filename(), lineno, name->columnStart,
                      "error: invalid function parameters.");
     }
   }
@@ -499,7 +527,7 @@ ssize_t Compiler::FindSymbolIndex(const std::string &name) {
   if (index < 0) {
     LOG_ERROR << "Not found symbol, index should not be negative " << index
               << ", name: " << name;
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   return index;
 }
@@ -522,15 +550,24 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
   if (index < 0) {
     LOG_ERROR << "Not found constant, index should not be negative " << index
               << ", str: " << str;
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   return index;
 }
 
+void Compiler::Init() {
+  InitCompileHandlers();
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(Code{.name = parser_->filename()});
+}
+
 void Compiler::Dump() {
+  std::cout << "--------------------" << std::endl;
+  std::cout << "----- bytecode -----" << std::endl;
+  std::cout << "total codes: " << codes().size() << std::endl;
   for (size_t codeIndex = 0; codeIndex < codes().size(); ++codeIndex) {
     const auto &code = codes()[codeIndex];
-    std::cout << "--------------------" << std::endl;
+    std::cout << "----------" << std::endl;
     std::cout << "code: " << code.name << std::endl;
     if (!code.args.empty()) {
       std::cout << "arguments: " << std::endl;
@@ -595,7 +632,7 @@ void Compiler::Dump() {
         if (cons.type == ConstType_str) {
           std::cout << "'";
         }
-        std::cout << cons.value;
+        std::cout << ConvertEscapeString(cons.value);
         if (cons.type == ConstType_str) {
           std::cout << "'";
         }
@@ -616,14 +653,15 @@ void Compiler::Dump() {
     for (size_t i = 0; i < code.constants.size(); ++i) {
       const auto &cons = code.constants[i];
       std::cout << i << "\t\t";
+      std::cout << ToStr(static_cast<LtId>(cons.type)) << '\t';
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
-      std::cout << cons.value;
+      std::cout << ConvertEscapeString(cons.value);
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
-      std::cout << '\t' << ToStr(static_cast<LtId>(cons.type)) << std::endl;
+      std::cout << std::endl;
     }
   }
 }

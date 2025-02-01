@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef __PARSER_IR_OPERATOR_H__
-#define __PARSER_IR_OPERATOR_H__
+#ifndef __CLI_OPTIONS_H__
+#define __CLI_OPTIONS_H__
 
-#include <vector>
+#include <argp.h>
 
-namespace ir {
-#define OPERATOR(O) Op_##O,
-typedef enum Operator {
-#include "lexer/operator.list"
-  Op_End,
-} Op;
-#undef OPERATOR
+/* Used by main to communicate with parse_opt. */
+struct arguments {
+  const char *args[1];
+  bool lex;
+  bool parse;
+  bool compile;
+  bool silent;
+  bool interpret;
+  const char *output;
+};
 
-} // namespace ir
+struct arguments GetOptions(int argc, char **argv);
 
-#endif // __PARSER_IR_OPERATOR_H__
+#endif // __CLI_OPTIONS_H__

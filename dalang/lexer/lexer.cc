@@ -1,17 +1,34 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "lexer.h"
 
 #include <cassert>
-#include <filesystem>
 #include <fstream>
+#include <sstream>
+
+#include "common/common.h"
+#include "common/logger.h"
 
 #undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+#define LOG_OUT NO_LOG_OUT
 
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
-    : filename_{std::filesystem::canonical(std::filesystem::path(filename))
-                    .string()},
-      file_{nullptr}, eof_{false} {
+    : filename_{filename}, file_{nullptr}, eof_{false} {
   OpenFile(filename);
 }
 
@@ -123,7 +140,7 @@ void Lexer::OpenFile(const std::string &filename) {
   file_.open(filename);
   if ((file_.rdstate() & std::ifstream::failbit) != 0) {
     CompileMessage(filename, "warning: fail to open file.");
-    exit(-1);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -140,7 +157,7 @@ const std::string &Lexer::ReadLine() {
     eof_ = true;
   } else if ((file_.rdstate() & std::ifstream::failbit) != 0) {
     CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");
-    exit(-1);
+    exit(EXIT_FAILURE);
   }
   ++lineno_;
   return line_;
@@ -181,7 +198,7 @@ Token Lexer::GetLiteral() {
     // Exception here.
     CompileMessage(filename_, lineno_, column_,
                    "warning: unexcepted literal string format.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   if (tok.type != TokenType_ContinuousString) {
     return tok;
@@ -195,7 +212,7 @@ Token Lexer::GetLiteral() {
       CompileMessage(filename_, lineno, column,
                      "warning: unexcepted end of file during "
                      "scanning multiple lines string.");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     ReadLine();
     const char *column = strchr(line_.c_str(), *tok.data.str);
@@ -248,7 +265,7 @@ std::string Lexer::UnescapeString(const std::string &str) {
         ss << "error: unexpected string literal: '" << str
            << "', position: " << invalidPos << ", col: " << colPos;
         CompileMessage(filename_, lineno_, colPos, ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       // https://en.cppreference.com/w/cpp/language/escape
       switch (*it++) {
@@ -295,11 +312,32 @@ std::string Lexer::UnescapeString(const std::string &str) {
         ss << "error: unexpected string literal: '" << str
            << "', position: " << invalidPos << ", col: " << colPos;
         CompileMessage(filename_, lineno_, colPos, ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
     }
     ss << c;
   }
   return ss.str();
+}
+
+std::string Lexer::EscapeString(const std::string &str) {
+  return ConvertEscapeString(str);
+}
+
+void Lexer::Dump() {
+  std::cout << "--------------------" << std::endl;
+  std::cout << "------ token -------" << std::endl;
+  for (const auto &token : Tokens()) {
+    if (token.type == TokenType_End) {
+      LOG_OUT << "No token anymore";
+      break;
+    }
+    if (token.IsSeparatorSpace()) {
+      continue;
+    }
+    std::string escapeName = EscapeString(token.name);
+    std::cout << std::setfill(' ') << std::setw(30) << std::left << escapeName
+              << "[" << ToStr(&token) << "]" << std::endl;
+  }
 }
 } // namespace lexer

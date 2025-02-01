@@ -1,3 +1,18 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include "vm/vm.h"
 
@@ -5,7 +20,7 @@
 #include <algorithm>
 
 #undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+#define LOG_OUT NO_LOG_OUT
 
 namespace vm {
 namespace {
@@ -98,7 +113,7 @@ void VM::InstLoadName(ssize_t offset) {
   if (slot == nullptr) {
     // Not found in all namespaces.
     CompileMessage(LineString(), "error: not defined symbol: '" + name + "'.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   LOG_OUT << "load: " << ToString(*slot);
   CurrentStack().emplace_back(*slot);
@@ -108,7 +123,7 @@ void VM::InstLoadName(ssize_t offset) {
 void VM::InstStoreName(ssize_t offset) {
   if (CurrentStack().empty()) {
     CompileMessage(LineString(), "error: stack is empty.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   const auto &name = syms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
@@ -158,7 +173,7 @@ void VM::InstCallFunc(ssize_t offset) {
         filename(), 0, 0,
         "error: invalid function name. slot: " + ToString(*funcIter) +
             ", stack size: " + std::to_string(CurrentStack().size()));
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   const auto &funcNameSlot = *funcIter;
   const auto argsSize =
@@ -181,7 +196,7 @@ void VM::InstCallFunc(ssize_t offset) {
       ss << "error: function arguments size(" << argsSize
          << ") should not exceed parameters size(" << paramsSize << ").";
       CompileMessage(filename(), 0, 0, ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
 
     // Move all arguments from caller stack into callee names map.
@@ -218,7 +233,7 @@ void VM::InstReturnVal(ssize_t offset) {
   if (frames_.size() < 1) {
     CompileMessage(filename(), 0, 0,
                    "error: no frame left, can not return anymore.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   LOG_OUT << "offset: " << offset
           << ", return from function, name: " << code().name
@@ -245,7 +260,7 @@ void VM::InstDefineFunc(ssize_t offset) {
   if (iter != names().cend()) {
     CompileMessage(LineString(),
                    "error: redefined function symbol: '" + func.name + "'.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   Slot funcSlot{.type = SlotFunction};
   funcSlot.value.offset = offset;
@@ -309,7 +324,7 @@ void VM::InstJumpTrue(ssize_t offset) {
   if (slot.type != SlotBool) {
     CompileMessage(LineString(), "error: the condition type is not bool: '" +
                                      ToString(slot) + "'.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   if (slot.value.bool_) {
     LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
@@ -325,7 +340,7 @@ void VM::InstJumpFalse(ssize_t offset) {
   if (slot.type != SlotBool) {
     CompileMessage(LineString(), "error: the condition type is not bool: '" +
                                      ToString(slot) + "'.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   LOG_OUT << "condition: " << slot.value.bool_;
   if (!slot.value.bool_) {
@@ -380,7 +395,7 @@ void VM::InstStdCout(ssize_t offset) {
   if (CurrentStack().size() < 1) {
     CompileMessage(filename(), 0, 0,
                    "error: no slot left, can not output by stdout.");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   // Print the value.
   const auto &slot = CurrentStack().back();
@@ -399,6 +414,41 @@ Slot *VM::FindLoadedName(const std::string &str) {
   return nullptr;
 }
 
+size_t &VM::CurrentPc() { return frames_.back().pc; }
+
+std::vector<Slot> &VM::CurrentStack() { return frames_.back().slots; }
+
+std::unordered_map<std::string, Slot> &VM::names() {
+  return frames_.back().names;
+}
+
+StringPool &VM::stringPool() { return stringPool_; }
+
+const std::vector<Code> &VM::codes() const {
+  CHECK_NULL(codesPtr_);
+  return *codesPtr_;
+}
+
+const Code &VM::code() const { return codes()[frames_.back().code]; }
+
+const std::vector<std::string> &VM::syms() const {
+  return codes()[frames_.back().code].symbols;
+}
+
+const std::vector<Constant> &VM::consts() const {
+  return codes()[frames_.back().code].constants;
+}
+
+const std::vector<InstCall> &VM::insts() const {
+  return codes()[frames_.back().code].insts;
+}
+
+const std::string &VM::filename() const { return filename_; }
+
+std::string VM::LineString() {
+  return filename() + ':' + std::to_string(insts()[CurrentPc() - 1].lineno);
+}
+
 void VM::Run() {
   auto topFrame = Frame{.type = FrameModule, .code = 0};
   frames_.emplace_back(topFrame);
@@ -410,7 +460,7 @@ void VM::Run() {
         LOG_ERROR << "instruction handler list size is less than input "
                      "inst type: "
                   << inst.inst << " >= " << instHandlers_.size();
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       ++CurrentPc();
 

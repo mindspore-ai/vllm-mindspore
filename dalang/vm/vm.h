@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef __VM_VM_H__
 #define __VM_VM_H__
 
@@ -138,42 +154,26 @@ private:
   void InstStdCin(ssize_t offset);
   void InstStdCout(ssize_t offset);
 
-  size_t &CurrentPc() { return frames_.back().pc; }
-  std::vector<Slot> &CurrentStack() { return frames_.back().slots; }
-  std::unordered_map<std::string, Slot> &names() {
-    return frames_.back().names;
-  }
+  size_t &CurrentPc();
+  std::vector<Slot> &CurrentStack();
+  std::unordered_map<std::string, Slot> &names();
 
-  StringPool &stringPool() { return stringPool_; }
+  StringPool &stringPool();
 
-  const std::vector<Code> &codes() const {
-    CHECK_NULL(codesPtr_);
-    return *codesPtr_;
-  }
+  const std::vector<Code> &codes() const;
+  const Code &code() const;
 
-  const Code &code() const { return codes()[frames_.back().code]; }
-
-  const std::vector<std::string> &syms() const {
-    return codes()[frames_.back().code].symbols;
-  }
-
-  const std::vector<Constant> &consts() const {
-    return codes()[frames_.back().code].constants;
-  }
-
-  const std::vector<InstCall> &insts() const {
-    return codes()[frames_.back().code].insts;
-  }
+  const std::vector<std::string> &syms() const;
+  const std::vector<Constant> &consts() const;
+  const std::vector<InstCall> &insts() const;
 
   Slot *FindLoadedName(const std::string &str);
   bool SetLoadedName(const std::string &str, Slot &&slot);
 
   void InitInstructionHandlers();
 
-  const std::string &filename() const { return filename_; }
-  std::string LineString() {
-    return filename() + ':' + std::to_string(insts()[CurrentPc() - 1].lineno);
-  }
+  const std::string &filename() const;
+  std::string LineString();
 
   Slot ConvertConstType(ConstType type, const std::string &value);
   Slot ConvertConstType(const Constant &cons);
@@ -206,7 +206,7 @@ private:
       auto rhsVal = rhs.value.int_;                                            \
       if (rhsVal == 0 && strcmp(#OpSymbol, "/") == 0) {                        \
         CompileMessage(LineString(), "error: should not div 0");               \
-        exit(1);                                                               \
+        exit(EXIT_FAILURE);                                                    \
       }                                                                        \
       auto res = lhsVal OpSymbol rhsVal;                                       \
       Slot slot;                                                               \
@@ -220,7 +220,7 @@ private:
       auto rhsVal = rhs.value.float_;                                          \
       if (rhsVal == 0.0 && strcmp(#OpSymbol, "/") == 0) {                      \
         CompileMessage(LineString(), "error: should not div 0");               \
-        exit(1);                                                               \
+        exit(EXIT_FAILURE);                                                    \
       }                                                                        \
       auto res = lhsVal OpSymbol rhsVal;                                       \
       Slot slot;                                                               \
@@ -234,7 +234,7 @@ private:
       auto rhsVal = rhs.value.float_;                                          \
       if (rhsVal == 0.0 && strcmp(#OpSymbol, "/") == 0) {                      \
         CompileMessage(LineString(), "error: should not div 0");               \
-        exit(1);                                                               \
+        exit(EXIT_FAILURE);                                                    \
       }                                                                        \
       auto res = ((double)lhsVal)OpSymbol rhsVal;                              \
       Slot slot;                                                               \
@@ -248,7 +248,7 @@ private:
       auto rhsVal = rhs.value.int_;                                            \
       if (rhsVal == 0 && strcmp(#OpSymbol, "/") == 0) {                        \
         CompileMessage(LineString(), "error: should not div 0");               \
-        exit(1);                                                               \
+        exit(EXIT_FAILURE);                                                    \
       }                                                                        \
       auto res = lhsVal OpSymbol((double)rhsVal);                              \
       Slot slot;                                                               \
@@ -261,7 +261,7 @@ private:
       if (strcmp(#OpSymbol, "+") != 0) {                                       \
         CompileMessage(LineString(),                                           \
                        "error: only support '+' for string operation.");       \
-        exit(1);                                                               \
+        exit(EXIT_FAILURE);                                                    \
       }                                                                        \
       std::stringstream ss;                                                    \
       GetSlotStr(lhs, ss);                                                     \
@@ -278,7 +278,7 @@ private:
                      "error: only support int, float or string "               \
                      "binary operation[" #OpSymbol "], but got {" +            \
                          ToString(lhs) + ", " + ToString(rhs) + "}.");         \
-      exit(1);                                                                 \
+      exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   }
 

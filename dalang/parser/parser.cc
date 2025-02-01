@@ -1,6 +1,23 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <filesystem>
 #include <iomanip>
 
+#include "common/common.h"
 #include "parser/ast_node.h"
 #include "parser/ast_visitor.h"
 #include "parser/expr.h"
@@ -8,13 +25,14 @@
 #include "parser/stmt.h"
 
 #undef LOG_OUT
-#define LOG_OUT LOG_NO_OUT
+#define LOG_OUT NO_LOG_OUT
 
 namespace parser {
-Parser::Parser(const std::string &filename)
-    : lexer_{Lexer(filename)},
-      filename_{std::filesystem::canonical(std::filesystem::path(filename))
-                    .string()} {}
+Parser::Parser(const std::string &filename) : selfManagedLexer_{true} {
+  lexer_ = new Lexer(filename);
+}
+
+Parser::Parser(Lexer *lexer) : lexer_{lexer}, selfManagedLexer_{false} {}
 
 ExprPtr Parser::ParseExpr() {
   // Ignore all comments.
@@ -186,7 +204,7 @@ ExprPtr Parser::ParseGroup() {
             ss << (Finish() ? ToString(PreviousToken())
                             : ToString(CurrentToken()));
             CompileMessage(LineString(), ss.str());
-            exit(1);
+            exit(EXIT_FAILURE);
           }
         }
       }
@@ -198,7 +216,7 @@ ExprPtr Parser::ParseGroup() {
         ss << "warning: invalid list ending. unrecognized token: ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
         CompileMessage(LineString(), ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
     }
   }
@@ -219,10 +237,8 @@ ExprPtr Parser::ParsePrimary() {
       return nullptr;
     }
   }
-#ifdef DEBUG
   LOG_OUT << LineString()
           << ", not match nothing, token: " << ToString(CurrentToken());
-#endif
   return nullptr;
 }
 
@@ -324,7 +340,7 @@ Stmts Parser::ParserFunctionArgs() {
         ss << "warning: invalid function arguments, expected ',' or ')': ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
         CompileMessage(LineString(), ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       RemoveToken(); // ,
     }
@@ -344,7 +360,7 @@ StmtPtr Parser::ParseFunctionDef() {
       ss << "warning: invalid function definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // {
     Stmts stmts;
@@ -355,7 +371,7 @@ StmtPtr Parser::ParseFunctionDef() {
       ss << "warning: invalid function definition, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // }
     return MakeFunctionStmt(id, args, stmts);
@@ -375,7 +391,7 @@ StmtPtr Parser::ParseClassDef() {
       ss << "warning: invalid class definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // {
     Stmts stmts;
@@ -386,7 +402,7 @@ StmtPtr Parser::ParseClassDef() {
       ss << "warning: invalid class definition, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // }
     return MakeClassStmt(id, bases, stmts);
@@ -409,7 +425,7 @@ StmtPtr Parser::ParseBlock() {
     ss << "warning: invalid code block, expected '}': ";
     ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
     CompileMessage(LineString(), ss.str());
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   RemoveToken(); // }
   return MakeBlockStmt(stmts);
@@ -425,7 +441,7 @@ StmtPtr Parser::ParseIf() {
       ss << "warning: invalid if statement, expected a condition expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     // {
     if (!StmtPattern::IfPattern::MatchBodyStart(CurrentToken())) {
@@ -433,7 +449,7 @@ StmtPtr Parser::ParseIf() {
       ss << "warning: invalid if statement, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // {
     Stmts ifBodyStmts;
@@ -444,7 +460,7 @@ StmtPtr Parser::ParseIf() {
       ss << "warning: invalid if statement, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // }
 
@@ -466,7 +482,7 @@ StmtPtr Parser::ParseIf() {
         ss << "warning: invalid else statement, expected '{': ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
         CompileMessage(LineString(), ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       RemoveToken();                    // {
       (void)ParseStmts(&elseBodyStmts); // Not check result.
@@ -476,7 +492,7 @@ StmtPtr Parser::ParseIf() {
         ss << "warning: invalid else statement, expected '}': ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
         CompileMessage(LineString(), ss.str());
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       RemoveToken(); // }
     }
@@ -495,7 +511,7 @@ StmtPtr Parser::ParseFor() {
       ss << "warning: invalid for statement, expected an element expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     // :
     if (!StmtPattern::ForPattern::MatchIteratorSeparator(CurrentToken())) {
@@ -503,7 +519,7 @@ StmtPtr Parser::ParseFor() {
       ss << "warning: invalid for statement, expected ':': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken();                       // :
     ExprConstPtr iterator = ParseExpr(); // iterator
@@ -512,7 +528,7 @@ StmtPtr Parser::ParseFor() {
       ss << "warning: invalid for statement, expected an iterator expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     // {
     if (!StmtPattern::ForPattern::MatchBodyStart(CurrentToken())) {
@@ -520,7 +536,7 @@ StmtPtr Parser::ParseFor() {
       ss << "warning: invalid for statement, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // {
     Stmts stmts;
@@ -531,7 +547,7 @@ StmtPtr Parser::ParseFor() {
       ss << "warning: invalid for statement, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // }
     return MakeForStmt(element, iterator, stmts);
@@ -550,7 +566,7 @@ StmtPtr Parser::ParseWhile() {
             "expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     // {
     if (!StmtPattern::WhilePattern::MatchBodyStart(CurrentToken())) {
@@ -558,7 +574,7 @@ StmtPtr Parser::ParseWhile() {
       ss << "warning: invalid while statement, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // {
     Stmts stmts;
@@ -569,7 +585,7 @@ StmtPtr Parser::ParseWhile() {
       ss << "warning: invalid while statement, expected '}': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     RemoveToken(); // }
     return MakeWhileStmt(cond, stmts);
@@ -652,16 +668,17 @@ bool Parser::ParseStmts(StmtsPtr stmts) {
     TokenConstPtr lastToken = CurrentToken();
     StmtPtr stmt = ParserCode();
     if (stmt != nullptr) {
-      (void)stmts->emplace_back(stmt);
+      LOG_OUT << "stmt: " << ToString(stmt);
+      (void)stmts->emplace_back(std::move(stmt));
     } else if (lastToken == CurrentToken()) { // Infinite loop, break.
       return false;
     } else {
-#ifdef DEBUG
-      LOG_OUT << "notice: handle partial tokens. last token: "
-              << LineString(lastToken) << ": " << ToString(lastToken)
-              << ", current token: " << LineString(CurrentToken()) << ": "
-              << ToString(CurrentToken());
-#endif
+      if (CurrentToken() != nullptr) {
+        LOG_OUT << "notice: handle partial tokens. last token: "
+                << LineString(lastToken) << ": " << ToString(lastToken)
+                << ", current token: " << LineString(CurrentToken()) << ": "
+                << ToString(CurrentToken());
+      }
     }
   }
   return true;
@@ -674,14 +691,88 @@ StmtPtr Parser::ParseModule() {
     ss << "warning: can not handle token: ";
     ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
     CompileMessage(LineString(), ss.str());
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   return MakeModuleStmt(stmts);
 }
 
 StmtPtr Parser::ParseCode() {
-  module_ = ParseModule();
+  if (module_ == nullptr) {
+    module_ = ParseModule();
+  }
   return module_;
+}
+
+TokenConstPtr Parser::PreviousToken() {
+  if (tokenPos_ - 1 >= lexer_->Tokens().size()) {
+    return nullptr;
+  }
+  return &lexer_->Tokens()[tokenPos_ - 1];
+}
+
+TokenConstPtr Parser::NextToken() {
+  if (tokenPos_ + 1 >= lexer_->Tokens().size()) {
+    return nullptr;
+  }
+  return &lexer_->Tokens()[tokenPos_ + 1];
+}
+
+TokenConstPtr Parser::CurrentToken() {
+  if (tokenPos_ >= lexer_->Tokens().size()) {
+    return nullptr;
+  }
+  return &lexer_->Tokens()[tokenPos_];
+}
+
+TokenConstPtr Parser::GetToken() {
+  if (tokenPos_ >= lexer_->Tokens().size()) {
+    CompileMessage(LineString(&lexer_->Tokens().back()),
+                   "warning: tokens were exhaused");
+    exit(EXIT_FAILURE);
+  }
+  const auto *token = &lexer_->Tokens()[tokenPos_];
+  ++tokenPos_;
+  return token;
+}
+
+void Parser::RemoveToken() {
+  if (tokenPos_ >= lexer_->Tokens().size()) {
+    CompileMessage(LineString(&lexer_->Tokens().back()),
+                   "warning: tokens were exhaused");
+    exit(EXIT_FAILURE);
+  }
+  ++tokenPos_;
+}
+
+size_t Parser::TokenPos() { return tokenPos_; }
+
+void Parser::SetTokenPos(size_t pos) { tokenPos_ = pos; }
+
+bool Parser::Finish() { return tokenPos_ == lexer_->Tokens().size(); }
+
+const std::string Parser::LineString(TokenConstPtr token) {
+  return filename() + ':' + std::to_string(token->lineStart) + ':' +
+         std::to_string(token->columnStart + 1);
+}
+
+const std::string Parser::LineString() {
+  TokenConstPtr token;
+  if (Finish()) {
+    token = PreviousToken();
+  } else {
+    token = CurrentToken();
+  }
+  return LineString(token);
+}
+
+const std::string Parser::LineString(ExprConstPtr expr) {
+  return filename() + ':' + std::to_string(expr->lineStart) + ':' +
+         std::to_string(expr->columnStart + 1);
+}
+
+const std::string Parser::LineString(StmtConstPtr stmt) {
+  return filename() + ':' + std::to_string(stmt->lineStart) + ':' +
+         std::to_string(stmt->columnStart + 1);
 }
 
 constexpr int indentLen = 2;
@@ -755,6 +846,8 @@ void Parser::DumpAst() {
   };
   auto visitor = DumpNodeVisitor();
   visitor.Visit(module_);
+  std::cout << "--------------------" << std::endl;
+  std::cout << "------- AST --------" << std::endl;
   std::cout << visitor.dump();
 }
 } // namespace parser

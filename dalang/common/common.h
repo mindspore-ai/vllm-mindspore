@@ -1,63 +1,28 @@
-#ifndef __COMMON_H__
-#define __COMMON_H__
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef __COMMON_COMMON_H__
+#define __COMMON_COMMON_H__
 
 #include <codecvt>
 #include <cstring>
-#include <iomanip>
 #include <iostream>
 #include <locale>
 #include <sstream>
 #include <string>
-
-class Cout {
-public:
-  Cout(bool enabled = true) : enabled_{enabled} {}
-  ~Cout() {
-    if (enabled_) {
-      std::cout << std::endl;
-    }
-  }
-
-  template <typename T> Cout &operator<<(const T &val) noexcept {
-    if (enabled_) {
-      std::cout << val;
-    }
-    return *this;
-  }
-
-private:
-  bool enabled_;
-};
-
-class Cerr {
-public:
-  Cerr() = default;
-  ~Cerr() { std::cerr << std::endl; }
-
-  template <typename T> Cerr &operator<<(const T &val) noexcept {
-    std::cerr << val;
-    return *this;
-  }
-};
-
-static inline std::string GetTime() {
-  auto t = time(0);
-  const tm *lt = localtime(&t);
-  std::stringstream ss;
-  ss << (lt->tm_year + 1900) << '-' << (lt->tm_mon + 1) << '-'
-     << std::setfill('0') << std::setw(2) << lt->tm_mday << ' ' << std::setw(2)
-     << lt->tm_hour << ':' << std::setw(2) << lt->tm_min << ':' << std::setw(2)
-     << lt->tm_sec;
-  return ss.str();
-}
-
-#define LOG_OUT                                                                \
-  Cout() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' '            \
-         << __FUNCTION__ << "] "
-#define LOG_ERROR                                                              \
-  Cerr() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' '            \
-         << __FUNCTION__ << "] error: "
-#define LOG_NO_OUT Cout(false)
 
 #define ENDL '\n'
 
@@ -65,7 +30,7 @@ static inline std::string GetTime() {
 #define CHECK_NULL(a)                                                          \
   if (a == nullptr) {                                                          \
     LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null.";                \
-    exit(1);                                                                   \
+    exit(EXIT_FAILURE);                                                        \
   }
 
 #define EVER                                                                   \
@@ -124,4 +89,52 @@ inline std::string WStringToString(const std::wstring &wstr) {
   std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
   return converter.to_bytes(wstr);
 }
-#endif // __COMMON_H__
+
+inline std::string ConvertEscapeString(const std::string &str) {
+  std::stringstream ss;
+  std::string::const_iterator it = str.cbegin();
+  while (it != str.cend()) {
+    char c = *it++;
+    // https://en.cppreference.com/w/cpp/language/escape
+    switch (c) {
+    case '\'':
+      ss << "\'";
+      break;
+    case '\"':
+      ss << "\\\"";
+      break;
+    case '\?':
+      ss << "\\?";
+      break;
+    case '\\':
+      ss << "\\\\";
+      break;
+    case '\a':
+      ss << "\\a";
+      break;
+    case '\b':
+      ss << "\\b";
+      break;
+    case '\f':
+      ss << "\\f";
+      break;
+    case '\n':
+      ss << "\\n";
+      break;
+    case '\r':
+      ss << "\\r";
+      break;
+    case '\t':
+      ss << "\\t";
+      break;
+    case '\v':
+      ss << "\\v";
+      break;
+    default:
+      ss << c;
+      break;
+    }
+  }
+  return ss.str();
+}
+#endif // __COMMON_COMMON_H__

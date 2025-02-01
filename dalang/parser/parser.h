@@ -1,3 +1,19 @@
+/**
+ * Copyright 2024 Zhang Qinghua
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef __PARSER_PARSER_H__
 #define __PARSER_PARSER_H__
 
@@ -11,15 +27,20 @@ using namespace lexer;
 class Parser {
 public:
   explicit Parser(const std::string &filename);
+  explicit Parser(Lexer *lexer);
   ~Parser() {
     ClearExprPool();
     ClearStmtPool();
+    if (selfManagedLexer_) {
+      delete lexer_;
+      lexer_ = nullptr;
+    }
   }
 
   // Parse statements.
   StmtPtr ParseCode();
 
-  const std::string &filename() const { return filename_; }
+  const std::string &filename() const { return lexer_->filename(); }
 
   void DumpAst();
 
@@ -57,78 +78,28 @@ private:
   StmtPtr ParserCode();
   StmtPtr ParseModule();
 
-  TokenConstPtr PreviousToken() {
-    if (tokenPos_ - 1 >= lexer_.Tokens().size()) {
-      return nullptr;
-    }
-    return &lexer_.Tokens()[tokenPos_ - 1];
-  }
-  TokenConstPtr NextToken() {
-    if (tokenPos_ + 1 >= lexer_.Tokens().size()) {
-      return nullptr;
-    }
-    return &lexer_.Tokens()[tokenPos_ + 1];
-  }
-  TokenConstPtr CurrentToken() {
-    if (tokenPos_ >= lexer_.Tokens().size()) {
-      return nullptr;
-    }
-    return &lexer_.Tokens()[tokenPos_];
-  }
-  TokenConstPtr GetToken() {
-    if (tokenPos_ >= lexer_.Tokens().size()) {
-      CompileMessage(LineString(&lexer_.Tokens().back()),
-                     "warning: tokens were exhaused");
-      exit(1);
-    }
-    const auto *token = &lexer_.Tokens()[tokenPos_];
-    ++tokenPos_;
-    return token;
-  }
-  void RemoveToken() {
-    if (tokenPos_ >= lexer_.Tokens().size()) {
-      CompileMessage(LineString(&lexer_.Tokens().back()),
-                     "warning: tokens were exhaused");
-      exit(1);
-    }
-    ++tokenPos_;
-  }
+  TokenConstPtr PreviousToken();
+  TokenConstPtr NextToken();
+  TokenConstPtr CurrentToken();
+  TokenConstPtr GetToken();
+  void RemoveToken();
 
-  size_t TokenPos() { return tokenPos_; }
-  void SetTokenPos(size_t pos) { tokenPos_ = pos; }
+  size_t TokenPos();
+  void SetTokenPos(size_t pos);
 
-  bool Finish() { return tokenPos_ == lexer_.Tokens().size(); }
+  bool Finish();
 
   bool ParseStmts(StmtsPtr stmts);
 
-  const std::string LineString(TokenConstPtr token) {
-    return filename_ + ':' + std::to_string(token->lineStart) + ':' +
-           std::to_string(token->columnStart + 1);
-  }
+  const std::string LineString(TokenConstPtr token);
+  const std::string LineString();
+  const std::string LineString(ExprConstPtr expr);
+  const std::string LineString(StmtConstPtr stmt);
 
-  const std::string LineString() {
-    TokenConstPtr token;
-    if (Finish()) {
-      token = PreviousToken();
-    } else {
-      token = CurrentToken();
-    }
-    return LineString(token);
-  }
+  Lexer *lexer_;
+  bool selfManagedLexer_{false};
 
-  const std::string LineString(ExprConstPtr expr) {
-    return filename_ + ':' + std::to_string(expr->lineStart) + ':' +
-           std::to_string(expr->columnStart + 1);
-  }
-
-  const std::string LineString(StmtConstPtr stmt) {
-    return filename_ + ':' + std::to_string(stmt->lineStart) + ':' +
-           std::to_string(stmt->columnStart + 1);
-  }
-
-  Lexer lexer_;
-  std::string filename_;
-  StmtPtr module_;
+  StmtPtr module_{nullptr};
   size_t tokenPos_{0};
 };
 } // namespace parser

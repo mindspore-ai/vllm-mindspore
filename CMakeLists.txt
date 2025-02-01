@@ -22,5 +22,5 @@ include_directories(${PROJECT_SOURCE_DIR}/dalang)
 add_subdirectory(dalang)
 
 # Test for da-lang
-add_executable(da test/main.cc)
+add_executable(da dalang/cli/main.cc dalang/cli/options.cc)
 target_link_libraries(da lexer_obj parser_obj ir_obj compiler_obj vm_obj)
