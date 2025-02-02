@@ -9,7 +9,7 @@ function fibonacci(n) {
 }
 
 function main() {
-    n = 28 : int
+    n = 50 : int
     i = 0 : int
     while i < n {
       i = i + 1

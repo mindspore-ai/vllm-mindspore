@@ -14,4 +14,4 @@ function foo(flag) {
   }
 }
 
-foo(true) # Call foo function directly.
+<: foo(true) # Call foo function directly.

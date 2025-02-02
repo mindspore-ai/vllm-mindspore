@@ -16,12 +16,15 @@
 
 #include "compiler/compiler.h"
 
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-
 #include <algorithm>
 
 #include "common/common.h"
+
+#undef DEBUG
+#ifndef DEBUG
+#undef LOG_OUT
+#define LOG_OUT NO_LOG_OUT
+#endif
 
 #define TO_STR(s) #s
 #define INSTRUCTION(I) TO_STR(I),
@@ -169,35 +172,50 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
                          .lineno = lineno};
   AddInstruction(defineFunc);
   Code code{.name = funcName};
+  // Push the function.
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(std::move(code));
+  Code *funcCode = &codes_.back();
   // Function parameters.
   LOG_OUT << "func args len: " << funcStmt.argsLen;
   for (size_t i = 0; i < funcStmt.argsLen; ++i) {
     const auto &argStmt = funcStmt.args[i];
     LOG_OUT << "func args[" << i << "]: " << ToString(argStmt);
+    std::string argName;
     if (argStmt->type == StmtType_Expr &&
         argStmt->stmt.Expr.value->type == ExprType_Name) {
-      const auto &argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
+      argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       LOG_OUT << "param: " << argName;
-      code.args.emplace_back(argName);
-      code.defs.emplace_back("");
+      funcCode->args.emplace_back(argName);
+      funcCode->defs.emplace_back("");
     } else if (argStmt->type == StmtType_Assign &&
                argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
-      const auto &argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
+      argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
       const auto &defaultParam = *literal.value;
       LOG_OUT << "default param: " << argName << ": " << defaultParam;
-      code.args.emplace_back(argName);
-      code.defs.emplace_back(defaultParam);
+      funcCode->args.emplace_back(argName);
+      funcCode->defs.emplace_back(defaultParam);
     } else {
       CompileMessage(parser_->filename(), lineno, name->columnStart,
                      "error: invalid function parameters.");
+      exit(EXIT_FAILURE);
+    }
+    // Add function arguments name at the front of symbol pool.
+    const auto index = FindSymbolIndex(argName);
+    if (index == -1) { // Not used before.
+      LOG_OUT << "arg name: " << argName
+              << ", offset: " << funcCode->symbols.size();
+      symbolPool(CurrentCodeIndex()).emplace_back(argName);
+    } else {
+      CompileMessage(parser_->filename(), lineno, name->columnStart,
+                     "error: invalid function parameter[" + std::to_string(i) +
+                         "]: " + argName + ", already defined before.");
+      exit(EXIT_FAILURE);
     }
   }
 
-  // Push the function.
-  codeStack_.emplace(codes_.size());
-  codes_.emplace_back(std::move(code));
   // Function body.
   LOG_OUT << "func body len: " << funcStmt.len;
   for (size_t i = 0; i < funcStmt.len; ++i) {
@@ -233,33 +251,39 @@ bool Compiler::CompileBlock(StmtConstPtr stmt) {
     return false;
   }
 
+#if 0
   // Push the block code.
   auto codeIndex = codes_.size();
   Code code{.name = "block{#" + std::to_string(codeIndex) + "}"};
   codeStack_.emplace(codes_.size());
   codes_.emplace_back(std::move(code));
+#endif
+
   // Block body.
   const auto &blockStmt = stmt->stmt.Block;
-  const auto lineno = stmt->lineStart;
   LOG_OUT << "block body len: " << blockStmt.len;
   for (size_t i = 0; i < blockStmt.len; ++i) {
     const auto &stmt = blockStmt.body[i];
     CallStmtHandler(stmt);
     LOG_OUT << "block body[" << i << "]: " << ToString(stmt);
   }
+
+#if 0
   // Make extra return if no explicit return.
   if (lastInst_.inst != Inst_ReturnVal) {
     InstCall ret = {.inst = Inst_ReturnVal,
                     .offset = -1, // offset is not 0, means return void.
-                    .lineno = lineno};
+                    .lineno = stmt->lineStart};
     AddInstruction(ret);
   }
-  codeStack_.pop();
 
+  codeStack_.pop();
   InstCall enterBlock = {.inst = Inst_EnterBlock,
                          .offset = static_cast<ssize_t>(codeIndex),
                          .lineno = lineno};
   AddInstruction(enterBlock);
+#endif
+
   return true;
 }
 
@@ -536,15 +560,17 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   const auto &name = *expr->expr.Name.identifier;
   const auto lineno = expr->lineStart;
   const auto index = FindSymbolIndex(name);
+  if (index == -1) { // Not defined before.
+    CompileMessage(parser_->filename(), lineno, expr->columnStart,
+                   "error: not defined name: '" + name + "'");
+    exit(EXIT_FAILURE);
+  }
   InstCall load = {.inst = Inst_LoadLocal,
                    .offset =
                        (index == -1 ? static_cast<ssize_t>(
                                           symbolPool(CurrentCodeIndex()).size())
                                     : index),
                    .lineno = lineno};
-  if (index == -1) { // Not used before.
-    symbolPool(CurrentCodeIndex()).emplace_back(name);
-  }
   LOG_OUT << "name: " << name << ", index: " << load.offset;
   AddInstruction(load);
   return true;

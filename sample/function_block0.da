@@ -13,12 +13,12 @@ function foo(x, y, z=0){
 b = 2
 
 function bar(a, b, c) {
-a = 6
-b = 4
-#res = 10
-res = foo(a, b, c)
-return res * 2
+  a = 6
+  b = 4
+  #res = 10
+  res = foo(a, b, c)
+  return res * 2
 }
 
 z = 2
-return bar(a, b, z)  # Call foo function directly.
+<: bar(a, b, z)  # Call foo function directly.

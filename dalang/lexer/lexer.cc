@@ -23,8 +23,11 @@
 #include "common/common.h"
 #include "common/logger.h"
 
+#undef DEBUG
+#ifndef DEBUG
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
+#endif
 
 namespace lexer {
 Lexer::Lexer(const std::string &filename)

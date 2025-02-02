@@ -264,8 +264,10 @@ void VM::InstCallFunc(ssize_t offset) {
 #if 0
       newFuncFrame.names[func.args[i]] = std::move(arg);
 #else
+      LOG_OUT << "vars offset: " << i << ", name: " << code().symbols[i]
+              << ", arg: " << ToString(arg) << ", the same as StoreLocal.";
       newFuncFrame.vars[i] =
-          std::move(arg); // The argument name must at the front.
+          std::move(arg); // The argument name must be at the front.
 #endif
     }
     // Erase all arguments.
@@ -345,6 +347,7 @@ void VM::InstEnterBlock(ssize_t offset) {
   const auto &block = codes()[offset];
   LOG_OUT << "offset: " << offset << ", block: " << block.name;
 
+#if 0
   // Create new frame for block.
   auto blockFrame = Frame{.type = FrameBlock,
                           .code = static_cast<size_t>(offset),
@@ -352,6 +355,7 @@ void VM::InstEnterBlock(ssize_t offset) {
   // Push a new frame for function call.
   frames_.emplace_back(std::move(blockFrame));
   frame_ = &frames_.back();
+#endif
 }
 
 namespace {

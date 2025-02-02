@@ -24,8 +24,11 @@
 #include "parser/parser.h"
 #include "parser/stmt.h"
 
+#undef DEBUG
+#ifndef DEBUG
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
+#endif
 
 namespace parser {
 Parser::Parser(const std::string &filename) : selfManagedLexer_{true} {

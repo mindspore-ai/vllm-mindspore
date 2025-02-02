@@ -20,8 +20,11 @@
 #include <cstring>
 #include <iostream>
 
+#undef DEBUG
+#ifndef DEBUG
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
+#endif
 
 /* ...snippet
 
@@ -94,10 +97,11 @@ static struct argp_option options[] = {
     {"parse", 'p', 0, 0, "Print the AST output"},
     {"compile", 'c', 0, 0, "Print the bytecode output"},
     {"run", 'r', "ENABLED", 0,
-     "Interpret the code if ENABLE is not \"disable\" or 0"},
+     "Interpret the code if ENABLED is not 0 or \"disable\"\nEnabled by "
+     "default"},
     {"interpret", 0, 0, OPTION_ALIAS},
     {"output", 'o', "FILE", 0,
-     "Output the bytecode as FILE for later execution"},
+     "Output the bytecode as FILE for later execution\n[to-be-supported]"},
     {0}};
 
 /* Parse a single option. */
