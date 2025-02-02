@@ -149,6 +149,7 @@ private:
   }
 
   ssize_t FindSymbolIndex(const std::string &name);
+  ssize_t FindGlobalSymbolIndex(const std::string &name);
   ssize_t FindConstantIndex(const std::string &str);
 
 private:

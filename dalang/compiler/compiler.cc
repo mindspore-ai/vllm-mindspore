@@ -96,13 +96,12 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
     exit(EXIT_FAILURE);
   }
   const auto &targetName = *target->expr.Name.identifier;
-  LOG_OUT << "targetName: " << targetName;
   // Handle value.
   CallExprHandler(stmt->stmt.Assign.value);
   // Make call.
   const auto lineno = target->lineStart;
   const auto index = FindSymbolIndex(targetName);
-  InstCall call = {.inst = Inst_StoreName,
+  InstCall call = {.inst = Inst_StoreLocal,
                    .offset =
                        (index == -1 ? static_cast<ssize_t>(
                                           symbolPool(CurrentCodeIndex()).size())
@@ -111,6 +110,7 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   if (index == -1) { // Not used before.
     symbolPool(CurrentCodeIndex()).emplace_back(targetName);
   }
+  LOG_OUT << "name: " << targetName << ", index: " << call.offset;
   AddInstruction(call);
   return true;
 }
@@ -155,14 +155,14 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   CHECK_NULL(name);
   CHECK_NULL(name->expr.Name.identifier);
   const auto funcName = *(name->expr.Name.identifier);
-  LOG_OUT << "func name: " << funcName;
   const auto lineno = name->lineStart;
   // Insert function name into the symbol table.
-  auto funcSymIndex = FindSymbolIndex(funcName);
+  auto funcSymIndex = FindGlobalSymbolIndex(funcName);
   if (funcSymIndex == -1) { // Not used before.
-    funcSymIndex = symbolPool(CurrentCodeIndex()).size();
-    symbolPool(CurrentCodeIndex()).emplace_back(funcName);
+    funcSymIndex = symbolPool(0).size();
+    symbolPool(0).emplace_back(funcName);
   }
+  LOG_OUT << "funcName: " << funcName << ", index: " << funcSymIndex;
 
   InstCall defineFunc = {.inst = Inst_DefineFunc,
                          .offset = static_cast<ssize_t>(codes().size()),
@@ -215,12 +215,8 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   codeStack_.pop();
 
   // Store the function with name.
-  // const auto funcSymIndex = FindSymbolIndex(funcName);
   InstCall storeFunc = {
-      .inst = Inst_StoreName, .offset = funcSymIndex, .lineno = lineno};
-  // if (funcSymIndex == -1) { // Not used before.
-  //   symbolPool().emplace_back(funcName);
-  // }
+      .inst = Inst_StoreGlobal, .offset = funcSymIndex, .lineno = lineno};
   AddInstruction(storeFunc);
   return true;
 }
@@ -500,10 +496,33 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
   if (expr->type != ExprType_Call) {
     return false;
   }
-  CallExprHandler(expr->expr.Call.function);
+
+  // Not CallExprHandler(expr->expr.Call.function) to LoadLocal, but LoadGlobal
+  // for function name.
+  const auto &funcNameExpr = expr->expr.Call.function;
+  if (funcNameExpr->type != ExprType_Name) {
+    return false;
+  }
+  const auto &funcName = *funcNameExpr->expr.Name.identifier;
+  const auto lineno = funcNameExpr->lineStart;
+  const auto index = FindGlobalSymbolIndex(funcName);
+  InstCall loadFunc = {
+      .inst = Inst_LoadGlobal,
+      .offset =
+          (index == -1 ? static_cast<ssize_t>(symbolPool(0).size()) : index),
+      .lineno = lineno};
+  if (index == -1) { // Not used before.
+    symbolPool(0).emplace_back(funcName);
+  }
+  LOG_OUT << "funcName: " << funcName << ", index: " << loadFunc.offset;
+  AddInstruction(loadFunc);
+
   CallExprHandler(expr->expr.Call.list);
-  const auto lineno = expr->lineStart;
-  InstCall call = {.inst = Inst_CallFunc, .offset = 0, .lineno = lineno};
+  const auto argsLen = expr->expr.Call.list->expr.List.len;
+  InstCall call = {
+      .inst = Inst_CallFunc,
+      .offset = static_cast<ssize_t>(argsLen), // Set arguments size as offset.
+      .lineno = expr->lineStart};
   AddInstruction(call);
   return true;
 }
@@ -517,7 +536,7 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   const auto &name = *expr->expr.Name.identifier;
   const auto lineno = expr->lineStart;
   const auto index = FindSymbolIndex(name);
-  InstCall load = {.inst = Inst_LoadName,
+  InstCall load = {.inst = Inst_LoadLocal,
                    .offset =
                        (index == -1 ? static_cast<ssize_t>(
                                           symbolPool(CurrentCodeIndex()).size())
@@ -526,6 +545,7 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   if (index == -1) { // Not used before.
     symbolPool(CurrentCodeIndex()).emplace_back(name);
   }
+  LOG_OUT << "name: " << name << ", index: " << load.offset;
   AddInstruction(load);
   return true;
 }
@@ -564,6 +584,22 @@ ssize_t Compiler::FindSymbolIndex(const std::string &name) {
     return -1;
   }
   auto index = std::distance(currentSymbolPool.cbegin(), iter);
+  if (index < 0) {
+    LOG_ERROR << "Not found symbol, index should not be negative " << index
+              << ", name: " << name;
+    exit(EXIT_FAILURE);
+  }
+  return index;
+}
+
+ssize_t Compiler::FindGlobalSymbolIndex(const std::string &name) {
+  auto &globalSymbolPool = symbolPool(0);
+  auto iter =
+      std::find(globalSymbolPool.cbegin(), globalSymbolPool.cend(), name);
+  if (iter == globalSymbolPool.cend()) {
+    return -1;
+  }
+  auto index = std::distance(globalSymbolPool.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found symbol, index should not be negative " << index
               << ", name: " << name;
@@ -639,9 +675,14 @@ void Compiler::Dump() {
       // Print instruction.
       std::cout << GetInstStr(inst.inst);
       // Print variable names or constants.
-      if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName) {
+      if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName ||
+          inst.inst == Inst_LoadLocal || inst.inst == Inst_StoreLocal) {
         std::cout << "\t\t" << inst.offset << " ("
                   << symbolPool(codeIndex)[inst.offset] << ')';
+      } else if (inst.inst == Inst_LoadGlobal ||
+                 inst.inst == Inst_StoreGlobal) {
+        std::cout << "\t\t" << inst.offset << " (" << symbolPool(0)[inst.offset]
+                  << ')';
       } else if (inst.inst == Inst_StdCin) {
         std::cout << "\t\t\t" << inst.offset << " ("
                   << symbolPool(codeIndex)[inst.offset] << ')';

@@ -1,4 +1,5 @@
 #!dalang
+#perf record -g -e cpu-cycles ./da -v ../sample/fibonacci.da
 
 function fibonacci(n) {
     if (n <= 1) {

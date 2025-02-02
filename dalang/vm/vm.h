@@ -28,7 +28,7 @@ using namespace compiler;
 
 class VM;
 using InstHandlerFunction = void (VM::*)(ssize_t);
-using InstHandlerFunctions = std::unordered_map<InstType, InstHandlerFunction>;
+using InstHandlerFunctions = std::vector<InstHandlerFunction>;
 
 enum SlotType {
   SlotVoid,
@@ -61,6 +61,7 @@ struct Frame {
   size_t code;
   size_t pc{0};
   std::vector<Slot> slots;                     // Slot stack.
+  std::vector<Slot> vars;                      // Variables by offset.
   std::unordered_map<std::string, Slot> names; // Name map.
 };
 
@@ -139,6 +140,10 @@ private:
   void InstLoadConst(ssize_t offset);
   void InstLoadName(ssize_t offset);
   void InstStoreName(ssize_t offset);
+  void InstLoadLocal(ssize_t offset);
+  void InstStoreLocal(ssize_t offset);
+  void InstLoadGlobal(ssize_t offset);
+  void InstStoreGlobal(ssize_t offset);
   void InstPopTop(ssize_t offset);
   void InstBinaryAdd(ssize_t offset);
   void InstBinarySub(ssize_t offset);
@@ -155,8 +160,10 @@ private:
   void InstStdCin(ssize_t offset);
   void InstStdCout(ssize_t offset);
 
-  size_t &CurrentPc();
   std::vector<Slot> &CurrentStack();
+  std::vector<Slot> &LocalVars();
+  std::vector<Slot> &GlobalVars();
+
   std::unordered_map<std::string, Slot> &names();
 
   StringPool &stringPool();
@@ -164,7 +171,9 @@ private:
   const std::vector<Code> &codes() const;
   const Code &code() const;
 
-  const std::vector<std::string> &syms() const;
+  const std::vector<std::string> &LocalSyms() const;
+  const std::vector<std::string> &GlobalSyms() const;
+
   const std::vector<Constant> &consts() const;
   const std::vector<InstCall> &insts() const;
 
@@ -192,6 +201,8 @@ private:
   StringPool stringPool_;
 
   std::vector<Frame> frames_; // Block, function or module stack.
+
+  Frame *frame_;
 
   InstHandlerFunctions instHandlers_; // Notice: Do not change.
 };
@@ -243,7 +254,7 @@ private:
       slot.value.float_ = res;                                                 \
       LOG_OUT << "result: " << ToString(lhs) << ' ' << #OpSymbol << ' '        \
               << ToString(rhs) << " = " << ToString(slot);                     \
-      CurrentStack().emplace_back(slot);                                       \
+      CurrentStack().emplace_back(std::move(slot));                            \
     } else if (lhs.type == SlotFloat && rhs.type == SlotInt) {                 \
       auto lhsVal = lhs.value.float_;                                          \
       auto rhsVal = rhs.value.int_;                                            \

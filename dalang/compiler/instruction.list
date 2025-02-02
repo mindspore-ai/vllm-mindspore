@@ -14,14 +14,18 @@
  * limitations under the License.
  */
 
-INSTRUCTION(LoadConst)  // Load a const value from contant table.
-INSTRUCTION(LoadName)   // Load a value by name from symbol table.
-INSTRUCTION(StoreName)  // Store the value by name into symbol table.
-INSTRUCTION(PopTop)     // Pop up the top from the stack.
-INSTRUCTION(BinaryAdd)  // Do binary add operation.
-INSTRUCTION(BinarySub)  // Do binary sub operation.
-INSTRUCTION(BinaryMul)  // Do binary mul operation.
-INSTRUCTION(BinaryDiv)  // Do binary div operation.
+INSTRUCTION(LoadConst)   // Load a const value from contant table.
+INSTRUCTION(LoadName)    // Load a value by name from symbol table.
+INSTRUCTION(StoreName)   // Store the value by name into symbol table.
+INSTRUCTION(LoadLocal)   // Load a value by offset in the function namespace.
+INSTRUCTION(StoreLocal)  // Store the value by offset in the function namespace.
+INSTRUCTION(LoadGlobal)  // Load a value by offset in global namespace.
+INSTRUCTION(StoreGlobal) // Store the value by offset in global namespace.
+INSTRUCTION(PopTop)      // Pop up the top from the stack.
+INSTRUCTION(BinaryAdd)   // Do binary add operation.
+INSTRUCTION(BinarySub)   // Do binary sub operation.
+INSTRUCTION(BinaryMul)   // Do binary mul operation.
+INSTRUCTION(BinaryDiv)   // Do binary div operation.
 INSTRUCTION(CallFunc)   // Call function with new frame, and bind the arguments.
 INSTRUCTION(ReturnVal)  // Return the value to caller frame.
 INSTRUCTION(DefineFunc) // Make a new function with context.

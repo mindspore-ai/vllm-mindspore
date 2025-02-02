@@ -19,10 +19,11 @@
 #include "common/common.h"
 #include <algorithm>
 
+#undef DEBUG
+#ifndef DEBUG
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
-
-#undef DEBUG
+#endif
 
 namespace vm {
 namespace {
@@ -103,12 +104,12 @@ void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
   LOG_OUT << "offset: " << offset << ", value: " << cons.value << " ("
           << cons.type << ")";
-  CurrentStack().emplace_back(ConvertConstType(cons));
+  CurrentStack().emplace_back(std::move(ConvertConstType(cons)));
 }
 
 // Load a value by name which stored before.
 void VM::InstLoadName(ssize_t offset) {
-  const auto &name = syms()[offset];
+  const auto &name = LocalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
   // Find the name from current frame and upper frames, one frame by one frame.
   auto *slot = FindLoadedName(name);
@@ -127,7 +128,7 @@ void VM::InstStoreName(ssize_t offset) {
     CompileMessage(LineString(), "error: stack is empty.");
     exit(EXIT_FAILURE);
   }
-  const auto &name = syms()[offset];
+  const auto &name = LocalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
   auto iter = names().find(name);
   if (iter == names().cend()) {
@@ -145,6 +146,46 @@ void VM::InstStoreName(ssize_t offset) {
     // Already used name.
     names()[name] = std::move(CurrentStack().back());
   }
+  CurrentStack().pop_back();
+}
+
+// Load a value by offset which stored before.
+void VM::InstLoadLocal(ssize_t offset) {
+  const auto &name = LocalSyms()[offset];
+  LOG_OUT << "offset: " << offset << ", name: " << name;
+  auto *slot = &LocalVars()[offset];
+  LOG_OUT << "load: " << ToString(*slot);
+  CurrentStack().emplace_back(*slot);
+}
+
+// Store a slot by offset for latish load.
+void VM::InstStoreLocal(ssize_t offset) {
+  if (CurrentStack().empty()) {
+    CompileMessage(LineString(), "error: stack is empty.");
+    exit(EXIT_FAILURE);
+  }
+  LocalVars()[offset] = std::move(CurrentStack().back());
+  CurrentStack().pop_back();
+}
+
+// Load a value by offset which stored before.
+void VM::InstLoadGlobal(ssize_t offset) {
+  const auto &name = GlobalSyms()[offset];
+  LOG_OUT << "offset: " << offset << ", name: " << name;
+  auto *slot = &GlobalVars()[offset];
+  LOG_OUT << "load: " << ToString(*slot);
+  CurrentStack().emplace_back(*slot);
+}
+
+// Store a slot by offset for latish load.
+void VM::InstStoreGlobal(ssize_t offset) {
+  const auto &name = GlobalSyms()[offset];
+  LOG_OUT << "offset: " << offset << ", name: " << name;
+  if (CurrentStack().empty()) {
+    CompileMessage(LineString(), "error: stack is empty.");
+    exit(EXIT_FAILURE);
+  }
+  GlobalVars()[offset] = std::move(CurrentStack().back());
   CurrentStack().pop_back();
 }
 
@@ -166,24 +207,34 @@ BINARY_OP(Sub, -) // VM::InstBinarySub
 BINARY_OP(Mul, *) // VM::InstBinaryMul
 BINARY_OP(Div, /) // VM::InstBinaryDiv
 
-// Call a function by function slot and argument slots, and create a new frame.
-// The first(reverse stack) slot is function object created by DefineFunc
-// instruction. The left slot is arguments.
+// Call a function by function slot and argument slots, and create a new
+// frame. The first(reverse stack) slot is function object created by
+// DefineFunc instruction. The left slot is arguments.
 void VM::InstCallFunc(ssize_t offset) {
+  if (CurrentStack().size() < 1) {
+    CompileMessage(filename(), 0, 0,
+                   "error: invalid function. stack size: " +
+                       std::to_string(CurrentStack().size()));
+    exit(EXIT_FAILURE);
+  }
+#if 0
   // Found the function slot firstly.
   auto funcIter =
       std::find_if(CurrentStack().crbegin(), CurrentStack().crend(),
                    [](const Slot &slot) { return slot.type == SlotFunction; });
-  if (funcIter == CurrentStack().crend() || CurrentStack().size() < 1) {
-    CompileMessage(
-        filename(), 0, 0,
-        "error: invalid function name. slot: " + ToString(*funcIter) +
-            ", stack size: " + std::to_string(CurrentStack().size()));
+  if (funcIter == CurrentStack().crend()) {
+    CompileMessage(filename(), 0, 0,
+                   "error: not found function slot. stack size: " +
+                       std::to_string(CurrentStack().size()));
     exit(EXIT_FAILURE);
   }
   const auto &funcNameSlot = *funcIter;
   const auto argsSize =
       static_cast<size_t>(std::distance(CurrentStack().crbegin(), funcIter));
+#else
+  const auto argsSize = static_cast<size_t>(offset);
+  const auto &funcNameSlot = *(CurrentStack().crbegin() + argsSize);
+#endif
 
   // Get callee function information.
   const auto codeIndex = funcNameSlot.value.offset;
@@ -191,8 +242,9 @@ void VM::InstCallFunc(ssize_t offset) {
   LOG_OUT << "offset: " << offset << ", name: " << func.name
           << ", id: " << frames_.size();
   // Create new function frame in advance.
-  auto newFuncFrame =
-      Frame{.type = FrameFunction, .code = funcNameSlot.value.offset};
+  auto newFuncFrame = Frame{.type = FrameFunction,
+                            .code = funcNameSlot.value.offset,
+                            .vars = std::vector<Slot>{func.symbols.size()}};
 
   if (argsSize > 0) { // Has arguments.
     // To bind the arguments and parameters.
@@ -209,7 +261,12 @@ void VM::InstCallFunc(ssize_t offset) {
     auto argStartIndex = CurrentStack().size() - argsSize;
     for (size_t i = 0; i < argsSize; ++i) {
       const auto &arg = CurrentStack()[argStartIndex + i];
+#if 0
       newFuncFrame.names[func.args[i]] = std::move(arg);
+#else
+      newFuncFrame.vars[i] =
+          std::move(arg); // The argument name must at the front.
+#endif
     }
     // Erase all arguments.
     CurrentStack().erase(CurrentStack().begin() + argStartIndex,
@@ -228,13 +285,14 @@ void VM::InstCallFunc(ssize_t offset) {
   CurrentStack().pop_back();
 
   // Push a new frame for function call.
-  frames_.emplace_back(newFuncFrame);
+  frames_.emplace_back(std::move(newFuncFrame));
+  frame_ = &frames_.back();
 }
 
 // Return the top slot to previous frame.
 //   offset (0): explicit return set by user.
-//   offset (not 0): the compiler append it for every function implicitly, if no
-//   return set by user.
+//   offset (not 0): the compiler append it for every function implicitly, if
+//   no return set by user.
 void VM::InstReturnVal(ssize_t offset) {
   if (frames_.size() < 1) {
     CompileMessage(filename(), 0, 0,
@@ -261,6 +319,7 @@ void VM::InstReturnVal(ssize_t offset) {
   }
   // Just pop the frame.
   frames_.pop_back();
+  frame_ = &frames_.back();
 }
 
 // Make a function object slot and push into the stack.
@@ -268,12 +327,13 @@ void VM::InstReturnVal(ssize_t offset) {
 void VM::InstDefineFunc(ssize_t offset) {
   const auto &func = codes()[offset];
   LOG_OUT << "offset: " << offset << ", function: " << func.name;
-  auto iter = names().find(func.name);
-  if (iter != names().cend()) {
-    CompileMessage(LineString(),
-                   "error: redefined function symbol: '" + func.name + "'.");
-    exit(EXIT_FAILURE);
-  }
+  // auto iter = names().find(func.name);
+  // if (iter != names().cend()) {
+  //   CompileMessage(LineString(),
+  //                  "error: redefined function symbol: '" + func.name +
+  //                  "'.");
+  //   exit(EXIT_FAILURE);
+  // }
   Slot funcSlot{.type = SlotFunction};
   funcSlot.value.offset = offset;
   CurrentStack().emplace_back(std::move(funcSlot));
@@ -286,10 +346,12 @@ void VM::InstEnterBlock(ssize_t offset) {
   LOG_OUT << "offset: " << offset << ", block: " << block.name;
 
   // Create new frame for block.
-  auto blockFrame =
-      Frame{.type = FrameBlock, .code = static_cast<size_t>(offset)};
+  auto blockFrame = Frame{.type = FrameBlock,
+                          .code = static_cast<size_t>(offset),
+                          .vars = std::vector<Slot>{block.symbols.size()}};
   // Push a new frame for function call.
-  frames_.emplace_back(blockFrame);
+  frames_.emplace_back(std::move(blockFrame));
+  frame_ = &frames_.back();
 }
 
 namespace {
@@ -339,8 +401,8 @@ void VM::InstJumpTrue(ssize_t offset) {
     exit(EXIT_FAILURE);
   }
   if (slot.value.bool_) {
-    LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
-    CurrentPc() = offset;
+    LOG_OUT << "Jump from " << frame_->pc << " to " << offset;
+    frame_->pc = offset;
   }
   CurrentStack().pop_back();
 }
@@ -356,8 +418,8 @@ void VM::InstJumpFalse(ssize_t offset) {
   }
   LOG_OUT << "condition: " << slot.value.bool_;
   if (!slot.value.bool_) {
-    LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
-    CurrentPc() = offset;
+    LOG_OUT << "Jump from " << frame_->pc << " to " << offset;
+    frame_->pc = offset;
   }
   CurrentStack().pop_back();
 }
@@ -366,14 +428,15 @@ void VM::InstJumpFalse(ssize_t offset) {
 void VM::InstJump(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
 
-  LOG_OUT << "Jump from " << CurrentPc() << " to " << offset;
-  CurrentPc() = offset;
+  LOG_OUT << "Jump from " << frame_->pc << " to " << offset;
+  frame_->pc = offset;
 }
 
 // Input from standard input stream.
 void VM::InstStdCin(ssize_t offset) {
+#if 0
   Slot *slot = nullptr;
-  const auto &name = syms()[offset];
+  const auto &name = LocalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
   auto iter = names().find(name);
   if (iter == names().cend()) {
@@ -388,6 +451,9 @@ void VM::InstStdCin(ssize_t offset) {
     // Already used name.
     slot = &names()[name];
   }
+#else
+  auto *slot = &LocalVars()[offset];
+#endif
 
   // Get input.
   std::string str;
@@ -426,13 +492,12 @@ Slot *VM::FindLoadedName(const std::string &str) {
   return nullptr;
 }
 
-size_t &VM::CurrentPc() { return frames_.back().pc; }
+std::vector<Slot> &VM::CurrentStack() { return frame_->slots; }
 
-std::vector<Slot> &VM::CurrentStack() { return frames_.back().slots; }
+std::unordered_map<std::string, Slot> &VM::names() { return frame_->names; }
 
-std::unordered_map<std::string, Slot> &VM::names() {
-  return frames_.back().names;
-}
+std::vector<Slot> &VM::LocalVars() { return frame_->vars; }
+std::vector<Slot> &VM::GlobalVars() { return frames_.front().vars; }
 
 StringPool &VM::stringPool() { return stringPool_; }
 
@@ -441,45 +506,54 @@ const std::vector<Code> &VM::codes() const {
   return *codesPtr_;
 }
 
-const Code &VM::code() const { return codes()[frames_.back().code]; }
+const Code &VM::code() const { return codes()[frame_->code]; }
 
-const std::vector<std::string> &VM::syms() const {
-  return codes()[frames_.back().code].symbols;
+const std::vector<std::string> &VM::LocalSyms() const {
+  return codes()[frame_->code].symbols;
+}
+
+const std::vector<std::string> &VM::GlobalSyms() const {
+  return codes()[frames_.front().code].symbols;
 }
 
 const std::vector<Constant> &VM::consts() const {
-  return codes()[frames_.back().code].constants;
+  return codes()[frame_->code].constants;
 }
 
 const std::vector<InstCall> &VM::insts() const {
-  return codes()[frames_.back().code].insts;
+  return codes()[frame_->code].insts;
 }
 
 const std::string &VM::filename() const { return filename_; }
 
 std::string VM::LineString() {
-  return filename() + ':' + std::to_string(insts()[CurrentPc() - 1].lineno);
+  return filename() + ':' + std::to_string(insts()[frame_->pc - 1].lineno);
 }
 
 void VM::Run() {
-  auto topFrame = Frame{.type = FrameModule, .code = 0};
-  frames_.emplace_back(topFrame);
+  if (codes().empty()) {
+    LOG_ERROR << "no code exits";
+    exit(EXIT_FAILURE);
+  }
+  auto topFrame = Frame{.type = FrameModule,
+                        .code = 0,
+                        .vars = std::vector<Slot>{codes()[0].symbols.size()}};
+  frames_.emplace_back(std::move(topFrame));
   while (!frames_.empty()) {
     // Run in current frame.
-    while (CurrentPc() < insts().size()) {
-      const auto &inst = insts()[CurrentPc()];
+    frame_ = &frames_.back();
+    while (frame_->pc < insts().size()) {
+      const auto &inst = insts()[frame_->pc];
       if (inst.inst >= instHandlers_.size()) {
         LOG_ERROR << "instruction handler list size is less than input "
                      "inst type: "
                   << inst.inst << " >= " << instHandlers_.size();
         exit(EXIT_FAILURE);
       }
-      ++CurrentPc();
+      ++frame_->pc;
 
-      // Print the value if Return exists in the module.
       if (frames_.size() == 1 && CurrentStack().size() == 1 &&
           inst.inst == Inst_ReturnVal && inst.offset == 0) {
-        std::cout << ToString(CurrentStack().back());
         break;
       }
 
@@ -491,7 +565,7 @@ void VM::Run() {
       }
       LOG_OUT << "frame size: " << frames_.size()
               << ", stack size: " << CurrentStack().size()
-              << ", inst size: " << insts().size() << ", pc: " << CurrentPc();
+              << ", inst size: " << insts().size() << ", pc: " << frame_->pc;
 #ifdef DEBUG
       DumpStack();
 #endif
@@ -517,6 +591,7 @@ void VM::DumpStack() {
 
 #define INSTRUCTION(I) instHandlers_[Inst_##I] = &VM::Inst##I;
 void VM::InitInstructionHandlers() {
+  instHandlers_ = std::vector<InstHandlerFunction>(Inst_End);
 #include "compiler/instruction.list"
 }
 #undef INSTRUCTION
