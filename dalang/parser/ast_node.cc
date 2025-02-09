@@ -158,56 +158,81 @@ void ClearStmtPool() {
 StmtsConstPtr StmtList() { return &gStmtPool; }
 
 const std::string ToString(StmtConstPtr stmt) {
-  if (stmt->type == StmtType_Return) {
+  switch (stmt->type) {
+  case StmtType_Return: {
     return "Return";
-  } else if (stmt->type == StmtType_Assign) {
+  }
+  case StmtType_Assign: {
     return "Assign";
-  } else if (stmt->type == StmtType_AugAssign) {
+  }
+  case StmtType_AugAssign: {
     return "AugAssign{" + std::string(ToStr(stmt->stmt.AugAssign.op)) + '}';
-  } else if (stmt->type == StmtType_Function) {
+  }
+  case StmtType_Function: {
     return "Function";
-  } else if (stmt->type == StmtType_Class) {
+  }
+  case StmtType_Class: {
     return "Class";
-  } else if (stmt->type == StmtType_Block) {
+  }
+  case StmtType_Block: {
     return "Block";
-  } else if (stmt->type == StmtType_StdCin) {
+  }
+  case StmtType_StdCin: {
     return "StdCin";
-  } else if (stmt->type == StmtType_StdCout) {
+  }
+  case StmtType_StdCout: {
     return "StdCout";
-  } else if (stmt->type == StmtType_If) {
+  }
+  case StmtType_If: {
     return "If";
-  } else if (stmt->type == StmtType_For) {
+  }
+  case StmtType_For: {
     return "For";
-  } else if (stmt->type == StmtType_While) {
+  }
+  case StmtType_While: {
     return "While";
-  } else if (stmt->type == StmtType_Expr) {
+  }
+  case StmtType_Expr: {
     return "Expr";
-  } else if (stmt->type == StmtType_Module) {
+  }
+  case StmtType_Module: {
     return "Module";
   }
-  return "...";
+  default:
+    return "...";
+  }
 }
 
 const std::string ToString(ExprConstPtr expr) {
   if (expr == nullptr) {
     return "Expr{null}";
   }
-  if (expr->type == ExprType_Binary) {
+
+  switch (expr->type) {
+  case ExprType_Binary: {
     return std::string(ToStr(expr->expr.Binary.op));
-  } else if (expr->type == ExprType_Unary) {
+  }
+  case ExprType_Unary: {
     return std::string(ToStr(expr->expr.Unary.op));
-  } else if (expr->type == ExprType_Name) {
+  }
+  case ExprType_Name: {
     return "Name{" + *expr->expr.Name.identifier + "}";
-  } else if (expr->type == ExprType_Literal) {
+  }
+  case ExprType_Literal: {
     return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + ':' +
            ConvertEscapeString(*expr->expr.Literal.value) + '}';
-  } else if (expr->type == ExprType_List) {
+  }
+  case ExprType_List: {
     return "List{len:" + std::to_string(expr->expr.List.len) + "}";
-  } else if (expr->type == ExprType_Call) {
+  }
+  case ExprType_Call: {
     return "Call";
-  } else if (expr->type == ExprType_Attribute) {
+  }
+  case ExprType_Attribute: {
     return "Attribute";
   }
-  return "?";
+  default:
+    return "?";
+  }
 }
 } // namespace parser

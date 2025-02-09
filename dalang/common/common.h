@@ -24,12 +24,21 @@
 #include <sstream>
 #include <string>
 
+#include "common/logger.h"
+
 #define ENDL '\n'
 
 #define TO_STR(s) #s
+
 #define CHECK_NULL(a)                                                          \
   if (a == nullptr) {                                                          \
     LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null.";                \
+    exit(EXIT_FAILURE);                                                        \
+  }
+
+#define CHECK_FAIL(a)                                                          \
+  if (!(a)) {                                                                  \
+    LOG_ERROR << '\'' << TO_STR((a)) << "\' is not true. check fail.";         \
     exit(EXIT_FAILURE);                                                        \
   }
 

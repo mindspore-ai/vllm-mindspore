@@ -456,32 +456,40 @@ bool Compiler::CompileBinary(ExprConstPtr expr) {
   CallExprHandler(expr->expr.Binary.left);
   CallExprHandler(expr->expr.Binary.right);
   const auto lineno = expr->expr.Binary.left->lineStart;
-  if (expr->expr.Binary.op == OpId_Add) {
+  switch (expr->expr.Binary.op) {
+  case OpId_Add: {
     InstCall call = {.inst = Inst_BinaryAdd, .offset = 0, .lineno = lineno};
     AddInstruction(call);
     return true;
-  } else if (expr->expr.Binary.op == OpId_Sub) {
+  }
+  case OpId_Sub: {
     InstCall call = {.inst = Inst_BinarySub, .offset = 0, .lineno = lineno};
     AddInstruction(call);
     return true;
-  } else if (expr->expr.Binary.op == OpId_Mul) {
+  }
+  case OpId_Mul: {
     InstCall call = {.inst = Inst_BinaryMul, .offset = 0, .lineno = lineno};
     AddInstruction(call);
     return true;
-  } else if (expr->expr.Binary.op == OpId_Div) {
+  }
+  case OpId_Div: {
     InstCall call = {.inst = Inst_BinaryDiv, .offset = 0, .lineno = lineno};
     AddInstruction(call);
     return true;
-  } else if (expr->expr.Binary.op == OpId_Equal ||
-             expr->expr.Binary.op == OpId_NotEqual ||
-             expr->expr.Binary.op == OpId_GreaterThan ||
-             expr->expr.Binary.op == OpId_LessThan ||
-             expr->expr.Binary.op == OpId_GreaterEqual ||
-             expr->expr.Binary.op == OpId_LessEqual) {
+  }
+  case OpId_Equal:
+  case OpId_NotEqual:
+  case OpId_GreaterThan:
+  case OpId_LessThan:
+  case OpId_GreaterEqual:
+  case OpId_LessEqual: {
     InstCall compare = {
         .inst = Inst_Compare, .offset = expr->expr.Binary.op, .lineno = lineno};
     AddInstruction(compare);
     return true;
+  }
+  default:
+    break;
   }
   return false;
 }
@@ -676,9 +684,12 @@ void Compiler::Dump() {
       for (size_t i = 0; i < code.args.size(); ++i) {
         const auto &arg = code.args[i];
         const auto &def = code.defs[i];
-        std::cout << i << "\t\t" << arg;
+        std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
         if (!def.empty()) {
-          std::cout << "\t" << def;
+          std::cout << std::setfill(' ') << std::setw(8) << std::left << arg;
+          std::cout << def;
+        } else {
+          std::cout << arg;
         }
         std::cout << std::endl;
       }
@@ -689,52 +700,86 @@ void Compiler::Dump() {
     for (size_t i = 0; i < code.insts.size(); ++i) {
       const auto &inst = code.insts[i];
       // Print lineno.
+      std::cout << std::setfill(' ') << std::setw(8) << std::left;
       if (lastLineno != inst.lineno) {
         if (lastLineno != -1) { // Print blank line between lines.
           std::cout << std::endl;
         }
         lastLineno = inst.lineno;
         std::cout << lastLineno;
+      } else {
+        std::cout << ' ';
       }
       // Print instruction number.
-      std::cout << '\t' << std::setw(8) << std::right << i << ' ';
+      std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
       // Print instruction.
-      std::cout << GetInstStr(inst.inst);
+      std::cout << std::setfill(' ') << std::setw(16) << std::left
+                << GetInstStr(inst.inst);
       // Print variable names or constants.
-      if (inst.inst == Inst_LoadName || inst.inst == Inst_StoreName ||
-          inst.inst == Inst_LoadLocal || inst.inst == Inst_StoreLocal) {
-        std::cout << "\t\t" << inst.offset << " ("
-                  << symbolPool(codeIndex)[inst.offset] << ')';
-      } else if (inst.inst == Inst_LoadGlobal ||
-                 inst.inst == Inst_StoreGlobal) {
-        std::cout << "\t\t" << inst.offset << " (" << symbolPool(0)[inst.offset]
+      switch (inst.inst) {
+      case Inst_LoadName:
+      case Inst_StoreName:
+      case Inst_LoadLocal:
+      case Inst_StoreLocal: {
+        std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset]
                   << ')';
-      } else if (inst.inst == Inst_StdCin) {
-        std::cout << "\t\t\t" << inst.offset << " ("
-                  << symbolPool(codeIndex)[inst.offset] << ')';
-      } else if (inst.inst == Inst_JumpTrue || inst.inst == Inst_JumpFalse) {
-        std::cout << "\t\t" << inst.offset;
-      } else if (inst.inst == Inst_Jump) {
-        std::cout << "\t\t\t" << inst.offset;
-      } else if (inst.inst == Inst_Compare) {
-        std::cout << "\t\t" << inst.offset << " (";
-        if (inst.offset == OpId_Equal) {
+        break;
+      }
+      case Inst_LoadGlobal:
+      case Inst_StoreGlobal: {
+        std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
+        break;
+      }
+      case Inst_StdCin: {
+        std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset]
+                  << ')';
+        break;
+      }
+      case Inst_JumpTrue:
+      case Inst_JumpFalse: {
+        std::cout << inst.offset;
+        break;
+      }
+      case Inst_Jump: {
+        std::cout << inst.offset;
+        break;
+      }
+      case Inst_Compare: {
+        std::cout << inst.offset << " (";
+        switch (inst.offset) {
+        case OpId_Equal: {
           std::cout << "==" << ')';
-        } else if (inst.offset == OpId_NotEqual) {
-          std::cout << "!=" << ')';
-        } else if (inst.offset == OpId_GreaterThan) {
-          std::cout << ">" << ')';
-        } else if (inst.offset == OpId_LessThan) {
-          std::cout << "<" << ')';
-        } else if (inst.offset == OpId_GreaterEqual) {
-          std::cout << ">=" << ')';
-        } else if (inst.offset == OpId_LessEqual) {
-          std::cout << "<=" << ')';
-        } else {
-          std::cout << "error" << ')';
+          break;
         }
-      } else if (inst.inst == Inst_LoadConst) {
-        std::cout << "\t\t" << inst.offset << " (";
+        case OpId_NotEqual: {
+          std::cout << "!=" << ')';
+          break;
+        }
+        case OpId_GreaterThan: {
+          std::cout << ">" << ')';
+          break;
+        }
+        case OpId_LessThan: {
+          std::cout << "<" << ')';
+          break;
+        }
+        case OpId_GreaterEqual: {
+          std::cout << ">=" << ')';
+          break;
+        }
+        case OpId_LessEqual: {
+          std::cout << "<=" << ')';
+          break;
+        }
+        default: {
+          std::cout << "error" << ')';
+          break;
+        }
+        }
+        break;
+      }
+      case Inst_LoadConst: {
+        std::cout << inst.offset << " (";
         const auto &cons = constantPool(codeIndex)[inst.offset];
         if (cons.type == ConstType_str) {
           std::cout << "'";
@@ -744,8 +789,14 @@ void Compiler::Dump() {
           std::cout << "'";
         }
         std::cout << ')';
-      } else if (inst.inst == Inst_EnterBlock) {
-        std::cout << "\t\t" << inst.offset;
+        break;
+      }
+      case Inst_EnterBlock: {
+        std::cout << inst.offset;
+        break;
+      }
+      default:
+        break;
       }
       std::cout << std::endl;
     }
@@ -753,14 +804,16 @@ void Compiler::Dump() {
     std::cout << "symbols: " << std::endl;
     for (size_t i = 0; i < code.symbols.size(); ++i) {
       const auto &var = code.symbols[i];
-      std::cout << i << "\t\t" << var << std::endl;
+      std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
+      std::cout << var << std::endl;
     }
 
     std::cout << "constants: " << std::endl;
     for (size_t i = 0; i < code.constants.size(); ++i) {
       const auto &cons = code.constants[i];
-      std::cout << i << "\t\t";
-      std::cout << ToStr(static_cast<LtId>(cons.type)) << '\t';
+      std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
+      std::cout << std::setfill(' ') << std::setw(8) << std::left
+                << ToStr(static_cast<LtId>(cons.type));
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }

@@ -65,6 +65,35 @@ struct Frame {
   std::unordered_map<std::string, Slot> names; // Name map.
 };
 
+inline const char *GetSlotTypeStr(const Slot &slot) {
+  switch (slot.type) {
+  case SlotBool: {
+    return "bool";
+  }
+  case SlotInt: {
+    return "int";
+  }
+  case SlotFloat: {
+    return "float";
+  }
+  case SlotString: {
+    return "str";
+  }
+  case SlotFunction: {
+    return "function";
+  }
+  case SlotClass: {
+    return "class";
+  }
+  case SlotRefName: {
+    return "ref";
+  }
+  default:
+    // unknown
+    return "<unknown>";
+  }
+}
+
 inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
   switch (slot.type) {
   case SlotBool: {
@@ -328,15 +357,15 @@ private:
               << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
               << ToString(rhs);                                                \
       return res;                                                              \
-    } else if (lhs.type == SlotString || rhs.type == SlotString) {             \
+    } else if (lhs.type == SlotString && rhs.type == SlotString) {             \
       auto res = strcmp(lhs.value.str_, rhs.value.str_) CompareOpSymbol 0;     \
       LOG_OUT << "compare STR result: " << (res ? "true" : "false") << ", "    \
               << ToString(lhs) << ' ' << #CompareOpSymbol << ' '               \
               << ToString(rhs);                                                \
       return res;                                                              \
+    } else {                                                                   \
+      throw std::runtime_error("Unexcepted constant");                         \
     }                                                                          \
-    return false;                                                              \
   }
-
 } // namespace vm
 #endif // __VM_VM_H__

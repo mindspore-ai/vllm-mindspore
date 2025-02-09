@@ -376,18 +376,30 @@ static inline StmtPtr MakeAugAssignStmt(ExprConstPtr target, OpId op,
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_AugAssign;
   stmt->stmt.AugAssign.target = target;
-  if (op == OpId_AddAssign) {
+  switch (op) {
+  case OpId_AddAssign: {
     stmt->stmt.AugAssign.op = OpId_Add;
-  } else if (op == OpId_SubAssign) {
+    break;
+  }
+  case OpId_SubAssign: {
     stmt->stmt.AugAssign.op = OpId_Sub;
-  } else if (op == OpId_MulAssign) {
+    break;
+  }
+  case OpId_MulAssign: {
     stmt->stmt.AugAssign.op = OpId_Mul;
-  } else if (op == OpId_DivAssign) {
+    break;
+  }
+  case OpId_DivAssign: {
     stmt->stmt.AugAssign.op = OpId_Div;
-  } else if (op == OpId_ModAssign) {
+    break;
+  }
+  case OpId_ModAssign: {
     stmt->stmt.AugAssign.op = OpId_Mod;
-  } else {
+    break;
+  }
+  default: {
     return nullptr;
+  }
   }
   stmt->stmt.AugAssign.value = value;
   stmt->lineStart = target->lineStart;

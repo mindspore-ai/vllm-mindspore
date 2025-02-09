@@ -375,18 +375,42 @@ void VM::InstCompare(ssize_t offset) {
   CurrentStack().pop_back();
 
   bool res;
-  if (offset == OpId_Equal) {
-    res = lhs == rhs;
-  } else if (offset == OpId_NotEqual) {
-    res = lhs != rhs;
-  } else if (offset == OpId_GreaterThan) {
-    res = lhs > rhs;
-  } else if (offset == OpId_LessThan) {
-    res = lhs < rhs;
-  } else if (offset == OpId_GreaterEqual) {
-    res = lhs >= rhs;
-  } else if (offset == OpId_LessEqual) {
-    res = lhs <= rhs;
+  try {
+    switch (offset) {
+    case OpId_Equal: {
+      res = lhs == rhs;
+      break;
+    }
+    case OpId_NotEqual: {
+      res = lhs != rhs;
+      break;
+    }
+    case OpId_GreaterThan: {
+      res = lhs > rhs;
+      break;
+    }
+    case OpId_LessThan: {
+      res = lhs < rhs;
+      break;
+    }
+    case OpId_GreaterEqual: {
+      res = lhs >= rhs;
+      break;
+    }
+    case OpId_LessEqual: {
+      res = lhs <= rhs;
+      break;
+    }
+    default:
+      break;
+    }
+  } catch (std::runtime_error &ex) {
+    CompileMessage(LineString(),
+                   std::string("error: not support to do [") +
+                       ToStr((OpId)offset) + "] compare between '" +
+                       GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
+                       "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
+    exit(EXIT_FAILURE);
   }
 
   Slot slot = {.type = SlotBool};
@@ -463,9 +487,35 @@ void VM::InstStdCin(ssize_t offset) {
   std::string str;
   getline(std::cin, str);
   CHECK_NULL(slot);
-  slot->type = SlotString;
-  const char *strPtr = stringPool().Intern(std::move(str));
-  slot->value.str_ = strPtr;
+  if ((str.front() == '\'' && str.back() == '\'') ||
+      (str.front() == '\"' && str.back() == '\"')) {
+    slot->type = SlotString;
+    const char *strPtr = stringPool().Intern(str.substr(1, str.size() - 2));
+    slot->value.str_ = strPtr;
+  } else if (str.find('.') != std::string::npos) {
+    slot->type = SlotFloat;
+    try {
+      slot->value.float_ = std::stod(str);
+    } catch (std::invalid_argument &ex) {
+      CompileMessage(LineString(),
+                     "error: invalid input for float type: " + str);
+      exit(EXIT_FAILURE);
+    } catch (std::out_of_range &ex) {
+      CompileMessage(LineString(), "error: out of range as float type: " + str);
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    slot->type = SlotInt;
+    try {
+      slot->value.int_ = std::stoi(str);
+    } catch (std::invalid_argument &ex) {
+      CompileMessage(LineString(), "error: invalid input for int type: " + str);
+      exit(EXIT_FAILURE);
+    } catch (std::out_of_range &ex) {
+      CompileMessage(LineString(), "error: out of range as int type: " + str);
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
 // Output to standard output stream.

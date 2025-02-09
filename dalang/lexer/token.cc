@@ -43,22 +43,39 @@ std::string ToString(TokenConstPtr token) {
   }
   std::stringstream ss;
   ss << '[' << ToStr(token) << ": ";
-  if (token->type == TokenType_Operator) {
+  switch (token->type) {
+  case TokenType_Operator: {
     ss << ToStr(token->data.op);
-  } else if (token->type == TokenType_Keyword) {
+    break;
+  }
+  case TokenType_Keyword: {
     ss << ToStr(token->data.kw);
-  } else if (token->type == TokenType_Separator) {
+    break;
+  }
+  case TokenType_Separator: {
     ss << ToStr(token->data.sp);
-  } else if (token->type == TokenType_Literal) {
+    break;
+  }
+  case TokenType_Literal: {
     ss << ToStr(token->data.lt);
-  } else if (token->type == TokenType_Identifier) {
+    break;
+  }
+  case TokenType_Identifier: {
     ss << token->data.str;
-  } else if (token->type == TokenType_Comment) {
+    break;
+  }
+  case TokenType_Comment: {
     ss << token->data.str;
-  } else if (token->type == TokenType_End) {
+    break;
+  }
+  case TokenType_End: {
     ss << '\'' << token->name << '\'';
-  } else {
+    break;
+  }
+  default: {
     ss << "?";
+    break;
+  }
   }
   ss << ']';
   return ss.str();

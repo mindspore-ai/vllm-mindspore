@@ -28,72 +28,127 @@ public:
   virtual void Visit(StmtConstPtr stmt) {
     if (stmt == nullptr) {
       LOG_ERROR << "Null stmt node.";
-    } else if (stmt->type == StmtType_End) {
+      return;
+    }
+    switch (stmt->type) {
+    case StmtType_End: {
       LOG_ERROR << "Invalid stmt node.";
-    } else if (stmt->type == StmtType_Return) {
+      break;
+    }
+    case StmtType_Return: {
       Visit(stmt->stmt.Return.value);
-    } else if (stmt->type == StmtType_Assign) {
+      break;
+    }
+    case StmtType_Assign: {
       Visit(stmt->stmt.Assign.target);
       Visit(stmt->stmt.Assign.value);
-    } else if (stmt->type == StmtType_AugAssign) {
+      break;
+    }
+    case StmtType_AugAssign: {
       Visit(stmt->stmt.AugAssign.target);
       Visit(stmt->stmt.AugAssign.value);
-    } else if (stmt->type == StmtType_Function) {
+      break;
+    }
+    case StmtType_Function: {
       Visit(stmt->stmt.Function.name);
       VisitList(stmt->stmt.Function.argsLen, stmt->stmt.Function.args);
       VisitList(stmt->stmt.Function.len, stmt->stmt.Function.body);
-    } else if (stmt->type == StmtType_Class) {
+      break;
+    }
+    case StmtType_Class: {
       Visit(stmt->stmt.Class.name);
       Visit(stmt->stmt.Class.bases);
       VisitList(stmt->stmt.Class.len, stmt->stmt.Class.body);
-    } else if (stmt->type == StmtType_Block) {
+      break;
+    }
+    case StmtType_Block: {
       VisitList(stmt->stmt.Block.len, stmt->stmt.Block.body);
-    } else if (stmt->type == StmtType_StdCin) {
+      break;
+    }
+    case StmtType_StdCin: {
       Visit(stmt->stmt.StdCin.value);
-    } else if (stmt->type == StmtType_StdCout) {
+      break;
+    }
+    case StmtType_StdCout: {
       Visit(stmt->stmt.StdCout.value);
-    } else if (stmt->type == StmtType_If) {
+      break;
+    }
+    case StmtType_If: {
       Visit(stmt->stmt.If.condition);
       VisitList(stmt->stmt.If.ifLen, stmt->stmt.If.ifBody);
       VisitList(stmt->stmt.If.elseLen, stmt->stmt.If.elseBody);
-    } else if (stmt->type == StmtType_For) {
+      break;
+    }
+    case StmtType_For: {
       Visit(stmt->stmt.For.element);
       Visit(stmt->stmt.For.iterator);
       VisitList(stmt->stmt.For.len, stmt->stmt.For.body);
-    } else if (stmt->type == StmtType_While) {
+      break;
+    }
+    case StmtType_While: {
       Visit(stmt->stmt.While.condition);
       VisitList(stmt->stmt.While.len, stmt->stmt.While.body);
-    } else if (stmt->type == StmtType_Expr) {
+      break;
+    }
+    case StmtType_Expr: {
       Visit(stmt->stmt.Expr.value);
-    } else if (stmt->type == StmtType_Module) {
+      break;
+    }
+    case StmtType_Module: {
       VisitList(stmt->stmt.Module.len, stmt->stmt.Module.body);
+      break;
+    }
+    default:
+      break;
     }
   }
 
   virtual void Visit(ExprConstPtr expr) {
     if (expr == nullptr) {
       LOG_ERROR << "Null expr node.";
-    } else if (expr->type == ExprType_End) {
+      return;
+    }
+
+    switch (expr->type) {
+    case ExprType_End: {
       LOG_ERROR << "Invalid expr node.";
-    } else if (expr->type == ExprType_Binary) {
+      break;
+    }
+    case ExprType_Binary: {
       Visit(expr->expr.Binary.left);
       Visit(expr->expr.Binary.right);
-    } else if (expr->type == ExprType_Unary) {
+      break;
+    }
+    case ExprType_Unary: {
       Visit(expr->expr.Unary.operand);
-    } else if (expr->type == ExprType_Name) {
+      break;
+    }
+    case ExprType_Name: {
       // No expr.
-    } else if (expr->type == ExprType_Literal) {
+      break;
+    }
+    case ExprType_Literal: {
       // No expr.
-    } else if (expr->type == ExprType_List) {
+      break;
+    }
+    case ExprType_List: {
       VisitList(expr->expr.List.len, expr->expr.List.values);
-    } else if (expr->type == ExprType_Call) {
+      break;
+    }
+    case ExprType_Call: {
       Visit(expr->expr.Call.function);
       Visit(expr->expr.Call.list);
-    } else if (expr->type == ExprType_Attribute) {
+      break;
+    }
+    case ExprType_Attribute: {
       Visit(expr->expr.Attribute.entity);
       Visit(expr->expr.Attribute.attribute);
-    } else {
+      break;
+    }
+    default: {
       // No expr.
+      break;
+    }
     }
   }
 
