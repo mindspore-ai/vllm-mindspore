@@ -1,0 +1,14 @@
+#!dalang
+
+graph net(x, y) {
+    z = op.matmul(x, y)
+    return op.add(z, z)
+}
+
+function main() {
+    return net(tensor(2), tensor(3))
+}
+
+<: 'fib:\n'
+<: main()
+<: '\n'
