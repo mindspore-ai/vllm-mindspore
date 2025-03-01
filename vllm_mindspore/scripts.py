@@ -21,28 +21,30 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def env_setup():
-    default_env_dict = {
-        "USE_TORCH": "FALSE",
-        "USE_TF": "FALSE",
-        "RUN_MODE": "prefict",
-        "CUSTOM_MATMUL_SHUFFLE": "on",
-        "HCCL_DETERMINISTIC": "false",
-        "ASCEND_LAUNCH_BLOCKING": "0",
-        "TE_PARALLEL_COMPILER": "0",
-        "LCCL_DETERMINISTIC": "0",
-        "MS_ENABLE_GRACEFUL_EXIT": "0",
-        "MS_ALLOC_CONF": "enable_vmm:False",
-        "CPU_AFFINIITY": "True",
-        "MS_ENABLE_INTERNAL_BOOST": "on",
-        "MS_ENABLE_LCCL": "off",
-        "HCCL_EXEC_TIMEOUT": "7200",
-        "DEVICE_NUM_PER_NODE": "16",
-        "HCCL_OP_EXPANSION_MODE": "AIV",
-        "MS_JIT_MODULES": "vllm_mindspore,research"
-    }
+def env_setup(target_env_dict=None):
+    if target_env_dict is None:
+        target_env_dict = {
+            "USE_TORCH": "FALSE",
+            "USE_TF": "FALSE",
+            "RUN_MODE": "prefict",
+            "CUSTOM_MATMUL_SHUFFLE": "on",
+            "HCCL_DETERMINISTIC": "false",
+            "ASCEND_LAUNCH_BLOCKING": "0",
+            "TE_PARALLEL_COMPILER": "0",
+            "LCCL_DETERMINISTIC": "0",
+            "MS_ENABLE_GRACEFUL_EXIT": "0",
+            "MS_ALLOC_CONF": "enable_vmm:False",
+            "CPU_AFFINIITY": "True",
+            "MS_ENABLE_INTERNAL_BOOST": "on",
+            "MS_ENABLE_LCCL": "off",
+            "HCCL_EXEC_TIMEOUT": "7200",
+            "DEVICE_NUM_PER_NODE": "16",
+            "HCCL_OP_EXPANSION_MODE": "AIV",
+            "MS_JIT_MODULES": "vllm_mindspore,research",
+            "GLOG_v": "3"
+        }
 
-    for key, value in default_env_dict.items():
+    for key, value in target_env_dict.items():
         if key not in os.environ:
             logger.debug('Setting %s to "%s"' % (key, value))
             os.environ[key] = value

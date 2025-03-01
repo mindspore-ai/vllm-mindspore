@@ -19,11 +19,10 @@
 import importlib.util
 import logging
 import os
-import subprocess
 import sys
 from typing import List
-
 from setuptools import find_packages, setup
+from pathlib import Path
 
 
 def load_module_from_path(module_name, path):
@@ -83,36 +82,11 @@ def get_requirements() -> List[str]:
     return requirements
 
 
-def prepare_submodules() -> None:
-    def _run_cmd(args: str, check: bool = True) -> None:
-        cmds = args.split(" ")
-        returned = subprocess.run(cmds, stderr=subprocess.STDOUT)
-        if check:
-            returned.check_returncode()
-        elif returned.returncode != 0:
-            logger.warning("Run %s error, please check!" % args)
-
-    old_dir = os.getcwd()
-    os.chdir(ROOT_DIR)
-
-    _run_cmd("rm -rf vllm_mindspore/msadapter")
-    _run_cmd("git submodule update --init vllm_mindspore/msadapter", check=False)
-    os.chdir(get_path("vllm_mindspore", "msadapter"))
-
-    # Add __init__.py for packing.
-    _run_cmd("touch __init__.py")
-    _run_cmd("touch mindtorch/__init__.py")
-
-    os.chdir(old_dir)
-
-
-prepare_submodules()
-
+version = (Path("vllm_mindspore") / "version.txt").read_text()
 
 setup(
     name="vllm-mindspore",
-    use_scm_version=True,
-    setup_requires=["setuptools_scm"],
+    version=version,
     author="MindSpore Team",
     license="Apache 2.0",
     description=(

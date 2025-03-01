@@ -60,23 +60,20 @@ device：Ascend A2/A3卡
 ### 源码安装
 
 ```shell
-git clone https://gitee.com/mindspore/vllm_mindspore.git
-cd vllm_mindspore
-# 1. 安装vllm（可选）
-bash install_vllm.sh
-# bash install_vllm.sh develop # 开发者模式
+# 1. 安装vllm（已安装有对应版本vllm时可跳过）
+git clone https://github.com/vllm-project/vllm.git -b v0.6.6.post1 --depth 1 vllm-v0.6.6.post1
+cd vllm-v0.6.6.post1
+export VLLM_TARGET_DEVICE=empty
+pip install .
 
 # 2. 安装vllm_mindspore
+git clone https://gitee.com/mindspore/vllm_mindspore.git
+cd vllm_mindspore
 pip3 install .
-# pip3 install -e . # 开发者模式
 
 # 3. 卸载torch相关包
-pip3 uninstall torch torch-npu torchvision # 卸载 torch 相关包，当前msadapter带来的限制，后续清除
+pip3 uninstall torch torch-npu torchvision # 卸载 torch 相关包，msadaptor的限制
 ```
-
-> msadapter 需要申请仓权限： 
->
-> https://gitee.com/mindspore/msadapter
 
 ### 通过镜像使用
 

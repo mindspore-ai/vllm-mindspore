@@ -108,7 +108,7 @@ class Qwen2ForCausalLM(MsModelBase):
         ).jit_config_dict
 
         set_output_path(self.mf_config.output_dir)
-        set_stratery_save_path(self.mf_config.parallel)
+        set_strategy_save_path(self.mf_config.parallel)
         # update safetensor path
         ms_safetensors_path = BaseTrainer._get_load_path_after_hf_convert(
             self.mf_config, self.network

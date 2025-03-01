@@ -1,3 +1,0 @@
-[submodule "vllm_mindspore/msadapter"]
-	path = vllm_mindspore/msadapter
-	url = https://gitee.com/mindspore/msadapter.git

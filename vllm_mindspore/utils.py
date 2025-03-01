@@ -42,6 +42,8 @@ import mindspore as ms
 from mindspore.common.initializer import Zero
 from mindspore import dtype as mstype
 
+from .scripts import env_setup
+
 MsKVCache = Tuple[ms.Tensor, ms.Tensor]
 
 logger = logging.getLogger(__name__)
@@ -296,7 +298,10 @@ def is_mindformers_model_backend():
 
 def check_ready():
     from mindspore import set_context
-    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})  # Common environment variables of predict.
+
+    # Common environment variables of predict.
+    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
+
     if is_mindformers_model_backend():
         logger.info("Run with Mindformers backend!")
         necessary_envs = ("vLLM_MODEL_MEMORY_USE_GB", "MINDFORMERS_MODEL_CONFIG")
@@ -307,6 +312,11 @@ def check_ready():
                 'For "MindFormers" model backend, environments %s should be set!'
                 % str(lost_envs)
             )
+
+        mindformers_default_env = {
+            "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": "FlashAttentionScore,PagedAttention",
+        }
+        env_setup(mindformers_default_env)
 
         set_context(mode=0, device_target="Ascend", max_call_depth=10000)
     else:

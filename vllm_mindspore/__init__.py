@@ -15,16 +15,8 @@
 # limitations under the License.
 # ============================================================================
 
-import os
 import sys
 import warnings
-
-msadapter_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "msadapter/mindtorch")
-)
-sys.path.insert(0, msadapter_path)
-
-from .version import __version__
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.
