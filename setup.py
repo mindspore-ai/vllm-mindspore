@@ -21,8 +21,8 @@ import logging
 import os
 import sys
 from typing import List
-from setuptools import find_packages, setup
 from pathlib import Path
+from setuptools import find_packages, setup
 
 
 def load_module_from_path(module_name, path):
