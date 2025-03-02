@@ -18,6 +18,8 @@
 """A layer that samples the next tokens from the model's outputs."""
 import itertools
 import warnings
+import mindspore as ms
+from mindspore.common.api import _pynative_executor
 from dataclasses import dataclass
 from importlib.util import find_spec
 from math import inf
@@ -47,6 +49,15 @@ from vllm_mindspore.model_executor.sampling_metadata import (
     SamplingTensors,
     SequenceGroupToSample,
 )
+
+class AsyncContext:
+    def __enter__(self):
+        _pynative_executor.sync()
+        _pynative_executor.set_async_for_graph(True)
+
+    def __exit__(self, exc_type, exc_value, tb):
+        _pynative_executor.sync()
+        _pynative_executor.set_async_for_graph(False)
 
 if envs.VLLM_USE_FLASHINFER_SAMPLER and find_spec("flashinfer"):
     raise RuntimeError("Donot support for mindspore now.")
@@ -234,7 +245,7 @@ class Sampler(nn.Module):
         self._do_top_p_top_k = do_top_p_top_k
         self._do_min_p = do_min_p
 
-    def forward(
+    def run_forward(
         self,
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
@@ -306,7 +317,6 @@ class Sampler(nn.Module):
         # Compute the probabilities.
         probs = torch.softmax(logits, dim=-1, dtype=torch.float)
         # Compute the log probabilities.
-        import mindspore as ms
 
         logprobs = ms.ops.log_softmax(logits, axis=-1).to(torch.float)
 
@@ -349,6 +359,14 @@ class Sampler(nn.Module):
             on_device_tensors=on_device_tensors,
             skip_sampler_cpu_output=sampling_metadata.skip_sampler_cpu_output,
         )
+
+    def forward(
+        self,
+        logits: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> Optional[SamplerOutput]:
+        with AsyncContext() as ctx:
+            return self.run_forward(logits, sampling_metadata)
 
     @property
     def _should_modify_greedy_probs_inplace(self) -> bool:

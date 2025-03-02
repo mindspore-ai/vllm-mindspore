@@ -1,169 +1,103 @@
 # vllm_mindspore
 
-## 项目介绍
+## Overview
 
-功能介绍
+The `vllm-mindspore`is a integration for running vLLM on the MindSpore framework.
 
-API
+This  is the recommended solution for supporting the MindSpore  within the vLLM community. It provides deep integration with the MindSpore framework, offering efficient computation and optimization support for vLLM, enabling seamless operation on MindSpore.
 
----
-
-## 前置依赖
-
-### 运行环境
-
-OS：linux aarch64
-
-python：python3.9-3.11
-
-device：Ascend A2/A3卡
-
-软件：
-
-1. `CANN>=8.0.0`
-2. `mindspore>=2.5.0`
-
-### 环境验证
-
-`python -c "import mindspore;mindspore.set_context(device_target='Ascend');mindspore.run_check()"`
-
-> **若报错显示CANN不匹配，则需重新安装CANN包**
->
-> 则可通过如下方法找到对应的CANN:
->
-> 1. 找到包安装路径下的 `.commit_id` (如: `/your_path/site-packages/mindspore/.commit_id`）, 可获取其对应的代码 commit记录，如:
->
->   ```
-> __commit_id__ = '[sha1]:94cf8828,[branch]:(HEAD,origin/master,origin/HEAD,master)'
->   ```
->
-> 2. 通过该 commit id 查找源码中对应的 `./.jenkins/task/config/cann_version.txt` 文件即可知配套 CANN 的归档日期，重新安装对应CANN。
->
-> 
->
-> **mindspore，CANN包推荐**
->
-> 依赖的 CANN 和 MindSpore 仍处于开发态未正式发布，可通过 
-> https://repo.mindspore.cn/mindspore/mindspore/version  获取每日构建版本，并安装对应的 CANN 配套环境。
->
-> **推荐获取: Milan_C20_20241231 的CANN，和 20250125 的每日 mindspore 包。**
-> mindspore包地址：
-> https://repo.mindspore.cn/mindspore/mindspore/version/202501/20250125/master_20250125160017_3f1def978242de1dda3ef0544e282b6ef369d165_newest/unified/aarch64/
->
-> CANN包地址：
-> https://mindspore-repo.csi.rnd.huawei.com/productrepo
+By using the `vllm-mindspore`, popular open-source models, including Transformer-like, Mixture-of-Expert, Embedding, and Multi-modal LLMs, can run seamlessly for training and inference on the MindSpore framework.
 
 ---
 
-## 安装
+## Prerequisites
 
-### 源码安装
+- Hardware: Atlas A2/A3
+- Software:
+  - Python >= 3.9
+  - CANN >= 8.0.0
+  - MindSpore >=2.5.0
+
+---
+
+## Getting Started
+
+### Installation
+
+Installation from source code
 
 ```shell
-# 1. 安装vllm（已安装有对应版本vllm时可跳过）
-git clone https://github.com/vllm-project/vllm.git -b v0.6.6.post1 --depth 1 vllm-v0.6.6.post1
-cd vllm-v0.6.6.post1
-export VLLM_TARGET_DEVICE=empty
-pip install .
+# 1. Uninstall torch-related packages due to msadapter limitations
+pip3 uninstall torch torch-npu torchvision 
 
-# 2. 安装vllm_mindspore
+# 2.Install vllm_mindspore
 git clone https://gitee.com/mindspore/vllm_mindspore.git
 cd vllm_mindspore
-pip3 install .
-
-# 3. 卸载torch相关包
-pip3 uninstall torch torch-npu torchvision # 卸载 torch 相关包，msadaptor的限制
+pip install .
 ```
 
-### 通过镜像使用
+### Inference and Serving
 
-````
-bash build_image.sh $DEVICE_TYPE $VERSION
-# bash build_image.sh 800I 2.0.RC1.B020
-````
+#### Offline Inference
 
-> DEVICE_TYPE可以取值`300I`、`800I`、`A3`
->
-> VERSION取值为MindIE版本号，如2.0.RC1.B020
+You can run vllm_mindspore in your own code on a list of prompts.
 
----
+```python
+import vllm_mindspore # Add this line on the top of script.
+from vllm import LLM, SamplingParams
 
-## 部署
+# Sample prompts.
+prompts = [
+    "I am",
+    "Today is",
+    "Llama is"
+]
 
-1. 离线批量推理
+# Create a sampling params object.
+sampling_params = SamplingParams(temperature=0.0, top_p=0.95)
 
-   ```python
-   import vllm_mindspore # Add this line on the top of script.
-   from vllm import LLM, SamplingParams
-   
-   # Sample prompts.
-   prompts = [
-       "I am",
-       "Today is",
-       "Llama is"
-   ]
-   
-   # Create a sampling params object.
-   sampling_params = SamplingParams(temperature=0.0, top_p=0.95)
-   
-   # Create an LLM.
-   llm = LLM(model="meta-llama/Llama-2-7b-hf")
-   # Generate texts from the prompts. The output is a list of RequestOutput objects
-   # that contain the prompt, generated text, and other information.
-   outputs = llm.generate(prompts, sampling_params)
-   # Print the outputs.
-   for output in outputs:
-       prompt = output.prompt
-       generated_text = output.outputs[0].text
-       print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-   ```
+# Create an LLM.
+llm = LLM(model="meta-llama/Llama-2-7b-hf")
+# Generate texts from the prompts. The output is a list of RequestOutput objects
+# that contain the prompt, generated text, and other information.
+outputs = llm.generate(prompts, sampling_params)
+# Print the outputs.
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+```
 
-   > **关于权重设置**
-   >
-   > 1. 在线权重需要设置HF_TOKEN
-   >
-   >    `export HF_TOKEN=Your_token`
-   >
-   > 2. 本地权重设置
-   >
-   >    如果已经有下载好的模型配置、权重等，将 `meta-llama/Llama-2-7b-hf` 替换为本地的路径即可。
-   >
-   >
-   > 
-   >
-   > **https请求失败时额外设置**
-   >
-   > 由于一些限制，在线下载在特定的服务器上需要通过安装较低版本的 requests 包 `requests-2.27.1`，且需要在脚本最上方添加如下代码:
-   >
-   > ```python
-   > import urllib3
-   > import os
-   > # disable SSL certificate verification
-   > os.environ['CURL_CA_BUNDLE'] = ''
-   > # disable_warning
-   > urllib3.disable_warnings()
-   > ```
+#### Serving（OpenAI-Compatible）
 
-2. 服务化（兼容openai）
+You can start the server via the vllm_mindspore command:
 
-   **拉起服务** 
+`python3 -m vllm_mindspore.entrypoints vllm.entrypoints.openai.api_server --model "meta-llama/Llama-2-7b-hf"`
 
-   `python3 -m vllm_mindspore.entrypoints vllm.entrypoints.openai.api_server --model "meta-llama/Llama-2-7b-hf"`
+To call the server, you can use `curl` or any other HTTP client.
 
-   **发起请求** 
-
-   ```shell
-   curl http://localhost:8000/v1/completions \
-     -H "Content-Type: application/json" \
-     -d '{
-       "model": "meta-llama/Llama-2-7b-hf",
-       "prompt": "Llama is",
-       "max_tokens": 120,
-       "temperature": 0
-     }'
-   ```
-   
-   
+```shell
+curl http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Llama-2-7b-hf",
+    "prompt": "Llama is",
+    "max_tokens": 120,
+    "temperature": 0
+  }'
+```
 
 
 
+## Contributing
+
+We welcome and value any contributions and collaborations:
+
+- Please feel free comments about your usage of vllm_mindspore.
+- Please let us know if you encounter a bug by filing an issue.
+
+
+
+## License
+
+Apache License 2.0, as found in the [LICENSE](https://gitee.com/mindspore/vllm_mindspore/blob/master/LICENSE) file.

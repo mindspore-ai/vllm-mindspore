@@ -1,54 +1,89 @@
-FROM mindie:dev-2.0.RC1-B020-800I-A2-py311-ubuntu22.04-aarch64 AS base
+FROM hub.oepkgs.net/openeuler/openeuler:22.03-lts-sp4
 
-RUN sh -c "echo '127.0.0.1 $(hostname)' >> /etc/hosts";\
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy main restricted" > /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy multiverse" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy universe" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-security main restricted" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-security multiverse" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-security universe" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-updates main restricted" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-updates multiverse" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://mirrors.tools.huawei.com/ubuntu-ports/ jammy-updates universe" >> /etc/apt/sources.list
-
-RUN set -eux; \
-    apt update; \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        netbase \
+RUN yum clean all && \
+    yum makecache && \
+    yum install -y \
+        kmod \
+        sudo \
+        wget \
         curl \
-        wget \
-        tzdata \
-        wget \
-        vim \
-        autoconf \
-        automake \
-        libtool \
+        cmake \
+        make \
         git \
-        tcl \
-        patch \
-        libnuma-dev \
-        flex \
-        tclsh \
-        git-lfs \
-        pkg-config \
-        aria2; \
-    apt-get clean;
+        vim \
+        gcc && \
+    yum clean all
 
-RUN pip config set global.index-url 'https://mirrors.tools.huawei.com/pypi/simple/'; \
-    pip config set global.trusted-host "mirrors.tools.huawei.com pypi.org files.pythonhosted.org ms-release.obs.cn-north-4.myhuaweicloud.com"
+####################### python #######################
+WORKDIR /root
+RUN wget --no-check-certificate https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh && \
+    bash /root/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh -b && \
+    rm /root/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh
+ENV PATH="/root/miniconda3/bin:$PATH"
+ENV PYTHONPATH="/root/miniconda3/lib/python3.11/site-packages"
+RUN pip config set global.index-url 'https://mirrors.tools.huawei.com/pypi/simple/' && \
+    pip config set global.trusted-host mirrors.tools.huawei.com
 
-FROM base AS ms_vllm
+####################### CANN #######################
+COPY ascend_install.info /etc/ascend_install.info
+RUN wget --no-check-certificate "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.0.0/Ascend-cann-toolkit_8.0.0_linux-aarch64.run" -o Ascend-cann-toolkit_8.0.0_linux-aarch64.run && \
+    wget --no-check-certificate "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.0.0/Ascend-cann-kernels-910b_8.0.0_linux-aarch64.run" -o Ascend-cann-kernels-910b_8.0.0_linux-aarch64.run && \
+    wget --no-check-certificate "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.0.0/Ascend-cann-nnrt_8.0.0_linux-aarch64.run" -o Ascend-cann-nnrt_8.0.0_linux-aarch64.run && \
+    chmod a+x *.run && \
+    bash /root/Ascend-cann-toolkit_8.0.0_linux-aarch64.run --install -q && \
+    bash /root/Ascend-cann-kernels-910b_8.0.0_linux-aarch64.run --install -q && \
+    bash /Ascend-cann-nnrt_8.0.0_linux-aarch64.run --install -q && \
+    rm /root/*.run
 
-WORKDIR /workspace/mindspore-vllm
-COPY . /workspace/mindspore-vllm
+RUN echo "source /usr/local/Ascend/nnrt/set_env.sh" >> /root/.bashrc && \
+    echo "source /usr/local/Ascend/ascend-toolkit/set_env.sh" >> /root/.bashrc
 
-ENV VLLM_TARGET_DEVICE=empty
-RUN cd vllm-v0.6.6.post1; \
-    pip install -e .; \
-    cd ..
+####################### dev #######################
+RUN pip install --no-cache-dir \
+    cmake \
+    decorator \
+    ray==2.42.1 \
+    wheel \
+    setuptools \
+    wrap \
+    deprecated
 
-RUN pip install -r requirements.txt --progress-bar on && \
-    pip install -e . && \
-    pip uninstall torch torch-npu torchvision -y
+WORKDIR /workspace
+
+ARG GITEE_USERNAME
+ARG GITEE_PASSWORD
+RUN git config --global credential.helper store && \
+    echo "https://${GITEE_USERNAME}:${GITEE_PASSWORD}@gitee.com" > /root/.git-credentials
+
+RUN git clone -b br_infer_deepseek_os https://gitee.com/mindspore/mindformers.git /workspace/mindformers && \
+    cd mindformers && \
+    bash build.sh && \
+    PACKAGE_PATH=$(python3 -c "import site; print(site.getsitepackages()[0])") && \
+    cp -a research "$PACKAGE_PATH" && \
+    rm -rf /workspace/mindformers
+
+RUN git clone -b deepseek https://gitee.com/mindspore/golden-stick.git /workspace/golden-stick && \
+    cd golden-stick && \
+    bash build.sh && \
+    pip install --no-cache-dir /workspace/golden-stick/output/*.whl && \
+    rm -rf /workspace/golden-stick
+
+RUN git clone https://gitee.com/mindspore/msadapter.git /workspace/msadapter && \
+    cd /workspace/msadapter && \
+    bash scripts/build_and_reinstall.sh && \
+    rm -rf /workspace/msadapter
+
+# vllm_ms
+ENV USE_TORCH="FALSE"
+ENV USE_TF="FALSE"
+RUN git clone -b v0.6.6.post1 https://gitee.com/mirrors/vllm.git /workspace/vllm && \
+    cd vllm && \
+    VLLM_TARGET_DEVICE=empty pip install --no-cache-dir . && \
+    rm -rf /workspace/vllm
+ADD . /workspace/vllm_mindspore
+RUN cd /workspace/vllm_mindspore && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install . && \
+    rm -rf /workspace/vllm_mindspore
+
+CMD ["bash"]

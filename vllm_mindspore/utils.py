@@ -196,6 +196,8 @@ def make_tensor_with_pad(
     np_dtype = TORCH_DTYPE_TO_NUMPY_DTYPE[dtype]
     padded_x = make_ndarray_with_pad(x, pad, np_dtype, max_len=max_len)
 
+    pin_memory = False
+
     if padded_x.size == 0:
         tensor = _create_empty_tensor(dtype)
     else:

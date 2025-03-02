@@ -37,7 +37,9 @@ from mindformers.core.parallel_config import build_parallel_config
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
 from mindformers.trainer import BaseTrainer
 from mindformers.tools.utils import set_output_path, set_strategy_save_path
-from research.qwen2_5.infer.qwen2_5 import ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF
+from research.qwen2_5.infer.qwen2_5 import (
+    ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF,
+)
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
@@ -96,7 +98,9 @@ class Qwen2ForCausalLM(MsModelBase):
 
         self.mf_model_config = LlamaConfig_MF(**self.mf_config.model.model_config)
         # Cannot get num_gpu_blocks from cache config now, calculate one first.
-        self.mf_model_config.num_blocks = cal_block_num(self.cache_config, self.model_config, self.parallel_config)
+        self.mf_model_config.num_blocks = cal_block_num(
+            self.cache_config, self.model_config, self.parallel_config
+        )
         self.mf_model_config.block_size = self.cache_config.block_size
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
@@ -166,11 +170,11 @@ class Qwen2ForCausalLM(MsModelBase):
         if is_prefill:
             self.network.phase = "prefill"
             self.network.add_flags_custom(is_first_iteration=True)
-        else:
+            self.logits = self.network(**model_inputs)
             self.network.phase = "increment"
             self.network.add_flags_custom(is_first_iteration=False)
-
-        self.logits = self.network(**model_inputs)
+        else:
+            self.logits = self.network(**model_inputs)
 
         return None
 
