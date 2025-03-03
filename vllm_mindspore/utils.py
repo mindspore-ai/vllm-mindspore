@@ -340,3 +340,12 @@ def cal_block_num(cache_config, model_config, parallel_config):
     )
     num_gpu_blocks = int(available_cache_memory // cache_block_size)
     return num_gpu_blocks
+
+
+def is_use_mla(model_config):
+    if not is_mindformers_model_backend():
+        return False
+
+    return hasattr(model_config.hf_text_config, "model_type") and (
+        model_config.hf_text_config.model_type in ("deepseek_v3",)
+    )

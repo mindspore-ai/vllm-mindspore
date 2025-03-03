@@ -111,7 +111,8 @@ from vllm_mindspore.worker.cache_engine import (
     ms_allocate_kv_cache,
     ms_swap_in,
     ms_swap_out,
-    cache_engine_init
+    cache_engine_init,
+    get_cache_block_size,
 )
 
 import vllm.worker.cache_engine
@@ -120,6 +121,7 @@ vllm.worker.cache_engine.CacheEngine._allocate_kv_cache = ms_allocate_kv_cache
 vllm.worker.cache_engine.CacheEngine.__init__ = cache_engine_init
 vllm.worker.cache_engine.CacheEngine.swap_in = ms_swap_in
 vllm.worker.cache_engine.CacheEngine.swap_out = ms_swap_out
+vllm.worker.cache_engine.CacheEngine.get_cache_block_size = get_cache_block_size
 
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     safetensors_weights_iterator,
@@ -180,9 +182,11 @@ vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
-from .config import get_head_size, _verify_quantization
+from .config import get_head_size, _verify_quantization, get_num_kv_heads
+
 vllm.config.ModelConfig.get_head_size = get_head_size
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
+vllm.config.ModelConfig.get_num_kv_heads = get_num_kv_heads
 
 from .utils import check_ready
 
