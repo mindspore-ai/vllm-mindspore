@@ -20,16 +20,12 @@ from typing import List
 
 from vllm.logger import init_logger
 
-logger = init_logger(__name__)
-
-from vllm_mindspore.utils import (
-    MsKVCache,
-    get_valid_dtype,
-    is_mindformers_model_backend,
-)
+from vllm_mindspore.utils import MsKVCache, get_valid_dtype, is_use_mla, get_dtype_size
 
 import mindspore as ms
 from mindspore import mutable
+
+logger = init_logger(__name__)
 
 
 def create_block(shape, dtype, name=None, device=None):
@@ -115,15 +111,6 @@ def cache_engine_init(
     else:
         self.dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
-    if (
-        is_mindformers_model_backend()
-        and hasattr(model_config.hf_text_config, "model_type")
-        and (model_config.hf_text_config.model_type in ("deepseek_v3",))
-    ):
-        is_mla = True
-    else:
-        is_mla = False
-
     # Get attention backend.
     self.attn_backend = get_attn_backend(
         self.head_size,
@@ -131,7 +118,7 @@ def cache_engine_init(
         cache_config.cache_dtype,
         self.block_size,
         model_config.is_attention_free,
-        use_mla=is_mla,
+        use_mla=is_use_mla(model_config),
     )
 
     # Initialize the cache.
@@ -139,3 +126,27 @@ def cache_engine_init(
         self.num_gpu_blocks, self.device_config.device_type
     )
     self.cpu_cache = self._allocate_kv_cache(self.num_cpu_blocks, "cpu")
+
+
+def get_cache_block_size(
+    cache_config: "CacheConfig",
+    model_config: "ModelConfig",
+    parallel_config: "ParallelConfig",
+) -> int:
+    from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE, LayerBlockType
+
+    head_size = model_config.get_head_size()
+    num_heads = model_config.get_num_kv_heads(parallel_config)
+    num_attention_layers = model_config.get_num_layers_by_block_type(
+        parallel_config, LayerBlockType.attention
+    )
+
+    key_cache_block = cache_config.block_size * num_heads * head_size
+    value_cache_block = key_cache_block if not is_use_mla(model_config) else 0
+    total = num_attention_layers * (key_cache_block + value_cache_block)
+    if cache_config.cache_dtype == "auto":
+        dtype = model_config.dtype
+    else:
+        dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
+    dtype_size = get_dtype_size(dtype)
+    return dtype_size * total
