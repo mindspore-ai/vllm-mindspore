@@ -1,0 +1,8 @@
+mindspore:
+  'https://repo.mindspore.cn/mindspore/mindspore/version/202502/20250227/master_20250227211723_94ac228bae9cd6d0f00b4ce8d5857773799c4f26_newest/'
+
+mindformers:
+  'https://repo.mindspore.cn/mindspore/mindformers/version/202502/20250228/dev_20250228220021_4e90ca405720ea2f4a0abdf501d01078f28d724c_newest/'
+
+msadapter:
+  'https://repo.mindspore.cn/mindspore/msadapter/version/202503/20250301/master_20250301_newest/'

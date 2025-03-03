@@ -14,9 +14,9 @@ By using the `vllm-mindspore`, popular open-source models, including Transformer
 
 - Hardware: Atlas A2/A3
 - Software:
-  - Python >= 3.9
-  - CANN >= 8.0.0
-  - MindSpore >=2.5.0
+    - Python >= 3.9
+    - CANN >= 8.0.0
+    - MindSpore >=2.5.0
 
 ---
 
@@ -27,13 +27,15 @@ By using the `vllm-mindspore`, popular open-source models, including Transformer
 Installation from source code
 
 ```shell
+
 # 1. Uninstall torch-related packages due to msadapter limitations
-pip3 uninstall torch torch-npu torchvision 
+pip3 uninstall torch torch-npu torchvision
 
 # 2.Install vllm_mindspore
 git clone https://gitee.com/mindspore/vllm_mindspore.git
 cd vllm_mindspore
 pip install .
+
 ```
 
 ### Inference and Serving
@@ -43,6 +45,7 @@ pip install .
 You can run vllm_mindspore in your own code on a list of prompts.
 
 ```python
+
 import vllm_mindspore # Add this line on the top of script.
 from vllm import LLM, SamplingParams
 
@@ -66,6 +69,7 @@ for output in outputs:
     prompt = output.prompt
     generated_text = output.outputs[0].text
     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+
 ```
 
 #### Serving（OpenAI-Compatible）
@@ -77,6 +81,7 @@ You can start the server via the vllm_mindspore command:
 To call the server, you can use `curl` or any other HTTP client.
 
 ```shell
+
 curl http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -85,9 +90,8 @@ curl http://localhost:8000/v1/completions \
     "max_tokens": 120,
     "temperature": 0
   }'
+
 ```
-
-
 
 ## Contributing
 
@@ -95,8 +99,6 @@ We welcome and value any contributions and collaborations:
 
 - Please feel free comments about your usage of vllm_mindspore.
 - Please let us know if you encounter a bug by filing an issue.
-
-
 
 ## License
 
