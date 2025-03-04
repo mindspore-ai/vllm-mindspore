@@ -24,7 +24,7 @@ By using the `vllm-mindspore`, popular open-source models, including Transformer
 
 ### Installation
 
-Installation from source code
+#### Installation from source code
 
 ```shell
 
@@ -36,6 +36,20 @@ git clone https://gitee.com/mindspore/vllm_mindspore.git
 cd vllm_mindspore
 pip install .
 
+```
+
+#### Set up using Docker
+
+##### Pre-built images
+
+```shell
+docker pull hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore:v1.0
+```
+
+##### Build image from source
+
+```shell
+docker build --network=host .
 ```
 
 ### Inference and Serving
