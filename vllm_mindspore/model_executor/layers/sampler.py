@@ -441,9 +441,9 @@ def _apply_top_k_top_p(
     # Apply top-k.
     top_k_mask = logits_sort.size(1) - k.to(torch.long)
     # Get all the top_k values.
-    top_k_mask = logits_sort.gather(top_k_mask, 0)
+    top_k_mask = logits_sort.gather(1, top_k_mask.unsqueeze(dim=1))
     top_k_mask = logits_sort < top_k_mask
-    logits_sort.masked_fill(top_k_mask, -float("inf"))
+    logits_sort = logits_sort.masked_fill(top_k_mask, -float("inf"))
 
     # Apply top-p.
     probs_sort = logits_sort.softmax(axis=-1)
@@ -451,7 +451,7 @@ def _apply_top_k_top_p(
     top_p_mask = probs_sum <= 1 - p.unsqueeze(dim=1)
     # at least one
     top_p_mask[:, -1] = False
-    logits_sort.masked_fill(top_p_mask, -float("inf"))
+    logits_sort = logits_sort.masked_fill(top_p_mask, -float("inf"))
 
     # Re-sort the probabilities.
     logits = torch.empty_like(logits_sort).scatter(
