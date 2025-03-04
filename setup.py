@@ -96,9 +96,9 @@ setup(
     ),
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://gitee.com/mindspore/vllm_mindspore",
+    url="https://gitee.com/mindspore/vllm-mindspore",
     project_urls={
-        "Homepage": "https://gitee.com/mindspore/vllm_mindspore",
+        "Homepage": "https://gitee.com/mindspore/vllm-mindspore",
         "Documentation": "",
     },
     classifiers=[
