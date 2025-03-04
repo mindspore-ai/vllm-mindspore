@@ -15,6 +15,7 @@
 # limitations under the License.
 # ============================================================================
 
+import os
 from abc import abstractmethod
 from typing import Iterable, List, Optional, Set, Tuple, Union, Dict
 
@@ -41,8 +42,25 @@ class MsModelBase():
         self.lora_config = lora_config
         self.cache_config = vllm_config.cache_config
         self.parallel_config = vllm_config.parallel_config
+        self.load_config = vllm_config.load_config
 
         self.modules_dict = None
+
+    def get_model_path(self):
+        model_name_or_path = self.model_config.model
+        if os.path.isdir(model_name_or_path):
+            return model_name_or_path
+        else:
+            from vllm.model_executor.model_loader.weight_utils import download_weights_from_hf
+            allow_patterns = ["*.safetensors"]
+            revision = self.model_config.revision
+            return download_weights_from_hf(
+                model_name_or_path,
+                self.load_config.download_dir,
+                allow_patterns,
+                revision,
+                ignore_patterns=self.load_config.ignore_patterns,
+            )
 
     def set_modules(self, model_dicts: Dict[str, nn.Cell]):
         self.modules_dict = model_dicts
