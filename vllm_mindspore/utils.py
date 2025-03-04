@@ -323,7 +323,7 @@ def check_ready():
 
         set_context(mode=0, device_target="Ascend", max_call_depth=10000)
     else:
-        env_setup({"MS_ALLOC_CONF": "enable_vmm:False", })
+        env_setup({"MS_ALLOC_CONF": "enable_vmm:True", })
         logger.info("Run with native model backend!")
 
 
