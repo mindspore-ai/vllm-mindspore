@@ -32,8 +32,8 @@ By using the `vllm-mindspore`, popular open-source models, including Transformer
 pip3 uninstall torch torch-npu torchvision
 
 # 2.Install vllm_mindspore
-git clone https://gitee.com/mindspore/vllm_mindspore.git
-cd vllm_mindspore
+git clone https://gitee.com/mindspore/vllm-mindspore.git
+cd vllm-mindspore
 pip install .
 
 ```
