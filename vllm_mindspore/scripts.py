@@ -33,7 +33,6 @@ def env_setup(target_env_dict=None):
             "TE_PARALLEL_COMPILER": "0",
             "LCCL_DETERMINISTIC": "0",
             "MS_ENABLE_GRACEFUL_EXIT": "0",
-            "MS_ALLOC_CONF": "enable_vmm:False",
             "CPU_AFFINIITY": "True",
             "MS_ENABLE_INTERNAL_BOOST": "on",
             "MS_ENABLE_LCCL": "off",

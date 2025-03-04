@@ -317,11 +317,13 @@ def check_ready():
 
         mindformers_default_env = {
             "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": "FlashAttentionScore,PagedAttention",
+            "MS_ALLOC_CONF": "enable_vmm:False",
         }
         env_setup(mindformers_default_env)
 
         set_context(mode=0, device_target="Ascend", max_call_depth=10000)
     else:
+        env_setup({"MS_ALLOC_CONF": "enable_vmm:False", })
         logger.info("Run with native model backend!")
 
 
