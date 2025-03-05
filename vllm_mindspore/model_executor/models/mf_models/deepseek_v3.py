@@ -124,14 +124,6 @@ class DeepseekV3ForCausalLM(MsModelBase):
                             precision_recovery=PrecisionRecovery.NONE,
                             act_quant_granularity=QuantGranularity.PER_TENSOR,
                             weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            wo_config = PTQConfig(mode=PTQMode.DEPLOY,
-                                  backend=BackendTarget.ASCEND,
-                                  weight_quant_dtype=msdtype.int8,
-                                  act_quant_dtype=msdtype.int8,
-                                  outliers_suppression=OutliersSuppressionType.NONE,
-                                  precision_recovery=PrecisionRecovery.NONE,
-                                  act_quant_granularity=QuantGranularity.PER_TENSOR,
-                                  weight_quant_granularity=QuantGranularity.PER_CHANNEL)
             ffn_config = PTQConfig(mode=PTQMode.DEPLOY,
                                    backend=BackendTarget.ASCEND,
                                    weight_quant_dtype=msdtype.int8,
@@ -141,7 +133,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
                                    act_quant_granularity=QuantGranularity.PER_TOKEN,
                                    weight_quant_granularity=QuantGranularity.PER_CHANNEL)
             ptq = PTQ(config=cfg,
-                      layer_policies=OrderedDict({r'.*\.wo.*':wo_config, r'.*\.feed_forward\..*':ffn_config}))
+                      layer_policies=OrderedDict({r'.*\.feed_forward\..*':ffn_config}))
             ptq.apply(self.network)
             ptq.convert(self.network)
 
