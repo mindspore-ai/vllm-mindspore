@@ -112,6 +112,7 @@ class Qwen2ForCausalLM(MsModelBase):
             jit_level="O0", infer_boost="on"
         ).jit_config_dict
 
+        self.mf_config.load_checkpoint = self.get_model_path()
         set_output_path(self.mf_config.output_dir)
         set_strategy_save_path(self.mf_config.parallel)
         # update safetensor path

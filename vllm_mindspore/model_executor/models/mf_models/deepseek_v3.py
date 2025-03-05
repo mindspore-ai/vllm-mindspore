@@ -98,6 +98,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
             get_tensor_model_parallel_world_size()
         )
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
+        self.mf_config.load_checkpoint = self.get_model_path()
 
         self.mf_model_config = DeepseekV3Config_MF(**self.mf_config.model.model_config)
         self.mf_model_config.num_blocks = cal_block_num(self.cache_config, self.model_config, self.parallel_config)
@@ -223,3 +224,10 @@ class DeepseekV3ForCausalLM(MsModelBase):
         )
         self.network.set_dynamic_inputs()
         return None
+
+    def get_model_path(self):
+        model_name_or_path = self.model_config.model
+        if os.path.isdir(model_name_or_path):
+            return model_name_or_path
+        else:
+            raise ValueError("The 'model' in LLM should be the local path of the MindSpore checkpoint file.")
