@@ -237,7 +237,7 @@ class Sampler(nn.Module):
         self._do_top_p_top_k = do_top_p_top_k
         self._do_min_p = do_min_p
 
-    def run_forward(
+    def forward(
         self,
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
@@ -346,13 +346,13 @@ class Sampler(nn.Module):
             on_device_tensors=on_device_tensors,
             skip_sampler_cpu_output=sampling_metadata.skip_sampler_cpu_output)
 
-    def forward(
+    def __call__(
         self,
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
         with AsyncContext() as ctx:
-            return self.run_forward(logits, sampling_metadata)
+            return self.forward(logits, sampling_metadata)
 
     @property
     def _should_modify_greedy_probs_inplace(self) -> bool:
@@ -514,7 +514,6 @@ def _random_sample(
         seq_group has do_sample=False, tuple contains ([], [])
     """
     # Find the maximum n value of the prompt phase requests.
-    random_samples = random_samples.cpu()
     sample_idx = 0
     results: SampleResultType = []
     for seq_group in selected_seq_groups:
