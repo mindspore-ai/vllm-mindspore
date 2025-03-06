@@ -273,20 +273,19 @@ class ColumnParallelLinear(LinearBase):
 
         use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
 
-        param_data = param.data
         # bitsandbytes loads the weights of the specific portion
         # no need to narrow here
         if output_dim is not None and not use_bitsandbytes_4bit:
-            shard_size = param_data.shape[output_dim]
+            shard_size = param.shape[output_dim]
             start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size)
+            loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
 
         # Special case for loading scales off disk, which often do not
         # have a shape (such as in the case of AutoFP8).
         if len(loaded_weight.shape) == 0:
             loaded_weight = loaded_weight.reshape(1)
 
-        assert param_data.shape == loaded_weight.shape
+        assert param.shape == loaded_weight.shape
         # param_data.copy_(loaded_weight)
         # param.set_data(loaded_weight)
         # param[:, start_idx:start_idx + shard_size] = loaded_weight
@@ -377,7 +376,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # bitsandbytes loads the weights of the specific portion
             # no need to narrow here
             if not use_bitsandbytes_4bit:
-                loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size)
+                loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
             assert param_data.shape == loaded_weight.shape
             # param_data.copy_(loaded_weight)
             # param_data.set_data(loaded_weight)
@@ -460,7 +459,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             start_idx = shard_id * shard_size
 
             if not use_bitsandbytes_4bit:
-                loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size)
+                loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
             assert param_data.shape == loaded_weight.shape
             if param.name.endswith("weight"):
                 self.weight[shard_offset: shard_offset + shard_size, :] = loaded_weight
@@ -528,7 +527,7 @@ class RowParallelLinear(LinearBase):
             )
 
         if bias:
-            self.bias = Parameter(mint.zeros(self.output_size), dtype=params_dtype)
+            self.bias = Parameter(mint.zeros(self.output_size, dtype=params_dtype))
             set_weight_attrs(
                 self.bias,
                 {
@@ -569,24 +568,22 @@ class RowParallelLinear(LinearBase):
 
     def weight_loader(self, param, loaded_weight):
         tp_rank = get_tensor_model_parallel_rank()
-        tp_size = get_tensor_model_parallel_world_size()
         input_dim = getattr(param, "input_dim", None)
         use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
 
-        param_data = param.data
         # bitsandbytes loads the weights of the specific portion
         # no need to narrow here
         if input_dim is not None and not use_bitsandbytes_4bit:
-            shard_size = param_data.shape[input_dim]
+            shard_size = param.shape[input_dim]
             start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(input_dim, start_idx, shard_size)
+            loaded_weight = loaded_weight.narrow(input_dim, start_idx, shard_size).contiguous()
 
         # Special case for loading scales off disk, which often do not
         # have a shape (such as in the case of AutoFP8).
         if len(loaded_weight.shape) == 0:
             loaded_weight = loaded_weight.reshape(1)
 
-        assert param_data.shape == loaded_weight.shape
+        assert param.shape == loaded_weight.shape
         # param_data.copy_(loaded_weight)
         # self.weight[:, start_idx : start_idx + shard_size] = loaded_weight
-        param.set_data(loaded_weight)
+        param.set_data(loaded_weight.contiguous())
