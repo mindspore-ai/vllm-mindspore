@@ -359,7 +359,7 @@ class VocabParallelEmbedding(nn.Cell):
                 f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}")
 
         # Copy the data.
-        loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size)
+        loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
         param[: loaded_weight.shape[0]] = loaded_weight
         param[loaded_weight.shape[0]:] = 0
 
