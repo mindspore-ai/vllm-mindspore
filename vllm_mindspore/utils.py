@@ -328,12 +328,14 @@ def check_ready():
         logger.info("Run with native model backend!")
 
 
-def cal_block_num(cache_config, model_config, parallel_config):
+def calc_block_num(cache_config, model_config, parallel_config):
     from vllm.worker.cache_engine import CacheEngine
 
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
-    _, total_gpu_memory = torch.cuda.mem_get_info()
+
+    total_gpu_memory = int(os.environ["ASCEND_TOTAL_MEMORY_GB"]) if os.getenv("ASCEND_TOTAL_MEMORY_GB") else 64
+    total_gpu_memory = total_gpu_memory * 1024 * 1024 * 1024
     memory_can_use = total_gpu_memory * cache_config.gpu_memory_utilization
 
     model_use_memory_b = int(os.getenv("vLLM_MODEL_MEMORY_USE_GB")) * 1024 * 1024 * 1024
