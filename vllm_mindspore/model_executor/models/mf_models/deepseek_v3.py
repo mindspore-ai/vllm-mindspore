@@ -49,6 +49,9 @@ from vllm_mindspore.utils import calc_block_num
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model
+from mindspore.communication.comm_func import barrier
+
+from vllm_mindspore.model_executor.models.mf_models.deepseekv3_infer_parallelism import DeepseekInferParallelism
 
 
 logger = init_logger(__name__)
@@ -105,6 +108,8 @@ class DeepseekV3ForCausalLM(MsModelBase):
         self.mf_model_config.block_size = self.cache_config.block_size
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
+
+        self.is_quant = hasattr(self.mf_config.model.model_config, "quantization_config")
 
         # Initital network
         self.network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
@@ -214,14 +219,19 @@ class DeepseekV3ForCausalLM(MsModelBase):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        model = Model(self.network)
-        batch_size = self.mf_config.model.model_config.batch_size
-        seq_length = self.mf_config.model.model_config.seq_length
-        input_ids = np.ones(shape=tuple([batch_size, seq_length]))
-        infer_data = self.network.prepare_inputs_for_predict_layout(input_ids)
-        transform_and_load_checkpoint(
-            self.mf_config, model, self.network, infer_data, do_predict=True
-        )
+        if self.mf_config.load_ckpt_format == "ckpt":
+            model = Model(self.network)
+            batch_size = self.mf_config.model.model_config.batch_size
+            seq_length = self.mf_config.model.model_config.seq_length
+            input_ids = np.ones(shape=tuple([batch_size, seq_length]))
+            infer_data = self.network.prepare_inputs_for_predict_layout(input_ids)
+            transform_and_load_checkpoint(
+                self.mf_config, model, self.network, infer_data, do_predict=True
+            )
+        else:
+            model_parallelism = DeepseekInferParallelism(self.mf_config, self.network, self.is_quant)
+            model_parallelism.infer_convert_and_parallelism(self.mf_config.load_checkpoint)
+            barrier()
         self.network.set_dynamic_inputs()
         return None
 
