@@ -44,7 +44,7 @@ from research.qwen2_5.infer.qwen2_5 import (
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
-from vllm_mindspore.utils import cal_block_num
+from vllm_mindspore.utils import calc_block_num
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model
@@ -99,7 +99,7 @@ class Qwen2ForCausalLM(MsModelBase):
 
         self.mf_model_config = LlamaConfig_MF(**self.mf_config.model.model_config)
         # Cannot get num_gpu_blocks from cache config now, calculate one first.
-        self.mf_model_config.num_blocks = cal_block_num(
+        self.mf_model_config.num_blocks = calc_block_num(
             self.cache_config, self.model_config, self.parallel_config
         )
         self.mf_model_config.block_size = self.cache_config.block_size

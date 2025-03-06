@@ -20,6 +20,8 @@
 from typing import TYPE_CHECKING, Optional
 
 import torch
+import os
+import mindspore as ms
 
 from vllm.platforms.interface import DeviceCapability, Platform, PlatformEnum, _Backend
 from vllm.logger import init_logger
@@ -129,6 +131,19 @@ class AscendPlatform(Platform):
         cache_config = vllm_config.cache_config
         if cache_config and cache_config.block_size is None:
             cache_config.block_size = 16
+
+        if os.getenv("ASCEND_TOTAL_MEMORY_GB"):
+            total_device_memory = int(os.environ["ASCEND_TOTAL_MEMORY_GB"])
+        else:
+            total_device_memory = 64
+            logger.warning(
+                "Total device memory should be set by environ 'ASCEND_TOTAL_MEMORY_GB'",
+                "please check size by cmd(npu-smi info).",
+                "For now, we will try default size(64GB) which might not be correct exactly."
+            )
+        max_device_memory_for_ms = str(total_device_memory * cache_config.gpu_memory_utilization) + 'GB'
+        ms.set_context(max_device_memory=max_device_memory_for_ms)
+        logger.info("max_device_memory for mindspore is: ", max_device_memory_for_ms)
 
     @classmethod
     def verify_quantization(cls, quant: str) -> None:

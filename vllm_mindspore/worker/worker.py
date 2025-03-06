@@ -103,13 +103,15 @@ def determine_num_available_blocks(self) -> Tuple[int, int]:
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
 
-    _, total_gpu_memory = torch.cuda.mem_get_info()
+    total_gpu_memory = int(os.environ["ASCEND_TOTAL_MEMORY_GB"]) if os.getenv("ASCEND_TOTAL_MEMORY_GB") else 64
+    total_gpu_memory = total_gpu_memory * 1024 * 1024 * 1024
 
     if os.getenv("vLLM_MODEL_MEMORY_USE_GB"):
         memory_use_for_model_run = int(os.environ["vLLM_MODEL_MEMORY_USE_GB"]) * 1024 * 1024 * 1024
     else:
         # Execute a forward pass with dummy inputs to profile the memory usage
         # of the model.
+        _, total_gpu_memory = torch.cuda.mem_get_info()
         with memory_profiling(
             baseline_memory_in_bytes=total_gpu_memory - self.init_gpu_memory,
             weights_memory_in_bytes=self.model_runner.model_memory_usage,
