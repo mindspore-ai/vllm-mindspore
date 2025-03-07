@@ -137,8 +137,8 @@ class AscendPlatform(Platform):
         else:
             total_device_memory = 64
             logger.warning(
-                "Total device memory should be set by environ 'ASCEND_TOTAL_MEMORY_GB'",
-                "please check size by cmd(npu-smi info).",
+                "Total device memory should be set by environ 'ASCEND_TOTAL_MEMORY_GB', "
+                "please check size by cmd(npu-smi info). "
                 "For now, we will try default size(64GB) which might not be correct exactly."
             )
         max_device_memory_for_ms = str(total_device_memory * cache_config.gpu_memory_utilization) + 'GB'
