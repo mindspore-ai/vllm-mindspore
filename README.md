@@ -1,4 +1,4 @@
-# vllm_mindspore
+# vllm-mindspore
 
 ## Overview
 
