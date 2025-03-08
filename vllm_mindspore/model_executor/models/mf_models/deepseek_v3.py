@@ -109,13 +109,13 @@ class DeepseekV3ForCausalLM(MsModelBase):
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
 
-        self.is_quant = hasattr(self.mf_config.model.model_config, "quantization_config")
-
+        self.is_quant = bool(hasattr(self.mf_model_config, "quantization_config") and
+                             self.mf_model_config.quantization_config)
         # Initital network
         self.network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
 
         # quant
-        if hasattr(self.mf_model_config, "quantization_config") and self.mf_model_config.quantization_config:        
+        if self.is_quant:
             from mindspore_gs.ptq import PTQ
             from mindspore_gs.ptq import PTQMode, PTQConfig, OutliersSuppressionType, PrecisionRecovery, QuantGranularity
             from mindspore_gs.common import BackendTarget
@@ -231,7 +231,6 @@ class DeepseekV3ForCausalLM(MsModelBase):
         else:
             model_parallelism = DeepseekInferParallelism(self.mf_config, self.network, self.is_quant)
             model_parallelism.infer_convert_and_parallelism(self.mf_config.load_checkpoint)
-            barrier()
         self.network.set_dynamic_inputs()
         return None
 
