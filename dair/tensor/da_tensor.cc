@@ -18,18 +18,38 @@
 #include "common/common.h"
 
 namespace tensor {
-DAContext *NewDAContext() {
+DAContext *NewDAContext(size_t deviceId, size_t memSize) {
   static DAContextManager _manager;
   for (size_t i = 0; i < DA_CONTEXT_MAX_NUM; ++i) {
     if (!_manager.used[i]) {
       _manager.used[i] = true;
-      return &_manager.context[i];
+      auto &context = _manager.context[i];
+      context.deviceId = deviceId;
+      context.memSize = memSize;
+      context.memPool = malloc(memSize);
+      LOG_OUT << "Create a new DAContext " << &context;
+      return &context;
     }
   }
+  LOG_ERROR << "Failed to create new DAContext";
   return nullptr;
 }
 
+void FreeDAContext(DAContext *context) {
+  if (context != nullptr && context->memPool != nullptr) {
+    context->deviceId = -1;
+    context->memSize = 0;
+    free(context->memPool);
+    context->memPool = nullptr;
+    LOG_OUT << "Free DAContext " << context;
+  } else {
+    LOG_ERROR << "context is null or context.memPool is null";
+    exit(EXIT_FAILURE);
+  }
+}
+
 DAGraph *NewDAGraph(DAContext *context) {
+  LOG_OUT << "Create DAGraph for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 
@@ -43,6 +63,7 @@ DAGraph *NewDAGraph(DAContext *context) {
 }
 
 DATensor *NewDATensor(DAContext *context) {
+  LOG_OUT << "Create DATensor for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 
@@ -52,12 +73,16 @@ DATensor *NewDATensor(DAContext *context) {
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
+  tensor->dim = 0;
+  tensor->shape[0] = 0;
+  tensor->type = Type_F32;
   return tensor;
 }
 
-DATensor *NewDATensor(DAContext *context, Type type, void *data, size_t dim,
-                      size_t shape[DA_TENSOR_MAX_DIM], Op op,
+DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
+                      size_t shape[DA_TENSOR_MAX_DIM], void *data, ops::Op op,
                       DATensor *input[DA_TENSOR_MAX_INPUT]) {
+  LOG_OUT << "Create DATensor for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 

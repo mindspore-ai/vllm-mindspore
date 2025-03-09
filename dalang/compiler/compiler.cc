@@ -19,6 +19,7 @@
 #include <algorithm>
 
 #include "common/common.h"
+#include "ops/ops_name.h"
 
 #undef DEBUG
 #ifndef DEBUG
@@ -146,6 +147,99 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
   return true;
 }
 
+bool Compiler::CompileGraph(StmtConstPtr stmt) {
+  CHECK_NULL(stmt);
+  LOG_OUT << ToString(stmt);
+  if (stmt->type != StmtType_Graph) {
+    return false;
+  }
+  const auto &graphStmt = stmt->stmt.Graph;
+  // Graph name.
+  ExprConstPtr name = graphStmt.name;
+  CHECK_NULL(name);
+  CHECK_NULL(name->expr.Name.identifier);
+  const auto graphName = *(name->expr.Name.identifier);
+  const auto lineno = name->lineStart;
+  // Insert graph name into the symbol table.
+  auto graphSymIndex = FindGlobalSymbolIndex(graphName);
+  if (graphSymIndex == -1) { // Not used before.
+    graphSymIndex = symbolPool(0).size();
+    symbolPool(0).emplace_back(graphName);
+  }
+  LOG_OUT << "graph name: " << graphName << ", index: " << graphSymIndex;
+
+  InstCall defineGraph = {.inst = Inst_DefineGraph,
+                          .offset = static_cast<ssize_t>(codes().size()),
+                          .lineno = lineno};
+  AddInstruction(defineGraph);
+  Code code{.type = CodeGraph, .name = graphName};
+  // Push the graph.
+  codeStack_.emplace(codes_.size());
+  codes_.emplace_back(std::move(code));
+  Code *graphCode = &codes_.back();
+  // Graph parameters.
+  LOG_OUT << "graph args len: " << graphStmt.argsLen;
+  for (size_t i = 0; i < graphStmt.argsLen; ++i) {
+    const auto &argStmt = graphStmt.args[i];
+    LOG_OUT << "graph args[" << i << "]: " << ToString(argStmt);
+    std::string argName;
+    if (argStmt->type == StmtType_Expr &&
+        argStmt->stmt.Expr.value->type == ExprType_Name) {
+      argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
+      LOG_OUT << "param: " << argName;
+      graphCode->args.emplace_back(argName);
+      graphCode->defs.emplace_back("");
+    } else if (argStmt->type == StmtType_Assign &&
+               argStmt->stmt.Assign.target->type == ExprType_Name &&
+               argStmt->stmt.Assign.value->type == ExprType_Literal) {
+      argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
+      const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
+      const auto &defaultParam = *literal.value;
+      LOG_OUT << "default param: " << argName << ": " << defaultParam;
+      graphCode->args.emplace_back(argName);
+      graphCode->defs.emplace_back(defaultParam);
+    } else {
+      CompileMessage(parser_->filename(), lineno, name->columnStart,
+                     "error: invalid graph parameters.");
+      exit(EXIT_FAILURE);
+    }
+    // Add graph arguments name at the front of symbol pool.
+    const auto index = FindSymbolIndex(argName);
+    if (index == -1) { // Not used before.
+      LOG_OUT << "arg name: " << argName
+              << ", offset: " << graphCode->symbols.size();
+      symbolPool(CurrentCodeIndex()).emplace_back(argName);
+    } else {
+      CompileMessage(parser_->filename(), lineno, name->columnStart,
+                     "error: invalid graph parameter[" + std::to_string(i) +
+                         "]: " + argName + ", already defined before.");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  // Graph body.
+  LOG_OUT << "graph body len: " << graphStmt.len;
+  for (size_t i = 0; i < graphStmt.len; ++i) {
+    const auto &stmt = graphStmt.body[i];
+    CallStmtHandler(stmt);
+    LOG_OUT << "graph body[" << i << "]: " << ToString(stmt);
+  }
+  // Make extra return if no explicit return.
+  if (lastInst_.inst != Inst_ReturnVal) {
+    InstCall ret = {.inst = Inst_ReturnVal,
+                    .offset = -1, // offset is not 0, means return void.
+                    .lineno = lineno};
+    AddInstruction(ret);
+  }
+  codeStack_.pop();
+
+  // Store the graph with name.
+  InstCall storeGraph = {
+      .inst = Inst_StoreGlobal, .offset = graphSymIndex, .lineno = lineno};
+  AddInstruction(storeGraph);
+  return true;
+}
+
 bool Compiler::CompileFunction(StmtConstPtr stmt) {
   CHECK_NULL(stmt);
   LOG_OUT << ToString(stmt);
@@ -171,7 +265,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
                          .offset = static_cast<ssize_t>(codes().size()),
                          .lineno = lineno};
   AddInstruction(defineFunc);
-  Code code{.name = funcName};
+  Code code{.type = CodeFunction, .name = funcName};
   // Push the function.
   codeStack_.emplace(codes_.size());
   codes_.emplace_back(std::move(code));
@@ -254,7 +348,7 @@ bool Compiler::CompileBlock(StmtConstPtr stmt) {
 #if 0
   // Push the block code.
   auto codeIndex = codes_.size();
-  Code code{.name = "block{#" + std::to_string(codeIndex) + "}"};
+  Code code{.type = CodeBlock, .name = "block{#" + std::to_string(codeIndex) + "}"};
   codeStack_.emplace(codes_.size());
   codes_.emplace_back(std::move(code));
 #endif
@@ -532,31 +626,78 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
   // Not CallExprHandler(expr->expr.Call.function) to LoadLocal, but LoadGlobal
   // for function name.
   const auto &funcNameExpr = expr->expr.Call.function;
-  if (funcNameExpr->type != ExprType_Name) {
-    return false;
-  }
-  const auto &funcName = *funcNameExpr->expr.Name.identifier;
-  const auto lineno = funcNameExpr->lineStart;
-  const auto index = FindGlobalSymbolIndex(funcName);
-  InstCall loadFunc = {
-      .inst = Inst_LoadGlobal,
-      .offset =
-          (index == -1 ? static_cast<ssize_t>(symbolPool(0).size()) : index),
-      .lineno = lineno};
-  if (index == -1) { // Not used before.
-    symbolPool(0).emplace_back(funcName);
-  }
-  LOG_OUT << "funcName: " << funcName << ", index: " << loadFunc.offset;
-  AddInstruction(loadFunc);
+  if (funcNameExpr->type == ExprType_Name) {
+    const auto &funcName = *funcNameExpr->expr.Name.identifier;
+    const auto lineno = funcNameExpr->lineStart;
+    const auto index = FindGlobalSymbolIndex(funcName);
+    if (index < intrinsicSize_) { // Call intrinsic.
+      InstCall loadIntrinsic = {
+          .inst = Inst_LoadIntrin, .offset = index, .lineno = lineno};
+      LOG_OUT << "intrinsic name: " << funcName
+              << ", index: " << loadIntrinsic.offset;
+      AddInstruction(loadIntrinsic);
 
-  CallExprHandler(expr->expr.Call.list);
-  const auto argsLen = expr->expr.Call.list->expr.List.len;
-  InstCall call = {
-      .inst = Inst_CallFunc,
-      .offset = static_cast<ssize_t>(argsLen), // Set arguments size as offset.
-      .lineno = expr->lineStart};
-  AddInstruction(call);
-  return true;
+      CallExprHandler(expr->expr.Call.list);
+      const auto argsLen = expr->expr.Call.list->expr.List.len;
+      InstCall call = {.inst = Inst_CallIntrin,
+                       .offset = static_cast<ssize_t>(
+                           argsLen), // Set arguments size as offset.
+                       .lineno = expr->lineStart};
+      AddInstruction(call);
+      return true;
+    } else { // Call function or graph.
+      InstCall loadFunc = {
+          .inst = Inst_LoadGlobal,
+          .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(0).size())
+                                 : index),
+          .lineno = lineno};
+      if (index == -1) { // Not used before.
+        symbolPool(0).emplace_back(funcName);
+      }
+      LOG_OUT << "function name: " << funcName
+              << ", index: " << loadFunc.offset;
+      AddInstruction(loadFunc);
+
+      CallExprHandler(expr->expr.Call.list);
+      const auto argsLen = expr->expr.Call.list->expr.List.len;
+      InstCall call = {.inst = Inst_DoCall,
+                       .offset = static_cast<ssize_t>(
+                           argsLen), // Set arguments size as offset.
+                       .lineno = expr->lineStart};
+      AddInstruction(call);
+      return true;
+    }
+  } else if (funcNameExpr->type == ExprType_Attribute) {
+    LOG_OUT << "Call attribute, " << ToString(funcNameExpr);
+    const auto entity = funcNameExpr->expr.Attribute.entity;
+    const auto attr = funcNameExpr->expr.Attribute.attribute;
+    if (entity->type == ExprType_Name && attr->type == ExprType_Name) {
+      const auto &opsName = *entity->expr.Name.identifier;
+      if (opsName == ToStr(KwId_ops)) {
+        // Support ops.xxx for tensor operations.
+        const auto &opName = *attr->expr.Name.identifier;
+        LOG_OUT << "Call ops." << opName;
+
+        // const auto opSym = opsName + '.' + opName;
+        const auto lineno = funcNameExpr->lineStart;
+        const auto index = ops::MatchOp(opName.c_str());
+        InstCall loadOps = {
+            .inst = Inst_LoadOps, .offset = index, .lineno = lineno};
+        LOG_OUT << "Op: " << opName << ", index: " << loadOps.offset;
+        AddInstruction(loadOps);
+
+        CallExprHandler(expr->expr.Call.list);
+        const auto argsLen = expr->expr.Call.list->expr.List.len;
+        InstCall call = {.inst = Inst_CallOps,
+                         .offset = static_cast<ssize_t>(
+                             argsLen), // Set arguments size as offset.
+                         .lineno = expr->lineStart};
+        AddInstruction(call);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 bool Compiler::CompileName(ExprConstPtr expr) {
@@ -668,7 +809,20 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
 void Compiler::Init() {
   InitCompileHandlers();
   codeStack_.emplace(codes_.size());
-  codes_.emplace_back(Code{.name = parser_->filename()});
+  codes_.emplace_back(Code{.type = CodeModule,
+                           .name = parser_->filename()}); // Preset module code.
+
+  // Preset intrinsic symbols in global symbol pool for
+  // bool/int/float/str/tensor, and so on.
+  symbolPool(0).emplace_back(ToStr(LiteralId_bool));
+  symbolPool(0).emplace_back(ToStr(LiteralId_int));
+  symbolPool(0).emplace_back(ToStr(LiteralId_float));
+  symbolPool(0).emplace_back(ToStr(LiteralId_str));
+  symbolPool(0).emplace_back(ToStr(LiteralId_list));
+  symbolPool(0).emplace_back(ToStr(LiteralId_set));
+  symbolPool(0).emplace_back(ToStr(LiteralId_dict));
+  symbolPool(0).emplace_back(ToStr(LiteralId_tensor));
+  intrinsicSize_ = symbolPool(0).size();
 }
 
 void Compiler::Dump() {
@@ -726,7 +880,9 @@ void Compiler::Dump() {
         break;
       }
       case Inst_LoadGlobal:
-      case Inst_StoreGlobal: {
+      case Inst_StoreGlobal:
+      case Inst_LoadIntrin:
+      case Inst_LoadOps: {
         std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
         break;
       }

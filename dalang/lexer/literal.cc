@@ -22,13 +22,13 @@
 
 namespace lexer {
 #define TYPE(T) #T,
-const char *_types_str[] = {
+const char *_typesStr[] = {
 #include "literal_type.list"
     "End",
 };
 #undef TYPE
 
-const char *ToStr(LtId ltid) { return _types_str[ltid]; }
+const char *ToStr(LtId ltid) { return _typesStr[ltid]; }
 
 std::unordered_set<char> _decimal = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -57,8 +57,8 @@ int Char2Int(char c) {
 
 size_t StartsWithLiteralType(const char *literal, size_t *count) {
   for (size_t i = 0; i < LiteralId_End; ++i) {
-    if (strstr(literal, _types_str[i]) == literal) {
-      *count = strlen(_types_str[i]);
+    if (strstr(literal, _typesStr[i]) == literal) {
+      *count = strlen(_typesStr[i]);
       return i;
     }
   }

@@ -137,7 +137,11 @@ ExprPtr Parser::ParseUnary() { return ParseCallAndAttribute(); }
 ExprPtr Parser::ParseCallAndAttribute() {
   ExprPtr expr = ParseIdentifier();
   if (expr == nullptr) {
-    expr = ParseGroup();
+    expr = ParseList();
+    if (expr != nullptr) {
+      return expr;
+    }
+    expr = ParseTensor();
     if (expr != nullptr) {
       return expr;
     }
@@ -177,7 +181,7 @@ ExprPtr Parser::ParseCall(ExprPtr func) {
   }
   // If continuous call. such as [func][list]...[list]
   for (EVER) {
-    ExprPtr group = ParseGroup();
+    ExprPtr group = ParseList();
     if (group == nullptr) {
       return func;
     }
@@ -185,17 +189,17 @@ ExprPtr Parser::ParseCall(ExprPtr func) {
   }
 }
 
-ExprPtr Parser::ParseGroup() {
-  if (ExprPattern::GroupPattern::Match(CurrentToken())) {
+ExprPtr Parser::ParseList() {
+  if (ExprPattern::ListPattern::Match(CurrentToken())) {
     Exprs elements;
-    if (ExprPattern::GroupPattern::MatchStart(CurrentToken())) {
+    if (ExprPattern::ListPattern::MatchStart(CurrentToken())) {
       TokenConstPtr start = GetToken(); // (
       ExprPtr expr = ParseExpr();
       if (expr != nullptr) { // Not empty list.
         // The first element.
         (void)elements.emplace_back(expr);
 
-        while (ExprPattern::GroupPattern::MatchSplit(CurrentToken())) {
+        while (ExprPattern::ListPattern::MatchSplit(CurrentToken())) {
           RemoveToken(); // ,
           // The middle and last elements.
           expr = ParseExpr();
@@ -211,10 +215,51 @@ ExprPtr Parser::ParseGroup() {
           }
         }
       }
-      if (ExprPattern::GroupPattern::MatchEnd(CurrentToken())) {
+      if (ExprPattern::ListPattern::MatchEnd(CurrentToken())) {
         TokenConstPtr end = GetToken(); // )
         return MakeListExpr(start, end, elements);
       } else { // Abnormal group expression.
+        std::stringstream ss;
+        ss << "warning: invalid list ending. unrecognized token: ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+  return nullptr;
+}
+
+ExprPtr Parser::ParseTensor() {
+  if (ExprPattern::TensorPattern::Match(CurrentToken())) {
+    Exprs elements;
+    if (ExprPattern::TensorPattern::MatchStart(CurrentToken())) {
+      TokenConstPtr start = GetToken(); // [
+      ExprPtr expr = ParseExpr();
+      if (expr != nullptr) { // Not empty list.
+        // The first element.
+        (void)elements.emplace_back(expr);
+
+        while (ExprPattern::TensorPattern::MatchSplit(CurrentToken())) {
+          RemoveToken(); // ,
+          // The middle and last elements.
+          expr = ParseExpr();
+          if (expr != nullptr) {
+            (void)elements.emplace_back(expr);
+          } else { // Abnormal group expression.
+            std::stringstream ss;
+            ss << "warning: invalid list. unexcepted token: ";
+            ss << (Finish() ? ToString(PreviousToken())
+                            : ToString(CurrentToken()));
+            CompileMessage(LineString(), ss.str());
+            exit(EXIT_FAILURE);
+          }
+        }
+      }
+      if (ExprPattern::TensorPattern::MatchEnd(CurrentToken())) {
+        TokenConstPtr end = GetToken(); // ]
+        return MakeTensorExpr(start);   // TODO: parse const tensor later.
+      } else {                          // Abnormal group expression.
         std::stringstream ss;
         ss << "warning: invalid list ending. unrecognized token: ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
@@ -250,6 +295,9 @@ ExprPtr Parser::ParseIdentifier() {
     return MakeNameExpr(GetToken());
   }
   if (ExprPattern::PrimaryPattern::MatchKeywordThis(CurrentToken())) {
+    return MakeNameExpr(GetToken());
+  }
+  if (ExprPattern::PrimaryPattern::MatchKeywordOps(CurrentToken())) {
     return MakeNameExpr(GetToken());
   }
   return nullptr;
@@ -319,7 +367,70 @@ StmtPtr Parser::ParseReturn() {
   return nullptr;
 }
 
-Stmts Parser::ParserFunctionArgs() {
+Stmts Parser::ParseGraphArgs() {
+  Stmts args;
+  // (
+  if (StmtPattern::GraphPattern::MatchArgsStart(CurrentToken())) {
+    RemoveToken(); // (
+    for (EVER) {
+      StmtPtr arg = ParseAssign();
+      if (arg == nullptr) {
+        arg = ParseStmtExpr();
+      }
+      if (arg != nullptr) {
+        (void)args.emplace_back(arg);
+      }
+      // )
+      if (StmtPattern::GraphPattern::MatchArgsEnd(CurrentToken())) {
+        RemoveToken(); // )
+        break;
+      }
+      // ,
+      if (!StmtPattern::GraphPattern::MatchArgsSeparator(CurrentToken())) {
+        std::stringstream ss;
+        ss << "warning: invalid function arguments, expected ',' or ')': ";
+        ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+        CompileMessage(LineString(), ss.str());
+        exit(EXIT_FAILURE);
+      }
+      RemoveToken(); // ,
+    }
+  }
+  return args;
+}
+
+StmtPtr Parser::ParseGraphDef() {
+  // function
+  if (StmtPattern::GraphPattern::Match(CurrentToken())) {
+    RemoveToken(); // function
+    ExprConstPtr id = ParseIdentifier();
+    Stmts args = ParseGraphArgs();
+    // {
+    if (!StmtPattern::GraphPattern::MatchBodyStart(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid graph definition, expected '{': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(EXIT_FAILURE);
+    }
+    RemoveToken(); // {
+    Stmts stmts;
+    (void)ParseStmts(&stmts); // Not check result.
+    // }
+    if (!StmtPattern::GraphPattern::MatchBodyEnd(CurrentToken())) {
+      std::stringstream ss;
+      ss << "warning: invalid graph definition, expected '}': ";
+      ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
+      CompileMessage(LineString(), ss.str());
+      exit(EXIT_FAILURE);
+    }
+    RemoveToken(); // }
+    return MakeGraphStmt(id, args, stmts);
+  }
+  return nullptr;
+}
+
+Stmts Parser::ParseFunctionArgs() {
   Stmts args;
   // (
   if (StmtPattern::FunctionPattern::MatchArgsStart(CurrentToken())) {
@@ -356,7 +467,7 @@ StmtPtr Parser::ParseFunctionDef() {
   if (StmtPattern::FunctionPattern::Match(CurrentToken())) {
     RemoveToken(); // function
     ExprConstPtr id = ParseIdentifier();
-    Stmts args = ParserFunctionArgs();
+    Stmts args = ParseFunctionArgs();
     // {
     if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken())) {
       std::stringstream ss;
@@ -635,6 +746,11 @@ StmtPtr Parser::ParserCode() {
   }
   // Function definition.
   stmt = ParseFunctionDef();
+  if (stmt != nullptr || Finish()) {
+    return stmt;
+  }
+  // Graph definition.
+  stmt = ParseGraphDef();
   if (stmt != nullptr || Finish()) {
     return stmt;
   }

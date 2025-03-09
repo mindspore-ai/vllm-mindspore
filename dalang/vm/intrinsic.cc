@@ -1,5 +1,5 @@
 /**
- * Copyright 2024 Zhang Qinghua
+ * Copyright 2025 Zhang Qinghua
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,6 @@
  * limitations under the License.
  */
 
-STMT(Module)
-STMT(Expr)
-STMT(Assign)
-STMT(AugAssign)
-STMT(Return)
-STMT(Graph)
-STMT(Function)
-STMT(Class)
-STMT(Block)
-STMT(If)
-STMT(While)
-STMT(For)
-STMT(Break)
-STMT(Continue)
-STMT(Pass)
-STMT(Import)
-STMT(StdCin)
-STMT(StdCout)
+#include "vm/intrinsic.h"
+
+namespace intrinsic {} // namespace intrinsic

@@ -1,0 +1,23 @@
+#!dalang
+
+graph net(x, y) {
+    z = ops.matmul(x, y)
+    return ops.add(z, z)
+}
+
+function main() {
+    #a = int(0)
+    a = 0 : int
+    b = 1
+    if a > b {
+        <: 'error' <: '\n'
+    }
+    return net([2], [3])
+    #x = [2]
+    #y = [3]
+    #return net(x, y)
+}
+
+<: 'fib:\n'
+<: main()
+<: '\n'

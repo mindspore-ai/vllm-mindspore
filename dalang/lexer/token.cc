@@ -22,7 +22,7 @@
 
 namespace lexer {
 #define TOKEN(T) #T,
-const char *_tokens_str[] = {
+const char *_tokensStr[] = {
 #include "token_type.list"
     "ContStr",
     "InvalidStr"
@@ -34,7 +34,7 @@ const char *ToStr(TokenConstPtr token) {
   if (token == nullptr) {
     return "Token[null]";
   }
-  return _tokens_str[token->type];
+  return _tokensStr[token->type];
 }
 
 std::string ToString(TokenConstPtr token) {

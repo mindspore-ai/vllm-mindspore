@@ -16,6 +16,5 @@ fi
 
 cd $BUILD_DIR
 cmake ..
-#make clean
+make clean
 make
-

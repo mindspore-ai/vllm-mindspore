@@ -21,18 +21,23 @@ INSTRUCTION(LoadLocal)   // Load a value by offset in the function namespace.
 INSTRUCTION(StoreLocal)  // Store the value by offset in the function namespace.
 INSTRUCTION(LoadGlobal)  // Load a value by offset in global namespace.
 INSTRUCTION(StoreGlobal) // Store the value by offset in global namespace.
+INSTRUCTION(LoadIntrin)  // Load an intrinsic by offset.
+INSTRUCTION(LoadOps)     // Load an ops by offset.
 INSTRUCTION(PopTop)      // Pop up the top from the stack.
 INSTRUCTION(BinaryAdd)   // Do binary add operation.
 INSTRUCTION(BinarySub)   // Do binary sub operation.
 INSTRUCTION(BinaryMul)   // Do binary mul operation.
 INSTRUCTION(BinaryDiv)   // Do binary div operation.
-INSTRUCTION(CallFunc)   // Call function with new frame, and bind the arguments.
-INSTRUCTION(ReturnVal)  // Return the value to caller frame.
-INSTRUCTION(DefineFunc) // Make a new function with context.
-INSTRUCTION(EnterBlock) // Enter a block with context.
-INSTRUCTION(Compare)    // Compare two operand by ==, !=, >, <, >=, or <=.
-INSTRUCTION(JumpTrue)   // Jump to offset if the condition is true.
-INSTRUCTION(JumpFalse)  // Jump to offset if the condition is false.
-INSTRUCTION(Jump)       // Jump by offset unconditionally.
-INSTRUCTION(StdCin)     // Input from standard input stream.
-INSTRUCTION(StdCout)    // Output to standard output stream.
+INSTRUCTION(DoCall)      // Call function or graph in new frame.
+INSTRUCTION(CallIntrin)  // Call intrinsic. Like Call.
+INSTRUCTION(CallOps)     // Call ops. Like Call.
+INSTRUCTION(ReturnVal)   // Return the value to caller frame.
+INSTRUCTION(DefineFunc)  // Make a new function with context.
+INSTRUCTION(DefineGraph) // Make a new graph with context.
+INSTRUCTION(EnterBlock)  // Enter a block with context.
+INSTRUCTION(Compare)     // Compare two operand by ==, !=, >, <, >=, or <=.
+INSTRUCTION(JumpTrue)    // Jump to offset if the condition is true.
+INSTRUCTION(JumpFalse)   // Jump to offset if the condition is false.
+INSTRUCTION(Jump)        // Jump by offset unconditionally.
+INSTRUCTION(StdCin)      // Input from standard input stream.
+INSTRUCTION(StdCout)     // Output to standard output stream.

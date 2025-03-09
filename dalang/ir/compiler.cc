@@ -66,6 +66,11 @@ NsPtr Compiler::CompileReturn(NsConstPtr ns, StmtConstPtr stmt) {
   return nullptr;
 }
 
+NsPtr Compiler::CompileGraph(NsConstPtr ns, StmtConstPtr stmt) {
+  LOG_OUT << ToString(stmt);
+  return nullptr;
+}
+
 NsPtr Compiler::CompileFunction(NsConstPtr ns, StmtConstPtr stmt) {
   LOG_OUT << ToString(stmt);
   FuncPtr func = NewFunc();

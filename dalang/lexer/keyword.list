@@ -35,3 +35,5 @@ KEYWORD(try)
 KEYWORD(throw)
 KEYWORD(catch)
 KEYWORD(yield)
+KEYWORD(graph)
+KEYWORD(ops) // Operators

@@ -49,6 +49,12 @@ public:
       Visit(stmt->stmt.AugAssign.value);
       break;
     }
+    case StmtType_Graph: {
+      Visit(stmt->stmt.Graph.name);
+      VisitList(stmt->stmt.Graph.argsLen, stmt->stmt.Graph.args);
+      VisitList(stmt->stmt.Graph.len, stmt->stmt.Graph.body);
+      break;
+    }
     case StmtType_Function: {
       Visit(stmt->stmt.Function.name);
       VisitList(stmt->stmt.Function.argsLen, stmt->stmt.Function.args);

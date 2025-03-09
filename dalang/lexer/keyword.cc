@@ -41,11 +41,11 @@ Token TraverseKwTable(const char *start) {
 }
 
 #define KEYWORD(T) #T,
-const char *_keywords_str[] = {
+const char *_keywordsStr[] = {
 #include "keyword.list"
     "End",
 };
 #undef KEYWORD
 
-const char *ToStr(KwId kwid) { return _keywords_str[kwid]; }
+const char *ToStr(KwId kwid) { return _keywordsStr[kwid]; }
 } // namespace lexer

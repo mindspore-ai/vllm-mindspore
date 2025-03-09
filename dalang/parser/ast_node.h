@@ -86,6 +86,13 @@ typedef struct StmtNode {
       StmtConstPtr *args{nullptr};
       size_t len{0};
       StmtConstPtr *body{nullptr};
+    } Graph;
+    struct {
+      ExprConstPtr name{nullptr};
+      size_t argsLen{0};
+      StmtConstPtr *args{nullptr};
+      size_t len{0};
+      StmtConstPtr *body{nullptr};
     } Function;
     struct {
       ExprConstPtr name{nullptr};

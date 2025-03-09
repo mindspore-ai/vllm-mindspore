@@ -16,8 +16,11 @@
 
 #include "vm/vm.h"
 
-#include "common/common.h"
 #include <algorithm>
+#include <functional>
+
+#include "common/common.h"
+#include "vm/intrinsic.h"
 
 #undef DEBUG
 #ifndef DEBUG
@@ -90,6 +93,12 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
     slot.value.str_ = strPtr;
     return slot;
   }
+  case ConstType_tensor: {
+    slot.type = SlotTensor;
+    slot.value.tensor_ =
+        nullptr; // TODO: convert string value to tensor value later.
+    return slot;
+  }
   default:
     throw std::runtime_error("Unexcepted constant");
   }
@@ -125,7 +134,7 @@ void VM::InstLoadName(ssize_t offset) {
 // Store a slot by name for latish load.
 void VM::InstStoreName(ssize_t offset) {
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(), "error: stack is empty.");
+    CompileMessage(LineString(), "error: stack is empty.\nfail to store name.");
     exit(EXIT_FAILURE);
   }
   const auto &name = LocalSyms()[offset];
@@ -161,7 +170,8 @@ void VM::InstLoadLocal(ssize_t offset) {
 // Store a slot by offset for latish load.
 void VM::InstStoreLocal(ssize_t offset) {
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(), "error: stack is empty.");
+    CompileMessage(LineString(),
+                   "error: stack is empty.\nfail to store local.");
     exit(EXIT_FAILURE);
   }
   LocalVars()[offset] = std::move(CurrentStack().back());
@@ -171,7 +181,8 @@ void VM::InstStoreLocal(ssize_t offset) {
 // Load a value by offset which stored before.
 void VM::InstLoadGlobal(ssize_t offset) {
   const auto &name = GlobalSyms()[offset];
-  LOG_OUT << "offset: " << offset << ", name: " << name;
+  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size()
+          << ", name: " << name;
   auto *slot = &GlobalVars()[offset];
   LOG_OUT << "load: " << ToString(*slot);
   CurrentStack().emplace_back(*slot);
@@ -182,11 +193,60 @@ void VM::InstStoreGlobal(ssize_t offset) {
   const auto &name = GlobalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(), "error: stack is empty.");
+    CompileMessage(LineString(),
+                   "error: stack is empty.\nfail to store global.");
     exit(EXIT_FAILURE);
   }
   GlobalVars()[offset] = std::move(CurrentStack().back());
   CurrentStack().pop_back();
+}
+
+// Load an intrinsic by offset.
+void VM::InstLoadIntrin(ssize_t offset) {
+  const auto &name = GlobalSyms()[offset];
+  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size()
+          << ", name: " << name;
+  Slot intrinSlot{.type = SlotIntrinsic};
+  switch (offset) {
+  case LiteralId_bool: {
+    break;
+  }
+  case LiteralId_int: {
+    break;
+  }
+  case LiteralId_float: {
+    break;
+  }
+  case LiteralId_str: {
+    break;
+  }
+  case LiteralId_list: {
+    break;
+  }
+  case LiteralId_set: {
+    break;
+  }
+  case LiteralId_dict: {
+    break;
+  }
+  case LiteralId_tensor: {
+    intrinSlot.value.intr = intrinsic::IntrisicType_tensor;
+    break;
+  }
+  default:
+    break;
+  }
+
+  CurrentStack().emplace_back(std::move(intrinSlot));
+}
+
+// Load an ops by offset.
+void VM::InstLoadOps(ssize_t offset) {
+  const auto &name = ops::ToStr((ops::Op)offset);
+  LOG_OUT << "offset: " << offset << ", name: " << name;
+  Slot opsSlot{.type = SlotOps};
+  opsSlot.value.op = (ops::Op)offset;
+  CurrentStack().emplace_back(std::move(opsSlot));
 }
 
 // Just pop up the top slot.
@@ -196,7 +256,7 @@ void VM::InstPopTop(ssize_t offset) {
                                      : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(), "error: stack is empty.");
+    CompileMessage(LineString(), "error: stack is empty.\nfail to pop top.");
     exit(EXIT_FAILURE);
   }
   CurrentStack().pop_back();
@@ -207,10 +267,10 @@ BINARY_OP(Sub, -) // VM::InstBinarySub
 BINARY_OP(Mul, *) // VM::InstBinaryMul
 BINARY_OP(Div, /) // VM::InstBinaryDiv
 
-// Call a function by function slot and argument slots, and create a new
-// frame. The first(reverse stack) slot is function object created by
-// DefineFunc instruction. The left slot is arguments.
-void VM::InstCallFunc(ssize_t offset) {
+// Call a function or graph by function/graph slot and argument slots, and
+// create a new frame. The first(reverse stack) slot is function/graph object
+// created by DefineFunc/DefineGraph instruction. The left slot is arguments.
+void VM::InstDoCall(ssize_t offset) {
   if (CurrentStack().size() < 1) {
     CompileMessage(filename(), 0, 0,
                    "error: invalid function. stack size: " +
@@ -236,22 +296,31 @@ void VM::InstCallFunc(ssize_t offset) {
   const auto &funcNameSlot = *(CurrentStack().crbegin() + argsSize);
 #endif
 
-  // Get callee function information.
+  // Get callee function/graph information.
   const auto codeIndex = funcNameSlot.value.offset;
-  const auto &func = codes()[codeIndex];
-  LOG_OUT << "offset: " << offset << ", name: " << func.name
-          << ", id: " << frames_.size();
-  // Create new function frame in advance.
-  auto newFuncFrame = Frame{.type = FrameFunction,
+  const auto &callCode = codes()[codeIndex];
+  LOG_OUT << "offset: " << offset << ", type: " << callCode.type
+          << ", name: " << callCode.name << ", id: " << frames_.size();
+
+  // If call a graph.
+  if (callCode.type == CodeGraph) {
+    std::cout << "#DAGraph: " << callCode.name << std::endl;
+    graphExecutor_.BeginGraph();
+  }
+
+  // Create new function/graph frame in advance.
+  auto newFuncFrame = Frame{.type = callCode.type,
                             .code = funcNameSlot.value.offset,
-                            .vars = std::vector<Slot>{func.symbols.size()}};
+                            .vars = std::vector<Slot>{callCode.symbols.size()}};
 
   if (argsSize > 0) { // Has arguments.
     // To bind the arguments and parameters.
-    auto paramsSize = func.args.size();
+    auto paramsSize = callCode.args.size();
     if (argsSize > paramsSize) {
       std::stringstream ss;
-      ss << "error: function arguments size(" << argsSize
+      ss << "error: ";
+      ss << (callCode.type == CodeGraph ? "graph" : "function");
+      ss << " arguments size(" << argsSize
          << ") should not exceed parameters size(" << paramsSize << ").";
       CompileMessage(filename(), 0, 0, ss.str());
       exit(EXIT_FAILURE);
@@ -262,7 +331,7 @@ void VM::InstCallFunc(ssize_t offset) {
     for (size_t i = 0; i < argsSize; ++i) {
       const auto &arg = CurrentStack()[argStartIndex + i];
 #if 0
-      newFuncFrame.names[func.args[i]] = std::move(arg);
+      newFuncFrame.names[callCode.args[i]] = std::move(arg);
 #else
       LOG_OUT << "vars offset: " << i << ", name: " << code().symbols[i]
               << ", arg: " << ToString(arg) << ", the same as StoreLocal.";
@@ -277,18 +346,105 @@ void VM::InstCallFunc(ssize_t offset) {
     // Append default parameters in callee names map.
     if (argsSize < paramsSize) {
       // for (size_t i = argsSize; i < paramsSize; ++i) {
-      //   names()[func.args[i]] = std::move(Slot{.type=SlotInt,
-      //   .value.int_=func.defs[i]});
+      //   names()[callCode.args[i]] = std::move(Slot{.type=SlotInt,
+      //   .value.int_=callCode.defs[i]});
       // }
       LOG_ERROR << "Not support default parameter by now";
     }
   }
-  // Erase the function.
+  // Erase the function/graph.
   CurrentStack().pop_back();
 
-  // Push a new frame for function call.
+  // Push a new frame for function/graph call.
   frames_.emplace_back(std::move(newFuncFrame));
   frame_ = &frames_.back();
+}
+
+// Call an intrinsic.
+void VM::InstCallIntrin(ssize_t offset) {
+  if (CurrentStack().size() < 1) {
+    CompileMessage(filename(), 0, 0,
+                   "error: invalid intrinsic call. stack size: " +
+                       std::to_string(CurrentStack().size()));
+    exit(EXIT_FAILURE);
+  }
+  const auto argsSize = static_cast<size_t>(offset);
+  const auto &intrinsicSlot = *(CurrentStack().crbegin() + argsSize);
+
+  switch (intrinsicSlot.value.intr) {
+  case intrinsic::IntrisicType_bool: {
+    break;
+  }
+  case intrinsic::IntrisicType_int: {
+    break;
+  }
+  case intrinsic::IntrisicType_float: {
+    break;
+  }
+  case intrinsic::IntrisicType_str: {
+    break;
+  }
+  case intrinsic::IntrisicType_list: {
+    break;
+  }
+  case intrinsic::IntrisicType_set: {
+    break;
+  }
+  case intrinsic::IntrisicType_dict: {
+    break;
+  }
+  case intrinsic::IntrisicType_tensor: {
+    auto tensor = graphExecutor_.AddTensor();
+    Slot tensorSlot{.type = SlotTensor};
+    tensorSlot.value.addr = tensor;
+    CurrentStack().emplace_back(std::move(tensorSlot));
+    break;
+  }
+  default:
+    LOG_ERROR << "invalid intrinsic.";
+    exit(EXIT_FAILURE);
+  }
+
+  if (argsSize > 0) { // Has arguments.
+    // Erase all arguments.
+    auto argStartIndex = CurrentStack().size() - argsSize;
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
+                         CurrentStack().end());
+  }
+  // Erase the intrinsic self.
+  CurrentStack().pop_back();
+  LOG_OUT << "Call intrisic.";
+}
+
+// Call an ops.xxx.
+void VM::InstCallOps(ssize_t offset) {
+  if (CurrentStack().size() < 1) {
+    CompileMessage(filename(), 0, 0,
+                   "error: invalid ops call. stack size: " +
+                       std::to_string(CurrentStack().size()));
+    exit(EXIT_FAILURE);
+  }
+
+  const auto argsSize = static_cast<size_t>(offset);
+  const auto &opsNameSlot = *(CurrentStack().crbegin() + argsSize);
+
+  // Call an op.
+  std::cout << "  #call ops." << ops::ToStr(opsNameSlot.value.op) << std::endl;
+
+  if (argsSize > 0) { // Has arguments.
+    // Erase all arguments.
+    auto argStartIndex = CurrentStack().size() - argsSize;
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
+                         CurrentStack().end());
+  }
+  // Erase the op self.
+  CurrentStack().pop_back();
+
+  // TODO: Remove later, just for test.
+  LOG_OUT << "Call ops";
+  Slot fakeSlot{.type = SlotInt};
+  fakeSlot.value.int_ = -1;
+  CurrentStack().emplace_back(std::move(fakeSlot));
 }
 
 // Return the top slot to previous frame.
@@ -341,6 +497,16 @@ void VM::InstDefineFunc(ssize_t offset) {
   CurrentStack().emplace_back(std::move(funcSlot));
 }
 
+// Make a graph object slot and push into the stack.
+// Usually, a StoreName instruction is followed, to bind a graph name.
+void VM::InstDefineGraph(ssize_t offset) {
+  const auto &graph = codes()[offset];
+  LOG_OUT << "offset: " << offset << ", graph: " << graph.name;
+  Slot graphSlot{.type = SlotGraph};
+  graphSlot.value.offset = offset;
+  CurrentStack().emplace_back(std::move(graphSlot));
+}
+
 // Push a new frame for block.
 // The code of block can be accessed by offset.
 void VM::InstEnterBlock(ssize_t offset) {
@@ -349,7 +515,7 @@ void VM::InstEnterBlock(ssize_t offset) {
 
 #if 0
   // Create new frame for block.
-  auto blockFrame = Frame{.type = FrameBlock,
+  auto blockFrame = Frame{.type = CodeBlock,
                           .code = static_cast<size_t>(offset),
                           .vars = std::vector<Slot>{block.symbols.size()}};
   // Push a new frame for function call.
@@ -589,7 +755,7 @@ void VM::Run() {
     LOG_ERROR << "no code exits";
     exit(EXIT_FAILURE);
   }
-  auto topFrame = Frame{.type = FrameModule,
+  auto topFrame = Frame{.type = CodeModule,
                         .code = 0,
                         .vars = std::vector<Slot>{codes()[0].symbols.size()}};
   frames_.emplace_back(std::move(topFrame));

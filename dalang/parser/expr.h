@@ -130,7 +130,7 @@ static inline bool Match(TokenConstPtr token) {
 }
 } // namespace AttributePattern
 
-namespace GroupPattern {
+namespace ListPattern {
 static inline bool MatchStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
@@ -172,7 +172,51 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace GroupPattern
+} // namespace ListPattern
+
+namespace TensorPattern {
+static inline bool MatchStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_LeftBracket) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchSplit(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Comma) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_RightBracket) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (MatchStart(token) || MatchSplit(token) || MatchEnd(token)) {
+    return true;
+  }
+  return false;
+}
+} // namespace TensorPattern
 
 namespace PrimaryPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -191,6 +235,16 @@ static inline bool MatchKeyword(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Keyword) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchKeywordOps(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && (token->data.kw == KwId_ops)) {
     return true;
   }
   return false;
@@ -290,6 +344,18 @@ static inline ExprPtr MakeLiteralExpr(TokenConstPtr literal) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_Literal;
   expr->expr.Literal.kind = literal->data.lt;
+  expr->expr.Literal.value = &literal->name;
+  expr->lineStart = literal->lineStart;
+  expr->lineEnd = literal->lineEnd;
+  expr->columnStart = literal->columnStart;
+  expr->columnEnd = literal->columnEnd;
+  RETURN_AND_TRACE_EXPR_NODE(expr);
+}
+
+static inline ExprPtr MakeTensorExpr(TokenConstPtr literal) {
+  ExprPtr expr = NewExpr();
+  expr->type = ExprType_Literal;
+  expr->expr.Literal.kind = LiteralId_tensor;
   expr->expr.Literal.value = &literal->name;
   expr->lineStart = literal->lineStart;
   expr->lineEnd = literal->lineEnd;

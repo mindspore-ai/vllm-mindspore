@@ -57,7 +57,8 @@ private:
   ExprPtr ParseAttribute(ExprPtr entity);
   ExprPtr ParseCall(ExprPtr func);
   ExprPtr ParseCallAndAttribute();
-  ExprPtr ParseGroup();
+  ExprPtr ParseList();
+  ExprPtr ParseTensor();
   ExprPtr ParsePrimary();
   ExprPtr ParseIdentifier();
   ExprPtr ParseLiteral();
@@ -67,7 +68,9 @@ private:
   StmtPtr ParseAssign();
   StmtPtr ParseAugAssign();
   StmtPtr ParseReturn();
-  Stmts ParserFunctionArgs();
+  Stmts ParseGraphArgs();
+  StmtPtr ParseGraphDef();
+  Stmts ParseFunctionArgs();
   StmtPtr ParseFunctionDef();
   StmtPtr ParseClassDef();
   StmtPtr ParseStdCinCout();

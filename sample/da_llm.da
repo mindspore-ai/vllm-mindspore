@@ -1,14 +1,24 @@
 #!dalang
 
 graph net(x, y) {
-    z = op.matmul(x, y)
-    return op.add(z, z)
+    z = ops.matmul(x, y)
+    return ops.add(z, z)
 }
 
 function main() {
-    return net(tensor(2), tensor(3))
+    "a = int(0)
+    b = 1 : int
+    if a > b {
+        <: 'error' <: '\n'
+    }"
+
+    'x = tensor((2, 3))
+    y = tensor((3, 4))'
+    x = tensor(2)
+    y = tensor(3)
+    'x = 2
+    y = 3'
+    return net(x, y)
 }
 
-<: 'fib:\n'
-<: main()
-<: '\n'
+<: main() <: '\n'

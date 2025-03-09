@@ -45,11 +45,11 @@ Token TraverseOpTable(const char *start) {
 }
 
 #define OPERATOR(T) #T,
-const char *_operators_str[] = {
+const char *_operatorsStr[] = {
 #include "operator.list"
     "End",
 };
 #undef OPERATOR
 
-const char *ToStr(OpId opid) { return _operators_str[opid]; }
+const char *ToStr(OpId opid) { return _operatorsStr[opid]; }
 } // namespace lexer

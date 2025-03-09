@@ -61,6 +61,7 @@ private:
   NsPtr CompileAssign(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileAugAssign(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileReturn(NsConstPtr ns, StmtConstPtr stmt);
+  NsPtr CompileGraph(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileFunction(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileClass(NsConstPtr ns, StmtConstPtr stmt);
   NsPtr CompileBlock(NsConstPtr ns, StmtConstPtr stmt);

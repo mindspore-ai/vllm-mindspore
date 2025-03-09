@@ -64,11 +64,14 @@ struct Constant {
 };
 typedef Constant *ConstantPtr;
 
+enum CodeType { CodeBlock, CodeFunction, CodeGraph, CodeModule, CodeEnd };
+
 struct Code {
+  CodeType type;
   std::vector<std::string> symbols; // Symbol pool in the namespace.
   std::vector<Constant> constants;  // Constant pool in the namespace.
   std::vector<InstCall> insts;      // Instructions in the namespace.
-  std::string name;                 // Function name or module name.
+  std::string name;                 // Function, graph or module name.
   std::vector<std::string> args;    // Parameter names.
   std::vector<std::string> defs;    // Parameter default values.
 };
@@ -107,6 +110,7 @@ private:
   bool CompileAssign(StmtConstPtr stmt);
   bool CompileAugAssign(StmtConstPtr stmt);
   bool CompileReturn(StmtConstPtr stmt);
+  bool CompileGraph(StmtConstPtr stmt);
   bool CompileFunction(StmtConstPtr stmt);
   bool CompileClass(StmtConstPtr stmt);
   bool CompileBlock(StmtConstPtr stmt);
@@ -158,6 +162,8 @@ private:
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
   std::stack<size_t> codeStack_;
+
+  ssize_t intrinsicSize_{0};
 
   // Compile result records start.
   // Do serialization or deserialization of them for compilation reuse.

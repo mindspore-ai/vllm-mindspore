@@ -19,9 +19,13 @@ SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/dalang)
+include_directories(${PROJECT_SOURCE_DIR}/dair)
+include_directories(${PROJECT_SOURCE_DIR}/dart)
 
 add_subdirectory(dalang)
+add_subdirectory(dair)
+add_subdirectory(dart)
 
-# Test for da-lang
+# Create da execution file
 add_executable(da dalang/cli/main.cc dalang/cli/options.cc)
-target_link_libraries(da lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj)
+target_link_libraries(da lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj)

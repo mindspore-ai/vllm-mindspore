@@ -22,6 +22,9 @@
 #include <set>
 
 #include "compiler/compiler.h"
+#include "ops/ops_name.h"
+#include "runtime/executor.h"
+#include "vm/intrinsic.h"
 
 namespace vm {
 using namespace compiler;
@@ -34,11 +37,15 @@ enum SlotType {
   SlotVoid,
   SlotRefName,
   SlotFunction,
+  SlotGraph,
   SlotClass,
   SlotBool,
   SlotInt,
   SlotFloat,
   SlotString,
+  SlotTensor,
+  SlotOps,
+  SlotIntrinsic,
   SlotEnd
 };
 
@@ -51,13 +58,14 @@ struct Slot {
     ssize_t int_;
     double float_;
     const char *str_;
+    void *tensor_;
+    ops::Op op;
+    intrinsic::IntrinsicType intr;
   } value;
 };
 
-enum FrameType { FrameBlock, FrameFunction, FrameModule, FrameEnd };
-
 struct Frame {
-  FrameType type;
+  CodeType type;
   size_t code;
   size_t pc{0};
   std::vector<Slot> slots;                     // Slot stack.
@@ -82,11 +90,20 @@ inline const char *GetSlotTypeStr(const Slot &slot) {
   case SlotFunction: {
     return "function";
   }
+  case SlotGraph: {
+    return "graph";
+  }
   case SlotClass: {
     return "class";
   }
   case SlotRefName: {
     return "ref";
+  }
+  case SlotTensor: {
+    return "tensor";
+  }
+  case SlotIntrinsic: {
+    return "intrinsic";
   }
   default:
     // unknown
@@ -117,6 +134,10 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
     ss << "function:" << slot.value.addr;
     break;
   }
+  case SlotGraph: {
+    ss << "graph:" << slot.value.addr;
+    break;
+  }
   case SlotClass: {
     ss << "class:" << slot.value.addr;
     break;
@@ -125,9 +146,17 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
     ss << "ref:" << slot.value.addr;
     break;
   }
+  case SlotTensor: {
+    ss << "tensor:" << slot.value.tensor_;
+    break;
+  }
+  case SlotIntrinsic: {
+    ss << "intrinsic:" << slot.value.addr;
+    break;
+  }
   default:
     // unknown
-    ss << "<unknown>";
+    ss << "<unknown>(" << slot.type << ")";
   }
 }
 
@@ -173,15 +202,20 @@ private:
   void InstStoreLocal(ssize_t offset);
   void InstLoadGlobal(ssize_t offset);
   void InstStoreGlobal(ssize_t offset);
+  void InstLoadIntrin(ssize_t offset);
+  void InstLoadOps(ssize_t offset);
   void InstPopTop(ssize_t offset);
   void InstBinaryAdd(ssize_t offset);
   void InstBinarySub(ssize_t offset);
   void InstBinaryMul(ssize_t offset);
   void InstBinaryDiv(ssize_t offset);
   void InstCompare(ssize_t offset);
-  void InstCallFunc(ssize_t offset);
+  void InstDoCall(ssize_t offset);
+  void InstCallIntrin(ssize_t offset);
+  void InstCallOps(ssize_t offset);
   void InstReturnVal(ssize_t offset);
   void InstDefineFunc(ssize_t offset);
+  void InstDefineGraph(ssize_t offset);
   void InstEnterBlock(ssize_t offset);
   void InstJumpTrue(ssize_t offset);
   void InstJumpFalse(ssize_t offset);
@@ -234,6 +268,8 @@ private:
   Frame *frame_;
 
   InstHandlerFunctions instHandlers_; // Notice: Do not change.
+
+  runtime::GraphExecutor graphExecutor_;
 };
 
 #define BINARY_OP(OpName, OpSymbol)                                            \

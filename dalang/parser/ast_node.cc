@@ -56,6 +56,24 @@ StmtPtr NewStmt() {
   return gStmtPool.back();
 }
 
+void ClearStmtGraphArgsMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.argsLen != 0 &&
+      stmt->stmt.Graph.args != nullptr) {
+    free(stmt->stmt.Graph.args);
+    stmt->stmt.Graph.args = nullptr;
+    stmt->stmt.Graph.argsLen = 0;
+  }
+}
+
+void ClearStmtGraphBodyMemory(StmtPtr stmt) {
+  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.len != 0 &&
+      stmt->stmt.Graph.body != nullptr) {
+    free(stmt->stmt.Graph.body);
+    stmt->stmt.Graph.body = nullptr;
+    stmt->stmt.Graph.len = 0;
+  }
+}
+
 void ClearStmtFunctionArgsMemory(StmtPtr stmt) {
   if (stmt->type == StmtType_Function && stmt->stmt.Function.argsLen != 0 &&
       stmt->stmt.Function.args != nullptr) {
@@ -143,6 +161,8 @@ void ClearStmtModuleMemory(StmtPtr stmt) {
 
 void ClearStmtPool() {
   for (StmtPtr stmt : gStmtPool) {
+    ClearStmtGraphArgsMemory(stmt);
+    ClearStmtGraphBodyMemory(stmt);
     ClearStmtFunctionArgsMemory(stmt);
     ClearStmtFunctionBodyMemory(stmt);
     ClearStmtClassBodyMemory(stmt);
@@ -167,6 +187,9 @@ const std::string ToString(StmtConstPtr stmt) {
   }
   case StmtType_AugAssign: {
     return "AugAssign{" + std::string(ToStr(stmt->stmt.AugAssign.op)) + '}';
+  }
+  case StmtType_Graph: {
+    return "Graph";
   }
   case StmtType_Function: {
     return "Function";

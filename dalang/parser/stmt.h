@@ -70,6 +70,70 @@ static inline bool Match(TokenConstPtr token) {
 }
 } // namespace ReturnPattern
 
+namespace GraphPattern {
+static inline bool Match(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Keyword && token->data.kw == KwId_graph) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchArgsStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_LeftParenthesis) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchArgsSeparator(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Comma) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchArgsEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator &&
+      token->data.sp == SpId_RightParenthesis) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool MatchBodyEnd(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBrace) {
+    return true;
+  }
+  return false;
+}
+} // namespace GraphPattern
+
 namespace FunctionPattern {
 static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
@@ -418,6 +482,34 @@ static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
     stmt->lineEnd = value->lineEnd;
     stmt->columnStart = value->columnStart;
     stmt->columnEnd = value->columnEnd;
+  }
+  RETURN_AND_TRACE_STMT_NODE(stmt);
+}
+
+static inline StmtPtr MakeGraphStmt(ExprConstPtr id, const Stmts &args,
+                                    const Stmts &body) {
+  StmtPtr stmt = NewStmt();
+  stmt->type = StmtType_Graph;
+  stmt->stmt.Graph.name = id;
+  stmt->stmt.Graph.argsLen = args.size();
+  stmt->stmt.Graph.args =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
+  for (size_t i = 0; i < args.size(); ++i) {
+    stmt->stmt.Graph.args[i] = args[i];
+  }
+  stmt->stmt.Graph.len = body.size();
+  stmt->stmt.Graph.body =
+      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  for (size_t i = 0; i < body.size(); ++i) {
+    stmt->stmt.Graph.body[i] = body[i];
+  }
+  stmt->lineStart = id->lineStart;
+  if (!body.empty()) {
+    stmt->lineEnd = body.back()->lineEnd;
+  }
+  stmt->columnStart = id->columnStart;
+  if (!body.empty()) {
+    stmt->columnEnd = body.back()->columnEnd;
   }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }

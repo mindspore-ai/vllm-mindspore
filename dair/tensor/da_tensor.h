@@ -19,6 +19,8 @@
 
 #include <stdlib.h>
 
+#include "ops/ops_name.h"
+
 #ifndef DA_TENSOR_MAX_INPUT
 #define DA_TENSOR_MAX_INPUT 10
 #endif
@@ -47,8 +49,6 @@ enum Type {
   Type_End
 };
 
-enum Op { Op_Mul, Op_End };
-
 struct DATensor {
   // Data type of tensor
   Type type{Type_End};
@@ -62,7 +62,9 @@ struct DATensor {
   size_t shape[DA_TENSOR_MAX_DIM] = {0};
 
   // Operation of this tensor
-  Op op{Op_End};
+  ops::Op op{ops::Op_End};
+  // Inputs size
+  size_t inputNum{0};
   // Input tensors
   struct DATensor *input[DA_TENSOR_MAX_INPUT] = {nullptr};
 };
@@ -94,11 +96,14 @@ struct DAContextManager {
   DAContext context[DA_CONTEXT_MAX_NUM];
 };
 
-DAContext *NewDAContext();
+DAContext *NewDAContext(size_t deviceId = 0,
+                        size_t memSize = 1024 * 1024 * 256);
+void FreeDAContext(DAContext *context);
 DAGraph *NewDAGraph(DAContext *context);
 DATensor *NewDATensor(DAContext *context);
-DATensor *NewDATensor(DAContext *context, Type type, void *data, size_t dim = 0,
-                      size_t shape[DA_TENSOR_MAX_DIM] = nullptr, Op op = Op_End,
+DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
+                      size_t shape[DA_TENSOR_MAX_DIM] = nullptr,
+                      void *data = nullptr, ops::Op op = ops::Op_End,
                       DATensor *input[DA_TENSOR_MAX_INPUT] = nullptr);
 } // namespace tensor
 
