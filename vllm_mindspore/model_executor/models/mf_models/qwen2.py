@@ -37,7 +37,6 @@ from mindformers.core.parallel_config import build_parallel_config
 
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
 from mindformers.trainer import BaseTrainer
-from mindformers.tools.utils import set_output_path, set_strategy_save_path
 from research.qwen2_5.infer.qwen2_5 import (
     ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF,
 )
@@ -48,7 +47,7 @@ from vllm_mindspore.utils import calc_block_num
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model
-from mindformers.trainer.utils import transform_and_load_checkpoint
+from vllm_mindspore.model_executor.models.mf_models.qwen2_infer_parallelism import Qwen2InferParallelism
 
 
 logger = init_logger(__name__)
@@ -106,6 +105,9 @@ class Qwen2ForCausalLM(MsModelBase):
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
 
+        # qwen qkv concat will support in next version
+        self.mf_model_config.qkv_concat = False
+        self.mf_config.model.model_config.qkv_concat = False
         # Initial network
         self.network = ParallelQwenForCausalLM_MF(self.mf_model_config)
         self.network._jit_config_dict = JitConfig(
@@ -113,13 +115,6 @@ class Qwen2ForCausalLM(MsModelBase):
         ).jit_config_dict
 
         self.mf_config.load_checkpoint = self.get_model_path()
-        set_output_path(self.mf_config.output_dir)
-        set_strategy_save_path(self.mf_config.parallel)
-        # update safetensor path
-        ms_safetensors_path = BaseTrainer._get_load_path_after_hf_convert(
-            self.mf_config, self.network
-        )
-        self.mf_config.load_checkpoint = ms_safetensors_path
 
         self.mf_kvcaches_init = False
         self.logits = None
@@ -196,14 +191,8 @@ class Qwen2ForCausalLM(MsModelBase):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        model = Model(self.network)
-        batch_size = self.mf_config.model.model_config.batch_size
-        seq_length = self.mf_config.model.model_config.seq_length
-        input_ids = np.ones(shape=tuple([batch_size, seq_length]))
-        infer_data = self.network.prepare_inputs_for_predict_layout(input_ids)
-        transform_and_load_checkpoint(
-            self.mf_config, model, self.network, infer_data, do_predict=True
-        )
+        model_parallelism = Qwen2InferParallelism(self.mf_config, self.network, False)
+        model_parallelism.infer_convert_and_parallelism(self.mf_config.load_checkpoint)
 
         self.network.set_dynamic_inputs()
 
