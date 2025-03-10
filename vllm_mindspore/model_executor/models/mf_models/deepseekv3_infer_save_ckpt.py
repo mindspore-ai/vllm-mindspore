@@ -85,10 +85,10 @@ def main(config_path, load_checkpoint, save_ckpt_dir):
         model_parallelism = DeepseekInferParallelism(config, network, is_quant)
         model_parallelism.infer_convert_and_parallelism(config.load_checkpoint)
 
-    rank_id = get_rank()
-    os.makedirs(os.path.join(save_ckpt_dir, "rank_" + str(rank_id)), exist_ok=True)
+    rank_id = str(get_rank())
+    os.makedirs(os.path.join(save_ckpt_dir, "rank_" + rank_id), exist_ok=True)
 
-    save_ckpt_path = os.path.join(save_ckpt_dir, "rank_" + str(rank_id), "checkpoint_" + str(rank_id))
+    save_ckpt_path = os.path.join(save_ckpt_dir, "rank_" + rank_id, "checkpoint_" + rank_id + ".ckpt")
     ms.save_checkpoint(network.parameters_dict(), save_ckpt_path)
 
 
