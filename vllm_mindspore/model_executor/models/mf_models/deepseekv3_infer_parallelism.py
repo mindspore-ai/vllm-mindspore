@@ -125,7 +125,7 @@ class DeepseekInferParallelism(BaseModelParallelism):
         e_score_correction_bias_ms_param = self.get_safetensor_from_file(e_score_correction_bias_hf_name, src_hf_dir,
                                                                          hf_weight_map)
         parameter_dict[e_score_correction_bias_ms_name] = ms.Parameter(
-            ms.Tensor(e_score_correction_bias_ms_param, ms.bfloat16),
+            ms.Tensor(e_score_correction_bias_ms_param, ms.float32),
             name=e_score_correction_bias_ms_name, requires_grad=False)
 
         w1_list = []
@@ -659,7 +659,7 @@ class DeepseekInferParallelism(BaseModelParallelism):
         e_score_correction_bias_ms_param = self.get_safetensor_from_file(e_score_correction_bias_hf_name, src_hf_dir,
                                                                          hf_weight_map)
         parameter_dict[e_score_correction_bias_ms_name] = ms.Parameter(
-            ms.Tensor(e_score_correction_bias_ms_param, ms.bfloat16),
+            ms.Tensor(e_score_correction_bias_ms_param, ms.float32),
             name=e_score_correction_bias_ms_name, requires_grad=False)
 
         w1_list = []
