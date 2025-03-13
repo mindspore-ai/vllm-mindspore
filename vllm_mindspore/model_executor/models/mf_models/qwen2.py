@@ -36,7 +36,6 @@ from mindformers.core.context import build_context
 from mindformers.core.parallel_config import build_parallel_config
 
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
-from mindformers.trainer import BaseTrainer
 from research.qwen2_5.infer.qwen2_5 import (
     ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF,
 )
@@ -104,6 +103,7 @@ class Qwen2ForCausalLM(MsModelBase):
         self.mf_model_config.block_size = self.cache_config.block_size
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
+        self.mf_model_config.enable_vllm_infer = True
 
         # qwen qkv concat will support in next version
         self.mf_model_config.qkv_concat = False
@@ -122,6 +122,13 @@ class Qwen2ForCausalLM(MsModelBase):
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
+        self.prefill_mask = Tensor(np.triu(np.ones(shape=(128, 128), dtype=np.float16), k=1), dtype=ms.bfloat16)
+
+        self.decode_mask = Tensor(np.triu(np.ones(shape=(self.mf_model_config.seq_length,
+                                                         self.mf_model_config.seq_length), dtype=np.int8), k=1),
+                                          dtype=ms.bfloat16)
+        self.gather = ms.ops.Gather()
+
     def update_mf_kvcaches(self, kv_caches):
         if self.mf_kvcaches_init:
             return
@@ -137,6 +144,13 @@ class Qwen2ForCausalLM(MsModelBase):
             )
         self.mf_kvcaches_init = True
 
+    def gen_attention_mask(self, is_prefill, position_ids):
+        if is_prefill:
+            attention_mask = self.prefill_mask
+        else:
+            attention_mask = self.gather(self.decode_mask, position_ids, 0)
+        return attention_mask
+
     def forward(
         self,
         input_ids: Tensor,
@@ -148,7 +162,13 @@ class Qwen2ForCausalLM(MsModelBase):
     ) -> Union[Tensor, IntermediateTensors]:
         self.update_mf_kvcaches(kv_caches)
 
-        is_prefill = True if attn_metadata.prefill_metadata else False
+        if max(attn_metadata.context_lens_tensor) <= 0:
+            is_prefill = True
+        else:
+            is_prefill = False
+        q_seq_lens = ms.Tensor(attn_metadata.seq_lens_tensor - attn_metadata.context_lens_tensor, dtype=ms.int32)
+        position_ids = ms.Tensor(positions, dtype=ms.int32)
+        attention_mask = self.gen_attention_mask(is_prefill, position_ids)
 
         self.logits = None
 
@@ -163,7 +183,9 @@ class Qwen2ForCausalLM(MsModelBase):
             self.mf_model_config.block_size,
         )
         model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-
+        model_inputs["position_ids"] = position_ids
+        model_inputs["q_seq_lens"] = q_seq_lens
+        model_inputs["attention_mask"] = attention_mask
         if is_prefill:
             self.network.phase = "prefill"
             self.network.add_flags_custom(is_first_iteration=True)
@@ -172,7 +194,6 @@ class Qwen2ForCausalLM(MsModelBase):
             self.network.add_flags_custom(is_first_iteration=False)
         else:
             self.logits = self.network(**model_inputs)
-
         return None
 
     def compute_logits(
@@ -180,6 +201,16 @@ class Qwen2ForCausalLM(MsModelBase):
         hidden_states: Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
+        selected_token_indices = sampling_metadata.selected_token_indices
+        if selected_token_indices.numel() <= 0:
+            self.logits = ms.mint.zeros((0, self.mf_model_config.vocab_size),
+                                        dtype=self.mf_model_config.compute_dtype)
+        else:
+            hidden_states = self.logits
+            hidden_states = hidden_states.index_select(0, sampling_metadata.selected_token_indices)
+            self.logits = self.network.lm_head(hidden_states)
+            self.logits = self.logits.reshape(-1, self.logits.shape[-1])
+
         return self.logits
 
     def sample(
