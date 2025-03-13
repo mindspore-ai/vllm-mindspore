@@ -16,15 +16,29 @@
 # limitations under the License.
 # ============================================================================
 
-from typing import List
+from typing import List, Dict, Optional
 
 import torch
+import torch.nn as nn
+import weakref
+import numpy as np
 from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
+from vllm.lora.worker_manager import LRUCacheWorkerLoRAManager
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
-from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
+from vllm.config import VllmConfig
+from vllm.inputs import INPUT_REGISTRY, InputRegistry
+from vllm.multimodal import (MULTIMODAL_REGISTRY, MultiModalRegistry)
+from vllm.worker.model_runner_base import ModelRunnerBase
+from vllm.utils import (PyObjectCache, is_pin_memory_available)
+from vllm.model_executor.models.utils import set_cpu_offload_max_bytes
+from vllm.attention import get_attn_backend
+from vllm.model_executor import SamplingMetadataCache
+from vllm.prompt_adapter.worker_manager import LRUCacheWorkerPromptAdapterManager
+from vllm.attention.backends.utils import CommonAttentionState
+from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE, is_use_mla
 
 from mindspore.common import dtype as mstype
 from mindspore import mutable, Tensor
@@ -156,3 +170,107 @@ def profile_run(self) -> None:
     self.execute_model(model_input, kv_caches, intermediate_tensors)
     torch.cuda.synchronize()
     return
+
+def gpu_model_runner_base_init(
+    self,
+    vllm_config: VllmConfig,
+    kv_cache_dtype: Optional[str] = "auto",
+    is_driver_worker: bool = False,
+    return_hidden_states: bool = False,
+    input_registry: InputRegistry = INPUT_REGISTRY,
+    mm_registry: MultiModalRegistry = MULTIMODAL_REGISTRY,
+):
+
+    ModelRunnerBase.__init__(self, vllm_config)
+    model_config = self.model_config
+    cache_config = self.cache_config
+
+    self.is_driver_worker = is_driver_worker
+    self.return_hidden_states = return_hidden_states
+
+    self.device = self.device_config.device
+    self.pin_memory = is_pin_memory_available()
+
+    self.kv_cache_dtype = kv_cache_dtype
+    self.sliding_window = model_config.get_sliding_window()
+    self.block_size = cache_config.block_size
+    self.max_seq_len_to_capture = self.model_config.max_seq_len_to_capture
+    self.max_batchsize_to_capture = \
+        self.vllm_config.compilation_config.max_capture_size
+
+    self.has_inner_state = model_config.has_inner_state
+
+    # When using CUDA graph, the input block tables must be padded to
+    # max_seq_len_to_capture. However, creating the block table in
+    # Python can be expensive. To optimize this, we cache the block table
+    # in numpy and only copy the actual input content at every iteration.
+    # The shape of the cached block table will be
+    # (max batch size to capture, max seq len to capture / block size).
+    self.graph_block_tables = np.zeros(
+        (self.max_batchsize_to_capture, self.get_max_block_per_batch()),
+        dtype=np.int32)
+
+    # Attention-free but stateful models like Mamba need a placeholder attn
+    # backend, as the attention metadata is needed to manage internal state.
+    # However we must bypass attention selection altogether for some models
+    # used for speculative decoding to avoid a divide-by-zero in
+    # model_config.get_head_size()
+    num_attn_heads = self.model_config.get_num_attention_heads(
+        self.parallel_config)
+    needs_attn_backend = (num_attn_heads != 0
+                          or self.model_config.is_attention_free)
+
+    self.attn_backend = get_attn_backend(
+        self.model_config.get_head_size(),
+        self.model_config.dtype,
+        self.kv_cache_dtype,
+        self.block_size,
+        self.model_config.is_attention_free,
+        use_mla=is_use_mla(model_config),
+    ) if needs_attn_backend else None
+    if self.attn_backend:
+        self.attn_state = self.attn_backend.get_state_cls()(
+            weakref.proxy(self))
+    else:
+        self.attn_state = CommonAttentionState(weakref.proxy(self))
+
+    # Multi-modal data support
+    self.input_registry = input_registry
+    self.mm_registry = mm_registry
+    self.multi_modal_input_mapper = mm_registry \
+        .create_input_mapper(model_config)
+    self.mm_registry.init_mm_limits_per_prompt(self.model_config)
+
+    # Lazy initialization
+    self.model: nn.Module  # Set after load_model
+    # Set after load_model.
+    self.lora_manager: Optional[LRUCacheWorkerLoRAManager] = None
+    self.prompt_adapter_manager: LRUCacheWorkerPromptAdapterManager = None
+
+    set_cpu_offload_max_bytes(
+        int(self.cache_config.cpu_offload_gb * 1024**3))
+
+    # Used to cache python objects
+    self.inter_data_cache: Dict[int, PyObjectCache] = {}
+
+    # Using the PythonizationCache in Pipeline-Parallel clobbers the
+    # SequenceGroupToSample object. In Pipeline-Parallel, we have
+    # more than 1 Scheduler, resulting in a potential back-to-back
+    # prepare_model_inputs() call. This clobbers the cached
+    # SequenceGroupToSample objects, as we reset the cache during
+    # every prepare_model_inputs() call.
+    self.sampling_metadata_cache: SamplingMetadataCache = \
+          SamplingMetadataCache() \
+            if self.parallel_config.pipeline_parallel_size == 1 else None
+
+MULTI_STEP_ATTENTION_BACKENDS = [
+    "MS_MLA", "FLASH_ATTN", "ROCM_FLASH", "FLASHINFER", "NO_ATTENTION" 
+]
+MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS = ["FLASH_ATTN"]
+
+def _get_supported_attention_backends(chunked_prefill_enabled: bool) \
+    -> List[str]:
+    if chunked_prefill_enabled:
+        return MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS
+    else:
+        return MULTI_STEP_ATTENTION_BACKENDS
