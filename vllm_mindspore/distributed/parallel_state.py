@@ -17,7 +17,7 @@
 # ============================================================================
 
 import pickle
-from typing import List, Optional, Any, Dict, Union
+from typing import List, Optional, Any, Dict, Union, Tuple
 
 import numpy as np
 import torch
@@ -25,6 +25,8 @@ import torch.distributed
 from torch.distributed import Backend, ProcessGroup
 from mindspore.common.api import _pynative_executor
 
+from collections import namedtuple
+TensorMetadata = namedtuple("TensorMetadata", ["device", "dtype", "size"])
 
 def init_model_parallel_group(
     group_ranks: List[List[int]],
@@ -78,6 +80,30 @@ def all_reduce_for_GroupCoordinator(self, input_: torch.Tensor) -> torch.Tensor:
 
     torch.distributed.all_reduce(input_, group=self.device_group)
     return input_
+
+def _split_tensor_dict(
+    tensor_dict: Dict[str, Union[torch.Tensor, Any]]
+) -> Tuple[List[Tuple[str, Any]], List[torch.Tensor]]:
+    """Split the tensor dictionary into two parts:
+    1. A list of (key, value) pairs. If the value is a tensor, it is replaced
+         by its metadata.
+    2. A list of tensors.
+    """
+    metadata_list: List[Tuple[str, Any]] = []
+    tensor_list: List[torch.Tensor] = []
+    for key, value in tensor_dict.items():
+        if isinstance(value, torch.Tensor):
+            # Note: we cannot use `value.device` here,
+            # because it contains not only the device type but also the device
+            # index (e.g. "cuda:0"). We only need the device type.
+            # receiving side will set the device index.
+            device = value.device.type
+            metadata_list.append(
+                (key, TensorMetadata(device, value.dtype, value.size())))
+            tensor_list.append(value)
+        else:
+            metadata_list.append((key, value))
+    return metadata_list, tensor_list
 
 def broadcast_tensor_dict(
     self,
