@@ -264,9 +264,9 @@ def gpu_model_runner_base_init(
             if self.parallel_config.pipeline_parallel_size == 1 else None
 
 MULTI_STEP_ATTENTION_BACKENDS = [
-    "MS_MLA", "FLASH_ATTN", "ROCM_FLASH", "FLASHINFER", "NO_ATTENTION" 
+    "MS_MLA", "MS_ATTN", "NO_ATTENTION"
 ]
-MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS = ["FLASH_ATTN"]
+MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS = ["MS_MLA", "MS_ATTN"]
 
 def _get_supported_attention_backends(chunked_prefill_enabled: bool) \
     -> List[str]:
