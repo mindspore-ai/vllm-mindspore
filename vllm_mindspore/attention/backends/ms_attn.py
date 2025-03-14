@@ -21,6 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import accumulate
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
+import os
 
 import torch
 
@@ -267,34 +268,45 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             self.seq_lens[i] += 1
         self.max_decode_seq_len = max(self.seq_lens)
 
-        # TODO optimize these codes using ascendc just like flash attention backend using cuda
-        # update input_tokens
-        sampled_token_ids_list = sampled_token_ids[:
-                                                   num_queries].squeeze(  # type: ignore
-                                                       -1)
-        model_input.input_tokens[:
-                                 num_queries] = sampled_token_ids_list  # type: ignore
+        # default use python op
+        if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "off") == "on":
+            from vllm_mindspore import npu_ops
+            npu_ops.adv_step_flash(num_seqs=num_seqs,
+                                    num_queries=num_queries,
+                                    block_size=block_size,
+                                    input_tokens=model_input.input_tokens,
+                                    sampled_token_ids=sampled_token_ids,
+                                    input_positions=model_input.input_positions,
+                                    seq_lens=self.seq_lens_tensor,
+                                    slot_mapping=self.slot_mapping,
+                                    block_tables=self.block_tables)
+        else:
+            sampled_token_ids_list = sampled_token_ids[:
+                                                    num_queries].squeeze(  # type: ignore
+                                                        -1)
+            model_input.input_tokens[:
+                                    num_queries] = sampled_token_ids_list  # type: ignore
 
-        # get seq_lens and input_positions
-        seq_lens = self.seq_lens_tensor[:num_queries]
-        next_seq_lens = seq_lens + 1
-        next_input_pos = next_seq_lens - 1
+            # get seq_lens and input_positions
+            seq_lens = self.seq_lens_tensor[:num_queries]
+            next_seq_lens = seq_lens + 1
+            next_input_pos = next_seq_lens - 1
 
-        # update seq_lens and input_positions
-        self.seq_lens_tensor[:num_queries] = next_seq_lens
-        model_input.input_positions[:
-                                    num_queries] = next_input_pos  # type: ignore
+            # update seq_lens and input_positions
+            self.seq_lens_tensor[:num_queries] = next_seq_lens
+            model_input.input_positions[:
+                                        num_queries] = next_input_pos  # type: ignore
 
-        # 计算 block index 和 offset
-        block_idx = next_input_pos // block_size
-        block_offset = next_input_pos % block_size
+            # 计算 block index 和 offset
+            block_idx = next_input_pos // block_size
+            block_offset = next_input_pos % block_size
 
-        current_block_table = self.block_tables.gather(
-            1, block_idx.unsqueeze(-1)).squeeze(-1)
-        slot_num = current_block_table * block_size + block_offset
+            current_block_table = self.block_tables.gather(
+                1, block_idx.unsqueeze(-1)).squeeze(-1)
+            slot_num = current_block_table * block_size + block_offset
 
-        # update slot_mapping
-        self.slot_mapping[:num_queries] = slot_num
+            # update slot_mapping
+            self.slot_mapping[:num_queries] = slot_num
 
     def get_seq_lens(
         self,
