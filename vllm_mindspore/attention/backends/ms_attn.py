@@ -563,7 +563,7 @@ class MsAttentionBackend(AttentionBackend):
 
     @staticmethod
     def get_name() -> str:
-        raise "MS_ATTN"
+        return "MS_ATTN"
 
     @staticmethod
     def get_impl_cls() -> Type["AttentionImpl"]:
