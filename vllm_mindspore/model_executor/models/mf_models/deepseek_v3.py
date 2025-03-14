@@ -266,6 +266,8 @@ class DeepseekV3ForCausalLM(MsModelBase):
             model_parallelism = DeepseekInferParallelism(self.mf_config, self.network, self.is_quant)
             model_parallelism.infer_convert_and_parallelism(self.mf_config.load_checkpoint)
         self.network.set_dynamic_inputs()
+        dynamic_hidden_states = ms.Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        self.network.lm_head.set_inputs(dynamic_hidden_states)
         return None
 
     def get_model_path(self):
