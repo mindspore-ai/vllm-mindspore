@@ -52,8 +52,6 @@ from vllm_mindspore.utils import MsKVCache
 import mindspore as ms
 from mindspore import mutable
 from mindspore._c_expression import swap_cache
-from mindspore.common.api import _pynative_executor
-
 
 @dataclass
 class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
@@ -74,7 +72,7 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
     context_lens_tensor: Optional[torch.Tensor] = None
     encoder_seq_start_loc: Optional[torch.Tensor] = None
     max_decode_query_len: Optional[int] = None
-
+    query_lens: Optional[List[int]] = None,
     max_kv_len: Optional[int] = None
     query_start_loc: Optional[torch.Tensor] = None
     kv_start_loc: Optional[torch.Tensor] = None
@@ -217,9 +215,6 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
         """
         Update metadata in-place to advance one decode step.
         """
-        # sync and start spin thread
-        _pynative_executor.sync()
-        _pynative_executor.set_async_for_graph(True)
         # When using cudagraph, the num_seqs is padded to the next captured
         # batch sized, but num_queries tracks the actual number of requests in
         # the batch. For --enforce-eager mode, num_seqs == num_queries
@@ -300,9 +295,6 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
 
         # update slot_mapping
         self.slot_mapping[:num_queries] = slot_num
-        
-        _pynative_executor.sync()
-        _pynative_executor.set_async_for_graph(False)
 
     def get_seq_lens(
         self,
@@ -555,6 +547,7 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
             seq_start_loc=seq_start_loc_tensor,
             context_lens_tensor=context_lens_tensor,
             max_query_len=max_query_len,
+            query_lens=query_lens,
         )
 
 

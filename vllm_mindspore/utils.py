@@ -42,7 +42,7 @@ from vllm.utils import T, TORCH_DTYPE_TO_NUMPY_DTYPE, make_ndarray_with_pad
 import mindspore as ms
 from mindspore.common.initializer import Zero
 from mindspore import dtype as mstype
-
+from mindspore.common.api import _pynative_executor
 from .scripts import env_setup
 
 MsKVCache = Tuple[ms.Tensor, ms.Tensor]
@@ -323,6 +323,7 @@ def check_ready():
         env_setup(mindformers_default_env)
 
         set_context(mode=0, device_target="Ascend", max_call_depth=10000)
+        _pynative_executor.set_async_for_graph(True)
     else:
         env_setup({"MS_ALLOC_CONF": "enable_vmm:True", })
         logger.info("Run with native model backend!")
