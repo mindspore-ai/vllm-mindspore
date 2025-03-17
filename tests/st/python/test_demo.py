@@ -28,6 +28,7 @@ class TestDemo:
         """
         test case aaa
         """
+        import vllm_mindspore
         from vllm import LLM, SamplingParams
 
         # Sample prompts.
