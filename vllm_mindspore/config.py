@@ -16,8 +16,10 @@
 # limitations under the License.
 # ============================================================================
 
+from vllm.logger import init_logger
 from vllm_mindspore.utils import is_mindformers_model_backend, is_use_mla
 
+logger = init_logger(__name__)
 
 def get_head_size(self) -> int:
     if hasattr(self.hf_text_config, "model_type") and (
@@ -54,3 +56,33 @@ def get_num_kv_heads(self, parallel_config: "ParallelConfig") -> int:
 
     total_num_kv_heads = self.get_total_num_kv_heads()
     return max(1, total_num_kv_heads // parallel_config.tensor_parallel_size)
+
+
+def _verify_args(self) -> None:
+    if (self.max_num_batched_tokens < self.max_model_len
+            and not self.chunked_prefill_enabled):
+        logger.warning(
+            f"max_num_batched_tokens ({self.max_num_batched_tokens}) is "
+            f"smaller than max_model_len ({self.max_model_len}). "
+            "This effectively limits the maximum sequence length to "
+            "max_num_batched_tokens and makes vLLM reject longer "
+            "sequences. Please increase max_num_batched_tokens or "
+            "decrease max_model_len.")
+
+    if self.max_num_batched_tokens < self.max_num_seqs:
+        raise ValueError(
+            f"max_num_batched_tokens ({self.max_num_batched_tokens}) must "
+            "be greater than or equal to max_num_seqs "
+            f"({self.max_num_seqs}).")
+
+    if self.num_lookahead_slots < 0:
+        raise ValueError(
+            "num_lookahead_slots "
+            f"({self.num_lookahead_slots}) must be greater than or "
+            "equal to 0.")
+
+    if self.num_scheduler_steps < 1:
+        raise ValueError(
+            "num_scheduler_steps "
+            f"({self.num_scheduler_steps}) must be greater than or "
+            "equal to 1.")

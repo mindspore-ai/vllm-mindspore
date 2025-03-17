@@ -195,11 +195,12 @@ vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
-from .config import get_head_size, _verify_quantization, get_num_kv_heads
+from .config import get_head_size, _verify_quantization, get_num_kv_heads, _verify_args
 
 vllm.config.ModelConfig.get_head_size = get_head_size
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.ModelConfig.get_num_kv_heads = get_num_kv_heads
+vllm.config.SchedulerConfig._verify_args = _verify_args
 
 from .utils import check_ready
 
