@@ -20,7 +20,6 @@
 import itertools
 import warnings
 import mindspore as ms
-from mindspore.common.api import _pynative_executor
 import numpy as np
 from dataclasses import dataclass
 from importlib.util import find_spec
@@ -43,15 +42,6 @@ from vllm_mindspore.model_executor.sampling_metadata import (
     SamplingTensors,
     SequenceGroupToSample,
 )
-
-class AsyncContext:
-    def __enter__(self):
-        _pynative_executor.sync()
-        _pynative_executor.set_async_for_graph(True)
-
-    def __exit__(self, exc_type, exc_value, tb):
-        _pynative_executor.sync()
-        _pynative_executor.set_async_for_graph(False)
 
 if envs.VLLM_USE_FLASHINFER_SAMPLER and find_spec("flashinfer"):
     raise RuntimeError("Donot support for mindspore now.")
@@ -351,8 +341,7 @@ class Sampler(nn.Module):
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
-        with AsyncContext() as ctx:
-            return self.forward(logits, sampling_metadata)
+        return self.forward(logits, sampling_metadata)
 
     @property
     def _should_modify_greedy_probs_inplace(self) -> bool:
