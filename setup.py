@@ -24,6 +24,10 @@ import sys
 from typing import List
 from pathlib import Path
 from setuptools import find_packages, setup
+from setuptools.command.build_ext import build_ext
+from setuptools.command.install import install
+from setuptools import Extension
+import subprocess
 
 
 def load_module_from_path(module_name, path):
@@ -85,6 +89,68 @@ def get_requirements() -> List[str]:
 
 version = (Path("vllm_mindspore") / "version.txt").read_text()
 
+BUILD_DIR = os.path.join(ROOT_DIR, "build")
+KERNELS_SO_DIR = os.path.join(BUILD_DIR, "lib64")
+KERNELS_SO_PATH = os.path.join(KERNELS_SO_DIR, "libascendc_kernels_npu.so")
+NPU_OPS_SO_DIR = os.path.join(ROOT_DIR, "kernel_meta", "npu_ops")
+NPU_OPS_SO_PATH = os.path.join(NPU_OPS_SO_DIR, "npu_ops.so")
+
+
+class CustomBuildExt(build_ext):
+    def run(self):
+        # Step 1: Build libascendc_kernels_npu.so using the shell script
+        self.build_kernels()
+        # Step 2: Compile custom ops into npu_ops.so using CustomOpBuilder
+        self.build_npu_ops()
+        super().run()
+
+    def build_kernels(self):
+        print("Building libascendc_kernels_npu.so ...")
+        soc_version = os.getenv("SOC_VERSION", None)
+        build_script = os.path.join(ROOT_DIR, "vllm_mindspore", "ops", "scripts", "build_kernels.sh")
+        if not os.path.exists(build_script):
+            raise FileNotFoundError(f"Build script {build_script} not found.")
+        cmd = ["bash", build_script, "-p", BUILD_DIR]
+        if soc_version:
+            cmd.extend(["-v", soc_version])
+        result = subprocess.run(cmd, cwd=ROOT_DIR, check=True)
+        if result.returncode != 0:
+            raise RuntimeError("Failed to build libascendc_kernels_npu")
+        print(f"libascendc_kernels_npu.so built successfully and placed in {KERNELS_SO_PATH}.")
+
+    def build_npu_ops(self):
+        print("Building npu_ops.so ...")
+        import mindspore as ms
+        try:
+            ops_dir = os.path.join(ROOT_DIR, "vllm_mindspore", "ops")
+            src = os.path.join(ops_dir, "adapt", "advance_step_flashattn.cpp")
+            ms.ops.CustomOpBuilder("npu_ops", src, backend="Ascend",
+                            cflags=f"-I{ops_dir}",
+                            ldflags=f"-L{KERNELS_SO_DIR} -lascendc_kernels_npu -Wl,-rpath,'$$ORIGIN/lib'").load()
+        except ImportError:
+            pass
+        print(f"npu_ops.so built successfully and placed in {NPU_OPS_SO_DIR}.")
+
+
+class CustomInstall(install):
+    def run(self):
+        # Run the standard install process
+        super().run()
+
+        # Ensure `npu_ops.so` is included in the installed package
+        self.include_npu_ops()
+
+    def include_npu_ops(self):
+        print("Including npu_ops.so and libascendc_kernels_npu.so in the installed package...")
+        package_path = os.path.join(self.install_lib, "vllm_mindspore")
+        lib_path = os.path.join(package_path, "lib")
+        os.makedirs(lib_path, exist_ok=True)
+        self.copy_file(NPU_OPS_SO_PATH, package_path)
+        print("copy", NPU_OPS_SO_PATH, "to", package_path)
+        self.copy_file(KERNELS_SO_PATH, lib_path)
+        print("copy", KERNELS_SO_PATH, "to", lib_path)
+
+
 setup(
     name="vllm-mindspore",
     version=version,
@@ -115,4 +181,13 @@ setup(
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=get_requirements(),
+    include_package_data=True,
+    cmdclass={
+        "build_ext": CustomBuildExt,
+        "install": CustomInstall,
+    },
+    ext_modules=[
+        # Dummy extension to trigger build_ext
+        Extension("dummy", sources=[]),
+    ],
 )
