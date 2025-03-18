@@ -150,6 +150,13 @@ class CustomInstall(install):
         self.copy_file(KERNELS_SO_PATH, lib_path)
         print("copy", KERNELS_SO_PATH, "to", lib_path)
 
+cmdclass = {}
+ext_modules = []
+if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "off") == "on":
+    cmdclass["build_ext"] = CustomBuildExt
+    cmdclass["install"] = CustomInstall
+    # Dummy extension to trigger build_ext
+    ext_modules.append(Extension("dummy", sources=[]))
 
 setup(
     name="vllm-mindspore",
@@ -182,12 +189,6 @@ setup(
     python_requires=">=3.9",
     install_requires=get_requirements(),
     include_package_data=True,
-    cmdclass={
-        "build_ext": CustomBuildExt,
-        "install": CustomInstall,
-    },
-    ext_modules=[
-        # Dummy extension to trigger build_ext
-        Extension("dummy", sources=[]),
-    ],
+    cmdclass=cmdclass,
+    ext_modules=ext_modules,
 )
