@@ -204,4 +204,8 @@ vllm.config.SchedulerConfig._verify_args = _verify_args
 
 from .utils import check_ready
 
+from vllm_mindspore.engine.multiprocessing.engine import cleanup
+import vllm.engine.multiprocessing.engine
+vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
+
 check_ready()
