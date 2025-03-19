@@ -161,13 +161,14 @@ from vllm_mindspore.distributed.parallel_state import (
     all_reduce_for_GroupCoordinator,
     init_model_parallel_group,
     broadcast_tensor_dict,
+    init_group_coordinator,
 )
 
 vllm.distributed.parallel_state.GroupCoordinator.all_reduce = (
     all_reduce_for_GroupCoordinator
 )
 vllm.distributed.parallel_state.init_model_parallel_group = init_model_parallel_group
-
+vllm.distributed.parallel_state.GroupCoordinator.__init__ = init_group_coordinator
 vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = broadcast_tensor_dict
 
 from vllm_mindspore.executor.multiproc_worker_utils import (
