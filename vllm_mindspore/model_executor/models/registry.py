@@ -62,11 +62,18 @@ _T = TypeVar("_T")
 
 
 _SUBPROCESS_COMMAND = [
-    sys.executable, "-m", "vllm.model_executor.models.registry"
+    sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"
 ]
 
 
 def _run() -> None:
+    import vllm_mindspore.compilation.inductor_pass as ms_inductor_pass
+    sys.modules["vllm.compilation.inductor_pass"] = ms_inductor_pass
+
+    # Setup plugins
+    from vllm.plugins import load_general_plugins
+    load_general_plugins()
+
     fn, output_file = pickle.loads(sys.stdin.buffer.read())
 
     result = fn()

@@ -15,13 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+from collections import Counter
+from typing import Union
+import sys
+
 import torch
+
+from transformers import PretrainedConfig
+
 
 import vllm.envs as envs
 
-from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, logger
+from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, logger, _STR_DTYPE_TO_TORCH_DTYPE
 from vllm.utils import random_uuid
 from vllm.logger import init_logger
+from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
+from vllm.platforms import CpuArchEnum
 
 logger = init_logger(__name__)
 
@@ -80,8 +89,14 @@ def vllm_config_post_init(self):
         self.compilation_config.use_inductor = True
         self.compilation_config.cudagraph_num_of_warmups = 1
         self.compilation_config.pass_config.enable_fusion = False
-        self.compilation_config.pass_config.enable_reshape = False
-        self.compilation_config.level = CompilationLevel.PIECEWISE
+        self.compilation_config.pass_config.enable_noop = False
+        # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda graph,
+        # which means the model inputs will be padded to cuda graph acceptable size,
+        # but it is not for mindspore. So here set to CompilationLevel.DYNAMO_AS_IS.
+        self.compilation_config.level = CompilationLevel.DYNAMO_AS_IS
+        # Set a small compile_sizes for warmup. '20' is not in 'cudagraph_capture_sizes'.
+        # So the warmup can be runned.
+        self.compilation_config.compile_sizes = [20]
 
     self._set_cudagraph_sizes()
 
@@ -160,3 +175,120 @@ def _verify_args(self) -> None:
             f"max_long_partial_prefills ({self.max_long_partial_prefills}) "
             "must be greater than or equal to 1 and less than or equal to "
             f"max_num_partial_prefills ({self.max_num_partial_prefills}).")
+
+
+def model_post_init(self, __context) -> None:
+
+    count_none = self.custom_ops.count("none")
+    count_all = self.custom_ops.count("all")
+    assert count_none + count_all <= 1, "Can only specify 'none' or 'all'"
+
+    if self.splitting_ops is None:
+        self.splitting_ops = []
+
+    for k, v in self.inductor_passes.items():
+        if not isinstance(v, str):
+            assert callable(v), (
+                f"pass {k} should be callable or a qualified name")
+            self.inductor_compile_config[k] = v if isinstance(
+                v, InductorPass) else CallableInductorPass(v)
+            continue
+
+        # resolve function from qualified name
+        names = v.split(".")
+        module = ".".join(names[:-1])
+        func_name = names[-1]
+        func = __import__(module).__dict__[func_name]
+        self.inductor_compile_config[k] = func if isinstance(
+            func, InductorPass) else CallableInductorPass(func)
+
+    self.enabled_custom_ops = Counter()
+    self.disabled_custom_ops = Counter()
+    self.traced_files = set()
+    self.static_forward_context = {}
+    self.compilation_time = 0.0
+
+
+def _get_and_verify_dtype(
+    config: PretrainedConfig,
+    dtype: Union[str, torch.dtype],
+) -> torch.dtype:
+    # NOTE: getattr(config, "torch_dtype", torch.float32) is not correct
+    # because config.torch_dtype can be None.
+    config_dtype = getattr(config, "torch_dtype", None)
+
+    # Fallbacks for multi-modal models if the root config
+    # does not define torch_dtype
+    if config_dtype is None and hasattr(config, "text_config"):
+        config_dtype = getattr(config.text_config, "torch_dtype", None)
+    if config_dtype is None and hasattr(config, "vision_config"):
+        config_dtype = getattr(config.vision_config, "torch_dtype", None)
+
+    if config_dtype is None:
+        config_dtype = torch.float32
+
+    if isinstance(dtype, str):
+        dtype = dtype.lower()
+        if dtype == "auto":
+            if config_dtype == torch.float32:
+                # Following common practice, we use float16 for float32 models
+                torch_dtype = torch.float16
+            else:
+                torch_dtype = config_dtype
+
+            from vllm.platforms import current_platform
+            if (current_platform.is_cpu()
+                    and current_platform.get_cpu_architecture()
+                    == CpuArchEnum.POWERPC
+                    and (config_dtype == torch.float16
+                         or config_dtype == torch.float32)):
+                logger.info(
+                    "For POWERPC, we cast models to bfloat16 instead of "
+                    "using float16 by default. Float16 is not currently "
+                    "supported for POWERPC.")
+                torch_dtype = torch.bfloat16
+
+            # TODO: change this condition to check if the platform support bf16
+            # instead of checking the OS. For instance M2 shall supports bf16
+            # already. But we need to modify `cpu_extension.cmake` to activate
+            # the feature in the build.
+            if (current_platform.is_cpu() and sys.platform.startswith("darwin")
+                    and current_platform.get_cpu_architecture()
+                    == CpuArchEnum.ARM and config_dtype == torch.bfloat16):
+                logger.info("For macOS with Apple Silicon, currently bfloat16 "
+                            "is not supported. Setting dtype to float16.")
+                torch_dtype = torch.float16
+
+            if current_platform.is_hpu() and config_dtype == torch.float16:
+                logger.info(
+                    "For HPU, we cast models to bfloat16 instead of "
+                    "using float16 by default. Please specify `dtype` if you "
+                    "want to use float16.")
+                torch_dtype = torch.bfloat16
+        else:
+            if dtype not in _STR_DTYPE_TO_TORCH_DTYPE:
+                raise ValueError(f"Unknown dtype: {dtype}")
+            torch_dtype = _STR_DTYPE_TO_TORCH_DTYPE[dtype]
+    elif isinstance(dtype, torch.dtype):
+        torch_dtype = dtype
+    else:
+        raise ValueError(f"Unknown dtype: {dtype}")
+
+    # Verify the dtype.
+    if torch_dtype != config_dtype:
+        if torch_dtype == torch.float32:
+            # Upcasting to float32 is allowed.
+            logger.info("Upcasting %s to %s.", config_dtype, torch_dtype)
+            pass
+        elif config_dtype == torch.float32:
+            # Downcasting from float32 to float16 or bfloat16 is allowed.
+            logger.info("Downcasting %s to %s.", config_dtype, torch_dtype)
+            pass
+        else:
+            # Casting between float16 and bfloat16 is allowed with a warning.
+            logger.warning("Casting %s to %s.", config_dtype, torch_dtype)
+
+    if torch_dtype in _STR_DTYPE_TO_TORCH_DTYPE:
+        torch_dtype = _STR_DTYPE_TO_TORCH_DTYPE[torch_dtype]
+
+    return torch_dtype
