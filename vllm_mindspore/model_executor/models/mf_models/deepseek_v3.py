@@ -26,6 +26,7 @@ from vllm.config import VllmConfig
 from vllm.config import get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+import vllm.envs as envs
 
 from mindspore import Tensor, JitConfig, Model, mutable
 from mindspore.common import dtype as msdtype
@@ -46,7 +47,7 @@ from research.deepseek3.deepseek3 import (
 )
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase, Fake_MLA
+from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase, Fake_MLA, Fake_MLA_V1
 
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
 from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerTriangularMask
@@ -66,8 +67,10 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-
-        self.kv_caches = [Fake_MLA() for i in range(self.mf_model_config.num_layers)]
+        if envs.VLLM_USE_V1:
+            self.kv_caches = [Fake_MLA_V1() for i in range(self.mf_model_config.num_layers)]
+        else:
+            self.kv_caches = [Fake_MLA() for i in range(self.mf_model_config.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:

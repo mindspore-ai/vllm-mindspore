@@ -168,6 +168,11 @@ from vllm.executor.multiproc_worker_utils import get_mp_context
 
 vllm.executor.multiproc_worker_utils.get_mp_context = ms_get_mp_context
 
+import vllm.v1.executor.multiproc_executor
+vllm.v1.executor.multiproc_executor.get_mp_context = ms_get_mp_context
+import vllm.v1.utils
+vllm.v1.utils.get_mp_context = ms_get_mp_context
+
 from vllm_mindspore.executor.ray_gpu_executor import (
     ms_init_workers_ray,
     initialize_ray_cluster,
@@ -220,6 +225,46 @@ from vllm.model_executor.layers.rejection_sampler import RejectionSampler
 RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(RejectionSampler, '_smallest_positive_value')
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
+
+from vllm_mindspore.v1.attention.backends import flash_attn
+import vllm.v1.attention.backends
+sys.modules['vllm.v1.attention.backends.flash_attn'] = flash_attn
+import vllm.v1.attention.backends.flash_attn
+
+import vllm.v1.worker.gpu_model_runner
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _prepare_inputs
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = _prepare_inputs
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
+
+from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = initialize_kv_cache
+
+import vllm.v1.worker.block_table
+from vllm_mindspore.v1.worker.block_table import BlockTable
+vllm.v1.worker.block_table.BlockTable = BlockTable
+
+import vllm.v1.worker.gpu_input_batch
+from vllm_mindspore.v1.worker.gpu_input_batch import InputBatch
+vllm.v1.worker.gpu_input_batch.InputBatch = InputBatch
+vllm.v1.worker.gpu_model_runner.InputBatch = InputBatch
+
+from vllm.v1.worker.gpu_worker import Worker
+
+Worker.__init__ = wrapper_worker_init(Worker.__init__)
+Worker.init_device = wrapper_worker_init_device(Worker.init_device)
+
+
+import vllm.v1.utils
+from vllm_mindspore.v1.utils import copy_slice
+vllm.v1.utils.copy_slice = copy_slice
+vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
+
+from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
+import vllm.v1.sample.ops.penalties
+vllm.v1.sample.ops.penalties._convert_to_tensors = _convert_to_tensors
 
 from .utils import check_ready
 
