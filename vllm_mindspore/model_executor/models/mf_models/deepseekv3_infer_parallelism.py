@@ -19,6 +19,7 @@ transform huggingface model to mindspore safetensor.
 import os
 import time
 import json
+import gc
 import numpy as np
 
 import mindspore as ms
@@ -224,6 +225,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
                                                         name=w2_scale_ms_name,
                                                         requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_quant_process_moe_shared_expert_ffn_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer quant process moe shared expert ffn weight"""
@@ -296,6 +300,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
                                                         name=w2_ms_name,
                                                         requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_quant_process_dense_ffn_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process dense ffn weight"""
@@ -378,6 +385,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
                                                         name=w2_ms_name,
                                                         requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_convert_outer_weight(self, src_hf_dir, hf_weight_map):
         """convert weight not in model"""
@@ -405,6 +415,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[lm_head_ms_name] = ms.Parameter(ms.Tensor(np_data, ms.bfloat16), name=lm_head_ms_name,
                                                        requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def quant_special_attention_weight(self, layer_id, src_hf_dir, hf_weight_map, name, is_trans_rope_weigh=False,
                                        is_split_param=False):
@@ -479,6 +492,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[dequant_scale_ms_name] = ms.Parameter(ms.Tensor(dequant_scale_ms_param, ms.float32),
                                                              name=dequant_scale_ms_name, requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_quant_bias_weight(self, src_hf_dir, layer_id, hf_weight_map):
         # quant_op.beta
@@ -503,6 +519,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
                                                              name=l2q_proj_bias_ms_name,
                                                              requires_grad=False)
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_quant_process_attention_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer quant process attention weight"""
@@ -598,6 +617,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         self.quant_special_attention_weight(layer_id, src_hf_dir, hf_weight_map, "o_proj")
 
         param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_quant_net_convert_layer_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer quant net convert layer weight"""
@@ -705,6 +727,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[w2_ms_name] = ms.Parameter(ms.Tensor(w2_ms_stack_param, ms.bfloat16), name=w2_ms_name,
                                                   requires_grad=False)
         _, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_process_moe_shared_expert_ffn_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process moe shared expert ffn weight"""
@@ -735,6 +760,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[w2_ms_name] = ms.Parameter(ms.Tensor(w2_ms_param, ms.bfloat16), name=w2_ms_name,
                                                   requires_grad=False)
         _, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_process_dense_ffn_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process dense ffn weight"""
@@ -771,6 +799,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[w2_ms_name] = ms.Parameter(ms.Tensor(w2_ms_param, ms.bfloat16), name=w2_ms_name,
                                                   requires_grad=False)
         _, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_process_attention_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process attention weight"""
@@ -857,6 +888,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
         parameter_dict[wo_ms_name] = ms.Parameter(ms.Tensor(wo_ms_param, ms.bfloat16), name=wo_ms_name,
                                                   requires_grad=False)
         _, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_process_norm_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process attention weight"""
@@ -880,6 +914,9 @@ class DeepseekInferParallelism(BaseModelParallelism):
                                                         requires_grad=False)
 
         _, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        
+        del parameter_dict
+        gc.collect()
 
     def infer_convert_layer_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer convert layer weight"""
