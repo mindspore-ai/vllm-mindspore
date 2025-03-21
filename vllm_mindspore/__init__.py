@@ -47,7 +47,6 @@ vllm.utils.current_platform = ascend_platform
 
 from vllm_mindspore.utils import (
     direct_register_custom_op,
-    memory_profiling,
     make_tensor_with_pad,
     async_tensor_h2d,
     get_dtype_size,
@@ -56,7 +55,6 @@ from vllm_mindspore.utils import (
 )
 
 vllm.utils.direct_register_custom_op = direct_register_custom_op
-vllm.utils.memory_profiling = memory_profiling
 vllm.utils.make_tensor_with_pad = make_tensor_with_pad
 vllm.utils.async_tensor_h2d = async_tensor_h2d
 vllm.utils.get_dtype_size = get_dtype_size

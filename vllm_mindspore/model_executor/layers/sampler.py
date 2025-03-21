@@ -420,7 +420,7 @@ def _apply_top_k_top_p(
     logits_sort.masked_fill_(top_k_mask, -float("inf"))
 
     # Apply top-p.
-    probs_sort = logits_sort.softmax(axis=-1)
+    probs_sort = logits_sort.softmax(dim=-1)
     probs_sum = probs_sort.cumsum(axis=-1)
     top_p_mask = probs_sum <= 1 - p.unsqueeze(dim=1)
     # at least one
