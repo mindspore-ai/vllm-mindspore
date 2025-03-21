@@ -32,7 +32,7 @@ from vllm.logger import init_logger
 
 
 from mindformers.tools.register.config import MindFormerConfig
-
+from mindspore.common.api import _pynative_executor
 from mindformers.core.context import build_context
 from mindformers.core.parallel_config import build_parallel_config
 from mindformers.trainer.utils import transform_and_load_checkpoint
@@ -195,6 +195,8 @@ class DeepseekV3ForCausalLM(MsModelBase):
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
         self.update_mf_kvcaches(kv_caches)
+        _pynative_executor.sync()
+        _pynative_executor.set_async_for_graph(True)]
         query_lens = attn_metadata.query_lens
         kv_cache_lens = attn_metadata.seq_lens_tensor.asnumpy() - query_lens
         if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
@@ -219,6 +221,8 @@ class DeepseekV3ForCausalLM(MsModelBase):
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
+        _pynative_executor.sync()
+        _pynative_executor.set_async_for_graph(False)
 
         if is_prefill:
             self.network.phase = "prefill"
