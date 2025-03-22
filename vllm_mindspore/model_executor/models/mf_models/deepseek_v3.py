@@ -33,7 +33,7 @@ from vllm.logger import init_logger
 
 from mindformers.tools.register.config import MindFormerConfig
 from mindspore.common.api import _pynative_executor
-from mindformers.core.context import build_context
+from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
 from mindformers.trainer.utils import transform_and_load_checkpoint
 from research.deepseek3.deepseek3_config import (
@@ -90,7 +90,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
         )
 
         self.mf_config = MindFormerConfig(os.getenv("MINDFORMERS_MODEL_CONFIG"))
-        build_context(self.mf_config, is_set_ms_ctx=False, is_init_ms=False)
+        build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
         self.mf_config.model.model_config.parallel_config = (
             self.mf_config.parallel_config
@@ -204,10 +204,6 @@ class DeepseekV3ForCausalLM(MsModelBase):
         else:
             is_prefill = False
 
-        q_seq_lens = ms.Tensor(query_lens, dtype=ms.int32)
-        position_ids = ms.Tensor(positions, dtype=ms.int32)
-        attention_mask = self.gen_attention_mask(is_prefill, position_ids, query_lens)
-
         model_inputs = {}
         model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
         model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(
@@ -218,9 +214,6 @@ class DeepseekV3ForCausalLM(MsModelBase):
             self.mf_model_config.block_size,
         )
         model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-        model_inputs["position_ids"] = position_ids
-        model_inputs["q_seq_lens"] = q_seq_lens
-        model_inputs["attention_mask"] = attention_mask
         _pynative_executor.sync()
         _pynative_executor.set_async_for_graph(False)
 
