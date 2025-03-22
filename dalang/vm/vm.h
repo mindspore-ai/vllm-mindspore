@@ -102,6 +102,9 @@ inline const char *GetSlotTypeStr(const Slot &slot) {
   case SlotTensor: {
     return "tensor";
   }
+  case SlotOps: {
+    return "ops";
+  }
   case SlotIntrinsic: {
     return "intrinsic";
   }
@@ -148,6 +151,10 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
   }
   case SlotTensor: {
     ss << "tensor:" << slot.value.tensor_;
+    break;
+  }
+  case SlotOps: {
+    ss << "ops:" << ops::ToStr(slot.value.op);
     break;
   }
   case SlotIntrinsic: {

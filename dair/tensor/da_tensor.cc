@@ -17,6 +17,12 @@
 #include "tensor/da_tensor.h"
 #include "common/common.h"
 
+#undef DEBUG
+#ifndef DEBUG
+#undef LOG_OUT
+#define LOG_OUT NO_LOG_OUT
+#endif
+
 namespace tensor {
 DAContext *NewDAContext(size_t deviceId, size_t memSize) {
   static DAContextManager _manager;
@@ -27,7 +33,8 @@ DAContext *NewDAContext(size_t deviceId, size_t memSize) {
       context.deviceId = deviceId;
       context.memSize = memSize;
       context.memPool = malloc(memSize);
-      LOG_OUT << "Create a new DAContext " << &context;
+      LOG_OUT << "Create a new DAContext " << &context
+              << ", pool size: " << memSize;
       return &context;
     }
   }
@@ -49,7 +56,6 @@ void FreeDAContext(DAContext *context) {
 }
 
 DAGraph *NewDAGraph(DAContext *context) {
-  LOG_OUT << "Create DAGraph for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 
@@ -59,11 +65,20 @@ DAGraph *NewDAGraph(DAContext *context) {
 
   DAGraph *graph = (DAGraph *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
+  LOG_OUT << "Create DAGraph " << graph << ", size: " << sizeof(DAGraph)
+          << ", for DAContext " << context;
+
   return graph;
 }
 
+void AddParameter(DAGraph *graph, DATensor *param) {
+  CHECK_NULL(graph);
+  graph->param[graph->paramSize] = param;
+  ++graph->paramSize;
+  LOG_OUT << "Add Parameter " << param << " for DAContext " << graph;
+}
+
 DATensor *NewDATensor(DAContext *context) {
-  LOG_OUT << "Create DATensor for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 
@@ -76,13 +91,14 @@ DATensor *NewDATensor(DAContext *context) {
   tensor->dim = 0;
   tensor->shape[0] = 0;
   tensor->type = Type_F32;
+  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
+          << ", for DAContext " << context;
   return tensor;
 }
 
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
                       size_t shape[DA_TENSOR_MAX_DIM], void *data, ops::Op op,
                       DATensor *input[DA_TENSOR_MAX_INPUT]) {
-  LOG_OUT << "Create DATensor for DAContext " << context;
   CHECK_NULL(context);
   CHECK_NULL(context->memPool);
 
@@ -103,6 +119,8 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
       tensor->input[i] = input[i];
     }
   }
+  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
+          << ", for DAContext " << context;
   return tensor;
 }
 } // namespace tensor

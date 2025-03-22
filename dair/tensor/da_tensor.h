@@ -28,6 +28,10 @@
 #define DA_TENSOR_MAX_DIM 6
 #endif
 
+#ifndef DA_GRAPH_MAX_PARAM
+#define DA_GRAPH_MAX_PARAM 64
+#endif
+
 #ifndef DA_GRAPH_MAX_NODE
 #define DA_GRAPH_MAX_NODE 4096
 #endif
@@ -64,14 +68,19 @@ struct DATensor {
   // Operation of this tensor
   ops::Op op{ops::Op_End};
   // Inputs size
-  size_t inputNum{0};
+  size_t inputSize{0};
   // Input tensors
   struct DATensor *input[DA_TENSOR_MAX_INPUT] = {nullptr};
 };
 
 struct DAGraph {
-  // Number of nodes
-  size_t num{0};
+  // Size of parameters
+  size_t paramSize{0};
+  // Tensor parameters
+  DATensor *param[DA_GRAPH_MAX_PARAM] = {nullptr};
+
+  // Size of nodes
+  size_t nodeSize{0};
   // Tensor nodes
   DATensor *node[DA_GRAPH_MAX_NODE] = {nullptr};
 };
@@ -96,10 +105,14 @@ struct DAContextManager {
   DAContext context[DA_CONTEXT_MAX_NUM];
 };
 
-DAContext *NewDAContext(size_t deviceId = 0,
-                        size_t memSize = 1024 * 1024 * 256);
+constexpr auto kMemPoolSize = 1024 * 1024 * 256;
+
+DAContext *NewDAContext(size_t deviceId = 0, size_t memSize = kMemPoolSize);
 void FreeDAContext(DAContext *context);
+
 DAGraph *NewDAGraph(DAContext *context);
+void AddParameter(DAGraph *graph, DATensor *param);
+
 DATensor *NewDATensor(DAContext *context);
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
                       size_t shape[DA_TENSOR_MAX_DIM] = nullptr,

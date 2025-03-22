@@ -35,6 +35,25 @@ const char *_insts[]{// Inst strings.
 #undef INSTRUCTION
 
 namespace compiler {
+const char *ToStr(CodeType type) {
+  switch (type) {
+  case CodeBlock: {
+    return "block";
+  }
+  case CodeFunction: {
+    return "function";
+  }
+  case CodeGraph: {
+    return "graph";
+  }
+  case CodeModule: {
+    return "module";
+  }
+  default:
+    return "<unknown>";
+  }
+}
+
 const char *GetInstStr(Inst inst) {
   if (inst >= Inst_End) {
     LOG_ERROR << "inst is abnormal, " << inst << ", " << Inst_End;
@@ -814,14 +833,14 @@ void Compiler::Init() {
 
   // Preset intrinsic symbols in global symbol pool for
   // bool/int/float/str/tensor, and so on.
-  symbolPool(0).emplace_back(ToStr(LiteralId_bool));
-  symbolPool(0).emplace_back(ToStr(LiteralId_int));
-  symbolPool(0).emplace_back(ToStr(LiteralId_float));
-  symbolPool(0).emplace_back(ToStr(LiteralId_str));
-  symbolPool(0).emplace_back(ToStr(LiteralId_list));
-  symbolPool(0).emplace_back(ToStr(LiteralId_set));
-  symbolPool(0).emplace_back(ToStr(LiteralId_dict));
-  symbolPool(0).emplace_back(ToStr(LiteralId_tensor));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_bool));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_int));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_float));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_str));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_list));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_set));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_dict));
+  symbolPool(0).emplace_back(lexer::ToStr(LiteralId_tensor));
   intrinsicSize_ = symbolPool(0).size();
 }
 
@@ -832,7 +851,8 @@ void Compiler::Dump() {
   for (size_t codeIndex = 0; codeIndex < codes().size(); ++codeIndex) {
     const auto &code = codes()[codeIndex];
     std::cout << "----------" << std::endl;
-    std::cout << "code: " << code.name << std::endl;
+    std::cout << "code: <" << ToStr(code.type) << " '" << code.name << "'>";
+    std::cout << std::endl;
     if (!code.args.empty()) {
       std::cout << "arguments: " << std::endl;
       for (size_t i = 0; i < code.args.size(); ++i) {
@@ -881,9 +901,13 @@ void Compiler::Dump() {
       }
       case Inst_LoadGlobal:
       case Inst_StoreGlobal:
-      case Inst_LoadIntrin:
-      case Inst_LoadOps: {
+      case Inst_LoadIntrin: {
         std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
+        break;
+      }
+      case Inst_LoadOps: {
+        std::cout << inst.offset << " (" << ops::ToStr((ops::Op)inst.offset)
+                  << ')';
         break;
       }
       case Inst_StdCin: {
@@ -969,7 +993,7 @@ void Compiler::Dump() {
       const auto &cons = code.constants[i];
       std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
       std::cout << std::setfill(' ') << std::setw(8) << std::left
-                << ToStr(static_cast<LtId>(cons.type));
+                << lexer::ToStr(static_cast<LtId>(cons.type));
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }

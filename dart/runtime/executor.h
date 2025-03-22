@@ -23,7 +23,7 @@
 #include <unordered_map>
 #include <vector>
 
-#define DEBUG
+#define DUMP
 
 namespace runtime {
 using namespace tensor;
@@ -34,23 +34,43 @@ public:
   ~GraphExecutor() {
     CHECK_NULL(context_);
     FreeDAContext(context_);
+    context_ = nullptr;
   }
 
-  void BeginGraph();
+  // Start building graph.
+  void BeginGraph(const std::string &name);
+  // Finish building graph.
   void EndGraph();
+  // Add a parameter for graph.
+  void AddParameter(DATensor *param);
+  // Add parameters for graph.
+  void AddParameters(const std::vector<DATensor *> &params);
+  // Add a const tensor.
   DATensor *AddTensor(Type type = Type_F32, size_t dim = 0,
                       size_t shape[DA_TENSOR_MAX_DIM] = nullptr,
                       void *data = nullptr);
-  DATensor *AddTensor(const std::vector<DATensor *> &inputs);
+  // Add operation result tensor.
+  DATensor *AddTensor(ops::Op op, const std::vector<DATensor *> &inputs);
 
-  void Run();
-  void RunTensor(const DATensor *tensor);
+  // Run the built graph.
+  void RunGraph();
+  // If the graph had been built.
+  bool HasGraph() const { return graph_ != nullptr; }
+#ifdef DUMP
+  // Dump the built graph.
+  void DumpGraph();
+#endif
 
 private:
+  void RunTensor(const DATensor *tensor);
+
+  std::string name_;
   DAContext *context_{nullptr};
   DAGraph *graph_{nullptr};
-#ifdef DEBUG
-  std::unordered_map<const DATensor *, size_t> tensorNumMap_;
+  std::vector<DATensor *> parameters_;
+#ifdef DUMP
+  std::unordered_map<const DATensor *, ssize_t> paraNumMap_;
+  std::unordered_map<const DATensor *, ssize_t> nodeNumMap_;
 #endif
 };
 } // namespace runtime

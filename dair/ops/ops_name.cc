@@ -19,6 +19,12 @@
 
 #include "common/logger.h"
 
+#undef DEBUG
+#ifndef DEBUG
+#undef LOG_OUT
+#define LOG_OUT NO_LOG_OUT
+#endif
+
 namespace ops {
 #define OP(O) {#O, Op_##O},
 std::unordered_map<std::string_view, Op> _opNames{
@@ -30,7 +36,7 @@ Op MatchOp(const char *op) {
   if (_opNames.count(op) == 0) {
     LOG_ERROR << "Not found op with name '" << op << "'";
     for (auto it = _opNames.cbegin(); it != _opNames.cend(); ++it) {
-      LOG_OUT << "#" << it->first << ", " << it->second;
+      LOG_ERROR << "\t#" << it->first << ", " << it->second;
     }
     exit(EXIT_FAILURE);
   }

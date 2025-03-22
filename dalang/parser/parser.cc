@@ -257,9 +257,9 @@ ExprPtr Parser::ParseTensor() {
         }
       }
       if (ExprPattern::TensorPattern::MatchEnd(CurrentToken())) {
-        TokenConstPtr end = GetToken(); // ]
-        return MakeTensorExpr(start);   // TODO: parse const tensor later.
-      } else {                          // Abnormal group expression.
+        RemoveToken();                // ]
+        return MakeTensorExpr(start); // TODO: parse const tensor later.
+      } else {                        // Abnormal group expression.
         std::stringstream ss;
         ss << "warning: invalid list ending. unrecognized token: ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));

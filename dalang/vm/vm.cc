@@ -162,9 +162,9 @@ void VM::InstStoreName(ssize_t offset) {
 void VM::InstLoadLocal(ssize_t offset) {
   const auto &name = LocalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
-  auto *slot = &LocalVars()[offset];
-  LOG_OUT << "load: " << ToString(*slot);
-  CurrentStack().emplace_back(*slot);
+  auto &slot = LocalVars()[offset];
+  LOG_OUT << "load: " << ToString(slot);
+  CurrentStack().emplace_back(slot);
 }
 
 // Store a slot by offset for latish load.
@@ -174,7 +174,9 @@ void VM::InstStoreLocal(ssize_t offset) {
                    "error: stack is empty.\nfail to store local.");
     exit(EXIT_FAILURE);
   }
-  LocalVars()[offset] = std::move(CurrentStack().back());
+  auto &slot = CurrentStack().back();
+  LOG_OUT << "offset: " << offset << ", store: " << ToString(slot);
+  LocalVars()[offset] = std::move(slot);
   CurrentStack().pop_back();
 }
 
@@ -300,12 +302,18 @@ void VM::InstDoCall(ssize_t offset) {
   const auto codeIndex = funcNameSlot.value.offset;
   const auto &callCode = codes()[codeIndex];
   LOG_OUT << "offset: " << offset << ", type: " << callCode.type
-          << ", name: " << callCode.name << ", id: " << frames_.size();
+          << ", name: " << callCode.name << ", id: " << frames_.size()
+          << ", arg size: " << argsSize;
 
   // If call a graph.
   if (callCode.type == CodeGraph) {
-    std::cout << "#DAGraph: " << callCode.name << std::endl;
-    graphExecutor_.BeginGraph();
+    LOG_OUT << "Call DAGraph: " << callCode.name;
+    if (graphExecutor_.HasGraph()) {
+      graphExecutor_.RunGraph();
+      return;
+    } else {
+      graphExecutor_.BeginGraph(callCode.name);
+    }
   }
 
   // Create new function/graph frame in advance.
@@ -330,6 +338,13 @@ void VM::InstDoCall(ssize_t offset) {
     auto argStartIndex = CurrentStack().size() - argsSize;
     for (size_t i = 0; i < argsSize; ++i) {
       const auto &arg = CurrentStack()[argStartIndex + i];
+
+      // If call a graph.
+      if (callCode.type == CodeGraph) {
+        LOG_OUT << "Add parameter " << ToString(arg);
+        graphExecutor_.AddParameter((tensor::DATensor *)arg.value.tensor_);
+      }
+
 #if 0
       newFuncFrame.names[callCode.args[i]] = std::move(arg);
 #else
@@ -371,6 +386,15 @@ void VM::InstCallIntrin(ssize_t offset) {
   const auto argsSize = static_cast<size_t>(offset);
   const auto &intrinsicSlot = *(CurrentStack().crbegin() + argsSize);
 
+  if (argsSize > 0) { // Has arguments.
+    // Erase all arguments.
+    auto argStartIndex = CurrentStack().size() - argsSize;
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
+                         CurrentStack().end());
+  }
+  // Erase the intrinsic self.
+  CurrentStack().pop_back();
+
   switch (intrinsicSlot.value.intr) {
   case intrinsic::IntrisicType_bool: {
     break;
@@ -404,15 +428,6 @@ void VM::InstCallIntrin(ssize_t offset) {
     LOG_ERROR << "invalid intrinsic.";
     exit(EXIT_FAILURE);
   }
-
-  if (argsSize > 0) { // Has arguments.
-    // Erase all arguments.
-    auto argStartIndex = CurrentStack().size() - argsSize;
-    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
-                         CurrentStack().end());
-  }
-  // Erase the intrinsic self.
-  CurrentStack().pop_back();
   LOG_OUT << "Call intrisic.";
 }
 
@@ -428,23 +443,29 @@ void VM::InstCallOps(ssize_t offset) {
   const auto argsSize = static_cast<size_t>(offset);
   const auto &opsNameSlot = *(CurrentStack().crbegin() + argsSize);
 
-  // Call an op.
-  std::cout << "  #call ops." << ops::ToStr(opsNameSlot.value.op) << std::endl;
-
+  std::vector<tensor::DATensor *> inputs;
   if (argsSize > 0) { // Has arguments.
-    // Erase all arguments.
+    // Move all arguments from caller stack into tensor inputs.
     auto argStartIndex = CurrentStack().size() - argsSize;
+    for (size_t i = 0; i < argsSize; ++i) {
+      const auto &arg = CurrentStack()[argStartIndex + i];
+      LOG_OUT << "Add input " << ToString(arg);
+      inputs.emplace_back((tensor::DATensor *)arg.value.tensor_);
+    }
+
+    // Erase all arguments.
     CurrentStack().erase(CurrentStack().begin() + argStartIndex,
                          CurrentStack().end());
   }
   // Erase the op self.
   CurrentStack().pop_back();
 
-  // TODO: Remove later, just for test.
-  LOG_OUT << "Call ops";
-  Slot fakeSlot{.type = SlotInt};
-  fakeSlot.value.int_ = -1;
-  CurrentStack().emplace_back(std::move(fakeSlot));
+  // Call an op.
+  LOG_OUT << "Call ops." << ops::ToStr(opsNameSlot.value.op);
+  auto tensor = graphExecutor_.AddTensor(opsNameSlot.value.op, inputs);
+  Slot tensorSlot{.type = SlotTensor};
+  tensorSlot.value.tensor_ = tensor;
+  CurrentStack().emplace_back(std::move(tensorSlot));
 }
 
 // Return the top slot to previous frame.
@@ -475,6 +496,18 @@ void VM::InstReturnVal(ssize_t offset) {
     auto &prevFrame = frames_.rbegin()[1];
     prevFrame.slots.emplace_back(std::move(voidSlot));
   }
+
+  // If call a graph.
+  if (frames_.back().type == CodeGraph) {
+    if (graphExecutor_.HasGraph()) {
+      graphExecutor_.EndGraph();
+      graphExecutor_.DumpGraph();
+    } else {
+      LOG_ERROR << "No graph building.";
+      exit(EXIT_FAILURE);
+    }
+  }
+
   // Just pop the frame.
   frames_.pop_back();
   frame_ = &frames_.back();

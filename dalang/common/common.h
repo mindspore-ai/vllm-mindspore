@@ -38,7 +38,7 @@
 
 #define CHECK_FAIL(a)                                                          \
   if (!(a)) {                                                                  \
-    LOG_ERROR << '\'' << TO_STR((a)) << "\' is not true. check fail.";         \
+    LOG_ERROR << '\'' << TO_STR(a) << "\' is not true. check fail.";           \
     exit(EXIT_FAILURE);                                                        \
   }
 

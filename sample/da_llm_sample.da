@@ -9,18 +9,8 @@ graph net(x, y) {
 }
 
 function main() {
-    "a = int(0)
-    b = 1 : int
-    if a > b {
-        <: 'error' <: '\n'
-    }"
-
-    'x = tensor((2, 3))
-    y = tensor((3, 4))'
     x = tensor(2)
     y = tensor(3)
-    'x = 2
-    y = 3'
     net(x, y)
     b = net(x, y)
     return b

@@ -18,84 +18,165 @@
 
 #include <sstream>
 
-namespace runtime {
+#undef DEBUG
+#ifndef DEBUG
+#undef LOG_OUT
+#define LOG_OUT NO_LOG_OUT
+#endif
 
-void GraphExecutor::BeginGraph() {
-  LOG_OUT << "begin graph";
+namespace runtime {
+// Start building graph.
+void GraphExecutor::BeginGraph(const std::string &name) {
+  LOG_OUT << "Begin graph building";
   CHECK_FAIL(graph_ == nullptr);
   CHECK_NULL(context_);
   graph_ = NewDAGraph(context_);
+  name_ = name;
 }
 
+// Finish building graph.
 void GraphExecutor::EndGraph() {
-  LOG_OUT << "end graph";
+  LOG_OUT << "End graph building";
   CHECK_NULL(graph_);
+}
+
+// Add a parameter for graph.
+void GraphExecutor::AddParameter(DATensor *param) {
+  LOG_OUT << "Add parameter: " << param << " for graph: " << graph_;
+  tensor::AddParameter(graph_, param);
+}
+
+// Add parameters for graph.
+void GraphExecutor::AddParameters(const std::vector<DATensor *> &params) {
+  LOG_OUT << "Add parameters[" << params.size() << "] for graph: " << graph_;
+  for (const auto &param : params) {
+    tensor::AddParameter(graph_, param);
+  }
 }
 
 // Add a const tensor.
 DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
                                    size_t shape[DA_TENSOR_MAX_DIM],
                                    void *data) {
-  LOG_OUT << "add const tensor";
+  LOG_OUT << "Add const tensor";
   CHECK_NULL(context_);
   auto *tensor = NewDATensor(context_, type, dim, shape, data);
   CHECK_NULL(tensor);
   if (graph_ != nullptr) {
-    graph_->node[graph_->num] = tensor;
-    ++graph_->num;
+    graph_->node[graph_->nodeSize] = tensor;
+    ++graph_->nodeSize;
   }
   return tensor;
 }
 
 // Add operation result tensor.
-DATensor *GraphExecutor::AddTensor(const std::vector<DATensor *> &inputs) {
-  LOG_OUT << "add tensor";
+DATensor *GraphExecutor::AddTensor(ops::Op op,
+                                   const std::vector<DATensor *> &inputs) {
+  LOG_OUT << "Add tensor";
   CHECK_NULL(context_);
   auto *tensor = NewDATensor(context_);
   CHECK_NULL(tensor);
+  tensor->op = op;
   for (const auto &input : inputs) {
-    tensor->input[tensor->inputNum] = input;
-    ++tensor->inputNum;
+    tensor->input[tensor->inputSize] = input;
+    ++tensor->inputSize;
   }
   if (graph_ != nullptr) {
-    graph_->node[graph_->num] = tensor;
-    ++graph_->num;
+    graph_->node[graph_->nodeSize] = tensor;
+    ++graph_->nodeSize;
   }
   return tensor;
 }
 
 void GraphExecutor::RunTensor(const DATensor *tensor) {
+  LOG_OUT << "Run tensor, ops." << ops::ToStr(tensor->op)
+          << ", tensor: " << tensor;
   // Call (tensor->op, tensor->node)
-#ifdef DEBUG
-  std::stringstream ss;
-  for (size_t i = 0; i < tensor->inputNum; ++i) {
-    ss << "%" << tensorNumMap_[tensor->input[i]];
-    if (i != tensor->inputNum - 1) {
-      ss << ", ";
-    }
-  }
-  std::cout << "  %" << tensorNumMap_[tensor] << " = ops."
-            << ops::ToStr(tensor->op) << "(" << ss.str() << ")" << std::endl;
-#endif
 }
 
-void GraphExecutor::Run() {
+// Run the built graph.
+void GraphExecutor::RunGraph() {
+  LOG_OUT << "Run graph";
   CHECK_NULL(context_);
   CHECK_NULL(graph_);
-#ifdef DEBUG
-  for (size_t i = 0; i < graph_->num; ++i) {
-    tensorNumMap_.emplace(graph_->node[i], i);
-  }
-  std::cout << "graph(" << graph_->num << ") {" << std::endl;
-#endif
+
   // Run all tensor nodes.
-  for (size_t i = 0; i < graph_->num; ++i) {
-    auto tensorNode = graph_->node[i];
+  DATensor *tensorNode{nullptr};
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    tensorNode = graph_->node[i];
     RunTensor(tensorNode);
   }
-
-#ifdef DEBUG
-  std::cout << "}" << std::endl;
-#endif
 }
+
+#undef DEBUG_DUMP
+#ifdef DUMP
+// Run the built graph.
+void GraphExecutor::DumpGraph() {
+  LOG_OUT << "Run graph";
+  CHECK_NULL(context_);
+  CHECK_NULL(graph_);
+
+  constexpr auto paramPrefix = "param_";
+  std::cout << "graph{" << name_ << "}(";
+  for (size_t i = 0; i < graph_->paramSize; ++i) {
+    auto para = graph_->param[i];
+    paraNumMap_.emplace(para, i);
+    std::cout << paramPrefix << i;
+#ifdef DEBUG_DUMP
+    std::cout << "(" << para << ")";
+#endif
+    if (i < graph_->paramSize - 1) {
+      std::cout << ", ";
+    }
+  }
+  std::cout << ") {" << std::endl;
+
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    nodeNumMap_.emplace(graph_->node[i], i);
+  }
+
+  // Run all tensor nodes.
+  DATensor *tensorNode{nullptr};
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    tensorNode = graph_->node[i];
+    std::stringstream ss;
+    for (size_t i = 0; i < tensorNode->inputSize; ++i) {
+      auto input = tensorNode->input[i];
+      // Find node number firstly.
+      auto nodeIt = nodeNumMap_.find(input);
+      if (nodeIt != nodeNumMap_.cend()) {
+        ss << "%" << nodeIt->second;
+      } else {
+        // Find parameter number.
+        auto paraIt = paraNumMap_.find(input);
+        if (paraIt != paraNumMap_.cend()) {
+          ss << paramPrefix << paraIt->second;
+        } else {
+          ss << "<ERR>";
+        }
+      }
+#ifdef DEBUG_DUMP
+      ss << "(" << input << ")";
+#endif
+      if (i != tensorNode->inputSize - 1) {
+        ss << ", ";
+      }
+    }
+
+    if (nodeNumMap_.count(tensorNode) == 0) {
+      LOG_ERROR << "Failed to find tensor number for " << tensorNode;
+      exit(EXIT_FAILURE);
+    }
+    std::cout << "  %" << nodeNumMap_[tensorNode];
+#ifdef DEBUG_DUMP
+    std::cout << "(" << tensorNode << ")";
+#endif
+    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str()
+              << ")" << std::endl;
+  }
+
+  std::cout << "  return %" << nodeNumMap_[tensorNode] << std::endl;
+  std::cout << "}" << std::endl;
+}
+#endif
 } // namespace runtime

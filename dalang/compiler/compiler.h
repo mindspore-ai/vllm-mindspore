@@ -65,6 +65,7 @@ struct Constant {
 typedef Constant *ConstantPtr;
 
 enum CodeType { CodeBlock, CodeFunction, CodeGraph, CodeModule, CodeEnd };
+const char *ToStr(CodeType type);
 
 struct Code {
   CodeType type;
