@@ -23,7 +23,7 @@ import numpy as np
 import torch
 import torch.distributed
 from torch.distributed import Backend, ProcessGroup
-from mindspore.common.api import _pynative_executor
+
 from collections import namedtuple
 TensorMetadata = namedtuple("TensorMetadata", ["device", "dtype", "size"])
 
@@ -114,9 +114,6 @@ def broadcast_tensor_dict(
     """Broadcast the input tensor dictionary.
     NOTE: `src` is the local rank of the source rank.
     """
-    # sync and start spin thread
-    _pynative_executor.sync()
-    _pynative_executor.set_async_for_graph(True)
     # Bypass the function if we are using only 1 GPU.
     if (not torch.distributed.is_initialized() or self.world_size == 1):
         return tensor_dict
@@ -190,8 +187,6 @@ def broadcast_tensor_dict(
                 tensor_dict[key] = value
         for async_handle in async_handles:
             async_handle.wait()
-    _pynative_executor.sync()
-    _pynative_executor.set_async_for_graph(False)
     return tensor_dict
 
 def init_group_coordinator(
