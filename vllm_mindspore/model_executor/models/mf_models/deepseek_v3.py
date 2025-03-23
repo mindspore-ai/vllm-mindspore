@@ -196,7 +196,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
     ) -> Union[Tensor, IntermediateTensors]:
         self.update_mf_kvcaches(kv_caches)
         _pynative_executor.sync()
-        _pynative_executor.set_async_for_graph(True)
+        _pynative_executor.set_async_for_graph(True)]
         query_lens = attn_metadata.query_lens
         kv_cache_lens = attn_metadata.seq_lens_tensor.asnumpy() - query_lens
         if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
