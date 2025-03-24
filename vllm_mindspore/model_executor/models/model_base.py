@@ -47,6 +47,11 @@ class MsModelBase():
 
         self.modules_dict = None
 
+        self.enable_chunked_prefill = vllm_config.scheduler_config.enable_chunked_prefill
+        self.enable_prefix_caching = vllm_config.cache_config.enable_prefix_caching
+        self.is_multi_step = vllm_config.scheduler_config.is_multi_step
+        self.is_multi_step_chunked_prefill = self.is_multi_step and self.enable_chunked_prefill
+
     def get_model_path(self):
         model_name_or_path = self.model_config.model
         if os.path.isdir(model_name_or_path):
