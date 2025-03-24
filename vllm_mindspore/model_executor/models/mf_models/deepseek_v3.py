@@ -19,6 +19,7 @@
 import os
 from typing import Iterable, List, Optional, Set, Tuple, Union
 from pathlib import Path
+from collections import OrderedDict
 
 import numpy as np
 
@@ -36,6 +37,7 @@ from mindspore.common.api import _pynative_executor
 from mindformers.core.context import build_context
 from mindformers.core.parallel_config import build_parallel_config
 from mindformers.trainer.utils import transform_and_load_checkpoint
+from research.deepseek3.deepseek3_model_infer import DeepseekV3DecodeLayer
 from research.deepseek3.deepseek3_config import (
     DeepseekV3Config as DeepseekV3Config_MF,
 )
@@ -49,6 +51,11 @@ from vllm_mindspore.utils import calc_block_num
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model
+from mindspore.common import dtype as msdtype
+
+from mindspore_gs.ptq import PTQ
+from mindspore_gs.ptq import PTQMode, PTQConfig, OutliersSuppressionType, PrecisionRecovery, QuantGranularity, GPTQQuantConfig
+from mindspore_gs.common import BackendTarget
 
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_infer_parallelism import DeepseekInferParallelism
 
@@ -114,33 +121,11 @@ class DeepseekV3ForCausalLM(MsModelBase):
         self.network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
 
         # quant
-        if self.is_quant:
-            from mindspore_gs.ptq import PTQ
-            from mindspore_gs.ptq import PTQMode, PTQConfig, OutliersSuppressionType, PrecisionRecovery, QuantGranularity
-            from mindspore_gs.common import BackendTarget
-            from mindspore.common import dtype as msdtype
-            from collections import OrderedDict
-            cfg = PTQConfig(mode=PTQMode.DEPLOY,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.int8,
-                            act_quant_dtype=msdtype.int8,
-                            outliers_suppression=OutliersSuppressionType.OUTLIER_SUPPRESSION_PLUS,
-                            opname_blacklist=['lkv2kv', 'lm_head'],
-                            precision_recovery=PrecisionRecovery.NONE,
-                            act_quant_granularity=QuantGranularity.PER_TENSOR,
-                            weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            ffn_config = PTQConfig(mode=PTQMode.DEPLOY,
-                                   backend=BackendTarget.ASCEND,
-                                   weight_quant_dtype=msdtype.int8,
-                                   act_quant_dtype=msdtype.int8,
-                                   outliers_suppression=OutliersSuppressionType.NONE,
-                                   precision_recovery=PrecisionRecovery.NONE,
-                                   act_quant_granularity=QuantGranularity.PER_TOKEN,
-                                   weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            ptq = PTQ(config=cfg,
-                      layer_policies=OrderedDict({r'.*\.feed_forward\..*':ffn_config}))
-            ptq.apply(self.network)
-            ptq.convert(self.network)
+        if hasattr(self.mf_model_config, "quantization_config") and hasattr(self.mf_model_config.quantization_config, "quant_method"):
+            ptq = self.create_ptq(self.mf_model_config.quantization_config.quant_method, PTQMode.DEPLOY)
+            if ptq is not None:
+                ptq.apply(self.network)
+                ptq.convert(self.network)
 
         self.network._jit_config_dict = JitConfig(
             jit_level="O0", infer_boost="on"
@@ -259,7 +244,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        if self.mf_config.load_ckpt_format == "ckpt":
+        if self.mf_config.load_ckpt_format == "ckpt" or self.mf_model_config.quantization_config.quant_method == "gptq-pergroup":
             model = Model(self.network)
             batch_size = self.mf_config.model.model_config.batch_size
             seq_length = self.mf_config.model.model_config.seq_length
@@ -283,3 +268,72 @@ class DeepseekV3ForCausalLM(MsModelBase):
             return model_name_or_path
         else:
             raise ValueError("The 'model' in LLM should be the local path of the MindSpore checkpoint file.")
+
+    def create_ptq(self, quant_type: str, quant_mode: PTQMode):
+        """create_ptq"""
+        if quant_type.lower() == 'ptq':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            act_quant_dtype=msdtype.int8,
+                            outliers_suppression=OutliersSuppressionType.OUTLIER_SUPPRESSION_PLUS,
+                            opname_blacklist=['lkv2kv', 'lm_head'], precision_recovery=PrecisionRecovery.NONE,
+                            act_quant_granularity=QuantGranularity.PER_TENSOR,
+                            weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+            ffn_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                                act_quant_dtype=msdtype.int8,
+                                outliers_suppression=OutliersSuppressionType.NONE,
+                                precision_recovery=PrecisionRecovery.NONE,
+                                act_quant_granularity=QuantGranularity.PER_TOKEN,
+                                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
+        elif quant_type.lower() == 'awq-a16w4':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.qint4x2,
+                            act_quant_dtype=None, outliers_suppression=OutliersSuppressionType.AWQ,
+                            opname_blacklist=['lm_head', 'lkv2kv'], weight_quant_granularity=QuantGranularity.PER_GROUP,
+                            group_size=128)
+            layer_policies = OrderedDict()
+        elif quant_type.lower() == 'awq-a16w8':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            act_quant_dtype=None, outliers_suppression=OutliersSuppressionType.AWQ,
+                            opname_blacklist=['lm_head', 'lkv2kv'])
+        elif quant_type.lower() == 'gptq-perchannel':
+            gptq_config = GPTQQuantConfig()
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.qint4x2,
+                            act_quant_dtype=None, precision_recovery=PrecisionRecovery.GPTQ, algo_args=gptq_config,
+                            opname_blacklist=['lm_head', 'lkv2kv'])
+            layer_policies = OrderedDict()
+        elif quant_type.lower() == 'gptq-pergroup':
+            gptq_config = GPTQQuantConfig()
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.qint4x2,
+                            algo_args=gptq_config, act_quant_dtype=None, precision_recovery=PrecisionRecovery.GPTQ,
+                            weight_quant_granularity=QuantGranularity.PER_GROUP, opname_blacklist=['lm_head', 'lkv2kv'],
+                            group_size=128)
+            layer_policies = OrderedDict()
+        elif quant_type.lower() == 'smoothquant':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH,
+                            opname_blacklist=['lm_head', 'lkv2kv'])
+            w2_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                                act_quant_dtype=msdtype.int8,
+                                outliers_suppression=OutliersSuppressionType.NONE,
+                                precision_recovery=PrecisionRecovery.NONE,
+                                act_quant_granularity=QuantGranularity.PER_TOKEN,
+                                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+            layer_policies = OrderedDict({r'.*\.w2.*': w2_config})
+        elif quant_type.lower() == 'a16w8':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            opname_blacklist=['lm_head', 'lkv2kv'])
+            layer_policies = OrderedDict()
+        elif quant_type.lower() == 'a8dynw8':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            act_quant_dtype=msdtype.int8, act_quant_granularity=QuantGranularity.PER_TOKEN,
+                            opname_blacklist=['lm_head', 'lkv2kv'])
+            layer_policies = OrderedDict()
+        else:
+            logger.warning("Input unsupported quant type: %s.", quant_type)
+            return None
+        ptq = PTQ(config=cfg, layer_policies=layer_policies)
+        if 'awq' in quant_type.lower():
+            # pylint: disable=protected-access
+            ptq._config.weight_symmetric = False
+        ptq.decoder_layer_types.append(DeepseekV3DecodeLayer)
+        return ptq
