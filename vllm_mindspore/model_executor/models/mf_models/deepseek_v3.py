@@ -254,7 +254,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        if self.mf_config.load_ckpt_format == "ckpt" or self.mf_model_config.quantization_config.quant_method == "gptq-pergroup":
+        if self.mf_config.load_ckpt_format == "ckpt":
             model = Model(self.network)
             batch_size = self.mf_config.model.model_config.batch_size
             seq_length = self.mf_config.model.model_config.seq_length

@@ -39,9 +39,12 @@ class BaseModelParallelism:
         rank_id = get_rank()
         safetensor_file = hf_weight_map[hf_param_name]
         with safe_open(f"{src_hf_dir}/{safetensor_file}", framework="np") as sf_file:
+            qint4 = False
+            if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+                qint4 = True
             if not is_split_param:
                 np_data = sf_file.get_tensor(hf_param_name)
-                return np_data
+                return np_data, qint4
 
             np_data = sf_file.get_slice(hf_param_name)
             shape = np_data.get_shape()
@@ -57,7 +60,7 @@ class BaseModelParallelism:
                 split_data = np_data[:, start:stop]
             else:
                 raise ValueError("split_axis:{} is not supported.".format(split_axis))
-            return split_data
+            return split_data, qint4
 
     def split_weight_by_rank(self, weight, split_axis=0):
         tp_group_size = get_group_size()
