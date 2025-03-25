@@ -168,8 +168,19 @@ class Qwen2ForCausalLM(MsModelBase):
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
         self.update_mf_kvcaches(kv_caches)
-        query_lens = attn_metadata.query_lens
-        kv_cache_lens = attn_metadata.seq_lens_tensor.asnumpy() - query_lens
+        seq_lens = attn_metadata.seq_lens
+        max_query_len = attn_metadata.max_query_len
+        # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+        # decodes are scheduled together. In the first step, all the
+        # prefills turn into decodes and max_query_len will be 1.
+        if self.is_multi_step_chunked_prefill and max_query_len == 1:
+            query_lens = [1] * len(seq_lens)
+        else:
+            query_lens = attn_metadata.query_lens
+
+        seq_lens_np = np.array(seq_lens, dtype=np.int32)
+        query_lens_np = np.array(query_lens, dtype=np.int32)
+        kv_cache_lens = seq_lens_np - query_lens_np
         if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
             is_prefill = True
         else:
@@ -181,8 +192,7 @@ class Qwen2ForCausalLM(MsModelBase):
 
         model_inputs = {}
         model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
-        model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(
-            attn_metadata.seq_lens_tensor.asnumpy(), 0))
+        model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(seq_lens_np, 0))
         model_inputs["block_tables"] = _pad_block_table(
             attn_metadata.block_tables,
             self.mf_model_config.seq_length,
