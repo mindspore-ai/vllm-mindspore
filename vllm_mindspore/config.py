@@ -86,3 +86,10 @@ def _verify_args(self) -> None:
             "num_scheduler_steps "
             f"({self.num_scheduler_steps}) must be greater than or "
             "equal to 1.")
+
+def _verify_cache_args(self) -> None:
+    if self.gpu_memory_utilization > 1.0:
+        raise ValueError(
+            "GPU memory utilization must be less than 1.0. Got "
+            f"{self.gpu_memory_utilization}.")
+
