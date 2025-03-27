@@ -345,5 +345,8 @@ class DeepseekV3ForCausalLM(MsModelBase):
         if 'awq' in quant_type.lower():
             # pylint: disable=protected-access
             ptq._config.weight_symmetric = False
+        if 'smoothquant' in quant_type.lower():
+            # pylint: disable=protected-access
+            ptq._config.aclnn_quant_list = ["routed_experts.ffn.w_gate_hidden"]
         ptq.decoder_layer_types.append(DeepseekV3DecodeLayer)
         return ptq
