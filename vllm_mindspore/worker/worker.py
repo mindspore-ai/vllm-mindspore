@@ -63,6 +63,9 @@ def _prepare_input_for_warmup(model_config, model_runner, cache_engine, is_prefi
     ]
 
     model_input = model_runner.prepare_model_input(seqs)
+    block_tables = model_input.attn_metadata.block_tables
+    if block_tables is not None and block_tables.numel() <= 0:
+        model_input.attn_metadata.block_tables = torch.zeros((1, 1), dtype=torch.int32)
     return model_input
 
 

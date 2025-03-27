@@ -53,27 +53,6 @@ from vllm_mindspore.model_executor.models.mf_models.qwen2_infer_parallelism impo
 logger = init_logger(__name__)
 
 
-def _pad_to_max(x, max_len):
-    return x + [-1] * (max_len - len(x))
-
-
-def _pad_block_table(block_tables, seq_length, block_size):
-    # When Prefill, the block_tables is a empty tensor.
-    if len(block_tables.shape) < 2:
-        fake_block_tables = ms.mint.empty(
-            1, seq_length // block_size, dtype=ms.int32, device="Ascend"
-        )
-        return fake_block_tables
-
-    block_tables_list = block_tables.tolist()
-    padded_block_tables = [
-        _pad_to_max(block_table, seq_length // block_size)
-        for block_table in block_tables_list
-    ]
-
-    return Tensor(np.array(padded_block_tables).astype(np.int32))
-
-
 def _batch_seq(input_tokens, prefill):
     if prefill:
         return ms.ops.expand_dims(input_tokens, 0).to(ms.int32)
@@ -193,11 +172,7 @@ class Qwen2ForCausalLM(MsModelBase):
         model_inputs = {}
         model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
         model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(seq_lens_np, 0))
-        model_inputs["block_tables"] = _pad_block_table(
-            attn_metadata.block_tables,
-            self.mf_model_config.seq_length,
-            self.mf_model_config.block_size,
-        )
+        model_inputs["block_tables"] = attn_metadata.block_tables
         model_inputs["slot_mapping"] = attn_metadata.slot_mapping
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
