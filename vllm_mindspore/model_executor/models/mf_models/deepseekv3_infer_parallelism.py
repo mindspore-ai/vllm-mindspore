@@ -963,7 +963,6 @@ class DeepseekInferParallelism(BaseModelParallelism):
         no_need_split_layer = ["tok_embeddings", "norm", "q2l_proj",
                                "kv2l", "routed_experts.router.dense",
                                "routed_experts.router.e_score_correction_bias",
-                               "shared_experts.w_gate_hidden", "shared_experts.w2",
                                "topk_bias"]
         
         for param_name, _ in tqdm(hf_weight_map.items(), desc="split safetensors"):
@@ -973,24 +972,16 @@ class DeepseekInferParallelism(BaseModelParallelism):
             if any([name in param_name for name in no_need_split_layer]):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                hf_weight_map)
-            elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden."]]):
-                if param_name.endswith(".weight"):
-                    value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
-                                                                   split_axis=0)
-                else:
-                    value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
-                                                                   split_axis=1)
-            elif any([name in param_name for name in [".feed_forward.w2.", ".wo."]]):
-                if param_name.endswith(".weight"):
-                    value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
-                                                                   split_axis=1)
-                else:
-                    value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
-                                                                   split_axis=0)
+            elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden.",
+                                                      "shared_experts.w_gate_hidden"]]):
+                value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                hf_weight_map, is_split_param=True,
+                                                                split_axis=1)
+            elif any([name in param_name for name in [".feed_forward.w2.", ".wo.",
+                                                      "shared_experts.w2"]]):
+                value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                hf_weight_map, is_split_param=True,
+                                                                split_axis=0)
             elif ".routed_experts.ffn.w_gate_hidden." in param_name:
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
                 value_list = []
@@ -1038,6 +1029,8 @@ class DeepseekInferParallelism(BaseModelParallelism):
                 param_json_path = os.path.join(src_hf_dir, file)
                 with open(param_json_path, "r") as fp:
                     hf_weight_map = json.load(fp)
+                    if hf_weight_map.get('weight_map'):
+                        hf_weight_map = hf_weight_map['weight_map']
                 break
 
         if not param_json_path:
