@@ -29,6 +29,7 @@ from typing import (
     Tuple,
     Union,
 )
+import numpy as np
 
 import torch
 
@@ -170,6 +171,10 @@ def _create_empty_tensor(ms_type):
     return init_tensor
 
 
+def _create_dummy_block_tables():
+    return ms.ops.zeros((1, 1), dtype=ms.int32)
+
+
 def make_tensor_with_pad(
     x: List[List[T]],
     pad: T,
@@ -191,7 +196,7 @@ def make_tensor_with_pad(
     pin_memory = False
 
     if padded_x.size == 0:
-        tensor = _create_empty_tensor(dtype)
+        tensor = _create_dummy_block_tables()
     else:
         tensor = torch.from_numpy(padded_x)
     if pin_memory:
@@ -316,9 +321,6 @@ def check_ready():
             "MS_ALLOC_CONF": "enable_vmm:False",
         }
         env_setup(mindformers_default_env)
-
-        set_context(mode=0, device_target="Ascend", max_call_depth=10000)
-        _pynative_executor.set_async_for_graph(True)
     else:
         env_setup({"MS_ALLOC_CONF": "enable_vmm:True", })
         logger.info("Run with native model backend!")
@@ -350,3 +352,20 @@ def is_use_mla(model_config):
     return hasattr(model_config.hf_text_config, "model_type") and (
         model_config.hf_text_config.model_type in ("deepseek_v3",)
     )
+
+
+def convert_np_to_ms_dtype(value):
+    """convert_np_to_ms_dtype"""
+    if value.dtype == np.int8:
+        value_dtype = ms.int8
+    elif value.dtype == np.int32:
+        value_dtype = ms.int32
+    elif value.dtype == np.int64:
+        value_dtype = ms.int64
+    elif value.dtype == np.float64:
+        value_dtype = ms.float64
+    elif value.dtype == np.float32:
+        value_dtype = ms.float32
+    else:
+        value_dtype = ms.bfloat16
+    return value_dtype

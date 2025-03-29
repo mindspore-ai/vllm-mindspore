@@ -43,9 +43,9 @@ class Qwen2InferParallelism(BaseModelParallelism):
         embed_tokens_hf_name = "model.embed_tokens.weight"
         embed_tokens_ms_name = self.convert_weight_name(embed_tokens_hf_name)
         if self.config.parallel_config.vocab_emb_dp:
-            np_data = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map)
+            np_data, _ = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map)
         else:
-            np_data = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map,
+            np_data, _ = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map,
                                                     is_split_param=True, split_axis=0)
         parameter_dict[embed_tokens_ms_name] = ms.Parameter(ms.Tensor(np_data, ms.bfloat16),
                                                             name=embed_tokens_ms_name,
@@ -53,7 +53,7 @@ class Qwen2InferParallelism(BaseModelParallelism):
 
         norm_hf_name = "model.norm.weight"
         norm_ms_name = self.convert_weight_name(norm_hf_name)
-        np_data = self.get_safetensor_from_file(norm_hf_name, src_hf_dir, hf_weight_map)
+        np_data, _ = self.get_safetensor_from_file(norm_hf_name, src_hf_dir, hf_weight_map)
         parameter_dict[norm_ms_name] = ms.Parameter(ms.Tensor(np_data, ms.bfloat16), name=norm_ms_name,
                                                     requires_grad=False)
 
@@ -61,10 +61,10 @@ class Qwen2InferParallelism(BaseModelParallelism):
         lm_head_ms_name = self.convert_weight_name(lm_head_hf_name)
         if not self.config.model.model_config.tie_word_embeddings:
             if not self.config.parallel_config.vocab_emb_dp:
-                np_data = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map,
+                np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map,
                                                         is_split_param=True, split_axis=0)
             else:
-                np_data = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map)
+                np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map)
             parameter_dict[lm_head_ms_name] = ms.Parameter(ms.Tensor(np_data, ms.bfloat16), name=lm_head_ms_name,
                                                            requires_grad=False)
 
@@ -94,17 +94,17 @@ class Qwen2InferParallelism(BaseModelParallelism):
 
         w1_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight"
         w1_ms_name = self.convert_weight_name(w1_hf_name)
-        w1_ms_param = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight"
         w2_ms_name = self.convert_weight_name(w2_hf_name)
-        w2_ms_param = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=1)
 
         w3_hf_name = f"model.layers.{layer_id}.mlp.up_proj.weight"
         w3_ms_name = self.convert_weight_name(w3_hf_name)
-        w3_ms_param = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=0)
 
         if ffn_concat:
@@ -129,36 +129,36 @@ class Qwen2InferParallelism(BaseModelParallelism):
         # wq
         wq_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.weight"
         wq_ms_name = self.convert_weight_name(wq_hf_name)
-        wq_ms_param = self.get_safetensor_from_file(wq_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        wq_ms_param, _ = self.get_safetensor_from_file(wq_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=0)
         # wq bias
         wq_bias_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.bias"
         wq_bias_ms_name = self.convert_weight_name(wq_bias_hf_name)
-        wq_bias_ms_param = self.get_safetensor_from_file(wq_bias_hf_name, src_hf_dir, hf_weight_map,
+        wq_bias_ms_param, _ = self.get_safetensor_from_file(wq_bias_hf_name, src_hf_dir, hf_weight_map,
                                                          is_split_param=True,
                                                          split_axis=0)
 
         # wk
         wk_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.weight"
         wk_ms_name = self.convert_weight_name(wk_hf_name)
-        wk_ms_param = self.get_safetensor_from_file(wk_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        wk_ms_param, _ = self.get_safetensor_from_file(wk_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=0)
         # wk bias
         wk_bias_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.bias"
         wk_bias_ms_name = self.convert_weight_name(wk_bias_hf_name)
-        wk_bias_ms_param = self.get_safetensor_from_file(wk_bias_hf_name, src_hf_dir, hf_weight_map,
+        wk_bias_ms_param, _ = self.get_safetensor_from_file(wk_bias_hf_name, src_hf_dir, hf_weight_map,
                                                          is_split_param=True,
                                                          split_axis=0)
 
         # wv
         wv_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.weight"
         wv_ms_name = self.convert_weight_name(wv_hf_name)
-        wv_ms_param = self.get_safetensor_from_file(wv_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        wv_ms_param, _ = self.get_safetensor_from_file(wv_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=0)
         # wv bias
         wv_bias_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.bias"
         wv_bias_ms_name = self.convert_weight_name(wv_bias_hf_name)
-        wv_bias_ms_param = self.get_safetensor_from_file(wv_bias_hf_name, src_hf_dir, hf_weight_map,
+        wv_bias_ms_param, _ = self.get_safetensor_from_file(wv_bias_hf_name, src_hf_dir, hf_weight_map,
                                                          is_split_param=True,
                                                          split_axis=0)
 
@@ -193,7 +193,7 @@ class Qwen2InferParallelism(BaseModelParallelism):
         # wo
         wo_hf_name = f"model.layers.{layer_id}.self_attn.o_proj.weight"
         wo_ms_name = self.convert_weight_name(wo_hf_name)
-        wo_ms_param = self.get_safetensor_from_file(wo_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        wo_ms_param, _ = self.get_safetensor_from_file(wo_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                     split_axis=1)
         parameter_dict[wo_ms_name] = ms.Parameter(ms.Tensor(wo_ms_param, ms.bfloat16), name=wo_ms_name,
                                                   requires_grad=False)
@@ -205,7 +205,7 @@ class Qwen2InferParallelism(BaseModelParallelism):
         # attention_norm
         attention_norm_hf_name = f"model.layers.{layer_id}.input_layernorm.weight"
         attention_norm_ms_name = self.convert_weight_name(attention_norm_hf_name)
-        attention_norm_ms_param = self.get_safetensor_from_file(attention_norm_hf_name,
+        attention_norm_ms_param, _ = self.get_safetensor_from_file(attention_norm_hf_name,
                                                                 src_hf_dir,
                                                                 hf_weight_map)
         parameter_dict[attention_norm_ms_name] = ms.Parameter(ms.Tensor(attention_norm_ms_param, ms.bfloat16),
@@ -215,7 +215,7 @@ class Qwen2InferParallelism(BaseModelParallelism):
         # ffn_norm
         ffn_norm_hf_name = f"model.layers.{layer_id}.post_attention_layernorm.weight"
         ffn_norm_ms_name = self.convert_weight_name(ffn_norm_hf_name)
-        ffn_norm_ms_param = self.get_safetensor_from_file(ffn_norm_hf_name, src_hf_dir, hf_weight_map)
+        ffn_norm_ms_param, _ = self.get_safetensor_from_file(ffn_norm_hf_name, src_hf_dir, hf_weight_map)
         parameter_dict[ffn_norm_ms_name] = ms.Parameter(ms.Tensor(ffn_norm_ms_param, ms.bfloat16),
                                                         name=ffn_norm_ms_name,
                                                         requires_grad=False)

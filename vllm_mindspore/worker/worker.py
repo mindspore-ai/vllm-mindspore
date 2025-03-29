@@ -63,6 +63,9 @@ def _prepare_input_for_warmup(model_config, model_runner, cache_engine, is_prefi
     ]
 
     model_input = model_runner.prepare_model_input(seqs)
+    block_tables = model_input.attn_metadata.block_tables
+    if block_tables is not None and block_tables.numel() <= 0:
+        model_input.attn_metadata.block_tables = torch.zeros((1, 1), dtype=torch.int32)
     return model_input
 
 
@@ -71,12 +74,21 @@ def _warm_up_model(self) -> None:
     kv_cache = self.cache_engine[0].gpu_cache
 
     # warmup for prefill
-    model_input = _prepare_input_for_warmup(self.model_config, self.model_runner, self.cache_engine[0], True)
-    self.model_runner.execute_model(model_input, kv_cache, None)
+    if self.vllm_config.scheduler_config.is_multi_step:
+        model_input = _prepare_input_for_warmup(self.model_config, self.model_runner._base_model_runner, self.cache_engine[0], True)
+        self.model_runner._base_model_runner.execute_model(model_input, kv_cache, None)
+    else:
+        model_input = _prepare_input_for_warmup(self.model_config, self.model_runner, self.cache_engine[0], True)
+        self.model_runner.execute_model(model_input, kv_cache, None)
     torch.cuda.synchronize()
+
     # warmup for decode
-    model_input = _prepare_input_for_warmup(self.model_config, self.model_runner, self.cache_engine[0], False)
-    self.model_runner.execute_model(model_input, kv_cache, None)
+    if self.vllm_config.scheduler_config.is_multi_step:
+        model_input = _prepare_input_for_warmup(self.model_config, self.model_runner._base_model_runner, self.cache_engine[0], False)
+        self.model_runner._base_model_runner.execute_model(model_input, kv_cache, None)
+    else:
+        model_input = _prepare_input_for_warmup(self.model_config, self.model_runner, self.cache_engine[0], False)
+        self.model_runner.execute_model(model_input, kv_cache, None)
     torch.cuda.synchronize()
 
     # Reset the seed to ensure that the random state is not affected by

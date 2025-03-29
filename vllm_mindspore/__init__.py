@@ -132,27 +132,42 @@ from vllm_mindspore.worker.worker import (
     _warm_up_model,
     determine_num_available_blocks,
 )
+from vllm_mindspore.worker.profile import (
+    wrapper_worker_init,
+    wrapper_worker_init_device
+)
 from vllm.worker.worker import Worker
 
 Worker._warm_up_model = _warm_up_model
 Worker.determine_num_available_blocks = determine_num_available_blocks
+Worker.__init__ = wrapper_worker_init(Worker.__init__)
+Worker.init_device = wrapper_worker_init_device(Worker.init_device)
 
-from vllm_mindspore.worker.model_runner import _get_cuda_graph_pad_size, profile_run
+from vllm_mindspore.worker.model_runner import (
+    _get_cuda_graph_pad_size,
+    profile_run,
+    _get_supported_attention_backends
+)
 
 vllm.worker.model_runner.ModelInputForGPUBuilder._get_cuda_graph_pad_size = (
     _get_cuda_graph_pad_size
 )
 vllm.worker.model_runner.GPUModelRunnerBase.profile_run = profile_run
 
+import vllm.worker.multi_step_model_runner
+vllm.worker.multi_step_model_runner._get_supported_attention_backends = _get_supported_attention_backends
+
 from vllm_mindspore.distributed.parallel_state import (
     all_reduce_for_GroupCoordinator,
     init_model_parallel_group,
+    init_group_coordinator,
 )
 
 vllm.distributed.parallel_state.GroupCoordinator.all_reduce = (
     all_reduce_for_GroupCoordinator
 )
 vllm.distributed.parallel_state.init_model_parallel_group = init_model_parallel_group
+vllm.distributed.parallel_state.GroupCoordinator.__init__ = init_group_coordinator
 
 from vllm_mindspore.executor.multiproc_worker_utils import (
     get_mp_context as ms_get_mp_context,
@@ -181,11 +196,11 @@ vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
-from .config import get_head_size, _verify_quantization, get_num_kv_heads
+from .config import _verify_quantization, _verify_args, vllm_config_post_init
 
-vllm.config.ModelConfig.get_head_size = get_head_size
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
-vllm.config.ModelConfig.get_num_kv_heads = get_num_kv_heads
+vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
+vllm.config.SchedulerConfig._verify_args = _verify_args
 
 from .utils import check_ready
 

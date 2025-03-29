@@ -7,7 +7,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+#        http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,6 +19,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import accumulate
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 import torch
@@ -53,6 +54,41 @@ import mindspore as ms
 from mindspore import mutable
 from mindspore._c_expression import swap_cache
 
+def advance_step_op(sampled_token_ids,
+                    model_input,
+                    seq_lens_tensor,
+                    num_queries,
+                    block_size,
+                    block_tables,
+                    slot_mapping):
+    # update input_tokens
+    sampled_token_ids_list = sampled_token_ids[:
+                                               num_queries].squeeze(  # type: ignore
+                                                   -1)
+    model_input.input_tokens[:
+                             num_queries] = sampled_token_ids_list  # type: ignore
+
+    # get seq_lens and input_positions
+    seq_lens = seq_lens_tensor[:num_queries]
+    next_seq_lens = seq_lens + 1
+    next_input_pos = next_seq_lens - 1
+
+    # update seq_lens and input_positions
+    seq_lens_tensor[:num_queries] = next_seq_lens
+    model_input.input_positions[:
+                                num_queries] = next_input_pos  # type: ignore
+
+    # 计算 block index 和 offset
+    block_idx = next_input_pos // block_size
+    block_offset = next_input_pos % block_size
+
+    current_block_table = block_tables.gather(
+        1, block_idx.unsqueeze(-1)).squeeze(-1)
+    slot_num = current_block_table * block_size + block_offset
+
+    # update slot_mapping
+    slot_mapping[:num_queries] = slot_num
+
 
 @dataclass
 class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
@@ -65,11 +101,20 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
 
     # For chunked prefill only
     max_query_len: Optional[int] = None
+
+    max_prefill_seq_len: int = 0
+    seq_start_loc: Optional[torch.Tensor] = None
+    _cached_prefill_metadata: Optional["MSAttentionMetadata"] = None
+    _cached_decode_metadata: Optional["MSAttentionMetadata"] = None
+    context_lens_tensor: Optional[torch.Tensor] = None
+    encoder_seq_start_loc: Optional[torch.Tensor] = None
+    max_decode_query_len: Optional[int] = None
+
     max_kv_len: Optional[int] = None
     query_start_loc: Optional[torch.Tensor] = None
     kv_start_loc: Optional[torch.Tensor] = None
     prefill_block_tables: Optional[torch.Tensor] = None
-    query_lens: Optional[List[int]] = None,
+    query_lens: Optional[List[int]] = None
 
     # Begin encoder attn & enc/dec cross-attn fields...
     # Encoder sequence lengths representation
@@ -93,15 +138,183 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
 
     @property
     def prefill_metadata(self):
-        if self.num_prefill_tokens == 0:
+        if self.num_prefills == 0:
             return None
-        return self
+
+        if self._cached_prefill_metadata is not None:
+            return self._cached_prefill_metadata
+
+        assert ((self.seq_lens is not None)
+                or (self.encoder_seq_lens is not None))
+        assert ((self.seq_lens_tensor is not None)
+                or (self.encoder_seq_lens_tensor is not None))
+
+        # Compute some attn_metadata fields which default to None
+        query_start_loc = (None if self.query_start_loc is None else
+                           self.query_start_loc[:self.num_prefills + 1])
+        slot_mapping = (None if self.slot_mapping is None else
+                        self.slot_mapping[:self.num_prefill_tokens])
+        seq_lens = (None if self.seq_lens is None else
+                    self.seq_lens[:self.num_prefills])
+        seq_lens_tensor = (None if self.seq_lens_tensor is None else
+                           self.seq_lens_tensor[:self.num_prefills])
+        seq_start_loc = (None if self.seq_start_loc is None else
+                         self.seq_start_loc[:self.num_prefills + 1])
+        context_lens_tensor = (None if self.context_lens_tensor is None else
+                               self.context_lens_tensor[:self.num_prefills])
+        block_tables = (None if self.block_tables is None else
+                        self.block_tables[:self.num_prefills])
+
+        self._cached_prefill_metadata = MSAttentionMetadata(
+            num_prefills=self.num_prefills,
+            num_prefill_tokens=self.num_prefill_tokens,
+            num_decode_tokens=0,
+            slot_mapping=slot_mapping,
+            multi_modal_placeholder_index_maps=self.
+            multi_modal_placeholder_index_maps,
+            enable_kv_scales_calculation=False,
+            seq_lens=seq_lens,
+            seq_lens_tensor=seq_lens_tensor,
+            max_query_len=self.max_query_len,
+            max_prefill_seq_len=self.max_prefill_seq_len,
+            max_decode_query_len=0,
+            max_decode_seq_len=0,
+            query_start_loc=query_start_loc,
+            seq_start_loc=seq_start_loc,
+            context_lens_tensor=context_lens_tensor,
+            block_tables=block_tables,
+            use_cuda_graph=False,
+            # Begin encoder & cross attn fields below...
+            encoder_seq_lens=self.encoder_seq_lens,
+            encoder_seq_lens_tensor=self.encoder_seq_lens_tensor,
+            encoder_seq_start_loc=self.encoder_seq_start_loc,
+            max_encoder_seq_len=self.max_encoder_seq_len,
+            chunked_prefill=self.chunked_prefill,
+            cross_slot_mapping=self.cross_slot_mapping,
+            cross_block_tables=self.cross_block_tables)
+        return self._cached_prefill_metadata
 
     @property
     def decode_metadata(self):
         if self.num_decode_tokens == 0:
             return None
-        return self
+
+        if self._cached_decode_metadata is not None:
+            return self._cached_decode_metadata
+        assert ((self.seq_lens_tensor is not None)
+                or (self.encoder_seq_lens_tensor is not None))
+
+        # Compute some attn_metadata fields which default to None
+        slot_mapping = (None if self.slot_mapping is None else
+                        self.slot_mapping[self.num_prefill_tokens:])
+        seq_lens_tensor = (None if self.seq_lens_tensor is None else
+                           self.seq_lens_tensor[self.num_prefills:])
+        block_tables = (None if self.block_tables is None else
+                        self.block_tables[self.num_prefills:])
+
+        self._cached_decode_metadata = MSAttentionMetadata(
+            num_prefills=0,
+            num_prefill_tokens=0,
+            num_decode_tokens=self.num_decode_tokens,
+            slot_mapping=slot_mapping,
+            multi_modal_placeholder_index_maps=None,
+            enable_kv_scales_calculation=False,
+            seq_lens=None,
+            seq_lens_tensor=seq_lens_tensor,
+            max_decode_query_len=self.max_decode_query_len,
+            max_query_len=self.max_query_len,
+            max_prefill_seq_len=0,
+            max_decode_seq_len=self.max_decode_seq_len,
+            # Batch may be composed of prefill|decodes, adjust query start
+            # indices to refer to the start of decodes. E.g.
+            # in tokens:[3 prefills|6 decodes], query_start_loc=[3,9] => [0,6].
+            query_start_loc=(self.query_start_loc[self.num_prefills:] -
+                             self.query_start_loc[self.num_prefills])
+            if self.query_start_loc is not None else None,
+            seq_start_loc=self.seq_start_loc[self.num_prefills:]
+            if self.seq_start_loc is not None else None,
+            context_lens_tensor=None,
+            block_tables=block_tables,
+            use_cuda_graph=self.use_cuda_graph,
+            # Begin encoder & cross attn fields below...
+            encoder_seq_lens=self.encoder_seq_lens,
+            encoder_seq_lens_tensor=self.encoder_seq_lens_tensor,
+            encoder_seq_start_loc=self.encoder_seq_start_loc,
+            max_encoder_seq_len=self.max_encoder_seq_len,
+            chunked_prefill=self.chunked_prefill,
+            cross_slot_mapping=self.cross_slot_mapping,
+            cross_block_tables=self.cross_block_tables)
+        return self._cached_decode_metadata
+
+    def advance_step(self,
+                     model_input: "ModelInputForNPUWithSamplingMetadata",
+                     sampled_token_ids: Optional[torch.Tensor],
+                     block_size: int,
+                     num_seqs: int,
+                     num_queries: int,
+                     turn_prefills_into_decodes: bool = False):
+        """
+        Update metadata in-place to advance one decode step.
+        """
+        # When using cudagraph, the num_seqs is padded to the next captured
+        # batch sized, but num_queries tracks the actual number of requests in
+        # the batch. For --enforce-eager mode, num_seqs == num_queries
+        if num_seqs != num_queries:
+            assert num_seqs > num_queries
+
+        if turn_prefills_into_decodes:
+            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+            # decodes are scheduled together. In the first step, all the
+            # prefills turn into decodes. This update reflects that
+            # conversion.
+            assert self.num_decode_tokens + self.num_prefills == num_seqs
+            self.num_decode_tokens += self.num_prefills
+            self.num_prefills = 0
+            self.num_prefill_tokens = 0
+            self.max_prefill_seq_len = 0
+            self.max_query_len = 1
+
+            self.slot_mapping = self.slot_mapping[:num_seqs]
+        else:
+            assert self.seq_lens is not None
+            assert self.max_decode_seq_len == max(self.seq_lens)
+
+        assert self.num_prefills == 0
+        assert self.num_prefill_tokens == 0
+        assert self.num_decode_tokens == num_seqs
+        assert self.slot_mapping.shape == (num_seqs, )
+
+        assert self.seq_lens is not None
+        assert len(self.seq_lens) == num_seqs
+        assert self.seq_lens_tensor is not None
+        assert self.seq_lens_tensor.shape == (num_seqs, )
+        assert self.max_query_len == 1
+        assert self.max_prefill_seq_len == 0
+
+        assert self.query_start_loc is not None
+        assert self.query_start_loc.shape == (num_queries + 1, )
+        assert self.seq_start_loc is not None
+        assert self.seq_start_loc.shape == (num_seqs + 1, )
+
+        assert self.context_lens_tensor is not None
+        assert self.context_lens_tensor.shape == (num_queries, )
+
+        assert self.block_tables is not None
+        assert self.block_tables.shape[0] == num_seqs
+
+        # Update query lengths. Note that we update only queries and not seqs,
+        # since tensors may be padded due to captured cuda graph batch size
+        for i in range(num_queries):
+            self.seq_lens[i] += 1
+        self.max_decode_seq_len = max(self.seq_lens)
+
+        advance_step_op(sampled_token_ids,
+                        model_input,
+                        self.seq_lens_tensor,
+                        num_queries,
+                        block_size,
+                        self.block_tables,
+                        self.slot_mapping)
 
     def get_seq_lens(
         self,
@@ -311,8 +524,16 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
         use_captured_graph = cuda_graph_pad_size != -1
 
         max_query_len = max(query_lens)
+        decode_query_lens = query_lens[self.num_prefills:]
+        if len(decode_query_lens) > 0:
+            max_decode_query_len = max(decode_query_lens)
+        else:
+            max_decode_query_len = 1
+        max_prefill_seq_len = max(self.prefill_seq_lens, default=0)
         max_decode_seq_len = max(self.curr_seq_lens, default=0)
         num_decode_tokens = self.num_decode_tokens
+        query_start_loc = list(accumulate(query_lens, initial=0))
+        seq_start_loc = list(accumulate(seq_lens, initial=0))
 
         if use_captured_graph:
             raise RuntimeError("Doesnot support captured graph now!")
@@ -325,10 +546,15 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
             )
         assert max_query_len > 0, "query_lens: {}".format(query_lens)
 
+        context_lens_tensor = ms.Tensor(self.context_lens, dtype=ms.int32)
         seq_lens_tensor = ms.Tensor(seq_lens, dtype=ms.int32)
 
+        slot_mapping_tensor = ms.Tensor(self.slot_mapping, dtype=ms.int32)
+        query_start_loc_tensor = ms.Tensor(query_start_loc, dtype=ms.int32)
+        seq_start_loc_tensor = ms.Tensor(seq_start_loc, dtype=ms.int32)
+
         return MSAttentionMetadata(
-            slot_mapping=ms.Tensor(self.slot_mapping, dtype=ms.int32),
+            slot_mapping=slot_mapping_tensor,
             block_tables=block_tables,
             seq_lens_tensor=seq_lens_tensor,
             seq_lens=seq_lens,
@@ -340,6 +566,10 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
             multi_modal_placeholder_index_maps=None,
             enable_kv_scales_calculation=False,
             query_lens=query_lens,
+            query_start_loc=query_start_loc_tensor,
+            seq_start_loc=seq_start_loc_tensor,
+            context_lens_tensor=context_lens_tensor,
+            max_query_len=max_query_len,
         )
 
 

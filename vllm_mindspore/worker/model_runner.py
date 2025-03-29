@@ -26,8 +26,7 @@ from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
 from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
 
-from mindspore.common import dtype as mstype
-from mindspore import mutable, Tensor
+from mindspore import mutable
 
 logger = init_logger(__name__)
 
@@ -155,3 +154,16 @@ def profile_run(self) -> None:
     self.execute_model(model_input, kv_caches, intermediate_tensors)
     torch.cuda.synchronize()
     return
+
+
+MULTI_STEP_ATTENTION_BACKENDS = [
+    "MS_MLA", "MS_ATTN", "NO_ATTENTION"
+]
+MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS = ["MS_MLA", "MS_ATTN"]
+
+def _get_supported_attention_backends(chunked_prefill_enabled: bool) \
+    -> List[str]:
+    if chunked_prefill_enabled:
+        return MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS
+    else:
+        return MULTI_STEP_ATTENTION_BACKENDS
