@@ -42,6 +42,7 @@ from vllm_mindspore.model_executor.sampling_metadata import (
     SamplingTensors,
     SequenceGroupToSample,
 )
+from mindspore import mint
 
 if envs.VLLM_USE_FLASHINFER_SAMPLER and find_spec("flashinfer"):
     raise RuntimeError("Donot support for mindspore now.")
@@ -428,7 +429,7 @@ def _apply_top_k_top_p(
     logits_sort.masked_fill_(top_p_mask, -float("inf"))
 
     # Re-sort the probabilities.
-    logits = torch.empty_like(logits_sort).scatter_(dim=-1,
+    logits = mint.empty_like(logits_sort).scatter_(dim=-1,
                                                     index=logits_idx,
                                                     src=logits_sort)
     return logits
@@ -505,6 +506,7 @@ def _random_sample(
     # Find the maximum n value of the prompt phase requests.
     sample_idx = 0
     results: SampleResultType = []
+    random_samples = random_samples.asnumpy()
     for seq_group in selected_seq_groups:
         if not seq_group.do_sample:
             results.append(([], []))
@@ -597,13 +599,6 @@ def _beam_search_sample(
     return results
 
 
-def exponential(x, lambd=1.0, *, generator=None):
-    if generator is not None:
-        raise ValueError("`generator` can not be supported.")
-    output = np.random.exponential(scale=lambd, size=x.shape)
-    return ms.Tensor(output).astype(x.dtype)
-
-
 # torch.multinomial forces a GPU<->CPU sync.
 # Therefore, we use an optimized implementation instead.
 # Note that we always sample with replacement.
@@ -616,20 +611,19 @@ def _multinomial(
 ) -> torch.Tensor:
     if num_samples > 1:
         probs = probs.repeat_interleave(num_samples, dim=0)
-    q = torch.empty_like(probs)
+    q = mint.empty_like(probs)
     if seq_groups is None:
-        q = exponential(q)
+        q.exponential_(q)
     else:
         sample_idx = 0
         for seq_group in seq_groups:
             seq_ids = seq_group.seq_ids
             stride = len(seq_ids) * num_samples
             assert seq_group.generator is not None
-            q[sample_idx : sample_idx + stride] = exponential(
-                q[sample_idx : sample_idx + stride]
-            )
+            q[sample_idx : sample_idx +
+              stride].exponential_(generator=seq_group.generator)
             sample_idx += stride
-    return probs.div(q).argmax(axis=1).view(-1, num_samples)
+    return probs.div_(q).argmax(dim=1).view(-1, num_samples)
 
 
 def _top_k_top_p_multinomial_with_flashinfer(
