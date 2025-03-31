@@ -83,6 +83,19 @@ def _batch_seq(input_tokens, prefill):
     return ms.mint.reshape(input_tokens, (-1, 1)).to(ms.int32)
 
 
+def set_runtime_kernel_launch_group():
+    kernel_launch_group = {'thread_num' : 2, 'kernel_group_num' : 8}
+    env_kernel_launch_group = os.getenv("EXPERIMENTAL_KERNEL_LAUNCH_GROUP", None)
+    if env_kernel_launch_group is not None:
+        pairs = env_kernel_launch_group.split(',')
+        for pair in pairs:
+            key, val = pair.split(':')
+            kernel_launch_group[key] = val
+    thread_num = int(kernel_launch_group.get('thread_num', 2))
+    kernel_group_num = int(kernel_launch_group.get('kernel_group_num', 8))
+    ms.runtime.set_kernel_launch_group(thread_num=thread_num, kernel_group_num=kernel_group_num)
+
+
 class DeepseekV3ForCausalLM(MsModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(DeepseekV3ForCausalLM, self).__init__(
@@ -113,6 +126,7 @@ class DeepseekV3ForCausalLM(MsModelBase):
                              self.mf_model_config.quantization_config)
         # Initital network
         self.network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
+        set_runtime_kernel_launch_group()
 
         # quant
         if self.is_quant:
