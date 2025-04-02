@@ -613,7 +613,7 @@ def _multinomial(
         probs = probs.repeat_interleave(num_samples, dim=0)
     q = mint.empty_like(probs)
     if seq_groups is None:
-        q.exponential_(q)
+        q.exponential_()
     else:
         sample_idx = 0
         for seq_group in seq_groups:
