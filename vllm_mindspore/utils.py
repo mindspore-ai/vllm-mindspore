@@ -79,89 +79,6 @@ def direct_register_custom_op(
 ): ...
 
 
-@contextlib.contextmanager
-def memory_profiling(
-        baseline_snapshot: "MemorySnapshot",
-        weights_memory: int) -> "Generator[MemoryProfilingResult, None, None]":
-    """Memory profiling context manager.
-    baseline_snapshot: the memory snapshot before the current vLLM instance.
-    weights_memory: memory used by PyTorch when loading the model weights.
-        Note that, before loading the model weights, we also initialize the device
-        and distributed environment, which may consume some memory. This part is not
-        included in the weights_memory because PyTorch does not control it.
-
-    The memory in one GPU can be classified into 3 categories:
-    1. memory used by anything other than the current vLLM instance.
-    2. memory used by torch in the current vLLM instance.
-    3. memory used in the current vLLM instance, but not by torch.
-
-    A quantitive example:
-
-    Before creating the current vLLM instance:
-        category 1: 1 GiB
-        category 2: 0 GiB
-        category 3: 0 GiB
-
-    After creating the current vLLM instance and loading the model,
-    (i.e. before profiling):
-        category 1: 1 GiB
-        category 2: 2 GiB (model weights take 2 GiB)
-        category 3: 0.5 GiB (memory used by NCCL)
-
-    During profiling (peak):
-        category 1: 1 GiB
-        category 2: 4 GiB (peak activation tensors take 2 GiB)
-        category 3: 1 GiB (memory used by NCCL + buffers for some attention backends)
-
-    After profiling:
-        category 1: 1 GiB
-        category 2: 3 GiB (after garbage-collecting activation tensors)
-        category 3: 1 GiB (memory used by NCCL + buffers for some attention backends)
-
-    In this case, non-kv cache takes 5 GiB in total, including:
-    a. 2 GiB used by the model weights (category 2)
-    b. 2 GiB reserved for the peak activation tensors (category 2)
-    c. 1 GiB used by non-torch components (category 3)
-
-    The memory used for loading weights (a.) is directly given from the argument `weights_memory`.
-
-    The increase of `torch.cuda.memory_stats()["allocated_bytes.all.peak"]` during profiling gives (b.).
-
-    The increase of `non_torch_memory` from creating the current vLLM instance until after profiling to get (c.).
-    """ # noqa
-    from vllm.utils import MemoryProfilingResult
-
-    gc.collect()
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-
-    result = MemoryProfilingResult()
-
-    result.before_create = baseline_snapshot
-    # the part of memory used for holding the model weights
-    result.weights_memory = weights_memory
-
-    result.before_profile.measure()
-
-    before_torch_memory_in_bytes = torch.cuda.memory_stats()["allocated_bytes.all.current"]
-
-    yield result
-
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    result.after_profile.measure()
-
-    after_torch_memory_in_bytes = torch.cuda.memory_stats()["allocated_bytes.all.current"]
-
-    diff_profile = result.after_profile - result.before_profile
-    diff_from_create = result.after_profile - result.before_create
-    result.torch_peak_increase = diff_profile.torch_peak
-    result.non_torch_increase = after_torch_memory_in_bytes - before_torch_memory_in_bytes
-    result.profile_time = diff_profile.timestamp
-    result.non_kv_cache_memory = result.non_torch_increase + result.torch_peak_increase + result.weights_memory  # noqa
-
-
 def _create_empty_tensor(ms_type):
     init_func = Zero()
     init_func.__enable_zero_dim__ = True
@@ -307,7 +224,7 @@ def check_ready():
 
     if is_mindformers_model_backend():
         logger.info("Run with Mindformers backend!")
-        necessary_envs = ("vLLM_MODEL_MEMORY_USE_GB", "MINDFORMERS_MODEL_CONFIG")
+        necessary_envs = ("MINDFORMERS_MODEL_CONFIG", )
         lost_envs = [env_item for env_item in necessary_envs if not os.getenv(env_item)]
 
         if lost_envs:
@@ -318,40 +235,10 @@ def check_ready():
 
         mindformers_default_env = {
             "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": "FlashAttentionScore,PagedAttention",
-            "MS_ALLOC_CONF": "enable_vmm:False",
         }
         env_setup(mindformers_default_env)
     else:
-        env_setup({"MS_ALLOC_CONF": "enable_vmm:True", })
         logger.info("Run with native model backend!")
-
-
-def calc_block_num(cache_config, model_config, parallel_config):
-    from vllm.worker.cache_engine import CacheEngine
-
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-
-    total_gpu_memory = int(os.environ["ASCEND_TOTAL_MEMORY_GB"]) if os.getenv("ASCEND_TOTAL_MEMORY_GB") else 64
-    total_gpu_memory = total_gpu_memory * 1024 * 1024 * 1024
-    memory_can_use = total_gpu_memory * cache_config.gpu_memory_utilization
-
-    model_use_memory_b = int(os.getenv("vLLM_MODEL_MEMORY_USE_GB")) * 1024 * 1024 * 1024
-    available_cache_memory = memory_can_use - model_use_memory_b
-    cache_block_size = CacheEngine.get_cache_block_size(
-        cache_config, model_config, parallel_config
-    )
-    num_gpu_blocks = int(available_cache_memory // cache_block_size)
-    return num_gpu_blocks
-
-
-def is_use_mla(model_config):
-    if not is_mindformers_model_backend():
-        return False
-
-    return hasattr(model_config.hf_text_config, "model_type") and (
-        model_config.hf_text_config.model_type in ("deepseek_v3",)
-    )
 
 
 def convert_np_to_ms_dtype(value):

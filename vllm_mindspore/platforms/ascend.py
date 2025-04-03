@@ -92,18 +92,6 @@ class AscendPlatform(Platform):
         if cache_config and cache_config.block_size is None:
             cache_config.block_size = 16
 
-        if os.getenv("ASCEND_TOTAL_MEMORY_GB"):
-            total_device_memory = int(os.environ["ASCEND_TOTAL_MEMORY_GB"])
-        else:
-            total_device_memory = 64
-            logger.warning(
-                "Total device memory should be set by environ 'ASCEND_TOTAL_MEMORY_GB', "
-                "please check size by cmd(npu-smi info). "
-                "For now, we will try default size(64GB) which might not be correct exactly."
-            )
-        max_device_memory_for_ms = str(total_device_memory * cache_config.gpu_memory_utilization) + "GB"
-        ms.set_context(max_device_memory=max_device_memory_for_ms)
-        logger.info("max_device_memory for mindspore is: ", max_device_memory_for_ms)
 
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
@@ -126,6 +114,7 @@ class AscendPlatform(Platform):
     @classmethod
     def get_current_memory_usage(cls, device: Optional[torch.types.Device] = None) -> float:
         """Return the memory usage in bytes."""
+        torch.cuda.reset_peak_memory_stats()
         return torch.cuda.max_memory_allocated(device)
 
     @classmethod

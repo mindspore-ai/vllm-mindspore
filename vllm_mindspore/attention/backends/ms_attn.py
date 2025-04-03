@@ -21,6 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import accumulate
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
+import os
 
 import torch
 
@@ -308,13 +309,26 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             self.seq_lens[i] += 1
         self.max_decode_seq_len = max(self.seq_lens)
 
-        advance_step_op(sampled_token_ids,
-                        model_input,
-                        self.seq_lens_tensor,
-                        num_queries,
-                        block_size,
-                        self.block_tables,
-                        self.slot_mapping)
+        # default use python op
+        if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "off") == "on":
+            from vllm_mindspore import npu_ops
+            npu_ops.adv_step_flash(num_seqs=num_seqs,
+                                   num_queries=num_queries,
+                                   block_size=block_size,
+                                   input_tokens=model_input.input_tokens,
+                                   sampled_token_ids=sampled_token_ids,
+                                   input_positions=model_input.input_positions,
+                                   seq_lens=self.seq_lens_tensor,
+                                   slot_mapping=self.slot_mapping,
+                                   block_tables=self.block_tables)
+        else:
+            advance_step_op(sampled_token_ids,
+                            model_input,
+                            self.seq_lens_tensor,
+                            num_queries,
+                            block_size,
+                            self.block_tables,
+                            self.slot_mapping)
 
     def get_seq_lens(
         self,

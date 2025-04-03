@@ -33,7 +33,7 @@ from vllm.logger import init_logger
 
 import torch
 import mindspore as ms
-from mindspore import Tensor
+from mindspore import Tensor, mutable
 
 from mindformers.tools.register.config import MindFormerConfig
 from mindformers.core.context import build_context
@@ -57,12 +57,32 @@ def _batch_seq(input_tokens, prefill):
 
 class Fake_Attention:
     def __init__(self):
+        vllm_config = get_current_vllm_config()
+        block_size = vllm_config.cache_config.block_size
+        num_kv_heads = vllm_config.model_config.get_num_kv_heads(
+            vllm_config.parallel_config
+        )
+        head_size = vllm_config.model_config.get_head_size()
+        num_block = 0
+        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
         self.kv_cache = [
-            torch.tensor([]) for _ in range(get_current_vllm_config(
-            ).parallel_config.pipeline_parallel_size)
+            (
+                torch.zeros(self.kv_shape, dtype=ms.bfloat16, device="Ascend"),
+                torch.zeros(self.kv_shape, dtype=ms.bfloat16, device="Ascend"),
+            )
+            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
         self.attn_type = AttentionType.DECODER
 
+
+class Fake_MLA(Fake_Attention):
+    def __init__(self):
+        super().__init__()
+        vllm_config = get_current_vllm_config()
+        self.kv_cache = [
+            (torch.zeros(self.kv_shape, dtype=ms.bfloat16, device="Ascend"),)
+            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+        ]
 
 class MfModelBase(MsModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
@@ -82,22 +102,16 @@ class MfModelBase(MsModelBase):
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
 
 
-    def update_mf_kvcaches(self):
-        if self.mf_kvcaches_init:
-            return
-
+    def get_kvcache(self):
+        key_cache = []
+        value_cache = []
         forward_context = get_forward_context()
         for i in range(self.mf_model_config.num_layers):
             k_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
             v_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
-            mf_k_cache, mf_v_cache = self.network.kvcache(i)
-            mf_k_cache.set_device_address(
-                k_cache._data_ptr(), k_cache.shape, k_cache.dtype
-            )
-            mf_v_cache.set_device_address(
-                v_cache._data_ptr(), v_cache.shape, v_cache.dtype
-            )
-        self.mf_kvcaches_init = True
+            key_cache.append(k_cache)
+            value_cache.append(v_cache)
+        return mutable(key_cache), mutable(value_cache)
 
 
     def forward(
@@ -109,7 +123,7 @@ class MfModelBase(MsModelBase):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
-        self.update_mf_kvcaches()
+        key_cache, value_cache = self.get_kvcache()
 
         seq_lens = attn_metadata.seq_lens
         max_query_len = attn_metadata.max_query_len
@@ -141,6 +155,8 @@ class MfModelBase(MsModelBase):
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
+        model_inputs["key_cache"] = key_cache
+        model_inputs["value_cache"] = value_cache
 
         if is_prefill:
             self.network.phase = "prefill"

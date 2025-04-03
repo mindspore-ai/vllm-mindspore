@@ -102,7 +102,7 @@ def vllm_config_post_init(self):
     current_platform.check_and_update_config(self)
 
     if self.model_config and self.model_config.use_mla:
-        logger.info("For MindSpore, MLA supports chunked prefill and prefix, "
+        logger.info("For MindSpore, MLA supports chunked prefill and prefix cache, "
                     "so keep them enable.")
 
     if not self.instance_id:
