@@ -119,7 +119,6 @@ class DeepseekV3ForCausalLM(MsModelBase):
         self.mf_model_config.block_size = self.cache_config.block_size
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
-        self.mf_model_config.ffn_concat = True
         self.mf_model_config.return_hidden_states = True
 
         self.is_quant = bool(hasattr(self.mf_model_config, "quantization_config") and
