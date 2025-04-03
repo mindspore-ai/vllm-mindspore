@@ -16,7 +16,7 @@ By using the `vllm-mindspore`, popular open-source models, can run seamlessly fo
 - Software:
     - Python >= 3.9
     - CANN >= 8.0.0
-    - MindSpore >=2.5.0
+    - MindSpore >=2.6.0
 
 ---
 
@@ -101,6 +101,8 @@ curl http://localhost:8000/v1/completions \
   }'
 
 ```
+
+KVCache configuration parameters are documented in docs/kvcache_config.md.
 
 ## Contributing
 
