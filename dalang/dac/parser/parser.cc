@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <filesystem>
 #include <iomanip>
 
 #include "common/common.h"
@@ -552,7 +551,8 @@ StmtPtr Parser::ParseIf() {
     ExprConstPtr condition = ParseExpr(); // condition
     if (condition == nullptr) {
       std::stringstream ss;
-      ss << "warning: invalid if statement, expected a condition expression: ";
+      ss << "warning: invalid if statement, expected a condition "
+            "expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
@@ -622,7 +622,8 @@ StmtPtr Parser::ParseFor() {
     ExprConstPtr element = ParseExpr(); // element
     if (element == nullptr) {
       std::stringstream ss;
-      ss << "warning: invalid for statement, expected an element expression: ";
+      ss << "warning: invalid for statement, expected an element "
+            "expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
@@ -639,7 +640,8 @@ StmtPtr Parser::ParseFor() {
     ExprConstPtr iterator = ParseExpr(); // iterator
     if (iterator == nullptr) {
       std::stringstream ss;
-      ss << "warning: invalid for statement, expected an iterator expression: ";
+      ss << "warning: invalid for statement, expected an iterator "
+            "expression: ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);

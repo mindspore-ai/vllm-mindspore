@@ -107,13 +107,21 @@ struct DAContextManager {
 
 constexpr auto kMemPoolSize = 1024 * 1024 * 256;
 
+// Create a new DAContext.
 DAContext *NewDAContext(size_t deviceId = 0, size_t memSize = kMemPoolSize);
+// Free the DAContext.
 void FreeDAContext(DAContext *context);
 
+// Create a new DAGraph.
 DAGraph *NewDAGraph(DAContext *context);
+// Add a parameter for DAGraph.
 void AddParameter(DAGraph *graph, DATensor *param);
+// Add a tensor for DAGraph.
+void AddTensor(DAGraph *graph, DATensor *tensor);
 
+// Create a new DATensor.
 DATensor *NewDATensor(DAContext *context);
+// Create a new DATensor.
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
                       size_t shape[DA_TENSOR_MAX_DIM] = nullptr,
                       void *data = nullptr, ops::Op op = ops::Op_End,

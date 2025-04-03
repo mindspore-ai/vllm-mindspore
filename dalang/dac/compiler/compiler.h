@@ -68,11 +68,11 @@ enum CodeType { CodeBlock, CodeFunction, CodeGraph, CodeModule, CodeEnd };
 const char *ToStr(CodeType type);
 
 struct Code {
-  CodeType type;
+  CodeType type;                    // Type of block/function/graph/module.
+  std::string name;                 // Function, graph or module name.
   std::vector<std::string> symbols; // Symbol pool in the namespace.
   std::vector<Constant> constants;  // Constant pool in the namespace.
   std::vector<InstCall> insts;      // Instructions in the namespace.
-  std::string name;                 // Function, graph or module name.
   std::vector<std::string> args;    // Parameter names.
   std::vector<std::string> defs;    // Parameter default values.
 };

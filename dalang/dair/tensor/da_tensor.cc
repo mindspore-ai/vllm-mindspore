@@ -73,9 +73,19 @@ DAGraph *NewDAGraph(DAContext *context) {
 
 void AddParameter(DAGraph *graph, DATensor *param) {
   CHECK_NULL(graph);
+  CHECK_FAIL(graph->paramSize < DA_GRAPH_MAX_PARAM);
   graph->param[graph->paramSize] = param;
   ++graph->paramSize;
-  LOG_OUT << "Add Parameter " << param << " for DAContext " << graph;
+  LOG_OUT << "Add Parameter " << param << " for DAGraph " << graph;
+}
+
+void AddTensor(DAGraph *graph, DATensor *tensor) {
+  CHECK_NULL(graph);
+  CHECK_NULL(tensor);
+  CHECK_FAIL(graph->nodeSize < DA_GRAPH_MAX_NODE);
+  graph->node[graph->nodeSize] = tensor;
+  ++graph->nodeSize;
+  LOG_OUT << "Add Tensor " << tensor << " for DAGraph " << graph;
 }
 
 DATensor *NewDATensor(DAContext *context) {
@@ -108,15 +118,21 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
-  *tensor = (DATensor){type, data, dim, {0}, op, {0}};
+  *tensor = (DATensor){type, data, dim, {0}, op, 0, {0}};
   if (shape != nullptr) {
     for (size_t i = 0; i < DA_TENSOR_MAX_DIM; ++i) {
       tensor->shape[i] = shape[i];
+      if (shape[i] == 0) {
+        break;
+      }
     }
   }
   if (input != nullptr) {
     for (size_t i = 0; i < DA_TENSOR_MAX_INPUT; ++i) {
       tensor->input[i] = input[i];
+      if (input[i] == nullptr) {
+        break;
+      }
     }
   }
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)

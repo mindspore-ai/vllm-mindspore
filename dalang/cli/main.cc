@@ -14,7 +14,16 @@
  * limitations under the License.
  */
 
+#define MACRO_HELPER(x) #x
+#define MACRO(x) #x "=" MACRO_HELPER(x)
+#pragma message(MACRO(__GNUC__))
+#if defined(__GNUC__) && (__GNUC__ < 8)
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
 #include <filesystem>
+namespace fs = std::filesystem;
+#endif
 
 #include "common/common.h"
 #include "compiler/compiler.h"
@@ -39,11 +48,11 @@ int main(int argc, char **argv) {
 
   // Handle the source file path.
   const std::string filenameArg = args.args[0];
-  const auto path = std::filesystem::path(filenameArg);
+  const auto path = fs::path(filenameArg);
   std::string filename;
   try {
-    filename = std::filesystem::canonical(path).string();
-  } catch (std::filesystem::filesystem_error &ex) {
+    filename = fs::canonical(path).string();
+  } catch (fs::filesystem_error &ex) {
     std::cout << "error: wrong path: " << path << std::endl;
     exit(EXIT_FAILURE);
   }

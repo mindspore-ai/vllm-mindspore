@@ -38,6 +38,8 @@ typedef enum TokenType {
 
 typedef struct Token {
   TokenType type;
+  const char *start;
+  size_t len;
   union {
     KwId kw;
     SpId sp;
@@ -50,8 +52,6 @@ typedef struct Token {
   int columnStart;
   int columnEnd;
   std::string name;
-  const char *start;
-  size_t len;
 
   bool IsSeparatorSpace() const {
     return type == TokenType_Separator && data.sp == SpId_Space;

@@ -1,5 +1,3 @@
-add_subdirectory(lexer)
-add_subdirectory(parser)
-add_subdirectory(ir)
-add_subdirectory(compiler)
-add_subdirectory(vm)
+add_subdirectory(dac)
+add_subdirectory(dair)
+add_subdirectory(dart)

@@ -319,6 +319,8 @@ void VM::InstDoCall(ssize_t offset) {
   // Create new function/graph frame in advance.
   auto newFuncFrame = Frame{.type = callCode.type,
                             .code = funcNameSlot.value.offset,
+                            .pc = 0,
+                            .slots = std::vector<Slot>(),
                             .vars = std::vector<Slot>{callCode.symbols.size()}};
 
   if (argsSize > 0) { // Has arguments.
@@ -550,6 +552,8 @@ void VM::InstEnterBlock(ssize_t offset) {
   // Create new frame for block.
   auto blockFrame = Frame{.type = CodeBlock,
                           .code = static_cast<size_t>(offset),
+                          .pc = 0,
+                          .slots = std::vector<Slot>(),
                           .vars = std::vector<Slot>{block.symbols.size()}};
   // Push a new frame for function call.
   frames_.emplace_back(std::move(blockFrame));
@@ -790,6 +794,8 @@ void VM::Run() {
   }
   auto topFrame = Frame{.type = CodeModule,
                         .code = 0,
+                        .pc = 0,
+                        .slots = std::vector<Slot>(),
                         .vars = std::vector<Slot>{codes()[0].symbols.size()}};
   frames_.emplace_back(std::move(topFrame));
   while (!frames_.empty()) {

@@ -30,7 +30,7 @@ void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
   CHECK_FAIL(graph_ == nullptr);
   CHECK_NULL(context_);
-  graph_ = NewDAGraph(context_);
+  graph_ = tensor::NewDAGraph(context_);
   name_ = name;
 }
 
@@ -60,11 +60,10 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
                                    void *data) {
   LOG_OUT << "Add const tensor";
   CHECK_NULL(context_);
-  auto *tensor = NewDATensor(context_, type, dim, shape, data);
+  auto *tensor = tensor::NewDATensor(context_, type, dim, shape, data);
   CHECK_NULL(tensor);
   if (graph_ != nullptr) {
-    graph_->node[graph_->nodeSize] = tensor;
-    ++graph_->nodeSize;
+    tensor::AddTensor(graph_, tensor);
   }
   return tensor;
 }
@@ -74,17 +73,15 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
                                    const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
   CHECK_NULL(context_);
-  auto *tensor = NewDATensor(context_);
+  auto *tensor = tensor::NewDATensor(context_);
   CHECK_NULL(tensor);
   tensor->op = op;
   for (const auto &input : inputs) {
     tensor->input[tensor->inputSize] = input;
     ++tensor->inputSize;
   }
-  if (graph_ != nullptr) {
-    graph_->node[graph_->nodeSize] = tensor;
-    ++graph_->nodeSize;
-  }
+  CHECK_NULL(graph_);
+  tensor::AddTensor(graph_, tensor);
   return tensor;
 }
 
