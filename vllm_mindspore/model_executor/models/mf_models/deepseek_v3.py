@@ -59,32 +59,9 @@ class DeepseekV3ForCausalLM(MfModelBase):
         super(DeepseekV3ForCausalLM, self).__init__(
             vllm_config=vllm_config, prefix=prefix
         )
-
-        self.mf_config.load_checkpoint = self.get_model_path()
-
-        self.mf_model_config = DeepseekV3Config_MF(**self.mf_config.model.model_config)
-        if self.mf_config.moe_config:
-            self.mf_model_config.moe_config = self.mf_config.moe_config
-        self.mf_model_config.return_hidden_states = True
-        setattr(self.mf_model_config, 'npu_mem_size', -1)
-
         self.is_quant = bool(hasattr(self.mf_model_config, "quantization_config") and
                              self.mf_model_config.quantization_config)
-        # Initital network
-        with no_init_parameters():  # Delay initialization
-            self.network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
 
-        # quant
-        if hasattr(self.mf_model_config, "quantization_config") and hasattr(self.mf_model_config.quantization_config,
-                                                                            "quant_method"):
-            ptq = self.create_ptq(self.mf_model_config.quantization_config.quant_method, PTQMode.DEPLOY)
-            if ptq is not None:
-                ptq.apply(self.network)
-                ptq.convert(self.network)
-
-        self.network._jit_config_dict = JitConfig(
-            jit_level="O0", infer_boost="on"
-        ).jit_config_dict
         self.mf_kvcaches_init = False
 
         self.sampler = get_sampler()
@@ -100,6 +77,28 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
         self.set_flags = False
+
+    def _generate_model_config(self):
+        self.mf_config.load_checkpoint = self.get_model_path()
+
+        self.mf_model_config = DeepseekV3Config_MF(**self.mf_config.model.model_config)
+        if self.mf_config.moe_config:
+            self.mf_model_config.moe_config = self.mf_config.moe_config
+        self.mf_model_config.return_hidden_states = True
+        setattr(self.mf_model_config, 'npu_mem_size', -1)
+
+    def _create_network(self):
+        # Initital network
+        with no_init_parameters():  # Delay initialization
+            network = DeepseekV3ForCausalLM_MF(self.mf_model_config)
+
+        # quant
+        if hasattr(self.mf_model_config, "quantization_config") and hasattr(self.mf_model_config.quantization_config, "quant_method"):
+            ptq = self.create_ptq(self.mf_model_config.quantization_config.quant_method, PTQMode.DEPLOY)
+            if ptq is not None:
+                ptq.apply(network)
+                ptq.convert(network)
+        return network
 
     def get_kvcache(self):
         key_cache = []

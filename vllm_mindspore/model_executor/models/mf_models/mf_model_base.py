@@ -17,7 +17,9 @@
 # ============================================================================
 
 import os
+from types import MethodType
 from typing import Iterable, List, Optional, Set, Tuple, Union
+from abc import abstractmethod
 import numpy as np
 
 from vllm.attention import AttentionMetadata
@@ -100,6 +102,24 @@ class MfModelBase(MsModelBase):
             get_tensor_model_parallel_world_size()
         )
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
+
+        self._generate_model_config()
+        self.network = self._create_network()
+
+        self.network.construct = MethodType(ms.jit(self.network.__class__.construct,
+                                                   jit_level='O0', infer_boost='on'),
+                                            self.network)
+        self.network.lm_head.construct = MethodType(ms.jit(self.network.lm_head.__class__.construct,
+                                                            jit_level='O0', infer_boost='on'),
+                                                    self.network.lm_head)
+
+    @abstractmethod
+    def _generate_model_config(self):
+        raise NotImplementedError("Function _generate_model_config should be Implemented!")
+
+    @abstractmethod
+    def _create_network(self):
+        raise NotImplementedError("Function _create_network should be Implemented!")
 
 
     def get_kvcache(self):

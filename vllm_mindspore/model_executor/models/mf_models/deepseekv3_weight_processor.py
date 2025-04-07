@@ -931,8 +931,92 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         self.infer_process_attention_weight(src_hf_dir, layer_id, hf_weight_map)
         self.infer_process_norm_weight(src_hf_dir, layer_id, hf_weight_map)
 
-    def infer_quant_net_ms_convert_layer_weight(self, src_hf_dir, num_layers, hf_weight_map):
-        """infer_quant_net_ms_convert_layer_weight"""
+    def infer_smooth_quant_net_ms_convert_layer_weight(self, src_hf_dir, num_layers, hf_weight_map):
+        """infer_smooth_quant_net_ms_convert_layer_weight"""
+        parameter_dict = {}
+
+        no_need_split_layer = ["tok_embeddings", "norm", "q2l_proj",
+                               "kv2l", "routed_experts.router.dense",
+                               "routed_experts.router.e_score_correction_bias",
+                               "topk_bias"]
+        for param_name, _ in tqdm(hf_weight_map.items(), desc="split safetensors"):
+            if "model.layers" in param_name and int(param_name.split('.')[2]) >= num_layers:
+                continue
+
+            if any([name in param_name for name in no_need_split_layer]):
+                value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                               hf_weight_map)
+            elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden.",
+                                                      "shared_experts.w_gate_hidden"]]):
+                if param_name.endswith(".weight") or "matmul" in param_name:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map, is_split_param=True,
+                                                                   split_axis=0)
+                else:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map)
+            elif any([name in param_name for name in [".feed_forward.w2.", ".wo.", "shared_experts.w2"]]):
+                if param_name.endswith(".weight"):
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map, is_split_param=True,
+                                                                   split_axis=1)
+                elif "quant_op" in param_name:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map, is_split_param=True,
+                                                                   split_axis=0)
+                else:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map)
+            elif ".routed_experts.ffn.w_gate_hidden." in param_name:
+                if param_name.endswith(".weight"):
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
+                    value_list = []
+                    for experts_id in range(value.shape[0]):
+                        value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=1))
+                    value = np.stack(value_list, axis=0)
+                elif "matmul" in param_name:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
+                    value_list = []
+                    for experts_id in range(value.shape[0]):
+                        value_list.append(self.split_weight_by_rank(value[experts_id, :], split_axis=0))
+                    value = np.stack(value_list, axis=0)
+                else:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map)
+            elif ".routed_experts.ffn.w2" in param_name:
+                if param_name.endswith(".weight"):
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
+                    value_list = []
+                    for experts_id in range(value.shape[0]):
+                        value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=0))
+                    value = np.stack(value_list, axis=0)
+                else:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
+                                                                   hf_weight_map)                 
+            elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v"]]):
+                value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
+                                                               is_split_param=True, split_axis=0)
+            elif "lm_head" in param_name:
+                if not self.config.parallel_config.vocab_emb_dp:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
+                                                                   is_split_param=True, split_axis=0)
+                else:
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
+            else:
+                raise ValueError(f"not found layer {param_name}, please check safetensors file.")
+
+            dst_dtype = convert_np_to_ms_dtype(value)
+
+            parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dst_dtype),
+                                                        name=param_name, requires_grad=False)
+
+        param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+        print(f"smoothquant param_not_load:{param_not_load}")
+        print(f"smoothquant ckpt_not_load:{ckpt_not_load}")
+
+    def infer_gptq_quant_net_ms_convert_layer_weight(self, src_hf_dir, num_layers, hf_weight_map):
+        """infer_gptq_quant_net_ms_convert_layer_weight"""
+        parameter_dict = {}
 
         no_need_split_layer = ["tok_embeddings", "norm", "q2l_proj",
                                "kv2l", "routed_experts.router.dense",
@@ -940,7 +1024,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                "shared_experts.w_gate_hidden", "shared_experts.w2",
                                "topk_bias"]
 
-        for param_name, _ in hf_weight_map.items():
+        for param_name, _ in tqdm(hf_weight_map.items(), desc="split safetensors"):
             if "model.layers" in param_name and int(param_name.split('.')[2]) >= num_layers:
                 continue
 
@@ -991,11 +1075,14 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
             dst_dtype = convert_np_to_ms_dtype(value)
             if is_int4:
-                self.parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dtype.qint4x2),
-                                                               name=param_name, requires_grad=False)
+                parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dtype.qint4x2),
+                                                          name=param_name, requires_grad=False)
             else:
-                self.parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dst_dtype),
-                                                               name=param_name, requires_grad=False)
+                parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dst_dtype),
+                                                          name=param_name, requires_grad=False)
+            param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, parameter_dict)
+            print(f"gptq-quant param_not_load:{param_not_load}")
+            print(f"gptq-quant ckpt_not_load:{ckpt_not_load}")
 
     def load_safetensors_shard(self, src_hf_dir):
         """deepseek load safetensors and shard """
@@ -1011,7 +1098,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             elif file.endswith('_name_map.json'):
                 param_json_path = os.path.join(src_hf_dir, file)
                 with open(param_json_path, "r") as fp:
-                    hf_weight_map = json.load(fp)
+                    param_map = json.load(fp)
+                    hf_weight_map = param_map["weight_map"] if "weight_map" in param_map else param_map
                 break
 
         if not param_json_path:
@@ -1019,12 +1107,15 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         quantization_config = self.config.model.model_config.quantization_config
         quant_method = quantization_config.quant_method if quantization_config else None
-        if not quant_method or quant_method != "gptq-pergroup":
+        if not quant_method or (quant_method != "gptq-pergroup" and quant_method != "smoothquant"):
             self.infer_convert_outer_weight(src_hf_dir, hf_weight_map)
 
         num_layers = self.config.model.model_config.num_layers
         if quant_method and quant_method == "gptq-pergroup":
-            self.infer_quant_net_ms_convert_layer_weight(src_hf_dir, num_layers, hf_weight_map)
+            self.infer_gptq_quant_net_ms_convert_layer_weight(src_hf_dir, num_layers, hf_weight_map)
+            return
+        if quant_method and quant_method == "smoothquant":
+            self.infer_smooth_quant_net_ms_convert_layer_weight(src_hf_dir, num_layers, hf_weight_map)
             return
 
         enable_tqdm = rank_id == 0

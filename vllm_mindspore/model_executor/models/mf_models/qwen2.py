@@ -42,25 +42,6 @@ logger = init_logger(__name__)
 class Qwen2ForCausalLM(MfModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(Qwen2ForCausalLM, self).__init__(vllm_config=vllm_config, prefix=prefix)
-
-        self.mf_model_config = LlamaConfig_MF(**self.mf_config.model.model_config)
-        if self.mf_config.moe_config:
-            self.mf_model_config.moe_config = self.mf_config.moe_config
-        self.mf_model_config.return_hidden_states = True
-
-        # qwen qkv concat will support in next version
-        self.mf_model_config.qkv_concat = False
-        setattr(self.mf_model_config, 'npu_mem_size', -1)
-        self.mf_config.model.model_config.qkv_concat = False
-        # Initial network
-        with no_init_parameters():  # Delay initialization
-            self.network = ParallelQwenForCausalLM_MF(self.mf_model_config)
-        self.network._jit_config_dict = JitConfig(
-            jit_level="O0", infer_boost="on"
-        ).jit_config_dict
-
-        self.mf_config.load_checkpoint = self.get_model_path()
-
         self.mf_kvcaches_init = False
 
         self.sampler = get_sampler()
@@ -76,6 +57,24 @@ class Qwen2ForCausalLM(MfModelBase):
 
         self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
         self.set_flags = False
+
+    def _generate_model_config(self):
+        self.mf_config.load_checkpoint = self.get_model_path()
+        self.mf_model_config = LlamaConfig_MF(**self.mf_config.model.model_config)
+        if self.mf_config.moe_config:
+            self.mf_model_config.moe_config = self.mf_config.moe_config
+        self.mf_model_config.return_hidden_states = True
+
+        # qwen qkv concat will support in next version
+        self.mf_model_config.qkv_concat = False
+        setattr(self.mf_model_config, 'npu_mem_size', -1)
+        self.mf_config.model.model_config.qkv_concat = False
+
+    def _create_network(self):
+        # Initial network
+        with no_init_parameters():  # Delay initialization
+            network = ParallelQwenForCausalLM_MF(self.mf_model_config)
+        return network
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, False)
