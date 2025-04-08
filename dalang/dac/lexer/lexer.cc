@@ -59,17 +59,13 @@ const std::vector<Token> &Lexer::Tokens() {
   for (EVER) {
     auto token = NextToken();
     if (token.type == TokenType_End) {
-#ifdef DEBUG
       LOG_OUT << "No token anymore";
-#endif
       break;
     }
     if (token.IsSeparatorSpace()) {
       continue;
     }
-#ifdef DEBUG
     LOG_OUT << "# token: " << token.name << "\t\t\t[" << ToStr(&token) << "]";
-#endif
     tokens_.emplace_back(std::move(token));
   }
   scanned_ = true;
@@ -130,6 +126,8 @@ const Token Lexer::TokenInLine() {
   }
 
   // Not match any excepted token, return a invalid token and move on.
+  LOG_OUT << "Not match any excepted token, line: " << line_
+          << ", column: " << column_;
   Token invalidToken = Token{.type = TokenType_End};
   if (!IsLineEnd()) {
     invalidToken.name = line_.at(column_);
@@ -150,13 +148,9 @@ void Lexer::OpenFile(const std::string &filename) {
 const std::string &Lexer::ReadLine() {
   column_ = 0;
   std::getline(file_, line_);
-#ifdef DEBUG
   LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
-#endif
   if ((file_.rdstate() & std::ifstream::eofbit) != 0) {
-#ifdef DEBUG
     LOG_OUT << "Reach end of file for " << filename_;
-#endif
     eof_ = true;
   } else if ((file_.rdstate() & std::ifstream::failbit) != 0) {
     CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");

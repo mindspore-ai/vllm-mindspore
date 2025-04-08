@@ -19,11 +19,15 @@
 
 namespace lexer {
 #define KEYWORD(K) KwId_##K,
+#define KEYWORD_ALIAS(K, ALIAS) KwId_##K,
+#define KEYWORD_ALIAS2(K, ALIAS1, ALIAS2) KwId_##K,
 typedef enum KeywordId {
 #include "keyword.list"
   KwId_End
 } KwId;
 #undef KEYWORD
+#undef KEYWORD_ALIAS
+#undef KEYWORD_ALIAS2
 
 typedef struct NameToKeywordId {
   const char *name;

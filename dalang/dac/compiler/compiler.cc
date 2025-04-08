@@ -649,11 +649,12 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
     const auto &funcName = *funcNameExpr->expr.Name.identifier;
     const auto lineno = funcNameExpr->lineStart;
     const auto index = FindGlobalSymbolIndex(funcName);
-    if (index < intrinsicSize_) { // Call intrinsic.
+    if (index != -1 && index < intrinsicSize_) { // Call intrinsic.
       InstCall loadIntrinsic = {
           .inst = Inst_LoadIntrin, .offset = index, .lineno = lineno};
       LOG_OUT << "intrinsic name: " << funcName
-              << ", index: " << loadIntrinsic.offset;
+              << ", index: " << loadIntrinsic.offset
+              << ", size: " << intrinsicSize_;
       AddInstruction(loadIntrinsic);
 
       CallExprHandler(expr->expr.Call.list);
@@ -692,7 +693,7 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
     const auto attr = funcNameExpr->expr.Attribute.attribute;
     if (entity->type == ExprType_Name && attr->type == ExprType_Name) {
       const auto &opsName = *entity->expr.Name.identifier;
-      if (opsName == ToStr(KwId_ops)) {
+      if (opsName == lexer::ToStr(KwId_ops)) {
         // Support ops.xxx for tensor operations.
         const auto &opName = *attr->expr.Name.identifier;
         LOG_OUT << "Call ops." << opName;
@@ -902,6 +903,8 @@ void Compiler::Dump() {
       case Inst_LoadGlobal:
       case Inst_StoreGlobal:
       case Inst_LoadIntrin: {
+        LOG_OUT << "size: " << symbolPool(0).size()
+                << ", index: " << inst.offset;
         std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
         break;
       }

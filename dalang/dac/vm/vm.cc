@@ -187,6 +187,10 @@ void VM::InstLoadGlobal(ssize_t offset) {
           << ", name: " << name;
   auto *slot = &GlobalVars()[offset];
   LOG_OUT << "load: " << ToString(*slot);
+  if (slot->type == SlotInvalid || slot->type == SlotEnd) {
+    CompileMessage(LineString(), "error: undefined symbol '" + name + "'");
+    exit(EXIT_FAILURE);
+  }
   CurrentStack().emplace_back(*slot);
 }
 
@@ -610,7 +614,7 @@ void VM::InstCompare(ssize_t offset) {
   } catch (std::runtime_error &ex) {
     CompileMessage(LineString(),
                    std::string("error: not support to do [") +
-                       ToStr((OpId)offset) + "] compare between '" +
+                       lexer::ToStr((OpId)offset) + "] compare between '" +
                        GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
                        "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
     exit(EXIT_FAILURE);

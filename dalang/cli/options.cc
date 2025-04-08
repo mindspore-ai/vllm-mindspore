@@ -96,11 +96,11 @@ static struct argp_option options[] = {
     {"lex", 'l', 0, 0, "Print the tokens output"},
     {"parse", 'p', 0, 0, "Print the AST output"},
     {"compile", 'c', 0, 0, "Print the bytecode output"},
-    {"run", 'r', "ENABLED", 0,
+    {"run", 'r', "<ENABLED>", 0,
      "Interpret the code if ENABLED is not 0 or \"disable\"\nEnabled by "
      "default"},
     {"interpret", 0, 0, OPTION_ALIAS},
-    {"output", 'o', "FILE", 0,
+    {"output", 'o', "<FILE>", 0,
      "Output the bytecode as FILE for later execution\n[to-be-supported]"},
     {0}};
 

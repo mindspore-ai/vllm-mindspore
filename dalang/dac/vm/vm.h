@@ -34,6 +34,7 @@ using InstHandlerFunction = void (VM::*)(ssize_t);
 using InstHandlerFunctions = std::vector<InstHandlerFunction>;
 
 enum SlotType {
+  SlotInvalid,
   SlotVoid,
   SlotRefName,
   SlotFunction,
@@ -96,6 +97,9 @@ inline const char *GetSlotTypeStr(const Slot &slot) {
   case SlotClass: {
     return "class";
   }
+  case SlotVoid: {
+    return "void";
+  }
   case SlotRefName: {
     return "ref";
   }
@@ -107,6 +111,9 @@ inline const char *GetSlotTypeStr(const Slot &slot) {
   }
   case SlotIntrinsic: {
     return "intrinsic";
+  }
+  case SlotInvalid: {
+    return "<invalid>";
   }
   default:
     // unknown
@@ -145,6 +152,10 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
     ss << "class:" << slot.value.addr;
     break;
   }
+  case SlotVoid: {
+    ss << "void";
+    break;
+  }
   case SlotRefName: {
     ss << "ref:" << slot.value.addr;
     break;
@@ -159,6 +170,10 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
   }
   case SlotIntrinsic: {
     ss << "intrinsic:" << slot.value.addr;
+    break;
+  }
+  case SlotInvalid: {
+    ss << "<invalid>";
     break;
   }
   default:

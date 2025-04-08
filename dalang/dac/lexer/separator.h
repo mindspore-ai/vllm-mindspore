@@ -20,6 +20,7 @@
 namespace lexer {
 typedef enum SeparatorId {
   SpId_Space,            // sp
+  SpId_Tab,              // tab
   SpId_LeftParenthesis,  // (
   SpId_RightParenthesis, // )
   SpId_LeftBracket,      // [

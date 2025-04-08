@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
+/*
+Usage:
+  KEYWORD(keyword)
+  KEYWORD_ALIAS(keyword, alias_1)
+  KEYWORD_ALIAS2(keyword, alias_1, alias_2)
+*/
 KEYWORD(return)
-KEYWORD(function)
+KEYWORD_ALIAS2(function, func, def)
 KEYWORD(class)
 KEYWORD(if)
 KEYWORD(else)
@@ -26,11 +32,11 @@ KEYWORD(inline)
 KEYWORD(static)
 KEYWORD(const)
 KEYWORD(break)
-KEYWORD(continue)
+KEYWORD_ALIAS(continue, cont)
 KEYWORD(goto)
 KEYWORD(pass)
 KEYWORD(this)
-KEYWORD(self)
+KEYWORD_ALIAS(self, this)
 KEYWORD(try)
 KEYWORD(throw)
 KEYWORD(catch)

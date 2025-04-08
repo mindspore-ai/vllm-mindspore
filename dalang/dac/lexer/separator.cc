@@ -20,6 +20,7 @@
 namespace lexer {
 NameToSpId _separators[] = {
     {" ", SpId_Space},
+    {"\t", SpId_Tab},
     {"(", SpId_LeftParenthesis},
     {")", SpId_RightParenthesis},
     {"[", SpId_LeftBracket},

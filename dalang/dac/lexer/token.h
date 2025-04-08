@@ -54,7 +54,8 @@ typedef struct Token {
   std::string name;
 
   bool IsSeparatorSpace() const {
-    return type == TokenType_Separator && data.sp == SpId_Space;
+    return type == TokenType_Separator &&
+           (data.sp == SpId_Space || data.sp == SpId_Tab);
   }
 } Token;
 typedef Token *TokenPtr;
