@@ -123,6 +123,17 @@ static inline bool MatchBodyStart(TokenConstPtr token) {
   return false;
 }
 
+// Support indent.
+static inline bool MatchIndentBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Colon) {
+    return true;
+  }
+  return false;
+}
+
 static inline bool MatchBodyEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
@@ -182,6 +193,17 @@ static inline bool MatchBodyStart(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBrace) {
+    return true;
+  }
+  return false;
+}
+
+// Support indent.
+static inline bool MatchIndentBodyStart(TokenConstPtr token) {
+  if (token == nullptr) {
+    return false;
+  }
+  if (token->type == TokenType_Separator && token->data.sp == SpId_Colon) {
     return true;
   }
   return false;

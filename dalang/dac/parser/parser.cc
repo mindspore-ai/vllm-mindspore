@@ -405,14 +405,16 @@ StmtPtr Parser::ParseGraphDef() {
     ExprConstPtr id = ParseIdentifier();
     Stmts args = ParseGraphArgs();
     // {
-    if (!StmtPattern::GraphPattern::MatchBodyStart(CurrentToken())) {
+    if (!StmtPattern::GraphPattern::MatchBodyStart(CurrentToken()) &&
+        !(lexer_->supportIndent() &&
+          StmtPattern::GraphPattern::MatchIndentBodyStart(CurrentToken()))) {
       std::stringstream ss;
       ss << "warning: invalid graph definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken(); // {, or : if support indent.
     Stmts stmts;
     (void)ParseStmts(&stmts); // Not check result.
     // }
@@ -468,14 +470,16 @@ StmtPtr Parser::ParseFunctionDef() {
     ExprConstPtr id = ParseIdentifier();
     Stmts args = ParseFunctionArgs();
     // {
-    if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken())) {
+    if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken()) &&
+        !(lexer_->supportIndent() &&
+          StmtPattern::FunctionPattern::MatchIndentBodyStart(CurrentToken()))) {
       std::stringstream ss;
       ss << "warning: invalid function definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken(); // {, or : if support indent.
     Stmts stmts;
     (void)ParseStmts(&stmts); // Not check result.
     // }

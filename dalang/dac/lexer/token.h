@@ -57,6 +57,9 @@ typedef struct Token {
     return type == TokenType_Separator &&
            (data.sp == SpId_Space || data.sp == SpId_Tab);
   }
+  bool IsIndentBlockStart() const {
+    return type == TokenType_Separator && data.sp == SpId_Colon;
+  }
 } Token;
 typedef Token *TokenPtr;
 typedef const Token *TokenConstPtr;

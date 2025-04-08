@@ -41,13 +41,36 @@ Lexer::~Lexer() {
   }
 }
 
+namespace {
+const Token MakeIndentFinishToken() {
+  // Insert a phony } separator for indent change.
+  auto tok = Token{.type = TokenType_Separator};
+  tok.data.sp = SpId_RightBrace;
+  tok.name = "}[PHONY]";
+  LOG_OUT << "Insert a phony } separator for indent decreasing";
+  return tok;
+}
+} // namespace
+
 const Token Lexer::NextToken() {
   // Skip blank line.
   while (IsLineEnd()) {
     if (eof_) {
+      // Support indent feature. Handle the last line.
+      if (supportIndent_ && !indents_.empty()) {
+        indents_.clear();
+        return MakeIndentFinishToken();
+      }
+
+      LOG_OUT << "No line any more";
       return Token{.type = TokenType_End};
     }
     ReadLine();
+
+    // Support indent feature. Check the indent when get the new line.
+    if (supportIndent_ && HandleNewLineIndent()) {
+      return MakeIndentFinishToken();
+    }
   }
   return TokenInLine();
 }
@@ -70,6 +93,56 @@ const std::vector<Token> &Lexer::Tokens() {
   }
   scanned_ = true;
   return tokens_;
+}
+
+// If block end, return true.
+bool Lexer::HandleNewLineIndent() {
+  column_ += SkipWhiteSpace(line_.c_str() + column_);
+  if (column_ == 0 && indents_.empty()) { // No indent at all.
+    // Ignore.
+    LOG_OUT << "No indent at all, column_: " << column_;
+  } else if (column_ == 0 && !indents_.empty()) { // No indent, but
+                                                  // there're previous indents.
+    indents_.clear();
+    LOG_OUT << "Block end, column_: " << column_;
+    return true;
+  } else if (column_ != 0 && indents_.empty()) { // New indent, and no previous
+                                                 // indent. Just record indent.
+    const auto &currentTok = tokens_.back();
+    if (currentTok.IsIndentBlockStart()) {
+      std::string indent = std::string(line_, 0, column_);
+      LOG_OUT << "New block start, " << indent.size()
+              << ", column_: " << column_;
+      indents_.emplace_back(std::move(indent));
+    }
+  } else if (column_ != 0 &&
+             !indents_.empty()) { // New indent, and there's previous indents.
+    // Compare the indent and previous indent firstly.
+    std::string indent = std::string(line_, 0, column_);
+    auto lastIndentLen = indents_.back().size();
+    auto currentIndentLen = indent.size();
+    LOG_OUT << "lastIndentLen: " << lastIndentLen
+            << ", currentIndentLen: " << currentIndentLen
+            << ", column_: " << column_;
+    if (lastIndentLen > currentIndentLen) { // Block end.
+      indents_.pop_back();
+      LOG_OUT << "Block end, " << lastIndentLen << ", " << currentIndentLen
+              << ", column_: " << column_;
+      return true;
+    } else if (lastIndentLen < currentIndentLen) { // New block.
+                                                   // Record the indent.
+      const auto &currentTok = tokens_.back();
+      if (currentTok.IsIndentBlockStart()) {
+        LOG_OUT << "New block start, " << lastIndentLen << ", "
+                << currentIndentLen << ", column_: " << column_;
+        indents_.emplace_back(std::move(indent));
+      }
+    } else { // Same indent, ignore.
+      LOG_OUT << "Same indent: '" << indent << "', " << lastIndentLen << ", "
+              << currentIndentLen << ", column_: " << column_;
+    }
+  }
+  return false;
 }
 
 const Token Lexer::TokenInLine() {

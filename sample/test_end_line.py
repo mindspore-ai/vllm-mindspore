@@ -11,6 +11,3 @@ func foo() {
 
 function main():
 	return foo()
-
-
-<: main() <: '\n'

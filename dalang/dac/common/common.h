@@ -64,7 +64,6 @@ static inline size_t SkipWhiteSpace(const char *str) {
     char c = str[pos];
     switch (c) {
     case ' ':
-    case '\r':
     case '\t':
       ++pos;
       break;

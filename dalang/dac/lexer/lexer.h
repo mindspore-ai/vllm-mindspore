@@ -38,6 +38,8 @@ public:
 
   const std::string &filename() const { return filename_; }
 
+  bool supportIndent() const { return supportIndent_; }
+
 private:
   void OpenFile(const std::string &filename);
   const std::string &ReadLine();
@@ -52,6 +54,8 @@ private:
   Token GetIdentifier();
   Token GetComment();
 
+  bool HandleNewLineIndent();
+
   std::string UnescapeString(const std::string &str);
   std::string EscapeString(const std::string &str);
 
@@ -63,6 +67,8 @@ private:
   bool eof_{false};
   bool skipWhiteSpace_{false};
   bool scanned_{false};
+  bool supportIndent_{true};
+  std::vector<std::string> indents_;
   std::vector<Token> tokens_;
 };
 } // namespace lexer
