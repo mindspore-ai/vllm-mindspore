@@ -163,6 +163,9 @@ class CustomBuildExt(build_ext):
         shutil.copy(src_so_path, dst_so_path)
         logger.info(f"Copied {so_name} to {dst_so_path}")
 
+
+write_commit_id()
+
 package_data = {
     "": [
         "*.so",
