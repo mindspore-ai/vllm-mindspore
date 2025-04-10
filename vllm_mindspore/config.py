@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+from collections import Counter
+
 import torch
 
 import vllm.envs as envs
@@ -22,6 +24,7 @@ import vllm.envs as envs
 from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, logger
 from vllm.utils import random_uuid
 from vllm.logger import init_logger
+from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
 
 logger = init_logger(__name__)
 
@@ -166,3 +169,35 @@ def _verify_args(self) -> None:
                 f"max_long_partial_prefills ({self.max_long_partial_prefills}) "
                 "must be greater than or equal to 1 and less than or equal to "
                 f"max_num_partial_prefills ({self.max_num_partial_prefills}).")
+
+
+def model_post_init(self, __context) -> None:
+
+    count_none = self.custom_ops.count("none")
+    count_all = self.custom_ops.count("all")
+    assert count_none + count_all <= 1, "Can only specify 'none' or 'all'"
+
+    if self.splitting_ops is None:
+        self.splitting_ops = []
+
+    for k, v in self.inductor_passes.items():
+        if not isinstance(v, str):
+            assert callable(v), (
+                f"pass {k} should be callable or a qualified name")
+            self.inductor_compile_config[k] = v if isinstance(
+                v, InductorPass) else CallableInductorPass(v)
+            continue
+
+        # resolve function from qualified name
+        names = v.split(".")
+        module = ".".join(names[:-1])
+        func_name = names[-1]
+        func = __import__(module).__dict__[func_name]
+        self.inductor_compile_config[k] = func if isinstance(
+            func, InductorPass) else CallableInductorPass(func)
+
+    self.enabled_custom_ops = Counter()
+    self.disabled_custom_ops = Counter()
+    self.traced_files = set()
+    self.static_forward_context = {}
+    self.compilation_time = 0.0

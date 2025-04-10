@@ -71,6 +71,7 @@ from vllm_mindspore.model_executor.models.registry import (
     _SUBPROCESS_COMMAND,
 )
 
+
 vllm.config.ModelRegistry = MindSporeModelRegistry
 
 import vllm.model_executor
@@ -192,11 +193,12 @@ vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
-from .config import _verify_quantization, _verify_args, vllm_config_post_init
+from .config import _verify_quantization, _verify_args, vllm_config_post_init, model_post_init
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.SchedulerConfig._verify_args = _verify_args
+vllm.config.CompilationConfig.model_post_init = model_post_init
 
 from .utils import update_modules
 from vllm_mindspore.attention.backends import ms_attn
