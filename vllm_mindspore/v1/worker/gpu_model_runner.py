@@ -254,22 +254,19 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
         kv_cache_config: Configuration for the KV cache, including the KV 
         cache size of each layer
     """
-    if len(kv_cache_config.groups) > 1:
+    if len(kv_cache_config.kv_cache_groups) > 1:
         raise NotImplementedError(
             "Hybrid models with more than one KV cache type are not "
             "supported yet.")
 
     kv_caches: Dict[str, torch.Tensor] = {}
 
-    # backend = MLABackend if is_use_mla(self.model_config) else FlashAttentionBackend
-    backend = FlashAttentionBackend
-
     for layer_name, layer_spec in kv_cache_config.kv_cache_spec.items():
         tensor_config = kv_cache_config.tensors[layer_name]
         assert tensor_config.size % layer_spec.page_size_bytes == 0
         num_blocks = tensor_config.size // layer_spec.page_size_bytes
         if isinstance(layer_spec, FullAttentionSpec):
-            kv_cache_shape = backend.get_kv_cache_shape(
+            kv_cache_shape = self.attn_backend.get_kv_cache_shape(
                 num_blocks, layer_spec.block_size, layer_spec.num_kv_heads,
                 layer_spec.head_size)
             dtype = layer_spec.dtype
