@@ -18,6 +18,7 @@
 #define __LEXER_LEXER_H__
 
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,7 @@ namespace lexer {
 class Lexer {
 public:
   explicit Lexer(const std::string &filename);
+  explicit Lexer(const char *sourceLines);
   ~Lexer();
 
   const Token NextToken();
@@ -42,7 +44,7 @@ public:
 
 private:
   void OpenFile(const std::string &filename);
-  const std::string &ReadLine();
+  void ReadLine();
   const Token TokenInLine();
   bool IsLineEnd() const;
   void SetLineInfo(TokenPtr token);
@@ -59,8 +61,13 @@ private:
   std::string UnescapeString(const std::string &str);
   std::string EscapeString(const std::string &str);
 
+  // Read from file.
   std::string filename_;
-  std::ifstream file_;
+  std::ifstream sourceFileStream_;
+  // Read source directly.
+  const char *sources_;
+  std::istringstream sourceStringStream_;
+
   std::string line_;
   size_t lineno_{0};
   size_t column_{0};

@@ -21,9 +21,10 @@
 
 namespace intrinsic {
 
-#define TYPE(t) IntrisicType_##t,
+#define TYPE(t) IntrinsicType_##t,
 enum IntrinsicType {
 #include "lexer/literal_type.list"
+  IntrinsicType_print,
 };
 #undef TYPE
 

@@ -31,14 +31,21 @@
 
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
-    : filename_{filename}, file_{nullptr}, eof_{false} {
+    : filename_{filename}, sourceFileStream_{std::ifstream()} {
+  LOG_OUT << "filename: " << filename;
   OpenFile(filename);
 }
 
+Lexer::Lexer(const char *sourceLines)
+    : sources_{sourceLines}, sourceStringStream_{sourceLines} {
+  LOG_OUT << "sourceLines: " << sourceLines;
+}
+
 Lexer::~Lexer() {
-  if (file_.is_open()) {
-    file_.close();
+  if (sourceFileStream_.is_open()) {
+    sourceFileStream_.close();
   }
+  LOG_OUT << "Call ~Lexer";
 }
 
 namespace {
@@ -211,26 +218,37 @@ const Token Lexer::TokenInLine() {
 }
 
 void Lexer::OpenFile(const std::string &filename) {
-  file_.open(filename);
-  if ((file_.rdstate() & std::ifstream::failbit) != 0) {
+  sourceFileStream_.open(filename);
+  if ((sourceFileStream_.rdstate() & std::ifstream::failbit) != 0) {
     CompileMessage(filename, "warning: fail to open file.");
     exit(EXIT_FAILURE);
   }
 }
 
-const std::string &Lexer::ReadLine() {
+void Lexer::ReadLine() {
   column_ = 0;
-  std::getline(file_, line_);
-  LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
-  if ((file_.rdstate() & std::ifstream::eofbit) != 0) {
-    LOG_OUT << "Reach end of file for " << filename_;
-    eof_ = true;
-  } else if ((file_.rdstate() & std::ifstream::failbit) != 0) {
-    CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");
-    exit(EXIT_FAILURE);
+  if (!filename_.empty() && sourceFileStream_.is_open()) {
+    std::getline(sourceFileStream_, line_);
+    LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
+    if ((sourceFileStream_.rdstate() & std::ifstream::eofbit) != 0) {
+      LOG_OUT << "Reach end of file for " << filename_;
+      eof_ = true;
+    } else if ((sourceFileStream_.rdstate() & std::ifstream::failbit) != 0) {
+      CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    std::getline(sourceStringStream_, line_, '\n');
+    LOG_OUT << "-------------line-------------: \"" << line_ << "\"";
+    if ((sourceStringStream_.rdstate() & std::ifstream::eofbit) != 0) {
+      LOG_OUT << "Reach end of string lines";
+      eof_ = true;
+    } else if ((sourceStringStream_.rdstate() & std::ifstream::failbit) != 0) {
+      CompileMessage(filename_, lineno_, 0, "warning: fail to read line.");
+      exit(EXIT_FAILURE);
+    }
   }
   ++lineno_;
-  return line_;
 }
 
 bool Lexer::IsLineEnd() const {

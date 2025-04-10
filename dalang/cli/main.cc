@@ -60,21 +60,18 @@ int main(int argc, char **argv) {
   auto lexer = lexer::Lexer(filename);
   if (args.lex && !args.silent) {
     lexer.Dump();
-    std::cout << std::endl;
   }
 
   auto parser = parser::Parser(&lexer);
   parser.ParseCode();
   if (args.parse && !args.silent) {
     parser.DumpAst();
-    std::cout << std::endl;
   }
 
   auto compiler = compiler::Compiler(&parser);
   compiler.Compile();
   if (args.compile && !args.silent) {
     compiler.Dump();
-    std::cout << std::endl;
   }
 
   if (args.interpret) {

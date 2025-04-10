@@ -86,7 +86,7 @@ public:
 
   void Compile();
 
-  const std::string &filename() const { return parser_->filename(); }
+  const std::string &filename() const { return filename_; }
   const std::vector<Code> &codes() const { return codes_; }
 
   // Return true if stmt was handled, otherwise return false.
@@ -104,6 +104,7 @@ public:
 private:
   void Init();
   void InitCompileHandlers();
+  void InitIntrinsicSymbols();
 
   // Compile statement.
   bool CompileModule(StmtConstPtr stmt);
@@ -159,6 +160,7 @@ private:
 
 private:
   Parser *parser_;
+  std::string filename_;
   bool selfManagedParser_{false};
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;

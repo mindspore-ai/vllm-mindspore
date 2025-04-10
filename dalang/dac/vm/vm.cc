@@ -29,16 +29,6 @@
 #endif
 
 namespace vm {
-namespace {
-void ReplaceStr(std::string &dst, const char *oldStr, size_t oldStrLen,
-                const char *newStr) {
-  std::string::size_type pos = 0;
-  while ((pos = dst.find(oldStr)) != std::string::npos) {
-    dst.replace(pos, oldStrLen, newStr);
-  }
-}
-} // namespace
-
 bool VM::ReplaceEscapeStr(std::string &dst) {
   constexpr auto escapeSize = 4;
   const char *escapes[] = {"\\\\", "\\n", "\\r", "\\t"};
@@ -214,29 +204,33 @@ void VM::InstLoadIntrin(ssize_t offset) {
           << ", name: " << name;
   Slot intrinSlot{.type = SlotIntrinsic};
   switch (offset) {
-  case LiteralId_bool: {
+  case intrinsic::IntrinsicType_bool: {
     break;
   }
-  case LiteralId_int: {
+  case intrinsic::IntrinsicType_int: {
     break;
   }
-  case LiteralId_float: {
+  case intrinsic::IntrinsicType_float: {
     break;
   }
-  case LiteralId_str: {
+  case intrinsic::IntrinsicType_str: {
     break;
   }
-  case LiteralId_list: {
+  case intrinsic::IntrinsicType_list: {
     break;
   }
-  case LiteralId_set: {
+  case intrinsic::IntrinsicType_set: {
     break;
   }
-  case LiteralId_dict: {
+  case intrinsic::IntrinsicType_dict: {
     break;
   }
-  case LiteralId_tensor: {
-    intrinSlot.value.intr = intrinsic::IntrisicType_tensor;
+  case intrinsic::IntrinsicType_tensor: {
+    intrinSlot.value.intr = intrinsic::IntrinsicType_tensor;
+    break;
+  }
+  case intrinsic::IntrinsicType_print: {
+    intrinSlot.value.intr = intrinsic::IntrinsicType_print;
     break;
   }
   default:
@@ -402,32 +396,36 @@ void VM::InstCallIntrin(ssize_t offset) {
   CurrentStack().pop_back();
 
   switch (intrinsicSlot.value.intr) {
-  case intrinsic::IntrisicType_bool: {
+  case intrinsic::IntrinsicType_bool: {
     break;
   }
-  case intrinsic::IntrisicType_int: {
+  case intrinsic::IntrinsicType_int: {
     break;
   }
-  case intrinsic::IntrisicType_float: {
+  case intrinsic::IntrinsicType_float: {
     break;
   }
-  case intrinsic::IntrisicType_str: {
+  case intrinsic::IntrinsicType_str: {
     break;
   }
-  case intrinsic::IntrisicType_list: {
+  case intrinsic::IntrinsicType_list: {
     break;
   }
-  case intrinsic::IntrisicType_set: {
+  case intrinsic::IntrinsicType_set: {
     break;
   }
-  case intrinsic::IntrisicType_dict: {
+  case intrinsic::IntrinsicType_dict: {
     break;
   }
-  case intrinsic::IntrisicType_tensor: {
+  case intrinsic::IntrinsicType_tensor: {
     auto tensor = graphExecutor_.AddTensor();
     Slot tensorSlot{.type = SlotTensor};
     tensorSlot.value.addr = tensor;
     CurrentStack().emplace_back(std::move(tensorSlot));
+    break;
+  }
+  case intrinsic::IntrinsicType_print: {
+    std::cout << "-----print-----" << std::endl;
     break;
   }
   default:

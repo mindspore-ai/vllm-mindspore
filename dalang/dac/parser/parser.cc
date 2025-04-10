@@ -36,6 +36,16 @@ Parser::Parser(const std::string &filename) : selfManagedLexer_{true} {
 
 Parser::Parser(Lexer *lexer) : lexer_{lexer}, selfManagedLexer_{false} {}
 
+Parser::~Parser() {
+  ClearExprPool();
+  ClearStmtPool();
+  if (selfManagedLexer_) {
+    delete lexer_;
+    lexer_ = nullptr;
+  }
+  LOG_OUT << "Call ~Parser";
+}
+
 ExprPtr Parser::ParseExpr() {
   // Ignore all comments.
   while (ExprPattern::PrimaryPattern::MatchComment(CurrentToken())) {

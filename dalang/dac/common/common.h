@@ -145,4 +145,22 @@ inline std::string ConvertEscapeString(const std::string &str) {
   }
   return ss.str();
 }
+
+// Replace 'oldStr[len:oldStrLen]' with a string 'newStr'
+inline void ReplaceStrStr(std::string &dst, const char *oldStr,
+                          size_t oldStrLen, const char *newStr) {
+  std::string::size_type pos = 0;
+  while ((pos = dst.find(oldStr)) != std::string::npos) {
+    dst.replace(pos, oldStrLen, newStr);
+  }
+}
+
+// Replace 'oldStr[len:oldStrLen]' with a charactor 'newChar'
+inline void ReplaceStrChr(std::string &dst, const char *oldStr,
+                          size_t oldStrLen, const char newChar) {
+  std::string::size_type pos = 0;
+  while ((pos = dst.find(oldStr)) != std::string::npos) {
+    dst.replace(pos, oldStrLen, 1, newChar);
+  }
+}
 #endif // __COMMON_COMMON_H__

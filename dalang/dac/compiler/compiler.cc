@@ -62,14 +62,15 @@ const char *GetInstStr(Inst inst) {
 }
 
 Compiler::Compiler(const std::string &filename)
-    : selfManagedParser_{true}, walker_{new CompilerNodeVisitor(this)} {
+    : filename_{filename}, selfManagedParser_{true},
+      walker_{new CompilerNodeVisitor(this)} {
   parser_ = new Parser(filename);
   Init();
 }
 
 Compiler::Compiler(Parser *parser)
-    : parser_{parser}, selfManagedParser_{false},
-      walker_{new CompilerNodeVisitor(this)} {
+    : parser_{parser}, filename_{parser_->filename()},
+      selfManagedParser_{false}, walker_{new CompilerNodeVisitor(this)} {
   Init();
 }
 
@@ -78,6 +79,7 @@ Compiler::~Compiler() {
     delete parser_;
   }
   delete walker_;
+  LOG_OUT << "Call ~Compiler";
 }
 
 void Compiler::Compile() {
@@ -831,7 +833,10 @@ void Compiler::Init() {
   codeStack_.emplace(codes_.size());
   codes_.emplace_back(Code{.type = CodeModule,
                            .name = parser_->filename()}); // Preset module code.
+  InitIntrinsicSymbols();
+}
 
+void Compiler::InitIntrinsicSymbols() {
   // Preset intrinsic symbols in global symbol pool for
   // bool/int/float/str/tensor, and so on.
   symbolPool(0).emplace_back(lexer::ToStr(LiteralId_bool));
@@ -842,6 +847,7 @@ void Compiler::Init() {
   symbolPool(0).emplace_back(lexer::ToStr(LiteralId_set));
   symbolPool(0).emplace_back(lexer::ToStr(LiteralId_dict));
   symbolPool(0).emplace_back(lexer::ToStr(LiteralId_tensor));
+  symbolPool(0).emplace_back("print");
   intrinsicSize_ = symbolPool(0).size();
 }
 

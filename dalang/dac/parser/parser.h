@@ -28,14 +28,7 @@ class Parser {
 public:
   explicit Parser(const std::string &filename);
   explicit Parser(Lexer *lexer);
-  ~Parser() {
-    ClearExprPool();
-    ClearStmtPool();
-    if (selfManagedLexer_) {
-      delete lexer_;
-      lexer_ = nullptr;
-    }
-  }
+  ~Parser();
 
   // Parse statements.
   StmtPtr ParseCode();
