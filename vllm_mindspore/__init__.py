@@ -229,6 +229,9 @@ vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 from vllm_mindspore.v1.sample import rejection_sampler
 update_modules("vllm.v1.sample.rejection_sampler", rejection_sampler)
 
+from vllm_mindspore.v1.spec_decode import eagle
+update_modules("vllm.v1.spec_decode.eagle", eagle)
+
 from vllm_mindspore.v1.attention.backends import flash_attn
 import vllm.v1.attention.backends
 sys.modules['vllm.v1.attention.backends.flash_attn'] = flash_attn
