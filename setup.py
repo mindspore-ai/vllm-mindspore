@@ -88,6 +88,14 @@ def get_requirements() -> List[str]:
     return requirements
 
 
+def write_commit_id():
+    ret_code = os.system("git rev-parse --abbrev-ref HEAD > ./vllm_mindspore/.commit_id "
+                         "&& git log --abbrev-commit -1 >> ./vllm_mindspore/.commit_id")
+    if ret_code != 0:
+        sys.stdout.write("Warning: Can not get commit id information. Please make sure git is available.")
+        os.system("echo 'git is not available while building.' > ./vllm_mindspore/.commit_id")
+
+
 version = (Path("vllm_mindspore") / "version.txt").read_text()
 
 def _get_ascend_home_path():
@@ -184,10 +192,14 @@ class CustomBuildExt(build_ext):
         print(f"Moved npu_ops.so to {build_lib_dir}.")
         shutil.rmtree(kernel_meta_dir)
 
+
+write_commit_id()
+
 package_data = {
     "": [
         "*.so",
         "lib/*.so",
+        ".commit_id"
     ]
 }
 
