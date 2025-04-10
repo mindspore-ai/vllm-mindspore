@@ -34,12 +34,17 @@ def _prepare_inputs(
     num_reqs = self.input_batch.num_reqs
     assert num_reqs > 0
 
+    modified_batch = self.attn_metadata_builder.reorder_batch(
+        self.input_batch, scheduler_output)
+    if modified_batch:
+        self.input_batch.refresh_sampling_metadata()
+
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
     self.input_batch.block_table.commit(num_reqs)
     # context_lens = ms.Tensor(self.input_batch.num_computed_tokens_cpu[:num_reqs], dtype=torch.int32)
-    context_lens = ms.from_numpy(self.input_batch.num_computed_tokens_cpu[:num_reqs])
-    context_lens.move_to("Ascend", blocking=False)
+    # context_lens = ms.from_numpy(self.input_batch.num_computed_tokens_cpu[:num_reqs])
+    # context_lens.move_to("Ascend", blocking=False)
     # Get the number of scheduled tokens for each request.
     # TODO: The Python loop can be slow. Optimize.
     num_scheduled_tokens = np.empty(num_reqs, dtype=np.int32)
@@ -52,8 +57,8 @@ def _prepare_inputs(
 
     # non_blocking send q_seq_lens to device
     # q_seq_lens = ms.Tensor(num_scheduled_tokens, dtype=ms.int32)
-    q_seq_lens = ms.from_numpy(num_scheduled_tokens)
-    q_seq_lens.move_to("Ascend", blocking=False)
+    # q_seq_lens = ms.from_numpy(num_scheduled_tokens)
+    # q_seq_lens.move_to("Ascend", blocking=False)
 
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
@@ -78,7 +83,18 @@ def _prepare_inputs(
             arange,
             out=positions_np)
     # self.positions_cpu[:total_num_scheduled_tokens] = torch.from_numpy(positions_np)
-    self.positions[:total_num_scheduled_tokens] = torch.from_numpy(positions_np)
+
+    if self.uses_mrope:
+        self._calc_mrope_positions(scheduler_output)
+
+    if self.uses_mrope:
+        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+        self.mrope_positions[:, :total_num_scheduled_tokens].copy_(
+            self.mrope_positions_cpu[:, :total_num_scheduled_tokens],
+            non_blocking=True)
+    else:
+        self.positions[:total_num_scheduled_tokens] = torch.from_numpy(positions_np)
+
 
     # Get token indices.
     # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
@@ -130,15 +146,15 @@ def _prepare_inputs(
     # TODO:
     # slot_mapping = self.slot_mapping_cpu[:total_num_scheduled_tokens].to(torch.int32)
     # slot_mapping = ms.Tensor(self.slot_mapping_np[:total_num_scheduled_tokens], dtype=ms.int32)
-    slot_mapping = ms.from_numpy(self.slot_mapping_np[:total_num_scheduled_tokens])
-    slot_mapping.move_to("Ascend", blocking=False)
+    # slot_mapping = ms.from_numpy(self.slot_mapping_np[:total_num_scheduled_tokens])
+    # slot_mapping.move_to("Ascend", blocking=False)
 
     # # Prepare the attention metadata.
     self.query_start_loc_np[0] = 0
     self.query_start_loc_np[1:num_reqs + 1] = cu_num_tokens
     # query_start_loc = ms.Tensor(self.query_start_loc_np[:num_reqs + 1], dtype=ms.int32)
-    query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
-    query_start_loc.move_to("Ascend", blocking=False)
+    # query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
+    # query_start_loc.move_to("Ascend", blocking=False)
     # TODO:
     # self.query_start_loc_cpu[1:num_reqs + 1] = \
     #     torch.from_numpy(self.query_start_loc_np[1:num_reqs + 1])
@@ -146,12 +162,12 @@ def _prepare_inputs(
     self.seq_lens_np[:num_reqs] = (
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
-    max_seq_len = self.seq_lens_np[:num_reqs].max()
+    # max_seq_len = self.seq_lens_np[:num_reqs].max()
     # TODO:
-    seq_lens_np = self.seq_lens_np[:num_reqs]
+    # seq_lens_np = self.seq_lens_np[:num_reqs]
     # seq_lens = ms.Tensor(seq_lens_np, dtype=ms.int32)
-    seq_lens = ms.from_numpy(seq_lens_np)
-    seq_lens.move_to("Ascend", blocking=False)
+    # seq_lens = ms.from_numpy(seq_lens_np)
+    # seq_lens.move_to("Ascend", blocking=False)
     # self.seq_lens_cpu[:num_reqs] = torch.from_numpy(self.seq_lens_np[:num_reqs])
 
     # # Copy the tensors to the GPU.
@@ -167,38 +183,63 @@ def _prepare_inputs(
 
     # seq_lens = self.seq_lens_cpu[:num_reqs]
 
-    max_context_lens = self.input_batch.num_computed_tokens_cpu[:num_reqs].max()
+    # max_context_lens = self.input_batch.num_computed_tokens_cpu[:num_reqs].max()
 
-    attn_metadata = FlashAttentionMetadata(
-        seq_lens=seq_lens,
-        seq_lens_np=seq_lens_np,
-        block_tables=(self.input_batch.block_table.get_device_tensor()[:num_reqs]),
-        slot_mapping=slot_mapping,
-        q_seq_lens=q_seq_lens,
-        q_seq_lens_np=num_scheduled_tokens,
-        max_seq_len=max_seq_len,
-        context_lens=context_lens,
-        max_context_lens=max_context_lens,
+    common_prefix_len = 0
+    if self.cascade_attn_enabled:
+        common_prefix_len = self._compute_cascade_attn_prefix_len(
+            num_scheduled_tokens,
+            scheduler_output.num_common_prefix_blocks,
+        )
+
+    attn_metadata = self.attn_metadata_builder.build(
+        num_reqs=num_reqs,
+        num_actual_tokens=total_num_scheduled_tokens,
+        max_query_len=max_num_scheduled_tokens,
+        common_prefix_len=common_prefix_len,
     )
+
+    # attn_metadata = FlashAttentionMetadata(
+    #     seq_lens=seq_lens,
+    #     seq_lens_np=seq_lens_np,
+    #     block_tables=(self.input_batch.block_table.get_device_tensor()[:num_reqs]),
+    #     slot_mapping=slot_mapping,
+    #     q_seq_lens=q_seq_lens,
+    #     q_seq_lens_np=num_scheduled_tokens,
+    #     max_seq_len=max_seq_len,
+    #     context_lens=context_lens,
+    #     max_context_lens=max_context_lens,
+    # )
 
     use_spec_decode = len(
         scheduler_output.scheduled_spec_decode_tokens) > 0
-    if use_spec_decode:
-        logits_indices = self._calc_spec_decode_metadata(
-            scheduler_output, cu_num_tokens)
-    else:
+    if not use_spec_decode:
         # NOTE(woosuk): Due to chunked prefills, the batch may contain
         # partial requests. While we should not sample any token
         # from these partial requests, we do so for simplicity.
         # We will ignore the sampled tokens from the partial requests.
         # TODO: Support prompt logprobs.
-        logits_indices = query_start_loc[1:] - 1
+        logits_indices = attn_metadata.query_start_loc[1:] - 1
+        spec_decode_metadata = None
+    else:
+        # Get the number of draft tokens for each request.
+        # Iterate over the dictionary rather than all requests since not all
+        # requests have draft tokens.
+        num_draft_tokens = np.zeros(num_reqs, dtype=np.int32)
+        for req_id, draft_token_ids in (
+                scheduler_output.scheduled_spec_decode_tokens.items()):
+            req_idx = self.input_batch.req_id_to_index[req_id]
+            num_draft_tokens[req_idx] = len(draft_token_ids)
+
+        spec_decode_metadata = self._calc_spec_decode_metadata(
+            num_draft_tokens, cu_num_tokens)
+        logits_indices = spec_decode_metadata.logits_indices
 
     # Hot-Swap lora model
     if self.lora_config:
         self.set_active_loras(self.input_batch, num_scheduled_tokens)
 
-    return attn_metadata, logits_indices
+    return attn_metadata, logits_indices, spec_decode_metadata
 
 
 def create_block(shape, dtype, name=None, device=None):
