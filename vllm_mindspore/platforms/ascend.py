@@ -28,8 +28,9 @@ from vllm.logger import init_logger
 import vllm.envs as envs
 
 if TYPE_CHECKING:
-    from vllm.config import VllmConfig
+    from vllm.config import ModelConfig, VllmConfig
 else:
+    ModelConfig = None
     VllmConfig = None
 
 logger = init_logger(__name__)
@@ -141,3 +142,7 @@ class AscendPlatform(Platform):
         """Get the total memory of a device in bytes."""
         device_props = torch.cuda.get_device_properties(device_id)
         return device_props.total_memory
+
+    @classmethod
+    def supports_v1(cls, model_config: ModelConfig) -> bool:
+        return True
