@@ -43,7 +43,7 @@ class FlashAttentionBackend(AttentionBackend):
 
     @staticmethod
     def get_builder_cls() -> Type["AttentionMetadataBuilder"]:
-        raise FlashAttentionMetadataBuilder
+        return FlashAttentionMetadataBuilder
 
     @staticmethod
     def get_kv_cache_shape(

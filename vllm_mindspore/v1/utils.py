@@ -9,3 +9,4 @@ def copy_slice(from_tensor: torch.Tensor, to_tensor: torch.Tensor,
     Used to copy pinned CPU tensor data to pre-allocated GPU tensors.
     """
     to_tensor[:length] = from_tensor[:length]
+    return to_tensor
