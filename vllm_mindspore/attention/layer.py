@@ -176,8 +176,9 @@ class Attention(nn.Cell):
         """
         output = query
         key_cache, value_cache = kv_cache
-        cache_out = self.reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
-        query = ops.depend(query, cache_out)
+        if key_cache.shape[0] > 0:
+            cache_out = self.reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
+            query = ops.depend(query, cache_out)
         if num_prefill_tokens > 0:
             output = self._run_prefill_forward(query, key, value, attn_mask, batch_valid_length, batch_valid_length)
         if num_decode_tokens > 0:
