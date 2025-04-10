@@ -24,7 +24,7 @@ from vllm.config import ModelConfig, ModelImpl
 
 from vllm.model_executor.models import ModelRegistry
 from vllm_mindspore.model_executor.models.registry import MindSporeModelRegistry
-from vllm.model_executor.model_loader.utils import resolve_transformers_fallback
+# from vllm.model_executor.model_loader.utils import resolve_transformers_fallback
 
 def get_ms_model_architecture(model_config: ModelConfig) -> Tuple[Type[nn.Module], str]:
     architectures = getattr(model_config.hf_config, "architectures", [])
