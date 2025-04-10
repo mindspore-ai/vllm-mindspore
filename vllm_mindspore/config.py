@@ -83,7 +83,7 @@ def vllm_config_post_init(self):
         self.compilation_config.use_inductor = True
         self.compilation_config.cudagraph_num_of_warmups = 1
         self.compilation_config.pass_config.enable_fusion = False
-        self.compilation_config.pass_config.enable_reshape = False
+        self.compilation_config.pass_config.enable_noop = False
         # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda graph,
         # which means the model inputs will be padded to cuda graph acceptable size,
         # but it is not for mindspore. So here set to CompilationLevel.DYNAMO_AS_IS.

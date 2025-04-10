@@ -45,6 +45,9 @@ import vllm.utils
 
 vllm.utils.current_platform = ascend_platform
 
+import vllm.attention.selector
+vllm.attention.selector.current_platform = ascend_platform
+
 from vllm_mindspore.utils import (
     direct_register_custom_op,
     make_tensor_with_pad,
