@@ -29,6 +29,7 @@ from typing import Dict, Iterator, List, Optional, Tuple, Union
 import msgspec
 import torch
 import torch.nn as nn
+from mindspore.common.api import _pynative_executor
 
 import vllm.envs as envs
 from vllm.sampling_params import SamplingType
@@ -341,7 +342,9 @@ class Sampler(nn.Module):
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
-        return self.forward(logits, sampling_metadata)
+        output = self.forward(logits, sampling_metadata)
+        _pynative_executor.sync()
+        return output
 
     @property
     def _should_modify_greedy_probs_inplace(self) -> bool:
