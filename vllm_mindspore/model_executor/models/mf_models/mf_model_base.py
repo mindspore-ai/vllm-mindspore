@@ -112,6 +112,7 @@ class Fake_Attention_V1(Attention):
         self.head_size = head_size
         self.dtype = vllm_config.model_config.dtype
         self.block_size = block_size
+        self.sliding_window = None
 
 
 class Fake_MLA_V1(Fake_Attention_V1):
@@ -195,6 +196,7 @@ class MfModelBase(MsModelBase):
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.set_flags else 1,
+            query_start_loc = None
         )
 
     def prepare_inputs(self, input_ids, positions, attn_metadata):
@@ -271,8 +273,8 @@ class MfModelBase(MsModelBase):
         self,
         input_ids: Tensor,
         positions: Tensor,
-        kv_caches: List[Tensor],
-        attn_metadata: AttentionMetadata,
+        # kv_caches: List[Tensor],
+        # attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         **kwargs
