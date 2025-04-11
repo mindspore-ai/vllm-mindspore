@@ -11,7 +11,7 @@ echo "SCRIPTS_PATH=$SCRIPTS_PATH"
 
 DALANG_PATH=$CURRENT_PATH/dalang
 cd $DALANG_PATH
-BUILD_DIR=./build
+BUILD_DIR=build
 
 make_sure_build_dir()
 {
@@ -42,14 +42,14 @@ echo "=============================="
 ./$BUILD_DIR/da ./sample/da_llm_sample.da
 
 # Set dalang shared library path
-CMAKE_DALANG_LIB_PATH="$(pwd)/$BUILD_DIR/libdalang.so"
-echo "CMAKE_DALANG_LIB_PATH=$CMAKE_DALANG_LIB_PATH"
+DALANG_LIBRARIES="$(pwd)/$BUILD_DIR/libdalang.so"
+echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
 
 
 ##################################################
 # Build DAPY shared library and execution
 ##################################################
-cd $CURRENT_PATH/python
+cd $CURRENT_PATH/python_api
 
 update_pybind11_submodule()
 {
@@ -68,17 +68,14 @@ update_pybind11_submodule
 make_sure_build_dir
 cd $BUILD_DIR
 
-# Set Python directories for CMake
-CMAKE_PYTHON_INCLUDE_DIR=$(python -m pybind11 --includes)
-echo "CMAKE_PYTHON_INCLUDE_DIR=$CMAKE_PYTHON_INCLUDE_DIR"
-CMAKE_PYTHON_CONFIG_CFLAGS=$(python3-config --cflags)
-echo "CMAKE_PYTHON_CONFIG_CFLAGS=$CMAKE_PYTHON_CONFIG_CFLAGS"
-CMAKE_PYTHON_CONFIG_LDFLAGS=$(python3-config --ldflags)
-echo "CMAKE_PYTHON_CONFIG_LDFLAGS=$CMAKE_PYTHON_CONFIG_LDFLAGS"
+# Check Python directories for CMake
+PYTHON_INCLUDE_DIR=$(python -m pybind11 --includes)
+echo "PYTHON_INCLUDE_DIR=$PYTHON_INCLUDE_DIR"
+PYTHON_CONFIG_CFLAGS=$(python3-config --cflags)
+echo "PYTHON_CONFIG_CFLAGS=$PYTHON_CONFIG_CFLAGS"
+PYTHON_CONFIG_LDFLAGS=$(python3-config --ldflags)
+echo "PYTHON_CONFIG_LDFLAGS=$PYTHON_CONFIG_LDFLAGS"
 
-cmake ..\
-  -DCMAKE_DALANG_LIB_PATH=$CMAKE_DALANG_LIB_PATH\
-  -DCMAKE_PYTHON_INCLUDE_DIR=$CMAKE_PYTHON_INCLUDE_DIR\
-  -DCMAKE_PYTHON_CONFIG_LDFLAGS=$CMAKE_PYTHON_CONFIG_LDFLAGS
+cmake .. -DDALANG_LIBRARIES=$DALANG_LIBRARIES
 make
 cd $CURRENT_PATH

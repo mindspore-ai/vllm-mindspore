@@ -19,20 +19,27 @@
 
 #include "pybind11/pybind11.h"
 
+#include "../../dalang/api/c_api.h"
+
 namespace py = pybind11;
+using Callable = compiler::Compiler;
 
 class DALangPy {
 public:
   DALangPy() = default;
   ~DALangPy() = default;
+  DALangPy(const DALangPy &) = delete;
+  DALangPy(DALangPy &&) = delete;
+  DALangPy &operator=(const DALangPy &) = delete;
+  DALangPy &operator=(DALangPy &&) = delete;
 
-  static DALangPy *GetInstance() {
-    static auto dalangPy = DALangPy();
-    return &dalangPy;
-  }
+  static DALangPy *GetInstance();
 
-  void Compile(const py::object &source, const py::tuple &args) {}
-  void Run(const py::tuple &args) {}
+  void Compile(const py::object &source, const py::tuple &args);
+  void Run(const py::tuple &args);
+
+private:
+  Callable *callable_{nullptr};
 };
 
 #endif // __DALANG_PYBIND11_API_H__

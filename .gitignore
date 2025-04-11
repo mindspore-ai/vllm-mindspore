@@ -3,6 +3,7 @@
 # git rm --cached -r build/
 # Build files
 build/
+python_api/pybind11/
 
 # Cmake files
 CMakeFiles/
