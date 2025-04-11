@@ -275,22 +275,22 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
             # different GPUs, and `kv_cache_config.num_blocks` is set to
             # the min of all `num_blocks`. Verify it here.
             assert num_blocks >= kv_cache_config.num_blocks
-        if isinstance(kv_cache_spec, FullAttentionSpec):
-            kv_cache_shape = self.attn_backend.get_kv_cache_shape(
-                num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
-                kv_cache_spec.head_size)
-            dtype = kv_cache_spec.dtype
-            dtype = get_valid_dtype(dtype)
-            current_cache = []
-            device_type = "CPU" if self.device.type == "cpu" else "Ascend"
-            for i in range(kv_cache_shape[0]):
-                cache_blocks = create_block(
-                    kv_cache_shape[1:], dtype, device=device_type
-                )
-                current_cache.append(mutable(cache_blocks))
-            kv_caches[layer_name] = mutable(tuple(current_cache))
-        else:
-            raise NotImplementedError
+            if isinstance(kv_cache_spec, FullAttentionSpec):
+                kv_cache_shape = self.attn_backend.get_kv_cache_shape(
+                    num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
+                    kv_cache_spec.head_size)
+                dtype = kv_cache_spec.dtype
+                dtype = get_valid_dtype(dtype)
+                current_cache = []
+                device_type = "CPU" if self.device.type == "cpu" else "Ascend"
+                for i in range(kv_cache_shape[0]):
+                    cache_blocks = create_block(
+                        kv_cache_shape[1:], dtype, device=device_type
+                    )
+                    current_cache.append(mutable(cache_blocks))
+                kv_caches[layer_name] = mutable(tuple(current_cache))
+            else:
+                raise NotImplementedError
 
     bind_kv_cache(
         kv_caches,
