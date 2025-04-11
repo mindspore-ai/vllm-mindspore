@@ -445,8 +445,10 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
             num_computed_tokens)
         start_index = (len(req_state.block_ids) -
                         len(req_data.new_block_ids))
-        self.input_batch.block_table.append_row(req_index, start_index,
-                                                req_data.new_block_ids)
+        # self.input_batch.block_table.append_row(req_index, start_index,
+        #                                         req_data.new_block_ids)
+        self.input_batch.block_table.append_row(req_data.new_block_ids,
+                                                req_index)
         # Add new_token_ids to token_ids_cpu.
         start_token_index = num_computed_tokens
         end_token_index = num_computed_tokens + len(req_data.new_token_ids)

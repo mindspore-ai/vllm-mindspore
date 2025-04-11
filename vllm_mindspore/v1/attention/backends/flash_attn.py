@@ -214,7 +214,7 @@ class FlashAttentionMetadataBuilder:
         context_lens = ms.from_numpy(self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
         context_lens.move_to("Ascend", blocking=False)
 
-        q_seq_lens_np = self.runner.query_start_loc_np[:num_reqs + 1].diff()
+        q_seq_lens_np = np.diff(self.runner.query_start_loc_np[:num_reqs + 1])
         q_seq_lens = ms.from_numpy(q_seq_lens_np)
         q_seq_lens.move_to("Ascend", blocking=False)
 
