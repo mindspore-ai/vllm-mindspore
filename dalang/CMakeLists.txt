@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(DaLang VERSION 1.0)
+project(DALang VERSION 1.0)
 
 message("-- CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -29,10 +29,12 @@ add_subdirectory(dac)
 add_subdirectory(dair)
 add_subdirectory(dart)
 
+set(DALANG_OBJ lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj stdc++fs)
+
 # Create da execution file
 add_executable(da cli/main.cc cli/options.cc)
-target_link_libraries(da lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj stdc++fs)
+target_link_libraries(da ${DALANG_OBJ})
 
 # Create shared library. target_compile_options(dalang PRIVATE -fPIC)
 add_library(dalang SHARED api/c_api.cc)
-target_link_libraries(dalang lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj stdc++fs)
+target_link_libraries(dalang ${DALANG_OBJ})

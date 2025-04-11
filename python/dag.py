@@ -36,6 +36,7 @@ def dag(func):
         src = ''.join(lines)
         src = bytes(src, encoding="utf-8")
         callable = _dalang.compile(src)
+        print(f'callable: {callable}, {type(callable)}, {dir(callable)}')
         return _dalang.run(callable)
 
     return wrap_func

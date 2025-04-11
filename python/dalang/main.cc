@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Zhang Qinghua
+ * Copyright 2024 Zhang Qinghua
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstring>
-#include <iostream>
 
-#include "compiler/compiler.h"
-#include "lexer/lexer.h"
-#include "parser/parser.h"
-#include "vm/vm.h"
+#include "../../dalang/api/c_api.h"
 
 #undef DEBUG
 #ifndef DEBUG
@@ -62,7 +57,7 @@ Callable *Compile(const char *source) {
   return compiler;
 }
 
-void Run(tensor::DAGraph *callable, std::vector<tensor::DATensor *> inputs) {
+void Run(Callable *callable, std::vector<tensor::DATensor *> inputs) {
   CHECK_NULL(callable);
   LOG_OUT << "run callable: " << callable;
   auto vm = vm::VM(callable);
