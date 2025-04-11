@@ -600,3 +600,16 @@ def _make_sampling_metadata(self) -> SamplingMetadata:
         allowed_token_ids_mask=allowed_token_ids_mask,
         bad_words_token_ids=self.bad_words_token_ids,
     )
+
+
+def _make_prompt_token_ids_tensor(self) -> torch.Tensor:
+    max_prompt_len = self.num_prompt_tokens[:self.num_reqs].max()
+    prompt_token_ids = np.empty((self.num_reqs, max_prompt_len), dtype=np.int64)
+    prompt_token_ids[:] = self.token_ids_cpu[:self.
+                                             num_reqs, :max_prompt_len]
+    for i in range(self.num_reqs):
+        prompt_token_ids[i, self.num_prompt_tokens[i]:] = self.vocab_size
+    prompt_token_ids_cpu_tensor = torch.from_numpy(prompt_token_ids)
+    prompt_token_ids_cpu_tensor.move_to("Ascend", blocking=False)
+    return prompt_token_ids_cpu_tensor
+

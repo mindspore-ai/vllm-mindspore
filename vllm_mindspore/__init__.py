@@ -29,6 +29,9 @@ from vllm_mindspore.scripts import env_setup
 
 env_setup()
 
+from vllm_mindspore.compilation import inductor_pass
+sys.modules.update({"vllm.compilation.inductor_pass": inductor_pass})
+
 from vllm_mindspore.platforms.ascend import AscendPlatform
 
 ascend_platform = AscendPlatform()
@@ -263,9 +266,11 @@ vllm.v1.worker.gpu_input_batch.BlockTable = BlockTable
 # vllm.v1.worker.gpu_input_batch.InputBatch = InputBatch
 # vllm.v1.worker.gpu_model_runner.InputBatch = InputBatch
 import vllm.v1.worker.gpu_input_batch
-from vllm_mindspore.v1.worker.gpu_input_batch import _make_sampling_metadata
+from vllm_mindspore.v1.worker.gpu_input_batch import _make_sampling_metadata, _make_prompt_token_ids_tensor
 vllm.v1.worker.gpu_input_batch.InputBatch._make_sampling_metadata = _make_sampling_metadata
 vllm.v1.worker.gpu_model_runner.InputBatch._make_sampling_metadata = _make_sampling_metadata
+vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
+vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
 
 from vllm.v1.worker.gpu_worker import Worker
 
