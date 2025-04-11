@@ -75,6 +75,10 @@ class MLABackend(AttentionBackend):
         return FlashAttentionMetadata
 
     @staticmethod
+    def get_builder_cls() -> Type["AttentionMetadataBuilder"]:
+        return FlashAttentionMetadataBuilder
+
+    @staticmethod
     def get_kv_cache_shape(
         num_blocks: int,
         block_size: int,
