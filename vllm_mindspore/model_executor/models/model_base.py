@@ -162,7 +162,8 @@ class MsModelBase():
 
         kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
             else self.cache_config.cache_dtype
-        kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
+        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
+            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
 
         num_layers = self.model_config.get_num_layers(self.parallel_config)
 
