@@ -29,6 +29,7 @@ from vllm_mindspore.scripts import env_setup
 
 env_setup()
 
+# should be place on the top of the file.
 from vllm_mindspore.compilation import inductor_pass as ms_inductor_pass
 sys.modules.update({"vllm.compilation.inductor_pass": ms_inductor_pass})
 
@@ -50,6 +51,10 @@ vllm.utils.current_platform = ascend_platform
 
 import vllm.attention.selector
 vllm.attention.selector.current_platform = ascend_platform
+
+import vllm.engine.arg_utils
+from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
+vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
 from vllm_mindspore.utils import (
     direct_register_custom_op,
@@ -207,7 +212,6 @@ vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.SchedulerConfig._verify_args = _verify_args
 vllm.config.CompilationConfig.model_post_init = model_post_init
 vllm.config._get_and_verify_dtype = _get_and_verify_dtype
-
 
 from .utils import update_modules
 from vllm_mindspore.attention.backends import ms_attn
