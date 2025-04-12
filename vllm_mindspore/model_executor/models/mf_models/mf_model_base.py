@@ -273,8 +273,6 @@ class MfModelBase(MsModelBase):
         self,
         input_ids: Tensor,
         positions: Tensor,
-        # kv_caches: List[Tensor],
-        # attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         **kwargs

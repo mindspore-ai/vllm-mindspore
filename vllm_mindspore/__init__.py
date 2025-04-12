@@ -261,10 +261,6 @@ from vllm_mindspore.v1.worker.block_table import BlockTable
 vllm.v1.worker.block_table.BlockTable = BlockTable
 vllm.v1.worker.gpu_input_batch.BlockTable = BlockTable
 
-# import vllm.v1.worker.gpu_input_batch
-# from vllm_mindspore.v1.worker.gpu_input_batch import InputBatch
-# vllm.v1.worker.gpu_input_batch.InputBatch = InputBatch
-# vllm.v1.worker.gpu_model_runner.InputBatch = InputBatch
 import vllm.v1.worker.gpu_input_batch
 from vllm_mindspore.v1.worker.gpu_input_batch import _make_sampling_metadata, _make_prompt_token_ids_tensor
 vllm.v1.worker.gpu_input_batch.InputBatch._make_sampling_metadata = _make_sampling_metadata

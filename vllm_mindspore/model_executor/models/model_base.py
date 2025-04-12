@@ -125,8 +125,6 @@ class MsModelBase():
         self,
         input_ids: Tensor,
         positions: Tensor,
-        # kv_caches: List[Tensor],
-        # attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         previous_hidden_states: Optional[Tensor] = None,
@@ -135,8 +133,6 @@ class MsModelBase():
         return self.forward(
             input_ids,
             positions,
-            # kv_caches,
-            # attn_metadata,
             intermediate_tensors,
             inputs_embeds,
             previous_hidden_states=previous_hidden_states,

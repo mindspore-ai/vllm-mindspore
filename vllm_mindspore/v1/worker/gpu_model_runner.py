@@ -10,7 +10,6 @@ from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetad
                                                              FlashAttentionBackend,
                                                              MLABackend)
 from vllm_mindspore.utils import get_valid_dtype
-# from vllm_mindspore.utils import is_use_mla
 
 from vllm.v1.kv_cache_interface import FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
@@ -42,9 +41,7 @@ def _prepare_inputs(
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
     self.input_batch.block_table.commit(num_reqs)
-    # context_lens = ms.Tensor(self.input_batch.num_computed_tokens_cpu[:num_reqs], dtype=torch.int32)
-    # context_lens = ms.from_numpy(self.input_batch.num_computed_tokens_cpu[:num_reqs])
-    # context_lens.move_to("Ascend", blocking=False)
+
     # Get the number of scheduled tokens for each request.
     # TODO: The Python loop can be slow. Optimize.
     num_scheduled_tokens = np.empty(num_reqs, dtype=np.int32)
@@ -54,11 +51,6 @@ def _prepare_inputs(
         num_scheduled_tokens[i] = num_tokens
         max_num_scheduled_tokens = max(max_num_scheduled_tokens,
                                         num_tokens)
-
-    # non_blocking send q_seq_lens to device
-    # q_seq_lens = ms.Tensor(num_scheduled_tokens, dtype=ms.int32)
-    # q_seq_lens = ms.from_numpy(num_scheduled_tokens)
-    # q_seq_lens.move_to("Ascend", blocking=False)
 
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
@@ -82,7 +74,6 @@ def _prepare_inputs(
     np.add(self.input_batch.num_computed_tokens_cpu[req_indices],
             arange,
             out=positions_np)
-    # self.positions_cpu[:total_num_scheduled_tokens] = torch.from_numpy(positions_np)
 
     if self.uses_mrope:
         self._calc_mrope_positions(scheduler_output)
@@ -103,17 +94,6 @@ def _prepare_inputs(
     token_indices = (positions_np +
                      req_indices * self.input_batch.token_ids_cpu.shape[1])
 
-    # NOTE(woosuk): We use torch.index_select instead of np.take here
-    # because torch.index_select is much faster than np.take for large
-    # tensors.
-    # self.input_ids_cpu[:total_num_scheduled_tokens] = \
-    #     torch.index_select(self.input_batch.token_ids_cpu_tensor.flatten(),
-    #                        0,
-    #                        torch.from_numpy(token_indices))
-    # self.input_ids[:total_num_scheduled_tokens] = \
-    #     torch.index_select(self.input_batch.token_ids_cpu_tensor.flatten(),
-    #                        0,
-    #                        torch.from_numpy(token_indices))
     self.input_ids[:total_num_scheduled_tokens] = torch.from_numpy(
         np.take(self.input_batch.token_ids_cpu.flatten(),
                 token_indices,
@@ -128,62 +108,21 @@ def _prepare_inputs(
     # because M (max_model_len) is not necessarily divisible by block_size.
     block_table_indices = (req_indices * self.max_num_blocks_per_req +
                            positions_np // self.block_size)
-    # NOTE(woosuk): We use torch.index_select instead of np.take here
-    # because torch.index_select is much faster than np.take for large
-    # tensors.
-    # block_table_cpu = self.input_batch.block_table.get_cpu_tensor()
-    # block_numbers = block_table_cpu.flatten()[block_table_indices].numpy()
+
+
     block_numbers = self.input_batch.block_table.block_table_np.flatten()[block_table_indices]
     block_offsets = positions_np % self.block_size
     np.add(block_numbers * self.block_size,
             block_offsets,
             out=self.slot_mapping_np[:total_num_scheduled_tokens])
-    # TODO:
-    # self.slot_mapping_cpu[:total_num_scheduled_tokens] = \
-    #     torch.from_numpy(self.slot_mapping_np[:total_num_scheduled_tokens])
-
-    # non_blocking send q_seq_lens to device
-    # TODO:
-    # slot_mapping = self.slot_mapping_cpu[:total_num_scheduled_tokens].to(torch.int32)
-    # slot_mapping = ms.Tensor(self.slot_mapping_np[:total_num_scheduled_tokens], dtype=ms.int32)
-    # slot_mapping = ms.from_numpy(self.slot_mapping_np[:total_num_scheduled_tokens])
-    # slot_mapping.move_to("Ascend", blocking=False)
 
     # # Prepare the attention metadata.
     self.query_start_loc_np[0] = 0
     self.query_start_loc_np[1:num_reqs + 1] = cu_num_tokens
-    # query_start_loc = ms.Tensor(self.query_start_loc_np[:num_reqs + 1], dtype=ms.int32)
-    # query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
-    # query_start_loc.move_to("Ascend", blocking=False)
-    # TODO:
-    # self.query_start_loc_cpu[1:num_reqs + 1] = \
-    #     torch.from_numpy(self.query_start_loc_np[1:num_reqs + 1])
 
     self.seq_lens_np[:num_reqs] = (
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
-    # max_seq_len = self.seq_lens_np[:num_reqs].max()
-    # TODO:
-    # seq_lens_np = self.seq_lens_np[:num_reqs]
-    # seq_lens = ms.Tensor(seq_lens_np, dtype=ms.int32)
-    # seq_lens = ms.from_numpy(seq_lens_np)
-    # seq_lens.move_to("Ascend", blocking=False)
-    # self.seq_lens_cpu[:num_reqs] = torch.from_numpy(self.seq_lens_np[:num_reqs])
-
-    # # Copy the tensors to the GPU.
-    # self.input_ids[:total_num_scheduled_tokens] = \
-    #     self.input_ids_cpu[:total_num_scheduled_tokens]
-
-    # # Common case (1D positions)
-    # self.positions[:total_num_scheduled_tokens] = \
-    #     self.positions_cpu[:total_num_scheduled_tokens]
-
-    # TODO:
-    # query_start_loc = self.query_start_loc_cpu[:num_reqs + 1]
-
-    # seq_lens = self.seq_lens_cpu[:num_reqs]
-
-    # max_context_lens = self.input_batch.num_computed_tokens_cpu[:num_reqs].max()
 
     common_prefix_len = 0
     if self.cascade_attn_enabled:
@@ -198,18 +137,6 @@ def _prepare_inputs(
         max_query_len=max_num_scheduled_tokens,
         common_prefix_len=common_prefix_len,
     )
-
-    # attn_metadata = FlashAttentionMetadata(
-    #     seq_lens=seq_lens,
-    #     seq_lens_np=seq_lens_np,
-    #     block_tables=(self.input_batch.block_table.get_device_tensor()[:num_reqs]),
-    #     slot_mapping=slot_mapping,
-    #     q_seq_lens=q_seq_lens,
-    #     q_seq_lens_np=num_scheduled_tokens,
-    #     max_seq_len=max_seq_len,
-    #     context_lens=context_lens,
-    #     max_context_lens=max_context_lens,
-    # )
 
     use_spec_decode = len(
         scheduler_output.scheduled_spec_decode_tokens) > 0
@@ -445,8 +372,6 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
             num_computed_tokens)
         start_index = (len(req_state.block_ids) -
                         len(req_data.new_block_ids))
-        # self.input_batch.block_table.append_row(req_index, start_index,
-        #                                         req_data.new_block_ids)
         self.input_batch.block_table.append_row(req_data.new_block_ids,
                                                 req_index)
         # Add new_token_ids to token_ids_cpu.
@@ -455,14 +380,7 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         self.input_batch.token_ids_cpu[
             req_index,
             start_token_index:end_token_index] = req_data.new_token_ids
-        # #######################################################
-        # self.input_batch.token_ids_cpu_tensor[
-        #     req_index,
-        #     start_token_index:end_token_index] = torch.from_numpy(
-        #         self.input_batch.token_ids_cpu[
-        #             req_index,
-        #             start_token_index:end_token_index])
-        # #######################################
+
         self.input_batch.num_tokens_no_spec[req_index] = end_token_index
         # Add spec_token_ids to token_ids_cpu.
         spec_token_ids = scheduler_output.scheduled_spec_decode_tokens.get(
@@ -494,12 +412,9 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
             req_index = None
         self.input_batch.add_request(req_state, req_index)
 
-    # self.input_batch.commit()
-
     # Condense the batched states if there are empty indices.
     if removed_req_indices:
         self.input_batch.condense(removed_req_indices)
-        # self.input_batch.commit()
 
     if batch_changed:
         self.input_batch.refresh_sampling_metadata()
