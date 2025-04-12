@@ -29,8 +29,8 @@ from vllm_mindspore.scripts import env_setup
 
 env_setup()
 
-from vllm_mindspore.compilation import inductor_pass
-sys.modules.update({"vllm.compilation.inductor_pass": inductor_pass})
+from vllm_mindspore.compilation import inductor_pass as ms_inductor_pass
+sys.modules.update({"vllm.compilation.inductor_pass": ms_inductor_pass})
 
 from vllm_mindspore.platforms.ascend import AscendPlatform
 
@@ -286,6 +286,15 @@ vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
 from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
 import vllm.v1.sample.ops.penalties
 vllm.v1.sample.ops.penalties._convert_to_tensors = _convert_to_tensors
+
+from vllm_mindspore.v1.sample.ops.topk_topp_sampler import apply_top_k_top_p, random_sample
+import vllm.v1.sample.ops.topk_topp_sampler
+vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_top_p = apply_top_k_top_p
+vllm.v1.sample.ops.topk_topp_sampler.random_sample = random_sample
+
+from vllm_mindspore.v1.sample.sampler import apply_temperature
+import vllm.v1.sample.sampler
+vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 
 from .utils import check_ready
 
