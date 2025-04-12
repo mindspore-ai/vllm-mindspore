@@ -69,7 +69,7 @@ class BlockTable:
         self.block_table_np[[src, tgt]] = self.block_table_np[[tgt, src]]
 
     def commit(self, num_reqs: int) -> None:
-        # self.block_table_cpu[:num_reqs] = torch.from_numpy(self.block_table_np[:num_reqs])
+        self.block_table_cpu[:num_reqs] = torch.from_numpy(self.block_table_np[:num_reqs])
         # self.block_table[:num_reqs] = self.block_table_cpu[:num_reqs]
         self.block_table[:num_reqs] = torch.from_numpy(self.block_table_np[:num_reqs])
 
