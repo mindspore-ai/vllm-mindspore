@@ -217,8 +217,8 @@ def check_ready():
     import vllm.envs as envs
     from mindspore import set_context
 
-    if envs.VLLM_USE_V1:
-        raise NotImplementedError("vLLM-MindSpore does not support VLLM V1 now!")
+    # if envs.VLLM_USE_V1:
+    #     raise NotImplementedError("vLLM-MindSpore does not support VLLM V1 now!")
 
     # Common environment variables of predict.
     set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})

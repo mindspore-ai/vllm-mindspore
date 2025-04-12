@@ -29,6 +29,10 @@ from vllm_mindspore.scripts import env_setup
 
 env_setup()
 
+# should be place on the top of the file.
+from vllm_mindspore.compilation import inductor_pass as ms_inductor_pass
+sys.modules.update({"vllm.compilation.inductor_pass": ms_inductor_pass})
+
 from vllm_mindspore.platforms.ascend import AscendPlatform
 
 ascend_platform = AscendPlatform()
@@ -44,6 +48,13 @@ vllm.platforms.current_platform = ascend_platform
 import vllm.utils
 
 vllm.utils.current_platform = ascend_platform
+
+import vllm.attention.selector
+vllm.attention.selector.current_platform = ascend_platform
+
+import vllm.engine.arg_utils
+from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
+vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
 from vllm_mindspore.utils import (
     direct_register_custom_op,
@@ -70,6 +81,7 @@ from vllm_mindspore.model_executor.models.registry import (
     MindSporeModelRegistry,
     _SUBPROCESS_COMMAND,
 )
+
 
 vllm.config.ModelRegistry = MindSporeModelRegistry
 
@@ -168,6 +180,11 @@ from vllm.executor.multiproc_worker_utils import get_mp_context
 
 vllm.executor.multiproc_worker_utils.get_mp_context = ms_get_mp_context
 
+import vllm.v1.executor.multiproc_executor
+vllm.v1.executor.multiproc_executor.get_mp_context = ms_get_mp_context
+import vllm.v1.utils
+vllm.v1.utils.get_mp_context = ms_get_mp_context
+
 from vllm_mindspore.executor.ray_gpu_executor import (
     ms_init_workers_ray,
     initialize_ray_cluster,
@@ -187,11 +204,14 @@ vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
-from .config import _verify_quantization, _verify_args, vllm_config_post_init
+from .config import _verify_quantization, _verify_args, vllm_config_post_init, model_post_init, \
+    _get_and_verify_dtype
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.SchedulerConfig._verify_args = _verify_args
+vllm.config.CompilationConfig.model_post_init = model_post_init
+vllm.config._get_and_verify_dtype = _get_and_verify_dtype
 
 from .utils import update_modules
 from vllm_mindspore.attention.backends import ms_attn
@@ -220,6 +240,64 @@ from vllm.model_executor.layers.rejection_sampler import RejectionSampler
 RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(RejectionSampler, '_smallest_positive_value')
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
+
+from vllm_mindspore.v1.sample import rejection_sampler
+update_modules("vllm.v1.sample.rejection_sampler", rejection_sampler)
+
+from vllm_mindspore.v1.spec_decode import eagle
+update_modules("vllm.v1.spec_decode.eagle", eagle)
+
+from vllm_mindspore.v1.attention.backends import flash_attn
+import vllm.v1.attention.backends
+sys.modules['vllm.v1.attention.backends.flash_attn'] = flash_attn
+import vllm.v1.attention.backends.flash_attn
+
+import vllm.v1.worker.gpu_model_runner
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _prepare_inputs
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = _prepare_inputs
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
+
+from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = initialize_kv_cache
+
+import vllm.v1.worker.block_table
+from vllm_mindspore.v1.worker.block_table import BlockTable
+vllm.v1.worker.block_table.BlockTable = BlockTable
+vllm.v1.worker.gpu_input_batch.BlockTable = BlockTable
+
+import vllm.v1.worker.gpu_input_batch
+from vllm_mindspore.v1.worker.gpu_input_batch import _make_sampling_metadata, _make_prompt_token_ids_tensor
+vllm.v1.worker.gpu_input_batch.InputBatch._make_sampling_metadata = _make_sampling_metadata
+vllm.v1.worker.gpu_model_runner.InputBatch._make_sampling_metadata = _make_sampling_metadata
+vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
+vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
+
+from vllm.v1.worker.gpu_worker import Worker
+
+Worker.__init__ = wrapper_worker_init(Worker.__init__)
+Worker.init_device = wrapper_worker_init_device(Worker.init_device)
+
+
+import vllm.v1.utils
+from vllm_mindspore.v1.utils import copy_slice
+vllm.v1.utils.copy_slice = copy_slice
+vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
+
+from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
+import vllm.v1.sample.ops.penalties
+vllm.v1.sample.ops.penalties._convert_to_tensors = _convert_to_tensors
+
+from vllm_mindspore.v1.sample.ops.topk_topp_sampler import apply_top_k_top_p, random_sample
+import vllm.v1.sample.ops.topk_topp_sampler
+vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_top_p = apply_top_k_top_p
+vllm.v1.sample.ops.topk_topp_sampler.random_sample = random_sample
+
+from vllm_mindspore.v1.sample.sampler import apply_temperature
+import vllm.v1.sample.sampler
+vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 
 from .utils import check_ready
 
