@@ -225,6 +225,7 @@ def ms_init_workers_ray(self, placement_group: "PlacementGroup",
                     "TPU_HOST_BOUNDS",
                     "VLLM_USE_V1",
                     "VLLM_TRACE_FUNCTION",
+                    "ASCEND_RT_VISIBLE_DEVICES",
             ]:
                 if name in os.environ:
                     args[name] = os.environ[name]
