@@ -21,6 +21,7 @@ import os
 from safetensors import safe_open
 from mindspore.communication.management import get_rank, get_group_size
 
+from vllm.distributed import get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank
 
 class BaseWeightProcessor:
     r"""
@@ -35,8 +36,8 @@ class BaseWeightProcessor:
         self.config = config
         self.network = network
         self.is_quant = is_quant
-        self.tp_group_size = get_group_size()
-        self.rank_id = get_rank()
+        self.tp_group_size = get_tensor_model_parallel_world_size()
+        self.rank_id = get_tensor_model_parallel_rank()
         self.parameter_dict = {}
         self.file_handles = {}
 

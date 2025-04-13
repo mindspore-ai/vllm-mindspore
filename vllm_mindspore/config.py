@@ -18,6 +18,9 @@
 from collections import Counter
 from typing import Union
 import sys
+import socket
+import pickle
+import time
 
 import torch
 
@@ -292,3 +295,109 @@ def _get_and_verify_dtype(
         torch_dtype = _STR_DTYPE_TO_TORCH_DTYPE[torch_dtype]
 
     return torch_dtype
+
+
+class SocketProcessGroup:
+    def __init__(self, master_ip: str, master_port: int, rank: int, world_size: int):
+        self.master_ip = master_ip
+        self.master_port = master_port
+        self.rank = rank
+        self.world_size = world_size
+        self.sockets = []
+        self.max_retries = 100
+        self.retry_interval = 2
+
+        if self.rank == 0:
+            # Master node: create a server socket
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.bind((self.master_ip, self.master_port))
+            self.server_socket.listen(self.world_size - 1)
+            print(f"Master node listening on {self.master_ip}:{self.master_port}")
+        else:
+            # Worker node: connect to the master
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            retries = 0
+            while retries < self.max_retries:
+                try:
+                    self.client_socket.connect((self.master_ip, self.master_port))
+                    print(f"Worker {self.rank} connected to master at {self.master_ip}:{self.master_port}")
+                    break
+                except ConnectionRefusedError:
+                    retries += 1
+                    print(f"Worker {self.rank} failed to connect to master. Retrying in {self.retry_interval} seconds... ({retries}/{self.max_retries})")
+                    time.sleep(self.retry_interval)
+            else:
+                raise ConnectionError(f"Worker {self.rank} could not connect to master at {self.master_ip}:{self.master_port} after {self.max_retries} retries.")
+
+    def initialize_group(self):
+        if self.rank == 0:
+            # Master node: accept connections from workers
+            for _ in range(self.world_size - 1):
+                conn, addr = self.server_socket.accept()
+                print(f"Accepted connection from {addr}")
+                self.sockets.append(conn)
+        else:
+            # Worker node: no additional setup needed
+            pass
+
+    def close(self):
+        if self.rank == 0:
+            # Master node: close all worker connections
+            for conn in self.sockets:
+                conn.close()
+            self.server_socket.close()
+        else:
+            # Worker node: close connection to master
+            self.client_socket.close()
+
+
+def stateless_init_dp_group(self) -> SocketProcessGroup:
+    """
+    Initialize a stateless data parallel process group using sockets.
+    """
+    dp_group = SocketProcessGroup(            
+            self.data_parallel_master_ip,
+            self.get_next_dp_init_port(),
+            self.data_parallel_rank,
+            self.data_parallel_size)
+    dp_group.initialize_group()
+    return dp_group
+
+
+def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> bool:
+    """
+    Check if any process in the group has unfinished tasks.
+    """
+    if dp_group.rank == 0:
+        # Master node: collect results from workers
+        results = [has_unfinished]
+        for conn in dp_group.sockets:
+            data = conn.recv(1024)
+            worker_result = pickle.loads(data)
+            results.append(worker_result)
+        
+        # Perform OR operation (any True means unfinished)
+        aggregated_result = any(results)
+        
+        # Broadcast the result back to workers
+        for conn in dp_group.sockets:
+            conn.send(pickle.dumps(aggregated_result))
+        
+        return aggregated_result
+    else:
+        # Worker node: send result to master
+        dp_group.client_socket.send(pickle.dumps(has_unfinished))
+        
+        # Receive aggregated result from master
+        data = dp_group.client_socket.recv(1024)
+        aggregated_result = pickle.loads(data)
+        return aggregated_result
+
+def stateless_destroy_socket_process_group(dp_group: "SocketProcessGroup") -> None:
+    """
+    Destroy the socket-based data parallel process group.
+    This function closes all sockets and cleans up resources.
+    """
+    if dp_group:
+        dp_group.close()
+        print(f"Socket process group for rank {dp_group.rank} destroyed.")
