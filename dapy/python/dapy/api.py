@@ -1,4 +1,3 @@
-#
 # Copyright 2025 Zhang Qinghua
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,35 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import os
 import inspect
 import types
 from functools import wraps
-from ctypes import cdll
-
-from _dalang import DALangPy_ 
+from _dapy import DALangPy_  # export PYTHONPATH=./dapy/build:./dapy/python
 
 
 def dag(func):
     @wraps(func)
     def wrap_func(*args, **kwargs):
-        if DALangPy_.get_instance() is None:
+        dalang_py = DALangPy_.get_instance()
+        if dalang_py is None:
             return func(args, kwargs)
         fn = inspect.unwrap(func.__func__ if isinstance(func, types.MethodType) else func)
         src_lines = inspect.getsourcelines(fn)
         lines, line_offset = src_lines
         src = ''.join(lines)
-        DALangPy_.get_instance().compile(src)
-        return DALangPy_.get_instance().run(callable)
+        dalang_py.compile(src, ())
+        return dalang_py(())
 
     return wrap_func
-
-
-@dag
-def test_func():
-    print('hello, world')
-    return 0
-
-
-test_func()

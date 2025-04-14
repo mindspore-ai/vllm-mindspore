@@ -22,9 +22,9 @@
 #define LOG_OUT NO_LOG_OUT
 #endif
 
-DALangPy *DALangPy::GetInstance() {
-  static auto dalangPy = DALangPy();
-  return &dalangPy;
+std::shared_ptr<DALangPy> DALangPy::GetInstance() {
+  static auto dalangPy = std::make_shared<DALangPy>();
+  return dalangPy;
 }
 
 void DALangPy::Compile(const py::object &source, const py::tuple &args) {
@@ -70,7 +70,7 @@ void DALangPy::Run(const py::tuple &args) {
 }
 
 // Interface with python
-PYBIND11_MODULE(_dalang, mod) {
+PYBIND11_MODULE(_dapy, mod) {
   (void)py::class_<DALangPy, std::shared_ptr<DALangPy>>(mod, "DALangPy_")
       .def_static("get_instance", &DALangPy::GetInstance,
                   "DALangPy single instance.")

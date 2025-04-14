@@ -33,7 +33,7 @@ public:
   DALangPy &operator=(const DALangPy &) = delete;
   DALangPy &operator=(DALangPy &&) = delete;
 
-  static DALangPy *GetInstance();
+  static std::shared_ptr<DALangPy> GetInstance();
 
   void Compile(const py::object &source, const py::tuple &args);
   void Run(const py::tuple &args);

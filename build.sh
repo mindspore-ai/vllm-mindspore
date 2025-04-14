@@ -49,7 +49,7 @@ echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
 ##################################################
 # Build DAPY shared library and execution
 ##################################################
-cd $CURRENT_PATH/python_api
+cd $CURRENT_PATH/dapy
 
 update_pybind11_submodule()
 {
@@ -69,12 +69,14 @@ make_sure_build_dir
 cd $BUILD_DIR
 
 # Check Python directories for CMake
-PYTHON_INCLUDE_DIR=$(python -m pybind11 --includes)
+PYTHON_INCLUDE_DIR=$(python3 -m pybind11 --includes)
 echo "PYTHON_INCLUDE_DIR=$PYTHON_INCLUDE_DIR"
 PYTHON_CONFIG_CFLAGS=$(python3-config --cflags)
 echo "PYTHON_CONFIG_CFLAGS=$PYTHON_CONFIG_CFLAGS"
 PYTHON_CONFIG_LDFLAGS=$(python3-config --ldflags)
 echo "PYTHON_CONFIG_LDFLAGS=$PYTHON_CONFIG_LDFLAGS"
+DALANG_PY_PACKAGE_NAME=_dapy$(python3-config --extension-suffix)
+echo "DALANG_PY_PACKAGE_NAME=$DALANG_PY_PACKAGE_NAME"
 
 cmake .. -DDALANG_LIBRARIES=$DALANG_LIBRARIES
 make
