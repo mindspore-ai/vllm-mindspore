@@ -386,15 +386,7 @@ void VM::InstCallIntrin(ssize_t offset) {
   const auto argsSize = static_cast<size_t>(offset);
   const auto &intrinsicSlot = *(CurrentStack().crbegin() + argsSize);
 
-  if (argsSize > 0) { // Has arguments.
-    // Erase all arguments.
-    auto argStartIndex = CurrentStack().size() - argsSize;
-    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
-                         CurrentStack().end());
-  }
-  // Erase the intrinsic self.
-  CurrentStack().pop_back();
-
+  Slot resultSlot{.type = SlotInvalid};
   switch (intrinsicSlot.value.intr) {
   case intrinsic::IntrinsicType_bool: {
     break;
@@ -419,20 +411,33 @@ void VM::InstCallIntrin(ssize_t offset) {
   }
   case intrinsic::IntrinsicType_tensor: {
     auto tensor = graphExecutor_.AddTensor();
-    Slot tensorSlot{.type = SlotTensor};
-    tensorSlot.value.addr = tensor;
-    CurrentStack().emplace_back(std::move(tensorSlot));
+    resultSlot.type = SlotTensor;
+    resultSlot.value.addr = tensor;
     break;
   }
   case intrinsic::IntrinsicType_print: {
-    std::cout << "-----print-----" << std::endl;
+    // Print the value.
+    const auto &slot = CurrentStack().back();
+    std::cout << ToString(slot);
     break;
   }
   default:
     LOG_ERROR << "invalid intrinsic.";
     exit(EXIT_FAILURE);
   }
-  LOG_OUT << "Call intrisic.";
+  LOG_OUT << "Call intrisic. argsSize: " << argsSize;
+
+  if (argsSize > 0) { // Has arguments.
+    // Erase all arguments.
+    auto argStartIndex = CurrentStack().size() - argsSize;
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
+                         CurrentStack().end());
+  }
+  // Erase the intrinsic self.
+  CurrentStack().pop_back();
+
+  // Push intrinsic result as new slot.
+  CurrentStack().emplace_back(std::move(resultSlot));
 }
 
 // Call an ops.xxx.

@@ -27,7 +27,8 @@ std::shared_ptr<DALangPy> DALangPy::GetInstance() {
   return dalangPy;
 }
 
-void DALangPy::Compile(const py::object &source, const py::tuple &args) {
+void DALangPy::Compile(const py::object &source, const py::tuple &args,
+                       bool dump) {
   // Check if the function or net is valid.
   if ((!py::isinstance<py::str>(source))) {
     LOG_ERROR << "error: the source must be string.";
@@ -43,28 +44,29 @@ void DALangPy::Compile(const py::object &source, const py::tuple &args) {
   }
 
   auto lexer = lexer::Lexer(functionStr);
-#ifdef DEBUG
-  lexer.Dump();
-#endif
+  if (dump) {
+    lexer.Dump();
+  }
 
   auto parser = parser::Parser(&lexer);
   parser.ParseCode();
-#ifdef DEBUG
-  parser.DumpAst();
-#endif
+  if (dump) {
+    parser.DumpAst();
+  }
 
   auto compiler = new compiler::Compiler(&parser); // delete by user.
   compiler->Compile();
-#ifdef DEBUG
-  compiler->Dump();
-#endif
-  LOG_OUT << "save callable: " << compiler;
+  if (dump) {
+    compiler->Dump();
+  }
+
+  LOG_OUT << "Save callable: " << compiler;
   callable_ = compiler;
 }
 
 void DALangPy::Run(const py::tuple &args) {
   CHECK_NULL(callable_);
-  LOG_OUT << "run callable: " << callable_;
+  LOG_OUT << "Run callable: " << callable_;
   auto vm = vm::VM(callable_);
   vm.Run();
 }
@@ -76,5 +78,6 @@ PYBIND11_MODULE(_dapy, mod) {
                   "DALangPy single instance.")
       .def("__call__", &DALangPy::Run, py::arg("args"), "Run with arguments.")
       .def("compile", &DALangPy::Compile, py::arg("source"),
-           py::arg("args") = py::list(), "Compile the source with arguments.");
+           py::arg("args") = py::list(), py::arg("dump") = py::bool_(false),
+           "Compile the source with arguments.");
 }

@@ -15,7 +15,7 @@
 
 from dapy import dag
 
-@dag
+@dag(dump_compiler=True)
 def test_func():
     print('hello, world')
     return 0

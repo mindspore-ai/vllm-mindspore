@@ -18,17 +18,21 @@ from functools import wraps
 from _dapy import DALangPy_  # export PYTHONPATH=./dapy/build:./dapy/python
 
 
-def dag(func):
-    @wraps(func)
-    def wrap_func(*args, **kwargs):
-        dalang_py = DALangPy_.get_instance()
-        if dalang_py is None:
-            return func(args, kwargs)
-        fn = inspect.unwrap(func.__func__ if isinstance(func, types.MethodType) else func)
-        src_lines = inspect.getsourcelines(fn)
-        lines, line_offset = src_lines
-        src = ''.join(lines)
-        dalang_py.compile(src, ())
-        return dalang_py(())
+def dag(func=None, *, dump_compiler=False):
+    def decorator(func):
+        @wraps(func)
+        def wrap_func(*args, **kwargs):
+            dalang_py = DALangPy_.get_instance()
+            if dalang_py is None:
+                return func(args, kwargs)
+            fn = inspect.unwrap(func.__func__ if isinstance(func, types.MethodType) else func)
+            src_lines = inspect.getsourcelines(fn)
+            lines, line_offset = src_lines
+            src = ''.join(lines)
+            dalang_py.compile(src, args, dump_compiler)
+            return dalang_py(args)
+        return wrap_func
 
-    return wrap_func
+    if func is None:
+        return decorator
+    return decorator(func)
