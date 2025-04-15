@@ -15,7 +15,7 @@
 import inspect
 import types
 from functools import wraps
-from _dapy import DALangPy_  # export PYTHONPATH=./dapy/build:./dapy/python
+from _dapy import DALangPy_
 
 
 def dag(func=None, *, dump_compiler=False):

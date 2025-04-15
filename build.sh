@@ -1,84 +1,89 @@
 #!/bin/bash
+set -e
 
-##################################################
-# Build DALANG shared library and execution
-##################################################
-# Make sure the build directory exists.
+
 CURRENT_PATH=$(pwd)
 SCRIPT_PATH=$(dirname "$0")
-echo "CURRENT_PATH=$CURRENT_PATH"
-echo "SCRIPTS_PATH=$SCRIPTS_PATH"
 
 DALANG_PATH=$CURRENT_PATH/dalang
-cd $DALANG_PATH
-BUILD_DIR=build
+DAPY_PATH=$CURRENT_PATH/dapy
 
+BUILD_DIR=$CURRENT_PATH/build
+BUILD_DIR_DALANG=$BUILD_DIR/dalang
+BUILD_DIR_DAPY=$BUILD_DIR/dapy
+
+# Make sure the build directory exists
 make_sure_build_dir()
 {
-    if [ -d "$BUILD_DIR" ]; then
-        echo "$BUILD_DIR already exists."
+    if [ -d "$1" ]; then
+        echo "$1 already exists."
     else
-        mkdir $BUILD_DIR
+        mkdir -p $1
     fi
 
-    if [ ! -d "$BUILD_DIR" ]; then
-        echo "error: $BUILD_DIR NOT exists."
+    if [ ! -d "$1" ]; then
+        echo "error: $1 NOT exists."
         return
     fi
 }
+make_sure_build_dir $BUILD_DIR_DALANG
+make_sure_build_dir $BUILD_DIR_DAPY
+
+
+##################################################
+# Step 1:
+# Build DALANG shared library and execution
+##################################################
 
 # Make da execution and shared library
-make_sure_build_dir
-cd $BUILD_DIR
-cmake ..
+cd $BUILD_DIR_DALANG
+cmake $DALANG_PATH
 make
-cd $DALANG_PATH
 
-# Run test.
+# Run test
 echo "=============================="
-echo "Run test case:"
-echo "./da ./sample/da_llm_sample.da"
+echo "Run da execution test case:"
+echo "./da sample/da_llm_sample.da"
 echo "=============================="
-./$BUILD_DIR/da ./sample/da_llm_sample.da
-
-# Set dalang shared library path
-DALANG_LIBRARIES="$(pwd)/$BUILD_DIR/libdalang.so"
-echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
+$BUILD_DIR_DALANG/da $DALANG_PATH/sample/da_llm_sample.da
 
 
 ##################################################
+# Step 2:
 # Build DAPY shared library and execution
 ##################################################
-cd $CURRENT_PATH/dapy
 
+# Set dalang shared library path for _dapy linking
+DALANG_LIBRARIES="$BUILD_DIR_DALANG/libdalang.so"
+echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
+
+# Update pybind11 submodule
 update_pybind11_submodule()
 {
     if [ -d "pybind11" ]; then
         echo "pybind11 already exists."
         git submodule update --init
     else
-        echo "no pybind11 found, start to clone."
+        echo "pybind11 not found, start to clone."
         # Change github repo to gitee's: https://github.com/pybind/pybind11 ==> https://gitee.com/mirrors/pybind11
         git submodule add --force -b stable https://gitee.com/mirrors/pybind11 pybind11
         git submodule update --init
     fi
 }
+cd $DAPY_PATH
 update_pybind11_submodule
+PYBIND11_PATH=$DAPY_PATH/pybind11
 
-# Make da execution and shared library
-make_sure_build_dir
-cd $BUILD_DIR
-
-# Check Python directories for CMake
-PYTHON_INCLUDE_DIR=$(python3 -m pybind11 --includes)
-echo "PYTHON_INCLUDE_DIR=$PYTHON_INCLUDE_DIR"
-PYTHON_CONFIG_CFLAGS=$(python3-config --cflags)
-echo "PYTHON_CONFIG_CFLAGS=$PYTHON_CONFIG_CFLAGS"
-PYTHON_CONFIG_LDFLAGS=$(python3-config --ldflags)
-echo "PYTHON_CONFIG_LDFLAGS=$PYTHON_CONFIG_LDFLAGS"
-DALANG_PY_PACKAGE_NAME=_dapy$(python3-config --extension-suffix)
-echo "DALANG_PY_PACKAGE_NAME=$DALANG_PY_PACKAGE_NAME"
-
-cmake .. -DDALANG_LIBRARIES=$DALANG_LIBRARIES
+# Make _dapy python module
+cd $BUILD_DIR_DAPY
+cmake $DAPY_PATH -DDALANG_LIBRARIES=$DALANG_LIBRARIES -DPYBIND11_PATH=$PYBIND11_PATH
 make
-cd $CURRENT_PATH
+
+# Run test
+echo "=============================="
+echo "Run dapy test case:"
+echo "python check_api.py --dump=True"
+echo "=============================="
+export PYTHONPATH=$BUILD_DIR_DAPY:$DAPY_PATH/python
+echo "PYTHONPATH=$PYTHONPATH"
+python $DAPY_PATH/python/check_api.py --dump=True

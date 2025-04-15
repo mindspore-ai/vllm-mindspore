@@ -13,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "c_api.h"
+
 #include <cstring>
 #include <iostream>
-
-#include "compiler/compiler.h"
-#include "lexer/lexer.h"
-#include "parser/parser.h"
-#include "vm/vm.h"
 
 #undef DEBUG
 #ifndef DEBUG
@@ -27,12 +24,11 @@
 #define LOG_OUT NO_LOG_OUT
 #endif
 
-using Callable = compiler::Compiler;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-Callable *compile(const char *source) {
+Callable *DA_API_Compile(const char *source,
+                         const std::vector<const Tensor *> &args, bool dump) {
   if (source == nullptr) {
     LOG_ERROR << "error: no source code.";
     exit(EXIT_FAILURE);
@@ -46,28 +42,29 @@ Callable *compile(const char *source) {
   }
 
   auto lexer = lexer::Lexer(functionStr);
-#ifdef DEBUG
-  lexer.Dump();
-#endif
+  if (dump) {
+    lexer.Dump();
+  }
 
   auto parser = parser::Parser(&lexer);
   parser.ParseCode();
-#ifdef DEBUG
-  parser.DumpAst();
-#endif
+  if (dump) {
+    parser.DumpAst();
+  }
 
   auto compiler = new compiler::Compiler(&parser); // delete by user.
   compiler->Compile();
-#ifdef DEBUG
-  compiler->Dump();
-#endif
-  LOG_OUT << "return callable: " << compiler;
+  if (dump) {
+    compiler->Dump();
+  }
+
+  LOG_OUT << "Return callable: " << compiler;
   return compiler;
 }
 
-void run(Callable *callable) {
+void DA_API_Run(Callable *callable, const std::vector<const Tensor *> &args) {
   CHECK_NULL(callable);
-  LOG_OUT << "run callable: " << callable;
+  LOG_OUT << "Run callable: " << callable;
   auto vm = vm::VM(callable);
   vm.Run();
 }

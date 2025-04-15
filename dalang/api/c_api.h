@@ -20,8 +20,19 @@
 #include "compiler/compiler.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
+#include "tensor/da_tensor.h"
 #include "vm/vm.h"
 
-#include "tensor/da_tensor.h"
+using Callable = compiler::Compiler;
+using Tensor = tensor::DATensor;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+Callable *DA_API_Compile(const char *source,
+                         const std::vector<const Tensor *> &args, bool dump);
+void DA_API_Run(Callable *callable, const std::vector<const Tensor *> &args);
+#ifdef __cplusplus
+}
+#endif
 #endif // __API_C_API_H__

@@ -14,11 +14,17 @@
 
 
 from dapy import dag
+import argparse
 
-@dag(dump_compiler=True)
-def test_func():
+_arg_parser = argparse.ArgumentParser()
+_arg_parser.add_argument('--dump', '-d', type=bool, default=False, required=False, help="if dump compiler information")
+_args = _arg_parser.parse_args()
+
+
+@dag(dump_compiler=_args.dump)
+def run_dag():
     print('hello, world')
     return 0
 
 
-test_func()
+run_dag()

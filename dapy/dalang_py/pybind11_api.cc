@@ -27,6 +27,16 @@ std::shared_ptr<DALangPy> DALangPy::GetInstance() {
   return dalangPy;
 }
 
+namespace {
+std::vector<const Tensor *> ConvertPyArgs(const py::tuple &args) {
+  std::vector<const Tensor *> tensorArgs;
+  for (const auto &arg : args) {
+    tensorArgs.emplace_back(py::cast<Tensor *>(arg));
+  }
+  return tensorArgs;
+}
+} // namespace
+
 void DALangPy::Compile(const py::object &source, const py::tuple &args,
                        bool dump) {
   // Check if the function or net is valid.
@@ -35,40 +45,12 @@ void DALangPy::Compile(const py::object &source, const py::tuple &args,
     exit(EXIT_FAILURE);
   }
   auto srcStr = py::cast<std::string>(source);
-  LOG_OUT << "source:\n" << srcStr;
-  constexpr auto pythonDef = "def";
-  const char *functionStr = strstr(srcStr.c_str(), pythonDef);
-  if (functionStr == nullptr) {
-    LOG_ERROR << "error: keyword 'def' not found.";
-    exit(EXIT_FAILURE);
-  }
-
-  auto lexer = lexer::Lexer(functionStr);
-  if (dump) {
-    lexer.Dump();
-  }
-
-  auto parser = parser::Parser(&lexer);
-  parser.ParseCode();
-  if (dump) {
-    parser.DumpAst();
-  }
-
-  auto compiler = new compiler::Compiler(&parser); // delete by user.
-  compiler->Compile();
-  if (dump) {
-    compiler->Dump();
-  }
-
-  LOG_OUT << "Save callable: " << compiler;
-  callable_ = compiler;
+  callable_ = DA_API_Compile(srcStr.c_str(), ConvertPyArgs(args), dump);
 }
 
 void DALangPy::Run(const py::tuple &args) {
   CHECK_NULL(callable_);
-  LOG_OUT << "Run callable: " << callable_;
-  auto vm = vm::VM(callable_);
-  vm.Run();
+  DA_API_Run(callable_, ConvertPyArgs(args));
 }
 
 // Interface with python

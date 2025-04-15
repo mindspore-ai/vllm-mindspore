@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __DALANG_PYBIND11_API_H__
-#define __DALANG_PYBIND11_API_H__
+#ifndef __DALANG_PY_PYBIND11_API_H__
+#define __DALANG_PY_PYBIND11_API_H__
 
 #include "pybind11/pybind11.h"
 
@@ -42,4 +42,4 @@ private:
   Callable *callable_{nullptr};
 };
 
-#endif // __DALANG_PYBIND11_API_H__
+#endif // __DALANG_PY_PYBIND11_API_H__

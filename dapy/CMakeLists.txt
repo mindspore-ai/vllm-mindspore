@@ -19,14 +19,15 @@ include_directories(${PROJECT_SOURCE_DIR}/../dalang/dair)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dart)
 
 # Include DaPy directories
-include_directories(${PROJECT_SOURCE_DIR}/pybind11/include)
 include_directories(${PROJECT_SOURCE_DIR}/dalang_py)
 
-# Find pybind11 package location, or call find_package(pybind11 REQUIRED)
-set(PYBIND11_PATH ${CMAKE_CURRENT_SOURCE_DIR}/pybind11)
+# Include pybind11 directories
 message("-- PYBIND11_PATH: ${PYBIND11_PATH}")
-add_subdirectory(${PYBIND11_PATH})
+include_directories(${PYBIND11_PATH}/include)
 
+# Find pybind11 package location, or call find_package(pybind11 REQUIRED)
+add_subdirectory(${PYBIND11_PATH})
 pybind11_add_module(_dapy NO_EXTRAS dalang_py/pybind11_api.cc)
+
 message("-- DALANG_LIBRARIES: ${DALANG_LIBRARIES}")
 target_link_libraries(_dapy PUBLIC ${DALANG_LIBRARIES})

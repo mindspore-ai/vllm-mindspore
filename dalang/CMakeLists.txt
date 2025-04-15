@@ -23,6 +23,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # add_compile_options(-fPIC)
 include_directories(${PROJECT_SOURCE_DIR}/dac)
 include_directories(${PROJECT_SOURCE_DIR}/dair)
 include_directories(${PROJECT_SOURCE_DIR}/dart)
+include_directories(${PROJECT_SOURCE_DIR}/api)
 
 # Add compiler, ir, and runtime directories
 add_subdirectory(dac)
