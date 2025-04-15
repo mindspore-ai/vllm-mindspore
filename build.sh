@@ -58,7 +58,8 @@ update_pybind11_submodule()
         git submodule update --init
     else
         echo "no pybind11 found, start to clone."
-        git submodule add -b stable https://github.com/pybind/pybind11 pybind11
+        # Change github repo to gitee's: https://github.com/pybind/pybind11 ==> https://gitee.com/mirrors/pybind11
+        git submodule add --force -b stable https://gitee.com/mirrors/pybind11 pybind11
         git submodule update --init
     fi
 }
