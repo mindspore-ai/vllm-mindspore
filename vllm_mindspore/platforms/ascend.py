@@ -69,29 +69,34 @@ class AscendPlatform(Platform):
 
     @classmethod
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
-        """
-        Check and update the configuration for the current platform.
-
-        It can raise an exception if the configuration is not compatible with
-        the current platform, or it can update the configuration to make it
-        compatible with the current platform.
-
-        The config is passed by reference, so it can be modified in place.
-        """
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
+        compilation_config = vllm_config.compilation_config
+        model_config = vllm_config.model_config
 
-        import vllm.envs as envs
-        if envs.VLLM_USE_V1:
-            parallel_config.worker_cls = \
-                "vllm.v1.worker.gpu_worker.Worker"
-        else:
-            if parallel_config.worker_cls == "auto":
-                if scheduler_config.is_multi_step:
-                    parallel_config.worker_cls = "vllm.worker.multi_step_worker.MultiStepWorker"
-                elif vllm_config.speculative_config:
-                    parallel_config.worker_cls = "vllm.spec_decode.spec_decode_worker.create_spec_worker"
-                    parallel_config.sd_worker_cls = "vllm.worker.worker.Worker"
+        if parallel_config.worker_cls == "auto":
+            if scheduler_config.is_multi_step:
+                if envs.VLLM_USE_V1:
+                    raise NotImplementedError(
+                        "Multi-step scheduling is not supported (and not "
+                        "needed) on vLLM V1. Please launch without "
+                        "--num-scheduler-steps.")
+                else:
+                    parallel_config.worker_cls = \
+                        "vllm.worker.multi_step_worker.MultiStepWorker"
+            elif vllm_config.speculative_config:
+                if envs.VLLM_USE_V1:
+                    parallel_config.worker_cls = \
+                            "vllm.v1.worker.gpu_worker.Worker"
+                else:
+                    parallel_config.worker_cls = \
+                        "vllm.spec_decode.spec_decode_worker.create_spec_worker"
+                    parallel_config.sd_worker_cls = \
+                        "vllm.worker.worker.Worker"
+            else:
+                if envs.VLLM_USE_V1:
+                    parallel_config.worker_cls = \
+                            "vllm.v1.worker.gpu_worker.Worker"
                 else:
                     parallel_config.worker_cls = "vllm.worker.worker.Worker"
 
@@ -99,9 +104,6 @@ class AscendPlatform(Platform):
         if cache_config and cache_config.block_size is None:
             cache_config.block_size = 16
 
-
-        # if envs.VLLM_USE_V1:
-        #     vllm_config.model_config.enforce_eager = True
 
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
