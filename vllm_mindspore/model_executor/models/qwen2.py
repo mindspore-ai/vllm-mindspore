@@ -16,6 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+import numpy as np
 from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple,
                     Union)
 
@@ -25,10 +26,10 @@ else:
     Qwen2Config = None
 
 import mindspore as ms
-import numpy as np
-import vllm.envs as envs
 from mindspore import Parameter, Tensor, mint, mutable, nn, ops
 from mindspore.common import dtype as mstype
+
+import vllm.envs as envs
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
@@ -36,6 +37,7 @@ from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SwiGLU
@@ -51,18 +53,13 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
-from vllm_mindspore.model_executor.models.attention_mask import \
-    LowerTriangularMask
-from vllm_mindspore.model_executor.models.model_base import (Fake_Attention,
-                                                             Fake_Attention_V1,
-                                                             MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, _jit, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix, set_enforce_eager)
-from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm_mindspore.model_executor.models.model_base import MsModelBase, AttentionWrapper
+from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
-from vllm_mindspore.v1.attention.backends.flash_attn import \
-    FlashAttentionMetadata
+from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
 class Qwen2MLP(nn.Cell):
@@ -491,14 +488,7 @@ class Qwen2ForCausalLM(MsModelBase, SupportsLoRA):
         self.casual_mask = LowerTriangularMask(
             dtype=self.mstype, max_model_len=self.model_config.max_model_len)
         self.set_model_inputs(self.prefill)
-        if envs.VLLM_USE_V1:
-            self.kv_caches = [
-                Fake_Attention_V1() for i in range(config.num_hidden_layers)
-            ]
-        else:
-            self.kv_caches = [
-                Fake_Attention() for i in range(config.num_hidden_layers)
-            ]
+        self.kv_caches = [AttentionWrapper() for i in range(config.num_hidden_layers)]
         compilation_config = vllm_config.compilation_config
 
         if prefix in compilation_config.static_forward_context:
@@ -588,11 +578,11 @@ class Qwen2ForCausalLM(MsModelBase, SupportsLoRA):
             is_prefill = attn_metadata.max_context_lens == 0
             slot_mapping = attn_metadata.slot_mapping
             batch_valid_length = Tensor.from_numpy(attn_metadata.seq_lens_np)
-            q_seq_lens = attn_metadata.q_seq_lens
             block_tables = attn_metadata.block_tables
             query_lens_np = attn_metadata.q_seq_lens_np
             attn_mask = self.casual_mask.gen_attention_mask(
                 is_prefill, positions, query_lens_np)
+            q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
             positions = positions.to(ms.int64)
         if is_prefill:
             if not self.prefill:
@@ -617,24 +607,22 @@ class Qwen2ForCausalLM(MsModelBase, SupportsLoRA):
         return model_output
 
     def _dummy_attention_metadata(self, input_ids: Tensor,
-                                  positions: Tensor) -> FlashAttentionMetadata:
+                                  positions: Tensor) -> MsAttentionMetadata:
         input_len = input_ids.shape[0]
         max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
-        q_seq_lens = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
         seq_lens_np = np.array([input_len], dtype=np.int32)
 
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
-        return FlashAttentionMetadata(
+        return MsAttentionMetadata(
             max_seq_len=max_seq_len,
             seq_lens=seq_lengths,
             seq_lens_np=seq_lens_np,
             block_tables=block_tables,
             slot_mapping=slot_mapping,
-            q_seq_lens=q_seq_lens,
             q_seq_lens_np=q_seq_lens_np,
             context_lens=0,
             # To enforce prefill and decode are both complied in warmup process.

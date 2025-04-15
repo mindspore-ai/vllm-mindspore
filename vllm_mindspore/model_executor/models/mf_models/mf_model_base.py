@@ -43,7 +43,7 @@ from mindformers.tools.utils import is_pynative
 
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
-from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
+from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 logger = init_logger(__name__)
 
@@ -93,24 +93,23 @@ class MfModelBase(MsModelBase):
         dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
         self.lm_head.set_inputs(dynamic_hidden_states)
 
-    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
+
+    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> MsAttentionMetadata:
         input_len = input_ids.shape[0]
         max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
-        q_seq_lens = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
         seq_lens_np = np.array([input_len], dtype=np.int32)
 
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
-        return FlashAttentionMetadata(
+        return MsAttentionMetadata(
             max_seq_len=max_seq_len,
             seq_lens=seq_lengths,
             seq_lens_np=seq_lens_np,
             block_tables=block_tables,
             slot_mapping=slot_mapping,
-            q_seq_lens=q_seq_lens,
             q_seq_lens_np=q_seq_lens_np,
             context_lens=0,
             # To enforce prefill and decode are both complied in warmup process.
@@ -122,16 +121,7 @@ class MfModelBase(MsModelBase):
     def prepare_inputs(self, input_ids, positions, attn_metadata):
         key_cache, value_cache = self.get_kvcache()
         if not envs.VLLM_USE_V1:
-            seq_lens = attn_metadata.seq_lens
-            max_query_len = attn_metadata.max_query_len
-            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-            # decodes are scheduled together. In the first step, all the
-            # prefills turn into decodes and max_query_len will be 1.
-            if self.is_multi_step_chunked_prefill and max_query_len == 1:
-                query_lens = [1] * len(seq_lens)
-            else:
-                query_lens = attn_metadata.query_lens
-
+            # V0
             seq_lens = attn_metadata.seq_lens
             max_query_len = attn_metadata.max_query_len
             # When Mutli-Step is enabled with Chunked-Prefill, prefills and
@@ -148,41 +138,27 @@ class MfModelBase(MsModelBase):
             if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
                 is_prefill = True
             else:
-                is_prefill = False
-
-            q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
-            position_ids = ms.Tensor(positions, dtype=ms.int32)
-            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
-
-            model_inputs = {}
-            model_inputs["input_ids"] = input_ids.astype(ms.int32)
-            model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-            model_inputs["block_tables"] = attn_metadata.block_tables
-            model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-            model_inputs["position_ids"] = position_ids
-            model_inputs["q_seq_lens"] = q_seq_lens
-            model_inputs["attention_mask"] = attention_mask
-            model_inputs["key_cache"] = key_cache
-            model_inputs["value_cache"] = value_cache
+                is_prefill = False            
         else:
-            if attn_metadata.max_context_lens == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
-            q_seq_lens = attn_metadata.q_seq_lens
+            # V1
+            is_prefill = True if attn_metadata.max_context_lens == 0 else False
             query_lens_np = attn_metadata.q_seq_lens_np
-            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+            seq_lens_np = attn_metadata.seq_lens_np
 
-            model_inputs = {}
-            model_inputs["input_ids"] = input_ids.astype(ms.int32)
-            model_inputs["batch_valid_length"] = ms.from_numpy(attn_metadata.seq_lens_np)
-            model_inputs["block_tables"] = attn_metadata.block_tables
-            model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-            model_inputs["position_ids"] = positions.to(ms.int32)
-            model_inputs["q_seq_lens"] = q_seq_lens
-            model_inputs["attention_mask"] = attention_mask
-            model_inputs["key_cache"] = key_cache
-            model_inputs["value_cache"] = value_cache
+        q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
+        position_ids = ms.Tensor(positions, dtype=ms.int32)
+        attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+
+        model_inputs = {}
+        model_inputs["input_ids"] = input_ids.astype(ms.int32)
+        model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
+        model_inputs["block_tables"] = attn_metadata.block_tables
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["position_ids"] = position_ids
+        model_inputs["q_seq_lens"] = q_seq_lens
+        model_inputs["attention_mask"] = attention_mask
+        model_inputs["key_cache"] = key_cache
+        model_inputs["value_cache"] = value_cache
 
         return model_inputs, is_prefill
 

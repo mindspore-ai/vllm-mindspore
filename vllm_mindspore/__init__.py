@@ -274,6 +274,7 @@ MultiModalKwargs.as_kwargs = as_kwargs
 from vllm_mindspore.model_executor.layers.rotary_embedding import InferMRotaryEmbedding
 vllm.model_executor.layers.rotary_embedding.MRotaryEmbedding = InferMRotaryEmbedding
 
+# patch for V1
 from vllm_mindspore.v1.sample import rejection_sampler
 
 update_modules("vllm.v1.sample.rejection_sampler", rejection_sampler)
@@ -282,11 +283,8 @@ from vllm_mindspore.v1.spec_decode import eagle
 
 update_modules("vllm.v1.spec_decode.eagle", eagle)
 
-from vllm_mindspore.v1.attention.backends import flash_attn
-import vllm.v1.attention.backends
-
-sys.modules['vllm.v1.attention.backends.flash_attn'] = flash_attn
-import vllm.v1.attention.backends.flash_attn
+from vllm_mindspore.v1.attention.backends import ms_attn
+update_modules("vllm.v1.attention.backends.flash_attn", ms_attn)
 
 import vllm.v1.worker.gpu_model_runner
 
@@ -298,9 +296,9 @@ from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
 
-from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache
-
+from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache, get_kv_cache_spec
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = initialize_kv_cache
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_kv_cache_spec = get_kv_cache_spec
 
 from vllm_mindspore.v1.worker.gpu_model_runner import wrapper_gpu_model_runner_execute_model
 from vllm.v1.worker.gpu_model_runner import GPUModelRunner

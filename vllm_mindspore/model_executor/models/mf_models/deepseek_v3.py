@@ -50,7 +50,7 @@ from research.deepseek3.deepseek3 import (
 )
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm_mindspore.model_executor.models.model_base import Fake_MLA, Fake_MLA_V1
+from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
 from vllm_mindspore.model_executor.models.attention_mask import MLALowerTriangularMask
@@ -124,10 +124,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-        if envs.VLLM_USE_V1:
-            self.kv_caches = [Fake_MLA_V1() for i in range(self.mf_model_config.num_layers)]
-        else:
-            self.kv_caches = [Fake_MLA() for i in range(self.mf_model_config.num_layers)]
+        self.kv_caches = [MLAAttentionWrapper() for i in range(self.mf_model_config.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:

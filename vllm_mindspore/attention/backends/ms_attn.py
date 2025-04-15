@@ -25,8 +25,6 @@ import os
 
 import numpy as np
 
-import torch
-
 from vllm.attention.backends.abstract import (
     AttentionBackend,
     AttentionImpl,
@@ -95,50 +93,86 @@ def advance_step_op(sampled_token_ids,
 
 
 @dataclass
-class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
-    """Metadata for TorchSDPABackend."""
+class MsAttentionMetadata(AttentionMetadata):
+    """Metadata for MsAttentionBackend.
+    """
+    # (batch_size,). The sequence length per sequence. Sequence length means
+    # the computed tokens + new tokens None if it is a decoding.
+    seq_lens: Optional[List[int]]
+    # seq_lens stored as a tensor.
+    seq_lens_tensor: Optional[ms.Tensor]
 
-    # Currently, input sequences can only contain all prompts
-    # or all decoding. True if all sequences are prompts.
-    chunked_prefill: bool
-    seq_lens: Optional[List[int]] = None  # For non-chunked prefill
+    # NOTE(sang): Definition of context_len, query_len, and seq_len.
+    # |---------- N-1 iteration --------|
+    # |---------------- N iteration ---------------------|
+    # |- tokenA -|......................|-- newTokens ---|
+    # |---------- context_len ----------|
+    # |-------------------- seq_len ---------------------|
+    #                                   |-- query_len ---|
 
-    # For chunked prefill only
+    # Maximum sequence length among prefill batch. 0 if there are decoding
+    # requests only.
+    max_prefill_seq_len: int
+    # Maximum sequence length among decode batch. 0 if there are prefill
+    # requests only.
+    max_decode_seq_len: int
+    # (batch_size,) A tensor of context lengths (tokens that are computed
+    # so far).
+    context_lens_tensor: Optional[ms.Tensor]
+
+    # (batch_size, max_blocks_per_seq).
+    # Block addresses per sequence. (Seq id -> list of physical block)
+    # E.g., [0, 1, 2] means tokens are stored in 0th, 1st, and 2nd blocks
+    # in the kv cache. Each block can contain up to block_size tokens.
+    # 2nd dimensions are padded up to max_blocks_per_seq if it is cuda-graph
+    # captured.
+    block_tables: Optional[ms.Tensor]
+
+    # Whether or not if cuda graph is enabled.
+    # Cuda-graph is currently enabled for decoding only.
+    # TODO(woosuk): Move `use_cuda_graph` out since it's unrelated to attention.
+
+    use_cuda_graph: bool
+
+    # Maximum query length in the batch.
     max_query_len: Optional[int] = None
 
-    max_prefill_seq_len: int = 0
-    seq_start_loc: Optional[torch.Tensor] = None
-    _cached_prefill_metadata: Optional["MSAttentionMetadata"] = None
-    _cached_decode_metadata: Optional["MSAttentionMetadata"] = None
-    context_lens_tensor: Optional[torch.Tensor] = None
-    encoder_seq_start_loc: Optional[torch.Tensor] = None
+    # Max number of query tokens among request in the batch.
     max_decode_query_len: Optional[int] = None
 
-    max_kv_len: Optional[int] = None
-    query_start_loc: Optional[torch.Tensor] = None
-    kv_start_loc: Optional[torch.Tensor] = None
-    prefill_block_tables: Optional[torch.Tensor] = None
-    query_lens: Optional[List[int]] = None
+    # (batch_size + 1,). The cumulative subquery lengths of the sequences in
+    # the batch, used to index into subquery. E.g., if the subquery length
+    # is [4, 6], it is [0, 4, 10].
+    query_start_loc: Optional[ms.Tensor] = None
+    # (batch_size + 1,). The cumulative sequence lengths of the sequences in
+    # the batch, used to index into sequence. E.g., if the sequence length is
+    # [4, 6], it is [0, 4, 10].
+    seq_start_loc: Optional[ms.Tensor] = None
+
+    _cached_prefill_metadata: Optional["MsAttentionMetadata"] = None
+    _cached_decode_metadata: Optional["MsAttentionMetadata"] = None
 
     # Begin encoder attn & enc/dec cross-attn fields...
+
     # Encoder sequence lengths representation
     encoder_seq_lens: Optional[List[int]] = None
-    encoder_seq_lens_tensor: Optional[torch.Tensor] = None
-
+    encoder_seq_lens_tensor: Optional[ms.Tensor] = None
+    # (batch_size + 1,). The cumulative sequence lengths of the sequences in
+    # the batch, used to index into sequence. E.g., if the sequence length is
+    # [4, 6], it is [0, 4, 10].
+    encoder_seq_start_loc: Optional[ms.Tensor] = None
     # Maximum sequence length among encoder sequences
     max_encoder_seq_len: Optional[int] = None
-
     # Number of tokens input to encoder
     num_encoder_tokens: Optional[int] = None
 
     # Cross-attention memory-mapping data structures: slot mapping
     # and block tables
-    cross_slot_mapping: Optional[torch.Tensor] = None
-    cross_block_tables: Optional[torch.Tensor] = None
+    cross_slot_mapping: Optional[ms.Tensor] = None
+    cross_block_tables: Optional[ms.Tensor] = None
 
-    use_cuda_graph: bool = False
-    enable_kv_scales_calculation: bool
-
+    # add by vllm-mindspore
+    query_lens: Optional[List[int]] = None
 
     @property
     def prefill_metadata(self):
@@ -169,7 +203,7 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
         block_tables = (None if self.block_tables is None else
                         self.block_tables[:self.num_prefills])
 
-        self._cached_prefill_metadata = MSAttentionMetadata(
+        self._cached_prefill_metadata = MsAttentionMetadata(
             num_prefills=self.num_prefills,
             num_prefill_tokens=self.num_prefill_tokens,
             num_decode_tokens=0,
@@ -193,7 +227,6 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             encoder_seq_lens_tensor=self.encoder_seq_lens_tensor,
             encoder_seq_start_loc=self.encoder_seq_start_loc,
             max_encoder_seq_len=self.max_encoder_seq_len,
-            chunked_prefill=self.chunked_prefill,
             cross_slot_mapping=self.cross_slot_mapping,
             cross_block_tables=self.cross_block_tables)
         return self._cached_prefill_metadata
@@ -216,7 +249,7 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
         block_tables = (None if self.block_tables is None else
                         self.block_tables[self.num_prefills:])
 
-        self._cached_decode_metadata = MSAttentionMetadata(
+        self._cached_decode_metadata = MsAttentionMetadata(
             num_prefills=0,
             num_prefill_tokens=0,
             num_decode_tokens=self.num_decode_tokens,
@@ -245,14 +278,13 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             encoder_seq_lens_tensor=self.encoder_seq_lens_tensor,
             encoder_seq_start_loc=self.encoder_seq_start_loc,
             max_encoder_seq_len=self.max_encoder_seq_len,
-            chunked_prefill=self.chunked_prefill,
             cross_slot_mapping=self.cross_slot_mapping,
             cross_block_tables=self.cross_block_tables)
         return self._cached_decode_metadata
 
     def advance_step(self,
                      model_input: "ModelInputForNPUWithSamplingMetadata",
-                     sampled_token_ids: Optional[torch.Tensor],
+                     sampled_token_ids: Optional[ms.Tensor],
                      block_size: int,
                      num_seqs: int,
                      num_queries: int,
@@ -394,7 +426,7 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             raise AttributeError(f"Invalid attention type {str(attn_type)}")
 
 
-class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
+class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
 
     def __init__(self, input_builder: "ModelInputForGPUBuilder"):
         self.input_builder = input_builder
@@ -545,7 +577,7 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
             block_tables = make_tensor_with_pad(
                 self.block_tables,
                 pad=-1,
-                dtype=torch.int,
+                dtype=ms.int32,
                 device=device,
             )
         assert max_query_len > 0, "query_lens: {}".format(query_lens)
@@ -557,13 +589,13 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
         query_start_loc_tensor = ms.Tensor(query_start_loc, dtype=ms.int32)
         seq_start_loc_tensor = ms.Tensor(seq_start_loc, dtype=ms.int32)
 
-        return MSAttentionMetadata(
+        return MsAttentionMetadata(
             slot_mapping=slot_mapping_tensor,
             block_tables=block_tables,
             seq_lens_tensor=seq_lens_tensor,
             seq_lens=seq_lens,
+            max_prefill_seq_len=max_prefill_seq_len,
             max_decode_seq_len=max_decode_seq_len,
-            chunked_prefill=self.input_builder.chunked_prefill_enabled,
             num_prefills=self.num_prefills,
             num_prefill_tokens=self.num_prefill_tokens,
             num_decode_tokens=num_decode_tokens,
@@ -574,6 +606,7 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MSAttentionMetadata]):
             seq_start_loc=seq_start_loc_tensor,
             context_lens_tensor=context_lens_tensor,
             max_query_len=max_query_len,
+            use_cuda_graph=False,
         )
 
 
@@ -590,7 +623,7 @@ class MsAttentionBackend(AttentionBackend):
 
     @staticmethod
     def get_metadata_cls() -> Type["AttentionMetadata"]:
-        return MSAttentionMetadata
+        return MsAttentionMetadata
 
     @staticmethod
     def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
@@ -615,7 +648,7 @@ class MsAttentionBackend(AttentionBackend):
     def swap_blocks(
         src_kv_cache: MsKVCache,
         dst_kv_cache: MsKVCache,
-        src_to_dst: torch.Tensor,
+        src_to_dst: ms.Tensor,
         swap_type: bool,
     ) -> None:
         """
@@ -637,7 +670,7 @@ class MsAttentionBackend(AttentionBackend):
     @staticmethod
     def copy_blocks(
         kv_caches: List[MsKVCache],
-        src_to_dists: torch.Tensor,
+        src_to_dists: ms.Tensor,
     ) -> None:
         blocks_to_copy = src_to_dists.asnumpy().tolist()
         for kv_cache in kv_caches:
@@ -691,14 +724,14 @@ class MsAttentionImpl(AttentionImpl):
     def forward(
         self,
         layer: AttentionLayer,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        kv_cache: torch.Tensor,
-        attn_metadata: MSAttentionMetadata,
+        query: ms.Tensor,
+        key: ms.Tensor,
+        value: ms.Tensor,
+        kv_cache: ms.Tensor,
+        attn_metadata: MsAttentionMetadata,
         attn_type: str = AttentionType.DECODER,
-        output: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+        output: Optional[ms.Tensor] = None,
+    ) -> ms.Tensor:
         """Forward pass with FlashAttention.
 
         Args:
@@ -726,7 +759,7 @@ class MLABackend(AttentionBackend):
 
     @staticmethod
     def get_metadata_cls() -> Type["AttentionMetadata"]:
-        return MSAttentionMetadata
+        return MsAttentionMetadata
 
     @staticmethod
     def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
@@ -747,9 +780,9 @@ class MLABackend(AttentionBackend):
 
     @staticmethod
     def swap_blocks(
-        src_kv_cache: torch.Tensor,
-        dst_kv_cache: torch.Tensor,
-        src_to_dst: torch.Tensor,
+        src_kv_cache: ms.Tensor,
+        dst_kv_cache: ms.Tensor,
+        src_to_dst: ms.Tensor,
     ) -> None:
         src_key_cache = src_kv_cache[0]
         dst_key_cache = dst_kv_cache[0]
@@ -758,8 +791,8 @@ class MLABackend(AttentionBackend):
 
     @staticmethod
     def copy_blocks(
-        kv_caches: List[torch.Tensor],
-        src_to_dists: torch.Tensor,
+        kv_caches: List[ms.Tensor],
+        src_to_dists: ms.Tensor,
     ) -> None:
         blocks_to_copy = src_to_dists.asnumpy().tolist()
         for kv_cache in kv_caches:
@@ -771,4 +804,4 @@ class MLABackend(AttentionBackend):
     def get_supported_head_sizes() -> List[int]:
         return [576]
 
-FlashAttentionMetadata = MSAttentionMetadata
+FlashAttentionMetadata = MsAttentionMetadata

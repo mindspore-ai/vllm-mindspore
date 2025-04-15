@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import numpy as np
-import torch
 
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionMetadata, AttentionType)
@@ -21,7 +20,7 @@ from mindspore._c_expression import swap_cache
 logger = init_logger(__name__)
 
 
-class FlashAttentionBackend(AttentionBackend):
+class MsAttentionBackend(AttentionBackend):
 
     accept_output_buffer: bool = True
 
@@ -39,11 +38,11 @@ class FlashAttentionBackend(AttentionBackend):
 
     @staticmethod
     def get_metadata_cls() -> Type["AttentionMetadata"]:
-        return FlashAttentionMetadata
+        return MsAttentionMetadata
 
     @staticmethod
-    def get_builder_cls() -> Type["AttentionMetadataBuilder"]:
-        return FlashAttentionMetadataBuilder
+    def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
+        return MsAttentionMetadataBuilder
 
     @staticmethod
     def get_kv_cache_shape(
@@ -72,11 +71,11 @@ class MLABackend(AttentionBackend):
 
     @staticmethod
     def get_metadata_cls() -> Type["AttentionMetadata"]:
-        return FlashAttentionMetadata
+        return MsAttentionMetadata
 
     @staticmethod
-    def get_builder_cls() -> Type["AttentionMetadataBuilder"]:
-        return FlashAttentionMetadataBuilder
+    def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
+        return MsAttentionMetadataBuilder
 
     @staticmethod
     def get_kv_cache_shape(
@@ -98,8 +97,12 @@ class MLABackend(AttentionBackend):
         return [576]
 
 
+
 @dataclass
-class FlashAttentionMetadata:
+class MsAttentionMetadata:
+    """
+    AttentionMetadata for vllm-mindspore V1
+    """
     # NOTE(sang): Definition of context_len, query_len, and seq_len.
     # |---------- N-1 iteration --------|
     # |---------------- N iteration ---------------------|
@@ -108,47 +111,36 @@ class FlashAttentionMetadata:
     # |-------------------- seq_len ---------------------|
     #                                   |-- query_len ---|
 
-    max_seq_len: int
-    seq_lens: torch.Tensor
+    # add by vllm-mindspore begin
     seq_lens_np: np.ndarray
-    block_tables: torch.Tensor
-    slot_mapping: torch.Tensor
-    q_seq_lens: torch.Tensor
+    block_tables: ms.Tensor
     q_seq_lens_np: np.ndarray
-    context_lens: torch.Tensor
+    context_lens: ms.Tensor
     max_context_lens: int
-    query_start_loc: torch.Tensor
+    # add by vllm-mindspore end
 
-    def __getitem__(self, key):
-        if key == "batch_valid_length":
-            key = "seq_lens"
-        return getattr(self, key)
+    #num_actual_tokens: int = None  # Number of tokens excluding padding.
+    #max_query_len: int 
+    query_start_loc: ms.Tensor
+    max_seq_len: int
+    seq_lens: ms.Tensor
+    #block_table: torch.Tensor
+    slot_mapping: ms.Tensor
+
+    # For cascade attention.
+    #use_cascade: bool
+    #common_prefix_len: int
+    #cu_prefix_query_lens: Optional[torch.Tensor]
+    #prefix_kv_lens: Optional[torch.Tensor]
+    #suffix_kv_lens: Optional[torch.Tensor]
+
+    # For logging.
+    num_input_tokens: int = 0  # Number of tokens including padding.
 
 
 class MsAttentionImpl(AttentionImpl):
     """
-    If the input tensors contain prompt tokens, the layout is as follows:
-    |<--------------- num_prefill_tokens ----------------->|
-    |<--prefill_0-->|<--prefill_1-->|...|<--prefill_N-1--->|
-
-    Otherwise, the layout is as follows:
-    |<----------------- num_decode_tokens ------------------>|
-    |<--decode_0-->|..........|<--decode_M-1-->|<--padding-->|
-
-    Generation tokens can contain padding when cuda-graph is used.
-    Currently, prompt tokens don't contain any padding.
-
-    The prompts might have different lengths, while the generation tokens
-    always have length 1.
-
-    If chunked prefill is enabled, prefill tokens and decode tokens can be
-    batched together in a flattened 1D query.
-
-    |<----- num_prefill_tokens ---->|<------- num_decode_tokens --------->|
-    |<-prefill_0->|...|<-prefill_N-1->|<--decode_0-->|...|<--decode_M-1-->|
-
-    Currently, cuda graph is disabled for chunked prefill, meaning there's no
-    padding between prefill and decode tokens.
+    AttentionImpl for vllm-mindspore V1
     """
 
     def __init__(
@@ -168,31 +160,20 @@ class MsAttentionImpl(AttentionImpl):
 
     def forward(
         self,
-        layer: torch.nn.Module,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        kv_cache: torch.Tensor,
-        attn_metadata: FlashAttentionMetadata,
-        output: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Forward pass with FlashAttention.
-
-        Args:
-            query: shape = [num_tokens, num_heads, head_size]
-            key: shape = [num_tokens, num_kv_heads, head_size]
-            value: shape = [num_tokens, num_kv_heads, head_size]
-            output: shape = [num_tokens, num_heads, head_size]
-            kv_cache = [2, num_blocks, block_size, num_kv_heads, head_size]
-                NOTE: kv_cache will be an empty tensor with shape [0]
-                for profiling run.
-            attn_metadata: Metadata for attention.
-        NOTE: It in-place updates the output tensor.
+        layer: ms.nn.Cell,
+        query: ms.Tensor,
+        key: ms.Tensor,
+        value: ms.Tensor,
+        kv_cache: ms.Tensor,
+        attn_metadata: MsAttentionMetadata,
+        output: Optional[ms.Tensor] = None,
+    ) -> ms.Tensor:
+        """Forward pass with MsAttention.
         """
         pass
 
 
-class FlashAttentionMetadataBuilder:
+class MsAttentionMetadataBuilder:
     def __init__(self, runner: "GPUModelRunner"):
         self.runner = runner
 
@@ -213,14 +194,12 @@ class FlashAttentionMetadataBuilder:
         context_lens = ms.from_numpy(self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
 
         q_seq_lens_np = np.diff(self.runner.query_start_loc_np[:num_reqs + 1])
-        q_seq_lens = ms.from_numpy(q_seq_lens_np)
 
-        attn_metadata = FlashAttentionMetadata(
+        attn_metadata = MsAttentionMetadata(
             seq_lens=seq_lens,
             seq_lens_np=seq_lens_np,
             block_tables=(self.runner.input_batch.block_table.get_device_tensor()[:num_reqs]),
             slot_mapping=slot_mapping,
-            q_seq_lens=q_seq_lens,
             q_seq_lens_np=q_seq_lens_np,
             max_seq_len=max_seq_len,
             context_lens=context_lens,
@@ -228,3 +207,5 @@ class FlashAttentionMetadataBuilder:
             query_start_loc = query_start_loc
         )
         return attn_metadata
+
+FlashAttentionMetadata = MsAttentionMetadata

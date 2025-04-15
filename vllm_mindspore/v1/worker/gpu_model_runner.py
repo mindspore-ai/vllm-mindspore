@@ -6,13 +6,14 @@ import torch
 
 from mindspore import mutable
 import mindspore as ms
-from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetadata,
-                                                             FlashAttentionBackend,
-                                                             MLABackend)
+from vllm_mindspore.v1.attention.backends.ms_attn import (MsAttentionMetadata,
+                                                          MsAttentionBackend,
+                                                          MLABackend)
 from vllm_mindspore.utils import get_valid_dtype
 
-from vllm.v1.kv_cache_interface import FullAttentionSpec
 from vllm.v1.outputs import ModelRunnerOutput
+from vllm.attention import AttentionType
+from vllm.v1.kv_cache_interface import FullAttentionSpec, KVCacheSpec, SlidingWindowSpec
 from vllm.v1.utils import bind_kv_cache
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
 from vllm.distributed.parallel_state import get_pp_group
@@ -27,7 +28,7 @@ logger = init_logger(__name__)
 def _prepare_inputs(
     self,
     scheduler_output: "SchedulerOutput",
-) -> Tuple[FlashAttentionMetadata, torch.Tensor]:
+) -> Tuple[MsAttentionMetadata, torch.Tensor]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
@@ -125,11 +126,8 @@ def _prepare_inputs(
         num_scheduled_tokens)
 
     common_prefix_len = 0
-    if self.cascade_attn_enabled:
-        common_prefix_len = self._compute_cascade_attn_prefix_len(
-            num_scheduled_tokens,
-            scheduler_output.num_common_prefix_blocks,
-        )
+    # when common_prefix_len > 0 use cascade_attn,
+    # which is associated with device_properties.multi_processor_count(CUDA).
 
     attn_metadata = self.attn_metadata_builder.build(
         num_reqs=num_reqs,
@@ -441,3 +439,40 @@ def wrapper_gpu_model_runner_execute_model(func):
             )
 
     return new_func
+
+
+def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
+    forward_ctx = self.vllm_config.compilation_config.static_forward_context
+    block_size = self.vllm_config.cache_config.block_size
+    use_mla = self.vllm_config.model_config.use_mla
+    kv_cache_spec: dict[str, KVCacheSpec] = {}
+    for layer_name, attn_module in forward_ctx.items():
+        # vllm-mindspore AttentionWrapper is not an Attention isinstance
+        # assert isinstance(attn_module, Attention)
+        if attn_module.attn_type == AttentionType.DECODER:
+            if attn_module.sliding_window is not None:
+                kv_cache_spec[layer_name] = SlidingWindowSpec(
+                    block_size=block_size,
+                    num_kv_heads=attn_module.num_kv_heads,
+                    head_size=attn_module.head_size,
+                    dtype=self.kv_cache_dtype,
+                    sliding_window=attn_module.sliding_window,
+                    use_mla=use_mla)
+            else:
+                kv_cache_spec[layer_name] = FullAttentionSpec(
+                    block_size=block_size,
+                    num_kv_heads=attn_module.num_kv_heads,
+                    head_size=attn_module.head_size,
+                    dtype=self.kv_cache_dtype,
+                    use_mla=use_mla)
+        elif attn_module.attn_type in (AttentionType.ENCODER,
+                                        AttentionType.ENCODER_ONLY):
+            # encoder-only attention does not need KV cache.
+            continue
+        elif attn_module.attn_type == AttentionType.ENCODER_DECODER:
+            raise NotImplementedError
+        else:
+            raise ValueError(
+                f"Unknown attention type: {attn_module.attn_type}")
+
+    return kv_cache_spec

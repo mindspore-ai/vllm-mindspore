@@ -19,10 +19,10 @@ import os
 from abc import abstractmethod
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
-import torch
+import mindspore as ms
 from mindspore import Tensor, mutable, nn
+
 from vllm.attention.backends.abstract import AttentionType
-from vllm.attention.layer import Attention
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -30,8 +30,7 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 
-class Fake_Attention:
-
+class AttentionWrapper:
     def __init__(self):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
@@ -40,41 +39,16 @@ class Fake_Attention:
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
         self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [(
-            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
-        self.attn_type = AttentionType.DECODER
-
-
-class Fake_MLA(Fake_Attention):
-
-    def __init__(self):
-        super().__init__()
-        vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16,
-                         device="Ascend"), )
+            (
+                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
+                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
+            )
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
-
-
-class Fake_Attention_V1(Attention):
-
-    def __init__(self):
-        vllm_config = get_current_vllm_config()
-        block_size = vllm_config.cache_config.block_size
-        num_kv_heads = vllm_config.model_config.get_num_kv_heads(
-            vllm_config.parallel_config)
-        head_size = vllm_config.model_config.get_head_size()
-        num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [(
-            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
         self.attn_type = AttentionType.DECODER
-        self.num_block = num_block
+
+        # add for v1
         self.num_kv_heads = num_kv_heads
         self.head_size = head_size
         self.dtype = vllm_config.model_config.dtype
@@ -82,14 +56,12 @@ class Fake_Attention_V1(Attention):
         self.sliding_window = None
 
 
-class Fake_MLA_V1(Fake_Attention_V1):
-
+class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16,
-                         device="Ascend"), )
+            (ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),)
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
