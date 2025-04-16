@@ -299,6 +299,10 @@ from vllm_mindspore.v1.sample.sampler import apply_temperature
 import vllm.v1.sample.sampler
 vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 
+from vllm_mindspore.distributed.shm_broadcast import initialize_ShmRingBuffer
+from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
+ShmRingBuffer.__init__ = initialize_ShmRingBuffer
+
 from .utils import check_ready
 
 check_ready()
