@@ -22,6 +22,13 @@
 #define LOG_OUT NO_LOG_OUT
 #endif
 
+DALangPy::~DALangPy() {
+  if (callable_ != nullptr) {
+    delete callable_;
+    callable_ = nullptr;
+  }
+}
+
 std::shared_ptr<DALangPy> DALangPy::GetInstance() {
   static auto dalangPy = std::make_shared<DALangPy>();
   return dalangPy;

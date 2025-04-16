@@ -52,7 +52,7 @@ Callable *DA_API_Compile(const char *source,
     parser.DumpAst();
   }
 
-  auto compiler = new compiler::Compiler(&parser); // delete by user.
+  auto compiler = new compiler::Compiler(&parser, true); // delete by user.
   compiler->Compile();
   if (dump) {
     compiler->Dump();

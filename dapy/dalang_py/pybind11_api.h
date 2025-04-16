@@ -27,7 +27,7 @@ using Callable = compiler::Compiler;
 class DALangPy {
 public:
   DALangPy() = default;
-  ~DALangPy() = default;
+  ~DALangPy();
   DALangPy(const DALangPy &) = delete;
   DALangPy(DALangPy &&) = delete;
   DALangPy &operator=(const DALangPy &) = delete;

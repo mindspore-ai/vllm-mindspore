@@ -18,7 +18,7 @@ from functools import wraps
 from _dapy import DALangPy_
 
 
-def dag(func=None, *, dump_compiler=False):
+def jit(func=None, *, dump_compiler=False):
     def decorator(func):
         @wraps(func)
         def wrap_func(*args, **kwargs):
@@ -36,3 +36,7 @@ def dag(func=None, *, dump_compiler=False):
     if func is None:
         return decorator
     return decorator(func)
+
+
+def dag(*args, **kwargs):
+    return jit(*args, **kwargs)

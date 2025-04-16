@@ -80,8 +80,8 @@ typedef Code *CodePtr;
 
 class Compiler {
 public:
-  explicit Compiler(const std::string &filename);
-  explicit Compiler(Parser *parser);
+  explicit Compiler(const std::string &filename, bool jit = false);
+  explicit Compiler(Parser *parser, bool jit = false);
   ~Compiler();
 
   void Compile();
@@ -136,6 +136,10 @@ private:
   bool CompileName(ExprConstPtr expr);
   bool CompileLiteral(ExprConstPtr expr);
 
+  // Bind arguments with function for JIT.
+  void CompileJitCallFunction(const std::string &funcName, ssize_t funcSymIndex,
+                              int lineno);
+
   size_t CurrentCodeIndex() { return codeStack_.top(); }
   Code &CurrentCode() { return codes_[codeStack_.top()]; }
   Code &code(size_t index) { return codes_[index]; }
@@ -162,10 +166,10 @@ private:
   Parser *parser_;
   std::string filename_;
   bool selfManagedParser_{false};
+  bool jit_{false};
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
   std::stack<size_t> codeStack_;
-
   ssize_t intrinsicSize_{0};
 
   // Compile result records start.

@@ -23,7 +23,7 @@ _args = _arg_parser.parse_args()
 
 @dag(dump_compiler=_args.dump)
 def run_dag():
-    print('hello, world')
+    print('hello, world\n')
     return 0
 
 

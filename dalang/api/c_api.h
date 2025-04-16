@@ -29,8 +29,18 @@ using Tensor = tensor::DATensor;
 #ifdef __cplusplus
 extern "C" {
 #endif
+/// \brief Compile the source code with dalang compiler, and return a callable.
+/// \param[in] source The source code string.
+/// \param[in] args The arguments.
+/// \param[in] dump If dump the compiler information.
+/// \return A callable object, which should be freed by user outside.
 Callable *DA_API_Compile(const char *source,
                          const std::vector<const Tensor *> &args, bool dump);
+
+/// \brief Run the callable object returned from 'DA_API_Compile()'.
+/// \param[in] callable The callable object.
+/// \param[in] args The arguments.
+/// \return The result of running callable.
 void DA_API_Run(Callable *callable, const std::vector<const Tensor *> &args);
 #ifdef __cplusplus
 }

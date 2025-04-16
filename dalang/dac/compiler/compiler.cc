@@ -61,16 +61,17 @@ const char *GetInstStr(Inst inst) {
   return _insts[inst];
 }
 
-Compiler::Compiler(const std::string &filename)
-    : filename_{filename}, selfManagedParser_{true},
+Compiler::Compiler(const std::string &filename, bool jit)
+    : filename_{filename}, selfManagedParser_{true}, jit_{jit},
       walker_{new CompilerNodeVisitor(this)} {
   parser_ = new Parser(filename);
   Init();
 }
 
-Compiler::Compiler(Parser *parser)
+Compiler::Compiler(Parser *parser, bool jit)
     : parser_{parser}, filename_{parser_->filename()},
-      selfManagedParser_{false}, walker_{new CompilerNodeVisitor(this)} {
+      selfManagedParser_{false}, jit_{jit},
+      walker_{new CompilerNodeVisitor(this)} {
   Init();
 }
 
@@ -261,6 +262,22 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
   return true;
 }
 
+void Compiler::CompileJitCallFunction(const std::string &funcName,
+                                      ssize_t funcSymIndex, int lineno) {
+  InstCall loadFunc = {
+      .inst = Inst_LoadGlobal, .offset = funcSymIndex, .lineno = lineno};
+  LOG_OUT << "function name: " << funcName << ", index: " << loadFunc.offset;
+  AddInstruction(loadFunc);
+
+  // Add JIT arguments here.
+  const auto argsLen = 0;
+  InstCall call = {
+      .inst = Inst_DoCall,
+      .offset = static_cast<ssize_t>(argsLen), // Set arguments size as offset.
+      .lineno = lineno};
+  AddInstruction(call);
+}
+
 bool Compiler::CompileFunction(StmtConstPtr stmt) {
   CHECK_NULL(stmt);
   LOG_OUT << ToString(stmt);
@@ -351,6 +368,10 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   InstCall storeFunc = {
       .inst = Inst_StoreGlobal, .offset = funcSymIndex, .lineno = lineno};
   AddInstruction(storeFunc);
+
+  if (jit_) {
+    CompileJitCallFunction(funcName, funcSymIndex, lineno);
+  }
   return true;
 }
 
