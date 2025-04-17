@@ -95,13 +95,15 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
 }
 
 Slot VM::ConvertConstType(const Constant &cons) {
-  return ConvertConstType(cons.type, cons.value);
+  CHECK_NULL(cons.value.str);
+  return ConvertConstType(cons.type, *cons.value.str);
 }
 
 // Load the constants by index from const pool.
 void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
-  LOG_OUT << "offset: " << offset << ", value: " << cons.value << " ("
+  CHECK_NULL(cons.value.str);
+  LOG_OUT << "offset: " << offset << ", value: " << *cons.value.str << " ("
           << cons.type << ")";
   CurrentStack().emplace_back(std::move(ConvertConstType(cons)));
 }
@@ -323,7 +325,7 @@ void VM::InstDoCall(ssize_t offset) {
 
   if (argsSize > 0) { // Has arguments.
     // To bind the arguments and parameters.
-    auto paramsSize = callCode.args.size();
+    auto paramsSize = callCode.argNames.size();
     if (argsSize > paramsSize) {
       std::stringstream ss;
       ss << "error: ";
@@ -346,7 +348,7 @@ void VM::InstDoCall(ssize_t offset) {
       }
 
 #if 0
-      newFuncFrame.names[callCode.args[i]] = std::move(arg);
+      newFuncFrame.names[callCode.argNames[i]] = std::move(arg);
 #else
       LOG_OUT << "vars offset: " << i << ", name: " << code().symbols[i]
               << ", arg: " << ToString(arg) << ", the same as StoreLocal.";
@@ -361,8 +363,8 @@ void VM::InstDoCall(ssize_t offset) {
     // Append default parameters in callee names map.
     if (argsSize < paramsSize) {
       // for (size_t i = argsSize; i < paramsSize; ++i) {
-      //   names()[callCode.args[i]] = std::move(Slot{.type=SlotInt,
-      //   .value.int_=callCode.defs[i]});
+      //   names()[callCode.argNames[i]] = std::move(Slot{.type=SlotInt,
+      //   .value.int_=callCode.argDefaults[i]});
       // }
       LOG_ERROR << "Not support default parameter by now";
     }
@@ -794,16 +796,34 @@ std::string VM::LineString() {
   return filename() + ':' + std::to_string(insts()[frame_->pc - 1].lineno);
 }
 
-void VM::Run() {
+void VM::PrepareArguments(Frame &topFrame, const std::vector<Argument> &args) {
+  constexpr size_t codeIndex = 0;
+  if (singleFunctionMode_) {
+    topFrame.type = CodeFunction;
+    // Initialize arguments.
+    const auto &argIndexes = codes()[codeIndex].argIndexes;
+    CHECK_FAIL(args.size() == argIndexes.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+      auto argIndex = argIndexes[i];
+      topFrame.vars[argIndex] = args[i];
+      LOG_OUT << "Bind argument, arg[" << i << "]: " << ToString(args[i]);
+    }
+  }
+}
+
+void VM::Run(const std::vector<Argument> &args) {
   if (codes().empty()) {
     LOG_ERROR << "no code exits";
     exit(EXIT_FAILURE);
   }
-  auto topFrame = Frame{.type = CodeModule,
-                        .code = 0,
-                        .pc = 0,
-                        .slots = std::vector<Slot>(),
-                        .vars = std::vector<Slot>{codes()[0].symbols.size()}};
+  constexpr size_t codeIndex = 0;
+  auto topFrame =
+      Frame{.type = CodeModule,
+            .code = codeIndex,
+            .pc = 0,
+            .slots = std::vector<Slot>(),
+            .vars = std::vector<Slot>{codes()[codeIndex].symbols.size()}};
+  PrepareArguments(topFrame, args);
   frames_.emplace_back(std::move(topFrame));
   while (!frames_.empty()) {
     // Run in current frame.

@@ -35,18 +35,27 @@ using InstHandlerFunctions = std::vector<InstHandlerFunction>;
 
 enum SlotType {
   SlotInvalid,
-  SlotVoid,
-  SlotRefName,
+
+  // Function, graph or class.
   SlotFunction,
   SlotGraph,
   SlotClass,
+
+  // Data type.
   SlotBool,
   SlotInt,
   SlotFloat,
   SlotString,
   SlotTensor,
+
+  // Extension type.
+  SlotVoid,
+  SlotRefName,
+
+  // Intrinsic function.
   SlotOps,
   SlotIntrinsic,
+
   SlotEnd
 };
 
@@ -64,6 +73,7 @@ struct Slot {
     intrinsic::IntrinsicType intr;
   } value;
 };
+using Argument = Slot; // Argument is also a Slot.
 
 struct Frame {
   CodeType type;
@@ -208,13 +218,14 @@ private:
 class VM {
 public:
   VM() = delete;
-  VM(Compiler *compiler)
-      : codesPtr_{&compiler->codes()}, filename_{compiler->filename()} {
+  VM(Compiler *compiler, bool singleFunctionMode = false)
+      : codesPtr_{&compiler->codes()}, filename_{compiler->filename()},
+        singleFunctionMode_{singleFunctionMode} {
     InitInstructionHandlers();
   }
   virtual ~VM() = default;
 
-  void Run();
+  void Run(const std::vector<Argument> &args = std::vector<Argument>());
 
 private:
   void InstLoadConst(ssize_t offset);
@@ -244,6 +255,8 @@ private:
   void InstJump(ssize_t offset);
   void InstStdCin(ssize_t offset);
   void InstStdCout(ssize_t offset);
+
+  void PrepareArguments(Frame &topFrame, const std::vector<Argument> &args);
 
   std::vector<Slot> &CurrentStack();
   std::vector<Slot> &LocalVars();
@@ -292,6 +305,8 @@ private:
   InstHandlerFunctions instHandlers_; // Notice: Do not change.
 
   runtime::GraphExecutor graphExecutor_;
+
+  bool singleFunctionMode_{false};
 };
 
 #define BINARY_OP(OpName, OpSymbol)                                            \

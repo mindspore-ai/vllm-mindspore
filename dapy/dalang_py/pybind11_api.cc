@@ -35,24 +35,43 @@ std::shared_ptr<DALangPy> DALangPy::GetInstance() {
 }
 
 namespace {
-std::vector<const Tensor *> ConvertPyArgs(const py::tuple &args) {
-  std::vector<const Tensor *> tensorArgs;
+std::vector<Argument> ConvertPyArgs(const py::tuple &args) {
+  std::vector<Argument> arguments;
   for (const auto &arg : args) {
-    tensorArgs.emplace_back(py::cast<Tensor *>(arg));
+    if (py::isinstance<py::bool_>(arg)) {
+      Argument argument = Argument({.type = vm::SlotBool});
+      argument.value.bool_ = py::cast<bool>(arg);
+      arguments.emplace_back(std::move(argument));
+    } else if (py::isinstance<py::int_>(arg)) {
+      Argument argument = Argument({.type = vm::SlotInt});
+      argument.value.int_ = py::cast<int>(arg);
+      arguments.emplace_back(std::move(argument));
+    } else if (py::isinstance<py::float_>(arg)) {
+      Argument argument = Argument({.type = vm::SlotFloat});
+      argument.value.float_ = py::cast<double>(arg);
+      arguments.emplace_back(std::move(argument));
+    } else if (py::isinstance<py::str>(arg)) {
+      Argument argument = Argument({.type = vm::SlotString});
+      argument.value.str_ = py::cast<std::string>(arg).c_str();
+      arguments.emplace_back(std::move(argument));
+    } else {
+      Argument argument = Argument({.type = vm::SlotTensor});
+      argument.value.tensor_ = (void *)py::cast<Tensor *>(arg);
+      arguments.emplace_back(std::move(argument));
+    }
   }
-  return tensorArgs;
+  return arguments;
 }
 } // namespace
 
-void DALangPy::Compile(const py::object &source, const py::tuple &args,
-                       bool dump) {
+void DALangPy::Compile(const py::object &source, bool dump) {
   // Check if the function or net is valid.
   if ((!py::isinstance<py::str>(source))) {
     LOG_ERROR << "error: the source must be string.";
     exit(EXIT_FAILURE);
   }
-  auto srcStr = py::cast<std::string>(source);
-  callable_ = DA_API_Compile(srcStr.c_str(), ConvertPyArgs(args), dump);
+  const auto srcStr = py::cast<std::string>(source);
+  callable_ = DA_API_Compile(srcStr.c_str(), dump);
 }
 
 void DALangPy::Run(const py::tuple &args) {
@@ -65,8 +84,9 @@ PYBIND11_MODULE(_dapy, mod) {
   (void)py::class_<DALangPy, std::shared_ptr<DALangPy>>(mod, "DALangPy_")
       .def_static("get_instance", &DALangPy::GetInstance,
                   "DALangPy single instance.")
-      .def("__call__", &DALangPy::Run, py::arg("args"), "Run with arguments.")
+      .def("__call__", &DALangPy::Run, py::arg("args") = py::list(),
+           "Run with arguments.")
       .def("compile", &DALangPy::Compile, py::arg("source"),
-           py::arg("args") = py::list(), py::arg("dump") = py::bool_(false),
+           py::arg("dump") = py::bool_(false),
            "Compile the source with arguments.");
 }

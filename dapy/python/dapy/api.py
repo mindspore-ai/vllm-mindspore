@@ -29,7 +29,7 @@ def jit(func=None, *, dump_compiler=False):
             src_lines = inspect.getsourcelines(fn)
             lines, line_offset = src_lines
             src = ''.join(lines)
-            dalang_py.compile(src, args, dump_compiler)
+            dalang_py.compile(src, dump_compiler)
             return dalang_py(args)
         return wrap_func
 

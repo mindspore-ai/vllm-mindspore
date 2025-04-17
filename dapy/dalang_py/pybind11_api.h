@@ -19,10 +19,9 @@
 
 #include "pybind11/pybind11.h"
 
-#include "../../dalang/api/c_api.h"
+#include "c_api.h"
 
 namespace py = pybind11;
-using Callable = compiler::Compiler;
 
 class DALangPy {
 public:
@@ -35,7 +34,7 @@ public:
 
   static std::shared_ptr<DALangPy> GetInstance();
 
-  void Compile(const py::object &source, const py::tuple &args, bool dump);
+  void Compile(const py::object &source, bool dump);
   void Run(const py::tuple &args);
 
 private:

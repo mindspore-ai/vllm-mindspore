@@ -17,6 +17,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dac)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dair)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dart)
+include_directories(${PROJECT_SOURCE_DIR}/../dalang/api)
 
 # Include DaPy directories
 include_directories(${PROJECT_SOURCE_DIR}/dalang_py)

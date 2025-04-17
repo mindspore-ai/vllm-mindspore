@@ -22,9 +22,11 @@ _args = _arg_parser.parse_args()
 
 
 @dag(dump_compiler=_args.dump)
-def run_dag():
+def run_dag(x, y):
     print('hello, world\n')
-    return 0
+    res = x + y
+    print(res)
+    return res
 
 
-run_dag()
+run_dag(2, 3)

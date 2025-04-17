@@ -17,6 +17,7 @@
 #ifndef __PARSER_COMPILER_COMPILER_H__
 #define __PARSER_COMPILER_COMPILER_H__
 
+#include <algorithm>
 #include <stack>
 #include <unordered_map>
 #include <vector>
@@ -59,8 +60,14 @@ typedef InstCall *InstCallPtr;
 typedef const InstCall *InstCallConstPtr;
 
 struct Constant {
-  ConstType type;    // Constant type.
-  std::string value; // Constant value.
+  ConstType type; // Constant type.
+  union {
+    void *addr{nullptr};
+    int int_;
+    double float_;
+    bool bool_;
+    const std::string *str;
+  } value; // Constant value.
 };
 typedef Constant *ConstantPtr;
 
@@ -68,20 +75,23 @@ enum CodeType { CodeBlock, CodeFunction, CodeGraph, CodeModule, CodeEnd };
 const char *ToStr(CodeType type);
 
 struct Code {
-  CodeType type;                    // Type of block/function/graph/module.
-  std::string name;                 // Function, graph or module name.
-  std::vector<std::string> symbols; // Symbol pool in the namespace.
-  std::vector<Constant> constants;  // Constant pool in the namespace.
-  std::vector<InstCall> insts;      // Instructions in the namespace.
-  std::vector<std::string> args;    // Parameter names.
-  std::vector<std::string> defs;    // Parameter default values.
+  CodeType type;                     // Type of block/function/graph/module.
+  std::string name;                  // Function, graph or module name.
+  std::vector<std::string> symbols;  // Symbol pool in the namespace.
+  std::vector<Constant> constants;   // Constant pool in the namespace.
+  std::vector<InstCall> insts;       // Instructions in the namespace.
+  std::vector<std::string> argNames; // Parameter names.
+  std::vector<ssize_t> argIndexes;   // Parameter name index in symbol pool.
+  std::vector<ConstType> argTypes;   // Parameter types.
+  std::vector<Constant> argDefaults; // Parameter default values.
 };
 typedef Code *CodePtr;
 
 class Compiler {
 public:
-  explicit Compiler(const std::string &filename, bool jit = false);
-  explicit Compiler(Parser *parser, bool jit = false);
+  explicit Compiler(const std::string &filename,
+                    bool singleFunctionMode = false);
+  explicit Compiler(Parser *parser, bool singleFunctionMode = false);
   ~Compiler();
 
   void Compile();
@@ -166,7 +176,7 @@ private:
   Parser *parser_;
   std::string filename_;
   bool selfManagedParser_{false};
-  bool jit_{false};
+  bool singleFunctionMode_{false};
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
   std::stack<size_t> codeStack_;
@@ -215,6 +225,22 @@ private:
 };
 
 const char *GetInstStr(Inst inst);
+
+// Return -1 if not found.
+inline ssize_t FindStringPoolIndex(std::vector<std::string> &stringPool,
+                                   const std::string &name) {
+  auto iter = std::find(stringPool.cbegin(), stringPool.cend(), name);
+  if (iter == stringPool.cend()) {
+    return -1;
+  }
+  auto index = std::distance(stringPool.cbegin(), iter);
+  if (index < 0) {
+    LOG_ERROR << "Not found symbol, index should not be negative " << index
+              << ", name: " << name;
+    exit(EXIT_FAILURE);
+  }
+  return index;
+}
 } // namespace compiler
 
 #endif // __PARSER_COMPILER_COMPILER_H__

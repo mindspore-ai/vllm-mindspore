@@ -27,8 +27,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-Callable *DA_API_Compile(const char *source,
-                         const std::vector<const Tensor *> &args, bool dump) {
+Callable *DA_API_Compile(const char *source, bool dump) {
   if (source == nullptr) {
     LOG_ERROR << "error: no source code.";
     exit(EXIT_FAILURE);
@@ -62,13 +61,12 @@ Callable *DA_API_Compile(const char *source,
   return compiler;
 }
 
-void DA_API_Run(Callable *callable, const std::vector<const Tensor *> &args) {
+void DA_API_Run(Callable *callable, const std::vector<Argument> &args) {
   CHECK_NULL(callable);
   LOG_OUT << "Run callable: " << callable;
-  auto vm = vm::VM(callable);
-  vm.Run();
+  auto vm = vm::VM(callable, true);
+  vm.Run(args);
 }
-
 #ifdef __cplusplus
 }
 #endif

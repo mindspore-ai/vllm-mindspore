@@ -42,11 +42,12 @@ make
 
 # Run test
 echo "=============================="
-echo "Run da execution test case:"
-echo "./da sample/da_llm_sample.da"
-echo "=============================="
+echo "Run da execution test cases:"
+echo "# 1/2: ./da sample/fibonacci_20.da"
+$BUILD_DIR_DALANG/da $DALANG_PATH/sample/fibonacci_20.da
+echo "# 2/2: ./da sample/da_llm_sample.da"
 $BUILD_DIR_DALANG/da $DALANG_PATH/sample/da_llm_sample.da
-
+echo "=============================="
 
 ##################################################
 # Step 2:
