@@ -19,12 +19,6 @@
 
 #include "common/logger.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 namespace ops {
 #define OP(O) {#O, Op_##O},
 std::unordered_map<std::string_view, Op> _opNames{

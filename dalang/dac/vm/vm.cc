@@ -22,12 +22,6 @@
 #include "common/common.h"
 #include "vm/intrinsic.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 namespace vm {
 bool VM::ReplaceEscapeStr(std::string &dst) {
   constexpr auto escapeSize = 4;
@@ -614,8 +608,14 @@ void VM::InstCompare(ssize_t offset) {
       res = lhs <= rhs;
       break;
     }
-    default:
-      break;
+    default: {
+      CompileMessage(LineString(),
+                     std::string("error: not support to do [") +
+                         lexer::ToStr((OpId)offset) + "] compare between '" +
+                         GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
+                         "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
+      exit(EXIT_FAILURE);
+    }
     }
   } catch (std::runtime_error &ex) {
     CompileMessage(LineString(),

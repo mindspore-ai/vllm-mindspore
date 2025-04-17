@@ -17,12 +17,6 @@
 #include "tensor/da_tensor.h"
 #include "common/common.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 namespace tensor {
 DAContext *NewDAContext(size_t deviceId, size_t memSize) {
   static DAContextManager _manager;

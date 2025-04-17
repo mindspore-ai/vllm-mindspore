@@ -19,12 +19,6 @@
 #include "common/common.h"
 #include "ops/ops_name.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 #define TO_STR(s) #s
 #define INSTRUCTION(I) TO_STR(I),
 const char *_insts[]{// Inst strings.

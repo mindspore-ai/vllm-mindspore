@@ -70,4 +70,9 @@ static inline std::string GetTime() {
   while (false)                                                                \
   Cerr()
 
+#ifndef DEBUG
+#undef LOG_OUT
+#define LOG_OUT NO_LOG_OUT
+#endif
+
 #endif // __COMMON_LOGGER_H__

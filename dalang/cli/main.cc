@@ -32,12 +32,6 @@ namespace fs = std::filesystem;
 #include "parser/parser.h"
 #include "vm/vm.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 /* Command-Line Interface */
 int main(int argc, char **argv) {
   struct arguments args = GetOptions(argc, argv);

@@ -18,12 +18,6 @@
 
 #include <sstream>
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 namespace runtime {
 // Start building graph.
 void GraphExecutor::BeginGraph(const std::string &name) {

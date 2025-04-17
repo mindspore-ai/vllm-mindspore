@@ -16,12 +16,6 @@
 
 #include "pybind11_api.h"
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 DALangPy::~DALangPy() {
   if (callable_ != nullptr) {
     delete callable_;

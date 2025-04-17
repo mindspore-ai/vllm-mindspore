@@ -20,12 +20,6 @@
 #include <cstring>
 #include <iostream>
 
-#undef DEBUG
-#ifndef DEBUG
-#undef LOG_OUT
-#define LOG_OUT NO_LOG_OUT
-#endif
-
 /* ...snippet
 
 We now use the first four fields in ARGP, so here's a description of them:
