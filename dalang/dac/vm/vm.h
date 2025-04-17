@@ -74,6 +74,7 @@ struct Slot {
   } value;
 };
 using Argument = Slot; // Argument is also a Slot.
+using Result = Slot;   // Result is also a Slot.
 
 struct Frame {
   CodeType type;
@@ -225,7 +226,7 @@ public:
   }
   virtual ~VM() = default;
 
-  void Run(const std::vector<Argument> &args = std::vector<Argument>());
+  Result Run(const std::vector<Argument> &args = std::vector<Argument>());
 
 private:
   void InstLoadConst(ssize_t offset);

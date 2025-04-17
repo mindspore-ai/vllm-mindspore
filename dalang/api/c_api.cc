@@ -61,11 +61,11 @@ Callable *DA_API_Compile(const char *source, bool dump) {
   return compiler;
 }
 
-void DA_API_Run(Callable *callable, const std::vector<Argument> &args) {
-  CHECK_NULL(callable);
+Result DA_API_Run(Callable *callable, const std::vector<Argument> &args) {
+  CHECK_IF_NULL(callable);
   LOG_OUT << "Run callable: " << callable;
   auto vm = vm::VM(callable, true);
-  vm.Run(args);
+  return vm.Run(args);
 }
 #ifdef __cplusplus
 }

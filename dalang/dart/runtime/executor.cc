@@ -28,8 +28,8 @@ namespace runtime {
 // Start building graph.
 void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
-  CHECK_FAIL(graph_ == nullptr);
-  CHECK_NULL(context_);
+  CHECK_IF_FAIL(graph_ == nullptr);
+  CHECK_IF_NULL(context_);
   graph_ = tensor::NewDAGraph(context_);
   name_ = name;
 }
@@ -37,7 +37,7 @@ void GraphExecutor::BeginGraph(const std::string &name) {
 // Finish building graph.
 void GraphExecutor::EndGraph() {
   LOG_OUT << "End graph building";
-  CHECK_NULL(graph_);
+  CHECK_IF_NULL(graph_);
 }
 
 // Add a parameter for graph.
@@ -59,9 +59,9 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
                                    size_t shape[DA_TENSOR_MAX_DIM],
                                    void *data) {
   LOG_OUT << "Add const tensor";
-  CHECK_NULL(context_);
+  CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_, type, dim, shape, data);
-  CHECK_NULL(tensor);
+  CHECK_IF_NULL(tensor);
   if (graph_ != nullptr) {
     tensor::AddTensor(graph_, tensor);
   }
@@ -72,15 +72,15 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
 DATensor *GraphExecutor::AddTensor(ops::Op op,
                                    const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
-  CHECK_NULL(context_);
+  CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_);
-  CHECK_NULL(tensor);
+  CHECK_IF_NULL(tensor);
   tensor->op = op;
   for (const auto &input : inputs) {
     tensor->input[tensor->inputSize] = input;
     ++tensor->inputSize;
   }
-  CHECK_NULL(graph_);
+  CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
   return tensor;
 }
@@ -94,8 +94,8 @@ void GraphExecutor::RunTensor(const DATensor *tensor) {
 // Run the built graph.
 void GraphExecutor::RunGraph() {
   LOG_OUT << "Run graph";
-  CHECK_NULL(context_);
-  CHECK_NULL(graph_);
+  CHECK_IF_NULL(context_);
+  CHECK_IF_NULL(graph_);
 
   // Run all tensor nodes.
   DATensor *tensorNode{nullptr};
@@ -110,8 +110,8 @@ void GraphExecutor::RunGraph() {
 // Run the built graph.
 void GraphExecutor::DumpGraph() {
   LOG_OUT << "Run graph";
-  CHECK_NULL(context_);
-  CHECK_NULL(graph_);
+  CHECK_IF_NULL(context_);
+  CHECK_IF_NULL(graph_);
 
   constexpr auto paramPrefix = "param_";
   std::cout << "graph{" << name_ << "}(";

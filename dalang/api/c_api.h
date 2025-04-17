@@ -25,6 +25,7 @@
 
 using Callable = compiler::Compiler;
 using Argument = vm::Argument;
+using Result = vm::Result;
 using Tensor = tensor::DATensor;
 
 #ifdef __cplusplus
@@ -40,7 +41,7 @@ Callable *DA_API_Compile(const char *source, bool dump);
 /// \param[in] callable The callable object.
 /// \param[in] args The arguments.
 /// \return The result of running callable.
-void DA_API_Run(Callable *callable, const std::vector<Argument> &args);
+Result DA_API_Run(Callable *callable, const std::vector<Argument> &args);
 #ifdef __cplusplus
 }
 #endif

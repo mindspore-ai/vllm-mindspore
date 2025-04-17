@@ -83,8 +83,8 @@ make
 # Run test
 echo "=============================="
 echo "Run dapy test case:"
-echo "python check_api.py --dump=True"
+echo "python check_api.py"
 echo "=============================="
 export PYTHONPATH=$BUILD_DIR_DAPY:$DAPY_PATH/python
 echo "PYTHONPATH=$PYTHONPATH"
-python $DAPY_PATH/python/check_api.py --dump=True
+python $DAPY_PATH/python/check_api.py

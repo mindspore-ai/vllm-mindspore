@@ -97,8 +97,8 @@ bool Compiler::CompileModule(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileExpr(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
-  CHECK_NULL(stmt->stmt.Expr.value);
+  CHECK_IF_NULL(stmt);
+  CHECK_IF_NULL(stmt->stmt.Expr.value);
   LOG_OUT << ToString(stmt) << "/" << ToString(stmt->stmt.Expr.value);
   CallExprHandler(stmt->stmt.Expr.value);
   const auto lineno = stmt->lineStart;
@@ -108,7 +108,7 @@ bool Compiler::CompileExpr(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileAssign(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_Assign) {
     return false;
@@ -145,7 +145,7 @@ bool Compiler::CompileAugAssign(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileReturn(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_Return) {
     return false;
@@ -168,7 +168,7 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileGraph(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_Graph) {
     return false;
@@ -176,8 +176,8 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
   const auto &graphStmt = stmt->stmt.Graph;
   // Graph name.
   ExprConstPtr name = graphStmt.name;
-  CHECK_NULL(name);
-  CHECK_NULL(name->expr.Name.identifier);
+  CHECK_IF_NULL(name);
+  CHECK_IF_NULL(name->expr.Name.identifier);
   const auto graphName = *(name->expr.Name.identifier);
   const auto lineno = name->lineStart;
   // Insert graph name into the symbol table.
@@ -279,7 +279,7 @@ void Compiler::CompileJitCallFunction(const std::string &funcName,
 }
 
 bool Compiler::CompileFunction(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_Function) {
     return false;
@@ -287,8 +287,8 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   const auto &funcStmt = stmt->stmt.Function;
   // Function name.
   ExprConstPtr name = funcStmt.name;
-  CHECK_NULL(name);
-  CHECK_NULL(name->expr.Name.identifier);
+  CHECK_IF_NULL(name);
+  CHECK_IF_NULL(name->expr.Name.identifier);
   const auto funcName = *(name->expr.Name.identifier);
   const auto lineno = name->lineStart;
   ssize_t funcSymIndex = -1;
@@ -389,7 +389,7 @@ bool Compiler::CompileClass(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileBlock(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_Block) {
     return false;
@@ -432,7 +432,7 @@ bool Compiler::CompileBlock(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileIf(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_If) {
     return false;
@@ -484,7 +484,7 @@ bool Compiler::CompileIf(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileWhile(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_While) {
     return false;
@@ -549,7 +549,7 @@ bool Compiler::CompileImport(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileStdCin(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_StdCin) {
     return false;
@@ -576,7 +576,7 @@ bool Compiler::CompileStdCin(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileStdCout(StmtConstPtr stmt) {
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   LOG_OUT << ToString(stmt);
   if (stmt->type != StmtType_StdCout) {
     return false;
@@ -592,7 +592,7 @@ bool Compiler::CompileStdCout(StmtConstPtr stmt) {
 }
 
 bool Compiler::CompileBinary(ExprConstPtr expr) {
-  CHECK_NULL(expr);
+  CHECK_IF_NULL(expr);
   LOG_OUT << ToString(expr);
   if (expr->type != ExprType_Binary) {
     return false;
@@ -654,7 +654,7 @@ bool Compiler::CompileSubscript(ExprConstPtr expr) {
 }
 
 bool Compiler::CompileList(ExprConstPtr expr) {
-  CHECK_NULL(expr);
+  CHECK_IF_NULL(expr);
   LOG_OUT << ToString(expr);
   if (expr->type != ExprType_List) {
     return false;
@@ -667,7 +667,7 @@ bool Compiler::CompileList(ExprConstPtr expr) {
 }
 
 bool Compiler::CompileCall(ExprConstPtr expr) {
-  CHECK_NULL(expr);
+  CHECK_IF_NULL(expr);
   LOG_OUT << ToString(expr);
   if (expr->type != ExprType_Call) {
     return false;
@@ -752,7 +752,7 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
 }
 
 bool Compiler::CompileName(ExprConstPtr expr) {
-  CHECK_NULL(expr);
+  CHECK_IF_NULL(expr);
   LOG_OUT << ToString(expr);
   if (expr->type != ExprType_Name) {
     return false;
@@ -777,7 +777,7 @@ bool Compiler::CompileName(ExprConstPtr expr) {
 }
 
 bool Compiler::CompileLiteral(ExprConstPtr expr) {
-  CHECK_NULL(expr);
+  CHECK_IF_NULL(expr);
   LOG_OUT << ToString(expr);
   if (expr->type != ExprType_Literal) {
     return false;
@@ -1000,7 +1000,7 @@ void Compiler::Dump() {
         if (cons.type == ConstType_str) {
           std::cout << "'";
         }
-        CHECK_NULL(cons.value.str);
+        CHECK_IF_NULL(cons.value.str);
         std::cout << ConvertEscapeString(*cons.value.str);
         if (cons.type == ConstType_str) {
           std::cout << "'";
@@ -1034,7 +1034,7 @@ void Compiler::Dump() {
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
-      CHECK_NULL(cons.value.str);
+      CHECK_IF_NULL(cons.value.str);
       std::cout << ConvertEscapeString(*cons.value.str);
       if (cons.type == ConstType_str) {
         std::cout << "'";

@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from dapy import dag
+from dapy import jit
 import argparse
 
 _arg_parser = argparse.ArgumentParser()
@@ -21,12 +20,13 @@ _arg_parser.add_argument('--dump', '-d', type=bool, default=False, required=Fals
 _args = _arg_parser.parse_args()
 
 
-@dag(dump_compiler=_args.dump)
-def run_dag(x, y):
-    print('hello, world\n')
-    res = x + y
-    print(res)
-    return res
+@jit(dump_compiler=_args.dump)
+def run_check(x, y):
+    print('hello world.\n')
+    z = x * y
+    z = z + x - y
+    z = z / y
+    return z
 
-
-run_dag(2, 3)
+assert run_check(12, 6) == 13
+print("The result is correct. 'dapy' module has been installed successfully.")

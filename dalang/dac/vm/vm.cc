@@ -95,14 +95,14 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
 }
 
 Slot VM::ConvertConstType(const Constant &cons) {
-  CHECK_NULL(cons.value.str);
+  CHECK_IF_NULL(cons.value.str);
   return ConvertConstType(cons.type, *cons.value.str);
 }
 
 // Load the constants by index from const pool.
 void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
-  CHECK_NULL(cons.value.str);
+  CHECK_IF_NULL(cons.value.str);
   LOG_OUT << "offset: " << offset << ", value: " << *cons.value.str << " ("
           << cons.type << ")";
   CurrentStack().emplace_back(std::move(ConvertConstType(cons)));
@@ -521,6 +521,7 @@ void VM::InstReturnVal(ssize_t offset) {
 
   // Just pop the frame.
   frames_.pop_back();
+  CHECK_IF_FAIL(!frames_.empty());
   frame_ = &frames_.back();
 }
 
@@ -698,7 +699,7 @@ void VM::InstStdCin(ssize_t offset) {
   // Get input.
   std::string str;
   getline(std::cin, str);
-  CHECK_NULL(slot);
+  CHECK_IF_NULL(slot);
   if ((str.front() == '\'' && str.back() == '\'') ||
       (str.front() == '\"' && str.back() == '\"')) {
     slot->type = SlotString;
@@ -768,7 +769,7 @@ std::vector<Slot> &VM::GlobalVars() { return frames_.front().vars; }
 StringPool &VM::stringPool() { return stringPool_; }
 
 const std::vector<Code> &VM::codes() const {
-  CHECK_NULL(codesPtr_);
+  CHECK_IF_NULL(codesPtr_);
   return *codesPtr_;
 }
 
@@ -802,7 +803,7 @@ void VM::PrepareArguments(Frame &topFrame, const std::vector<Argument> &args) {
     topFrame.type = CodeFunction;
     // Initialize arguments.
     const auto &argIndexes = codes()[codeIndex].argIndexes;
-    CHECK_FAIL(args.size() == argIndexes.size());
+    CHECK_IF_FAIL(args.size() == argIndexes.size());
     for (size_t i = 0; i < args.size(); ++i) {
       auto argIndex = argIndexes[i];
       topFrame.vars[argIndex] = args[i];
@@ -811,7 +812,7 @@ void VM::PrepareArguments(Frame &topFrame, const std::vector<Argument> &args) {
   }
 }
 
-void VM::Run(const std::vector<Argument> &args) {
+Result VM::Run(const std::vector<Argument> &args) {
   if (codes().empty()) {
     LOG_ERROR << "no code exits";
     exit(EXIT_FAILURE);
@@ -840,6 +841,9 @@ void VM::Run(const std::vector<Argument> &args) {
 
       if (frames_.size() == 1 && CurrentStack().size() == 1 &&
           inst.inst == Inst_ReturnVal && inst.offset == 0) {
+        if (singleFunctionMode_) {
+          return CurrentStack().back();
+        }
         break;
       }
 
@@ -847,7 +851,7 @@ void VM::Run(const std::vector<Argument> &args) {
       if (frames_.empty()) {
         // Finish.
         LOG_OUT << "Run finish";
-        return;
+        return Result({.type = SlotVoid});
       }
       LOG_OUT << "frame size: " << frames_.size()
               << ", stack size: " << CurrentStack().size()
@@ -859,6 +863,7 @@ void VM::Run(const std::vector<Argument> &args) {
     // Pop exhausted frame.
     frames_.pop_back();
   }
+  return Result({.type = SlotVoid});
 }
 
 void VM::DumpStack() {

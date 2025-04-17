@@ -74,12 +74,12 @@ NsPtr Compiler::CompileGraph(NsConstPtr ns, StmtConstPtr stmt) {
 NsPtr Compiler::CompileFunction(NsConstPtr ns, StmtConstPtr stmt) {
   LOG_OUT << ToString(stmt);
   FuncPtr func = NewFunc();
-  CHECK_NULL(stmt);
+  CHECK_IF_NULL(stmt);
   const auto &funcStmt = stmt->stmt.Function;
   // Function name.
   ExprConstPtr expr = funcStmt.name;
-  CHECK_NULL(expr);
-  CHECK_NULL(expr->expr.Name.identifier);
+  CHECK_IF_NULL(expr);
+  CHECK_IF_NULL(expr->expr.Name.identifier);
   const auto funcName = *(expr->expr.Name.identifier);
   func->setName(funcName);
   LOG_OUT << "func name: " << funcName;

@@ -62,6 +62,24 @@ std::vector<Argument> ConvertPyArgs(const py::tuple &args) {
   }
   return arguments;
 }
+
+py::object ConvertPyResult(const Result &res) {
+  if (res.type == vm::SlotBool) {
+    return py::bool_(res.value.bool_);
+  } else if (res.type == vm::SlotInt) {
+    return py::int_(res.value.int_);
+  } else if (res.type == vm::SlotFloat) {
+    return py::float_(res.value.float_);
+  } else if (res.type == vm::SlotString) {
+    return py::str(res.value.str_);
+  } else if (res.type == vm::SlotTensor) {
+    return py::object();
+  } else if (res.type == vm::SlotVoid) {
+    return py::none();
+  } else {
+    return py::none();
+  }
+}
 } // namespace
 
 void DALangPy::Compile(const py::object &source, bool dump) {
@@ -74,9 +92,11 @@ void DALangPy::Compile(const py::object &source, bool dump) {
   callable_ = DA_API_Compile(srcStr.c_str(), dump);
 }
 
-void DALangPy::Run(const py::tuple &args) {
-  CHECK_NULL(callable_);
-  DA_API_Run(callable_, ConvertPyArgs(args));
+py::object DALangPy::Run(const py::tuple &args) {
+  CHECK_IF_NULL(callable_);
+  auto res = DA_API_Run(callable_, ConvertPyArgs(args));
+  LOG_OUT << "result: " << vm::ToString(res);
+  return ConvertPyResult(res);
 }
 
 // Interface with python

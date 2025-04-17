@@ -56,12 +56,12 @@ void FreeDAContext(DAContext *context) {
 }
 
 DAGraph *NewDAGraph(DAContext *context) {
-  CHECK_NULL(context);
-  CHECK_NULL(context->memPool);
+  CHECK_IF_NULL(context);
+  CHECK_IF_NULL(context->memPool);
 
   constexpr size_t graphSize = sizeof(DAGraph);
   auto newSize = context->memUsed + graphSize;
-  CHECK_FAIL(newSize < context->memSize);
+  CHECK_IF_FAIL(newSize < context->memSize);
 
   DAGraph *graph = (DAGraph *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
@@ -72,29 +72,29 @@ DAGraph *NewDAGraph(DAContext *context) {
 }
 
 void AddParameter(DAGraph *graph, DATensor *param) {
-  CHECK_NULL(graph);
-  CHECK_FAIL(graph->paramSize < DA_GRAPH_MAX_PARAM);
+  CHECK_IF_NULL(graph);
+  CHECK_IF_FAIL(graph->paramSize < DA_GRAPH_MAX_PARAM);
   graph->param[graph->paramSize] = param;
   ++graph->paramSize;
   LOG_OUT << "Add Parameter " << param << " for DAGraph " << graph;
 }
 
 void AddTensor(DAGraph *graph, DATensor *tensor) {
-  CHECK_NULL(graph);
-  CHECK_NULL(tensor);
-  CHECK_FAIL(graph->nodeSize < DA_GRAPH_MAX_NODE);
+  CHECK_IF_NULL(graph);
+  CHECK_IF_NULL(tensor);
+  CHECK_IF_FAIL(graph->nodeSize < DA_GRAPH_MAX_NODE);
   graph->node[graph->nodeSize] = tensor;
   ++graph->nodeSize;
   LOG_OUT << "Add Tensor " << tensor << " for DAGraph " << graph;
 }
 
 DATensor *NewDATensor(DAContext *context) {
-  CHECK_NULL(context);
-  CHECK_NULL(context->memPool);
+  CHECK_IF_NULL(context);
+  CHECK_IF_NULL(context->memPool);
 
   constexpr size_t tensorSize = sizeof(DATensor);
   auto newSize = context->memUsed + tensorSize;
-  CHECK_FAIL(newSize < context->memSize);
+  CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
@@ -109,12 +109,12 @@ DATensor *NewDATensor(DAContext *context) {
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
                       size_t shape[DA_TENSOR_MAX_DIM], void *data, ops::Op op,
                       DATensor *input[DA_TENSOR_MAX_INPUT]) {
-  CHECK_NULL(context);
-  CHECK_NULL(context->memPool);
+  CHECK_IF_NULL(context);
+  CHECK_IF_NULL(context->memPool);
 
   constexpr size_t tensorSize = sizeof(DATensor);
   auto newSize = context->memUsed + tensorSize;
-  CHECK_FAIL(newSize < context->memSize);
+  CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;

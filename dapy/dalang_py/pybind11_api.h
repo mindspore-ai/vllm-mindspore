@@ -35,7 +35,7 @@ public:
   static std::shared_ptr<DALangPy> GetInstance();
 
   void Compile(const py::object &source, bool dump);
-  void Run(const py::tuple &args);
+  py::object Run(const py::tuple &args);
 
 private:
   Callable *callable_{nullptr};

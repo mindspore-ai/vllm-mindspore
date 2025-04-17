@@ -30,9 +30,9 @@ using namespace tensor;
 
 class GraphExecutor {
 public:
-  GraphExecutor() : context_{NewDAContext()} { CHECK_NULL(context_); }
+  GraphExecutor() : context_{NewDAContext()} { CHECK_IF_NULL(context_); }
   ~GraphExecutor() {
-    CHECK_NULL(context_);
+    CHECK_IF_NULL(context_);
     FreeDAContext(context_);
     context_ = nullptr;
   }
