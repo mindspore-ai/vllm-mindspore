@@ -300,14 +300,8 @@ void VM::InstDoCall(ssize_t offset) {
           << ", arg size: " << argsSize;
 
   // If call a graph.
-  if (callCode.type == CodeGraph) {
-    LOG_OUT << "Call DAGraph: " << callCode.name;
-    if (graphExecutor_.HasGraph()) {
-      graphExecutor_.RunGraph();
-      return;
-    } else {
-      graphExecutor_.BeginGraph(callCode.name);
-    }
+  if (StartGraph(callCode)) {
+    return;
   }
 
   // Create new function/graph frame in advance.
@@ -336,10 +330,7 @@ void VM::InstDoCall(ssize_t offset) {
       const auto &arg = CurrentStack()[argStartIndex + i];
 
       // If call a graph.
-      if (callCode.type == CodeGraph) {
-        LOG_OUT << "Add parameter " << ToString(arg);
-        graphExecutor_.AddParameter((tensor::DATensor *)arg.value.tensor_);
-      }
+      AddGraphParameter(callCode, arg);
 
 #if 0
       newFuncFrame.names[callCode.argNames[i]] = std::move(arg);
@@ -503,15 +494,7 @@ void VM::InstReturnVal(ssize_t offset) {
   }
 
   // If call a graph.
-  if (frames_.back().type == CodeGraph) {
-    if (graphExecutor_.HasGraph()) {
-      graphExecutor_.EndGraph();
-      graphExecutor_.DumpGraph();
-    } else {
-      LOG_ERROR << "No graph building.";
-      exit(EXIT_FAILURE);
-    }
-  }
+  FinishGraph(frames_.back());
 
   // Just pop the frame.
   frames_.pop_back();
@@ -768,10 +751,7 @@ std::vector<Slot> &VM::GlobalVars() { return frames_.front().vars; }
 
 StringPool &VM::stringPool() { return stringPool_; }
 
-const std::vector<Code> &VM::codes() const {
-  CHECK_IF_NULL(codesPtr_);
-  return *codesPtr_;
-}
+const std::vector<Code> &VM::codes() const { return codes_; }
 
 const Code &VM::code() const { return codes()[frame_->code]; }
 
@@ -797,16 +777,52 @@ std::string VM::LineString() {
   return filename() + ':' + std::to_string(insts()[frame_->pc - 1].lineno);
 }
 
+bool VM::StartGraph(const Code &code) { // If call a graph.
+  if (code.type == CodeGraph) {
+    LOG_OUT << "Call DAGraph: " << code.name;
+    if (graphExecutor_.HasGraph()) {
+      graphExecutor_.RunGraph();
+      return true;
+    } else {
+      graphExecutor_.BeginGraph(code.name);
+    }
+  }
+  return false;
+}
+
+void VM::FinishGraph(const Frame &frame) {
+  if (frame.type != CodeGraph) {
+    return;
+  }
+  if (graphExecutor_.HasGraph()) {
+    graphExecutor_.EndGraph();
+    graphExecutor_.DumpGraph();
+  } else {
+    LOG_ERROR << "No graph building.";
+    exit(EXIT_FAILURE);
+  }
+}
+
+void VM::AddGraphParameter(const Code &code, const Slot &arg) {
+  // If call a graph.
+  if (code.type == CodeGraph) {
+    LOG_OUT << "Add parameter " << ToString(arg);
+    graphExecutor_.AddParameter((tensor::DATensor *)arg.value.tensor_);
+  }
+}
+
 void VM::PrepareArguments(Frame &topFrame, const std::vector<Argument> &args) {
   constexpr size_t codeIndex = 0;
   if (singleFunctionMode_) {
-    topFrame.type = CodeFunction;
+    const auto &code = codes()[codeIndex];
+    topFrame.type = code.type;
     // Initialize arguments.
-    const auto &argIndexes = codes()[codeIndex].argIndexes;
+    const auto &argIndexes = code.argIndexes;
     CHECK_IF_FAIL(args.size() == argIndexes.size());
     for (size_t i = 0; i < args.size(); ++i) {
       auto argIndex = argIndexes[i];
       topFrame.vars[argIndex] = args[i];
+      AddGraphParameter(code, args[i]);
       LOG_OUT << "Bind argument, arg[" << i << "]: " << ToString(args[i]);
     }
   }
@@ -818,13 +834,16 @@ Result VM::Run(const std::vector<Argument> &args) {
     exit(EXIT_FAILURE);
   }
   constexpr size_t codeIndex = 0;
-  auto topFrame =
-      Frame{.type = CodeModule,
-            .code = codeIndex,
-            .pc = 0,
-            .slots = std::vector<Slot>(),
-            .vars = std::vector<Slot>{codes()[codeIndex].symbols.size()}};
-  PrepareArguments(topFrame, args);
+  const auto &topCode = codes()[codeIndex];
+  auto topFrame = Frame{.type = CodeModule,
+                        .code = codeIndex,
+                        .pc = 0,
+                        .slots = std::vector<Slot>(),
+                        .vars = std::vector<Slot>{topCode.symbols.size()}};
+  if (singleFunctionMode_) {
+    StartGraph(topCode);
+    PrepareArguments(topFrame, args);
+  }
   frames_.emplace_back(std::move(topFrame));
   while (!frames_.empty()) {
     // Run in current frame.
@@ -842,6 +861,7 @@ Result VM::Run(const std::vector<Argument> &args) {
       if (frames_.size() == 1 && CurrentStack().size() == 1 &&
           inst.inst == Inst_ReturnVal && inst.offset == 0) {
         if (singleFunctionMode_) {
+          FinishGraph(frames_.back());
           return CurrentStack().back();
         }
         break;

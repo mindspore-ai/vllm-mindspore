@@ -220,13 +220,15 @@ class VM {
 public:
   VM() = delete;
   VM(Compiler *compiler, bool singleFunctionMode = false)
-      : codesPtr_{&compiler->codes()}, filename_{compiler->filename()},
+      : codes_{compiler->codes()}, filename_{compiler->filename()},
         singleFunctionMode_{singleFunctionMode} {
     InitInstructionHandlers();
   }
   virtual ~VM() = default;
 
   Result Run(const std::vector<Argument> &args = std::vector<Argument>());
+
+  runtime::GraphExecutor &graphExecutor() { return graphExecutor_; }
 
 private:
   void InstLoadConst(ssize_t offset);
@@ -293,7 +295,11 @@ private:
 
   void DumpStack();
 
-  const std::vector<Code> *codesPtr_{nullptr};
+  bool StartGraph(const Code &code);
+  void FinishGraph(const Frame &frame);
+  void AddGraphParameter(const Code &code, const Slot &arg);
+
+  const std::vector<Code> codes_;
 
   std::string filename_;
 

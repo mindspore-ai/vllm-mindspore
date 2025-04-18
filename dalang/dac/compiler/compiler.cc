@@ -53,18 +53,19 @@ const char *GetInstStr(Inst inst) {
   return _insts[inst];
 }
 
-Compiler::Compiler(const std::string &filename, bool singleFunctionMode)
+Compiler::Compiler(const std::string &filename, bool singleFunctionMode,
+                   bool forceGraphMode)
     : filename_{filename}, selfManagedParser_{true},
-      singleFunctionMode_{singleFunctionMode},
+      singleFunctionMode_{singleFunctionMode}, forceGraphMode_{forceGraphMode},
       walker_{new CompilerNodeVisitor(this)} {
   parser_ = new Parser(filename);
   Init();
 }
 
-Compiler::Compiler(Parser *parser, bool singleFunctionMode)
+Compiler::Compiler(Parser *parser, bool singleFunctionMode, bool forceGraphMode)
     : parser_{parser}, filename_{parser_->filename()},
       selfManagedParser_{false}, singleFunctionMode_{singleFunctionMode},
-      walker_{new CompilerNodeVisitor(this)} {
+      forceGraphMode_{forceGraphMode}, walker_{new CompilerNodeVisitor(this)} {
   Init();
 }
 
@@ -845,8 +846,13 @@ void Compiler::Init() {
   InitCompileHandlers();
   codeStack_.emplace(codes_.size());
   if (singleFunctionMode_) {
-    codes_.emplace_back(
-        Code{.type = CodeFunction, .name = "@single/"}); // Preset module code.
+    if (forceGraphMode_) {
+      codes_.emplace_back(
+          Code{.type = CodeGraph, .name = "@single/"}); // Preset module code.
+    } else {
+      codes_.emplace_back(Code{.type = CodeFunction,
+                               .name = "@single/"}); // Preset module code.
+    }
   } else {
     codes_.emplace_back(
         Code{.type = CodeModule,

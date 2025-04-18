@@ -90,8 +90,10 @@ typedef Code *CodePtr;
 class Compiler {
 public:
   explicit Compiler(const std::string &filename,
-                    bool singleFunctionMode = false);
-  explicit Compiler(Parser *parser, bool singleFunctionMode = false);
+                    bool singleFunctionMode = false,
+                    bool forceGraphMode = false);
+  explicit Compiler(Parser *parser, bool singleFunctionMode = false,
+                    bool forceGraphMode = false);
   ~Compiler();
 
   void Compile();
@@ -177,6 +179,7 @@ private:
   std::string filename_;
   bool selfManagedParser_{false};
   bool singleFunctionMode_{false};
+  bool forceGraphMode_{false};
   CompilerNodeVisitor *walker_;
   InstCall lastInst_;
   std::stack<size_t> codeStack_;

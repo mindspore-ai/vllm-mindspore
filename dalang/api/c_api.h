@@ -23,7 +23,7 @@
 #include "tensor/da_tensor.h"
 #include "vm/vm.h"
 
-using Callable = compiler::Compiler;
+using Callable = vm::VM;
 using Argument = vm::Argument;
 using Result = vm::Result;
 using Tensor = tensor::DATensor;
@@ -33,9 +33,10 @@ extern "C" {
 #endif
 /// \brief Compile the source code with dalang compiler, and return a callable.
 /// \param[in] source The source code string.
+/// \param[in] graph If force use graph mode.
 /// \param[in] dump If dump the compiler information.
 /// \return A callable object, which should be freed by user outside.
-Callable *DA_API_Compile(const char *source, bool dump);
+Callable *DA_API_Compile(const char *source, bool graph, bool dump);
 
 /// \brief Run the callable object returned from 'DA_API_Compile()'.
 /// \param[in] callable The callable object.

@@ -34,10 +34,13 @@ public:
 
   static std::shared_ptr<DALangPy> GetInstance();
 
-  void Compile(const py::object &source, bool dump);
+  void Compile(const py::object &source, bool graph, bool dump);
   py::object Run(const py::tuple &args);
 
 private:
+  std::vector<Argument> ConvertPyArgs(const py::tuple &args);
+  py::object ConvertPyResult(const Result &res);
+
   Callable *callable_{nullptr};
 };
 

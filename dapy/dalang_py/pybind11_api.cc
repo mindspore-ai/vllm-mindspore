@@ -28,8 +28,7 @@ std::shared_ptr<DALangPy> DALangPy::GetInstance() {
   return dalangPy;
 }
 
-namespace {
-std::vector<Argument> ConvertPyArgs(const py::tuple &args) {
+std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
   std::vector<Argument> arguments;
   for (const auto &arg : args) {
     if (py::isinstance<py::bool_>(arg)) {
@@ -50,14 +49,17 @@ std::vector<Argument> ConvertPyArgs(const py::tuple &args) {
       arguments.emplace_back(std::move(argument));
     } else {
       Argument argument = Argument({.type = vm::SlotTensor});
-      argument.value.tensor_ = (void *)py::cast<Tensor *>(arg);
+      auto tensor = callable_->graphExecutor().AddTensor();
+      // TODO: Adapter MS tensor and DA tensor later.
+      tensor->data = (void *)arg.ptr();
+      argument.value.tensor_ = (void *)tensor;
       arguments.emplace_back(std::move(argument));
     }
   }
   return arguments;
 }
 
-py::object ConvertPyResult(const Result &res) {
+py::object DALangPy::ConvertPyResult(const Result &res) {
   if (res.type == vm::SlotBool) {
     return py::bool_(res.value.bool_);
   } else if (res.type == vm::SlotInt) {
@@ -74,23 +76,27 @@ py::object ConvertPyResult(const Result &res) {
     return py::none();
   }
 }
-} // namespace
 
-void DALangPy::Compile(const py::object &source, bool dump) {
+void DALangPy::Compile(const py::object &source, bool graph, bool dump) {
   // Check if the function or net is valid.
   if ((!py::isinstance<py::str>(source))) {
     LOG_ERROR << "error: the source must be string.";
     exit(EXIT_FAILURE);
   }
   const auto srcStr = py::cast<std::string>(source);
-  callable_ = DA_API_Compile(srcStr.c_str(), dump);
+  callable_ = DA_API_Compile(srcStr.c_str(), graph, dump);
 }
 
 py::object DALangPy::Run(const py::tuple &args) {
   CHECK_IF_NULL(callable_);
   auto res = DA_API_Run(callable_, ConvertPyArgs(args));
-  LOG_OUT << "result: " << vm::ToString(res);
-  return ConvertPyResult(res);
+  auto pyres = ConvertPyResult(res);
+  if (pyres.ptr() == nullptr) {
+    return py::none();
+  }
+  LOG_OUT << "res: " << vm::ToString(res)
+          << ", pyres: " << py::str(pyres).cast<std::string>();
+  return pyres;
 }
 
 // Interface with python
@@ -101,6 +107,7 @@ PYBIND11_MODULE(_dapy, mod) {
       .def("__call__", &DALangPy::Run, py::arg("args") = py::list(),
            "Run with arguments.")
       .def("compile", &DALangPy::Compile, py::arg("source"),
+           py::arg("graph") = py::bool_(false),
            py::arg("dump") = py::bool_(false),
            "Compile the source with arguments.");
 }
