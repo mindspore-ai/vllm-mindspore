@@ -3,10 +3,12 @@
 
 import gc
 import torch
-# import mindspore
 from vllm.logger import init_logger
+from vllm.distributed.parallel_state import get_pp_group
+
 
 logger = init_logger(__name__)
+
 
 def init_device(self):
     from vllm.config import get_current_vllm_config
@@ -39,3 +41,12 @@ def init_device(self):
     # Construct the model runner
     self.model_runner: GPUModelRunner = GPUModelRunner(
         self.vllm_config, self.device)
+
+
+def compile_or_warm_up_model(self) -> None:
+    # MindSpore does not support cuda graph. No need to warm up the model.
+    # Since prefill is done previously, we do decode here.
+    default_max_num_reqs = 1 # For MindSpore, we only do one more decode here.
+    if get_pp_group().is_last_rank:
+        self.model_runner._dummy_sampler_run(self.model_runner._dummy_run(
+                num_tokens=default_max_num_reqs))

@@ -310,6 +310,10 @@ from vllm_mindspore.distributed.shm_broadcast import initialize_ShmRingBuffer
 from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 
+from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
+from vllm.v1.worker.gpu_worker import Worker
+Worker.compile_or_warm_up_model = compile_or_warm_up_model
+
 from .utils import check_ready
 
 check_ready()
