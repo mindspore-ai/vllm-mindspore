@@ -56,6 +56,10 @@ import vllm.engine.arg_utils
 from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
+import vllm.v1.engine.core
+from vllm_mindspore.v1.engine.core import shutdown
+vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
+
 from vllm_mindspore.utils import (
     direct_register_custom_op,
     make_tensor_with_pad,
@@ -205,13 +209,15 @@ vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 
 from .config import _verify_quantization, _verify_args, vllm_config_post_init, model_post_init, \
-    _get_and_verify_dtype
+    _get_and_verify_dtype, stateless_init_dp_group, has_unfinished_dp
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
 vllm.config.SchedulerConfig._verify_args = _verify_args
 vllm.config.CompilationConfig.model_post_init = model_post_init
 vllm.config._get_and_verify_dtype = _get_and_verify_dtype
+vllm.config.ParallelConfig.stateless_init_dp_group = stateless_init_dp_group
+vllm.config.ParallelConfig.has_unfinished_dp = has_unfinished_dp
 
 from .utils import update_modules
 from vllm_mindspore.attention.backends import ms_attn
@@ -276,9 +282,10 @@ vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = _make_
 vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
 
 from vllm.v1.worker.gpu_worker import Worker
+from vllm_mindspore.v1.worker.gpu_worker import init_device
 
 Worker.__init__ = wrapper_worker_init(Worker.__init__)
-Worker.init_device = wrapper_worker_init_device(Worker.init_device)
+Worker.init_device = wrapper_worker_init_device(init_device)
 
 
 import vllm.v1.utils
