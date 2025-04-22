@@ -70,7 +70,7 @@ static inline std::string GetTime() {
   while (false)                                                                \
   Cerr()
 
-#ifndef DEBUG
+#ifndef DEBUG_LOG_OUT
 #undef LOG_OUT
 #define LOG_OUT NO_LOG_OUT
 #endif

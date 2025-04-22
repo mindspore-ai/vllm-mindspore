@@ -2,6 +2,55 @@
 set -e
 
 
+##################################################
+# Process build options
+##################################################
+usage()
+{
+  echo "Usage:"
+  echo "bash build.sh [-D] [-d lexer,parser,compiler,vm,ir,rt,dapy] [-i] [-h]\\"
+  echo ""
+  echo "Options:"
+  echo "    -d Enable log print of module(eg. -d parser,compiler)"
+  echo "    -h Print usage"
+  echo "    -i Enable increment building, default off"
+  echo "    -D Debug version, default release version"
+}
+
+process_options()
+{
+    while getopts 'Dd:hi' OPT; do
+        case $OPT in
+            D)
+                # Debug version or not.
+                # -D
+                export DEBUG="-DDEBUG=on";;
+            d)
+                # Enable log out for modules.
+                # -d lexer,parser,compiler,vm,ir,rt,dapy
+                OPTARGS=(${OPTARG//,/ })
+                for ARG in ${OPTARGS[@]}
+                do
+                    export DEBUG_LOG_OUT="$DEBUG_LOG_OUT -DDEBUG_LOG_OUT_$ARG=on"
+                done
+                ;;
+            i) export INC_BUILD=1;;
+            h)
+                usage
+                exit 0
+                ;;
+            ?) exit 1;;
+        esac
+    done
+}
+process_options $@
+DALANG_CMAKE_ARGS="${DALANG_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
+
+
+##################################################
+# Prepare source and build directories
+##################################################
 CURRENT_PATH=$(pwd)
 SCRIPT_PATH=$(dirname "$0")
 
@@ -37,7 +86,11 @@ make_sure_build_dir $BUILD_DIR_DAPY
 
 # Make da execution and shared library
 cd $BUILD_DIR_DALANG
-cmake $DALANG_PATH
+if [[ $INC_BUILD != 1 ]]; then
+    rm $BUILD_DIR_DALANG/* -rf
+    echo "DALANG_CMAKE_ARGS: $DALANG_CMAKE_ARGS"
+    cmake $DALANG_PATH $DALANG_CMAKE_ARGS
+fi
 make
 
 # Run test
@@ -57,6 +110,7 @@ echo "=============================="
 # Set dalang shared library path for _dapy linking
 DALANG_LIBRARIES="$BUILD_DIR_DALANG/libdalang.so"
 echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} -DDALANG_LIBRARIES=$DALANG_LIBRARIES"
 
 # Update pybind11 submodule
 update_pybind11_submodule()
@@ -74,10 +128,15 @@ update_pybind11_submodule()
 cd $DAPY_PATH
 update_pybind11_submodule
 PYBIND11_PATH=$DAPY_PATH/pybind11
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} -DPYBIND11_PATH=$PYBIND11_PATH"
 
 # Make _dapy python module
 cd $BUILD_DIR_DAPY
-cmake $DAPY_PATH -DDALANG_LIBRARIES=$DALANG_LIBRARIES -DPYBIND11_PATH=$PYBIND11_PATH
+if [[ $INC_BUILD != 1 ]]; then
+    rm $BUILD_DIR_DAPY/* -rf
+    echo "DALANG_CMAKE_ARGS: $DAPY_CMAKE_ARGS"
+    cmake $DAPY_PATH $DAPY_CMAKE_ARGS
+fi
 make
 
 # Run test
