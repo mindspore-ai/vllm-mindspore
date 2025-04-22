@@ -16,6 +16,7 @@ def _make_sampling_metadata(self) -> SamplingMetadata:
     num_reqs = self.num_reqs
     if not self.all_greedy:
         temperature = copy_slice(torch.from_numpy(self.temperature_cpu), self.temperature, num_reqs)
+        temperature = temperature[:num_reqs]
     else:
         temperature = None
     if not self.no_top_p:
