@@ -50,8 +50,7 @@ void GraphExecutor::AddParameters(const std::vector<DATensor *> &params) {
 
 // Add a const tensor.
 DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
-                                   size_t shape[DA_TENSOR_MAX_DIM],
-                                   void *data) {
+                                   const ShapeArrayPtr &shape, void *data) {
   LOG_OUT << "Add const tensor";
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_, type, dim, shape, data);
@@ -66,13 +65,15 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
 DATensor *GraphExecutor::AddTensor(ops::Op op,
                                    const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
+  auto tensor_size = inputs.size();
+  LOG_OUT << "tensor_size: " << tensor_size;
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_);
   CHECK_IF_NULL(tensor);
   tensor->op = op;
-  for (const auto &input : inputs) {
-    tensor->input[tensor->inputSize] = input;
-    ++tensor->inputSize;
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    tensor->inputs[i] = inputs[i];
+    ++tensor->inputs_size;
   }
   CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
@@ -130,9 +131,10 @@ void GraphExecutor::DumpGraph() {
   DATensor *tensorNode{nullptr};
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     tensorNode = graph_->node[i];
+    size_t inputSize = tensorNode->inputs_size;
     std::stringstream ss;
-    for (size_t i = 0; i < tensorNode->inputSize; ++i) {
-      auto input = tensorNode->input[i];
+    for (size_t i = 0; i < inputSize; ++i) {
+      auto input = tensorNode->inputs[i];
       // Find node number firstly.
       auto nodeIt = nodeNumMap_.find(input);
       if (nodeIt != nodeNumMap_.cend()) {
@@ -149,7 +151,7 @@ void GraphExecutor::DumpGraph() {
 #ifdef DEBUG_DUMP
       ss << "(" << input << ")";
 #endif
-      if (i != tensorNode->inputSize - 1) {
+      if (i != inputSize - 1) {
         ss << ", ";
       }
     }
