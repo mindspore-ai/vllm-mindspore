@@ -214,4 +214,9 @@ setup(
     ext_modules=_get_ext_modules(),
     include_package_data=True,
     package_data=package_data,
+    entry_points={
+        "console_scripts": [
+            "vllm-mindspore=vllm_mindspore.scripts:main",
+        ],
+    },
 )

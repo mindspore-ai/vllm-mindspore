@@ -19,6 +19,7 @@ from collections import Counter
 from typing import Union
 import sys
 import socket
+import threading
 import pickle
 import time
 
@@ -328,17 +329,21 @@ class SocketProcessGroup:
                     time.sleep(self.retry_interval)
             else:
                 raise ConnectionError(f"Worker {self.rank} could not connect to master at {self.master_ip}:{self.master_port} after {self.max_retries} retries.")
+    
+    def accept_connections(self):
+        for _ in range(self.world_size - 1):
+            conn, addr = self.server_socket.accept()
+            print(f"Accepted connection from {addr}")
+            self.sockets.append(conn)
 
     def initialize_group(self):
         if self.rank == 0:
             # Master node: accept connections from workers
-            for _ in range(self.world_size - 1):
-                conn, addr = self.server_socket.accept()
-                print(f"Accepted connection from {addr}")
-                self.sockets.append(conn)
+            self.conn_thread = threading.Thread(target=self.accept_connections, daemon=True)
+            self.conn_thread.start()
         else:
             # Worker node: no additional setup needed
-            pass
+            self.conn_thread = None
 
     def close(self):
         if self.rank == 0:
@@ -370,6 +375,9 @@ def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> boo
     """
     if dp_group.rank == 0:
         # Master node: collect results from workers
+        assert dp_group.conn_thread is not None
+        # Wait for all dp engine connectioned.
+        dp_group.conn_thread.join()
         results = [has_unfinished]
         for conn in dp_group.sockets:
             data = conn.recv(1024)
