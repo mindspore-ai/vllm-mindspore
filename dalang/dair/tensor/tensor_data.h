@@ -41,12 +41,12 @@ enum Type {
 
 enum TensorType { HOST_TENSOR, DEVICE_TENSOR };
 
-// shape vaule type of tensor
+// Shape vaule type of tensor
 using ShapeValueType = size_t;
-using ShapeArrayPtr = ShapeValueType[DA_TENSOR_MAX_DIM];
+using ShapeArray = ShapeValueType[DA_TENSOR_MAX_DIM];
 
-// get element size according to tensor shape
-inline ssize_t ShapeSize(const ShapeArrayPtr &shape) {
+// Get element size according to tensor shape
+inline ssize_t ShapeSize(const ShapeArray &shape) {
   ssize_t size = 1;
   for (auto dim : shape) {
     if (dim < 0) {
@@ -61,14 +61,14 @@ inline ssize_t ShapeSize(const ShapeArrayPtr &shape) {
   return size;
 }
 
-// get dims according to shape array
-inline size_t ShapeDims(const ShapeArrayPtr &shape) {
+// Get dims according to shape array
+inline size_t ShapeDims(const ShapeArray &shape) {
   size_t dims = 0;
   for (auto dim : shape) {
     if (dim == 0) {
       return dims;
     }
-    dims++;
+    ++dims;
   }
   return dims;
 }
@@ -76,14 +76,13 @@ inline size_t ShapeDims(const ShapeArrayPtr &shape) {
 struct TensorData {
   Type dtype{Type_End};
 };
-template <typename T>
-struct TensorDataImpl : public TensorData {
+
+template <typename T> struct TensorDataImpl : public TensorData {
   size_t ndim{0};
   ssize_t nbytes{0};
   ssize_t size{0};
-  bool is_from_mem_pool{false};
+  bool fromMemPool{false};
   T *data{nullptr};
 };
-
 } // namespace tensor
-#endif
+#endif // __TENSOR_TENSOR_DATA_H__

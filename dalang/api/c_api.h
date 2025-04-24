@@ -20,7 +20,7 @@
 #include "compiler/compiler.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
-#include "tensor/da_tensor.h"
+#include "tensor/tensor.h"
 #include "vm/vm.h"
 
 using Callable = vm::VM;

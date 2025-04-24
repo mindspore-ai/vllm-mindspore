@@ -18,7 +18,7 @@
 #define __RUNTIME_EXECUTOR_H__
 
 #include "common/common.h"
-#include "tensor/da_tensor.h"
+#include "tensor/tensor.h"
 
 #include <unordered_map>
 #include <vector>
@@ -47,8 +47,7 @@ public:
   void AddParameters(const std::vector<DATensor *> &params);
   // Add a const tensor.
   DATensor *AddTensor(Type type = Type_F32, size_t dim = 0,
-                      const ShapeArrayPtr &shape = {0},
-                      void *data = nullptr);
+                      const ShapeArray &shape = {0}, void *data = nullptr);
   // Add operation result tensor.
   DATensor *AddTensor(ops::Op op, const std::vector<DATensor *> &inputs);
 

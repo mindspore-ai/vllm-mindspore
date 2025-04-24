@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __TENSOR_DA_TENSOR_H__
-#define __TENSOR_DA_TENSOR_H__
+#ifndef __TENSOR_TENSOR_H__
+#define __TENSOR_TENSOR_H__
 
 #include <stdlib.h>
 
@@ -80,15 +80,15 @@ struct DATensor {
   // Data type of tensor
   Type type{Type_End};
   // tensor type of this tensor
-  TensorType tensor_type{HOST_TENSOR};
+  TensorType tensorType{HOST_TENSOR};
   // tensor shape
-  ShapeArrayPtr shape{0};
+  ShapeArray shape{0};
   // tensor data
   TensorData *data{nullptr};
   // Operation of this tensor
   ops::Op op{ops::Op_End};
   // Inputs size
-  size_t inputs_size{0};
+  size_t inputsSize{0};
   // Input tensors
   TensorArrayPtr inputs{nullptr};
 };
@@ -109,27 +109,28 @@ void AddTensor(DAGraph *graph, DATensor *tensor);
 DATensor *NewDATensor(DAContext *context);
 // Create a new DATensor.
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
-                      const ShapeArrayPtr &shape = {0}, void *data = nullptr,
+                      const ShapeArray &shape = {0}, void *data = nullptr,
                       ops::Op op = ops::Op_End,
                       const TensorArrayPtr &inputs = {nullptr});
 
 // directly use the original data address, no copy
 template <typename T>
-TensorData *NewTensorData(DAContext *ctx, Type dtype,
-                          const ShapeArrayPtr &shape, void *data) {
+TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape,
+                          void *data) {
   CHECK_IF_NULL(ctx);
   CHECK_IF_NULL(ctx->memPool);
 
-  size_t tensor_data_size = sizeof(TensorDataImpl<T>);
-  auto new_size = ctx->memUsed + tensor_data_size;
-  CHECK_IF_FAIL(new_size < ctx->memSize);
-  TensorDataImpl<T> *tensor_data = (TensorDataImpl<T> *)((char *)ctx->memPool + ctx->memUsed);
-  ctx->memUsed = new_size;
-  tensor_data->ndim = ShapeDims(shape);
-  tensor_data->size = ShapeSize(shape);
-  tensor_data->nbytes = tensor_data->size * sizeof(T);
-  tensor_data->data = static_cast<T *>(data);
-  return tensor_data;
+  size_t tensorDataSize = sizeof(TensorDataImpl<T>);
+  auto newSize = ctx->memUsed + tensorDataSize;
+  CHECK_IF_FAIL(newSize < ctx->memSize);
+  TensorDataImpl<T> *tensorData =
+      (TensorDataImpl<T> *)((char *)ctx->memPool + ctx->memUsed);
+  ctx->memUsed = newSize;
+  tensorData->ndim = ShapeDims(shape);
+  tensorData->size = ShapeSize(shape);
+  tensorData->nbytes = tensorData->size * sizeof(T);
+  tensorData->data = static_cast<T *>(data);
+  return tensorData;
 }
 
 template <typename... Args>
@@ -154,4 +155,4 @@ TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&...args) {
 }
 } // namespace tensor
 
-#endif // __TENSOR_DA_TENSOR_H__
+#endif // __TENSOR_TENSOR_H__

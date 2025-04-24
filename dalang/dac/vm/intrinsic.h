@@ -17,7 +17,7 @@
 #ifndef __VM_INTRINSIC_H__
 #define __VM_INTRINSIC_H__
 
-#include "tensor/da_tensor.h"
+#include "tensor/tensor.h"
 
 namespace intrinsic {
 

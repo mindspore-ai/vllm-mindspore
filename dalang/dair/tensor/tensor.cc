@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "tensor/da_tensor.h"
 #include "common/common.h"
+#include "tensor/tensor.h"
 
 namespace tensor {
 DAContext *NewDAContext(size_t deviceId, size_t memSize) {
@@ -99,7 +99,7 @@ DATensor *NewDATensor(DAContext *context) {
 }
 
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
-                      const ShapeArrayPtr &shape, void *data, ops::Op op,
+                      const ShapeArray &shape, void *data, ops::Op op,
                       const TensorArrayPtr &inputs) {
   CHECK_IF_NULL(context);
   CHECK_IF_NULL(context->memPool);
@@ -120,7 +120,7 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   for (size_t i = 0; i < DA_TENSOR_MAX_INPUT; ++i) {
     if (inputs[i] != nullptr) {
       tensor->inputs[i] = inputs[i];
-      ++tensor->inputs_size;
+      ++tensor->inputsSize;
     }
   }
   context->memUsed = newSize;
