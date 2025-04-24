@@ -47,7 +47,7 @@ public:
   void AddParameters(const std::vector<DATensor *> &params);
   // Add a const tensor.
   DATensor *AddTensor(Type type = Type_F32, size_t dim = 0,
-                      size_t shape[DA_TENSOR_MAX_DIM] = nullptr,
+                      const ShapeArrayPtr &shape = {0},
                       void *data = nullptr);
   // Add operation result tensor.
   DATensor *AddTensor(ops::Op op, const std::vector<DATensor *> &inputs);

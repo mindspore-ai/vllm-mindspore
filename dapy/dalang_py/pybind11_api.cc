@@ -49,9 +49,9 @@ std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
       arguments.emplace_back(std::move(argument));
     } else {
       Argument argument = Argument({.type = vm::SlotTensor});
-      auto tensor = callable_->graphExecutor().AddTensor();
-      // TODO: Adapter MS tensor and DA tensor later.
-      tensor->data = (void *)arg.ptr();
+      // get tensor data from ms tensor
+      void *data = (void *)arg.ptr();
+      auto tensor = callable_->graphExecutor().AddTensor(tensor::Type_F32, 0, {0}, data);
       argument.value.tensor_ = (void *)tensor;
       arguments.emplace_back(std::move(argument));
     }

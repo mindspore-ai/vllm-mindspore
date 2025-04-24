@@ -91,18 +91,16 @@ DATensor *NewDATensor(DAContext *context) {
   CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
-  context->memUsed = newSize;
-  tensor->dim = 0;
-  tensor->shape[0] = 0;
   tensor->type = Type_F32;
+  context->memUsed = newSize;
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;
   return tensor;
 }
 
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
-                      size_t shape[DA_TENSOR_MAX_DIM], void *data, ops::Op op,
-                      DATensor *input[DA_TENSOR_MAX_INPUT]) {
+                      const ShapeArrayPtr &shape, void *data, ops::Op op,
+                      const TensorArrayPtr &inputs) {
   CHECK_IF_NULL(context);
   CHECK_IF_NULL(context->memPool);
 
@@ -111,24 +109,22 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
+  tensor->type = type;
+  tensor->op = op;
+  tensor->data = MakeTensorData(context, type, shape, data);
+
+  for (size_t i = 0; i < DA_TENSOR_MAX_DIM; ++i) {
+    tensor->shape[i] = shape[i];
+  }
+
+  for (size_t i = 0; i < DA_TENSOR_MAX_INPUT; ++i) {
+    if (inputs[i] != nullptr) {
+      tensor->inputs[i] = inputs[i];
+      ++tensor->inputs_size;
+    }
+  }
   context->memUsed = newSize;
-  *tensor = (DATensor){type, data, dim, {0}, op, 0, {0}};
-  if (shape != nullptr) {
-    for (size_t i = 0; i < DA_TENSOR_MAX_DIM; ++i) {
-      tensor->shape[i] = shape[i];
-      if (shape[i] == 0) {
-        break;
-      }
-    }
-  }
-  if (input != nullptr) {
-    for (size_t i = 0; i < DA_TENSOR_MAX_INPUT; ++i) {
-      tensor->input[i] = input[i];
-      if (input[i] == nullptr) {
-        break;
-      }
-    }
-  }
+
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;
   return tensor;
