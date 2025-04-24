@@ -14,7 +14,6 @@ from vllm_mindspore.utils import get_valid_dtype
 from vllm.v1.kv_cache_interface import FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
-from vllm.logger import logger
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.utils import cdiv
 from vllm.logger import init_logger

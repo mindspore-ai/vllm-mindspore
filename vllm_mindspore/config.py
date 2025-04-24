@@ -30,7 +30,7 @@ from transformers import PretrainedConfig
 
 import vllm.envs as envs
 
-from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, logger, _STR_DTYPE_TO_TORCH_DTYPE
+from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, _STR_DTYPE_TO_TORCH_DTYPE
 from vllm.utils import random_uuid
 from vllm.logger import init_logger
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
@@ -313,7 +313,7 @@ class SocketProcessGroup:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.bind((self.master_ip, self.master_port))
             self.server_socket.listen(self.world_size - 1)
-            print(f"Master node listening on {self.master_ip}:{self.master_port}")
+            logger.info(f"Master node listening on {self.master_ip}:{self.master_port}")
         else:
             # Worker node: connect to the master
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -321,11 +321,11 @@ class SocketProcessGroup:
             while retries < self.max_retries:
                 try:
                     self.client_socket.connect((self.master_ip, self.master_port))
-                    print(f"Worker {self.rank} connected to master at {self.master_ip}:{self.master_port}")
+                    logger.info(f"Worker {self.rank} connected to master at {self.master_ip}:{self.master_port}")
                     break
                 except ConnectionRefusedError:
                     retries += 1
-                    print(f"Worker {self.rank} failed to connect to master. Retrying in {self.retry_interval} seconds... ({retries}/{self.max_retries})")
+                    logger.warning(f"Worker {self.rank} failed to connect to master. Retrying in {self.retry_interval} seconds... ({retries}/{self.max_retries})")
                     time.sleep(self.retry_interval)
             else:
                 raise ConnectionError(f"Worker {self.rank} could not connect to master at {self.master_ip}:{self.master_port} after {self.max_retries} retries.")
@@ -408,4 +408,4 @@ def stateless_destroy_socket_process_group(dp_group: "SocketProcessGroup") -> No
     """
     if dp_group:
         dp_group.close()
-        print(f"Socket process group for rank {dp_group.rank} destroyed.")
+        logger.info(f"Socket process group for rank {dp_group.rank} destroyed.")
