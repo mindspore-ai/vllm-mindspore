@@ -40,6 +40,7 @@ def load_module_from_path(module_name, path):
 
 
 ROOT_DIR = os.path.dirname(__file__)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -107,10 +108,10 @@ class CustomBuildExt(build_ext):
 
     def build_ascendc_kernels(self):
         kernel_so_name = "libascendc_kernels_npu.so"
-        print(f"Building {kernel_so_name}...")
+        logger.info(f"Building {kernel_so_name}...")
         tmp_build_dir = os.path.join(self.ASCENDC_OPS_DIR, "build")
         if os.path.exists(tmp_build_dir):
-            print(f"Removing existing build directory: {tmp_build_dir}")
+            logger.info(f"Removing existing build directory: {tmp_build_dir}")
             shutil.rmtree(tmp_build_dir)
         os.makedirs(tmp_build_dir, exist_ok=True)
 
@@ -132,12 +133,12 @@ class CustomBuildExt(build_ext):
 
         try:
             # Run the combined cmake command
-            print("Running combined CMake commands:")
+            logger.info("Running combined CMake commands:")
             result = subprocess.run(cmake_cmd, cwd=self.ROOT_DIR, text=True, shell=True, capture_output=True)
             if result.returncode != 0:
-                print("CMake commands failed:")
-                print(result.stdout)  # Print standard output
-                print(result.stderr)  # Print error output
+                logger.info("CMake commands failed:")
+                logger.info(result.stdout)  # Print standard output
+                logger.info(result.stderr)  # Print error output
                 raise RuntimeError(f"Combined CMake commands failed with exit code {result.returncode}")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to build {kernel_so_name}: {e}")
@@ -150,16 +151,16 @@ class CustomBuildExt(build_ext):
         if os.path.exists(dst_so_path):
             os.remove(dst_so_path)
         shutil.move(src_so_path, dst_so_path)
-        print(f"Moved {kernel_so_name} to {lib_dir}.")
+        logger.info(f"Moved {kernel_so_name} to {lib_dir}.")
         # Remove the build directory after building kernels.so
         shutil.rmtree(tmp_build_dir)
 
     def build_npu_ops(self, ext):
-        print("Building npu_ops.so ...")
+        logger.info("Building npu_ops.so ...")
         try:
             import mindspore as ms
         except ImportError:
-            print("Mindspore is not found, skip building npu_ops.so")
+            logger.warning("Mindspore is not found, skip building npu_ops.so")
             return
         try:
             src = [os.path.join(self.ASCENDC_OPS_DIR, s) for s in ext.sources]
@@ -181,7 +182,7 @@ class CustomBuildExt(build_ext):
         if os.path.exists(dst_so_path):
             os.remove(dst_so_path)
         shutil.move(src_so_path, build_lib_dir)
-        print(f"Moved npu_ops.so to {build_lib_dir}.")
+        logger.info(f"Moved npu_ops.so to {build_lib_dir}.")
         shutil.rmtree(kernel_meta_dir)
 
 package_data = {
