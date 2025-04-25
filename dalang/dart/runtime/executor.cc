@@ -19,6 +19,8 @@
 #include <sstream>
 
 namespace runtime {
+using namespace tensor;
+
 // Start building graph.
 void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
