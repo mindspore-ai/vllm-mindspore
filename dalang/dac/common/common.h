@@ -30,11 +30,13 @@
 
 #define TO_STR(s) #s
 
+#ifndef CHECK_IF_NULL
 #define CHECK_IF_NULL(a)                                                       \
   if (a == nullptr) {                                                          \
     LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null.";                \
     exit(EXIT_FAILURE);                                                        \
   }
+#endif
 
 #define CHECK_IF_FAIL(a)                                                       \
   if (!(a)) {                                                                  \
