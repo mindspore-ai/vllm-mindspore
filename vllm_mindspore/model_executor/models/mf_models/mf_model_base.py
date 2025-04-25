@@ -266,10 +266,10 @@ class MfModelBase(MsModelBase):
             else:
                 hidden_states = hidden_states.index_select(0, selected_token_indices)
                 logits = self.lm_head(hidden_states)
-                logits = logits.reshape(-1, logits.shape[-1])
+                logits = logits.view(-1, logits.shape[-1])
         else:
             logits = self.lm_head(hidden_states)
-            logits = logits.reshape(-1, logits.shape[-1])
+            logits = logits.view(-1, logits.shape[-1])
         return logits
 
     def sample(

@@ -1,6 +1,31 @@
 from typing import Optional
 import torch
-from vllm.v1.sample.ops.topk_topp_sampler import apply_top_k_only
+from mindspore import mint
+
+
+def apply_top_k_top_p_ms(logits, k, p):
+    """
+    Apply top-k and top-p masks to the logits for high performance.
+    which is reference from 'apply_top_k_top_p_tpu' in vllm.
+    """
+    if k is not None:
+        # use `apply_top_k_only` defined in this file.
+        logits = apply_top_k_only(logits, k)
+
+    if p is not None:
+        probs = logits.softmax(dim=-1)
+        probs_sort, _ = mint.sort(probs, dim=-1, descending=False)
+        cumprob = mint.cumsum(probs_sort, dim=-1)
+        top_p_mask = cumprob <= 1 - p.unsqueeze(dim=1)
+        top_p_mask[:, -1] = False  # at least one
+
+        top_p_count = top_p_mask.sum(dim=-1).unsqueeze(1)
+        top_p_cutoff = probs_sort.gather(-1, top_p_count)
+        elements_to_discard = probs < top_p_cutoff
+        logits.masked_fill_(elements_to_discard, -float("inf"))
+
+    return logits
+
 
 def random_sample(
     probs: torch.Tensor,
@@ -27,6 +52,18 @@ def random_sample(
     # a error when running.
     probs = probs.div(q)
     return probs.argmax(dim=-1).view(-1)
+
+
+def topk_topp_sampler_forward_native(
+    self,
+    logits: torch.Tensor,
+    generators: dict[int, torch.Generator],
+    k: Optional[torch.Tensor],
+    p: Optional[torch.Tensor],
+) -> torch.Tensor:
+    logits = apply_top_k_top_p_ms(logits, k, p)
+    probs = logits.softmax(dim=-1, dtype=torch.float32)
+    return random_sample(probs, generators)
 
 
 def apply_top_k_top_p(
@@ -87,10 +124,13 @@ def apply_top_k_only(
     # Set non-top-k rows to 1 so that we can gather.
     k = k.masked_fill(no_top_k_mask, 1)
     max_top_k = k.max()
-    int_max_top_k = max_top_k.item()
     # topk.values tensor has shape [batch_size, max_top_k].
     # Convert top k to 0-based index in range [0, max_top_k).
     k_index = k.sub_(1).unsqueeze(1).expand(logits.shape[0], 1)
+
+    # tensor.item() will cause GPU-CPU Sync, so place as later as possible.
+    # can be deleted after logits.topk() support tensor-type input.
+    int_max_top_k = max_top_k.item()
 
     top_k_mask = logits.topk(int_max_top_k, dim=1)[0].gather(1, k_index.long())
     # Handle non-topk rows.
