@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common/common.h"
 #include "tensor/tensor.h"
+#include "common/common.h"
 
 namespace tensor {
 DAContext *NewDAContext(size_t deviceId, size_t memSize) {
@@ -100,7 +100,7 @@ DATensor *NewDATensor(DAContext *context) {
 
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
                       const ShapeArray &shape, void *data, ops::Op op,
-                      const TensorArrayPtr &inputs) {
+                      size_t inputSize, const TensorArrayPtr &input) {
   CHECK_IF_NULL(context);
   CHECK_IF_NULL(context->memPool);
 
@@ -109,21 +109,22 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
+  context->memUsed = newSize;
   tensor->type = type;
   tensor->op = op;
   tensor->data = MakeTensorData(context, type, shape, data);
 
-  for (size_t i = 0; i < DA_TENSOR_MAX_DIM; ++i) {
+  CHECK_IF_FAIL(dim <= DA_TENSOR_MAX_DIM);
+  tensor->dim = dim;
+  for (size_t i = 0; i < dim; ++i) {
     tensor->shape[i] = shape[i];
   }
 
-  for (size_t i = 0; i < DA_TENSOR_MAX_INPUT; ++i) {
-    if (inputs[i] != nullptr) {
-      tensor->inputs[i] = inputs[i];
-      ++tensor->inputsSize;
-    }
+  CHECK_IF_FAIL(inputSize <= DA_TENSOR_MAX_INPUT);
+  tensor->inputSize = inputSize;
+  for (size_t i = 0; i < inputSize; ++i) {
+    tensor->input[i] = input[i];
   }
-  context->memUsed = newSize;
 
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;

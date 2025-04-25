@@ -18,6 +18,7 @@
 #define __RUNTIME_EXECUTOR_H__
 
 #include "common/common.h"
+#include "common/visible.h"
 #include "tensor/tensor.h"
 
 #include <unordered_map>
@@ -26,14 +27,10 @@
 #define DUMP
 
 namespace runtime {
-class GraphExecutor {
+class DA_API GraphExecutor {
 public:
-  GraphExecutor() : context_{tensor::NewDAContext()} { CHECK_IF_NULL(context_); }
-  ~GraphExecutor() {
-    CHECK_IF_NULL(context_);
-    FreeDAContext(context_);
-    context_ = nullptr;
-  }
+  GraphExecutor();
+  ~GraphExecutor();
 
   // Start building graph.
   void BeginGraph(const std::string &name);
@@ -43,11 +40,15 @@ public:
   void AddParameter(tensor::DATensor *param);
   // Add parameters for graph.
   void AddParameters(const std::vector<tensor::DATensor *> &params);
+
   // Add a const tensor.
-  tensor::DATensor *AddTensor(tensor::Type type = tensor::Type_F32, size_t dim = 0,
-                      const tensor::ShapeArray &shape = {0}, void *data = nullptr);
+  tensor::DATensor *AddTensor(tensor::Type type = tensor::Type_F32,
+                              size_t dim = 0,
+                              const tensor::ShapeArray &shape = {0},
+                              void *data = nullptr);
   // Add operation result tensor.
-  tensor::DATensor *AddTensor(ops::Op op, const std::vector<tensor::DATensor *> &inputs);
+  tensor::DATensor *AddTensor(ops::Op op,
+                              const std::vector<tensor::DATensor *> &inputs);
 
   // Run the built graph.
   void RunGraph();

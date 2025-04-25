@@ -8,10 +8,11 @@ set -e
 usage()
 {
   echo "Usage:"
-  echo "bash build.sh [-D] [-d lexer,parser,compiler,vm,ir,rt,dapy] [-i] [-h]\\"
+  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,ir,rt,dapy]] [-i] [-h]"
   echo ""
   echo "Options:"
-  echo "    -d Enable log print of module(eg. -d parser,compiler)"
+  echo "    -d Enable log print of modules, separated by comma(eg. -d parser,compiler),"
+  echo "       default off"
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
@@ -39,7 +40,10 @@ process_options()
                 usage
                 exit 0
                 ;;
-            ?) exit 1;;
+            ?)
+                usage
+                exit 1
+                ;;
         esac
     done
 }

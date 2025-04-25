@@ -17,6 +17,7 @@
 #ifndef __API_C_API_H__
 #define __API_C_API_H__
 
+#include "common/visible.h"
 #include "compiler/compiler.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
@@ -36,13 +37,13 @@ extern "C" {
 /// \param[in] graph If force use graph mode.
 /// \param[in] dump If dump the compiler information.
 /// \return A callable object, which should be freed by user outside.
-Callable *DA_API_Compile(const char *source, bool graph, bool dump);
+DA_API Callable *DA_API_Compile(const char *source, bool graph, bool dump);
 
 /// \brief Run the callable object returned from 'DA_API_Compile()'.
 /// \param[in] callable The callable object.
 /// \param[in] args The arguments.
 /// \return The result of running callable.
-Result DA_API_Run(Callable *callable, const std::vector<Argument> &args);
+DA_API Result DA_API_Run(Callable *callable, const std::vector<Argument> &args);
 #ifdef __cplusplus
 }
 #endif

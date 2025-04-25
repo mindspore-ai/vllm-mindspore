@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 
+#include "common/visible.h"
 #include "ops/ops_name.h"
 #include "tensor/tensor_data.h"
 
@@ -77,20 +78,26 @@ struct DAGraph {
 };
 
 struct DATensor {
+  // Device type of tensor
+  TensorType tensorType{HOST_TENSOR};
+
   // Data type of tensor
   Type type{Type_End};
-  // tensor type of this tensor
-  TensorType tensorType{HOST_TENSOR};
-  // tensor shape
-  ShapeArray shape{0};
-  // tensor data
-  TensorData *data{nullptr};
+
+  // Tensor data
+  void *data{nullptr};
+
+  // Number of dimensions
+  size_t dim{0};
+  // Shape of dimensions
+  size_t shape[DA_TENSOR_MAX_DIM] = {0};
+
   // Operation of this tensor
   ops::Op op{ops::Op_End};
   // Inputs size
-  size_t inputsSize{0};
+  size_t inputSize{0};
   // Input tensors
-  TensorArrayPtr inputs{nullptr};
+  TensorArrayPtr input{nullptr};
 };
 
 // Create a new DAContext.
@@ -110,8 +117,8 @@ DATensor *NewDATensor(DAContext *context);
 // Create a new DATensor.
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
                       const ShapeArray &shape = {0}, void *data = nullptr,
-                      ops::Op op = ops::Op_End,
-                      const TensorArrayPtr &inputs = {nullptr});
+                      ops::Op op = ops::Op_End, size_t inputSize = 0,
+                      const TensorArrayPtr &input = {nullptr});
 
 // directly use the original data address, no copy
 template <typename T>

@@ -18,12 +18,14 @@ message("-- CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
 if("${DEBUG_LOG_OUT_dapy}" STREQUAL "on")
 add_definitions(-DDEBUG_LOG_OUT)
 endif()
 
 # Include DALang headers
+include_directories(${PROJECT_SOURCE_DIR}/../dalang)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dac)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dair)
 include_directories(${PROJECT_SOURCE_DIR}/../dalang/dart)

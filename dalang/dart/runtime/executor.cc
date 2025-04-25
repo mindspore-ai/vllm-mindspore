@@ -21,6 +21,16 @@
 namespace runtime {
 using namespace tensor;
 
+GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
+  CHECK_IF_NULL(context_);
+}
+
+GraphExecutor::~GraphExecutor() {
+  CHECK_IF_NULL(context_);
+  FreeDAContext(context_);
+  context_ = nullptr;
+}
+
 // Start building graph.
 void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
@@ -74,8 +84,8 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
   CHECK_IF_NULL(tensor);
   tensor->op = op;
   for (size_t i = 0; i < inputs.size(); ++i) {
-    tensor->inputs[i] = inputs[i];
-    ++tensor->inputsSize;
+    tensor->input[i] = inputs[i];
+    ++tensor->inputSize;
   }
   CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
@@ -133,10 +143,10 @@ void GraphExecutor::DumpGraph() {
   DATensor *tensorNode{nullptr};
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     tensorNode = graph_->node[i];
-    size_t inputSize = tensorNode->inputsSize;
+    size_t inputSize = tensorNode->inputSize;
     std::stringstream ss;
     for (size_t i = 0; i < inputSize; ++i) {
-      auto input = tensorNode->inputs[i];
+      auto input = tensorNode->input[i];
       // Find node number firstly.
       auto nodeIt = nodeNumMap_.find(input);
       if (nodeIt != nodeNumMap_.cend()) {
