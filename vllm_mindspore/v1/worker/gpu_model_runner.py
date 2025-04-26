@@ -95,7 +95,7 @@ def _prepare_inputs(
                      req_indices * self.input_batch.token_ids_cpu.shape[1])
 
     self.input_ids[:total_num_scheduled_tokens] = torch.from_numpy(
-        np.take(self.input_batch.token_ids_cpu.flatten(),
+        np.take(self.input_batch.token_ids_cpu.ravel(),
                 token_indices,
                 0)
     )
@@ -110,7 +110,7 @@ def _prepare_inputs(
                            positions_np // self.block_size)
 
 
-    block_numbers = self.input_batch.block_table.block_table_np.flatten()[block_table_indices]
+    block_numbers = self.input_batch.block_table.block_table_np.ravel()[block_table_indices]
     block_offsets = positions_np % self.block_size
     np.add(block_numbers * self.block_size,
             block_offsets,
