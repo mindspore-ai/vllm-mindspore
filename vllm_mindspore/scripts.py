@@ -54,7 +54,7 @@ def env_setup(target_env_dict=None):
 def main():
     env_setup()
 
-    from vllm.scripts import main as vllm_main
+    from vllm.entrypoints.cli.main import main as vllm_main
 
     vllm_main()
 

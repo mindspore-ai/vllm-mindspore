@@ -21,14 +21,16 @@ from typing import Iterable, Set, Tuple
 from collections import OrderedDict
 
 import numpy as np
+import vllm.envs as envs
+import mindspore as ms
 
 from vllm.config import VllmConfig
 from vllm.config import get_current_vllm_config
+from vllm.distributed.parallel_state import get_dp_group, get_tensor_model_parallel_world_size
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-import vllm.envs as envs
 
-from mindspore import Tensor, JitConfig, Model, mutable
+from mindspore import Tensor, Model, mutable
 from mindspore.common import dtype as msdtype
 from mindspore.nn.utils import no_init_parameters
 
@@ -54,6 +56,47 @@ from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerT
 
 logger = init_logger(__name__)
 
+
+def _get_padding_index(q_seq_len):
+    dp_size = get_dp_group().world_size
+    tp_size = get_tensor_model_parallel_world_size()
+    if dp_size == 1 or tp_size == 1:
+        return None, None, None, None
+
+    tokens_len_per_dp = q_seq_len.sum().reshape(-1)
+    tokens_len_per_dp = get_dp_group().all_gather(tokens_len_per_dp)
+    tokens_len_per_dp = tokens_len_per_dp.asnumpy()
+    padding_size = (tokens_len_per_dp.max() + tp_size - 1) // tp_size * tp_size
+
+    dp_rank_id = get_dp_group().rank_in_group
+    attn_padding_idx = None
+    attn_unpadding_idx = None
+    ffn_padding_idx = None
+    ffn_unpadding_idx = None
+    last_arange_index = 0
+
+    for dp_rank, tokens_length in enumerate(tokens_len_per_dp):
+        arange_data = np.arange(0, int(tokens_length), dtype=np.int32)
+        if dp_rank == dp_rank_id:
+            ffn_unpadding_idx = arange_data
+            attn_padding_idx = np.pad(
+                arange_data, (0, padding_size - arange_data.shape[0]), mode='constant', constant_values=0)
+
+        if dp_rank == 0:
+            attn_unpadding_idx = arange_data
+            last_arange_index = arange_data[-1]
+            ffn_padding_idx= np.pad(attn_unpadding_idx, (0, padding_size - attn_unpadding_idx.shape[0]),
+                                    mode='constant', constant_values=0)
+        else:
+            attn_offset_idx = arange_data + padding_size * dp_rank
+            attn_unpadding_idx = np.concatenate((attn_unpadding_idx, attn_offset_idx), axis=0)
+            ffn_offset_idx = arange_data + last_arange_index + 1
+            last_arange_index = ffn_offset_idx[-1]
+            ffn_offset_idx_pad_zero =  np.pad(
+                ffn_offset_idx, (0, padding_size - ffn_offset_idx.shape[0]), mode='constant', constant_values=0)
+            ffn_padding_idx = np.concatenate((ffn_padding_idx, ffn_offset_idx_pad_zero), axis=0)
+    return ms.from_numpy(attn_padding_idx), ms.from_numpy(attn_unpadding_idx), ms.from_numpy(ffn_padding_idx), \
+        ms.from_numpy(ffn_unpadding_idx)
 
 class DeepseekV3ForCausalLM(MfModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
@@ -124,8 +167,26 @@ class DeepseekV3ForCausalLM(MfModelBase):
         else:
             weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, self.is_quant)
             weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
+
         self.network.set_dynamic_inputs()
+
+        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        self.network.lm_head.set_inputs(dynamic_hidden_states)
+
         return None
+
+    def prepare_inputs(self, input_ids, positions, attn_metadata):
+        model_inputs, is_prefill = super().prepare_inputs(
+            input_ids, positions, attn_metadata)
+
+        attn_padding_idx, attn_unpadding_idx, ffn_padding_idx, ffn_unpadding_idx = _get_padding_index(
+            model_inputs["q_seq_lens"])
+        model_inputs["attn_padding_idx"] = attn_padding_idx
+        model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
+        model_inputs["ffn_padding_idx"] = ffn_padding_idx
+        model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
+
+        return model_inputs, is_prefill
 
     def get_model_path(self):
         model_name_or_path = self.model_config.model

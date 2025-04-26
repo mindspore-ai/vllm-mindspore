@@ -1,0 +1,1416 @@
+diff --git a/vllm/config.py b/vllm/config.py
+index bd52fc90b..24fc1154d 100644
+--- a/vllm/config.py
++++ b/vllm/config.py
+@@ -1429,16 +1429,27 @@ class LoadConfig:
+ class ParallelConfig:
+     """Configuration for the distributed execution."""
+ 
+-    pipeline_parallel_size: int = 1  # Number of pipeline parallel groups.
+-    tensor_parallel_size: int = 1  # Number of tensor parallel groups.
+-    data_parallel_size: int = 1  # Number of data parallel groups.
+-    data_parallel_rank: int = 0  # Rank of the data parallel group.
+-    # Local rank of the data parallel group, defaults to global rank.
++    pipeline_parallel_size: int = 1
++    """Number of pipeline parallel groups."""
++    tensor_parallel_size: int = 1
++    """Number of tensor parallel groups."""
++    data_parallel_size: int = 1
++    """Number of data parallel groups. MoE layers will be sharded according to
++    the product of the tensor parallel size and data parallel size."""
++    data_parallel_size_local: int = 1
++    """Number of local data parallel groups."""
++    data_parallel_rank: int = 0
++    """Rank of the data parallel group."""
+     data_parallel_rank_local: Optional[int] = None
+     # IP of the data parallel master.
+     data_parallel_master_ip: str = "127.0.0.1"
+-    data_parallel_master_port: int = 29500  # Port of the data parallel master.
+-    enable_expert_parallel: bool = False  # Use EP instead of TP for MoE layers.
++    """IP of the data parallel master."""
++    data_parallel_rpc_port: int = 29550
++    """Port for data parallel messaging."""
++    data_parallel_master_port: int = 29500
++    """Port of the data parallel master."""
++    enable_expert_parallel: bool = False
++    """Use expert parallelism instead of tensor parallelism for MoE layers."""
+ 
+     # Maximum number of multiple batches
+     # when load model sequentially. To avoid RAM OOM when using tensor
+@@ -1475,12 +1486,16 @@ class ParallelConfig:
+ 
+     # world_size is TPxPP, it affects the number of workers we create.
+     world_size: int = field(init=False)
+-    # world_size_across_dp is TPxPPxDP, it is the size of the world
+-    # including data parallelism.
+-    world_size_across_dp: int = field(init=False)
++    """world_size is TPxPP, it affects the number of workers we create."""
+ 
+     rank: int = 0
+ 
++    @property
++    def world_size_across_dp(self) -> int:
++        """world_size_across_dp is TPxPPxDP, it is the size of the world
++        including data parallelism."""
++        return self.world_size * self.data_parallel_size
++
+     def get_next_dp_init_port(self) -> int:
+         """
+         We might need to initialize process groups in multiple
+@@ -1533,16 +1548,20 @@ class ParallelConfig:
+         factors: list[Any] = []
+         factors.append(self.pipeline_parallel_size)
+         factors.append(self.tensor_parallel_size)
++        factors.append(self.data_parallel_size)
+         return hashlib.sha256(str(factors).encode()).hexdigest()
+ 
+     def __post_init__(self) -> None:
+         self.world_size = self.pipeline_parallel_size * \
+             self.tensor_parallel_size
+ 
+-        if self.data_parallel_size > 1:
++        if self.data_parallel_size_local > self.data_parallel_size:
++            raise ValueError(
++                "data_parallel_size_local must be <= data_parallel_size")
++
++        if self.data_parallel_size > 1 or self.data_parallel_size_local == 0:
+             # Data parallel was specified in the engine args.
+             self.data_parallel_master_port = get_open_port()
+-            # TODO multi-node
+         else:
+             # Otherwise fall back to env vars (e.g. for offline SPMD case).
+             self.data_parallel_size = envs.VLLM_DP_SIZE
+@@ -1551,8 +1570,6 @@ class ParallelConfig:
+             self.data_parallel_master_ip = envs.VLLM_DP_MASTER_IP
+             self.data_parallel_master_port = envs.VLLM_DP_MASTER_PORT
+ 
+-        self.world_size_across_dp = self.world_size * self.data_parallel_size
+-
+         if self.distributed_executor_backend == "external_launcher":
+             import os
+             os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+diff --git a/vllm/distributed/utils.py b/vllm/distributed/utils.py
+index cae1a2551..2bdcdf4f1 100644
+--- a/vllm/distributed/utils.py
++++ b/vllm/distributed/utils.py
+@@ -21,6 +21,7 @@ from torch.distributed.rendezvous import rendezvous
+ 
+ import vllm.envs as envs
+ from vllm.logger import init_logger
++from vllm.utils import get_tcp_uri
+ 
+ logger = init_logger(__name__)
+ 
+@@ -282,7 +283,7 @@ def stateless_init_torch_distributed_process_group(
+     always formed with process 1, 2, ..., 8, and the additional communication
+     channel is formed with process 9 and 10.
+     """
+-    init_method = f"tcp://{host}:{port}"
++    init_method = get_tcp_uri(host, port)
+     backend = Backend(backend)  # it is basically string
+     timeout = _get_default_timeout(backend)
+ 
+@@ -301,6 +302,9 @@ def stateless_init_torch_distributed_process_group(
+         prefix_store,
+         group_rank,
+         group_size,
++        ProcessGroup.Options(
++            backend=backend
++        )
+     )
+ 
+     if backend == "gloo":
+@@ -325,7 +329,7 @@ def stateless_init_torch_distributed_process_group(
+     else:
+         raise RuntimeError(f"Unsupported torch distributed backend: {backend}")
+ 
+-    pg._set_default_backend(backend_type)
++    #pg._set_default_backend(backend_type)
+     backend_class._set_sequence_number_for_group()
+ 
+     pg._register_backend(device, backend_type, backend_class)
+diff --git a/vllm/engine/arg_utils.py b/vllm/engine/arg_utils.py
+index 89c9b6747..d6173763d 100644
+--- a/vllm/engine/arg_utils.py
++++ b/vllm/engine/arg_utils.py
+@@ -113,11 +113,14 @@ class EngineArgs:
+     distributed_executor_backend: Optional[Union[str,
+                                                  Type[ExecutorBase]]] = None
+     # number of P/D disaggregation (or other disaggregation) workers
+-    pipeline_parallel_size: int = 1
+-    tensor_parallel_size: int = 1
+-    data_parallel_size: int = 1
+-    enable_expert_parallel: bool = False
+-    max_parallel_loading_workers: Optional[int] = None
++    pipeline_parallel_size: int = ParallelConfig.pipeline_parallel_size
++    tensor_parallel_size: int = ParallelConfig.tensor_parallel_size
++    data_parallel_size: int = ParallelConfig.data_parallel_size
++    data_parallel_size_local: Optional[int] = None
++    data_parallel_address: Optional[str] = None
++    data_parallel_rpc_port: Optional[int] = None
++    enable_expert_parallel: bool = ParallelConfig.enable_expert_parallel
++    max_parallel_loading_workers: Optional[int] = ParallelConfig.max_parallel_loading_workers
+     block_size: Optional[int] = None
+     enable_prefix_caching: Optional[bool] = None
+     prefix_caching_hash_algo: str = "builtin"
+@@ -434,6 +437,21 @@ class EngineArgs:
+                             'MoE layers will be sharded according to the '
+                             'product of the tensor-parallel-size and '
+                             'data-parallel-size.')
++        parser.add_argument('--data-parallel-size-local',
++                            '-dpl',
++                            type=int,
++                            help='Number of data parallel replicas '
++                            'to run on this node.')
++        parser.add_argument('--data-parallel-address',
++                            '-dpa',
++                            type=str,
++                            help='Address of data parallel cluster '
++                            'head-node.')
++        parser.add_argument('--data-parallel-rpc-port',
++                            '-dpp',
++                            type=int,
++                            help='Port for data parallel RPC '
++                            'communication.')
+         parser.add_argument(
+             '--enable-expert-parallel',
+             action='store_true',
+@@ -1186,10 +1204,30 @@ class EngineArgs:
+             # but we should not do this here.
+             placement_group = ray.util.get_current_placement_group()
+ 
++        # Local DP size defaults to global DP size if not set.
++        data_parallel_size_local = self.data_parallel_size if (
++            self.data_parallel_size_local
++            is None) else self.data_parallel_size_local
++
++        # DP address, used in multi-node case for torch distributed group
++        # and ZMQ sockets.
++        data_parallel_address = self.data_parallel_address if (
++            self.data_parallel_address
++            is not None) else ParallelConfig.data_parallel_master_ip
++
++        # This port is only used when there are remote data parallel engines,
++        # otherwise the local IPC transport is used.
++        data_parallel_rpc_port = self.data_parallel_rpc_port if (
++            self.data_parallel_rpc_port
++            is not None) else ParallelConfig.data_parallel_rpc_port
++
+         parallel_config = ParallelConfig(
+             pipeline_parallel_size=self.pipeline_parallel_size,
+             tensor_parallel_size=self.tensor_parallel_size,
+             data_parallel_size=self.data_parallel_size,
++            data_parallel_size_local=data_parallel_size_local,
++            data_parallel_master_ip=data_parallel_address,
++            data_parallel_rpc_port=data_parallel_rpc_port,
+             enable_expert_parallel=self.enable_expert_parallel,
+             max_parallel_loading_workers=self.max_parallel_loading_workers,
+             disable_custom_all_reduce=self.disable_custom_all_reduce,
+diff --git a/vllm/entrypoints/cli/serve.py b/vllm/entrypoints/cli/serve.py
+index e89ac4e21..ffcc2bb10 100644
+--- a/vllm/entrypoints/cli/serve.py
++++ b/vllm/entrypoints/cli/serve.py
+@@ -1,14 +1,24 @@
+ # SPDX-License-Identifier: Apache-2.0
+ 
+ import argparse
++import signal
+ 
+ import uvloop
+ 
++import vllm.envs as envs
++from vllm import AsyncEngineArgs
+ from vllm.entrypoints.cli.types import CLISubcommand
+ from vllm.entrypoints.openai.api_server import run_server
+ from vllm.entrypoints.openai.cli_args import (make_arg_parser,
+                                               validate_parsed_serve_args)
+-from vllm.utils import FlexibleArgumentParser
++from vllm.logger import init_logger
++from vllm.usage.usage_lib import UsageContext
++from vllm.utils import FlexibleArgumentParser, get_tcp_uri
++from vllm.v1.engine.core import EngineCoreProc
++from vllm.v1.engine.core_client import CoreEngineProcManager
++from vllm.v1.executor.abstract import Executor
++
++logger = init_logger(__name__)
+ 
+ 
+ class ServeSubcommand(CLISubcommand):
+@@ -24,7 +34,10 @@ class ServeSubcommand(CLISubcommand):
+         if hasattr(args, 'model_tag') and args.model_tag is not None:
+             args.model = args.model_tag
+ 
+-        uvloop.run(run_server(args))
++        if args.headless:
++            run_headless(args)
++        else:
++            uvloop.run(run_server(args))
+ 
+     def validate(self, args: argparse.Namespace) -> None:
+         validate_parsed_serve_args(args)
+@@ -41,6 +54,18 @@ class ServeSubcommand(CLISubcommand):
+                                   nargs='?',
+                                   help="The model tag to serve "
+                                   "(optional if specified in config)")
++        serve_parser.add_argument(
++            "--headless",
++            action='store_true',
++            default=False,
++            help="Run in headless mode. See multi-node data parallel "
++            "documentation for more details.")
++        serve_parser.add_argument(
++            '--data-parallel-start-rank',
++            '-dpr',
++            type=int,
++            default=0,
++            help='Starting data parallel rank for secondary nodes.')
+         serve_parser.add_argument(
+             "--config",
+             type=str,
+@@ -56,3 +81,55 @@ class ServeSubcommand(CLISubcommand):
+ 
+ def cmd_init() -> list[CLISubcommand]:
+     return [ServeSubcommand()]
++
++
++def run_headless(args: argparse.Namespace):
++
++    # Create the EngineConfig.
++    engine_args = AsyncEngineArgs.from_cli_args(args)
++    usage_context = UsageContext.OPENAI_API_SERVER
++    vllm_config = engine_args.create_engine_config(usage_context=usage_context)
++
++    if not envs.VLLM_USE_V1:
++        raise RuntimeError("Headless mode is only supported for V1")
++
++    parallel_config = vllm_config.parallel_config
++    local_engine_count = parallel_config.data_parallel_size_local
++    host = parallel_config.data_parallel_master_ip
++    port = engine_args.data_parallel_rpc_port  # add to config too
++    input_address = get_tcp_uri(host, port)
++
++    if local_engine_count <= 0:
++        raise RuntimeError("data_parallel_size_local must be > 0 in "
++                           "headless mode")
++
++    # Catch SIGTERM and SIGINT to allow graceful shutdown.
++    def signal_handler(signum, frame):
++        logger.debug("Received %d signal.", signum)
++        raise SystemExit
++
++    signal.signal(signal.SIGTERM, signal_handler)
++    signal.signal(signal.SIGINT, signal_handler)
++
++    logger.info(
++        "Launching %d data parallel engine(s) in headless mode, "
++        "with head node address %s.", local_engine_count, input_address)
++
++    # Create the engines.
++    engine_manager = CoreEngineProcManager(
++        target_fn=EngineCoreProc.run_engine_core,
++        local_engine_count=local_engine_count,
++        start_index=args.data_parallel_start_rank,
++        local_start_index=0,
++        vllm_config=vllm_config,
++        on_head_node=False,
++        input_address=input_address,
++        executor_class=Executor.get_class(vllm_config),
++        log_stats=not engine_args.disable_log_stats,
++    )
++
++    try:
++        engine_manager.join_first()
++    finally:
++        logger.info("Shutting down.")
++        engine_manager.close()
+diff --git a/vllm/forward_context.py b/vllm/forward_context.py
+index e195a03c5..e5b9fd5fa 100644
+--- a/vllm/forward_context.py
++++ b/vllm/forward_context.py
+@@ -77,7 +77,8 @@ def set_forward_context(attn_metadata: Any,
+                     attn_metadata.num_decode_tokens
+             else:
+                 # for v1 attention backends
+-                batchsize = attn_metadata.num_input_tokens
++                # batchsize = attn_metadata.num_input_tokens
++                batchsize = len(attn_metadata.seq_lens)
+         else:
+             batchsize = num_tokens
+         num_tokens_across_dp = [0] * dp_size
+diff --git a/vllm/utils.py b/vllm/utils.py
+index 5f32f8cb6..d38d02586 100644
+--- a/vllm/utils.py
++++ b/vllm/utils.py
+@@ -551,6 +551,10 @@ def is_valid_ipv6_address(address: str) -> bool:
+ 
+ 
+ def get_distributed_init_method(ip: str, port: int) -> str:
++    return get_tcp_uri(ip, port)
++
++
++def get_tcp_uri(ip: str, port: int) -> str:
+     # Brackets are not permitted in ipv4 addresses,
+     # see https://github.com/python/cpython/issues/103848
+     return f"tcp://[{ip}]:{port}" if ":" in ip else f"tcp://{ip}:{port}"
+@@ -2189,6 +2193,8 @@ def make_zmq_socket(
+     ctx: Union[zmq.asyncio.Context, zmq.Context],  # type: ignore[name-defined]
+     path: str,
+     socket_type: Any,
++    bind: Optional[bool] = None,
++    identity: Optional[bytes] = None,
+ ) -> Union[zmq.Socket, zmq.asyncio.Socket]:  # type: ignore[name-defined]
+     """Make a ZMQ socket with the proper bind/connect semantics."""
+ 
+@@ -2207,16 +2213,24 @@ def make_zmq_socket(
+     else:
+         buf_size = -1  # Use system default buffer size
+ 
+-    if socket_type == zmq.constants.PULL:
+-        socket.setsockopt(zmq.constants.RCVHWM, 0)
+-        socket.setsockopt(zmq.constants.RCVBUF, buf_size)
++    if bind is None:
++        bind = socket_type != zmq.PUSH
++
++    if socket_type in (zmq.PULL, zmq.DEALER, zmq.ROUTER):
++        socket.setsockopt(zmq.RCVHWM, 0)
++        socket.setsockopt(zmq.RCVBUF, buf_size)
++
++    if socket_type in (zmq.PUSH, zmq.DEALER, zmq.ROUTER):
++        socket.setsockopt(zmq.SNDHWM, 0)
++        socket.setsockopt(zmq.SNDBUF, buf_size)
++
++    if identity is not None:
++        socket.setsockopt(zmq.IDENTITY, identity)
++
++    if bind:
+         socket.bind(path)
+-    elif socket_type == zmq.constants.PUSH:
+-        socket.setsockopt(zmq.constants.SNDHWM, 0)
+-        socket.setsockopt(zmq.constants.SNDBUF, buf_size)
+-        socket.connect(path)
+     else:
+-        raise ValueError(f"Unknown Socket Type: {socket_type}")
++        socket.connect(path)
+ 
+     return socket
+ 
+@@ -2225,14 +2239,19 @@ def make_zmq_socket(
+ def zmq_socket_ctx(
+     path: str,
+     socket_type: Any,
++    bind: Optional[bool] = None,
+     linger: int = 0,
++    identity: Optional[bytes] = None,
+ ) -> Iterator[zmq.Socket]:
+     """Context manager for a ZMQ socket"""
+ 
+     ctx = zmq.Context()  # type: ignore[attr-defined]
+     try:
+-        yield make_zmq_socket(ctx, path, socket_type)
+-
++        yield make_zmq_socket(ctx,
++                              path,
++                              socket_type,
++                              bind=bind,
++                              identity=identity)
+     except KeyboardInterrupt:
+         logger.debug("Got Keyboard Interrupt.")
+ 
+diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
+index 39caca0c2..32902a8b1 100644
+--- a/vllm/v1/engine/core.py
++++ b/vllm/v1/engine/core.py
+@@ -23,7 +23,7 @@ from vllm.lora.request import LoRARequest
+ from vllm.transformers_utils.config import (
+     maybe_register_config_serialize_by_value)
+ from vllm.utils import (get_exception_traceback, resolve_obj_by_qualname,
+-                        zmq_socket_ctx)
++                        make_zmq_socket, resolve_obj_by_qualname, zmq_socket_ctx)
+ from vllm.v1.core.kv_cache_utils import (get_kv_cache_config,
+                                          unify_kv_cache_configs)
+ from vllm.v1.core.sched.interface import SchedulerInterface
+@@ -43,6 +43,7 @@ from vllm.version import __version__ as VLLM_VERSION
+ logger = init_logger(__name__)
+ 
+ POLLING_TIMEOUT_S = 2.5
++HANDSHAKE_TIMEOUT_MINS = 5
+ 
+ _R = TypeVar('_R')  # Return type for collective_rpc
+ 
+@@ -306,43 +307,111 @@ class EngineCore:
+ 
+ class EngineCoreProc(EngineCore):
+     """ZMQ-wrapper for running EngineCore in background process."""
++    ENGINE_CORE_DEAD = b'ENGINE_CORE_DEAD'
+ 
+     def __init__(
+         self,
+-        input_path: str,
+-        output_path: str,
+         vllm_config: VllmConfig,
++        on_head_node: bool,
++        input_address: str,
+         executor_class: type[Executor],
+         log_stats: bool,
+         engine_index: int = 0,
+     ):
+-        super().__init__(vllm_config, executor_class, log_stats)
+-
+-        # Background Threads and Queues for IO. These enable us to
+-        # overlap ZMQ socket IO with GPU since they release the GIL,
+-        # and to overlap some serialization/deserialization with the
+-        # model forward pass.
+-        # Threads handle Socket <-> Queues and core_busy_loop uses Queue.
+-        self.input_queue: queue.Queue[tuple[EngineCoreRequestType,
+-                                            Any]] = queue.Queue()
+-        self.output_queue: queue.Queue[EngineCoreOutputs] = queue.Queue()
+-        threading.Thread(target=self.process_input_socket,
+-                         args=(input_path, ),
+-                         daemon=True).start()
+-        threading.Thread(target=self.process_output_socket,
+-                         args=(output_path, engine_index),
+-                         daemon=True).start()
+-
+-        self.global_unfinished_reqs = False
+-
+-        self.step_fn = (self.step if self.batch_queue is None else
+-                        self.step_with_batch_queue)
++        input_queue = queue.Queue[tuple[EngineCoreRequestType, Any]]()
++
++# GZQ DP patch TODO: executor_fail_callback is useful sometimes for reliabiltiy issues, should add later
++        executor_fail_callback = lambda: input_queue.put_nowait(
++            (EngineCoreRequestType.EXECUTOR_FAILED, b''))
++
++        # Create input socket.
++        input_ctx = zmq.Context()
++        identity = engine_index.to_bytes(length=2, byteorder="little")
++        input_socket = make_zmq_socket(input_ctx,
++                                       input_address,
++                                       zmq.DEALER,
++                                       identity=identity,
++                                       bind=False)
++        try:
++            # Register engine with front-end.
++            output_address = self.startup_handshake(
++                input_socket, on_head_node, vllm_config.parallel_config)
++
++            # Update config which may have changed from the handshake.
++            vllm_config.__post_init__()
++
++            # Set up data parallel environment.
++            self._init_data_parallel(vllm_config)
++
++            # Initialize engine core and model.
++            super().__init__(vllm_config, executor_class, log_stats)
++
++            self.step_fn = (self.step if self.batch_queue is None else
++                            self.step_with_batch_queue)
++
++            self.global_unfinished_reqs = False
++
++            # Send ready message.
++            input_socket.send(
++                msgspec.msgpack.encode({
++                    "status": "READY",
++                    "local": on_head_node
++                }))
++
++            # Background Threads and Queues for IO. These enable us to
++            # overlap ZMQ socket IO with GPU since they release the GIL,
++            # and to overlap some serialization/deserialization with the
++            # model forward pass.
++            # Threads handle Socket <-> Queues and core_busy_loop uses Queue.
++            self.input_queue = input_queue
++            self.output_queue = queue.Queue[Union[EngineCoreOutputs, bytes]]()
++            threading.Thread(target=self.process_input_socket,
++                             args=(input_socket, ),
++                             daemon=True).start()
++            input_socket = None
++            self.output_thread = threading.Thread(
++                target=self.process_output_socket,
++                args=(output_address, engine_index),
++                daemon=True)
++            self.output_thread.start()
++        finally:
++            if input_socket is not None:
++                input_socket.close(linger=0)
++
++    @staticmethod
++    def startup_handshake(input_socket: zmq.Socket, on_head_node: bool,
++                          parallel_config: ParallelConfig) -> str:
++
++        # Send registration message.
++        input_socket.send(
++            msgspec.msgpack.encode({
++                "status": "HELLO",
++                "local": on_head_node,
++            }))
++
++        # Receive initialization message.
++        logger.info("Waiting for init message from front-end.")
++        if not input_socket.poll(timeout=HANDSHAKE_TIMEOUT_MINS * 60 * 1000):
++            raise RuntimeError("Did not receive response from front-end "
++                               f"process within {HANDSHAKE_TIMEOUT_MINS} "
++                               f"minutes")
++        init_bytes = input_socket.recv()
++        init_message = msgspec.msgpack.decode(init_bytes)
++        logger.debug("Received init message: %s", init_message)
++
++        output_socket_address = init_message["output_socket_address"]
++        #TBD(nick) maybe replace IP with configured head node address
++
++        received_parallel_config = init_message["parallel_config"]
++        for key, value in received_parallel_config.items():
++            setattr(parallel_config, key, value)
++
++        return output_socket_address
+ 
+     @staticmethod
+     def run_engine_core(*args,
+                         dp_rank: int = 0,
+                         local_dp_rank: int = 0,
+-                        ready_pipe,
+                         **kwargs):
+         """Launch EngineCore busy loop in background process."""
+ 
+@@ -369,7 +438,7 @@ class EngineCoreProc(EngineCore):
+         try:
+             parallel_config: ParallelConfig = kwargs[
+                 "vllm_config"].parallel_config
+-            if parallel_config.data_parallel_size > 1:
++            if parallel_config.data_parallel_size > 1 or dp_rank > 0:
+                 # Set data parallel rank for this engine process.
+                 parallel_config.data_parallel_rank = dp_rank
+                 parallel_config.data_parallel_rank_local = local_dp_rank
+@@ -377,9 +446,6 @@ class EngineCoreProc(EngineCore):
+             else:
+                 engine_core = EngineCoreProc(*args, **kwargs)
+ 
+-            # Send Readiness signal to EngineClient.
+-            ready_pipe.send({"status": "READY"})
+-
+             engine_core.run_busy_loop()
+ 
+         except SystemExit:
+@@ -394,6 +460,9 @@ class EngineCoreProc(EngineCore):
+             if engine_core is not None:
+                 engine_core.shutdown()
+ 
++    def _init_data_parallel(self, vllm_config: VllmConfig):
++        pass
++
+     def run_busy_loop(self):
+         """Core busy loop of the EngineCore."""
+ 
+@@ -476,27 +545,37 @@ class EngineCoreProc(EngineCore):
+             and not isinstance(v, p.annotation) else v
+             for v, p in zip(args, arg_types))
+ 
+-    def process_input_socket(self, input_path: str):
++    def _send_engine_dead(self):
++        """Send EngineDead status to the EngineCoreClient."""
++
++        # Put ENGINE_CORE_DEAD in the queue.
++        self.output_queue.put_nowait(EngineCoreProc.ENGINE_CORE_DEAD)
++
++        # Wait until msg sent by the daemon before shutdown.
++        self.output_thread.join(timeout=5.0)
++        if self.output_thread.is_alive():
++            logger.fatal("vLLM shutdown signal from EngineCore failed "
++                         "to send. Please report this issue.")
++
++    def process_input_socket(self, input_socket: zmq.Socket):
+         """Input socket IO thread."""
+ 
+         # Msgpack serialization decoding.
+         add_request_decoder = MsgpackDecoder(EngineCoreRequest)
+         generic_decoder = MsgpackDecoder()
+ 
+-        with zmq_socket_ctx(input_path, zmq.constants.PULL) as socket:
+-            while True:
+-                # (RequestType, RequestData)
+-                type_frame, data_frame = socket.recv_multipart(copy=False)
+-                request_type = EngineCoreRequestType(bytes(type_frame.buffer))
++        while True:
++            # (RequestType, RequestData)
++            type_frame, data_frames = input_socket.recv_multipart(copy=False)
++            request_type = EngineCoreRequestType(bytes(type_frame.buffer))
+ 
+-                # Deserialize the request data.
+-                decoder = add_request_decoder if (
+-                    request_type
+-                    == EngineCoreRequestType.ADD) else generic_decoder
+-                request = decoder.decode(data_frame.buffer)
++            # Deserialize the request data.
++            decoder = add_request_decoder if (
++                request_type == EngineCoreRequestType.ADD) else generic_decoder
++            request = decoder.decode(data_frames)
+ 
+-                # Push to input queue for core busy loop.
+-                self.input_queue.put_nowait((request_type, request))
++            # Push to input queue for core busy loop.
++            self.input_queue.put_nowait((request_type, request))
+ 
+     def process_output_socket(self, output_path: str, engine_index: int):
+         """Output socket IO thread."""
+@@ -523,9 +602,9 @@ class DPEngineCoreProc(EngineCoreProc):
+ 
+     def __init__(
+         self,
+-        input_path: str,
+-        output_path: str,
+         vllm_config: VllmConfig,
++        on_head_node: bool,
++        input_address: str,
+         executor_class: type[Executor],
+         log_stats: bool,
+     ):
+@@ -537,8 +616,20 @@ class DPEngineCoreProc(EngineCoreProc):
+         _add_prefix(sys.stdout, process_name, pid)
+         _add_prefix(sys.stderr, process_name, pid)
+ 
+-        dp_size = vllm_config.parallel_config.data_parallel_size
++        # Counts forward-passes of the model so that we can synchronize
++        # finished with DP peers every N steps.
++        self.counter = 0
++
++        # Initialize the engine.
++        dp_rank = vllm_config.parallel_config.data_parallel_rank
++        super().__init__(vllm_config, on_head_node, input_address,
++                         executor_class, log_stats, dp_rank)
++
++    def _init_data_parallel(self, vllm_config: VllmConfig):
++
++        # Configure GPUs and stateless process group for data parallel.
+         dp_rank = vllm_config.parallel_config.data_parallel_rank
++        dp_size = vllm_config.parallel_config.data_parallel_size
+         local_dp_rank = vllm_config.parallel_config.data_parallel_rank_local
+ 
+         assert dp_size > 1
+@@ -547,22 +638,14 @@ class DPEngineCoreProc(EngineCoreProc):
+         from vllm.platforms import current_platform
+         if current_platform.is_cuda_alike():
+             from vllm.platforms.cuda import device_id_to_physical_device_id
+-            tp_size = vllm_config.parallel_config.tensor_parallel_size
++            world_size = vllm_config.parallel_config.world_size
+             os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+                 str(device_id_to_physical_device_id(i))
+-                for i in range(local_dp_rank * tp_size, (local_dp_rank + 1) *
+-                               tp_size))
++                for i in range(local_dp_rank *
++                               world_size, (local_dp_rank + 1) * world_size))
+ 
+         self.dp_group = vllm_config.parallel_config.stateless_init_dp_group()
+ 
+-        # Initialize the engine after setting up environment.
+-        super().__init__(input_path, output_path, vllm_config, executor_class,
+-                         log_stats, dp_rank)
+-
+-        # Counts forward-passes of the model so that we can synchronize
+-        # finished with DP peers every N steps.
+-        self.counter = 0
+-
+     def shutdown(self):
+         super().shutdown()
+         if dp_group := getattr(self, "dp_group", None):
+diff --git a/vllm/v1/engine/core_client.py b/vllm/v1/engine/core_client.py
+index e948e59b8..e443f45db 100644
+--- a/vllm/v1/engine/core_client.py
++++ b/vllm/v1/engine/core_client.py
+@@ -8,26 +8,29 @@ import threading
+ import uuid
+ import weakref
+ from abc import ABC, abstractmethod
+-from collections.abc import Awaitable, Sequence
++from collections.abc import Awaitable
+ from concurrent.futures import Future
+-from dataclasses import dataclass, field
++from dataclasses import dataclass
++from enum import Enum, auto
+ from threading import Thread
+ from typing import Any, Callable, Optional, TypeVar, Union
+ 
++import msgspec
+ import zmq
+ import zmq.asyncio
+ 
+-from vllm.config import VllmConfig
++from vllm.config import ParallelConfig, VllmConfig
+ from vllm.logger import init_logger
+ from vllm.lora.request import LoRARequest
+-from vllm.utils import (get_open_zmq_inproc_path, get_open_zmq_ipc_path,
+-                        kill_process_tree, make_zmq_socket)
++
++from vllm.utils import (get_open_port, get_open_zmq_inproc_path,
++                        get_open_zmq_ipc_path, kill_process_tree, get_tcp_uri, make_zmq_socket)
+ from vllm.v1.engine import (EngineCoreOutputs, EngineCoreRequest,
+                             EngineCoreRequestType, UtilityOutput)
+ from vllm.v1.engine.core import EngineCore, EngineCoreProc
+ from vllm.v1.executor.abstract import Executor
+-from vllm.v1.serial_utils import MsgpackDecoder, MsgpackEncoder
+-from vllm.v1.utils import BackgroundProcHandle
++from vllm.v1.serial_utils import MsgpackDecoder, MsgpackEncoder, bytestr
++from vllm.v1.utils import CoreEngineProcManager
+ 
+ logger = init_logger(__name__)
+ 
+@@ -35,6 +38,8 @@ AnyFuture = Union[asyncio.Future[Any], Future[Any]]
+ 
+ _R = TypeVar('_R')  # Return type for collective_rpc
+ 
++STARTUP_POLL_PERIOD_MS = 10000
++
+ 
+ class EngineCoreClient(ABC):
+     """
+@@ -253,52 +258,21 @@ class InprocClient(EngineCoreClient):
+         return self.engine_core.collective_rpc(method, timeout, args, kwargs)
+ 
+ 
+-class CoreEngine:
+-    """One per data parallel rank."""
++class CoreEngineState(Enum):
++    NEW = auto()
++    CONNECTED = auto()
++    READY = auto()
+ 
+-    def __init__(
+-        self,
+-        vllm_config: VllmConfig,
+-        executor_class: type[Executor],
+-        log_stats: bool,
+-        ctx: Union[zmq.Context, zmq.asyncio.Context],
+-        output_path: str,
+-        index: int = 0,
+-        local_dp_rank: int = 0,
+-    ):
+-        # Paths and sockets for IPC.
+-        input_path = get_open_zmq_ipc_path()
+-        self.input_socket = make_zmq_socket(ctx, input_path,
+-                                            zmq.constants.PUSH)
+-        try:
+-            # Start EngineCore in background process.
+-            self.proc_handle = BackgroundProcHandle(
+-                input_path=input_path,
+-                output_path=output_path,
+-                process_name=f"EngineCore_{index}",
+-                target_fn=EngineCoreProc.run_engine_core,
+-                process_kwargs={
+-                    "vllm_config": vllm_config,
+-                    "dp_rank": index,
+-                    "local_dp_rank": local_dp_rank,
+-                    "executor_class": executor_class,
+-                    "log_stats": log_stats,
+-                })
+ 
+-            self.num_reqs_in_flight = 0
+-        finally:
+-            if not hasattr(self, "num_reqs_in_flight"):
+-                # Ensure socket is closed if process fails to start.
+-                self.close()
++class CoreEngine:
++    """One per data parallel rank."""
+ 
+-    def send_multipart(self, msg_parts: Sequence):
+-        return self.input_socket.send_multipart(msg_parts, copy=False)
++    def __init__(self, index: int = 0, local: bool = True):
++        self.local = local
++        self.identity = index.to_bytes(length=2, byteorder="little")
+ 
+-    def close(self):
+-        if proc_handle := getattr(self, "proc_handle", None):
+-            proc_handle.shutdown()
+-        if socket := getattr(self, "input_socket", None):
+-            socket.close(linger=0)
++        self.state = CoreEngineState.NEW
++        self.num_reqs_in_flight = 0
+ 
+ 
+ @dataclass
+@@ -307,20 +281,23 @@ class BackgroundResources:
+     circular reference back to the client object."""
+ 
+     ctx: Union[zmq.Context]
+-    core_engines: list[CoreEngine] = field(default_factory=list)
++    local_engine_manager: Optional[CoreEngineProcManager] = None
+     output_socket: Optional[Union[zmq.Socket, zmq.asyncio.Socket]] = None
++    input_socket: Optional[Union[zmq.Socket, zmq.asyncio.Socket]] = None
+     shutdown_path: Optional[str] = None
+ 
+     def __call__(self):
+         """Clean up background resources."""
+ 
+-        for core_engine in self.core_engines:
+-            core_engine.close()
++        if self.local_engine_manager is not None:
++            self.local_engine_manager.close()
+ 
+         # ZMQ context termination can hang if the sockets
+         # aren't explicitly closed first.
+         if self.output_socket is not None:
+             self.output_socket.close(linger=0)
++        if self.input_socket is not None:
++            self.input_socket.close(linger=0)
+         if self.shutdown_path is not None:
+             # We must ensure that the sync output socket is
+             # closed cleanly in its own thread.
+@@ -384,38 +361,169 @@ class MPClient(EngineCoreClient):
+         # exception is raised mid-construction.
+         self.resources = BackgroundResources(ctx=sync_ctx)
+         self._finalizer = weakref.finalize(self, self.resources)
++        success = False
++        try:
++            parallel_config = vllm_config.parallel_config
++            local_engine_count = parallel_config.data_parallel_size_local
++            start_index = parallel_config.data_parallel_rank
++            local_start_index = parallel_config.data_parallel_rank_local
++
++            # SPMD mode is where there is an LLM instance per DP rank and
++            # one core engine per LLM, see
++            # examples/offline_inference/data_parallel.py.
++            spmd_mode = local_start_index is not None
++            if spmd_mode:
++                assert local_engine_count == 1
++                self.core_engines = [
++                    CoreEngine(index=local_start_index, local=True)
++                ]
++            else:
++                assert start_index == 0
++                local_start_index = 0
++                self.core_engines = [
++                    CoreEngine(index=i, local=(i < local_engine_count))
++                    for i in range(parallel_config.data_parallel_size)
++                ]
+ 
+-        # Paths and sockets for IPC.
+-        self.output_path = get_open_zmq_ipc_path()
+-
+-        new_core_engine = lambda index, local_dp_rank=None: CoreEngine(
+-            vllm_config, executor_class, log_stats, self.ctx, self.output_path,
+-            index, local_dp_rank)
+-
+-        # Start engine core process(es).
+-        self._init_core_engines(vllm_config, new_core_engine,
+-                                self.resources.core_engines)
+-
+-        # Wait for engine core process(es) to start.
+-        for engine in self.resources.core_engines:
+-            engine.proc_handle.wait_for_startup()
+-
+-        self.utility_results: dict[int, AnyFuture] = {}
++            input_address, output_address = self._get_zmq_addresses(
++                parallel_config, spmd_mode)
++
++            # Create input and output sockets.
++            self.input_socket = self.resources.input_socket = make_zmq_socket(
++                self.ctx, input_address, zmq.ROUTER, bind=True)
++
++            self.resources.output_socket = make_zmq_socket(
++                self.ctx, output_address, zmq.constants.PULL)
++            # Start local engines.
++            if local_engine_count:
++                # In server mode, start_index and local_start_index will
++                # both be 0.
++                self.resources.local_engine_manager = CoreEngineProcManager(
++                    EngineCoreProc.run_engine_core,
++                    vllm_config=vllm_config,
++                    executor_class=executor_class,
++                    log_stats=log_stats,
++                    input_address=input_address,
++                    on_head_node=True,
++                    local_engine_count=local_engine_count,
++                    start_index=start_index,
++                    local_start_index=local_start_index)
++
++            self.core_engine = self.core_engines[0]
++
++            # Wait for engine core process(es) to start.
++            self._wait_for_engine_startup(output_address, parallel_config)
++
++            self.utility_results: dict[int, AnyFuture] = {}
++            success = True
++        finally:
++            if not success:
++                self._finalizer()
+ 
+-    def _init_core_engines(
+-        self,
+-        vllm_config: VllmConfig,
+-        new_core_engine: Callable[[int, Optional[int]], CoreEngine],
+-        core_engines: list[CoreEngine],
+-    ) -> None:
+-
+-        # Default case - single core engine.
+-        dp_rank = vllm_config.parallel_config.data_parallel_rank
+-        local_dp_rank = vllm_config.parallel_config.data_parallel_rank_local
+-        core_engine = new_core_engine(
+-            dp_rank, local_dp_rank if local_dp_rank is not None else dp_rank)
+-        core_engines.append(core_engine)
+-        self.core_engine = core_engine
++    @staticmethod
++    def _get_zmq_addresses(parallel_config: ParallelConfig,
++                           spmd_mode: bool) -> tuple[str, str]:
++        """Returns (input_address, output_address)."""
++        dp_size = parallel_config.data_parallel_size
++        local_engine_count = parallel_config.data_parallel_size_local
++
++        if local_engine_count == dp_size or spmd_mode:
++            input_address = get_open_zmq_ipc_path()
++            output_address = get_open_zmq_ipc_path()
++        else:
++            host = parallel_config.data_parallel_master_ip
++            input_port = parallel_config.data_parallel_rpc_port
++            output_port = get_open_port()
++            input_address = get_tcp_uri(host, input_port)
++            output_address = get_tcp_uri(host, output_port)
++
++        return input_address, output_address
++
++    def _wait_for_engine_startup(self, output_address: str,
++                                 parallel_config: ParallelConfig):
++        # Get a sync handle to the socket which can be sync or async.
++        sync_input_socket = zmq.Socket.shadow(self.input_socket)
++
++        # Wait for engine core process(es) to send ready messages.
++        local_count = parallel_config.data_parallel_size_local
++        remote_count = len(self.core_engines) - local_count
++        # [local, remote] counts
++        conn_pending, start_pending = [local_count, remote_count], [0, 0]
++
++        poller = zmq.Poller()
++        poller.register(sync_input_socket, zmq.POLLIN)
++        proc_manager = self.resources.local_engine_manager
++        if proc_manager is not None:
++            for sentinel in proc_manager.sentinels():
++                poller.register(sentinel, zmq.POLLIN)
++        while any(conn_pending) or any(start_pending):
++            events = poller.poll(STARTUP_POLL_PERIOD_MS)
++            if not events:
++                if any(conn_pending):
++                    logger.debug(
++                        "Waiting for %d local, %d remote core engine proc(s) "
++                        "to connect.", *conn_pending)
++                if any(start_pending):
++                    logger.debug(
++                        "Waiting for %d local, %d remote core engine proc(s) "
++                        "to start.", *start_pending)
++                continue
++            if len(events) > 1 or events[0][0] != sync_input_socket:
++                # One of the local core processes exited.
++                finished = proc_manager.finished_procs(
++                ) if proc_manager else {}
++                raise RuntimeError("Engine core initialization failed. "
++                                   "See root cause above. "
++                                   f"Failed core proc(s): {finished}")
++
++            # Receive HELLO and READY messages from the input socket.
++            eng_identity, ready_msg_bytes = sync_input_socket.recv_multipart()
++            eng_index = int.from_bytes(eng_identity, byteorder="little")
++            engine = next(
++                (e for e in self.core_engines if e.identity == eng_identity),
++                None)
++            if engine is None:
++                raise RuntimeError(f"Message from engine with unexpected data "
++                                   f"parallel rank: {eng_index}")
++            msg = msgspec.msgpack.decode(ready_msg_bytes)
++            status, local = msg["status"], msg["local"]
++            if local != engine.local:
++                raise RuntimeError(f"{status} message from "
++                                   f"{'local' if local else 'remote'} "
++                                   f"engine {eng_index}, expected it to be "
++                                   f"{'local' if engine.local else 'remote'}")
++
++            if status == "HELLO" and engine.state == CoreEngineState.NEW:
++
++                # Send init message with DP config info.
++                init_message = self.encoder.encode({
++                    "output_socket_address": output_address,
++                    "parallel_config": {
++                        "data_parallel_master_ip":
++                        parallel_config.data_parallel_master_ip,
++                        "data_parallel_master_port":
++                        parallel_config.data_parallel_master_port,
++                        "data_parallel_size":
++                        parallel_config.data_parallel_size,
++                    },
++                })
++                sync_input_socket.send_multipart((eng_identity, init_message),
++                                                 copy=False)
++                conn_pending[0 if local else 1] -= 1
++                start_pending[0 if local else 1] += 1
++                engine.state = CoreEngineState.CONNECTED
++            elif status == "READY" and (engine.state
++                                        == CoreEngineState.CONNECTED):
++                start_pending[0 if local else 1] -= 1
++                engine.state = CoreEngineState.READY
++            else:
++                raise RuntimeError(f"Unexpected {status} message for "
++                                   f"{'local' if local else 'remote'} engine "
++                                   f"{eng_index} in {engine.state} state.")
++
++            logger.debug("%s from %s core engine process %s.", status,
++                         "local" if local else "remote", eng_index)
++# >>>>>>> fbe7575cc... squashed commit of pr#15977
+ 
+     def shutdown(self):
+         self._finalizer()
+@@ -448,7 +556,8 @@ class SyncMPClient(MPClient):
+         # Ensure that the outputs socket processing thread does not have
+         # a ref to the client which prevents gc.
+         ctx = self.ctx
+-        output_path = self.output_path
++        out_socket = self.resources.output_socket
++        assert out_socket is not None
+         decoder = self.decoder
+         utility_results = self.utility_results
+         outputs_queue = self.outputs_queue
+@@ -458,7 +567,6 @@ class SyncMPClient(MPClient):
+ 
+         def process_outputs_socket():
+             shutdown_socket = ctx.socket(zmq.PAIR)
+-            out_socket = make_zmq_socket(ctx, output_path, zmq.constants.PULL)
+             try:
+                 shutdown_socket.bind(shutdown_path)
+                 poller = zmq.Poller()
+@@ -490,13 +598,17 @@ class SyncMPClient(MPClient):
+                                           daemon=True)
+         self.output_queue_thread.start()
+ 
++        # The thread takes on responsibility for closing the socket.
++        self.resources.output_socket = None
++
+     def get_output(self) -> EngineCoreOutputs:
+         return self.outputs_queue.get()
+ 
+     def _send_input(self, request_type: EngineCoreRequestType, request: Any):
+-        # (RequestType, SerializedRequest)
+-        msg = (request_type.value, self.encoder.encode(request))
+-        self.core_engine.send_multipart(msg)
++        # (Identity, RequestType, SerializedRequest)
++        msg = (self.core_engine.identity, request_type.value,
++               self.encoder.encode(request))
++        self.input_socket.send_multipart(msg, copy=False)
+ 
+     def call_utility(self, method: str, *args) -> Any:
+         call_id = uuid.uuid1().int >> 64
+@@ -581,6 +693,7 @@ class AsyncMPClient(MPClient):
+             [AsyncMPClient, EngineCoreOutputs], Awaitable[None]]] = None
+ 
+     def _ensure_output_queue_task(self):
++        resources = self.resources
+         if self.outputs_queue is not None:
+             return
+ 
+@@ -592,10 +705,8 @@ class AsyncMPClient(MPClient):
+         outputs_queue = self.outputs_queue
+         output_handler = self.outputs_handler
+         _self_ref = weakref.ref(self) if output_handler else None
+-        output_path = self.output_path
+-        output_socket = make_zmq_socket(self.ctx, output_path,
+-                                        zmq.constants.PULL)
+-        self.resources.output_socket = output_socket
++        output_socket = resources.output_socket
++        assert output_socket is not None
+ 
+         async def process_outputs_socket():
+             while True:
+@@ -625,30 +736,34 @@ class AsyncMPClient(MPClient):
+         assert self.outputs_queue is not None
+         return await self.outputs_queue.get()
+ 
+-    async def _send_input(self, request_type: EngineCoreRequestType,
+-                          request: Any) -> None:
+-        await self.core_engine.send_multipart(
+-            (request_type.value, self.encoder.encode(request)))
++    def _send_input(self,
++                    request_type: EngineCoreRequestType,
++                    request: Any,
++                    engine: Optional[CoreEngine] = None) -> Awaitable[None]:
++        if engine is None:
++            engine = self.core_engine
+ 
+-        self._ensure_output_queue_task()
++        message = (request_type.value, self.encoder.encode(request))
++        return self._send_input_message(message, engine)
++
++    def _send_input_message(self, message: tuple[bytes, bytes],
++                            engine: CoreEngine) -> Awaitable[None]:
++        message = (engine.identity, ) + message  # type: ignore[assignment]
++        return self.input_socket.send_multipart(message, copy=False)
+ 
+     async def call_utility_async(self, method: str, *args) -> Any:
+         return await self._call_utility_async(method,
+                                               *args,
+                                               engine=self.core_engine)
+ 
+-    async def _call_utility_async(
+-        self,
+-        method: str,
+-        *args,
+-        engine: CoreEngine,
+-    ) -> Any:
++    async def _call_utility_async(self, method: str, *args,
++                                  engine: CoreEngine) -> Any:
+         call_id = uuid.uuid1().int >> 64
+         future = asyncio.get_running_loop().create_future()
+         self.utility_results[call_id] = future
+         message = (EngineCoreRequestType.UTILITY.value,
+                    self.encoder.encode((call_id, method, args)))
+-        await engine.send_multipart(message)
++        await self._send_input_message(message, engine)
+         self._ensure_output_queue_task()
+         return await future
+ 
+@@ -657,6 +772,7 @@ class AsyncMPClient(MPClient):
+         # tokenized.
+         request.prompt = None
+         await self._send_input(EngineCoreRequestType.ADD, request)
++        self._ensure_output_queue_task()
+ 
+     async def abort_requests_async(self, request_ids: list[str]) -> None:
+         if len(request_ids) > 0:
+@@ -728,21 +844,6 @@ class DPAsyncMPClient(AsyncMPClient):
+ 
+         self.outputs_handler = DPAsyncMPClient.process_engine_outputs  # type: ignore[assignment]
+ 
+-    def _init_core_engines(
+-        self,
+-        vllm_config: VllmConfig,
+-        new_core_engine: Callable[[int, Optional[int]], CoreEngine],
+-        core_engines: list[CoreEngine],
+-    ) -> None:
+-
+-        # Launch a core engine for each data parallel rank.
+-        dp_size = vllm_config.parallel_config.data_parallel_size
+-        for i in range(dp_size):
+-            # Multi-node not yet supported so local_dp_rank == dp_rank.
+-            core_engines.append(new_core_engine(i, i))
+-
+-        self.core_engines = core_engines
+-
+     async def call_utility_async(self, method: str, *args) -> Any:
+         # Only the result from the first engine is returned.
+         return (await asyncio.gather(*[
+@@ -761,15 +862,15 @@ class DPAsyncMPClient(AsyncMPClient):
+         self.reqs_in_flight[request.request_id] = chosen_engine
+         chosen_engine.num_reqs_in_flight += 1
+         if self.num_engines_running >= len(self.core_engines):
+-            await chosen_engine.send_multipart(msg)
++            await self._send_input_message(msg, chosen_engine)
+         else:
+             # Send request to chosen engine and dp start loop
+             # control message to all other engines.
+             self.num_engines_running += len(self.core_engines)
+             await asyncio.gather(*[
+-                engine.send_multipart(msg if engine is
+-                                      chosen_engine else self.start_dp_msg)
+-                for engine in self.core_engines
++                self._send_input_message(
++                    msg if engine is chosen_engine else self.start_dp_msg,
++                    engine) for engine in self.core_engines
+             ])
+ 
+         self._ensure_output_queue_task()
+@@ -794,7 +895,7 @@ class DPAsyncMPClient(AsyncMPClient):
+                 # sure to start the other engines:
+                 self.num_engines_running = len(self.core_engines)
+                 coros = [
+-                    engine.send_multipart(self.start_dp_msg)
++                    self._send_input_message(self.start_dp_msg, engine)
+                     for engine in self.core_engines
+                     if not engine.num_reqs_in_flight
+                 ]
+@@ -820,5 +921,5 @@ class DPAsyncMPClient(AsyncMPClient):
+ 
+     async def _abort_requests(self, request_ids: list[str],
+                               engine: CoreEngine) -> None:
+-        await engine.send_multipart((EngineCoreRequestType.ABORT.value,
+-                                     self.encoder.encode(request_ids)))
++        await self._send_input(EngineCoreRequestType.ABORT, request_ids,
++                               engine)
+diff --git a/vllm/v1/serial_utils.py b/vllm/v1/serial_utils.py
+index 146d7d747..7c1d48494 100644
+--- a/vllm/v1/serial_utils.py
++++ b/vllm/v1/serial_utils.py
+@@ -2,9 +2,10 @@
+ 
+ import pickle
+ from types import FunctionType
+-from typing import Any, Optional
++from typing import Any, Optional, Union
+ 
+ import cloudpickle
++import zmq
+ import torch
+ from msgspec import msgpack
+ 
+@@ -12,6 +13,7 @@ CUSTOM_TYPE_TENSOR = 1
+ CUSTOM_TYPE_PICKLE = 2
+ CUSTOM_TYPE_CLOUDPICKLE = 3
+ 
++bytestr = Union[bytes, bytearray, memoryview, zmq.Frame]
+ 
+ class MsgpackEncoder:
+     """Encoder with custom torch tensor serialization."""
+diff --git a/vllm/v1/utils.py b/vllm/v1/utils.py
+index f42b3501a..fbc0ee340 100644
+--- a/vllm/v1/utils.py
++++ b/vllm/v1/utils.py
+@@ -2,17 +2,21 @@
+ 
+ import multiprocessing
+ import os
++import time
+ import weakref
+ from collections import defaultdict
+ from collections.abc import Sequence
++from multiprocessing import Process, connection
+ from typing import (TYPE_CHECKING, Any, Callable, Generic, Optional, TypeVar,
+                     Union, overload)
+ 
+ import torch
+ 
++from vllm.config import VllmConfig
+ from vllm.logger import init_logger
+ from vllm.model_executor.models.utils import extract_layer_index
+ from vllm.utils import get_mp_context, kill_process_tree
++from vllm.v1.executor.abstract import Executor
+ 
+ if TYPE_CHECKING:
+     from vllm.attention.layer import Attention
+@@ -90,7 +94,7 @@ class ConstantList(Generic[T], Sequence):
+         return f"ConstantList({self._x})"
+ 
+ 
+-class BackgroundProcHandle:
++class CoreEngineProcManager:
+     """
+     Utility class to handle creation, readiness, and shutdown
+     of background processes used by the AsyncLLM and LLMEngine.
+@@ -98,55 +102,91 @@ class BackgroundProcHandle:
+ 
+     def __init__(
+         self,
+-        input_path: str,
+-        output_path: str,
+-        process_name: str,
+         target_fn: Callable,
+-        process_kwargs: dict[Any, Any],
++        local_engine_count: int,
++        start_index: int,
++        local_start_index: int,
++        vllm_config: VllmConfig,
++        on_head_node: bool,
++        input_address: str,
++        executor_class: type[Executor],
++        log_stats: bool,
+     ):
+         context = get_mp_context()
+-        self.reader, writer = context.Pipe(duplex=False)
+-
+-        assert ("ready_pipe" not in process_kwargs
+-                and "input_path" not in process_kwargs
+-                and "output_path" not in process_kwargs)
+-        process_kwargs["ready_pipe"] = writer
+-        process_kwargs["input_path"] = input_path
+-        process_kwargs["output_path"] = output_path
+-
+-        # Run busy loop in background process.
+-        self.proc = context.Process(target=target_fn,
+-                                    kwargs=process_kwargs,
+-                                    name=process_name)
+-        self._finalizer = weakref.finalize(self, shutdown, self.proc,
+-                                           input_path, output_path)
+-        self.proc.start()
+-
+-    def wait_for_startup(self):
+-        # Wait for startup.
+-        if self.reader.recv()["status"] != "READY":
+-            raise RuntimeError(f"{self.proc.name} initialization failed. "
+-                               "See root cause above.")
+-
+-    def shutdown(self):
++        common_kwargs = {
++            "vllm_config": vllm_config,
++            "on_head_node": on_head_node,
++            "input_address": input_address,
++            "executor_class": executor_class,
++            "log_stats": log_stats,
++        }
++
++        self.processes: list[Process] = []
++        for index in range(local_engine_count):
++            local_index = local_start_index + index
++            global_index = start_index + index
++            # Start EngineCore in background process.
++            self.processes.append(
++                context.Process(target=target_fn,
++                                name=f"EngineCore_{global_index}",
++                                kwargs=common_kwargs | {
++                                    "dp_rank": global_index,
++                                    "local_dp_rank": local_index,
++                                }))
++
++        self._finalizer = weakref.finalize(self, shutdown, self.processes,
++                                           input_address)
++        try:
++            for proc in self.processes:
++                proc.start()
++        finally:
++            # Kill other procs if not all are running.
++            if self.finished_procs():
++                self.close()
++
++    def close(self):
++        """Shutdown all procs."""
+         self._finalizer()
+ 
++    def join_first(self):
++        """Wait for any process to exit."""
++        connection.wait(proc.sentinel for proc in self.processes)
++
++    def sentinels(self) -> list:
++        return [proc.sentinel for proc in self.processes]
++
++    def finished_procs(self) -> dict[str, int]:
++        """Returns dict of proc name -> exit code for any finished procs."""
++        return {
++            proc.name: proc.exitcode
++            for proc in self.processes if proc.exitcode is not None
++        }
++
+ 
+ # Note(rob): shutdown function cannot be a bound method,
+ # else the gc cannot collect the object.
+-def shutdown(proc: multiprocessing.Process, input_path: str, output_path: str):
++def shutdown(procs: list[Process], input_address: str):
+     # Shutdown the process.
+-    if proc.is_alive():
+-        proc.terminate()
+-        proc.join(5)
++    for proc in procs:
++        if proc.is_alive():
++            proc.terminate()
++
++    # Allow 5 seconds for remaining procs to terminate.
++    deadline = time.monotonic() + 5
++    for proc in procs:
++        remaining = deadline - time.monotonic()
++        if remaining <= 0:
++            break
++        if proc.is_alive():
++            proc.join(remaining)
+ 
++    for proc in procs:
+         if proc.is_alive():
+             kill_process_tree(proc.pid)
+ 
+     # Remove zmq ipc socket files.
+-    ipc_sockets = [output_path, input_path]
+-    for ipc_socket in ipc_sockets:
+-        socket_file = ipc_socket.replace("ipc://", "")
++    if input_address.startswith("ipc://"):
++        socket_file = input_address[len("ipc://"):]
+         if os and os.path.exists(socket_file):
+             os.remove(socket_file)
+ 
