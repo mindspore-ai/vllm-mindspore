@@ -1,27 +1,26 @@
-pip install -r requirements-lint.txt
+pip install -r codecheck_toolkits/requirements-lint.txt
 
 RET_FLAG=0
 
-cd ..
-# yapf formats code automatically
+# yapf check
 
-MERGEBASE="$(git merge-base origin/master HEAD)"
-if ! git diff --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
-  yapf --in-place --recursive --parallel --exclude build/
+MERGEBASE="$(git merge-base origin/develop HEAD)"
+if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
+  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
+  yapf --diff --recursive --parallel --exclude tests/
 fi
 
 if [[ $? -ne 0 ]]; then
-  echo "yapf run failed."
+  echo "yapf check failed."
   RET_FLAG=1
 else
-  echo "yapf run success."
+  echo "yapf check success."
 fi
 
 # codespell check
-if ! git diff --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
-  codespell --skip ./vllm_mindspore/ops/ascendc/*
+if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
+  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs \
+  codespell --skip "./vllm_mindspore/ops/ascendc/*"
 fi
 if [[ $? -ne 0 ]]; then
   echo "codespell check failed."
@@ -31,8 +30,9 @@ else
 fi
 
 # ruff check
-if ! git diff --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
+if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
+  echo "ruff check is running..."
+  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' |  xargs \
   ruff check
 fi
 if [[ $? -ne 0 ]]; then
@@ -42,24 +42,24 @@ else
   echo "ruff check success."
 fi
 
-# isort fixed
-if ! git diff --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
-  isort
+# isort check
+if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
+  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs \
+  isort --check-only
 fi
 if [[ $? -ne 0 ]]; then
-  echo "isort fixed failed."
+  echo "isort check failed."
   RET_FLAG=1
 else
-  echo "isort fixed success."
+  echo "isort check success."
 fi
 
 # mypy check type
 
 PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 
-if ! git diff --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
+if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
+  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs \
   mypy --follow-imports skip --python-version "${PYTHON_VERSION}" "$@"
 fi
 if [[ $? -ne 0 ]]; then
@@ -69,4 +69,4 @@ else
   echo "mypy check success."
 fi
 
-cd - || exit $RET_FLAG
+exit $RET_FLAG
