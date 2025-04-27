@@ -19,6 +19,7 @@
 #include "common/common.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 Token FindIdentifier(const char *start) {
   int pos = MatchName(start);
@@ -32,3 +33,4 @@ Token FindIdentifier(const char *start) {
   return token;
 }
 } // namespace lexer
+} // namespace da

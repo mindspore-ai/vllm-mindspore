@@ -23,6 +23,7 @@
 
 #include "ir/node.h"
 
+namespace da {
 namespace ir {
 class Namespace {
 public:
@@ -104,5 +105,6 @@ void ClearBlockPool();
 FuncPtr NewFunc();
 void ClearFuncPool();
 } // namespace ir
+} // namespace da
 
 #endif // __PARSER_IR_NAMESPACE_H__

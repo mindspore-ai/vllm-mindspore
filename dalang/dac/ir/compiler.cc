@@ -18,6 +18,7 @@
 
 #include "common/common.h"
 
+namespace da {
 namespace ir {
 Compiler::Compiler(const std::string &filename)
     : parser_{Parser(filename)}, walker_{new CompilerNodeVisitor(this)} {
@@ -218,3 +219,4 @@ void Compiler::InitCompileHandlers() {
 #undef STMT
 #undef EXPR
 } // namespace ir
+} // namespace da

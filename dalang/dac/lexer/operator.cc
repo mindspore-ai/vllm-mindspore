@@ -17,6 +17,7 @@
 #include "common/common.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 NameToOpId _operators[] = {
     {"==", OpId_Equal},        {"!=", OpId_NotEqual},  {"<=", OpId_LessEqual},
@@ -53,3 +54,4 @@ const char *_operatorsStr[] = {
 
 const char *ToStr(OpId opid) { return _operatorsStr[opid]; }
 } // namespace lexer
+} // namespace da

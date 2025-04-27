@@ -32,26 +32,27 @@ std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
   std::vector<Argument> arguments;
   for (const auto &arg : args) {
     if (py::isinstance<py::bool_>(arg)) {
-      Argument argument = Argument({.type = vm::SlotBool});
+      Argument argument = Argument({.type = da::vm::SlotBool});
       argument.value.bool_ = py::cast<bool>(arg);
       arguments.emplace_back(std::move(argument));
     } else if (py::isinstance<py::int_>(arg)) {
-      Argument argument = Argument({.type = vm::SlotInt});
+      Argument argument = Argument({.type = da::vm::SlotInt});
       argument.value.int_ = py::cast<int>(arg);
       arguments.emplace_back(std::move(argument));
     } else if (py::isinstance<py::float_>(arg)) {
-      Argument argument = Argument({.type = vm::SlotFloat});
+      Argument argument = Argument({.type = da::vm::SlotFloat});
       argument.value.float_ = py::cast<double>(arg);
       arguments.emplace_back(std::move(argument));
     } else if (py::isinstance<py::str>(arg)) {
-      Argument argument = Argument({.type = vm::SlotString});
+      Argument argument = Argument({.type = da::vm::SlotString});
       argument.value.str_ = py::cast<std::string>(arg).c_str();
       arguments.emplace_back(std::move(argument));
     } else {
-      Argument argument = Argument({.type = vm::SlotTensor});
+      Argument argument = Argument({.type = da::vm::SlotTensor});
       // get tensor data from ms tensor
       void *data = (void *)arg.ptr();
-      auto tensor = callable_->graphExecutor().AddTensor(tensor::Type_F32, 0, {0}, data);
+      auto tensor = callable_->graphExecutor().AddTensor(da::tensor::Type_F32,
+                                                         0, {0}, data);
       argument.value.tensor_ = (void *)tensor;
       arguments.emplace_back(std::move(argument));
     }
@@ -60,17 +61,17 @@ std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
 }
 
 py::object DALangPy::ConvertPyResult(const Result &res) {
-  if (res.type == vm::SlotBool) {
+  if (res.type == da::vm::SlotBool) {
     return py::bool_(res.value.bool_);
-  } else if (res.type == vm::SlotInt) {
+  } else if (res.type == da::vm::SlotInt) {
     return py::int_(res.value.int_);
-  } else if (res.type == vm::SlotFloat) {
+  } else if (res.type == da::vm::SlotFloat) {
     return py::float_(res.value.float_);
-  } else if (res.type == vm::SlotString) {
+  } else if (res.type == da::vm::SlotString) {
     return py::str(res.value.str_);
-  } else if (res.type == vm::SlotTensor) {
+  } else if (res.type == da::vm::SlotTensor) {
     return py::object();
-  } else if (res.type == vm::SlotVoid) {
+  } else if (res.type == da::vm::SlotVoid) {
     return py::none();
   } else {
     return py::none();
@@ -94,7 +95,7 @@ py::object DALangPy::Run(const py::tuple &args) {
   if (pyres.ptr() == nullptr) {
     return py::none();
   }
-  LOG_OUT << "res: " << vm::ToString(res)
+  LOG_OUT << "res: " << da::vm::ToString(res)
           << ", pyres: " << py::str(pyres).cast<std::string>();
   return pyres;
 }

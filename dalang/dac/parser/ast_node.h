@@ -21,9 +21,10 @@
 
 #include "lexer/token.h"
 
+namespace da {
+namespace parser {
 using namespace lexer;
 
-namespace parser {
 typedef struct ExprNode *ExprPtr;
 typedef const struct ExprNode *ExprConstPtr;
 
@@ -183,5 +184,6 @@ typedef struct ExprNode {
 const std::string ToString(StmtConstPtr stmt);
 const std::string ToString(ExprConstPtr expr);
 } // namespace parser
+} // namespace da
 
 #endif // __PARSER_AST_NODE_H__

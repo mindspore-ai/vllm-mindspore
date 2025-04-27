@@ -34,24 +34,25 @@ Callable *DA_API_Compile(const char *source, bool graph, bool dump) {
     exit(EXIT_FAILURE);
   }
 
-  auto lexer = lexer::Lexer(functionStr);
+  auto lexer = da::lexer::Lexer(functionStr);
   if (dump) {
     lexer.Dump();
   }
 
-  auto parser = parser::Parser(&lexer);
+  auto parser = da::parser::Parser(&lexer);
   parser.ParseCode();
   if (dump) {
     parser.DumpAst();
   }
 
-  auto compiler = compiler::Compiler(&parser, true, graph); // delete by user.
+  auto compiler =
+      da::compiler::Compiler(&parser, true, graph); // delete by user.
   compiler.Compile();
   if (dump) {
     compiler.Dump();
   }
 
-  auto vm = new vm::VM(&compiler, true);
+  auto vm = new da::vm::VM(&compiler, true);
   LOG_OUT << "Return callable: " << vm;
   return vm;
 }

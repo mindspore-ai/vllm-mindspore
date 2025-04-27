@@ -26,6 +26,7 @@
 #define DA_TENSOR_MAX_DIM 6
 #endif
 
+namespace da {
 namespace tensor {
 // Data type of tensor
 enum Type {
@@ -85,4 +86,5 @@ template <typename T> struct TensorDataImpl : public TensorData {
   T *data{nullptr};
 };
 } // namespace tensor
+} // namespace da
 #endif // __TENSOR_TENSOR_DATA_H__

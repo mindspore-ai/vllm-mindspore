@@ -17,6 +17,7 @@
 #include "common/common.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 #define TO_STR(s) #s
 #define KEYWORD(K) {TO_STR(K), KwId_##K},
@@ -60,3 +61,4 @@ const char *_keywordsStr[] = {
 
 const char *ToStr(KwId kwid) { return _keywordsStr[kwid]; }
 } // namespace lexer
+} // namespace da

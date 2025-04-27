@@ -24,6 +24,7 @@ typedef enum OperatorId {
 } OpId;
 #undef OPERATOR
 
+namespace da {
 namespace lexer {
 typedef struct NameToOperatorId {
   const char *name;
@@ -32,5 +33,6 @@ typedef struct NameToOperatorId {
 
 const char *ToStr(OpId opid);
 } // namespace lexer
+} // namespace da
 
 #endif // __LEXER_OPERATOR_H__

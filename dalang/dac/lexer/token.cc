@@ -20,6 +20,7 @@
 
 #include "common/common.h"
 
+namespace da {
 namespace lexer {
 #define TOKEN(T) #T,
 const char *_tokensStr[] = {
@@ -81,3 +82,4 @@ std::string ToString(TokenConstPtr token) {
   return ss.str();
 }
 } // namespace lexer
+} // namespace da

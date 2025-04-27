@@ -26,6 +26,7 @@
 #include "lexer/operator.h"
 #include "lexer/separator.h"
 
+namespace da {
 namespace lexer {
 #define TOKEN(T) TokenType_##T,
 typedef enum TokenType {
@@ -74,5 +75,6 @@ Token FindComment(const char *start, size_t len);
 const char *ToStr(TokenConstPtr token);
 std::string ToString(TokenConstPtr token);
 } // namespace lexer
+} // namespace da
 
 #endif // __LEXER_TOKEN_H__

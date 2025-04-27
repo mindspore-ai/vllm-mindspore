@@ -17,6 +17,7 @@
 #include "common/common.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 NameToSpId _separators[] = {
     {" ", SpId_Space},
@@ -53,3 +54,4 @@ Token TraverseSpTable(const char *start) {
 
 const char *ToStr(SpId spid) { return _separators[spid].name; }
 } // namespace lexer
+} // namespace da

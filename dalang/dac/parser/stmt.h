@@ -23,9 +23,9 @@
 #include "lexer/token.h"
 #include "parser/ast_node.h"
 
-using namespace lexer;
-
+namespace da {
 namespace parser {
+using namespace lexer;
 namespace StmtPattern {
 namespace ExpressionPattern {
 static inline bool Match(TokenConstPtr token) { return true; }
@@ -758,5 +758,6 @@ static inline StmtPtr MakeModuleStmt(const Stmts &body) {
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 } // namespace parser
+} // namespace da
 
 #endif // __PARSER_STMT_H__

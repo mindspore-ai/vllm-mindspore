@@ -17,6 +17,7 @@
 #ifndef __LEXER_IDENTIFIER_H__
 #define __LEXER_IDENTIFIER_H__
 
+namespace da {
 namespace lexer {
 // Identifier name like c/cpp.
 static inline int MatchName(const char *start) {
@@ -42,5 +43,6 @@ static inline int MatchName(const char *start) {
   return pos;
 }
 } // namespace lexer
+} // namespace da
 
 #endif // __LEXER_IDENTIFIER_H__

@@ -19,6 +19,7 @@
 
 #include <vector>
 
+namespace da {
 namespace ir {
 #define OPERATOR(O) Op_##O,
 typedef enum Operator {
@@ -28,5 +29,6 @@ typedef enum Operator {
 #undef OPERATOR
 
 } // namespace ir
+} // namespace da
 
 #endif // __PARSER_IR_OPERATOR_H__

@@ -23,6 +23,7 @@
 #include "parser/parser.h"
 #include "parser/stmt.h"
 
+namespace da {
 namespace parser {
 Parser::Parser(const std::string &filename) : selfManagedLexer_{true} {
   lexer_ = new Lexer(filename);
@@ -980,3 +981,4 @@ void Parser::DumpAst() {
   std::cout << visitor.dump();
 }
 } // namespace parser
+} // namespace da

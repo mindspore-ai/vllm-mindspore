@@ -26,8 +26,10 @@ typedef enum LiteralId {
 } LtId;
 #undef TYPE
 
+namespace da {
 namespace lexer {
 const char *ToStr(LtId lid);
-} // namespace lexer
+}
+} // namespace da
 
 #endif // __LEXER_LITERAL_H__

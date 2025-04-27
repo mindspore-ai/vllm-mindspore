@@ -21,6 +21,7 @@
 
 #include "ir/operator.h"
 
+namespace da {
 namespace ir {
 class Namespace;
 using Ns = Namespace;
@@ -93,5 +94,6 @@ private:
 using CNode = ComplexNode;
 using CNodePtr = CNode *;
 } // namespace ir
+} // namespace da
 
 #endif // __PARSER_IR_NODE_H__

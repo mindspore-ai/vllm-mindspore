@@ -18,6 +18,7 @@
 
 #include <sstream>
 
+namespace da {
 namespace runtime {
 using namespace tensor;
 
@@ -185,3 +186,4 @@ void GraphExecutor::DumpGraph() {
 }
 #endif
 } // namespace runtime
+} // namespace da

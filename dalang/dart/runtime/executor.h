@@ -26,6 +26,7 @@
 
 #define DUMP
 
+namespace da {
 namespace runtime {
 class DA_API GraphExecutor {
 public:
@@ -72,5 +73,6 @@ private:
 #endif
 };
 } // namespace runtime
+} // namespace da
 
 #endif // __RUNTIME_EXECUTOR_H__

@@ -16,6 +16,7 @@
 
 #include "ir/namespace.h"
 
+namespace da {
 namespace ir {
 // Namespace pool.
 static Namespaces gNsPool;
@@ -56,3 +57,4 @@ void ClearFuncPool() {
   gFuncPool.clear();
 }
 } // namespace ir
+} // namespace da

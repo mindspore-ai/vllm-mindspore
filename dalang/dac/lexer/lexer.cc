@@ -23,6 +23,7 @@
 #include "common/common.h"
 #include "common/logger.h"
 
+namespace da {
 namespace lexer {
 Lexer::Lexer(const std::string &filename)
     : filename_{filename}, sourceFileStream_{std::ifstream()} {
@@ -423,3 +424,4 @@ void Lexer::Dump() {
   }
 }
 } // namespace lexer
+} // namespace da

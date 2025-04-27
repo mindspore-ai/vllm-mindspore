@@ -17,6 +17,7 @@
 #ifndef __LEXER_KEYWORD_H__
 #define __LEXER_KEYWORD_H__
 
+namespace da {
 namespace lexer {
 #define KEYWORD(K) KwId_##K,
 #define KEYWORD_ALIAS(K, ALIAS) KwId_##K,
@@ -36,4 +37,5 @@ typedef struct NameToKeywordId {
 
 const char *ToStr(KwId kwid);
 } // namespace lexer
+} // namespace da
 #endif // __LEXER_KEYWORD_H__

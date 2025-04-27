@@ -24,10 +24,10 @@
 #include "tensor/tensor.h"
 #include "vm/vm.h"
 
-using Callable = vm::VM;
-using Argument = vm::Argument;
-using Result = vm::Result;
-using Tensor = tensor::DATensor;
+using Callable = da::vm::VM;
+using Argument = da::vm::Argument;
+using Result = da::vm::Result;
+using Tensor = da::tensor::DATensor;
 
 #ifdef __cplusplus
 extern "C" {

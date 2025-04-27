@@ -25,6 +25,7 @@
 #include "parser/ast_visitor.h"
 #include "parser/parser.h"
 
+namespace da {
 namespace ir {
 using namespace parser;
 
@@ -127,5 +128,6 @@ private:
   Compiler *compiler_;
 };
 } // namespace ir
+} // namespace da
 
 #endif // __PARSER_IR_COMPILER_H__

@@ -26,6 +26,7 @@
 #include "runtime/executor.h"
 #include "vm/intrinsic.h"
 
+namespace da {
 namespace vm {
 using namespace compiler;
 
@@ -448,4 +449,5 @@ private:
     }                                                                          \
   }
 } // namespace vm
+} // namespace da
 #endif // __VM_VM_H__

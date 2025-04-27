@@ -20,6 +20,7 @@
 
 #include "common/common.h"
 
+namespace da {
 namespace parser {
 // Expr pool.
 static Exprs gExprPool;
@@ -259,3 +260,4 @@ const std::string ToString(ExprConstPtr expr) {
   }
 }
 } // namespace parser
+} // namespace da

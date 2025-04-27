@@ -17,6 +17,7 @@
 #ifndef __LEXER_SEPARATOR_H__
 #define __LEXER_SEPARATOR_H__
 
+namespace da {
 namespace lexer {
 typedef enum SeparatorId {
   SpId_Space,            // sp
@@ -43,5 +44,6 @@ typedef struct NameToSeparatorId {
 
 const char *ToStr(SpId spid);
 } // namespace lexer
+} // namespace da
 
 #endif // __LEXER_SEPARATOR_H__

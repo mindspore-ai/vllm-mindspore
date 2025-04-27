@@ -26,6 +26,7 @@
 #include "parser/ast_visitor.h"
 #include "parser/parser.h"
 
+namespace da {
 namespace compiler {
 using namespace parser;
 
@@ -245,5 +246,6 @@ inline ssize_t FindStringPoolIndex(std::vector<std::string> &stringPool,
   return index;
 }
 } // namespace compiler
+} // namespace da
 
 #endif // __PARSER_COMPILER_COMPILER_H__

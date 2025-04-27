@@ -22,6 +22,7 @@
 #include "common/logger.h"
 #include "parser/ast_node.h"
 
+namespace da {
 namespace parser {
 class NodeVisitor {
 public:
@@ -173,5 +174,6 @@ public:
   virtual ~NodeVisitor() {}
 };
 } // namespace parser
+} // namespace da
 
 #endif // __PARSER_AST_VISITOR_H__

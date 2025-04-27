@@ -17,6 +17,7 @@
 #include "tensor/tensor.h"
 #include "common/common.h"
 
+namespace da {
 namespace tensor {
 DAContext *NewDAContext(size_t deviceId, size_t memSize) {
   static DAContextManager _manager;
@@ -131,3 +132,4 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   return tensor;
 }
 } // namespace tensor
+} // namespace da

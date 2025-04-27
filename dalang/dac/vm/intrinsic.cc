@@ -16,4 +16,6 @@
 
 #include "vm/intrinsic.h"
 
-namespace intrinsic {} // namespace intrinsic
+namespace da {
+namespace intrinsic {}
+} // namespace da

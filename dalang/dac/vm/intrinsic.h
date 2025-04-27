@@ -19,6 +19,7 @@
 
 #include "tensor/tensor.h"
 
+namespace da {
 namespace intrinsic {
 
 #define TYPE(t) IntrinsicType_##t,
@@ -29,5 +30,6 @@ enum IntrinsicType {
 #undef TYPE
 
 } // namespace intrinsic
+} // namespace da
 
 #endif // __VM_INTRINSIC_H__

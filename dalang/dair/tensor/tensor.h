@@ -39,6 +39,7 @@
 #define DA_CONTEXT_MAX_NUM 5
 #endif
 
+namespace da {
 namespace tensor {
 struct DATensor;
 using TensorArrayPtr = DATensor *[DA_TENSOR_MAX_INPUT];
@@ -161,5 +162,6 @@ TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&...args) {
   return nullptr;
 }
 } // namespace tensor
+} // namespace da
 
 #endif // __TENSOR_TENSOR_H__

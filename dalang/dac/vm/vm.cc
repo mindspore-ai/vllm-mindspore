@@ -22,6 +22,7 @@
 #include "common/common.h"
 #include "vm/intrinsic.h"
 
+namespace da {
 namespace vm {
 bool VM::ReplaceEscapeStr(std::string &dst) {
   constexpr auto escapeSize = 4;
@@ -907,3 +908,4 @@ void VM::InitInstructionHandlers() {
 }
 #undef INSTRUCTION
 } // namespace vm
+} // namespace da

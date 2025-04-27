@@ -19,6 +19,7 @@
 #include "common/common.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 Token FindComment(const char *start, size_t len) {
   if (!MatchComment(start)) {
@@ -31,3 +32,4 @@ Token FindComment(const char *start, size_t len) {
   return token;
 }
 } // namespace lexer
+} // namespace da

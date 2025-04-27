@@ -22,6 +22,7 @@
 #include "lexer/lexer.h"
 #include "parser/ast_node.h"
 
+namespace da {
 namespace parser {
 using namespace lexer;
 class Parser {
@@ -99,5 +100,6 @@ private:
   size_t tokenPos_{0};
 };
 } // namespace parser
+} // namespace da
 
 #endif // __PARSER_PARSER_H__

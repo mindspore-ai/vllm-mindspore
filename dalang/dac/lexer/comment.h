@@ -17,6 +17,7 @@
 #ifndef __LEXER_COMMENT_H__
 #define __LEXER_COMMENT_H__
 
+namespace da {
 namespace lexer {
 // Starts with # or //
 static inline bool MatchComment(const char *start) {
@@ -36,5 +37,6 @@ static inline bool MatchComment(const char *start) {
   return false;
 }
 } // namespace lexer
+} // namespace da
 
 #endif // __LEXER_COMMENT_H__

@@ -26,6 +26,7 @@ const char *_insts[]{// Inst strings.
                      "End"};
 #undef INSTRUCTION
 
+namespace da {
 namespace compiler {
 const char *ToStr(CodeType type) {
   switch (type) {
@@ -1053,3 +1054,4 @@ void Compiler::InitCompileHandlers() {
 #undef STMT
 #undef EXPR
 } // namespace compiler
+} // namespace da

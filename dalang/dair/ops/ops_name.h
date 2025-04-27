@@ -17,6 +17,7 @@
 #ifndef __OPS_OPS_NAME_H__
 #define __OPS_OPS_NAME_H__
 
+namespace da {
 namespace ops {
 #define OP(O) Op_##O,
 enum Op {
@@ -28,5 +29,6 @@ enum Op {
 Op MatchOp(const char *op);
 const char *ToStr(Op op);
 } // namespace ops
+} // namespace da
 
 #endif // __OPS_OPS_NAME_H__

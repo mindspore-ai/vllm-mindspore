@@ -20,6 +20,7 @@
 #include "common/logger.h"
 #include "token.h"
 
+namespace da {
 namespace lexer {
 #define TYPE(T) #T,
 const char *_typesStr[] = {
@@ -188,3 +189,4 @@ Token FindLiteral(const char *start) {
   return Token{.type = TokenType_End, .start = start, .len = 0};
 }
 } // namespace lexer
+} // namespace da

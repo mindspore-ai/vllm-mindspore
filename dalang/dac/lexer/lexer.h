@@ -24,6 +24,7 @@
 
 #include "token.h"
 
+namespace da {
 namespace lexer {
 #define MAX_LINE_SIZE 4096
 
@@ -79,4 +80,5 @@ private:
   std::vector<Token> tokens_;
 };
 } // namespace lexer
+} // namespace da
 #endif // __LEXER_LEXER_H__

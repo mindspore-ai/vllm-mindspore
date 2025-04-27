@@ -23,9 +23,9 @@
 #include "lexer/token.h"
 #include "parser/ast_node.h"
 
-using namespace lexer;
-
+namespace da {
 namespace parser {
+using namespace lexer;
 namespace ExprPattern {
 namespace LogicalPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -406,5 +406,6 @@ static inline ExprPtr MakeAttributeExpr(ExprConstPtr entity,
   RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 } // namespace parser
+} // namespace da
 
 #endif // __PARSER_EXPR_H__

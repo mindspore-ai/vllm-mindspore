@@ -32,6 +32,8 @@ namespace fs = std::filesystem;
 #include "parser/parser.h"
 #include "vm/vm.h"
 
+using namespace da;
+
 /* Command-Line Interface */
 int main(int argc, char **argv) {
   struct arguments args = GetOptions(argc, argv);
