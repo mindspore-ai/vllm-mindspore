@@ -25,13 +25,16 @@ if "vllm" in sys.modules:
         "vllm import before vllm_mindspore, vllm_mindspore cannot worker right!"
     )
 
+# 1. set env before import mindspore.
 from vllm_mindspore.scripts import env_setup
-
 env_setup()
 
-# should be place on the top of the file.
+# 2. replace the inductor_pass module before import vllm.
 from vllm_mindspore.compilation import inductor_pass as ms_inductor_pass
 sys.modules.update({"vllm.compilation.inductor_pass": ms_inductor_pass})
+
+# 3. update the log configuration ahead of other modifications.
+import vllm_mindspore.logger
 
 from vllm_mindspore.platforms.ascend import AscendPlatform
 

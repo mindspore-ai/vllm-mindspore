@@ -2,9 +2,13 @@ import os
 import sys
 import subprocess
 
+from vllm.logger import init_logger
+
 from mindspore import Profiler
 from mindspore.profiler import ProfilerLevel, ProfilerActivity, AicoreMetrics
 from mindspore.profiler.common.profiler_context import ProfilerContext
+
+logger = init_logger(__name__)
 
 PROFILE_ENV_NAME = "VLLM_TORCH_PROFILER_DIR"
 
@@ -55,7 +59,7 @@ def wrapper_worker_init_device(fun):
         self = arg[0]
         profile_output_path = os.getenv(PROFILE_ENV_NAME, "")
         if profile_output_path:
-            print(f"Profiling enabled. Traces will be saved to: {profile_output_path}")
+            logger.info(f"Profiling enabled. Traces will be saved to: {profile_output_path}")
             self.profiler = AdapterProfiler(profile_output_path)
         else:
             self.profiler = None
