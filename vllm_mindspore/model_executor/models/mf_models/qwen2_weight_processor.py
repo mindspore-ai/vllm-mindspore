@@ -25,8 +25,10 @@ from safetensors import safe_open
 import mindspore as ms
 from mindspore.communication.management import get_rank
 
-from vllm_mindspore.model_executor.models.mf_models.weight_processor import BaseWeightProcessor
+from vllm_mindspore.model_executor.models.mf_models.weight_processor import BaseWeightProcessor, EPMethod
+from vllm.logger import init_logger
 
+logger = init_logger(__name__)
 
 class Qwen2WeightProcessor(BaseWeightProcessor):
     r"""
@@ -47,8 +49,8 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         if self.config.parallel_config.vocab_emb_dp:
             np_data, _ = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map)
         else:
-            np_data, _ = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+            np_data, _ = self.get_safetensor_from_file_split_tp_group(embed_tokens_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
         self.parameter_dict[embed_tokens_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
                                                                  name=embed_tokens_ms_name,
                                                                  requires_grad=False)
@@ -64,8 +66,8 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         lm_head_ms_name = self.convert_weight_name(lm_head_hf_name)
         if not self.config.model.model_config.tie_word_embeddings:
             if not self.config.parallel_config.vocab_emb_dp:
-                np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=0)
+                np_data, _ = self.get_safetensor_from_file_split_tp_group(lm_head_hf_name, src_hf_dir, hf_weight_map,
+                                                                          split_axis=0)
             else:
                 np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map)
             self.parameter_dict[lm_head_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
@@ -94,18 +96,18 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         ffn_concat = self.config.model.model_config.qkv_concat
         w1_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight"
         w1_ms_name = self.convert_weight_name(w1_hf_name)
-        w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=0)
+        w1_ms_param, _ = self.get_safetensor_from_file_split_tp_group(w1_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight"
         w2_ms_name = self.convert_weight_name(w2_hf_name)
-        w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=1)
+        w2_ms_param, _ = self.get_safetensor_from_file_split_tp_group(w2_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=1)
 
         w3_hf_name = f"model.layers.{layer_id}.mlp.up_proj.weight"
         w3_ms_name = self.convert_weight_name(w3_hf_name)
-        w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=0)
+        w3_ms_param, _ = self.get_safetensor_from_file_split_tp_group(w3_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
 
         if ffn_concat:
             w_gate_hidden_name = f"model.layers.{layer_id}.feed_forward.w_gate_hidden.weight"
@@ -130,38 +132,35 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         # wq
         wq_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.weight"
         wq_ms_name = self.convert_weight_name(wq_hf_name)
-        wq_ms_param, _ = self.get_safetensor_from_file(wq_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=0)
+        wq_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wq_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
         # wq bias
         wq_bias_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.bias"
         wq_bias_ms_name = self.convert_weight_name(wq_bias_hf_name)
-        wq_bias_ms_param, _ = self.get_safetensor_from_file(wq_bias_hf_name, src_hf_dir, hf_weight_map,
-                                                            is_split_param=True,
-                                                            split_axis=0)
+        wq_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wq_bias_hf_name, src_hf_dir, hf_weight_map,
+                                                                           split_axis=0)
 
         # wk
         wk_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.weight"
         wk_ms_name = self.convert_weight_name(wk_hf_name)
-        wk_ms_param, _ = self.get_safetensor_from_file(wk_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=0)
+        wk_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wk_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
         # wk bias
         wk_bias_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.bias"
         wk_bias_ms_name = self.convert_weight_name(wk_bias_hf_name)
-        wk_bias_ms_param, _ = self.get_safetensor_from_file(wk_bias_hf_name, src_hf_dir, hf_weight_map,
-                                                            is_split_param=True,
-                                                            split_axis=0)
+        wk_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wk_bias_hf_name, src_hf_dir, hf_weight_map,
+                                                                           split_axis=0)
 
         # wv
         wv_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.weight"
         wv_ms_name = self.convert_weight_name(wv_hf_name)
-        wv_ms_param, _ = self.get_safetensor_from_file(wv_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=0)
+        wv_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wv_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=0)
         # wv bias
         wv_bias_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.bias"
         wv_bias_ms_name = self.convert_weight_name(wv_bias_hf_name)
-        wv_bias_ms_param, _ = self.get_safetensor_from_file(wv_bias_hf_name, src_hf_dir, hf_weight_map,
-                                                            is_split_param=True,
-                                                            split_axis=0)
+        wv_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wv_bias_hf_name, src_hf_dir, hf_weight_map,
+                                                                           split_axis=0)
 
         if qkv_concat:
             w_qkv_name = f"model.layers.{layer_id}.attention.w_qkv.weight"
@@ -201,8 +200,8 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         # wo
         wo_hf_name = f"model.layers.{layer_id}.self_attn.o_proj.weight"
         wo_ms_name = self.convert_weight_name(wo_hf_name)
-        wo_ms_param, _ = self.get_safetensor_from_file(wo_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
-                                                       split_axis=1)
+        wo_ms_param, _ = self.get_safetensor_from_file_split_tp_group(wo_hf_name, src_hf_dir, hf_weight_map,
+                                                                      split_axis=1)
         self.parameter_dict[wo_ms_name] = ms.Parameter(ms.from_numpy(wo_ms_param).astype(ms.bfloat16),
                                                        name=wo_ms_name,
                                                        requires_grad=False)
@@ -262,6 +261,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         for layer_id in tqdm(range(num_layers), desc="Weight loading", disable=not enable_tqdm):
             self.infer_convert_layer_weight(src_hf_dir, layer_id, hf_weight_map)
 
-        ms.load_param_into_net(self.network, self.parameter_dict)
+        param_not_load, ckpt_not_load = ms.load_param_into_net(self.network, self.parameter_dict)
+        logger.info("param_not_load: %s, ckpt_not_load: %s" % (str(param_not_load), str(ckpt_not_load)))
         del self.parameter_dict
         gc.collect()
