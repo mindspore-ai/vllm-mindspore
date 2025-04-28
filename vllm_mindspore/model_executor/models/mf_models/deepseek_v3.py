@@ -184,8 +184,11 @@ class DeepseekV3ForCausalLM(MfModelBase):
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.qint4x2,
                             algo_args=gptq_config, act_quant_dtype=None, precision_recovery=PrecisionRecovery.GPTQ,
                             weight_quant_granularity=QuantGranularity.PER_GROUP, opname_blacklist=['lm_head', 'lkv2kv'],
-                            group_size=128)
-            layer_policies = OrderedDict()
+                            group_size=64)
+            w2_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                                  act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH)
+            layer_policies = OrderedDict({r'.*\.feed_forward\.w2.*': w2_config,
+                                          r'.*\.shared_experts.w2.*': w2_config})
         elif quant_type.lower() == 'smoothquant':
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                             act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH,
@@ -217,5 +220,9 @@ class DeepseekV3ForCausalLM(MfModelBase):
             # pylint: disable=protected-access
             ptq._config.aclnn_quant_list = ["routed_experts.ffn.w_gate_hidden", "routed_experts.ffn.w1",
                                             "routed_experts.ffn.w3"]
+        if 'gptq-pergroup' in quant_type.lower():
+            # pylint: disable=protected-access
+            ptq.layer_policies[r'.*\.feed_forward\.w2.*'].aclnn_quant_list = ["w2"]
+            ptq.layer_policies[r'.*\.shared_experts.w2.*'].aclnn_quant_list = ["w2"]
         ptq.decoder_layer_types.append(DeepseekV3DecodeLayer)
         return ptq

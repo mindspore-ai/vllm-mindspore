@@ -1263,7 +1263,9 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         else:
             value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                      hf_weight_map)
-        if "wo._layer.matmul.quant_bias" in param_name and get_tensor_model_parallel_rank() != 0:
+        quant_bias_set_zero = ["wo._layer.matmul.quant_bias", "w2._layer.matmul.quant_bias"]
+        if any([name in param_name for name in quant_bias_set_zero]) and \
+            get_tensor_model_parallel_rank() != 0:
             value.fill(0)
         return value
 
@@ -1365,11 +1367,13 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                 hf_weight_map, is_split_param=True,
                                                                 split_axis=1)
-            elif any([name in param_name for name in [".feed_forward.w2.", ".wo.",
-                                                      "shared_experts.w2"]]):
+            elif any([name in param_name for name in [".wo."]]):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                 hf_weight_map, is_split_param=True,
                                                                 split_axis=0)
+            elif any([name in param_name for name in [".feed_forward.w2.","shared_experts.w2"]]):
+                value = self.infer_smooth_quant_row_linear_split(param_name, src_hf_dir, hf_weight_map)
+                is_int4 = False
             elif ".routed_experts.ffn.w_gate_hidden." in param_name:
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
                 value_list = []
@@ -1430,7 +1434,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         quantization_config = self.config.model.model_config.quantization_config
         quant_method = quantization_config.quant_method if quantization_config else None
-        if not quant_method or (quant_method != "gptq-pergroup" and quant_method != "smoothquant") and \
+        support_quant_method = ["gptq-pergroup", "smoothquant"]
+        if not quant_method or (quant_method not in support_quant_method) and \
                 not is_mtp_model:
             self.infer_convert_outer_weight(src_hf_dir, hf_weight_map)
 
