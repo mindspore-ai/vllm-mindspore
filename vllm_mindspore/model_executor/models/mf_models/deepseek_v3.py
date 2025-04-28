@@ -92,22 +92,20 @@ def _get_padding_index(q_seq_len):
         arange_data = np.arange(0, int(tokens_length), dtype=np.int32)
         if dp_rank == dp_rank_id:
             ffn_unpadding_idx = arange_data
-            attn_padding_idx = np.pad(
-                arange_data, (0, padding_size - arange_data.shape[0]), mode='constant', constant_values=0)
-
+            pad = np.zeros(padding_size - arange_data.shape[0], dtype=np.int32)
+            attn_padding_idx = np.concatenate((arange_data, pad), axis=0)
         if dp_rank == 0:
             attn_unpadding_idx = arange_data
             last_arange_index = arange_data[-1]
-            ffn_padding_idx = np.pad(attn_unpadding_idx, (0, padding_size - attn_unpadding_idx.shape[0]),
-                                     mode='constant', constant_values=0)
+            pad = np.zeros(padding_size - attn_unpadding_idx.shape[0], dtype=np.int32)
+            ffn_padding_idx = np.concatenate((attn_unpadding_idx, pad), axis=0)
         else:
             attn_offset_idx = arange_data + padding_size * dp_rank
             attn_unpadding_idx = np.concatenate((attn_unpadding_idx, attn_offset_idx), axis=0)
             ffn_offset_idx = arange_data + last_arange_index + 1
             last_arange_index = ffn_offset_idx[-1]
-            ffn_offset_idx_pad_zero = np.pad(
-                ffn_offset_idx, (0, padding_size - ffn_offset_idx.shape[0]), mode='constant', constant_values=0)
-            ffn_padding_idx = np.concatenate((ffn_padding_idx, ffn_offset_idx_pad_zero), axis=0)
+            pad = np.zeros(padding_size - ffn_offset_idx.shape[0], dtype=np.int32)
+            ffn_padding_idx = np.concatenate((ffn_padding_idx, ffn_offset_idx, pad), axis=0)
     return ms.from_numpy(attn_padding_idx), ms.from_numpy(attn_unpadding_idx), ms.from_numpy(ffn_padding_idx), \
            ms.from_numpy(ffn_unpadding_idx)
 
