@@ -40,24 +40,13 @@ import mindspore as ms
 from mindspore import Tensor, mutable
 
 from mindformers.tools.register.config import MindFormerConfig
-from mindformers.core.context import build_context
+from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
 
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
 from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
 
 logger = init_logger(__name__)
-
-
-def _pad_to_max(x, max_len):
-    return x + [-1] * (max_len - len(x))
-
-
-def _batch_seq(input_tokens, prefill):
-    if prefill:
-        return ms.ops.expand_dims(input_tokens, 0).to(ms.int32)
-
-    return ms.mint.reshape(input_tokens, (-1, 1)).to(ms.int32)
 
 
 class Fake_Attention:
@@ -132,7 +121,7 @@ class MfModelBase(MsModelBase):
         )
 
         self.mf_config = MindFormerConfig(os.getenv("MINDFORMERS_MODEL_CONFIG"))
-        build_context(self.mf_config, is_set_ms_ctx=False, is_init_ms=False)
+        build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
         self.mf_config.model.model_config.parallel_config = (
             self.mf_config.parallel_config
@@ -145,12 +134,10 @@ class MfModelBase(MsModelBase):
         self._generate_model_config()
         self.network = self._create_network()
 
-        self.network.construct = MethodType(ms.jit(self.network.__class__.construct,
-                                                   jit_level='O0', infer_boost='on'),
-                                            self.network)
-        self.network.lm_head.construct = MethodType(ms.jit(self.network.lm_head.__class__.construct,
-                                                            jit_level='O0', infer_boost='on'),
-                                                    self.network.lm_head)
+        affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
+        if isinstance(affinity_config, dict):
+            ms.runtime.set_cpu_affinity(True, affinity_config)
+
 
     @abstractmethod
     def _generate_model_config(self):
@@ -235,8 +222,8 @@ class MfModelBase(MsModelBase):
             attention_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
 
             model_inputs = {}
-            model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
-            model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(seq_lens_np, 0))
+            model_inputs["input_ids"] = input_ids.astype(ms.int32)
+            model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
             model_inputs["block_tables"] = attn_metadata.block_tables
             model_inputs["slot_mapping"] = attn_metadata.slot_mapping
             model_inputs["position_ids"] = position_ids
@@ -254,8 +241,8 @@ class MfModelBase(MsModelBase):
             attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
 
             model_inputs = {}
-            model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
-            model_inputs["batch_valid_length"] = ms.Tensor(np.expand_dims(attn_metadata.seq_lens_np, 0))
+            model_inputs["input_ids"] = input_ids.astype(ms.int32)
+            model_inputs["batch_valid_length"] = ms.from_numpy(attn_metadata.seq_lens_np)
             model_inputs["block_tables"] = attn_metadata.block_tables
             model_inputs["slot_mapping"] = attn_metadata.slot_mapping
             model_inputs["position_ids"] = positions.to(ms.int32)
