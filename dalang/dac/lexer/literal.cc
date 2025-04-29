@@ -43,19 +43,6 @@ std::unordered_set<char> _alphabets = {
 };
 
 namespace {
-int Char2Int(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  } else if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  } else if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  } else {
-    LOG_ERROR << "Unsupported char in Char2Int().";
-    exit(EXIT_FAILURE);
-  }
-}
-
 size_t StartsWithLiteralType(const char *literal, size_t *count) {
   for (size_t i = 0; i < LiteralId_End; ++i) {
     if (strstr(literal, _typesStr[i]) == literal) {
