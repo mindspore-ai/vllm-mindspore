@@ -314,6 +314,10 @@ from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
 Worker.compile_or_warm_up_model = compile_or_warm_up_model
 
+from vllm_mindspore.v1.core.sched.scheduler import schedule
+from vllm.v1.core.sched.scheduler import Scheduler
+Scheduler.schedule = schedule
+
 from .utils import check_ready
 
 check_ready()
