@@ -18,15 +18,18 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 # Allow lines to be as long as 80.
 line-length = 80
+
 exclude = [
     # External file, leaving license intact
     "vllm_mindspore/__init__.py",
-    "tests/*"
+    "tests/*",
+    "setup.py"
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "vllm_mindspore/version.txt" = ["F401"]
 "vllm_mindspore/_version.txt" = ["ALL"]
+"setup.py" = ["ALL"]
 
 [tool.ruff.lint]
 select = [
@@ -64,27 +67,18 @@ follow_imports = "silent"
 
 # After fixing type errors resulting from follow_imports: "skip" -> "silent",
 # move the directory here and remove it from tools/mypy.sh
-#files = [
-#    "vllm/*.py",
-#    "vllm/adapter_commons",
-#    "vllm/assets",
-#    "vllm/entrypoints",
-#    "vllm/core",
-#    "vllm/inputs",
-#    "vllm/logging_utils",
-#    "vllm/multimodal",
-#    "vllm/platforms",
-#    "vllm/transformers_utils",
-#    "vllm/triton_utils",
-#    "vllm/usage",
-#]
-files= ["vllm_mindspore/*.py",]
-# TODO(woosuk): Include the code from Megatron and HuggingFace.
+files= ["vllm_mindspore/"]
 exclude = [
     "vllm_mindspore/model_executor/parallel_utils/|vllm_mindspore/model_executor/models/",
     # Ignore triton kernels in ops.
-    'vllm_mindspore/attention/ops/.*\.py$'
+    'vllm_mindspore/attention/ops/.*\.py$',
+    'setup.py',
+    'tests/'
 ]
+
+[[tool.mypy.overrides]]
+module = "setup"
+ignore_errors = true
 
 [tool.codespell]
 ignore-words-list = "dout, te, indicies, subtile, ElementE, CANN"
@@ -94,7 +88,7 @@ skip = "./tests/models/fixtures,./tests/prompts,./benchmarks/sonnet.txt,./tests/
 use_parentheses = true
 skip_gitignore = true
 
-skip_glob = ["tests/*", "vllm_mindspore/ops/*"]
+skip_glob = ["tests/*", "vllm_mindspore/ops/*", "setup.py"]
 skip = ["vllm_mindspore/__init__.py"]
 
 [tool.pytest.ini_options]
