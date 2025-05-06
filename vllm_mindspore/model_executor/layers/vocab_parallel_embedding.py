@@ -87,12 +87,12 @@ def get_masked_input_and_mask(
 ) -> Tuple[Tensor, Tensor]:
     displaced_x = mint.sub(input_, org_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(down_truncated_x, org_vocab_end_index)
+    truncated_x = mint.minimum(down_truncated_x, (org_vocab_end_index - org_vocab_start_index - 1))
     org_vocab_mask = mint.eq(displaced_x, truncated_x)
 
     displaced_x = mint.sub(input_, added_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(down_truncated_x, added_vocab_end_index)
+    truncated_x = mint.minimum(down_truncated_x, (added_vocab_end_index - added_vocab_start_index - 1))
     added_vocab_mask = mint.eq(displaced_x, truncated_x)
     added_offset = added_vocab_start_index - (
         org_vocab_end_index - org_vocab_start_index) - num_org_vocab_padding
@@ -197,8 +197,8 @@ class VocabParallelEmbedding(nn.Cell):
     ):
         super().__init__()
         # Keep the input dimensions.
-        tp_rank = get_tensor_model_parallel_rank()  # 获取tp并行的rank
-        self.tp_size = get_tensor_model_parallel_world_size()  # 获取tp并行的world_size
+        self.tp_rank = get_tensor_model_parallel_rank()
+        self.tp_size = get_tensor_model_parallel_world_size()
         self.num_embeddings = num_embeddings
         self.padding_size = padding_size
         self.org_vocab_size = org_num_embeddings or num_embeddings
@@ -216,7 +216,7 @@ class VocabParallelEmbedding(nn.Cell):
             self.org_vocab_size_padded,
             self.num_embeddings,
             self.org_vocab_size,
-            tp_rank,
+            self.tp_rank,
             self.tp_size,
         )
 
