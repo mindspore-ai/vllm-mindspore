@@ -58,12 +58,8 @@ DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
 CURRENT_PATH=$(pwd)
 SCRIPT_PATH=$(dirname "$0")
 
-DALANG_PATH=$CURRENT_PATH/dalang
-DAPY_PATH=$CURRENT_PATH/dapy
-
+DART_PATH=$CURRENT_PATH
 BUILD_DIR=$CURRENT_PATH/build
-BUILD_DIR_DALANG=$BUILD_DIR/dalang
-BUILD_DIR_DAPY=$BUILD_DIR/dapy
 
 # Make sure the build directory exists
 make_sure_build_dir()
@@ -79,75 +75,37 @@ make_sure_build_dir()
         return
     fi
 }
-make_sure_build_dir $BUILD_DIR_DALANG
-make_sure_build_dir $BUILD_DIR_DAPY
+make_sure_build_dir $BUILD_DIR
 
 
 ##################################################
-# Step 1:
-# Build DALANG shared library and execution
+# Make da & dapy execution and shared library
 ##################################################
-
-# Make da execution and shared library
-cd $BUILD_DIR_DALANG
+cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
-    rm $BUILD_DIR_DALANG/* -rf
-    echo "DALANG_CMAKE_ARGS: $DALANG_CMAKE_ARGS"
-    cmake $DALANG_PATH $DALANG_CMAKE_ARGS
+    rm $BUILD_DIR/* -rf
+    cmake $DART_PATH $DALANG_CMAKE_ARGS $DAPY_CMAKE_ARGS
 fi
 make
 
-# Run test
+
+##################################################
+# Run essential test
+##################################################
+# Run dalang test
 echo "=============================="
 echo "Run da execution test cases:"
 echo "# 1/2: ./da sample/fibonacci_20.da"
-$BUILD_DIR_DALANG/da $DALANG_PATH/sample/fibonacci_20.da
+$BUILD_DIR/dalang/da $DART_PATH/dalang/sample/fibonacci_20.da
 echo "# 2/2: ./da sample/da_llm_sample.da"
-$BUILD_DIR_DALANG/da $DALANG_PATH/sample/da_llm_sample.da
+$BUILD_DIR/dalang/da $DART_PATH/dalang/sample/da_llm_sample.da
 echo "=============================="
 
-##################################################
-# Step 2:
-# Build DAPY shared library and execution
-##################################################
-
-# Set dalang shared library path for _dapy linking
-DALANG_LIBRARIES="$BUILD_DIR_DALANG/libdalang.so"
-echo "DALANG_LIBRARIES=$DALANG_LIBRARIES"
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} -DDALANG_LIBRARIES=$DALANG_LIBRARIES"
-
-# Update pybind11 submodule
-update_pybind11_submodule()
-{
-    if [ -d "pybind11" ]; then
-        echo "pybind11 already exists."
-        git submodule update --init
-    else
-        echo "pybind11 not found, start to clone."
-        # Change github repo to gitee's: https://github.com/pybind/pybind11 ==> https://gitee.com/mirrors/pybind11
-        git submodule add --force -b stable https://gitee.com/mirrors/pybind11 pybind11
-        git submodule update --init
-    fi
-}
-cd $DAPY_PATH
-update_pybind11_submodule
-PYBIND11_PATH=$DAPY_PATH/pybind11
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} -DPYBIND11_PATH=$PYBIND11_PATH"
-
-# Make _dapy python module
-cd $BUILD_DIR_DAPY
-if [[ $INC_BUILD != 1 ]]; then
-    rm $BUILD_DIR_DAPY/* -rf
-    echo "DALANG_CMAKE_ARGS: $DAPY_CMAKE_ARGS"
-    cmake $DAPY_PATH $DAPY_CMAKE_ARGS
-fi
-make
-
-# Run test
+# Run dapy test
 echo "=============================="
 echo "Run dapy test case:"
 echo "python check_api.py"
 echo "=============================="
-export PYTHONPATH=$BUILD_DIR_DAPY:$DAPY_PATH/python
+export PYTHONPATH=$BUILD_DIR/dapy:$DART_PATH/dapy/python
 echo "PYTHONPATH=$PYTHONPATH"
-python $DAPY_PATH/python/check_api.py
+python $DART_PATH/dapy/python/check_api.py
