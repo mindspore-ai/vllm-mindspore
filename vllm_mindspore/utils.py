@@ -62,17 +62,6 @@ def get_valid_dtype(dtype):
     return dtype
 
 
-def direct_register_custom_op(
-    op_name: str,
-    op_func: Callable,
-    mutates_args: List[str],
-    fake_impl: Optional[Callable] = None,
-    target_lib: Optional[Library] = None,
-    dispatch_key: str = "CUDA",
-):
-    ...
-
-
 def _create_empty_tensor(ms_type):
     init_func = Zero()
     init_func.__enable_zero_dim__ = True
@@ -157,50 +146,6 @@ class vllmModelBackendEnum(str, Enum):
     """Define the variable Enum of vLLM_MODEL_BACKEND"""
     MF = 'MindFormers'
     MIND_ONE = 'MindONE'
-
-
-def get_dtype_size(dtype: torch.dtype) -> int:
-    """Get the size of the data type in bytes."""
-    if isinstance(dtype, str):
-        dtype = STR_DTYPE_TO_TENSOR_DTYPE[dtype]
-    return torch.tensor([1], dtype=dtype).itemsize
-
-
-def ascend_device_count_stateless() -> int:
-    visible_device_str = os.environ.get("ASCEND_RT_VISIBLE_DEVICES", None)
-    if visible_device_str:
-        try:
-            res = visible_device_str.split(",")
-        except Exception as e:
-            logger.error('Cannot parse "ASCEND_RT_VISIBLE_DEVICES" for: %s!',
-                         str(e))
-            raise ValueError(
-                f'Error argument({visible_device_str}) of environ "ASCEND_RT_VISIBLE_DEVICES"!'
-            ) from e
-
-        return len(res)
-
-    import re
-    import subprocess
-
-    output = subprocess.check_output(["npu-smi", "info"], encoding="utf-8")
-    res = re.findall(
-        r"\|\s+\d+\s+\w+\s+\|\s+(\w+)\s+\|\s+(?:[0-9\.]+|-)\s+[0-9\.]+\s+\d+\s+\/\s+\d+\s+\|",
-        output,
-    )
-
-    avl_devices = []
-    for i, stat in enumerate(res):
-        if stat != "OK":
-            logger.warning("Device %d is not ok, status is %s!", i, stat)
-        else:
-            avl_devices.append(str(i))
-    visible_device_str = ",".join(avl_devices)
-    os.environ["ASCEND_RT_VISIBLE_DEVICES"] = visible_device_str
-    logger.info('Set environ "ASCEND_RT_VISIBLE_DEVICES" as %s',
-                visible_device_str)
-
-    return len(avl_devices)
 
 
 def ascend_is_initialized():

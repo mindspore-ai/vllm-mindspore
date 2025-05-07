@@ -60,33 +60,23 @@ from vllm_mindspore.v1.engine.core import shutdown
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
 from vllm_mindspore.utils import (
-    direct_register_custom_op,
     make_tensor_with_pad,
     async_tensor_h2d,
-    get_dtype_size,
-    ascend_device_count_stateless,
     ascend_is_initialized,
     ms_memory_profiling,
 )
 
-vllm.utils.direct_register_custom_op = direct_register_custom_op
 vllm.utils.make_tensor_with_pad = make_tensor_with_pad
 vllm.utils.async_tensor_h2d = async_tensor_h2d
-vllm.utils.get_dtype_size = get_dtype_size
-vllm.utils.cuda_device_count_stateless = ascend_device_count_stateless
 vllm.utils.cuda_is_initialized = ascend_is_initialized
 vllm.utils.memory_profiling = ms_memory_profiling
-vllm.config.cuda_device_count_stateless = ascend_device_count_stateless
 
 import vllm.executor
-
-vllm.executor.cuda_device_count_stateless = ascend_device_count_stateless
 
 from vllm_mindspore.model_executor.models.registry import (
     MindSporeModelRegistry,
     _SUBPROCESS_COMMAND,
 )
-
 
 vllm.config.ModelRegistry = MindSporeModelRegistry
 
@@ -108,18 +98,10 @@ vllm.model_executor.model_loader.loader.get_model_architecture = (
     get_ms_model_architecture
 )
 
-from vllm_mindspore.model_executor.sampling_metadata import (
-    SequenceGroupToSample,
-    SamplingMetadataCache,
-    SamplingMetadata,
-)
+from vllm_mindspore.model_executor.sampling_metadata import SamplingTensors
 
-vllm.model_executor.SamplingMetadataCache = SamplingMetadataCache
-vllm.model_executor.SamplingMetadata = SamplingMetadata
-vllm.model_executor.sampling_metadata.SequenceGroupToSample = SequenceGroupToSample
-vllm.model_executor.sampling_metadata.SamplingMetadataCache = SamplingMetadataCache
-vllm.model_executor.sampling_metadata.SamplingMetadata = SamplingMetadata
-
+vllm.model_executor.sampling_metadata.async_tensor_h2d = async_tensor_h2d
+vllm.model_executor.sampling_metadata.SamplingTensors.from_lists = SamplingTensors.from_lists
 from vllm_mindspore.worker.cache_engine import (
     ms_allocate_kv_cache,
     ms_swap_in,

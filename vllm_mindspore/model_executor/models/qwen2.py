@@ -46,7 +46,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import \
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
-from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm_mindspore.model_executor.models.model_base import MsModelBase, Fake_Attention, Fake_Attention_V1
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
