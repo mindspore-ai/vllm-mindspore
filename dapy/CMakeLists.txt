@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.11)
 project(DaPy VERSION 1.0)
 message("-- CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -20,9 +20,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
-if("${DEBUG_LOG_OUT_dapy}" STREQUAL "on")
-add_definitions(-DDEBUG_LOG_OUT)
-endif()
+check_debug_log_out()
 
 # Include DALang headers
 include_directories(${PROJECT_SOURCE_DIR}/../dalang)

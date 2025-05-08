@@ -8,7 +8,7 @@ set -e
 usage()
 {
   echo "Usage:"
-  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,ir,rt,dapy]] [-i] [-h]"
+  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,tensor,ops,runtime,dapy]] [-i] [-h]"
   echo ""
   echo "Options:"
   echo "    -d Enable log print of modules, separated by comma(eg. -d parser,compiler),"
