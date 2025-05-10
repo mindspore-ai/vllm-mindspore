@@ -312,8 +312,8 @@ class MSAttentionMetadata(AttentionMetadata, PagedAttentionMetadata):
             self.seq_lens[i] += 1
         self.max_decode_seq_len = max(self.seq_lens)
 
-        # default use python op
-        if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "off") == "on":
+        # default use ascendc op
+        if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "on") != "off":
             from vllm_mindspore import npu_ops
             npu_ops.adv_step_flash(num_seqs=num_seqs,
                                    num_queries=num_queries,

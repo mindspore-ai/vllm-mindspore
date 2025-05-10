@@ -101,12 +101,11 @@ version = (Path("vllm_mindspore") / "version.txt").read_text()
 def _get_ascend_home_path():
     return os.environ.get("ASCEND_HOME_PATH", "/usr/local/Ascend/ascend-toolkit/latest")
 
-def _get_ascend_env_path(check_exists=True):
-    env_script_path = os.path.join(_get_ascend_home_path(), "bin", "setenv.bash")
-    if check_exists and not os.path.exists(env_script_path):
-        warnings.warn(f"The file '{env_script_path}' is not found, "
-                            "please make sure env variable 'ASCEND_HOME_PATH' is set correctly.")
-        return None
+def _get_ascend_env_path():
+    env_script_path = os.path.realpath(os.path.join(_get_ascend_home_path(), "..", "set_env.sh"))
+    if not os.path.exists(env_script_path):
+        raise ValueError(f"The file '{env_script_path}' is not found, "
+                            "please make sure environment variable 'ASCEND_HOME_PATH' is set correctly.")
     return env_script_path
 
 class CustomBuildExt(build_ext):
@@ -128,7 +127,7 @@ class CustomBuildExt(build_ext):
         os.makedirs(BUILD_OPS_DIR, exist_ok=True)
 
         ascend_home_path = _get_ascend_home_path()
-        env_script_path = _get_ascend_env_path(False)
+        env_script_path = _get_ascend_env_path()
         build_extension_dir = os.path.join(BUILD_OPS_DIR, "kernel_meta", ext_name)
         # Combine all cmake commands into one string
         cmake_cmd = (
@@ -176,12 +175,9 @@ package_data = {
 
 def _get_ext_modules():
     ext_modules = []
-    # Currently, the CI environment does not support the compilation of custom operators.
-    # As a temporary solution, this is controlled via an environment variable.
-    # Once the CI environment adds support for custom operator compilation,
-    # this should be updated to enable compilation by default.
-    if os.getenv("vLLM_USE_NPU_ADV_STEP_FLASH_OP", "off") == "on" and _get_ascend_env_path() is not None:
-        ext_modules.append(Extension("vllm_mindspore.npu_ops", sources=[])) # sources are specified in CMakeLists.txt
+    if os.path.exists(_get_ascend_home_path()):
+        # sources are specified in CMakeLists.txt
+        ext_modules.append(Extension("vllm_mindspore.npu_ops", sources=[]))
     return ext_modules
 
 setup(
