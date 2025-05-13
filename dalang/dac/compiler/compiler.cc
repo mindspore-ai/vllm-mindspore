@@ -887,7 +887,7 @@ void Compiler::Dump() {
     std::cout << "code: <" << ToStr(code.type) << " '" << code.name << "'>";
     std::cout << std::endl;
     if (!code.argNames.empty()) {
-      std::cout << "arguments: " << std::endl;
+      std::cout << "arguments:" << std::endl;
       for (size_t i = 0; i < code.argNames.size(); ++i) {
         const auto &arg = code.argNames[i];
         const auto idx = code.argIndexes[i];
@@ -904,7 +904,7 @@ void Compiler::Dump() {
       }
     }
 
-    std::cout << "instructions: " << std::endl;
+    std::cout << "instructions:" << std::endl;
     ssize_t lastLineno = -1;
     for (size_t i = 0; i < code.insts.size(); ++i) {
       const auto &inst = code.insts[i];
@@ -1019,14 +1019,14 @@ void Compiler::Dump() {
       std::cout << std::endl;
     }
 
-    std::cout << "symbols: " << std::endl;
+    std::cout << "symbols:" << std::endl;
     for (size_t i = 0; i < code.symbols.size(); ++i) {
       const auto &var = code.symbols[i];
       std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
       std::cout << var << std::endl;
     }
 
-    std::cout << "constants: " << std::endl;
+    std::cout << "constants:" << std::endl;
     for (size_t i = 0; i < code.constants.size(); ++i) {
       const auto &cons = code.constants[i];
       std::cout << std::setfill(' ') << std::setw(8) << std::left << i;

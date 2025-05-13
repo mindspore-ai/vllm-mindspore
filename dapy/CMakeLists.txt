@@ -32,33 +32,39 @@ include_directories(${PROJECT_SOURCE_DIR}/../dalang/api)
 # Include DaPy directories
 include_directories(${PROJECT_SOURCE_DIR}/dalang_py)
 
-# Prepare pybind11 module
-set(depname "pybind11")
-set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
-message("-- PYBIND11_PATH: ${PYBIND11_PATH}")
+if(TARGET pybind11::headers)
+    message("-- pybind11 already included")
+else()
+    # Prepare pybind11 module
+    message("-- pybind11 not included, start including")
+    set(depname "pybind11")
+    set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
+    message("-- PYBIND11_PATH: ${PYBIND11_PATH}")
 
-# Download and copy pybind11 project if not exists
-if(NOT EXISTS ${PYBIND11_PATH})
-    message("-- Downloading ${depname} module...")
-    include(FetchContent)
-    FetchContent_Declare(
-        ${depname}
-        # Change github repo to gitee's: https://github.com/pybind/pybind11 ==> https://gitee.com/mirrors/pybind11
-        GIT_REPOSITORY https://gitee.com/mirrors/pybind11.git
-        GIT_TAG 58c382a8e3d7081364d2f5c62e7f429f0412743b # stable
-    )
-    FetchContent_MakeAvailable(${depname})
-    message("-- pybind11_SOURCE_DIR: ${${depname}_SOURCE_DIR}")
-    message("-- pybind11_BINARY_DIR: ${${depname}_BINARY_DIR}")
-    # Find pybind11 package location, or call find_package(pybind11 REQUIRED)
-    message("-- Copying ${${depname}_SOURCE_DIR} to ${PROJECT_SOURCE_DIR}/...")
-    file(COPY ${${depname}_SOURCE_DIR} DESTINATION ${PROJECT_SOURCE_DIR})
+    # Download and copy pybind11 project if not exists
+    if(NOT EXISTS ${PYBIND11_PATH})
+        message("-- Downloading ${depname} module...")
+        include(FetchContent)
+        FetchContent_Declare(
+            ${depname}
+            # Change github repo to gitee's: https://github.com/pybind/pybind11 ==> https://gitee.com/mirrors/pybind11
+            GIT_REPOSITORY https://gitee.com/mirrors/pybind11.git
+            GIT_TAG 58c382a8e3d7081364d2f5c62e7f429f0412743b # stable
+        )
+        FetchContent_MakeAvailable(${depname})
+        message("-- pybind11_SOURCE_DIR: ${${depname}_SOURCE_DIR}")
+        message("-- pybind11_BINARY_DIR: ${${depname}_BINARY_DIR}")
+        # Find pybind11 package location, or call find_package(pybind11 REQUIRED)
+        message("-- Copying ${${depname}_SOURCE_DIR} to ${PROJECT_SOURCE_DIR}/...")
+        file(COPY ${${depname}_SOURCE_DIR} DESTINATION ${PROJECT_SOURCE_DIR})
+    endif()
+
+    # Include pybind11 directories
+    include_directories(${PYBIND11_PATH}/include)
+
+    add_subdirectory(${PYBIND11_PATH})
 endif()
 
-# Include pybind11 directories
-include_directories(${PYBIND11_PATH}/include)
-
 # Add pybind11 sub module
-add_subdirectory(${PYBIND11_PATH})
 pybind11_add_module(_dapy NO_EXTRAS dalang_py/pybind11_api.cc)
 target_link_libraries(_dapy PUBLIC dalang)
