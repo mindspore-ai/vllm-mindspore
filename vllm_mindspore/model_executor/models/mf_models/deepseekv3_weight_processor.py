@@ -938,7 +938,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                        requires_grad=False)
 
     def get_moe_shared_expert_weight(self, w1_hf_name, w2_hf_name, w3_hf_name, src_hf_dir, hf_weight_map):
-        if self.ep_method == EPMethod.ALLGATHER:
+        if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
             w1_ms_param, _ = self.get_safetensor_from_file_split_global_group(w1_hf_name, src_hf_dir, hf_weight_map,
                                                                               split_axis=0)
             w2_ms_param, _ = self.get_safetensor_from_file_split_global_group(w2_hf_name, src_hf_dir, hf_weight_map,
@@ -1292,7 +1292,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                   w3_bias_name, w3_scale_name, w2_weight_name, src_hf_dir,
                                                   hf_weight_map):
 
-        if self.ep_method == EPMethod.ALLGATHER:
+        if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
             w1_weight_param, _ = self.get_safetensor_from_file_split_moe_tp_group(w1_weight_name, src_hf_dir,
                                                                                   hf_weight_map,
                                                                                   split_axis=0)
