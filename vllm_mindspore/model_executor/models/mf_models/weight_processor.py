@@ -33,6 +33,7 @@ class EPMethod(Enum):
     ALLTOALL = 'alltoall'
     ALLGATHER = 'allgather'
 
+
 class BaseWeightProcessor:
     r"""
     Provide model weight load and shards.
@@ -51,8 +52,9 @@ class BaseWeightProcessor:
         self.tp_group_size = get_tp_world_size()
         self.dp_group_size = get_data_parallel_world_size()
         self.num_router_experts = self.config.moe_config.expert_num if self.config.moe_config.expert_num else 1
-        self.moe_ep_size = self.config.moe_config.moe_expert_parallel if self.config.moe_config.moe_expert_parallel else 1
-        self.moe_tp_size = self.config.moe_config.moe_tensor_parallel if self.config.moe_config.moe_tensor_parallel else 1
+        self.moe_ep_size = self.config.parallel_config.expert_parallel \
+            if self.config.parallel_config.expert_parallel else 1
+        self.moe_tp_size = self.global_group_size // self.moe_ep_size
         self.ep_method = EPMethod.DEFAULT
         if self.dp_group_size > 1 and self.moe_ep_size == self.global_group_size:
             self.ep_method = EPMethod.ALLTOALL
