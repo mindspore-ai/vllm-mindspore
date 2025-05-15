@@ -1434,7 +1434,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         quantization_config = self.config.model.model_config.quantization_config
         quant_method = quantization_config.quant_method if quantization_config else None
-        support_quant_method = ["gptq-pergroup", "smoothquant"]
+        support_quant_method = ["gptq-pergroup", "smoothquant", "osl"]
         if not quant_method or (quant_method not in support_quant_method) and \
                 not is_mtp_model:
             self.infer_convert_outer_weight(src_hf_dir, hf_weight_map)
@@ -1443,6 +1443,9 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             self.infer_gptq_quant_net_ms_convert_layer_weight(src_hf_dir, self.num_layers, hf_weight_map)
             return
         if quant_method and quant_method == "smoothquant":
+            self.infer_smooth_quant_net_ms_convert_layer_weight(src_hf_dir, self.num_layers, hf_weight_map)
+            return
+        if quant_method and quant_method == "osl":
             self.infer_smooth_quant_net_ms_convert_layer_weight(src_hf_dir, self.num_layers, hf_weight_map)
             return
 
