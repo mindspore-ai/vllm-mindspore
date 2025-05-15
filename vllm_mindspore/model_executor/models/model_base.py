@@ -66,16 +66,6 @@ class Fake_MLA(Fake_Attention):
         ]
 
 
-class Fake_MLA(Fake_Attention):
-    def __init__(self):
-        super().__init__()
-        vllm_config = get_current_vllm_config()
-        self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
-
-
 class Fake_Attention_V1(Attention):
     def __init__(self):
         vllm_config = get_current_vllm_config()
