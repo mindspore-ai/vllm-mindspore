@@ -1,5 +1,7 @@
 pip install -r codecheck_toolkits/requirements-lint.txt
 
+ln -s codecheck_toolkits/pyproject.toml pyproject.toml
+
 RET_FLAG=0
 
 # yapf check
@@ -68,5 +70,7 @@ if [[ $? -ne 0 ]]; then
 else
   echo "mypy check success."
 fi
+
+rm -f pyproject.toml
 
 exit $RET_FLAG
