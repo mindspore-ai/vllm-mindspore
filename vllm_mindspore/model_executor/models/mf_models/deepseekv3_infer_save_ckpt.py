@@ -17,17 +17,20 @@ import argparse
 import os
 from collections import OrderedDict
 
+from vllm.logger import init_logger
+
 import mindspore as ms
 from mindspore import dtype as msdtype
 from mindspore.communication.management import get_rank
 from mindformers.core.parallel_config import build_parallel_config
-from mindformers.tools.logger import logger
 from mindformers import MindFormerConfig
 from mindformers import build_context
 from research.deepseek3.deepseekv3_infer_parallelism import DeepseekInferParallelism
 
 from research.deepseek3.deepseek3_config import DeepseekV3Config
 from research.deepseek3.deepseek3_model_infer import InferenceDeepseekV3ForCausalLM
+
+logger = init_logger(__name__)
 
 # for example
 # bash scripts/msrun_launcher.sh "python ./infer_save_ckpt_from_safetensor.py

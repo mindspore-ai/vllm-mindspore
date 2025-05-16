@@ -19,6 +19,8 @@
 import logging
 import os
 
+# It's before the vllm import, so vllm.logger cannot be used here.
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +43,8 @@ def env_setup(target_env_dict=None):
             "DEVICE_NUM_PER_NODE": "16",
             "HCCL_OP_EXPANSION_MODE": "AIV",
             "MS_JIT_MODULES": "vllm_mindspore,research",
-            "GLOG_v": "3"
+            "GLOG_v": "3",
+            "RAY_CGRAPH_get_timeout": "360"
         }
 
     for key, value in target_env_dict.items():
@@ -53,7 +56,7 @@ def env_setup(target_env_dict=None):
 def main():
     env_setup()
 
-    from vllm.scripts import main as vllm_main
+    from vllm.entrypoints.cli.main import main as vllm_main
 
     vllm_main()
 

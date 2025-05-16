@@ -23,14 +23,15 @@ env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
-    "MS_ENABLE_LCCL": "off",
+    "MS_ENABLE_LCCL": "on",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
-    "ATB_LLM_LCOC_ENABLE": "0"
+    "ATB_LLM_LCOC_ENABLE": "0",
+    "VLLM_USE_V1": "0",
 }
 # set env
 env_manager.setup_ai_environment(env_vars)

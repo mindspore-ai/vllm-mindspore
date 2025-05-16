@@ -40,6 +40,7 @@ def load_module_from_path(module_name, path):
 
 
 ROOT_DIR = os.path.dirname(__file__)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -121,7 +122,7 @@ class CustomBuildExt(build_ext):
         # "vllm_mindspore.npu_ops" --> "npu_ops"
         ext_name = ext.name.split('.')[-1]
         so_name = ext_name + ".so"
-        print(f"Building {so_name} ...")
+        logger.info(f"Building {so_name} ...")
         OPS_DIR = os.path.join(ROOT_DIR, "vllm_mindspore", "ops")
         BUILD_OPS_DIR = os.path.join(ROOT_DIR, "build", "ops")
         os.makedirs(BUILD_OPS_DIR, exist_ok=True)
@@ -143,12 +144,12 @@ class CustomBuildExt(build_ext):
 
         try:
             # Run the combined cmake command
-            print(f"Running combined CMake commands:\n{cmake_cmd}")
+            logger.info(f"Running combined CMake commands:\n{cmake_cmd}")
             result = subprocess.run(cmake_cmd, cwd=self.ROOT_DIR, text=True, shell=True, capture_output=True)
             if result.returncode != 0:
-                print("CMake commands failed:")
-                print(result.stdout)  # Print standard output
-                print(result.stderr)  # Print error output
+                logger.info("CMake commands failed:")
+                logger.info(result.stdout)  # Print standard output
+                logger.info(result.stderr)  # Print error output
                 raise RuntimeError(f"Combined CMake commands failed with exit code {result.returncode}")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to build {so_name}: {e}")
@@ -160,7 +161,7 @@ class CustomBuildExt(build_ext):
         if os.path.exists(dst_so_path):
             os.remove(dst_so_path)
         shutil.copy(src_so_path, dst_so_path)
-        print(f"Copied {so_name} to {dst_so_path}")
+        logger.info(f"Copied {so_name} to {dst_so_path}")
 
 
 write_commit_id()
@@ -214,4 +215,9 @@ setup(
     ext_modules=_get_ext_modules(),
     include_package_data=True,
     package_data=package_data,
+    entry_points={
+        "console_scripts": [
+            "vllm-mindspore=vllm_mindspore.scripts:main",
+        ],
+    },
 )

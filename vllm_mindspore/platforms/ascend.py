@@ -25,10 +25,12 @@ import mindspore as ms
 
 from vllm.platforms.interface import DeviceCapability, Platform, PlatformEnum, _Backend
 from vllm.logger import init_logger
+import vllm.envs as envs
 
 if TYPE_CHECKING:
-    from vllm.config import VllmConfig
+    from vllm.config import ModelConfig, VllmConfig
 else:
+    ModelConfig = None
     VllmConfig = None
 
 logger = init_logger(__name__)
@@ -79,24 +81,35 @@ class AscendPlatform(Platform):
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
 
-        if parallel_config.worker_cls == "auto":
-            if scheduler_config.is_multi_step:
-                parallel_config.worker_cls = "vllm.worker.multi_step_worker.MultiStepWorker"
-            elif vllm_config.speculative_config:
-                parallel_config.worker_cls = "vllm.spec_decode.spec_decode_worker.create_spec_worker"
-                parallel_config.sd_worker_cls = "vllm.worker.worker.Worker"
-            else:
-                parallel_config.worker_cls = "vllm.worker.worker.Worker"
+        import vllm.envs as envs
+        if envs.VLLM_USE_V1:
+            parallel_config.worker_cls = \
+                "vllm.v1.worker.gpu_worker.Worker"
+        else:
+            if parallel_config.worker_cls == "auto":
+                if scheduler_config.is_multi_step:
+                    parallel_config.worker_cls = "vllm.worker.multi_step_worker.MultiStepWorker"
+                elif vllm_config.speculative_config:
+                    parallel_config.worker_cls = "vllm.spec_decode.spec_decode_worker.create_spec_worker"
+                    parallel_config.sd_worker_cls = "vllm.worker.worker.Worker"
+                else:
+                    parallel_config.worker_cls = "vllm.worker.worker.Worker"
 
         cache_config = vllm_config.cache_config
         if cache_config and cache_config.block_size is None:
             cache_config.block_size = 16
 
 
+        # if envs.VLLM_USE_V1:
+        #     vllm_config.model_config.enforce_eager = True
+
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
         """Get the attention backend class of a device."""
         if use_v1:
+            if use_mla:
+                return "vllm_mindspore.v1.attention.backends.flash_attn.MLABackend"
+            return "vllm_mindspore.v1.attention.backends.flash_attn.FlashAttentionBackend"
             raise RuntimeError("vLLM-MindSpore do not support v1 egine now!")
         if use_mla:
             logger.info("Using MindSpore MLA backend.")
@@ -120,6 +133,8 @@ class AscendPlatform(Platform):
     @classmethod
     def get_device_communicator_cls(cls) -> str:
         """Get device specific communicator class for distributed communication."""
+        if envs.VLLM_USE_V1:
+            return "vllm.distributed.device_communicators.cuda_communicator.CudaCommunicator"
         return "vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase"
 
     @classmethod
@@ -127,3 +142,7 @@ class AscendPlatform(Platform):
         """Get the total memory of a device in bytes."""
         device_props = torch.cuda.get_device_properties(device_id)
         return device_props.total_memory
+
+    @classmethod
+    def supports_v1(cls, model_config: ModelConfig) -> bool:
+        return True

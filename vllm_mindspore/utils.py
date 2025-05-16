@@ -18,7 +18,6 @@
 
 import contextlib
 import gc
-import logging
 import os
 import sys
 from typing import (
@@ -39,6 +38,7 @@ if TYPE_CHECKING:
 else:
     Library = None
 
+from vllm.logger import init_logger
 from vllm.utils import T, TORCH_DTYPE_TO_NUMPY_DTYPE, make_ndarray_with_pad
 
 import mindspore as ms
@@ -50,7 +50,7 @@ from .scripts import env_setup
 
 MsKVCache = Tuple[ms.Tensor, ms.Tensor]
 
-logger = logging.getLogger(__name__)
+logger = init_logger(__name__)
 
 
 STR_DTYPE_TO_MS_DTYPE = {
@@ -217,8 +217,8 @@ def check_ready():
     import vllm.envs as envs
     from mindspore import set_context
 
-    if envs.VLLM_USE_V1:
-        raise NotImplementedError("vLLM-MindSpore does not support VLLM V1 now!")
+    # if envs.VLLM_USE_V1:
+    #     raise NotImplementedError("vLLM-MindSpore does not support VLLM V1 now!")
 
     # Common environment variables of predict.
     set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
@@ -263,5 +263,5 @@ def convert_np_to_ms_dtype(value):
 
 # Replace the directly loaded module in vllm, such as 'from module import xxx'
 def update_modules(name, module):
-    logger.info(f"replace module {name} by {module}")
+    logger.debug(f"replace module {name} by {module}")
     sys.modules.update({name: module})

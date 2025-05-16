@@ -132,7 +132,8 @@ def _dummy_run(self,
         # tensor aliasing.
         kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
             else self.cache_config.cache_dtype
-        kv_cache_dtype = STR_DTYPE_TO_TENSOR_DTYPE[kv_cache_dtype]
+        if kv_cache_dtype in STR_DTYPE_TO_TENSOR_DTYPE:
+            kv_cache_dtype = STR_DTYPE_TO_TENSOR_DTYPE[kv_cache_dtype]
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
