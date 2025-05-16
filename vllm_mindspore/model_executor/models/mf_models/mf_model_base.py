@@ -17,11 +17,9 @@
 # ============================================================================
 
 import os
-from types import MethodType
-from typing import Iterable, List, Optional, Set, Tuple, Union
+from typing import Iterable, Optional, Set, Tuple, Union
 from abc import abstractmethod
 import numpy as np
-import math
 
 from vllm.config import VllmConfig
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -41,7 +39,7 @@ from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
 
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
-from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerTriangularMask
+from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
 
 logger = init_logger(__name__)
@@ -64,7 +62,8 @@ class MfModelBase(MsModelBase):
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
         self._generate_model_config()
 
-        self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
+        self.casual_mask = LowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
+                                               max_model_len=self.model_config.max_model_len)
         self.network, self.lm_head = self._create_network()
 
         affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})

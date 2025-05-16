@@ -53,6 +53,7 @@ from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.model_base import Fake_MLA, Fake_MLA_V1
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
+from vllm_mindspore.model_executor.models.attention_mask import MLALowerTriangularMask
 
 logger = init_logger(__name__)
 
@@ -136,6 +137,8 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.set_flags = False
         set_runtime_kernel_launch_group()
+        self.casual_mask = MLALowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
+                                                  max_model_len=self.model_config.max_model_len)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
