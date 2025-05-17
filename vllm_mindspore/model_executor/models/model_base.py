@@ -111,6 +111,7 @@ class MsModelBase():
         self.cache_config = vllm_config.cache_config
         self.parallel_config = vllm_config.parallel_config
         self.load_config = vllm_config.load_config
+        self.scheduler_config = vllm_config.scheduler_config
 
         self.modules_dict = None
 
