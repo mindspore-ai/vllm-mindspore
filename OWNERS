@@ -1,12 +1,16 @@
 reviewers:
-- wang_shaocong
-- erpim
-- zhang_xue_tong
-- tan-wei-cheng
+- zhaizhiqiang
+- panshaowu
+- zichun_ye
+- ckey_dou
 
 approvers:
-- tronzhang
-- zichun_ye
 - zlq2020
-- panshaowu
-- zhaizhiqiang
+- zhang_xue_tong
+- tronzhang
+- r1chardf1d0
+- wang_shaocong
+- erpim
+- tan-wei-cheng
+- hangangqiang
+- dayschan
