@@ -6,7 +6,6 @@ import torch
 from vllm.logger import init_logger
 from vllm.distributed.parallel_state import get_pp_group
 
-
 logger = init_logger(__name__)
 
 
@@ -19,8 +18,8 @@ def init_device(self):
 
     config = get_current_vllm_config()
     if config is not None and config.parallel_config.data_parallel_size > 1:
-        device_id = self.parallel_config.data_parallel_rank_local * self.parallel_config.world_size + self.local_rank
-        self.device = torch.device(f"cuda:{device_id}")
+        self.local_rank = self.parallel_config.data_parallel_rank_local * self.parallel_config.world_size + self.local_rank
+        self.device = torch.device(f"cuda:{self.local_rank}")
     else:
         self.device = torch.device(f"cuda:{self.local_rank}")
     torch.cuda.set_device(self.device)
@@ -31,9 +30,16 @@ def init_device(self):
     self.init_gpu_memory = torch.cuda.mem_get_info()[0]
 
     # Initialize the distributed environment.
-    init_worker_distributed_environment(self.parallel_config, self.rank,
-                                        self.distributed_init_method,
-                                        self.local_rank)
+    try:
+        # not None -> Module found: DLLM patch applied
+        init_worker_distributed_environment(config, self.rank,
+                                            self.distributed_init_method,
+                                            self.local_rank)
+    except:
+        # None -> Module not found: Patch not applied
+        init_worker_distributed_environment(self.parallel_config, self.rank,
+                                            self.distributed_init_method,
+                                            self.local_rank)
 
     # Set random seed.
     set_random_seed(self.model_config.seed)
