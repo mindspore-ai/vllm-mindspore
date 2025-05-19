@@ -222,6 +222,10 @@ def check_ready():
 
     # Common environment variables of predict.
     set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
+    default_env = {
+        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": "FlashAttentionScore,PagedAttention",
+    }
+    env_setup(default_env)
 
     if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
         set_context(mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
@@ -236,11 +240,6 @@ def check_ready():
                 'For "MindFormers" model backend, environments %s should be set!'
                 % str(lost_envs)
             )
-
-        mindformers_default_env = {
-            "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": "FlashAttentionScore,PagedAttention",
-        }
-        env_setup(mindformers_default_env)
     else:
         logger.info("Run with native model backend!")
 

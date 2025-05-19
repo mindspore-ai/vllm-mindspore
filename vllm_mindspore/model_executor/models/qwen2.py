@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-from vllm.config import get_current_vllm_config
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union, Iterable
 
 if TYPE_CHECKING:
@@ -25,7 +24,7 @@ else:
 
 import numpy as np
 
-from mindspore import Parameter, Tensor, mint, nn, jit, ops
+from mindspore import Parameter, Tensor, mint, nn, jit, ops, mutable
 from mindspore.common import dtype as mstype
 
 
@@ -49,6 +48,8 @@ from vllm_mindspore.model_executor.models.utils import (
     maybe_prefix)
 from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
 from vllm_mindspore.model_executor.models.model_base import MsModelBase, Fake_Attention
+from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 
 from vllm.config import CacheConfig, VllmConfig
@@ -173,8 +174,6 @@ class Qwen2Attention(nn.Cell):
             prefix=f"{prefix}.attn",
             attn_type=attn_type
         )
-        self.attn_mask = mint.triu(mint.ones(size=(128, 128), dtype=mstype.bfloat16), 1)
-        self.hard_mask = Tensor([0], dtype=mstype.bfloat16).reshape(1, 1)
 
     @jit
     def construct(
@@ -185,15 +184,16 @@ class Qwen2Attention(nn.Cell):
         value_cache: Tensor,
         is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: Tuple[int],
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size), -1)
-        q, k = self.rotary_emb(positions, q, k, q_seq_lens, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill, slot_mapping, batch_valid_length,
-                                q_seq_lens, block_tables, self.attn_mask, self.hard_mask)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill, slot_mapping, attn_mask,
+                                batch_valid_length, q_seq_lens, block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -257,7 +257,8 @@ class Qwen2DecoderLayer(nn.Cell):
         value_cache: Tensor,
         is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: Tuple[int],
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
         residual: Optional[Tensor],
@@ -275,6 +276,7 @@ class Qwen2DecoderLayer(nn.Cell):
             value_cache,
             is_prefill,
             slot_mapping,
+            attn_mask,
             batch_valid_length,
             q_seq_lens,
             block_tables
@@ -342,6 +344,7 @@ class Qwen2Model(nn.Cell):
         value_caches: List[Tensor],
         is_prefill: bool,
         slot_mapping: Tensor,
+        attn_mask: Tensor,
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
@@ -367,6 +370,7 @@ class Qwen2Model(nn.Cell):
                 value_caches[i - self.start_layer],
                 is_prefill,
                 slot_mapping,
+                attn_mask,
                 batch_valid_length,
                 q_seq_lens,
                 block_tables,
@@ -486,6 +490,9 @@ class Qwen2ForCausalLM(MsModelBase):
         self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
         self.prefill = True
+        self.mstype = STR_DTYPE_TO_MS_DTYPE.get(self.model_config.dtype, self.model_config.dtype)
+        self.casual_mask = LowerTriangularMask(dtype=self.mstype, 
+                                               max_model_len=self.model_config.max_model_len)
         self.set_model_inputs(self.prefill)
         self.kv_caches = [Fake_Attention() for i in range(config.num_hidden_layers)]
         compilation_config = vllm_config.compilation_config
@@ -495,8 +502,47 @@ class Qwen2ForCausalLM(MsModelBase):
         for i in range(config.num_hidden_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
-    def get_input_embeddings(self, input_ids: Tensor) -> Tensor:
-        return self.model.get_input_embeddings(input_ids)
+    def set_model_inputs(self, is_prefill):
+        dyn_input_ids = Tensor(shape=[None, None], dtype=mstype.int64)
+        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int64)
+
+        block_size = self.cache_config.block_size
+        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
+        head_size = self.model_config.get_head_size()
+        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+
+        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
+            else self.cache_config.cache_dtype
+        kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
+
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+
+        dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
+        dyn_value_caches = mutable([dyn_value_cache for _ in range(num_layers)])
+
+        dyn_slot_mapping = Tensor(shape=[None, ], dtype=mstype.int32)
+        dynamic_attention_mask = Tensor(shape=[None, None], dtype=self.mstype)
+        dyn_batch_valid_length = Tensor(shape=[None,], dtype=mstype.int32)
+        dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
+        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+        dyn_intermediate_tensors = None
+        dyn_inputs_embeds = None
+        self.model.set_inputs(
+            dyn_input_ids,
+            dyn_position_ids,
+            dyn_key_caches,
+            dyn_value_caches,
+            is_prefill,
+            dyn_slot_mapping,
+            dynamic_attention_mask,
+            dyn_batch_valid_length,
+            dyn_q_seq_lens,
+            dyn_block_tables,
+            dyn_intermediate_tensors,
+            dyn_inputs_embeds
+        )
 
     def forward(
         self,
@@ -535,7 +581,9 @@ class Qwen2ForCausalLM(MsModelBase):
                 self.set_model_inputs(self.prefill)
 
         slot_mapping = attn_metadata.slot_mapping
-        batch_valid_length = Tensor.from_numpy(np.array(attn_metadata.seq_lens, dtype=np.int32))
+        attn_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens)
+        seq_lens_np = np.array(attn_metadata.seq_lens, dtype=np.int32)
+        batch_valid_length = Tensor.from_numpy(seq_lens_np)
         q_seq_lens = Tensor.from_numpy(np.array(attn_metadata.query_lens, dtype=np.int32))
         block_tables = attn_metadata.block_tables
         model_output = self.model(input_ids,
@@ -544,6 +592,7 @@ class Qwen2ForCausalLM(MsModelBase):
                                   value_cache,
                                   is_prefill,
                                   slot_mapping,
+                                  attn_mask,
                                   batch_valid_length,
                                   q_seq_lens,
                                   block_tables,

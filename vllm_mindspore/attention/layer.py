@@ -157,11 +157,10 @@ class Attention(nn.Cell):
         value_cache: Tensor,
         is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: Tuple[int],
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        attn_mask: Tensor,
-        decode_mask: Tensor,
     ) -> Tensor:
         """Attention foward, support MHA and GQA.
 
@@ -181,7 +180,7 @@ class Attention(nn.Cell):
             output = self._run_prefill_forward(query, key, value, attn_mask, batch_valid_length, batch_valid_length)
         else:
             output = self._run_decode_forward(query, key_cache, value_cache, block_tables, batch_valid_length,
-                                              decode_mask, q_seq_lens)
+                                              attn_mask, q_seq_lens)
         return output
 
     def _run_prefill_forward(
@@ -228,7 +227,7 @@ class Attention(nn.Cell):
         value_cache: Tensor,
         block_tables: Tensor,
         batch_valid_length: Tensor,
-        decode_mask: Tensor,
+        attn_mask: Tensor,
         q_seq_lens: Tensor,
     ) -> Tensor:
         """Decode with PagedAttention.
@@ -248,7 +247,7 @@ class Attention(nn.Cell):
             batch_valid_length,
             None,
             None,
-            decode_mask,
+            attn_mask,
             q_seq_lens
         )
         return output

@@ -32,9 +32,7 @@ from vllm.attention.layer import Attention
 import torch
 
 from mindspore import Tensor, nn, mutable
-from mindspore import dtype as mstype
 
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 class Fake_Attention:
     def __init__(self):
@@ -220,47 +218,6 @@ class MsModelBase():
     ) -> Union[Tensor, IntermediateTensors]:
         raise NotImplementedError
 
-    def set_model_inputs(self, is_prefill):
-        dyn_input_ids = Tensor(shape=[None, None], dtype=mstype.int64)
-        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int64)
-
-        block_size = self.cache_config.block_size
-        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
-        head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
-
-        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
-            else self.cache_config.cache_dtype
-        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
-            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
-
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
-
-        dyn_key_cache = mutable(Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype))
-        dyn_value_cache = mutable(Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype))
-        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
-        dyn_value_caches = mutable([dyn_value_cache for _ in range(num_layers)])
-
-        dyn_batch_valid_length = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_slot_mapping = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
-        dyn_inputs_embeds = None
-
-        self.model.set_inputs(
-            dyn_input_ids,
-            dyn_position_ids,
-            dyn_key_caches,
-            dyn_value_caches,
-            is_prefill,
-            dyn_slot_mapping,
-            dyn_batch_valid_length,
-            dyn_q_seq_lens,
-            dyn_block_tables,
-            dyn_intermediate_tensors,
-            dyn_inputs_embeds
-        )
 
     def get_kvcache(self):
         key_cache = []

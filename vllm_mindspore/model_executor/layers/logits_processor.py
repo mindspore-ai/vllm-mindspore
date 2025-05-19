@@ -41,6 +41,7 @@ if envs.VLLM_LOGITS_PROCESSOR_THREADS is not None:
     _logits_processor_threadpool = ThreadPoolExecutor(
         envs.VLLM_LOGITS_PROCESSOR_THREADS)
 
+
 class LogitsProcessor(nn.Cell):
     """Process logits and apply logits processors from sampling metadata.
 
@@ -88,6 +89,8 @@ class LogitsProcessor(nn.Cell):
             logits = hidden_states
         else:
             if sampling_metadata is not None:
+                if sampling_metadata.selected_token_indices.numel() <= 0:
+                    return mint.zeros((0, self.vocab_size), dtype=hidden_states.dtype)
                 hidden_states = _prune_hidden_states(hidden_states, sampling_metadata)
 
             # Get the logits for the next tokens.
@@ -102,7 +105,7 @@ class LogitsProcessor(nn.Cell):
                 logits *= self.scale
 
             # Apply logits processors (if any).
-            if sampling_metadata is not None:
+            if sampling_metadata.seq_groups is not None:
                 logits = _apply_logits_processors(logits, sampling_metadata)
 
         return logits
@@ -146,10 +149,10 @@ def _prune_hidden_states(
     # NOTE(kzawora): The if guard is needed for Gaudi - in some scenarios
     # (warmup, profile_run) we might not have selected_token_indices,
     # so we skip pruning.
-    if sampling_metadata.selected_token_indices is not None:
-        return ops.gather(hidden_states, sampling_metadata.selected_token_indices, 0)
-    else:
-        return hidden_states
+    indices = sampling_metadata.selected_token_indices
+    if indices is not None and indices.numel() > 0:
+        return mint.index_select(hidden_states, 0, sampling_metadata.selected_token_indices)
+    return hidden_states
 
 
 def _apply_logits_processors(
@@ -187,7 +190,7 @@ def _apply_logits_processors(
         logits_processed += len(seq_group.sample_indices) + len(
             seq_group.prompt_logprob_indices
         )
-    
+
     for logits_row_idx, future in logits_row_ids_and_logits_row_futures:
         logits[logits_row_idx] = future.result()
 
@@ -195,6 +198,7 @@ def _apply_logits_processors(
         # verifies that no rows in logits were missed unexpectedly
         assert logits_processed == logits.shape[0]
     return logits
+
 
 def _apply_logits_processors_single_seq(logits_row, logits_processors,
                                         past_tokens_ids,
