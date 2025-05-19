@@ -1,20 +1,3 @@
-[build-system]
-# Should be mirrored in requirements-build.txt
-requires = [
-    "cmake>=3.26",
-    "ninja",
-    "packaging",
-    "setuptools>=61",
-    "setuptools-scm>=8.0",
-    "torch == 2.5.1",
-    "wheel",
-    "jinja2",
-]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools_scm]
-# version_file = "vllm/_version.py" # currently handled by `setup.py:get_version()`
-
 [tool.ruff]
 # Allow lines to be as long as 80.
 line-length = 80
