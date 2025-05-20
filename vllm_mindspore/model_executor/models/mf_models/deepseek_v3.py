@@ -274,25 +274,25 @@ class DeepseekV3ForCausalLM(MfModelBase):
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                             act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH,
                             opname_blacklist=['lm_head', 'lkv2kv'])
-            w2_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
-                                  act_quant_dtype=msdtype.int8,
-                                  outliers_suppression=OutliersSuppressionType.NONE,
-                                  precision_recovery=PrecisionRecovery.NONE,
-                                  act_quant_granularity=QuantGranularity.PER_TOKEN,
-                                  weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.w2.*': w2_config})
+            ffn_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                                   act_quant_dtype=msdtype.int8,
+                                   outliers_suppression=OutliersSuppressionType.NONE,
+                                   precision_recovery=PrecisionRecovery.NONE,
+                                   act_quant_granularity=QuantGranularity.PER_TOKEN,
+                                   weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
         elif quant_type.lower() == 'osl':
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                             act_quant_dtype=msdtype.int8,
                             outliers_suppression=OutliersSuppressionType.OUTLIER_SUPPRESSION_LITE,
                             opname_blacklist=['lm_head', 'lkv2kv'])
-            w2_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
-                                act_quant_dtype=msdtype.int8,
-                                outliers_suppression=OutliersSuppressionType.NONE,
-                                precision_recovery=PrecisionRecovery.NONE,
-                                act_quant_granularity=QuantGranularity.PER_TOKEN,
-                                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.w2.*': w2_config})
+            ffn_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                                   act_quant_dtype=msdtype.int8,
+                                   outliers_suppression=OutliersSuppressionType.NONE,
+                                   precision_recovery=PrecisionRecovery.NONE,
+                                   act_quant_granularity=QuantGranularity.PER_TOKEN,
+                                   weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
         elif quant_type.lower() == 'a16w8':
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                             opname_blacklist=['lm_head', 'lkv2kv'])
@@ -309,14 +309,6 @@ class DeepseekV3ForCausalLM(MfModelBase):
         if 'awq' in quant_type.lower():
             # pylint: disable=protected-access
             ptq._config.weight_symmetric = False
-        if 'smoothquant' in quant_type.lower():
-            # pylint: disable=protected-access
-            ptq._config.aclnn_quant_list = ["routed_experts.ffn.w_gate_hidden", "routed_experts.ffn.w1",
-                                            "routed_experts.ffn.w3"]
-        if 'osl' in quant_type.lower():
-            # pylint: disable=protected-access
-            ptq._config.aclnn_quant_list = ["routed_experts.ffn.w_gate_hidden", "routed_experts.ffn.w1",
-                                            "routed_experts.ffn.w3"]
         if 'gptq-pergroup' in quant_type.lower():
             # pylint: disable=protected-access
             ptq.layer_policies[r'.*\.feed_forward\.w2.*'].aclnn_quant_list = ["w2"]

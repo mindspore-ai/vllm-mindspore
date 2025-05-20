@@ -40,18 +40,17 @@ env_manager.setup_ai_environment(env_vars)
 import vllm_mindspore
 from vllm import LLM, SamplingParams
 
-class TestDeepSeek:
-    """
-    Test Deepseek.
-    """
-
+class TestDeepSeekMss:
+    '''
+    TestDeepSeekMss
+    '''
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
     @pytest.mark.skip(reason="gs master branch is not suit for the newest mindformers.")
-    def test_deepseek_r1(self):
+    def test_deepseek_r1_mss(self):
         """
-        test case deepseek r1 w8a8
+        test case deepseek r1 w8a8 mss
         """
 
         # Sample prompts.
@@ -64,7 +63,7 @@ class TestDeepSeek:
 
         # Create an LLM.
         llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-smoothquant-newconfig",
-                  trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=8, max_model_len=4096)
+                  trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=8, num_scheduler_steps=8)
         # Generate texts from the prompts. The output is a list of RequestOutput objects
         # that contain the prompt, generated text, and other information.
         outputs = llm.generate(prompts, sampling_params)
