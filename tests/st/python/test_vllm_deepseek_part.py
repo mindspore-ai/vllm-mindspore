@@ -25,7 +25,7 @@ env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b_w8a8.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
-    "MS_ENABLE_LCCL": "off",
+    "MS_ENABLE_LCCL": "on",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
@@ -89,7 +89,7 @@ class TestDeepSeekMTP:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="MTP need addition adaption on v0.8.3 V0")
+    @pytest.mark.skip(reason="gs master branch is not suit for the newest mindformers.")
     def test_deepseek_mtp(self):
         """
         test case deepseek mtp with main model of r1-w8a8
@@ -105,8 +105,8 @@ class TestDeepSeekMTP:
 
         # Create an LLM.
         llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-MTP",
-                  trust_remote_code=True, gpu_memory_utilization=0.8, tensor_parallel_size=8,
-                  num_speculative_tokens=1)
+                  trust_remote_code=True, gpu_memory_utilization=0.7, tensor_parallel_size=8,
+                  speculative_config={"num_speculative_tokens":1})
         # Generate texts from the prompts. The output is a list of RequestOutput objects
         # that contain the prompt, generated text, and other information.
         outputs = llm.generate(prompts, sampling_params)
