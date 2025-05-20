@@ -44,7 +44,10 @@ def env_setup(target_env_dict=None):
             "HCCL_OP_EXPANSION_MODE": "AIV",
             "MS_JIT_MODULES": "vllm_mindspore,research",
             "GLOG_v": "3",
-            "RAY_CGRAPH_get_timeout": "360"
+            "RAY_CGRAPH_get_timeout": "360",
+            # For CPU communication timeout setting, default is 15s, change to 180s
+            # to avoid multi node timeout when starting service.
+            "MS_NODE_TIMEOUT": "180"
         }
 
     for key, value in target_env_dict.items():
