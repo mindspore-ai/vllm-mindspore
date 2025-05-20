@@ -291,12 +291,21 @@ vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
 from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
 import vllm.v1.sample.ops.penalties
 vllm.v1.sample.ops.penalties._convert_to_tensors = _convert_to_tensors
+import vllm.model_executor.layers.utils
+from vllm_mindspore.model_executor.layers.utils import apply_penalties
+vllm.model_executor.layers.utils.apply_penalties = apply_penalties
+vllm.v1.sample.ops.penalties.apply_penalties = apply_penalties
 
-from vllm_mindspore.v1.sample.ops.topk_topp_sampler import apply_top_k_top_p, random_sample
+
+from vllm_mindspore.v1.sample.ops.topk_topp_sampler import apply_top_k_top_p, random_sample, \
+    apply_top_k_only, topk_topp_sampler_forward_native
+
 import vllm.v1.sample.ops.topk_topp_sampler
+from vllm.v1.sample.ops.topk_topp_sampler import TopKTopPSampler
+TopKTopPSampler.forward_native = topk_topp_sampler_forward_native
 vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_top_p = apply_top_k_top_p
 vllm.v1.sample.ops.topk_topp_sampler.random_sample = random_sample
-
+vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_only = apply_top_k_only
 from vllm_mindspore.v1.sample.sampler import apply_temperature
 import vllm.v1.sample.sampler
 vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature

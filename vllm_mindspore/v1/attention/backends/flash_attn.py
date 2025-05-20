@@ -122,10 +122,6 @@ class FlashAttentionMetadata:
     def __getitem__(self, key):
         if key == "batch_valid_length":
             key = "seq_lens"
-        if key == "block_tables":
-            if getattr(self, key).ndim == 1:
-                return mutable(getattr(self, key).expand_dims(0))
-            return mutable(getattr(self, key))
         return getattr(self, key)
 
 
@@ -206,21 +202,18 @@ class FlashAttentionMetadataBuilder:
 
     def build(self, num_reqs: int, num_actual_tokens: int, max_query_len: int,
               common_prefix_len: int):
+        # do not manually call 'tensor.move_to("Ascend", blocking=False)' here,
+        # because it will cause a certain amount of host time.
         query_start_loc = ms.from_numpy(self.runner.query_start_loc_np[:num_reqs + 1])
-        query_start_loc.move_to("Ascend", blocking=False)
         max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:num_reqs].max()
         slot_mapping = ms.from_numpy(self.runner.slot_mapping_np[:num_actual_tokens])
-        slot_mapping.move_to("Ascend", blocking=False)
         seq_lens_np = self.runner.seq_lens_np[:num_reqs]
         max_seq_len = seq_lens_np.max()
         seq_lens = ms.from_numpy(seq_lens_np)
-        seq_lens.move_to("Ascend", blocking=False)
         context_lens = ms.from_numpy(self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
-        context_lens.move_to("Ascend", blocking=False)
 
         q_seq_lens_np = np.diff(self.runner.query_start_loc_np[:num_reqs + 1])
         q_seq_lens = ms.from_numpy(q_seq_lens_np)
-        q_seq_lens.move_to("Ascend", blocking=False)
 
         attn_metadata = FlashAttentionMetadata(
             seq_lens=seq_lens,

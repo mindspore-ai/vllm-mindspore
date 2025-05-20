@@ -3,11 +3,8 @@ from typing import Dict, List, Optional, Set, Tuple, cast
 import numpy as np
 import torch
 
-from vllm.lora.request import LoRARequest
-from vllm.sampling_params import SamplingType
 from vllm.v1.sample.metadata import SamplingMetadata
-from vllm_mindspore.v1.utils import copy_slice
-from vllm.v1.worker.block_table import BlockTable
+from vllm_mindspore.v1.utils import _copy_slice_from_np, copy_slice
 
 _SAMPLING_EPS = 1e-5
 
@@ -15,26 +12,26 @@ _SAMPLING_EPS = 1e-5
 def _make_sampling_metadata(self) -> SamplingMetadata:
     num_reqs = self.num_reqs
     if not self.all_greedy:
-        temperature = copy_slice(torch.from_numpy(self.temperature_cpu), self.temperature, num_reqs)
+        temperature = _copy_slice_from_np(self.temperature_cpu, self.temperature, num_reqs)
         temperature = temperature[:num_reqs]
     else:
         temperature = None
     if not self.no_top_p:
-        copy_slice(torch.from_numpy(self.top_p_cpu), self.top_p, num_reqs)
+        _copy_slice_from_np(self.top_p_cpu, self.top_p, num_reqs)
     if not self.no_top_k:
-        copy_slice(torch.from_numpy(self.top_k_cpu), self.top_k, num_reqs)
+        _copy_slice_from_np(self.top_k_cpu, self.top_k, num_reqs)
     if not self.no_min_p:
-        copy_slice(torch.from_numpy(self.min_p_cpu), self.min_p, num_reqs)
+        _copy_slice_from_np(self.min_p_cpu, self.min_p, num_reqs)
 
     if not self.no_penalties:
         # Since syncing these tensors is expensive only copy them
         # if necessary i.e. if there are requests which require
         # penalties to be applied during sampling.
-        copy_slice(torch.from_numpy(self.frequency_penalties_cpu),
+        _copy_slice_from_np(self.frequency_penalties_cpu,
                 self.frequency_penalties, num_reqs)
-        copy_slice(torch.from_numpy(self.presence_penalties_cpu),
+        _copy_slice_from_np(self.presence_penalties_cpu,
                 self.presence_penalties, num_reqs)
-        copy_slice(torch.from_numpy(self.repetition_penalties_cpu),
+        _copy_slice_from_np(self.repetition_penalties_cpu,
                 self.repetition_penalties, num_reqs)
 
         # The prompt tokens are used only for applying penalties during
@@ -48,7 +45,7 @@ def _make_sampling_metadata(self) -> SamplingMetadata:
     if not self.no_allowed_token_ids:
         assert self.allowed_token_ids_mask is not None
         copy_slice(self.allowed_token_ids_mask_cpu_tensor,
-                    self.allowed_token_ids_mask, num_reqs)
+                    self.allowed_token_ids_mask, num_reqs, return_tensor=False)
         allowed_token_ids_mask = self.allowed_token_ids_mask[:num_reqs]
 
     return SamplingMetadata(
@@ -81,6 +78,5 @@ def _make_prompt_token_ids_tensor(self) -> torch.Tensor:
     for i in range(self.num_reqs):
         prompt_token_ids[i, self.num_prompt_tokens[i]:] = self.vocab_size
     prompt_token_ids_cpu_tensor = torch.from_numpy(prompt_token_ids)
-    prompt_token_ids_cpu_tensor.move_to("Ascend", blocking=False)
     return prompt_token_ids_cpu_tensor
 

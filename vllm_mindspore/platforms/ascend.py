@@ -99,9 +99,8 @@ class AscendPlatform(Platform):
         if cache_config and cache_config.block_size is None:
             cache_config.block_size = 16
 
-
-        # if envs.VLLM_USE_V1:
-        #     vllm_config.model_config.enforce_eager = True
+        model_config = vllm_config.model_config
+        model_config.disable_cascade_attn = True
 
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
