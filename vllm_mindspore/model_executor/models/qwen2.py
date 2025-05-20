@@ -47,19 +47,21 @@ from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
 from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
-from vllm_mindspore.model_executor.models.model_base import MsModelBase, Fake_Attention
+from vllm_mindspore.model_executor.models.model_base import MsModelBase, Fake_Attention, Fake_Attention_V1
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 
 from vllm.config import CacheConfig, VllmConfig
+import vllm.envs as envs
 from vllm.model_executor.layers.quantization import \
     QuantizationConfig
 from vllm.sequence import IntermediateTensors
 from vllm.attention.backends.abstract import AttentionType
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.attention.backends.abstract import AttentionMetadata
-
+from vllm.forward_context import get_forward_context
+from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
+import mindspore as ms
 
 class Qwen2MLP(nn.Cell):
     def __init__(
@@ -299,7 +301,6 @@ class Qwen2Model(nn.Cell):
 
         self.config = config
         self.quant_config = quant_config
-        self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
         if get_pp_group().is_first_rank or (config.tie_word_embeddings
@@ -494,7 +495,10 @@ class Qwen2ForCausalLM(MsModelBase):
         self.casual_mask = LowerTriangularMask(dtype=self.mstype, 
                                                max_model_len=self.model_config.max_model_len)
         self.set_model_inputs(self.prefill)
-        self.kv_caches = [Fake_Attention() for i in range(config.num_hidden_layers)]
+        if envs.VLLM_USE_V1:
+            self.kv_caches = [Fake_Attention_V1() for i in range(config.num_hidden_layers)]
+        else:
+            self.kv_caches = [Fake_Attention() for i in range(config.num_hidden_layers)]
         compilation_config = vllm_config.compilation_config
 
         if prefix in compilation_config.static_forward_context:
@@ -513,7 +517,8 @@ class Qwen2ForCausalLM(MsModelBase):
 
         kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
             else self.cache_config.cache_dtype
-        kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
+        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
+            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
 
         num_layers = self.model_config.get_num_layers(self.parallel_config)
 
@@ -548,27 +553,48 @@ class Qwen2ForCausalLM(MsModelBase):
         self,
         input_ids: Tensor,
         positions: Tensor,
-        kv_caches: List[Tuple[Tensor, Tensor]],
-        attn_metadata: AttentionMetadata,
         intermediate_tensors: IntermediateTensors = None,
         inputs_embeds: Tensor = None,
         **kwargs
     ) -> Union[Tensor, IntermediateTensors]:
         key_cache, value_cache = self.get_kvcache()
-        seq_lens = attn_metadata.seq_lens
-        max_query_len = attn_metadata.max_query_len
-        # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-        # decodes are scheduled together. In the first step, all the
-        # prefills turn into decodes and max_query_len will be 1.
-        if self.is_multi_step_chunked_prefill and max_query_len == 1:
-            query_lens = [1] * len(seq_lens)
-        else:
-            query_lens = attn_metadata.query_lens
+        attn_metadata = get_forward_context().attn_metadata
+        input_ids = input_ids.to(ms.int64)
+        if attn_metadata is None:
+            attn_metadata = self._dummy_attention_metadata(input_ids, positions)
+        if not envs.VLLM_USE_V1:
+            seq_lens = attn_metadata.seq_lens
+            max_query_len = attn_metadata.max_query_len
+            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+            # decodes are scheduled together. In the first step, all the
+            # prefills turn into decodes and max_query_len will be 1.
+            if self.is_multi_step_chunked_prefill and max_query_len == 1:
+                query_lens = [1] * len(seq_lens)
+            else:
+                query_lens = attn_metadata.query_lens
 
-        seq_lens_np = np.array(seq_lens, dtype=np.int32)
-        query_lens_np = np.array(query_lens, dtype=np.int32)
-        kv_cache_lens = seq_lens_np - query_lens_np
-        is_prefill = attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0
+            seq_lens_np = np.array(seq_lens, dtype=np.int32)
+            query_lens_np = np.array(query_lens, dtype=np.int32)
+            kv_cache_lens = seq_lens_np - query_lens_np
+            is_prefill = attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0
+            slot_mapping = attn_metadata.slot_mapping
+            batch_valid_length = Tensor.from_numpy(np.array(attn_metadata.seq_lens, dtype=np.int32))
+            q_seq_lens = Tensor.from_numpy(np.array(attn_metadata.query_lens, dtype=np.int32))
+            block_tables = attn_metadata.block_tables
+            position_ids = ms.Tensor(positions, dtype=ms.int32)
+            attn_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
+        else:
+            if attn_metadata.max_context_lens == 0:
+                is_prefill = True
+            else:
+                is_prefill = False
+            slot_mapping = attn_metadata.slot_mapping
+            batch_valid_length = Tensor.from_numpy(attn_metadata.seq_lens_np)
+            q_seq_lens = attn_metadata.q_seq_lens
+            block_tables = attn_metadata.block_tables
+            query_lens_np = attn_metadata.q_seq_lens_np
+            attn_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+            positions = positions.to(ms.int64)
         if is_prefill:
             input_ids = ops.expand_dims(input_ids, 0)
             if not self.prefill:
@@ -579,13 +605,6 @@ class Qwen2ForCausalLM(MsModelBase):
             if self.prefill:
                 self.prefill = False
                 self.set_model_inputs(self.prefill)
-
-        slot_mapping = attn_metadata.slot_mapping
-        attn_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens)
-        seq_lens_np = np.array(attn_metadata.seq_lens, dtype=np.int32)
-        batch_valid_length = Tensor.from_numpy(seq_lens_np)
-        q_seq_lens = Tensor.from_numpy(np.array(attn_metadata.query_lens, dtype=np.int32))
-        block_tables = attn_metadata.block_tables
         model_output = self.model(input_ids,
                                   positions,
                                   key_cache,
@@ -603,6 +622,32 @@ class Qwen2ForCausalLM(MsModelBase):
         else:
             model_output = ops.squeeze(model_output, 1)
         return model_output
+
+    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
+        input_len = input_ids.shape[0]
+        max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
+        seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
+        q_seq_lens = ms.Tensor([input_len], dtype=ms.int32)
+        q_seq_lens_np = np.array([input_len], dtype=np.int32)
+        seq_lens_np = np.array([input_len], dtype=np.int32)
+
+        block_tables = ms.Tensor([[0]], dtype=ms.int32)
+        slot_mapping = [-1 for _ in range(input_len)]
+        slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
+        return FlashAttentionMetadata(
+            max_seq_len=max_seq_len,
+            seq_lens=seq_lengths,
+            seq_lens_np=seq_lens_np,
+            block_tables=block_tables,
+            slot_mapping=slot_mapping,
+            q_seq_lens=q_seq_lens,
+            q_seq_lens_np=q_seq_lens_np,
+            context_lens=0,
+            # To enforce prefill and decode are both complied in warmup process.
+            # So set max_context_lens to 0 for prefill and 1 for decode.
+            max_context_lens=0 if self.prefill else 1,
+            query_start_loc = None
+        )
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         params_dict = self.get_params_dict()
