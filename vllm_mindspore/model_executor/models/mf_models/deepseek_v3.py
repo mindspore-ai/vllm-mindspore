@@ -29,11 +29,13 @@ from vllm.config import get_current_vllm_config
 from vllm.distributed.parallel_state import get_dp_group, get_tensor_model_parallel_world_size
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+from vllm.attention.layer import Attention
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model, mutable
 from mindspore.common import dtype as msdtype
 from mindspore.nn.utils import no_init_parameters
+from mindspore.common.api import _pynative_executor
 
 from mindspore_gs.ptq import PTQ
 from mindspore_gs.ptq import PTQMode, PTQConfig, OutliersSuppressionType, PrecisionRecovery, QuantGranularity, \
@@ -54,6 +56,13 @@ from vllm_mindspore.model_executor.models.model_base import Fake_MLA, Fake_MLA_V
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
 from vllm_mindspore.model_executor.models.attention_mask import MLALowerTriangularMask
+
+try:
+    # Need to apply dllm pd patch on vllm to use pd disagg related functions
+    from vllm.attention.layer import maybe_save_kv_layer_to_connector
+except ImportError:
+    pass
+
 
 logger = init_logger(__name__)
 
@@ -170,6 +179,14 @@ class DeepseekV3ForCausalLM(MfModelBase):
             k_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
             key_cache.append(k_cache)
         return mutable(key_cache), None
+
+    def connector_send_kvcache(self):
+        _pynative_executor.sync()
+        forward_context = get_forward_context()
+        for i in range(self.mf_model_config.num_layers):
+            kv_cache_module = self.kv_caches[i]
+            kv_cache = kv_cache_module.kv_cache[forward_context.virtual_engine][0]
+            maybe_save_kv_layer_to_connector("key." + str(i), kv_cache)
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         if self.mf_config.load_ckpt_format == "ckpt":

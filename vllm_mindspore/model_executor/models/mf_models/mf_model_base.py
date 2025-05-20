@@ -37,10 +37,19 @@ from mindspore.common.api import _pynative_executor
 from mindformers.tools.register.config import MindFormerConfig
 from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
-
+from mindspore.common.api import _pynative_executor
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
+
+try:
+    # Need to apply dllm pd patch on vllm to use pd disagg related functions
+    from vllm.attention.layer import maybe_save_kv_layer_to_connector, wait_for_kv_layer_from_connector
+    from vllm.distributed.kv_transfer import is_v1_kv_transfer_group
+    kv_transfer_supported = True
+except:
+    kv_transfer_supported = False
+
 
 logger = init_logger(__name__)
 
@@ -50,6 +59,7 @@ class MfModelBase(MsModelBase):
             vllm_config=vllm_config, prefix=prefix
         )
 
+        self.kv_transfer_config = vllm_config.kv_transfer_config
         self.mf_config = MindFormerConfig(os.getenv("MINDFORMERS_MODEL_CONFIG"))
         build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
@@ -78,6 +88,18 @@ class MfModelBase(MsModelBase):
     def _create_network(self):
         raise NotImplementedError("Function _create_network should be Implemented!")
 
+
+    def is_decoder_task(self) -> bool:
+        if self.kv_transfer_config is None:
+            return False
+
+        return self.kv_transfer_config.is_kv_consumer
+
+    def is_prefill_task(self) -> bool:
+        if self.kv_transfer_config is None:
+            return False
+
+        return self.kv_transfer_config.is_kv_producer
 
     def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
         input_len = input_ids.shape[0]
@@ -175,6 +197,24 @@ class MfModelBase(MsModelBase):
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
 
+    def connector_send_kvcache(self):
+        #TODO 可优化
+        _pynative_executor.sync()
+        forward_context = get_forward_context()
+        for i in range(self.mf_model_config.num_layers):
+            kv_cache = self.kv_caches[i]
+            k_cache = kv_cache.kv_cache[forward_context.virtual_engine][0]
+            v_cache = kv_cache.kv_cache[forward_context.virtual_engine][1]
+            maybe_save_kv_layer_to_connector("key." + str(i), (k_cache, v_cache))
+
+
+    def connector_wait_for_kv_layer(self):
+        logger.debug(f"connector_wait_for_kv_layer")
+        #TODO 可优化
+        for i in range(self.mf_model_config.num_layers):
+            wait_for_kv_layer_from_connector("key." + str(i))
+
+
     def forward(
         self,
         input_ids: Tensor,
@@ -198,7 +238,17 @@ class MfModelBase(MsModelBase):
             if not self.set_flags:
                 self.network.add_flags_custom(is_first_iteration=False)
                 self.set_flags = True
+            if kv_transfer_supported:
+                if is_v1_kv_transfer_group():
+                    self.connector_send_kvcache()
         else:
+            if kv_transfer_supported:
+                if is_v1_kv_transfer_group() and self.is_prefill_task():
+                    self.connector_send_kvcache()
+
+                if is_v1_kv_transfer_group() and self.is_decoder_task():
+                    self.connector_wait_for_kv_layer()
+                    logger.debug(f"connector_wait_for_kv_layer success")
             hidden_states = self.network(**model_inputs)
 
         return hidden_states

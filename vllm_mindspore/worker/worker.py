@@ -26,7 +26,6 @@ import torch
 
 from vllm.config import VllmConfig
 from vllm.distributed import (
-    ensure_kv_transfer_initialized,
     ensure_model_parallel_initialized,
     init_distributed_environment,
     set_custom_all_reduce,
