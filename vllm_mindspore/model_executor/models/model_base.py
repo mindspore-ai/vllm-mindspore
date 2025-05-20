@@ -20,7 +20,6 @@ import os
 from abc import abstractmethod
 from typing import Iterable, List, Optional, Set, Tuple, Union, Dict
 
-from vllm.attention import AttentionMetadata
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -82,6 +81,7 @@ class Fake_Attention_V1(Attention):
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
         self.attn_type = AttentionType.DECODER
+        self.num_block = num_block
         self.num_kv_heads = num_kv_heads
         self.head_size = head_size
         self.dtype = vllm_config.model_config.dtype
@@ -210,8 +210,6 @@ class MsModelBase():
         self,
         input_ids: Tensor,
         positions: Tensor,
-        kv_caches: List[Tensor],
-        attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         **kwargs

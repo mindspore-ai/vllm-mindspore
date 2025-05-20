@@ -41,7 +41,6 @@ if envs.VLLM_LOGITS_PROCESSOR_THREADS is not None:
     _logits_processor_threadpool = ThreadPoolExecutor(
         envs.VLLM_LOGITS_PROCESSOR_THREADS)
 
-
 class LogitsProcessor(nn.Cell):
     """Process logits and apply logits processors from sampling metadata.
 
@@ -74,9 +73,8 @@ class LogitsProcessor(nn.Cell):
         self.soft_cap = soft_cap
         # Whether to use gather or all-gather to gather the logits.
         parallel_config = get_current_vllm_config().parallel_config
-        self.use_gather = not current_platform.is_tpu() \
-            or envs.VLLM_USE_V1 \
-            or parallel_config.distributed_executor_backend == "external_launcher"
+        self.use_all_gather = envs.VLLM_USE_V1 \
+                              or parallel_config.distributed_executor_backend == "external_launcher"
 
     def construct(
         self,
@@ -105,7 +103,8 @@ class LogitsProcessor(nn.Cell):
                 logits *= self.scale
 
             # Apply logits processors (if any).
-            if sampling_metadata.seq_groups is not None:
+            if sampling_metadata is not None and \
+                    sampling_metadata.seq_groups is not None:
                 logits = _apply_logits_processors(logits, sampling_metadata)
 
         return logits
@@ -120,16 +119,16 @@ class LogitsProcessor(nn.Cell):
         logits = lm_head.quant_method.apply(
             lm_head, hidden_states, bias=embedding_bias
         )
-        if self.use_gather:
-            # None may be returned for rank > 0
-            logits = tensor_model_parallel_gather(logits)
-        else:
+        if self.use_all_gather:
             # Gather is not supported for some devices such as TPUs.
             # Use all-gather instead.
             # NOTE(woosuk): Here, the outputs of every device should not be None
             # because XLA requires strict SPMD among all devices. Every device
             # should execute the same operations after gathering the logits.
             logits = tensor_model_parallel_all_gather(logits)
+        else:
+            # None may be returned for rank > 0
+            logits = tensor_model_parallel_gather(logits)
         # Remove paddings in vocab (if any).
         if logits is not None:
             logits = logits[..., : self.org_vocab_size]

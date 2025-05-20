@@ -160,6 +160,8 @@ class LinearBase(ms.nn.Cell):
         params_dtype=None,
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
+        *,
+        return_bias: bool = True,
     ):
         super().__init__()
 
@@ -175,6 +177,7 @@ class LinearBase(ms.nn.Cell):
             self.quant_method: Optional[QuantizeMethodBase] = UnquantizedLinearMethod()
         else:
             self.quant_method = quant_config.get_quant_method(self, prefix=prefix)
+        self.return_bias = return_bias
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
         raise NotImplementedError
@@ -195,9 +198,11 @@ class ColumnParallelLinear(LinearBase):
         quant_config: Optional[QuantizationConfig] = None,
         output_sizes: Optional[List[int]] = None,
         prefix: str = "",
+        *,
+        return_bias: bool = True,
     ):
         super().__init__(
-            input_size, output_size, skip_bias_add, params_dtype, quant_config, prefix
+            input_size, output_size, skip_bias_add, params_dtype, quant_config, prefix, return_bias=return_bias
         )
 
         self.gather_output = gather_output
@@ -256,6 +261,8 @@ class ColumnParallelLinear(LinearBase):
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
+        if not self.return_bias:
+            return output
         return output, output_bias
 
     def weight_loader(self, param, loaded_weight):
@@ -326,6 +333,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         params_dtype=None,
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
+        *,
+        return_bias: bool = True
     ):
         self.output_sizes = output_sizes
         tp_size = get_tensor_model_parallel_world_size()
@@ -339,6 +348,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             params_dtype=params_dtype,
             quant_config=quant_config,
             prefix=prefix,
+            return_bias=return_bias
         )
 
     def weight_loader(
@@ -396,6 +406,8 @@ class QKVParallelLinear(ColumnParallelLinear):
         params_dtype=None,
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
+        *,
+        return_bias: bool = True,
     ):
         self.hidden_size = hidden_size
         self.head_size = head_size
@@ -431,6 +443,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             params_dtype=params_dtype,
             quant_config=quant_config,
             prefix=prefix,
+            return_bias=return_bias
         )
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id):
@@ -494,9 +507,11 @@ class RowParallelLinear(LinearBase):
         reduce_results: bool = True,
         quant_config: Optional[QuantizationConfig] = None,
         prefix: str = "",
+        *,
+        return_bias: bool = True,
     ):
         super().__init__(
-            input_size, output_size, skip_bias_add, params_dtype, quant_config, prefix
+            input_size, output_size, skip_bias_add, params_dtype, quant_config, prefix, return_bias=return_bias
         )
 
         # Divide the weight matrix along the last dimension.
@@ -566,7 +581,8 @@ class RowParallelLinear(LinearBase):
             output = output_parallel
 
         output_bias = self.bias if self.skip_bias_add else None
-
+        if not self.return_bias:
+            return output
         return output, output_bias
 
     def weight_loader(self, param, loaded_weight):
