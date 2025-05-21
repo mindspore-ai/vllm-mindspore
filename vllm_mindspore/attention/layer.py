@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -29,26 +28,21 @@ from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
 
-def _pad_to_max_tensor(
-        input_: Tensor,
-        max_len: int,
-        dim: int = 0,
-        pad_value: int = -1
-) -> Tensor:
+def _pad_to_max_tensor(input_: Tensor,
+                       max_len: int,
+                       dim: int = 0,
+                       pad_value: int = -1) -> Tensor:
     """Temporary function, will be deprecated in the future."""
     if input_.shape[dim] == max_len:
         return input_
-    pad_shape = (input_.shape[0], max_len - input_.shape[dim], *input_.shape[dim + 1:])
+    pad_shape = (input_.shape[0], max_len - input_.shape[dim],
+                 *input_.shape[dim + 1:])
     pad_tensor = mint.ones(size=pad_shape, dtype=input_.dtype) * pad_value
     output = mint.cat([input_, pad_tensor], dim=dim)
     return output
 
 
-def _generate_attn_mask(
-    query: Tensor,
-    value: Tensor,
-    flatten: bool
-) -> Tensor:
+def _generate_attn_mask(query: Tensor, value: Tensor, flatten: bool) -> Tensor:
     """Temporary function, will be deprecated in the future."""
     if flatten:
         return mint.triu(mint.ones(size=(128, 128), dtype=query.dtype), 1)
@@ -59,16 +53,14 @@ def _generate_attn_mask(
     return mask
 
 
-def _hidden_states_th2bsh(
-    input_: Tensor,
-    batch_valid_length: Tensor
-) -> Tensor:
+def _hidden_states_th2bsh(input_: Tensor,
+                          batch_valid_length: Tensor) -> Tensor:
     """Temporary function, will be deprecated in the future."""
     max_seq_len = batch_valid_length.max().item()
     start_pos = 0
     padding_input_list = []
     for valid_length in batch_valid_length:
-        valid_input = input_[:, start_pos: start_pos + valid_length, :]
+        valid_input = input_[:, start_pos:start_pos + valid_length, :]
         padded_input = _pad_to_max_tensor(valid_input, max_seq_len, 1)
         padding_input_list.append(padded_input)
         start_pos += valid_length
@@ -76,10 +68,8 @@ def _hidden_states_th2bsh(
     return bsh_output
 
 
-def _hidden_states_bsh2th(
-    input_: Tensor,
-    batch_valid_length: Tensor
-) -> Tensor:
+def _hidden_states_bsh2th(input_: Tensor,
+                          batch_valid_length: Tensor) -> Tensor:
     """Temporary function, will be deprecated in the future."""
     unpadded_input_list = []
     for batch_index, valid_length in enumerate(batch_valid_length):
@@ -128,8 +118,8 @@ class Attention(nn.Cell):
         self.num_heads = num_heads
         self.num_kv_heads = num_kv_heads
         self.head_size = head_size
-        self.hidden_size_per_partition = num_heads*head_size
-        self.kv_hidden_size_per_partition = num_kv_heads*head_size
+        self.hidden_size_per_partition = num_heads * head_size
+        self.kv_hidden_size_per_partition = num_kv_heads * head_size
         self.flatten = True
 
         input_layout = "TH" if self.flatten else "BSH"  # pynative 下不支持拉平操作。
@@ -162,7 +152,7 @@ class Attention(nn.Cell):
         q_seq_lens: Tensor,
         block_tables: Tensor,
     ) -> Tensor:
-        """Attention foward, support MHA and GQA.
+        """Attention forward, support MHA and GQA.
 
         Args:
             query: shape = [1, num_tokens, hidden_size]
@@ -173,13 +163,16 @@ class Attention(nn.Cell):
             batch_valid_length: shape = [batch_size, ]
             block_tables: shape = [block_size, num_block]
         """
-        output = query
-        cache_out = self.reshape_and_cache(key, value, key_cache, value_cache, slot_mapping)
+        cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
+                                           slot_mapping)
         query = ops.depend(query, cache_out)
         if is_prefill:
-            output = self._run_prefill_forward(query, key, value, attn_mask, batch_valid_length, batch_valid_length)
+            output = self._run_prefill_forward(query, key, value, attn_mask,
+                                               batch_valid_length,
+                                               batch_valid_length)
         else:
-            output = self._run_decode_forward(query, key_cache, value_cache, block_tables, batch_valid_length,
+            output = self._run_decode_forward(query, key_cache, value_cache,
+                                              block_tables, batch_valid_length,
                                               attn_mask, q_seq_lens)
         return output
 
@@ -202,22 +195,10 @@ class Attention(nn.Cell):
             actual_seq_kvlen: shape = [batch_size, ]
         NOTE: Currently `PyNative` mode does not support operations in "TH" form, so it will be converted to "BSH" form.
         """
-        query = query.view(-1, self.hidden_size_per_partition)
-        key = key.view(-1, self.kv_hidden_size_per_partition)
-        value = value.view(-1, self.kv_hidden_size_per_partition)
-        _, _, _, output = self.flash_attention(
-            query,
-            key,
-            value,
-            None,
-            None,
-            None,
-            attn_mask,
-            None,
-            actual_seq_qlen,
-            actual_seq_kvlen
-        )
-        output = output.view(1, -1, self.hidden_size_per_partition)
+        _, _, _, output = self.flash_attention(query, key, value, None, None,
+                                               None, attn_mask, None,
+                                               actual_seq_qlen,
+                                               actual_seq_kvlen)
         return output
 
     def _run_decode_forward(
@@ -239,15 +220,7 @@ class Attention(nn.Cell):
             block_tables: shape = [block_size, num_block]
             context_lens: shape = [batch_size, ]
         """
-        output = self.paged_attention(
-            query,
-            key_cache,
-            value_cache,
-            block_tables,
-            batch_valid_length,
-            None,
-            None,
-            attn_mask,
-            q_seq_lens
-        )
+        output = self.paged_attention(query, key_cache, value_cache,
+                                      block_tables, batch_valid_length, None,
+                                      None, attn_mask, q_seq_lens)
         return output

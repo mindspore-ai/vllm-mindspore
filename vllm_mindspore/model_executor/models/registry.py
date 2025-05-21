@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -16,16 +15,12 @@
 # limitations under the License.
 # ============================================================================
 
-import os
 import pickle
-import subprocess
 import sys
-import tempfile
-from typing import Callable, TypeVar
+from typing import TypeVar
 
-import cloudpickle
-
-from vllm.model_executor.models.registry import _ModelRegistry, _LazyRegisteredModel
+from vllm.model_executor.models.registry import (_LazyRegisteredModel,
+                                                 _ModelRegistry)
 
 from vllm_mindspore.utils import is_mindformers_model_backend
 
@@ -38,28 +33,26 @@ _MINDFORMERS_MODELS = {
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
     "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
     "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
+    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
+    "Qwen3MoeForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
 }
 
-MindSporeModelRegistry = _ModelRegistry(
-    {
-        model_arch: _LazyRegisteredModel(
-            module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDSPORE_MODELS.items()
-    }
-    if not is_mindformers_model_backend()
-    else {
-        model_arch: _LazyRegisteredModel(
-            module_name=f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()
-    }
-)
+MindSporeModelRegistry = _ModelRegistry({
+    model_arch: _LazyRegisteredModel(
+        module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
+        class_name=cls_name,
+    )
+    for model_arch, (mod_relname, cls_name) in _MINDSPORE_MODELS.items()
+} if not is_mindformers_model_backend() else {
+    model_arch: _LazyRegisteredModel(
+        module_name=
+        f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
+        class_name=cls_name,
+    )
+    for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()
+})
 
 _T = TypeVar("_T")
-
 
 _SUBPROCESS_COMMAND = [
     sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"
