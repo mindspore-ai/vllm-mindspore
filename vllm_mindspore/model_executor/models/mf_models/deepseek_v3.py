@@ -83,7 +83,7 @@ def set_runtime_kernel_launch_group():
 def _get_padding_index(q_seq_len):
     dp_size = get_dp_group().world_size
     tp_size = get_tensor_model_parallel_world_size()
-    if dp_size == 1 or tp_size == 1:
+    if dp_size == 1:
         return None, None, None, None
 
     tokens_len_per_dp = q_seq_len.sum().reshape(-1)
