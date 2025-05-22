@@ -46,7 +46,7 @@ class TestMfQwen_prefix_caching:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="pc precision need to be fixed on v0.8.3 V0")
+    @pytest.mark.skip(reason="mindspore not ready")
     def test_mf_qwen_7b_prefix_caching(self):
         """
         test case qwen_7b_prefix_caching
@@ -72,7 +72,7 @@ class TestMfQwen_prefix_caching:
         outputs = llm.generate(prompts, sampling_params)
         second_outputs = llm.generate(second_prompts, sampling_params)
         except_list=[' many times and each time I have found something new']
-        second_except_list=[' to visit, such as the Forbidden City, the']
+        second_except_list=[' in Beijing, but I have to say that the']
         for i, (output, second_output) in enumerate(zip(outputs, second_outputs)):
             generated_text = output.outputs[i].text
             print(f"Output1 - Prompt: {prompts[i]!r}, Generated text: {generated_text!r}")

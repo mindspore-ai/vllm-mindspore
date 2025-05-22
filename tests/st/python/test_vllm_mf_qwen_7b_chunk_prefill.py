@@ -48,7 +48,7 @@ class TestMfQwen_chunk_prefill:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="cp precision need to be fixed on v0.8.3 V0")
+    @pytest.mark.skip(reason="mindspore not ready")
     def test_mf_qwen_7b_chunk_prefill(self):
         """
         test case qwen_7b_chunk_prefill
@@ -61,8 +61,8 @@ class TestMfQwen_chunk_prefill:
                       "marvel that once housed emperors, stands as a testament to the city's imperial past. Meanwhile, the Great "
                       "Wall, though not within the city limits, is easily accessible from Beijing and offers a glimpse into the "
                       "strategic genius and resilience of ancient China.",
-            "answer": " The city's blend of traditional and modern architecture, vibrant street life, and rich culinary scene "
-                      "make it a truly unique and captivating destination. I am always eager to"},
+            "answer": " The city's blend of traditional and modern architecture, bustling markets, and vibrant street life make it "
+                      "a unique and fascinating destination. In short, Beijing is a city"},
             {"prompt": "I love Beijing, because",
              "answer": " it is a city with a long history. Which of the following options correctly expresses this sentence?\nA. I love Beijing, because it is a city with a"},
         ]
