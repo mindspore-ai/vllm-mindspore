@@ -15,6 +15,7 @@
 # limitations under the License.
 # ============================================================================
 
+import os
 import pickle
 import sys
 from typing import TypeVar
@@ -32,9 +33,9 @@ _MINDSPORE_MODELS = {
 
 _MINDFORMERS_MODELS = {
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
     "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
     "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
-    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
 }
 
 _MINDONE_MODELS = {
@@ -48,8 +49,7 @@ _registry_dict = {}
 if is_mindformers_model_backend():
     _registry_dict = {
         model_arch: _LazyRegisteredModel(
-            module_name=
-            f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
+            module_name=f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
             class_name=cls_name,
         )
         for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()

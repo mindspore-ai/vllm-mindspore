@@ -19,6 +19,7 @@ import contextlib
 import gc
 import os
 import sys
+from enum import Enum
 from typing import (TYPE_CHECKING, Callable, Generator, List, Optional, Tuple,
                     Union)
 
@@ -152,6 +153,11 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e5m2": mstype.uint8,
 }
 
+class vllmModelBackendEnum(str, Enum):
+    """Define the variable Enum of vLLM_MODEL_BACKEND"""
+    MF = 'MindFormers'
+    MIND_ONE = 'MindONE'
+
 
 def get_dtype_size(dtype: torch.dtype) -> int:
     """Get the size of the data type in bytes."""
@@ -203,15 +209,24 @@ def ascend_is_initialized():
 
 
 def is_mindformers_model_backend():
-    return (os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
-            and
-            os.environ["vLLM_MODEL_BACKEND"] == "MindFormers"  # noqa: SIM112
-            )
+    vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")
+    if vllm_model_backend:
+        try:
+            vllmModelBackendEnum(vllm_model_backend)
+        except ValueError as exc:
+            allowed_values = [member.value for member in vllmModelBackendEnum]
+            raise ValueError(
+                f"Illegal value of vLLM_MODEL_BACKEND '{vllm_model_backend}',"
+                f" allowed_values: {', '.join(allowed_values)}"
+            ) from exc
+        finally:
+            return vllm_model_backend == vllmModelBackendEnum.MF
+    return False
 
 
 def is_mindone_model_backend():
     return (os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
-            and os.environ["vLLM_MODEL_BACKEND"] == "MindONE"  # noqa: SIM112
+            and os.environ["vLLM_MODEL_BACKEND"] == vllmModelBackendEnum.MIND_ONE  # noqa: SIM112
             )
 
 
@@ -234,15 +249,6 @@ def check_ready():
 
     if is_mindformers_model_backend():
         logger.info("Run with Mindformers backend!")
-        necessary_envs = ("MINDFORMERS_MODEL_CONFIG", )
-        lost_envs = [
-            env_item for env_item in necessary_envs if not os.getenv(env_item)
-        ]
-
-        if lost_envs:
-            raise RuntimeError(
-                f'For "MindFormers" model backend, environments {str(lost_envs)} should be set!'
-            )
     elif is_mindone_model_backend():
         logger.info("Run with MindONE backend!")
     else:

@@ -53,7 +53,13 @@ class MfModelBase(MsModelBase):
             vllm_config=vllm_config, prefix=prefix
         )
 
-        self.mf_config = MindFormerConfig(os.getenv("MINDFORMERS_MODEL_CONFIG"))
+        model_config_path = os.getenv("MINDFORMERS_MODEL_CONFIG")
+        if model_config_path is None:
+            raise RuntimeError(
+                f'For "MindFormers" model backend, environments MINDFORMERS_MODEL_CONFIG should be set!'
+            )
+
+        self.mf_config = MindFormerConfig(model_config_path)
         build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
         self.mf_config.model.model_config.parallel_config = (

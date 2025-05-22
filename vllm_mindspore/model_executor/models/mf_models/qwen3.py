@@ -16,70 +16,258 @@
 # limitations under the License.
 # ============================================================================
 
-from typing import Iterable, Set, Tuple
+from typing import Iterable, Optional, Tuple, Union
 
-from vllm.config import VllmConfig
-from vllm.config import get_current_vllm_config
-from vllm.logger import init_logger
-
-from mindspore import Tensor, JitConfig
+import mindspore as ms
+import numpy as np
+from mindformers.core.context import build_mf_context
+from mindformers.core.parallel_config import build_parallel_config
+from mindformers.models.qwen3.configuration_qwen3 import Qwen3Config
+from mindformers.models.qwen3.modeling_qwen3 import Qwen3ForCausalLM as ParallelQwenForCausalLM_MF
+from mindformers.tools.utils import is_pynative
+from mindspore import Tensor, ops
+from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
+from vllm import envs
+from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.forward_context import get_forward_context
+from vllm.logger import init_logger
+from vllm.model_executor.layers.sampler import SamplerOutput
+from vllm.sequence import IntermediateTensors
 
-from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
-from research.qwen3.qwen3 import (
-    ParallelQwen3ForCausalLM as ParallelQwenForCausalLM_MF,
-)
-
+from vllm_mindspore import SamplingMetadata
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm_mindspore.model_executor.models.model_base import Fake_Attention
-from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
-from vllm_mindspore.model_executor.models.mf_models.qwen3_weight_processor import Qwen3WeightProcessor
-
+from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
+from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config, gen_model_config
+from vllm_mindspore.model_executor.models.model_base import (Fake_Attention,
+                                                             Fake_Attention_V1,
+                                                             MsModelBase)
+from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
 
 logger = init_logger(__name__)
 
 
-class Qwen3ForCausalLM(MfModelBase):
+class Qwen3ForCausalLM(MsModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(Qwen3ForCausalLM, self).__init__(vllm_config=vllm_config, prefix=prefix)
         self.mf_kvcaches_init = False
+        
+        self.vllm_config = vllm_config
+        self.kv_transfer_config = vllm_config.kv_transfer_config
+        self.set_flags = False
 
+        mf_config = gen_mf_config(vllm_config)
+        mf_config.load_checkpoint = self.get_model_path()
+        self.mf_config = mf_config
+
+        build_mf_context(self.mf_config)
+        build_parallel_config(self.mf_config)
+
+        self._generate_model_config()
+        self.casual_mask = LowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
+                                               max_model_len=self.mf_model_config.seq_length)
+        self.network, self.lm_head = self._create_network()
+
+        affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
+        if isinstance(affinity_config, dict):
+            ms.runtime.set_cpu_affinity(True, affinity_config)
+
+        self._set_dynamic_inputs()
+        
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
-        self.kv_caches = [Fake_Attention() for i in range(self.mf_model_config.num_layers)]
+        if envs.VLLM_USE_V1:
+            self.kv_caches = [Fake_Attention_V1() for _ in range(self.mf_model_config.num_hidden_layers)]
+        else:
+            self.kv_caches = [Fake_Attention() for _ in range(self.mf_model_config.num_hidden_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.mf_model_config.num_hidden_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
-        self.set_flags = False
+        self.cast = ops.Cast()
+
+
+    def _set_dynamic_inputs(self):
+        self.network.set_dynamic_inputs()
+        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        self.lm_head.set_inputs(dynamic_hidden_states)
+
+
+    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
+        input_len = input_ids.shape[0]
+        max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
+        seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
+        q_seq_lens = ms.Tensor([input_len], dtype=ms.int32)
+        q_seq_lens_np = np.array([input_len], dtype=np.int32)
+        seq_lens_np = np.array([input_len], dtype=np.int32)
+
+        block_tables = ms.Tensor([[0]], dtype=ms.int32)
+        slot_mapping = [-1 for _ in range(input_len)]
+        slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
+        return FlashAttentionMetadata(
+            max_seq_len=max_seq_len,
+            seq_lens=seq_lengths,
+            seq_lens_np=seq_lens_np,
+            block_tables=block_tables,
+            slot_mapping=slot_mapping,
+            q_seq_lens=q_seq_lens,
+            q_seq_lens_np=q_seq_lens_np,
+            context_lens=ms.Tensor([0], dtype=ms.int32),
+            # To enforce prefill and decode are both complied in warmup process.
+            # So set max_context_lens to 0 for prefill and 1 for decode.
+            max_context_lens=0 if not self.set_flags else 1,
+            query_start_loc = None
+        )
+
+
+    def prepare_inputs(self, input_ids, positions, attn_metadata):
+        key_cache, value_cache = self.get_kvcache()
+        if not envs.VLLM_USE_V1:
+            seq_lens = attn_metadata.seq_lens
+            max_query_len = attn_metadata.max_query_len
+            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+            # decodes are scheduled together. In the first step, all the
+            # prefills turn into decodes and max_query_len will be 1.
+            if self.is_multi_step_chunked_prefill and max_query_len == 1:
+                query_lens = [1] * len(seq_lens)
+            else:
+                query_lens = attn_metadata.query_lens
+
+            seq_lens = attn_metadata.seq_lens
+            max_query_len = attn_metadata.max_query_len
+            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+            # decodes are scheduled together. In the first step, all the
+            # prefills turn into decodes and max_query_len will be 1.
+            if self.is_multi_step_chunked_prefill and max_query_len == 1:
+                query_lens = [1] * len(seq_lens)
+            else:
+                query_lens = attn_metadata.query_lens
+
+            seq_lens_np = np.array(seq_lens, dtype=np.int32)
+            query_lens_np = np.array(query_lens, dtype=np.int32)
+            kv_cache_lens = seq_lens_np - query_lens_np
+            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
+                is_prefill = True
+            else:
+                is_prefill = False
+
+            q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
+            position_ids = ms.Tensor(positions, dtype=ms.int32)
+            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
+
+            model_inputs = {}
+            model_inputs["input_ids"] = input_ids.astype(ms.int32)
+            model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
+            model_inputs["block_tables"] = attn_metadata.block_tables
+            model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+            model_inputs["q_seq_lens"] = q_seq_lens
+            model_inputs["attention_mask"] = attention_mask
+            model_inputs["key_cache"] = key_cache
+            model_inputs["value_cache"] = value_cache
+            model_inputs["positions"] = position_ids
+            model_inputs["context_lens_tensor"] = ms.from_numpy(kv_cache_lens)  
+        else:
+            if attn_metadata.max_context_lens == 0:
+                is_prefill = True
+            else:
+                is_prefill = False
+            q_seq_lens = attn_metadata.q_seq_lens
+            query_lens_np = attn_metadata.q_seq_lens_np
+            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+            model_inputs = {}
+            model_inputs["input_ids"] = input_ids.astype(ms.int32)
+            model_inputs["batch_valid_length"] = ms.from_numpy(attn_metadata.seq_lens_np)
+            model_inputs["block_tables"] = attn_metadata.block_tables
+            model_inputs["slot_mapping"] = attn_metadata.slot_mapping														 
+            model_inputs["q_seq_lens"] = q_seq_lens
+            model_inputs["attention_mask"] = attention_mask
+            model_inputs["key_cache"] = key_cache
+            model_inputs["value_cache"] = value_cache
+            model_inputs["positions"] = positions.to(ms.int32)
+            model_inputs["context_lens_tensor"] = attn_metadata.context_lens 
+
+        return model_inputs, is_prefill
+
+
+    def forward(
+        self,
+        input_ids: Tensor,
+        positions: Tensor,
+        intermediate_tensors: Optional[IntermediateTensors] = None,
+        inputs_embeds: Optional[Tensor] = None,
+        **kwargs
+    ) -> Union[Tensor, IntermediateTensors]:
+        attn_metadata = get_forward_context().attn_metadata
+        if attn_metadata is None:
+            attn_metadata = self._dummy_attention_metadata(input_ids, positions)
+        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)
+        model_inputs = self.update_model_inputs(model_inputs, **kwargs)
+
+        if is_prefill:
+            self.network.phase = "prefill"
+            if not self.set_flags or is_pynative():
+                self.network.add_flags_custom_mcore(is_prefill=True)
+            hidden_states = self.network(**model_inputs)
+            self.network.phase = "increment"
+            if not self.set_flags or is_pynative():
+                self.network.add_flags_custom_mcore(is_prefill=False)
+                self.set_flags = True
+        else:
+            hidden_states = self.network(**model_inputs)
+
+        return hidden_states
+
 
     def _generate_model_config(self):
-        self.mf_config.load_checkpoint = self.get_model_path()
-        self.mf_model_config = LlamaConfig_MF(**self.mf_config.model.model_config)
-        if self.mf_config.moe_config:
-            self.mf_model_config.moe_config = self.mf_config.moe_config
-        self.mf_model_config.return_hidden_states = True
+        self.mf_model_config = gen_model_config(self.mf_config, Qwen3Config)
+        logger.debug("=====mf_model_config====\n", self.mf_model_config)
 
-        # qwen qkv concat will support in next version
-        self.mf_model_config.qkv_concat = False
-        setattr(self.mf_model_config, 'npu_mem_size', -1)
-        self.mf_config.model.model_config.qkv_concat = False
 
     def _create_network(self):
         # Initial network
         with no_init_parameters():  # Delay initialization
             network = ParallelQwenForCausalLM_MF(self.mf_model_config)
-        return network, network.lm_head
+        return network, network.model.output_layer
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        weight_processor = Qwen3WeightProcessor(self.mf_config, self.network, False)
-        weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
 
+    def update_model_inputs(self, model_inputs, **kwargs):
+        return model_inputs
+
+
+    def compute_logits(
+        self,
+        hidden_states: Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> Optional[Tensor]:
+        if sampling_metadata is not None:
+            selected_token_indices = sampling_metadata.selected_token_indices
+            if selected_token_indices is not None and selected_token_indices.numel() <= 0:
+                logits = ms.mint.zeros((0, self.mf_model_config.vocab_size),
+                                        dtype=self.mf_model_config.compute_dtype)
+            else:
+                hidden_states = hidden_states.reshape((-1, hidden_states.shape[-1]))
+                hidden_states = hidden_states.index_select(0, selected_token_indices)
+                logits = self.lm_head(hidden_states)
+                logits = logits.view(-1, logits.shape[-1])
+        else:
+            logits = self.lm_head(hidden_states)
+            logits = logits.view(-1, logits.shape[-1])
+        return logits
+
+    def sample(
+        self,
+        logits: Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> Optional[SamplerOutput]:
+        next_tokens = self.sampler(logits, sampling_metadata)
+        _pynative_executor.sync()
+        return next_tokens
+    
+    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]):
+        self.network.load_weights(self.mf_config.load_checkpoint)
         self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
-        self.lm_head.set_inputs(dynamic_hidden_states)
         return None
