@@ -172,12 +172,17 @@ vllm.worker.multi_step_model_runner._get_supported_attention_backends = (
 
 from vllm_mindspore.executor.multiproc_worker_utils import (
     get_mp_context as ms_get_mp_context,
+    terminate_worker as ms_terminate_worker,
 )
 
 # To patching the get_mp_context, should import it first.
 from vllm.executor.multiproc_worker_utils import get_mp_context
 
 vllm.executor.multiproc_worker_utils.get_mp_context = ms_get_mp_context
+
+import vllm.executor.multiproc_worker_utils
+
+vllm.executor.multiproc_worker_utils.ProcessWorkerWrapper.terminate_worker = ms_terminate_worker
 
 import vllm.v1.executor.multiproc_executor
 vllm.v1.executor.multiproc_executor.get_mp_context = ms_get_mp_context

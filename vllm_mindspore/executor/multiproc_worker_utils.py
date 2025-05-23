@@ -21,3 +21,8 @@ import multiprocessing
 
 def get_mp_context():
     return multiprocessing.get_context("fork")
+
+
+def terminate_worker(self):
+    self.process.kill()
+    self._task_queue.close()
