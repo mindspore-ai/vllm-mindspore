@@ -579,7 +579,7 @@ class Qwen2ForCausalLM(MsModelBase):
             is_prefill = attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0
             slot_mapping = attn_metadata.slot_mapping
             batch_valid_length = Tensor.from_numpy(np.array(attn_metadata.seq_lens, dtype=np.int32))
-            q_seq_lens = Tensor.from_numpy(np.array(attn_metadata.query_lens, dtype=np.int32))
+            q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
             block_tables = attn_metadata.block_tables
             position_ids = ms.Tensor(positions, dtype=ms.int32)
             attn_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
