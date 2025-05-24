@@ -46,7 +46,6 @@ class TestMfQwen_prefix_caching:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="mindspore not ready")
     def test_mf_qwen_7b_prefix_caching(self):
         """
         test case qwen_7b_prefix_caching

@@ -48,7 +48,6 @@ class TestDeepSeek:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="gs master branch is not suit for the newest mindformers.")
     def test_deepseek_r1(self):
         """
         test case deepseek r1 w8a8
@@ -89,7 +88,6 @@ class TestDeepSeekMTP:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="gs master branch is not suit for the newest mindformers.")
     def test_deepseek_mtp(self):
         """
         test case deepseek mtp with main model of r1-w8a8

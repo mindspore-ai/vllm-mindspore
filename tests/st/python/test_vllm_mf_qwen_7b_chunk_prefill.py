@@ -48,7 +48,6 @@ class TestMfQwen_chunk_prefill:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="mindspore not ready")
     def test_mf_qwen_7b_chunk_prefill(self):
         """
         test case qwen_7b_chunk_prefill

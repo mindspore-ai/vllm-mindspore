@@ -45,7 +45,6 @@ class TestMfQwen_cp_pc_mss:
     @pytest.mark.level0
     @pytest.mark.platform_arm_ascend910b_training
     @pytest.mark.env_single
-    @pytest.mark.skip(reason="mindspore not ready")
     def test_mf_qwen_7b_cp_pc_mss(self):
         """
         test case mf_qwen_7b_cp_pc_mss
