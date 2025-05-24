@@ -67,9 +67,6 @@ _SUBPROCESS_COMMAND = [
 
 
 def _run() -> None:
-    import vllm_mindspore.compilation.inductor_pass as ms_inductor_pass
-    sys.modules["vllm.compilation.inductor_pass"] = ms_inductor_pass
-
     # Setup plugins
     from vllm.plugins import load_general_plugins
     load_general_plugins()

@@ -29,11 +29,7 @@ if "vllm" in sys.modules:
 from vllm_mindspore.scripts import env_setup
 env_setup()
 
-# 2. replace the inductor_pass module before import vllm.
-from vllm_mindspore.compilation import inductor_pass as ms_inductor_pass
-sys.modules.update({"vllm.compilation.inductor_pass": ms_inductor_pass})
-
-# 3. update the log configuration ahead of other modifications.
+# 2. update the log configuration ahead of other modifications.
 import vllm_mindspore.logger
 
 from vllm_mindspore.platforms.ascend import AscendPlatform
