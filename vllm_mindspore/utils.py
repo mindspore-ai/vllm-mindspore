@@ -257,6 +257,8 @@ def convert_np_to_ms_dtype(value):
         value_dtype = ms.float64
     elif value.dtype == np.float32:
         value_dtype = ms.float32
+    elif value.dtype == np.float16:
+        value_dtype = ms.float16
     else:
         value_dtype = ms.bfloat16
     return value_dtype

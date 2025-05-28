@@ -20,7 +20,7 @@ import numpy as np
 
 import mindspore as ms
 from mindspore import Tensor, JitConfig, Model
-
+from mindspore.common import dtype as mstype
 
 class LowerTriangularMask:
     r"""
@@ -33,7 +33,9 @@ class LowerTriangularMask:
     def __init__(self, mf_model_config):
         compute_dtype = mf_model_config.compute_dtype
         seq_length = mf_model_config.seq_length
-        self.prefill_mask = Tensor(np.triu(np.ones(shape=(128, 128), dtype=np.float16), k=1), dtype=compute_dtype)
+        mask_coeff = 1.0 if compute_dtype is mstype.bfloat16 else -10000.0
+
+        self.prefill_mask = Tensor(np.triu(np.ones(shape=(128, 128), dtype=np.float16) * mask_coeff, k=1), dtype=compute_dtype)
 
         self.decode_mask = Tensor(np.triu(np.ones(shape=(seq_length, seq_length), dtype=np.int8), k=1),
                                   dtype=compute_dtype)

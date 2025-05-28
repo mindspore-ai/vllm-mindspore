@@ -152,15 +152,15 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         for index in range(0, num_router_experts):
             w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
             w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=0)
+                                                           is_split_param=self.is_split_param, split_axis=0)
 
             w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
             w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=1)
+                                                           is_split_param=self.is_split_param, split_axis=1)
 
             w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
             w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=0)
+                                                           is_split_param=self.is_split_param, split_axis=0)
 
             w1_list.append(w1_ms_param)
             w2_list.append(w2_ms_param)
@@ -168,14 +168,14 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
             w1_scale_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight_scale"
             w1_scale_ms_param, _ = self.get_safetensor_from_file(w1_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                                 is_split_param=True, split_axis=0)
+                                                                 is_split_param=self.is_split_param, split_axis=0)
 
             w2_scale_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight_scale"
             w2_scale_ms_param, _ = self.get_safetensor_from_file(w2_scale_hf_name, src_hf_dir, hf_weight_map)
 
             w3_scale_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight_scale"
             w3_scale_ms_param, _ = self.get_safetensor_from_file(w3_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                                 is_split_param=True, split_axis=0)
+                                                                 is_split_param=self.is_split_param, split_axis=0)
 
             w1_scale_ms_param = w1_scale_ms_param.squeeze(axis=-1)
             w2_scale_ms_param = w2_scale_ms_param.squeeze(axis=-1)
@@ -246,17 +246,17 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w1_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.gate_proj.weight"
         w1_ms_name = self.quant_convert_weight_name(w1_hf_name)
         w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+                                                       is_split_param=self.is_split_param, split_axis=0)
 
         w1_scale_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.gate_proj.weight_scale"
         w1_scale_ms_name = self.quant_convert_weight_name(w1_scale_hf_name)
         w1_scale_ms_param, _ = self.get_safetensor_from_file(w1_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                             is_split_param=True, split_axis=0)
+                                                             is_split_param=self.is_split_param, split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.down_proj.weight"
         w2_ms_name = self.quant_convert_weight_name(w2_hf_name)
         w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=1)
+                                                       is_split_param=self.is_split_param, split_axis=1)
 
         w2_scale_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.down_proj.weight_scale"
         w2_scale_ms_name = self.quant_convert_weight_name(w2_scale_hf_name)
@@ -265,12 +265,12 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w3_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.up_proj.weight"
         w3_ms_name = self.quant_convert_weight_name(w3_hf_name)
         w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+                                                       is_split_param=self.is_split_param, split_axis=0)
 
         w3_scale_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.up_proj.weight_scale"
         w3_scale_ms_name = self.quant_convert_weight_name(w3_scale_hf_name)
         w3_scale_ms_param, _ = self.get_safetensor_from_file(w3_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                             is_split_param=True, split_axis=0)
+                                                             is_split_param=self.is_split_param, split_axis=0)
 
         w1_scale_ms_param = w1_scale_ms_param.squeeze(axis=-1)
         w2_scale_ms_param = w2_scale_ms_param.squeeze(axis=-1)
@@ -324,18 +324,18 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w1_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight"
         w1_ms_name = self.quant_convert_weight_name(w1_hf_name)
         w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True,
+                                                       is_split_param=self.is_split_param,
                                                        split_axis=0)
         w1_scale_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight_scale"
         w1_scale_ms_name = self.quant_convert_weight_name(w1_scale_hf_name)
         w1_scale_ms_param, _ = self.get_safetensor_from_file(w1_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                             is_split_param=True,
+                                                             is_split_param=self.is_split_param,
                                                              split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight"
         w2_ms_name = self.quant_convert_weight_name(w2_hf_name)
         w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True,
+                                                       is_split_param=self.is_split_param,
                                                        split_axis=1)
         w2_scale_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight_scale"
         w2_scale_ms_name = self.quant_convert_weight_name(w2_scale_hf_name)
@@ -345,12 +345,12 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w3_hf_name = f"model.layers.{layer_id}.mlp.up_proj.weight"
         w3_ms_name = self.quant_convert_weight_name(w3_hf_name)
         w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True,
+                                                       is_split_param=self.is_split_param,
                                                        split_axis=0)
         w3_scale_hf_name = f"model.layers.{layer_id}.mlp.up_proj.weight_scale"
         w3_scale_ms_name = self.quant_convert_weight_name(w3_scale_hf_name)
         w3_scale_ms_param, _ = self.get_safetensor_from_file(w3_scale_hf_name, src_hf_dir, hf_weight_map,
-                                                             is_split_param=True,
+                                                             is_split_param=self.is_split_param,
                                                              split_axis=0)
 
         w1_scale_ms_param = w1_scale_ms_param.squeeze(axis=-1)
@@ -417,7 +417,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         lm_head_ms_name = self.quant_convert_weight_name(lm_head_hf_name)
         if not self.config.parallel_config.vocab_emb_dp:
             np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+                                                       is_split_param=self.is_split_param, split_axis=0)
         else:
             np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map)
         self.parameter_dict[lm_head_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
@@ -580,7 +580,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             name=l2q_proj_ms_name,
             requires_grad=False)
         self.quant_special_attention_weight(layer_id, src_hf_dir, hf_weight_map, "q_b_proj", is_trans_rope_weigh=True,
-                                            is_split_param=True)
+                                            is_split_param=self.is_split_param)
 
         # kv_a_layernorm->lkv_norm
         lkv_norm_hf_name = f"model.layers.{layer_id}.self_attn.kv_a_layernorm.weight"
@@ -717,15 +717,15 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         for index in range(0, num_router_experts):
             w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
             w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=0)
+                                                           is_split_param=self.is_split_param, split_axis=0)
 
             w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
             w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=1)
+                                                           is_split_param=self.is_split_param, split_axis=1)
 
             w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
             w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map,
-                                                           is_split_param=True, split_axis=0)
+                                                           is_split_param=self.is_split_param, split_axis=0)
 
             w1_list.append(w1_ms_param)
             w2_list.append(w2_ms_param)
@@ -766,17 +766,17 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w1_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.gate_proj.weight"
         w1_ms_name = self.convert_weight_name(w1_hf_name)
         w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+                                                       is_split_param=self.is_split_param, split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.down_proj.weight"
         w2_ms_name = self.convert_weight_name(w2_hf_name)
         w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=1)
+                                                       is_split_param=self.is_split_param, split_axis=1)
 
         w3_hf_name = f"model.layers.{layer_id}.mlp.shared_experts.up_proj.weight"
         w3_ms_name = self.convert_weight_name(w3_hf_name)
         w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map,
-                                                       is_split_param=True, split_axis=0)
+                                                       is_split_param=self.is_split_param, split_axis=0)
 
         if ffn_concat:
             w_gate_hidden_name = f"model.layers.{layer_id}.feed_forward.shared_experts.w_gate_hidden.weight"
@@ -805,17 +805,17 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         w1_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight"
         w1_ms_name = self.convert_weight_name(w1_hf_name)
-        w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=self.is_split_param,
                                                        split_axis=0)
 
         w2_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight"
         w2_ms_name = self.convert_weight_name(w2_hf_name)
-        w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w2_ms_param, _ = self.get_safetensor_from_file(w2_hf_name, src_hf_dir, hf_weight_map, is_split_param=self.is_split_param,
                                                        split_axis=1)
 
         w3_hf_name = f"model.layers.{layer_id}.mlp.up_proj.weight"
         w3_ms_name = self.convert_weight_name(w3_hf_name)
-        w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
+        w3_ms_param, _ = self.get_safetensor_from_file(w3_hf_name, src_hf_dir, hf_weight_map, is_split_param=self.is_split_param,
                                                        split_axis=0)
 
         if ffn_concat:
@@ -961,7 +961,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             ms_name = self.convert_weight_name(hf_name)
             if prefix_name in head_names and not self.config.parallel_config.vocab_emb_dp:
                 ms_param, _ = self.get_safetensor_from_file(hf_name, src_hf_dir, hf_weight_map,
-                                                         is_split_param=True, split_axis=0)
+                                                         is_split_param=self.is_split_param, split_axis=0)
             else:
                 ms_param, _ = self.get_safetensor_from_file(hf_name, src_hf_dir, hf_weight_map)
             parameter_dict[ms_name] = ms.Parameter(ms.Tensor(ms_param, ms.bfloat16),
@@ -994,17 +994,27 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                "routed_experts.router.e_score_correction_bias",
                                "topk_bias"]
         for param_name, _ in tqdm(hf_weight_map.items(), desc="split safetensors"):
-            if "model.layers" in param_name and int(param_name.split('.')[2]) >= num_layers:
+            from vllm.distributed.utils import get_pp_indices
+            from vllm.distributed.parallel_state import get_pp_group
+           
+            start_layer, end_layer = get_pp_indices(self.num_layers,
+                                                    get_pp_group().rank_in_group,
+                                                    get_pp_group().world_size)
+            if param_name not in self.network.parameters_dict():
                 continue
-
+            print(f"param_name : {get_pp_group().rank_in_group}, {param_name}", flush=True)
+            # from vllm.distributed.utils import get_pp_indices
+            # start_layer, end_layer = get_pp_indices()
             if any([name in param_name for name in no_need_split_layer]):
+                
                 value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                hf_weight_map)
+                print(f"value type :{value.dtype}, {param_name}", flush=True)
             elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden.",
-                                                      "shared_experts.w_gate_hidden"]]):
+                                                      "shared_experts.w_gate_hidden",".feed_forward.w1.",".feed_forward.w3.","shared_experts.w1","shared_experts.w3"]]):
                 if param_name.endswith(".weight") or "matmul" in param_name:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
+                                                                   hf_weight_map, is_split_param=self.is_split_param,
                                                                    split_axis=0)
                 else:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
@@ -1012,21 +1022,21 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             elif any([name in param_name for name in [".feed_forward.w2.", ".wo.", "shared_experts.w2"]]):
                 if param_name.endswith(".weight"):
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
+                                                                   hf_weight_map, is_split_param=self.is_split_param,
                                                                    split_axis=1)
                 elif "quant_op" in param_name:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                   hf_weight_map, is_split_param=True,
+                                                                   hf_weight_map, is_split_param=self.is_split_param,
                                                                    split_axis=0)
                 else:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                    hf_weight_map)
-            elif ".routed_experts.ffn.w_gate_hidden." in param_name:
+            elif ".routed_experts.ffn.w_gate_hidden." in param_name or ".routed_experts.ffn.w1." in param_name or ".routed_experts.ffn.w3." in param_name:
                 if param_name.endswith(".weight"):
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
                     value_list = []
                     for experts_id in range(value.shape[0]):
-                        value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=1))
+                        value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=0))
                     value = np.stack(value_list, axis=0)
                 elif "matmul" in param_name:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
@@ -1039,28 +1049,31 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                                    hf_weight_map)
             elif ".routed_experts.ffn.w2" in param_name:
                 if param_name.endswith(".weight"):
-                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
-                    value_list = []
-                    for experts_id in range(value.shape[0]):
-                        value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=0))
-                    value = np.stack(value_list, axis=0)
+                    value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
+                                                               is_split_param=self.is_split_param, split_axis=2)
+                    # value_list = []
+                    # for experts_id in range(value.shape[0]):
+                    #     value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=1))
+                    # value = np.stack(value_list, axis=0)
                 else:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                    hf_weight_map)                 
             elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v"]]):
                 value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
-                                                               is_split_param=True, split_axis=0)
+                                                               is_split_param=self.is_split_param, split_axis=0)
             elif "lm_head" in param_name:
                 if not self.config.parallel_config.vocab_emb_dp:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
-                                                                   is_split_param=True, split_axis=0)
+                                                                   is_split_param=self.is_split_param, split_axis=0)
                 else:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
             else:
                 raise ValueError(f"not found layer {param_name}, please check safetensors file.")
 
             dst_dtype = convert_np_to_ms_dtype(value)
-
+            if ms.Tensor(value, dtype=dst_dtype).shape != self.network.parameters_dict()[param_name].shape:
+                raise ValueError(f"{ms.Tensor(value, dtype=dst_dtype).shape}, {self.network.parameters_dict()[param_name].shape}")
+            # self.network.parameters_dict()[param_name].set_data(ms.Tensor(value, dtype=dst_dtype))
             parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dst_dtype),
                                                         name=param_name, requires_grad=False)
 
@@ -1087,12 +1100,12 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden.",
                                                       "shared_experts.w_gate_hidden"]]):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                hf_weight_map, is_split_param=True,
+                                                                hf_weight_map, is_split_param=self.is_split_param,
                                                                 split_axis=1)
             elif any([name in param_name for name in [".feed_forward.w2.", ".wo.",
                                                       "shared_experts.w2"]]):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir,
-                                                                hf_weight_map, is_split_param=True,
+                                                                hf_weight_map, is_split_param=self.is_split_param,
                                                                 split_axis=0)
             elif ".routed_experts.ffn.w_gate_hidden." in param_name:
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
@@ -1108,11 +1121,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 value = np.stack(value_list, axis=0)
             elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v"]]):
                 value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
-                                                               is_split_param=True, split_axis=0)
+                                                               is_split_param=self.is_split_param, split_axis=0)
             elif "lm_head" in param_name:
                 if not self.config.parallel_config.vocab_emb_dp:
                     value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
-                                                                   is_split_param=True, split_axis=0)
+                                                                   is_split_param=self.is_split_param, split_axis=0)
                 else:
                     value, is_int4 = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map)
             else:

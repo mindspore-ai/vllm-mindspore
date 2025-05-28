@@ -112,7 +112,8 @@ def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
     ) -> IntermediateTensors:
         dtype = get_valid_dtype(dtype)
         return IntermediateTensors(
-            {key: mint.zeros((batch_size, hidden_size), dtype=dtype) for key in keys}
+            # {key: mint.zeros((batch_size, hidden_size), dtype=dtype) for key in keys}
+            {key: mint.zeros((batch_size, 1, hidden_size), dtype=dtype) for key in keys}
         )
 
     return make_empty_intermediate_tensors
