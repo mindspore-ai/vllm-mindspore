@@ -21,26 +21,26 @@ import vllm.envs as envs
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
 from mindspore import Tensor
 from mindspore.nn.utils import no_init_parameters
-from research.qwen2_5.infer.qwen2_5 import \
-    ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF
+from research.qwen3.qwen3 import \
+    ParallelQwen3ForCausalLM as ParallelQwenForCausalLM_MF
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.logger import init_logger
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import \
     MfModelBase
-from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import \
-    Qwen2WeightProcessor
+from vllm_mindspore.model_executor.models.mf_models.qwen3_weight_processor import \
+    Qwen3WeightProcessor
 from vllm_mindspore.model_executor.models.model_base import (Fake_Attention,
                                                              Fake_Attention_V1)
 
 logger = init_logger(__name__)
 
 
-class Qwen2ForCausalLM(MfModelBase):
+class Qwen3ForCausalLM(MfModelBase):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
-        super(Qwen2ForCausalLM, self).__init__(
+        super(Qwen3ForCausalLM, self).__init__(
             vllm_config=vllm_config,  # noqa UP008
             prefix=prefix)
         self.mf_kvcaches_init = False
@@ -88,8 +88,7 @@ class Qwen2ForCausalLM(MfModelBase):
         return network, network.lm_head
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        weight_processor = Qwen2WeightProcessor(self.mf_config, self.network,
+        weight_processor = Qwen3WeightProcessor(self.mf_config, self.network,
                                                 False)
         weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
-
         return None

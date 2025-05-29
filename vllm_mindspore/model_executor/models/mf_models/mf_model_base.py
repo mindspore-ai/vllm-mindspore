@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -17,78 +16,90 @@
 # ============================================================================
 
 import os
-from typing import Iterable, Optional, Set, Tuple, Union
 from abc import abstractmethod
-import numpy as np
+from typing import Iterable, Optional, Set, Tuple, Union
 
+import mindspore as ms
+import numpy as np
+import vllm.envs as envs
+from mindformers.core.context import build_mf_context
+from mindformers.core.parallel_config import build_parallel_config
+from mindformers.tools.register.config import MindFormerConfig
+from mindformers.tools.utils import is_pynative
+from mindspore import Tensor
+from mindspore.common.api import _pynative_executor
 from vllm.config import VllmConfig
+from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.forward_context import get_forward_context
+from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
-from vllm.distributed import get_tensor_model_parallel_world_size
-from vllm.logger import init_logger
-from vllm.forward_context import get_forward_context
-import vllm.envs as envs
 
-import mindspore as ms
-from mindspore import Tensor
-from mindspore.common.api import _pynative_executor
-
-from mindformers.tools.register.config import MindFormerConfig
-from mindformers.core.context import build_mf_context
-from mindformers.core.parallel_config import build_parallel_config
-from mindspore.common.api import _pynative_executor
-from mindformers.tools.utils import is_pynative
+from vllm_mindspore.model_executor.models.attention_mask import \
+    LowerTriangularMask
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
-from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
-from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
+from vllm_mindspore.v1.attention.backends.flash_attn import \
+    FlashAttentionMetadata
 
 try:
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
-    from vllm.attention.layer import maybe_save_kv_layer_to_connector, wait_for_kv_layer_from_connector
+    from vllm.attention.layer import (maybe_save_kv_layer_to_connector,
+                                      wait_for_kv_layer_from_connector)
     from vllm.distributed.kv_transfer import is_v1_kv_transfer_group
     kv_transfer_supported = True
-except:
+except:  # noqa E722
     kv_transfer_supported = False
-
 
 logger = init_logger(__name__)
 
+
 class MfModelBase(MsModelBase):
+
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(MfModelBase, self).__init__(
-            vllm_config=vllm_config, prefix=prefix
-        )
+            vllm_config=vllm_config,  # noqa UP008
+            prefix=prefix)
 
         self.kv_transfer_config = vllm_config.kv_transfer_config
-        self.mf_config = MindFormerConfig(os.getenv("MINDFORMERS_MODEL_CONFIG"))
+        self.mf_config = MindFormerConfig(
+            os.getenv("MINDFORMERS_MODEL_CONFIG"))
         build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
         self.mf_config.model.model_config.parallel_config = (
-            self.mf_config.parallel_config
-        )
+            self.mf_config.parallel_config)
         self.mf_config.model.model_config.parallel_config.model_parallel = (
-            get_tensor_model_parallel_world_size()
-        )
+            get_tensor_model_parallel_world_size())
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
         self._generate_model_config()
 
-        self.casual_mask = LowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
-                                               max_model_len=self.model_config.max_model_len)
+        self.casual_mask = LowerTriangularMask(
+            dtype=self.mf_model_config.compute_dtype,
+            max_model_len=self.model_config.max_model_len)
         self.network, self.lm_head = self._create_network()
 
-        affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
+        affinity_config = self.mf_config.get('context',
+                                             {}).get('affinity_cpu_list', {})
         if isinstance(affinity_config, dict):
             ms.runtime.set_cpu_affinity(True, affinity_config)
 
+        self._set_dynamic_inputs()
+
     @abstractmethod
     def _generate_model_config(self):
-        raise NotImplementedError("Function _generate_model_config should be Implemented!")
+        raise NotImplementedError(
+            "Function _generate_model_config should be Implemented!")
 
     @abstractmethod
     def _create_network(self):
-        raise NotImplementedError("Function _create_network should be Implemented!")
+        raise NotImplementedError(
+            "Function _create_network should be Implemented!")
 
+    def _set_dynamic_inputs(self):
+        self.network.set_dynamic_inputs()
+        dynamic_hidden_states = Tensor(
+            shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        self.lm_head.set_inputs(dynamic_hidden_states)
 
     def is_decoder_task(self) -> bool:
         if self.kv_transfer_config is None:
@@ -102,7 +113,8 @@ class MfModelBase(MsModelBase):
 
         return self.kv_transfer_config.is_kv_producer
 
-    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
+    def _dummy_attention_metadata(self, input_ids: Tensor,
+                                  positions: Tensor) -> FlashAttentionMetadata:
         input_len = input_ids.shape[0]
         max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
@@ -125,8 +137,7 @@ class MfModelBase(MsModelBase):
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.set_flags else 1,
-            query_start_loc = None
-        )
+            query_start_loc=None)
 
     def prepare_inputs(self, input_ids, positions, attn_metadata):
         key_cache, value_cache = self.get_kvcache()
@@ -154,14 +165,13 @@ class MfModelBase(MsModelBase):
             seq_lens_np = np.array(seq_lens, dtype=np.int32)
             query_lens_np = np.array(query_lens, dtype=np.int32)
             kv_cache_lens = seq_lens_np - query_lens_np
-            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
+            is_prefill = True if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max(
+            ) == 0 else False
 
             q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
             position_ids = ms.Tensor(positions, dtype=ms.int32)
-            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
+            attention_mask = self.casual_mask.gen_attention_mask(
+                is_prefill, position_ids, query_lens)
 
             model_inputs = {}
             model_inputs["input_ids"] = input_ids.astype(ms.int32)
@@ -180,11 +190,13 @@ class MfModelBase(MsModelBase):
                 is_prefill = False
             q_seq_lens = attn_metadata.q_seq_lens
             query_lens_np = attn_metadata.q_seq_lens_np
-            attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+            attention_mask = self.casual_mask.gen_attention_mask(
+                is_prefill, positions, query_lens_np)
 
             model_inputs = {}
             model_inputs["input_ids"] = input_ids.astype(ms.int32)
-            model_inputs["batch_valid_length"] = ms.from_numpy(attn_metadata.seq_lens_np)
+            model_inputs["batch_valid_length"] = ms.from_numpy(
+                attn_metadata.seq_lens_np)
             model_inputs["block_tables"] = attn_metadata.block_tables
             model_inputs["slot_mapping"] = attn_metadata.slot_mapping
             model_inputs["position_ids"] = positions.to(ms.int32)
@@ -206,28 +218,25 @@ class MfModelBase(MsModelBase):
             kv_cache = self.kv_caches[i]
             k_cache = kv_cache.kv_cache[forward_context.virtual_engine][0]
             v_cache = kv_cache.kv_cache[forward_context.virtual_engine][1]
-            maybe_save_kv_layer_to_connector("key." + str(i), (k_cache, v_cache))
-
+            maybe_save_kv_layer_to_connector("key." + str(i),
+                                             (k_cache, v_cache))
 
     def connector_wait_for_kv_layer(self):
-        logger.debug(f"connector_wait_for_kv_layer")
-        #TODO 可优化
         for i in range(self.mf_model_config.num_layers):
             wait_for_kv_layer_from_connector("key." + str(i))
 
-
-    def forward(
-        self,
-        input_ids: Tensor,
-        positions: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
-        inputs_embeds: Optional[Tensor] = None,
-        **kwargs
-    ) -> Union[Tensor, IntermediateTensors]:
+    def forward(self,
+                input_ids: Tensor,
+                positions: Tensor,
+                intermediate_tensors: Optional[IntermediateTensors] = None,
+                inputs_embeds: Optional[Tensor] = None,
+                **kwargs) -> Union[Tensor, IntermediateTensors]:
         attn_metadata = get_forward_context().attn_metadata
         if attn_metadata is None:
-            attn_metadata = self._dummy_attention_metadata(input_ids, positions)
-        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)
+            attn_metadata = self._dummy_attention_metadata(
+                input_ids, positions)
+        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions,
+                                                       attn_metadata)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
 
         if is_prefill:
@@ -239,9 +248,8 @@ class MfModelBase(MsModelBase):
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom(is_first_iteration=False)
                 self.set_flags = True
-            if kv_transfer_supported:
-                if is_v1_kv_transfer_group():
-                    self.connector_send_kvcache()
+            if kv_transfer_supported and is_v1_kv_transfer_group():
+                self.connector_send_kvcache()
         else:
             if kv_transfer_supported:
                 if is_v1_kv_transfer_group() and self.is_prefill_task():
@@ -249,7 +257,6 @@ class MfModelBase(MsModelBase):
 
                 if is_v1_kv_transfer_group() and self.is_decoder_task():
                     self.connector_wait_for_kv_layer()
-                    logger.debug(f"connector_wait_for_kv_layer success")
             hidden_states = self.network(**model_inputs)
 
         return hidden_states
@@ -261,11 +268,14 @@ class MfModelBase(MsModelBase):
     ) -> Optional[Tensor]:
         if sampling_metadata is not None:
             selected_token_indices = sampling_metadata.selected_token_indices
-            if selected_token_indices is not None and selected_token_indices.numel() <= 0:
-                logits = ms.mint.zeros((0, self.mf_model_config.vocab_size),
-                                        dtype=self.mf_model_config.compute_dtype)
+            if selected_token_indices is not None and selected_token_indices.numel(
+            ) <= 0:
+                logits = ms.mint.zeros(
+                    (0, self.mf_model_config.vocab_size),
+                    dtype=self.mf_model_config.compute_dtype)
             else:
-                hidden_states = hidden_states.index_select(0, selected_token_indices)
+                hidden_states = hidden_states.index_select(
+                    0, selected_token_indices)
                 logits = self.lm_head(hidden_states)
                 logits = logits.view(-1, logits.shape[-1])
         else:

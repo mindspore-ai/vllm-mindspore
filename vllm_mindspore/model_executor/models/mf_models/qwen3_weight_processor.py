@@ -32,7 +32,7 @@ from vllm_mindspore.model_executor.models.mf_models.weight_processor import \
 logger = init_logger(__name__)
 
 
-class Qwen2WeightProcessor(BaseWeightProcessor):
+class Qwen3WeightProcessor(BaseWeightProcessor):
     r"""
     Provide Qwen2 Model weight load and shards.
     Args:
@@ -43,6 +43,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
 
     def __init__(self, config, network, is_quant):
         super().__init__(config, network, is_quant)
+        self.is_moe_ffn = self.num_router_experts > 1
 
     def infer_convert_outer_weight(self, src_hf_dir, hf_weight_map):
         """convert weight not in model"""
@@ -101,6 +102,16 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
                                           '.ffn_norm.')
         weight_name = weight_name.replace('model.norm.weight',
                                           'model.norm_out.weight')
+        weight_name = weight_name.replace(
+            'mlp.gate.e_score_correction_bias',
+            'feed_forward.routed_experts.router.e_score_correction_bias')
+        weight_name = weight_name.replace('self_attn.q_norm.',
+                                          'attention.q_norm.')
+        weight_name = weight_name.replace('self_attn.k_norm.',
+                                          'attention.k_norm.')
+        weight_name = weight_name.replace(
+            'mlp.gate.weight',
+            'feed_forward.routed_experts.router.dense.weight')
         return weight_name
 
     def infer_process_dense_ffn_weight(self, src_hf_dir, layer_id,
@@ -146,42 +157,140 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
             name=w2_ms_name,
             requires_grad=False)
 
+    def infer_process_moe_ffn_weight(self, src_hf_dir, layer_id,
+                                     hf_weight_map):
+        """process moe router expert weight"""
+        ffn_concat = self.config.model.model_config.qkv_concat
+        num_router_experts = self.config.moe_config.expert_num
+
+        # router expert dense
+        router_dense_hf_name = f"model.layers.{layer_id}.mlp.gate.weight"
+        router_dense_ms_name = self.convert_weight_name(router_dense_hf_name)
+        router_dense_ms_param, _ = self.get_safetensor_from_file(
+            router_dense_hf_name, src_hf_dir, hf_weight_map)
+        self.parameter_dict[router_dense_ms_name] = ms.Parameter(
+            ms.from_numpy(router_dense_ms_param).astype(ms.bfloat16),
+            name=router_dense_ms_name,
+            requires_grad=False)
+
+        w1_list = []
+        w2_list = []
+        w3_list = []
+
+        w1_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w1.weight"
+        w2_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w2.weight"
+        w3_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w3.weight"
+
+        for index in range(0, num_router_experts):
+            w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
+            w1_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
+                w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+            w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
+            w2_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
+                w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
+
+            w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
+            w3_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
+                w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+            w1_list.append(w1_ms_param)
+            w2_list.append(w2_ms_param)
+            w3_list.append(w3_ms_param)
+
+        w1_ms_stack_param = np.stack(w1_list, axis=0)
+        w2_ms_stack_param = np.stack(w2_list, axis=0)
+        w3_ms_stack_param = np.stack(w3_list, axis=0)
+
+        if ffn_concat:
+            w_gate_hidden_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w_gate_hidden.weight"
+            w_gate_hidden_np = np.concatenate(
+                [w1_ms_stack_param, w3_ms_stack_param], axis=1)
+            w_gate_hidden_param = ms.from_numpy(w_gate_hidden_np).permute(
+                0, 2, 1).astype(dtype=ms.bfloat16)
+            self.parameter_dict[w_gate_hidden_name] = ms.Parameter(
+                w_gate_hidden_param,
+                name=w_gate_hidden_name,
+                requires_grad=False)
+        else:
+            w1_ms_stack_param = ms.from_numpy(w1_ms_stack_param).permute(
+                0, 2, 1).astype(ms.bfloat16)
+            self.parameter_dict[w1_ms_name] = ms.Parameter(w1_ms_stack_param,
+                                                           name=w1_ms_name,
+                                                           requires_grad=False)
+
+            w3_ms_stack_param = ms.from_numpy(w3_ms_stack_param).permute(
+                0, 2, 1).astype(ms.bfloat16)
+            self.parameter_dict[w3_ms_name] = ms.Parameter(w3_ms_stack_param,
+                                                           name=w3_ms_name,
+                                                           requires_grad=False)
+
+        w2_ms_stack_param = ms.from_numpy(w2_ms_stack_param).permute(
+            0, 2, 1).astype(ms.bfloat16)
+        self.parameter_dict[w2_ms_name] = ms.Parameter(w2_ms_stack_param,
+                                                       name=w2_ms_name,
+                                                       requires_grad=False)
+
     def infer_process_attention_weight(self, src_hf_dir, layer_id,
                                        hf_weight_map):
         """infer process attention weight"""
         qkv_concat = self.config.model.model_config.qkv_concat
+        n_kv_heads = self.config.model.model_config.n_kv_heads
         # wq
         wq_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.weight"
         wq_ms_name = self.convert_weight_name(wq_hf_name)
         wq_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
             wq_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-        # wq bias
-        wq_bias_hf_name = f"model.layers.{layer_id}.self_attn.q_proj.bias"
-        wq_bias_ms_name = self.convert_weight_name(wq_bias_hf_name)
-        wq_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-            wq_bias_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
 
-        # wk
+        # wq_norm
+        q_norm_hf_name = f"model.layers.{layer_id}.self_attn.q_norm.weight"
+        q_norm_ms_name = self.convert_weight_name(q_norm_hf_name)
+        q_norm_ms_param, _ = self.get_safetensor_from_file(
+            q_norm_hf_name, src_hf_dir, hf_weight_map)
+        self.parameter_dict[q_norm_ms_name] = ms.Parameter(ms.Tensor(
+            q_norm_ms_param, ms.bfloat16),
+                                                           name=q_norm_ms_name,
+                                                           requires_grad=False)
+
+        # wk, wv
         wk_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.weight"
-        wk_ms_name = self.convert_weight_name(wk_hf_name)
-        wk_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-            wk_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-        # wk bias
-        wk_bias_hf_name = f"model.layers.{layer_id}.self_attn.k_proj.bias"
-        wk_bias_ms_name = self.convert_weight_name(wk_bias_hf_name)
-        wk_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-            wk_bias_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-
-        # wv
         wv_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.weight"
+
+        wk_ms_name = self.convert_weight_name(wk_hf_name)
         wv_ms_name = self.convert_weight_name(wv_hf_name)
-        wv_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-            wv_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-        # wv bias
-        wv_bias_hf_name = f"model.layers.{layer_id}.self_attn.v_proj.bias"
-        wv_bias_ms_name = self.convert_weight_name(wv_bias_hf_name)
-        wv_bias_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-            wv_bias_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+        if n_kv_heads < self.tp_group_size:
+            replicate = self.tp_group_size // n_kv_heads
+            wk_ms_param, _ = self.get_safetensor_from_file(
+                wk_hf_name, src_hf_dir, hf_weight_map)
+            wv_ms_param, _ = self.get_safetensor_from_file(
+                wv_hf_name, src_hf_dir, hf_weight_map)
+            wk_ms_param = self.split_weight_specific_rank_and_size(
+                wk_ms_param,
+                split_axis=0,
+                rank_id=self.tp_rank_id // replicate,
+                group_size=n_kv_heads)
+            wv_ms_param = self.split_weight_specific_rank_and_size(
+                wv_ms_param,
+                split_axis=0,
+                rank_id=self.tp_rank_id // replicate,
+                group_size=n_kv_heads)
+        else:
+            wk_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
+                wk_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+            wv_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
+                wv_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+        # wk_norm
+        k_norm_hf_name = f"model.layers.{layer_id}.self_attn.k_norm.weight"
+        k_norm_ms_name = self.convert_weight_name(k_norm_hf_name)
+        k_norm_ms_param, _ = self.get_safetensor_from_file(
+            k_norm_hf_name, src_hf_dir, hf_weight_map)
+        self.parameter_dict[k_norm_ms_name] = ms.Parameter(ms.Tensor(
+            k_norm_ms_param, ms.bfloat16),
+                                                           name=k_norm_ms_name,
+                                                           requires_grad=False)
 
         if qkv_concat:
             w_qkv_name = f"model.layers.{layer_id}.attention.w_qkv.weight"
@@ -191,14 +300,6 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
             self.parameter_dict[w_qkv_name] = ms.Parameter(w_qkv_param,
                                                            name=w_qkv_name,
                                                            requires_grad=False)
-
-            w_qkv_bias_name = f"model.layers.{layer_id}.attention.w_qkv.bias"
-            w_qkv_bias_param = np.concatenate(
-                (wq_bias_ms_param, wk_bias_ms_param, wv_bias_ms_param), axis=0)
-            w_qkv_bias_param = ms.from_numpy(w_qkv_bias_param).astype(
-                ms.bfloat16)
-            self.parameter_dict[w_qkv_bias_name] = ms.Parameter(
-                w_qkv_bias_param, name=w_qkv_bias_name, requires_grad=False)
         else:
             self.parameter_dict[wq_ms_name] = ms.Parameter(
                 ms.from_numpy(wq_ms_param).astype(ms.bfloat16),
@@ -212,20 +313,6 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
                 ms.from_numpy(wv_ms_param).astype(ms.bfloat16),
                 name=wv_ms_name,
                 requires_grad=False)
-
-            self.parameter_dict[wq_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wq_bias_ms_param).astype(ms.bfloat16),
-                name=wq_bias_ms_name,
-                requires_grad=False)
-            self.parameter_dict[wk_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wk_bias_ms_param).astype(ms.bfloat16),
-                name=wk_bias_ms_name,
-                requires_grad=False)
-            self.parameter_dict[wv_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wv_bias_ms_param).astype(ms.bfloat16),
-                name=wv_bias_ms_name,
-                requires_grad=False)
-
         # wo
         wo_hf_name = f"model.layers.{layer_id}.self_attn.o_proj.weight"
         wo_ms_name = self.convert_weight_name(wo_hf_name)
@@ -263,8 +350,12 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         """infer convert layer weight"""
         self.infer_process_attention_weight(src_hf_dir, layer_id,
                                             hf_weight_map)
-        self.infer_process_dense_ffn_weight(src_hf_dir, layer_id,
-                                            hf_weight_map)
+        if self.is_moe_ffn:
+            self.infer_process_moe_ffn_weight(src_hf_dir, layer_id,
+                                              hf_weight_map)
+        else:
+            self.infer_process_dense_ffn_weight(src_hf_dir, layer_id,
+                                                hf_weight_map)
         self.infer_process_norm_weight(src_hf_dir, layer_id, hf_weight_map)
 
     def load_safetensors_shard(self, src_hf_dir):
