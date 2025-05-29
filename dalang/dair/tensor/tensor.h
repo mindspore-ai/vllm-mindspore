@@ -24,11 +24,11 @@
 #include "tensor/tensor_data.h"
 
 #ifndef DA_TENSOR_MAX_INPUT
-#define DA_TENSOR_MAX_INPUT 10
+#define DA_TENSOR_MAX_INPUT 512
 #endif
 
 #ifndef DA_GRAPH_MAX_PARAM
-#define DA_GRAPH_MAX_PARAM 64
+#define DA_GRAPH_MAX_PARAM 1024
 #endif
 
 #ifndef DA_GRAPH_MAX_NODE
@@ -144,6 +144,8 @@ TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape,
 template <typename... Args>
 TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&...args) {
   switch (dtype) {
+  case Type_Bool:
+    return NewTensorData<bool>(ctx, dtype, std::forward<Args>(args)...);
   case Type_I16:
     return NewTensorData<int16_t>(ctx, dtype, std::forward<Args>(args)...);
   case Type_I32:
