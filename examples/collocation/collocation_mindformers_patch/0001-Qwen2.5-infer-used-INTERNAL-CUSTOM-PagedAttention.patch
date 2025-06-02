@@ -1,0 +1,27 @@
+From 4269d80a29e78ce31653b9c2d08664cbb322eaa5 Mon Sep 17 00:00:00 2001
+From: zhengdao <zhengdao.yu@foxmail.com>
+Date: Mon, 4 Aug 2025 17:28:25 +0800
+Subject: [PATCH] Qwen2.5 infer used INTERNAL CUSTOM PagedAttention instead of
+ ATB version
+
+---
+ research/qwen2_5/infer/parallel_paged_attention_mgr.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/research/qwen2_5/infer/parallel_paged_attention_mgr.py b/research/qwen2_5/infer/parallel_paged_attention_mgr.py
+index 1d92aeb31..142f499b0 100644
+--- a/research/qwen2_5/infer/parallel_paged_attention_mgr.py
++++ b/research/qwen2_5/infer/parallel_paged_attention_mgr.py
+@@ -83,5 +83,8 @@ class ParallelPagedAttentionMgr(nn.Cell):
+     def _paged_attn(self, query, batch_valid_length, block_tables, attn_mask=None, q_seq_lens=None,
+                     key_cache=None, value_cache=None):
+         """The forward compute of Paged Attention."""
+-        return self.paged_attention(query, key_cache, value_cache, block_tables, batch_valid_length,
++        query = query.reshape(query.shape[0], 1, query.shape[-1])
++        out = self.paged_attention(query, key_cache, value_cache, block_tables, batch_valid_length,
+                                     None, None, attn_mask, q_seq_lens)
++        out = out.reshape(query.shape[0], query.shape[-1])
++        return out
+-- 
+2.27.0
+
