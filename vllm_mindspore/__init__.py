@@ -102,7 +102,7 @@ vllm.model_executor.model_loader.get_model_architecture = get_ms_model_architect
 vllm.model_executor.model_loader.utils.get_model_architecture = (
     get_ms_model_architecture
 )
-vllm.model_executor.model_loader.loader.get_model_architecture = (
+vllm.model_executor.model_loader.default_loader.get_model_architecture = (
     get_ms_model_architecture
 )
 
@@ -110,6 +110,7 @@ from vllm_mindspore.model_executor.sampling_metadata import (
     SequenceGroupToSample,
     SamplingMetadataCache,
     SamplingMetadata,
+    SamplingTensors
 )
 
 vllm.model_executor.SamplingMetadataCache = SamplingMetadataCache
@@ -117,6 +118,7 @@ vllm.model_executor.SamplingMetadata = SamplingMetadata
 vllm.model_executor.sampling_metadata.SequenceGroupToSample = SequenceGroupToSample
 vllm.model_executor.sampling_metadata.SamplingMetadataCache = SamplingMetadataCache
 vllm.model_executor.sampling_metadata.SamplingMetadata = SamplingMetadata
+vllm.model_executor.sampling_metadata.SamplingTensors = SamplingTensors
 
 from vllm_mindspore.worker.cache_engine import (
     ms_allocate_kv_cache,
@@ -134,7 +136,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
     safetensors_weights_iterator,
 )
 
-vllm.model_executor.model_loader.loader.safetensors_weights_iterator = (
+vllm.model_executor.model_loader.default_loader.safetensors_weights_iterator = (
     safetensors_weights_iterator
 )
 
