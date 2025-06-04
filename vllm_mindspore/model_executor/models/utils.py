@@ -16,7 +16,7 @@
 # limitations under the License.
 # ============================================================================
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from vllm.sequence import IntermediateTensors
 
@@ -109,10 +109,11 @@ def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
         batch_size: int,
         dtype,
         device,
+        seq_lens: Optional[int] = 1,
     ) -> IntermediateTensors:
         dtype = get_valid_dtype(dtype)
         return IntermediateTensors(
-            {key: mint.zeros((batch_size, hidden_size), dtype=dtype) for key in keys}
+            {key: mint.zeros((batch_size, seq_lens, hidden_size), dtype=dtype) for key in keys}
         )
 
     return make_empty_intermediate_tensors
