@@ -30,6 +30,7 @@ from vllm.distributed import (
     ensure_model_parallel_initialized,
     init_distributed_environment,
     set_custom_all_reduce,
+    get_pp_group
 )
 
 from vllm.logger import init_logger
@@ -74,23 +75,30 @@ def _prepare_input_for_warmup(model_config, model_runner, cache_engine, is_prefi
 
 def _warm_up_model(self) -> None:
     # cache_engine is a list with length equal to the size of pipeline-parallel, and only pp=1 is supported.
+    intermediate_tensors = None
+    if not get_pp_group().is_first_rank:
+        intermediate_tensors = self.model_runner.model.make_empty_intermediate_tensors(
+            batch_size=1,
+            dtype=self.model_config.dtype,
+            device=self.device,
+        )
     kv_cache = self.cache_engine[0].gpu_cache
     is_mtp_model = self.speculative_config is not None and self.model_config.hf_config.model_type == "deepseek_mtp"
     if is_mtp_model:
         # prefill mtp model
         model_input, previous_hidden_states = _prepare_input_for_warmup(self.model_config, self.model_runner,
                                                                         self.cache_engine[0], True, is_mtp_model)
-        self.model_runner.execute_model(model_input, kv_cache, None, previous_hidden_states=previous_hidden_states)
+        self.model_runner.execute_model(model_input, kv_cache, intermediate_tensors, previous_hidden_states=previous_hidden_states)
 
     # warmup for decode
     if self.vllm_config.scheduler_config.is_multi_step:
         model_input, _ = _prepare_input_for_warmup(self.model_config, self.model_runner._base_model_runner,
                                                    self.cache_engine[0], False)
-        self.model_runner._base_model_runner.execute_model(model_input, kv_cache, None)
+        self.model_runner._base_model_runner.execute_model(model_input, kv_cache, intermediate_tensors)
     else:
         model_input, previous_hidden_states = _prepare_input_for_warmup(self.model_config, self.model_runner,
                                                                         self.cache_engine[0], False, is_mtp_model)
-        self.model_runner.execute_model(model_input, kv_cache, None, previous_hidden_states=previous_hidden_states)
+        self.model_runner.execute_model(model_input, kv_cache, intermediate_tensors, previous_hidden_states=previous_hidden_states)
 
     torch.cuda.synchronize()
 

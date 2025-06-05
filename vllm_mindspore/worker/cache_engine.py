@@ -18,9 +18,8 @@
 """CacheEngine class for managing the KV cache."""
 
 from typing import List
-
 import mindspore as ms
-from mindspore import mutable
+from mindspore import mutable, ops
 from vllm.logger import init_logger
 from vllm_mindspore.utils import MsKVCache, get_valid_dtype
 
@@ -32,6 +31,7 @@ def create_block(shape, dtype, name=None, device=None):
     from mindspore.ops.function.array_func import empty as empty_tensor
 
     blocks = empty_tensor(*shape, dtype=dtype, device=device)
+    blocks = ops.auto_generate.format_cast(blocks, 29)
     return blocks
 
 
