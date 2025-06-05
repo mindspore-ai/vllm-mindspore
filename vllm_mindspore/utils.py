@@ -63,6 +63,9 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e5m2": ms.uint8,
 }
 
+FORMAT_TYPE = {
+    "nz": 29,
+}
 
 def get_valid_dtype(dtype):
     if isinstance(dtype, str):

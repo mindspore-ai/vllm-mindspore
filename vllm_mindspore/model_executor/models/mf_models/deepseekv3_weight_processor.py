@@ -994,22 +994,13 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                "routed_experts.router.e_score_correction_bias",
                                "topk_bias"]
         for param_name, _ in tqdm(hf_weight_map.items(), desc="split safetensors"):
-            from vllm.distributed.utils import get_pp_indices
-            from vllm.distributed.parallel_state import get_pp_group
-           
-            start_layer, end_layer = get_pp_indices(self.num_layers,
-                                                    get_pp_group().rank_in_group,
-                                                    get_pp_group().world_size)
             if param_name not in self.network.parameters_dict():
                 continue
-            print(f"param_name : {get_pp_group().rank_in_group}, {param_name}", flush=True)
-            # from vllm.distributed.utils import get_pp_indices
-            # start_layer, end_layer = get_pp_indices()
+
             if any([name in param_name for name in no_need_split_layer]):
-                
                 value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                hf_weight_map)
-                print(f"value type :{value.dtype}, {param_name}", flush=True)
+                
             elif any([name in param_name for name in [".l2q_proj.", ".feed_forward.w_gate_hidden.",
                                                       "shared_experts.w_gate_hidden",".feed_forward.w1.",".feed_forward.w3.","shared_experts.w1","shared_experts.w3"]]):
                 if param_name.endswith(".weight") or "matmul" in param_name:
@@ -1024,7 +1015,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                    hf_weight_map, is_split_param=self.is_split_param,
                                                                    split_axis=1)
-                elif "quant_op" in param_name:
+                elif "quant_op" in param_name and "wo" not in param_name:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                    hf_weight_map, is_split_param=self.is_split_param,
                                                                    split_axis=0)
@@ -1051,14 +1042,10 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 if param_name.endswith(".weight"):
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
                                                                is_split_param=self.is_split_param, split_axis=2)
-                    # value_list = []
-                    # for experts_id in range(value.shape[0]):
-                    #     value_list.append(self.split_weight_by_rank(value[experts_id, :, :], split_axis=1))
-                    # value = np.stack(value_list, axis=0)
                 else:
                     value, _ = self.get_safetensor_from_file(param_name, src_hf_dir,
                                                                    hf_weight_map)                 
-            elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v"]]):
+            elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v", "absorb"]]):
                 value, _ = self.get_safetensor_from_file(param_name, src_hf_dir, hf_weight_map,
                                                                is_split_param=self.is_split_param, split_axis=0)
             elif "lm_head" in param_name:
@@ -1071,9 +1058,6 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 raise ValueError(f"not found layer {param_name}, please check safetensors file.")
 
             dst_dtype = convert_np_to_ms_dtype(value)
-            if ms.Tensor(value, dtype=dst_dtype).shape != self.network.parameters_dict()[param_name].shape:
-                raise ValueError(f"{ms.Tensor(value, dtype=dst_dtype).shape}, {self.network.parameters_dict()[param_name].shape}")
-            # self.network.parameters_dict()[param_name].set_data(ms.Tensor(value, dtype=dst_dtype))
             parameter_dict[param_name] = ms.Parameter(ms.Tensor(value, dtype=dst_dtype),
                                                         name=param_name, requires_grad=False)
 
