@@ -48,6 +48,10 @@ import vllm.utils
 
 vllm.utils.current_platform = ascend_platform
 
+import vllm.executor.ray_utils
+
+vllm.executor.ray_utils.current_platform = ascend_platform
+
 import vllm.attention.selector
 vllm.attention.selector.current_platform = ascend_platform
 
