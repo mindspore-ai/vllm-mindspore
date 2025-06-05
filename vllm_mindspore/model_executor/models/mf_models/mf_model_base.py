@@ -91,9 +91,9 @@ class MfModelBase(MsModelBase):
         self.network.set_dynamic_inputs()
         # dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
         # self.lm_head.set_inputs(dynamic_hidden_states)
-        if get_pp_group().is_last_rank:
-            dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
-            self.lm_head.set_inputs(dynamic_hidden_states)
+        # if get_pp_group().is_last_rank:
+        #     dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        #     self.lm_head.set_inputs(dynamic_hidden_states)
     
     def prepare_inputs(self, input_ids, positions, attn_metadata):
         key_cache, value_cache = self.get_kvcache()
@@ -147,7 +147,8 @@ class MfModelBase(MsModelBase):
     ) -> Union[Tensor, IntermediateTensors]:
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
-        model_inputs["hidden_states"] = intermediate_tensors["hidden_states"] if intermediate_tensors else None
+        # model_inputs["hidden_states"] = intermediate_tensors["hidden_states"] if intermediate_tensors else None
+
 
         if is_prefill:
             self.network.phase = "prefill"
@@ -161,10 +162,10 @@ class MfModelBase(MsModelBase):
         else:
             hidden_states = self.network(**model_inputs)
 
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-            })
+        # if not get_pp_group().is_last_rank:
+        #     return IntermediateTensors({
+        #         "hidden_states": hidden_states,
+        #     })
         return hidden_states
 
     def compute_logits(
