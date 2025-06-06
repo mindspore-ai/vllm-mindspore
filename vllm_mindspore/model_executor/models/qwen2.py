@@ -60,6 +60,7 @@ from vllm.sequence import IntermediateTensors
 from vllm.attention.backends.abstract import AttentionType
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.forward_context import get_forward_context
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
 import mindspore as ms
 
@@ -349,7 +350,8 @@ class Qwen2Model(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        hidden_states: Optional[Tensor] = None,
+        residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
         if get_pp_group().is_first_rank:
@@ -358,9 +360,6 @@ class Qwen2Model(nn.Cell):
             else:
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
-        else:
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
 
         for i in range(self.start_layer, self.end_layer):  # PP 并行对层进行切分
             layer = self.layers[i]
@@ -378,12 +377,9 @@ class Qwen2Model(nn.Cell):
                 residual
             )
         if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+            return hidden_states, residual
+        hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]], params_dict: Dict[str, Parameter]):
         loaded_params: Set[str] = set()
@@ -436,7 +432,7 @@ class Qwen2Model(nn.Cell):
         return loaded_params
 
 
-class Qwen2ForCausalLM(MsModelBase):
+class Qwen2ForCausalLM(MsModelBase, SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -492,18 +488,19 @@ class Qwen2ForCausalLM(MsModelBase):
 
         self.prefill = True
         self.mstype = STR_DTYPE_TO_MS_DTYPE.get(self.model_config.dtype, self.model_config.dtype)
-        self.casual_mask = LowerTriangularMask(dtype=self.mstype, 
+        self.casual_mask = LowerTriangularMask(dtype=self.mstype,
                                                max_model_len=self.model_config.max_model_len)
         self.set_model_inputs(self.prefill)
         if envs.VLLM_USE_V1:
             self.kv_caches = [Fake_Attention_V1() for i in range(config.num_hidden_layers)]
         else:
-            self.kv_caches = [Fake_Attention() for i in range(config.num_hidden_layers)]
+            self.num_layers = self.model_config.get_num_layers(self.parallel_config)
+            self.kv_caches = [Fake_Attention() for i in range(self.num_layers)]
         compilation_config = vllm_config.compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(config.num_hidden_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
     def set_model_inputs(self, is_prefill):
@@ -532,7 +529,10 @@ class Qwen2ForCausalLM(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None,], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
+        dyn_hidden_states = Tensor(shape=[None, None, None],
+                                   dtype=self.mstype) if not get_pp_group().is_first_rank else None
+        dyn_residual = Tensor(shape=[None, None, None],
+                              dtype=self.mstype) if not get_pp_group().is_first_rank else None
         dyn_inputs_embeds = None
         self.model.set_inputs(
             dyn_input_ids,
@@ -545,7 +545,8 @@ class Qwen2ForCausalLM(MsModelBase):
             dyn_batch_valid_length,
             dyn_q_seq_lens,
             dyn_block_tables,
-            dyn_intermediate_tensors,
+            dyn_hidden_states,
+            dyn_residual,
             dyn_inputs_embeds
         )
 
@@ -605,6 +606,10 @@ class Qwen2ForCausalLM(MsModelBase):
             if self.prefill:
                 self.prefill = False
                 self.set_model_inputs(self.prefill)
+
+        hidden_states = intermediate_tensors["hidden_states"] if intermediate_tensors else None
+        residual = intermediate_tensors["residual"] if intermediate_tensors else None
+
         model_output = self.model(input_ids,
                                   positions,
                                   key_cache,
@@ -615,13 +620,16 @@ class Qwen2ForCausalLM(MsModelBase):
                                   batch_valid_length,
                                   q_seq_lens,
                                   block_tables,
-                                  intermediate_tensors,
+                                  hidden_states,
+                                  residual,
                                   inputs_embeds)
+
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({"hidden_states": model_output[0], "residual": model_output[1], })
+
         if is_prefill:
-            model_output = ops.squeeze(model_output, 0)
-        else:
-            model_output = ops.squeeze(model_output, 1)
-        return model_output
+            return ops.squeeze(model_output[0], 0)
+        return ops.squeeze(model_output[0], 1)
 
     def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
         input_len = input_ids.shape[0]

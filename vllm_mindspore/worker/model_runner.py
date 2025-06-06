@@ -152,7 +152,8 @@ def _dummy_run(self,
         if not get_pp_group().is_first_rank:
             intermediate_tensors = \
                 self.model.make_empty_intermediate_tensors(
-                batch_size=batch_size,
+                batch_size=1,
+                seq_lens=batch_size,
                 dtype=self.model_config.dtype,
                 device=self.device)
 

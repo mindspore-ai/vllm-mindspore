@@ -325,6 +325,11 @@ from vllm_mindspore.engine.multiprocessing.engine import cleanup
 import vllm.engine.multiprocessing.engine
 vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
 
+from vllm_mindspore.adaptive_chunk_pp.scheduler import apply_scheduler_patch
+from vllm_mindspore.adaptive_chunk_pp.sequence import apply_sequence_patch
+apply_scheduler_patch()
+apply_sequence_patch()
+
 try:
     from vllm.distributed.kv_transfer.kv_connector.factory import KVConnectorFactory
 
