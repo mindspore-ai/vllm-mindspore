@@ -225,6 +225,8 @@ class MfModelBase(MsModelBase):
         **kwargs
     ) -> Union[Tensor, IntermediateTensors]:
         attn_metadata = get_forward_context().attn_metadata
+        if isinstance(attn_metadata, dict) and '1' in attn_metadata:
+            attn_metadata = attn_metadata['1']
         if attn_metadata is None:
             attn_metadata = self._dummy_attention_metadata(input_ids, positions)
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)

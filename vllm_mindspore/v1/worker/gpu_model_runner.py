@@ -26,30 +26,20 @@ logger = init_logger(__name__)
 def _prepare_inputs(
     self,
     scheduler_output: "SchedulerOutput",
-) -> Tuple[FlashAttentionMetadata, torch.Tensor]:
+) -> tuple[dict[str, FlashAttentionMetadata], torch.Tensor]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
     assert num_reqs > 0
 
-    modified_batch = self.attn_metadata_builder.reorder_batch(
-        self.input_batch, scheduler_output)
-    if modified_batch:
-        self.input_batch.refresh_sampling_metadata()
-
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
     self.input_batch.block_table.commit(num_reqs)
 
-    # Get the number of scheduled tokens for each request.
-    # TODO: The Python loop can be slow. Optimize.
-    num_scheduled_tokens = np.empty(num_reqs, dtype=np.int32)
-    max_num_scheduled_tokens = 0
-    for i, req_id in enumerate(self.input_batch.req_ids):
-        num_tokens = scheduler_output.num_scheduled_tokens[req_id]
-        num_scheduled_tokens[i] = num_tokens
-        max_num_scheduled_tokens = max(max_num_scheduled_tokens,
-                                        num_tokens)
+    req_ids = self.input_batch.req_ids
+    tokens = [scheduler_output.num_scheduled_tokens[i] for i in req_ids]
+    num_scheduled_tokens = np.array(tokens, dtype=np.int32)
+    max_num_scheduled_tokens = max(tokens)
 
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
@@ -99,21 +89,27 @@ def _prepare_inputs(
                 0)
     )
 
-    # Calculate the slot mapping.
-    # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    # -> [0, 0, K, K, K + 1, K + 1, K + 2, 2 * K, 2 * K, 2 * K + 1]
-    # where K is the max_num_blocks_per_req and the block size is 2.
-    # NOTE(woosuk): We can't simply use `token_indices // block_size` here
-    # because M (max_model_len) is not necessarily divisible by block_size.
-    block_table_indices = (req_indices * self.max_num_blocks_per_req +
-                           positions_np // self.block_size)
-
-
-    block_numbers = self.input_batch.block_table.block_table_np.ravel()[block_table_indices]
-    block_offsets = positions_np % self.block_size
-    np.add(block_numbers * self.block_size,
+    # Calculate the slot mapping for each KV cache group.
+    for kv_cache_group_id, kv_cache_group_spec in enumerate(
+            self.kv_cache_config.kv_cache_groups):
+        block_size = kv_cache_group_spec.kv_cache_spec.block_size
+        block_table: BlockTable = self.input_batch.block_table[
+            kv_cache_group_id]
+        # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+        # -> [0, 0, K, K, K + 1, K + 1, K + 2, 2 * K, 2 * K, 2 * K + 1]
+        # where K is the max_num_blocks_per_req and the block size is 2.
+        # NOTE(woosuk): We can't simply use `token_indices // block_size`
+        # here because M (max_model_len) is not necessarily divisible by
+        # block_size.
+        block_table_indices = (
+            req_indices * block_table.max_num_blocks_per_req +
+            positions_np // block_size)
+        block_numbers = block_table.block_table_np.ravel()[block_table_indices]
+        block_offsets = positions_np % block_size
+        np.add(
+            block_numbers * block_size,
             block_offsets,
-            out=self.slot_mapping_np[:total_num_scheduled_tokens])
+            out=block_table.slot_mapping_np[:total_num_scheduled_tokens])
 
     # # Prepare the attention metadata.
     self.query_start_loc_np[0] = 0
@@ -123,19 +119,41 @@ def _prepare_inputs(
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
 
-    common_prefix_len = 0
-    if self.cascade_attn_enabled:
-        common_prefix_len = self._compute_cascade_attn_prefix_len(
-            num_scheduled_tokens,
-            scheduler_output.num_common_prefix_blocks,
-        )
+    self.query_start_loc[:num_reqs + 1] = self.query_start_loc_cpu[:num_reqs + 1]
+    self.seq_lens[:num_reqs] = self.seq_lens_cpu[:num_reqs]
 
-    attn_metadata = self.attn_metadata_builder.build(
-        num_reqs=num_reqs,
-        num_actual_tokens=total_num_scheduled_tokens,
-        max_query_len=max_num_scheduled_tokens,
-        common_prefix_len=common_prefix_len,
-    )
+    # Fill unused with -1. Needed for reshape_and_cache
+    self.seq_lens[num_reqs:].fill_(0)
+    self.query_start_loc[num_reqs + 1:].fill_(-1)
+
+    query_start_loc = self.query_start_loc[:num_reqs + 1]
+
+    attn_metadata: dict[str, FlashAttentionMetadata] = {}
+    # Prepare the attention metadata for each KV cache group and make layers
+    # in the same group share the same metadata.
+    for kv_cache_group_id, kv_cache_group_spec in enumerate(
+            self.kv_cache_config.kv_cache_groups):
+
+        # Prepare for cascade attention if enabled & beneficial.
+        common_prefix_len = 0
+        if self.cascade_attn_enabled:
+            common_prefix_len = self._compute_cascade_attn_prefix_len(
+                num_scheduled_tokens,
+                scheduler_output.
+                num_common_prefix_blocks[kv_cache_group_id],
+                kv_cache_group_spec.kv_cache_spec,
+                self.attn_metadata_builders[kv_cache_group_id],
+            )
+
+        attn_metadata_i = (
+            self.attn_metadata_builders[kv_cache_group_id].build(
+                num_reqs=num_reqs,
+                num_actual_tokens=total_num_scheduled_tokens,
+                max_query_len=max_num_scheduled_tokens,
+                common_prefix_len=common_prefix_len,
+                ))
+        for layer_name in kv_cache_group_spec.layer_names:
+            attn_metadata[layer_name] = attn_metadata_i
 
     use_spec_decode = len(
         scheduler_output.scheduled_spec_decode_tokens) > 0
@@ -145,7 +163,7 @@ def _prepare_inputs(
         # from these partial requests, we do so for simplicity.
         # We will ignore the sampled tokens from the partial requests.
         # TODO: Support prompt logprobs.
-        logits_indices = attn_metadata.query_start_loc[1:] - 1
+        logits_indices = query_start_loc[1:] - 1
         spec_decode_metadata = None
     else:
         # Get the number of draft tokens for each request.
@@ -173,6 +191,7 @@ def create_block(shape, dtype, name=None, device=None):
     blocks = mint.empty(shape, dtype=dtype, device=device)
     return blocks
 
+
 def initialize_kv_cache(self, kv_cache_config) -> None:
     """
     Initialize KV cache based on `kv_cache_config`.
@@ -184,10 +203,12 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
         raise NotImplementedError(
             "Hybrid models with more than one KV cache type are not "
             "supported yet.")
+    self.kv_cache_config = kv_cache_config
+    self.initialize_attn_backend(kv_cache_config)
 
     kv_caches: Dict[str, torch.Tensor] = {}
 
-    for kv_cache_group in kv_cache_config.kv_cache_groups:
+    for i, kv_cache_group in enumerate(kv_cache_config.kv_cache_groups):
         kv_cache_spec = kv_cache_group.kv_cache_spec
         for layer_name in kv_cache_group.layer_names:
             tensor_config = kv_cache_config.tensors[layer_name]
@@ -202,14 +223,14 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
             # the min of all `num_blocks`. Verify it here.
             assert num_blocks >= kv_cache_config.num_blocks
             if isinstance(kv_cache_spec, FullAttentionSpec):
-                kv_cache_shape = self.attn_backend.get_kv_cache_shape(
+                kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
                     kv_cache_spec.head_size)
                 dtype = kv_cache_spec.dtype
                 dtype = get_valid_dtype(dtype)
                 current_cache = []
                 device_type = "CPU" if self.device.type == "cpu" else "Ascend"
-                for i in range(kv_cache_shape[0]):
+                for j in range(kv_cache_shape[0]):
                     cache_blocks = create_block(
                         kv_cache_shape[1:], dtype, device=device_type
                     )
@@ -289,7 +310,6 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         self.requests[req_id] = CachedRequestState(
             req_id=req_id,
             prompt_token_ids=new_req_data.prompt_token_ids,
-            prompt=new_req_data.prompt,
             mm_inputs=new_req_data.mm_inputs,
             mm_positions=new_req_data.mm_positions,
             sampling_params=sampling_params,
@@ -352,7 +372,8 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         # Update the block IDs.
         if not req_data.resumed_from_preemption:
             # Append the new blocks to the existing block IDs.
-            req_state.block_ids.extend(req_data.new_block_ids)
+            for i in range(len(self.kv_cache_config.kv_cache_groups)):
+                req_state.block_ids[i].extend(req_data.new_block_ids[i])
         else:
             # The request is resumed from preemption.
             # Replace the existing block IDs with the new ones.
@@ -415,5 +436,7 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
     if removed_req_indices:
         self.input_batch.condense(removed_req_indices)
 
-    if batch_changed:
+    batch_reordered = self._may_reorder_batch(scheduler_output)
+
+    if batch_changed or batch_reordered:
         self.input_batch.refresh_sampling_metadata()
