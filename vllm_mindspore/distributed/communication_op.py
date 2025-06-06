@@ -21,6 +21,7 @@
 # 不要去照搬mindspeed的， 因为训练当中包含太多的特性， 推理只需要非常简单的通信，可以提升性能。
 
 from typing import Any, Dict, Optional, Union
+import torch 
 
 import mindspore as ms
 from mindspore import Tensor, nn, ops
@@ -38,7 +39,6 @@ def tensor_model_parallel_all_reduce(input_: Tensor) -> Tensor:
     """All-reduce the input tensor across model parallel group."""
     output, _ = all_reduce(input_, group=get_tp_group())
     return output
-
 
 def tensor_model_parallel_all_gather(input_: Tensor,
                                      dim: int = -1) -> Tensor:
@@ -93,6 +93,14 @@ def broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[Tensor,
     # if not torch.distributed.is_initialized():
     #     return tensor_dict
     # return get_tp_group().broadcast_tensor_dict(tensor_dict, src)
+
+def ds_broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[torch.Tensor,
+                                                                Any]]] = None,
+                          src: int = 0):
+    if not torch.distributed.is_initialized():
+        return tensor_dict
+    return get_tp_group().broadcast_tensor_dict(tensor_dict, src, group=get_tp_group().cpu_group)
+
 
 
 def send_to_next_pp_rank(tensor):
