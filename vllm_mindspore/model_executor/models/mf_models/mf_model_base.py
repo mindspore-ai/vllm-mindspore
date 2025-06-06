@@ -147,7 +147,9 @@ class MfModelBase(MsModelBase):
     ) -> Union[Tensor, IntermediateTensors]:
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
-        model_inputs["hidden_states"] = intermediate_tensors["hidden_states"] if intermediate_tensors else None
+        if intermediate_tensors:
+            model_inputs["hidden_states"] = intermediate_tensors["hidden_states"]
+
 
         if is_prefill:
             self.network.phase = "prefill"
