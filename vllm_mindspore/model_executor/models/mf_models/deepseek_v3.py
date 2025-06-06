@@ -28,7 +28,7 @@ from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 
 import mindspore as ms
-from mindspore import Tensor, JitConfig, Model, mutable
+from mindspore import Tensor, JitConfig, Model, mutable , ops
 from mindspore.common import dtype as msdtype
 from mindspore.nn.utils import no_init_parameters
 
@@ -52,7 +52,9 @@ from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModel
 
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
 from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerTriangularMask
-
+from vllm.distributed.parallel_state import get_pp_group
+from vllm.model_executor.models.interfaces import SupportsPP
+from vllm_mindspore.model_executor.models.utils import make_empty_intermediate_tensors_factory
 logger = init_logger(__name__)
 
 
@@ -69,7 +71,7 @@ def set_runtime_kernel_launch_group():
     ms.runtime.set_kernel_launch_group(thread_num=thread_num, kernel_group_num=kernel_group_num)
 
 
-class DeepseekV3ForCausalLM(MfModelBase):
+class DeepseekV3ForCausalLM(MfModelBase, SupportsPP):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(DeepseekV3ForCausalLM, self).__init__(
             vllm_config=vllm_config, prefix=prefix
@@ -81,18 +83,22 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-
-        self.kv_caches = [Fake_MLA() for i in range(self.mf_model_config.num_layers)]
+        self.num_layers = self.model_config.get_num_layers(self.parallel_config)
+        
+        self.kv_caches = [Fake_MLA() for i in range(self.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
         self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
         self.set_flags = False
         set_runtime_kernel_launch_group()
+        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(
+            ["hidden_states", "residual"], self.mf_model_config.hidden_size
+        )
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
@@ -114,12 +120,15 @@ class DeepseekV3ForCausalLM(MfModelBase):
             if ptq is not None:
                 ptq.apply(network)
                 ptq.convert(network)
-        return network, network.lm_head
+        # return network, network.lm_head
+        if get_pp_group().is_last_rank:
+            return network, network.lm_head
+        return network, None
 
     def get_kvcache(self):
         key_cache = []
         forward_context = get_forward_context()
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             k_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
             key_cache.append(k_cache)
         return mutable(key_cache), None
@@ -137,9 +146,9 @@ class DeepseekV3ForCausalLM(MfModelBase):
         else:
             weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, self.is_quant)
             weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
-        self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
-        self.lm_head.set_inputs(dynamic_hidden_states)
+        # self.network.set_dynamic_inputs()
+        # dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        # self.lm_head.set_inputs(dynamic_hidden_states)
         return None
 
     def get_model_path(self):
@@ -190,7 +199,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
             layer_policies = OrderedDict()
         elif quant_type.lower() == 'smoothquant':
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
-                            act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH,
+                            act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.OUTLIER_SUPPRESSION_PLUS,
                             opname_blacklist=['lm_head', 'lkv2kv'])
             w2_config = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                                   act_quant_dtype=msdtype.int8,
@@ -198,7 +207,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
                                   precision_recovery=PrecisionRecovery.NONE,
                                   act_quant_granularity=QuantGranularity.PER_TOKEN,
                                   weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.w2.*': w2_config})
+            layer_policies = OrderedDict({r'.*\.feed_forward\..*': w2_config})
         elif quant_type.lower() == 'a16w8':
             cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
                             opname_blacklist=['lm_head', 'lkv2kv'])

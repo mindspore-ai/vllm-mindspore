@@ -27,7 +27,7 @@ from vllm.config import VllmConfig
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
-from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.distributed import get_tensor_model_parallel_world_size, get_pp_group
 from vllm.logger import init_logger
 
 import torch
@@ -70,13 +70,14 @@ class MfModelBase(MsModelBase):
         self.mf_config.model.model_config.parallel_config.model_parallel = (
             get_tensor_model_parallel_world_size()
         )
-        self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
+        self.mf_config.model.model_config.parallel_config.pipeline_stage = get_pp_group().world_size
 
         self._generate_model_config()
         self.network, self.lm_head = self._create_network()
         affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
         if isinstance(affinity_config, dict):
             ms.runtime.set_cpu_affinity(True, affinity_config)
+        self._set_dynamic_inputs()
 
     @abstractmethod
     def _generate_model_config(self):
@@ -86,7 +87,14 @@ class MfModelBase(MsModelBase):
     def _create_network(self):
         raise NotImplementedError("Function _create_network should be Implemented!")
 
-
+    def _set_dynamic_inputs(self):
+        self.network.set_dynamic_inputs()
+        # dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        # self.lm_head.set_inputs(dynamic_hidden_states)
+        if get_pp_group().is_last_rank:
+            dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+            self.lm_head.set_inputs(dynamic_hidden_states)
+    
     def prepare_inputs(self, input_ids, positions, attn_metadata):
         key_cache, value_cache = self.get_kvcache()
         seq_lens = attn_metadata.seq_lens
@@ -139,6 +147,9 @@ class MfModelBase(MsModelBase):
     ) -> Union[Tensor, IntermediateTensors]:
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, attn_metadata)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
+        if intermediate_tensors:
+            model_inputs["hidden_states"] = intermediate_tensors["hidden_states"]
+
 
         if is_prefill:
             self.network.phase = "prefill"
@@ -152,6 +163,10 @@ class MfModelBase(MsModelBase):
         else:
             hidden_states = self.network(**model_inputs)
 
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+            })
         return hidden_states
 
     def compute_logits(
@@ -164,6 +179,7 @@ class MfModelBase(MsModelBase):
             logits = ms.mint.zeros((0, self.mf_model_config.vocab_size),
                                     dtype=self.mf_model_config.compute_dtype)
         else:
+            hidden_states = hidden_states.view(-1, self.mf_model_config.hidden_size)
             hidden_states = hidden_states.index_select(0, selected_token_indices)
             logits = self.lm_head(hidden_states)
             logits = logits.reshape(-1, logits.shape[-1])

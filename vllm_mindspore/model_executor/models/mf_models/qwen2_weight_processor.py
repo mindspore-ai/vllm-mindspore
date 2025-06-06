@@ -49,14 +49,14 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         else:
             np_data, _ = self.get_safetensor_from_file(embed_tokens_hf_name, src_hf_dir, hf_weight_map,
                                                        is_split_param=True, split_axis=0)
-        self.parameter_dict[embed_tokens_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
+        self.parameter_dict[embed_tokens_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.float16),
                                                                  name=embed_tokens_ms_name,
                                                                  requires_grad=False)
 
         norm_hf_name = "model.norm.weight"
         norm_ms_name = self.convert_weight_name(norm_hf_name)
         np_data, _ = self.get_safetensor_from_file(norm_hf_name, src_hf_dir, hf_weight_map)
-        self.parameter_dict[norm_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
+        self.parameter_dict[norm_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.float32),
                                                          name=norm_ms_name,
                                                          requires_grad=False)
 
@@ -68,7 +68,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
                                                            is_split_param=True, split_axis=0)
             else:
                 np_data, _ = self.get_safetensor_from_file(lm_head_hf_name, src_hf_dir, hf_weight_map)
-            self.parameter_dict[lm_head_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.bfloat16),
+            self.parameter_dict[lm_head_ms_name] = ms.Parameter(ms.from_numpy(np_data).astype(ms.float16),
                                                                 name=lm_head_ms_name,
                                                                 requires_grad=False)
 
@@ -113,14 +113,14 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
             self.parameter_dict[w_gate_hidden_name] = ms.Parameter(w_gate_hidden_param, name=w_gate_hidden_name,
                                                                    requires_grad=False)
         else:
-            self.parameter_dict[w1_ms_name] = ms.Parameter(ms.from_numpy(w1_ms_param).astype(ms.bfloat16),
+            self.parameter_dict[w1_ms_name] = ms.Parameter(ms.from_numpy(w1_ms_param).astype(ms.float16),
                                                            name=w1_ms_name,
                                                            requires_grad=False)
-            self.parameter_dict[w3_ms_name] = ms.Parameter(ms.from_numpy(w3_ms_param).astype(ms.bfloat16),
+            self.parameter_dict[w3_ms_name] = ms.Parameter(ms.from_numpy(w3_ms_param).astype(ms.float16),
                                                            name=w3_ms_name,
                                                            requires_grad=False)
 
-        self.parameter_dict[w2_ms_name] = ms.Parameter(ms.from_numpy(w2_ms_param).astype(ms.bfloat16),
+        self.parameter_dict[w2_ms_name] = ms.Parameter(ms.from_numpy(w2_ms_param).astype(ms.float16),
                                                        name=w2_ms_name,
                                                        requires_grad=False)
 
@@ -166,35 +166,35 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         if qkv_concat:
             w_qkv_name = f"model.layers.{layer_id}.attention.w_qkv.weight"
             w_qkv_param = np.concatenate((wq_ms_param, wk_ms_param, wv_ms_param), axis=0)
-            w_qkv_param = ms.from_numpy(w_qkv_param).astype(ms.bfloat16)
+            w_qkv_param = ms.from_numpy(w_qkv_param).astype(ms.float16)
             self.parameter_dict[w_qkv_name] = ms.Parameter(w_qkv_param, name=w_qkv_name, requires_grad=False)
 
             w_qkv_bias_name = f"model.layers.{layer_id}.attention.w_qkv.bias"
             w_qkv_bias_param = np.concatenate((wq_bias_ms_param, wk_bias_ms_param, wv_bias_ms_param), axis=0)
-            w_qkv_bias_param = ms.from_numpy(w_qkv_bias_param).astype(ms.bfloat16)
+            w_qkv_bias_param = ms.from_numpy(w_qkv_bias_param).astype(ms.float16)
             self.parameter_dict[w_qkv_bias_name] = ms.Parameter(w_qkv_bias_param, name=w_qkv_bias_name,
                                                                 requires_grad=False)
         else:
-            self.parameter_dict[wq_ms_name] = ms.Parameter(ms.from_numpy(wq_ms_param).astype(ms.bfloat16),
+            self.parameter_dict[wq_ms_name] = ms.Parameter(ms.from_numpy(wq_ms_param).astype(ms.float16),
                                                            name=wq_ms_name,
                                                            requires_grad=False)
-            self.parameter_dict[wk_ms_name] = ms.Parameter(ms.from_numpy(wk_ms_param).astype(ms.bfloat16),
+            self.parameter_dict[wk_ms_name] = ms.Parameter(ms.from_numpy(wk_ms_param).astype(ms.float16),
                                                            name=wk_ms_name,
                                                            requires_grad=False)
-            self.parameter_dict[wv_ms_name] = ms.Parameter(ms.from_numpy(wv_ms_param).astype(ms.bfloat16),
+            self.parameter_dict[wv_ms_name] = ms.Parameter(ms.from_numpy(wv_ms_param).astype(ms.float16),
                                                            name=wv_ms_name,
                                                            requires_grad=False)
 
             self.parameter_dict[wq_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wq_bias_ms_param).astype(ms.bfloat16),
+                ms.from_numpy(wq_bias_ms_param).astype(ms.float16),
                 name=wq_bias_ms_name,
                 requires_grad=False)
             self.parameter_dict[wk_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wk_bias_ms_param).astype(ms.bfloat16),
+                ms.from_numpy(wk_bias_ms_param).astype(ms.float16),
                 name=wk_bias_ms_name,
                 requires_grad=False)
             self.parameter_dict[wv_bias_ms_name] = ms.Parameter(
-                ms.from_numpy(wv_bias_ms_param).astype(ms.bfloat16),
+                ms.from_numpy(wv_bias_ms_param).astype(ms.float16),
                 name=wv_bias_ms_name,
                 requires_grad=False)
 
@@ -203,7 +203,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         wo_ms_name = self.convert_weight_name(wo_hf_name)
         wo_ms_param, _ = self.get_safetensor_from_file(wo_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
                                                        split_axis=1)
-        self.parameter_dict[wo_ms_name] = ms.Parameter(ms.from_numpy(wo_ms_param).astype(ms.bfloat16),
+        self.parameter_dict[wo_ms_name] = ms.Parameter(ms.from_numpy(wo_ms_param).astype(ms.float16),
                                                        name=wo_ms_name,
                                                        requires_grad=False)
 
@@ -216,7 +216,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
                                                                    src_hf_dir,
                                                                    hf_weight_map)
         self.parameter_dict[attention_norm_ms_name] = ms.Parameter(
-            ms.from_numpy(attention_norm_ms_param).astype(ms.bfloat16),
+            ms.from_numpy(attention_norm_ms_param).astype(ms.float32),
             name=attention_norm_ms_name,
             requires_grad=False)
 
@@ -225,7 +225,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         ffn_norm_ms_name = self.convert_weight_name(ffn_norm_hf_name)
         ffn_norm_ms_param, _ = self.get_safetensor_from_file(ffn_norm_hf_name, src_hf_dir, hf_weight_map)
         self.parameter_dict[ffn_norm_ms_name] = ms.Parameter(
-            ms.from_numpy(ffn_norm_ms_param).astype(ms.bfloat16),
+            ms.from_numpy(ffn_norm_ms_param).astype(ms.float32),
             name=ffn_norm_ms_name,
             requires_grad=False)
 

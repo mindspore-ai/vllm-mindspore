@@ -30,10 +30,10 @@ from vllm.forward_context import get_forward_context
 
 import torch
 
-from mindspore import Tensor, nn, mutable
+from mindspore import Tensor, nn, mutable, ops
 from mindspore import dtype as mstype
 
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, FORMAT_TYPE
 
 class Fake_Attention:
     def __init__(self):
@@ -44,11 +44,11 @@ class Fake_Attention:
         )
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
+        self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
         self.kv_cache = [
             (
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
+                ops.auto_generate.format_cast(torch.zeros(self.kv_shape, dtype=torch.float16, device="Ascend"), FORMAT_TYPE["nz"]),
+                ops.auto_generate.format_cast(torch.zeros(self.kv_shape, dtype=torch.float16, device="Ascend"), FORMAT_TYPE["nz"]),
             )
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
@@ -60,7 +60,8 @@ class Fake_MLA(Fake_Attention):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
+            (ops.auto_generate.format_cast(torch.zeros(
+                self.kv_shape, dtype=torch.float16, device="Ascend"), FORMAT_TYPE["nz"]),)
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 

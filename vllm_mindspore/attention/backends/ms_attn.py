@@ -609,7 +609,7 @@ class MsAttentionBackend(AttentionBackend):
     ) -> Tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
-        return (2, num_blocks, block_size, num_kv_heads, head_size)
+        return (2, num_blocks, block_size, num_kv_heads*head_size)
 
     @staticmethod
     def swap_blocks(
@@ -743,7 +743,7 @@ class MLABackend(AttentionBackend):
         num_kv_heads: int,  # assumed to be 1 for MLA
         head_size: int,
     ) -> Tuple[int, ...]:
-        return (1, num_blocks, block_size, 1, head_size)
+        return (1, num_blocks, block_size, head_size)
 
     @staticmethod
     def swap_blocks(

@@ -213,6 +213,18 @@ RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(RejectionSampler, '_smallest_positive_value')
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
+import vllm.distributed.communication_op
+import vllm.worker.worker_base
+from vllm_mindspore.distributed.communication_op import ds_broadcast_tensor_dict
+vllm.distributed.communication_op.broadcast_tensor_dict = ds_broadcast_tensor_dict
+vllm.worker.worker_base.broadcast_tensor_dict = ds_broadcast_tensor_dict
+
+import vllm.distributed.parallel_state
+from vllm_mindspore.distributed.parallel_state import ds_gc_broadcast_tensor_dict, ds_init_model_parallel_group
+
+vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = ds_gc_broadcast_tensor_dict
+vllm.distributed.parallel_state.init_model_parallel_group = ds_init_model_parallel_group
+
 from .utils import check_ready
 
 check_ready()
