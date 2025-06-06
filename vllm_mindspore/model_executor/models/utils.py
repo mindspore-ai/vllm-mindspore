@@ -261,27 +261,3 @@ def merge_multimodal_embeddings(
         (input_ids == placeholder_token_id),
         multimodal_embeddings,
     )
-def set_enforce_eager(value):
-    """
-    set global variable enforce_eager to value.
-    """
-    global enforce_eager
-    enforce_eager = value
-
-
-def _jit(func):
-    """
-    A decorator to apply JIT compilation to a function or method.
-    """
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if enforce_eager:
-            # If enforce_eager is True, we do not apply JIT compilation.
-            return func(*args, **kwargs)
-        if hasattr(func, "__wrapped_by_jit__"):
-            # If the function is already wrapped by JIT, we call it directly.
-            return func(*args, **kwargs)
-        return jit(func, jit_level="O0", infer_boost="on")(*args, **kwargs)
-
-    return wrapper

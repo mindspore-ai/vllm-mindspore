@@ -186,9 +186,9 @@ class DeepseekV3ForCausalLM(MfModelBase):
             weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
         return None
 
-    def prepare_inputs(self, input_ids, positions, attn_metadata):
+    def prepare_inputs(self, input_ids, positions):
         model_inputs, is_prefill = super().prepare_inputs(
-            input_ids, positions, attn_metadata)
+            input_ids, positions)
 
         attn_padding_idx, attn_unpadding_idx, ffn_padding_idx, ffn_unpadding_idx = _get_padding_index(
             model_inputs["q_seq_lens"])

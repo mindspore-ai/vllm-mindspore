@@ -17,7 +17,8 @@
 
 import os
 from abc import abstractmethod
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import Iterable, List, Optional, Set, Tuple, Union, Dict
+import numpy as np
 
 import mindspore as ms
 from mindspore import Tensor, mutable, nn
@@ -28,6 +29,15 @@ from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
+import vllm.envs as envs
+
+import mindspore as ms
+from mindspore import Tensor, nn, mutable
+from mindspore.common import dtype as mstype
+
+from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
 class AttentionWrapper:
@@ -87,6 +97,8 @@ class MsModelBase:
         self.enable_prefix_caching = vllm_config.cache_config.enable_prefix_caching
         self.is_multi_step = vllm_config.scheduler_config.is_multi_step
         self.is_multi_step_chunked_prefill = self.is_multi_step and self.enable_chunked_prefill
+
+        self.set_flags = False
 
     def get_model_path(self):
         model_name_or_path = self.model_config.model
@@ -191,48 +203,6 @@ class MsModelBase:
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
         raise NotImplementedError
 
-    def set_model_inputs(self, is_prefill):
-        dyn_input_ids = Tensor(shape=[None, None], dtype=mstype.int64)
-        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int64)
-
-        block_size = self.cache_config.block_size
-        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
-        head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
-
-        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
-            else self.cache_config.cache_dtype
-        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
-            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
-
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
-
-        dyn_key_cache = mutable(Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype))
-        dyn_value_cache = mutable(Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype))
-        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
-        dyn_value_caches = mutable([dyn_value_cache for _ in range(num_layers)])
-
-        dyn_batch_valid_length = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_slot_mapping = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
-        dyn_inputs_embeds = None
-
-        self.model.set_inputs(
-            dyn_input_ids,
-            dyn_position_ids,
-            dyn_key_caches,
-            dyn_value_caches,
-            is_prefill,
-            dyn_slot_mapping,
-            dyn_batch_valid_length,
-            dyn_q_seq_lens,
-            dyn_block_tables,
-            dyn_intermediate_tensors,
-            dyn_inputs_embeds
-        )
-
     def get_kvcache(self):
         key_cache = []
         value_cache = []
@@ -265,5 +235,193 @@ class MsModelBase:
 
     @abstractmethod
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        raise NotImplementedError(
-            "Function load_weights should be Implemented!")
+        raise NotImplementedError("Function load_weights should be Implemented!")
+
+
+    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor):
+        input_len = input_ids.shape[0]
+        max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
+        seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
+        q_seq_lens_np = np.array([input_len], dtype=np.int32)
+        seq_lens_np = np.array([input_len], dtype=np.int32)
+        context_lens_tensor = ms.Tensor([0], dtype=ms.int32)
+
+        block_tables = ms.Tensor([[0]], dtype=ms.int32)
+        slot_mapping = [-1 for _ in range(input_len)]
+        slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
+        return MsAttentionMetadata(
+            max_seq_len=max_seq_len,
+            seq_lens=seq_lengths,
+            seq_lens_np=seq_lens_np,
+            block_tables=block_tables,
+            slot_mapping=slot_mapping,
+            q_seq_lens_np=q_seq_lens_np,
+            context_lens=context_lens_tensor,
+            # To enforce prefill and decode are both complied in warmup process.
+            # So set max_context_lens to 0 for prefill and 1 for decode.
+            max_context_lens=0 if not self.set_flags else 1,
+            query_start_loc = None
+        )
+
+
+    def prepare_base_inputs(self, input_ids, positions):
+        attn_metadata = get_forward_context().attn_metadata
+        if attn_metadata is None:
+            attn_metadata = self._dummy_attention_metadata(input_ids, positions)
+        key_cache, value_cache = self.get_kvcache()
+        if not envs.VLLM_USE_V1:
+            # V0
+            seq_lens = attn_metadata.seq_lens
+            max_query_len = attn_metadata.max_query_len
+            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
+            # decodes are scheduled together. In the first step, all the
+            # prefills turn into decodes and max_query_len will be 1.
+            if self.is_multi_step_chunked_prefill and max_query_len == 1:
+                query_lens = [1] * len(seq_lens)
+            else:
+                query_lens = attn_metadata.query_lens
+
+            seq_lens_np = np.array(seq_lens, dtype=np.int32)
+            query_lens_np = np.array(query_lens, dtype=np.int32)
+            kv_cache_lens = seq_lens_np - query_lens_np
+            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0:
+                is_prefill = True
+            else:
+                is_prefill = False
+        else:
+            # V1
+            is_prefill = attn_metadata.max_context_lens == 0
+            query_lens_np = attn_metadata.q_seq_lens_np
+            seq_lens_np = attn_metadata.seq_lens_np
+        
+        q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
+        position_ids = ms.Tensor(positions, dtype=ms.int32)
+        attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
+
+        model_inputs = {}
+        model_inputs["input_ids"] = input_ids.astype(ms.int32)
+        model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
+        model_inputs["block_tables"] = attn_metadata.block_tables
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["position_ids"] = position_ids
+        model_inputs["q_seq_lens"] = q_seq_lens
+        model_inputs["attention_mask"] = attention_mask
+        model_inputs["key_cache"] = key_cache
+        model_inputs["value_cache"] = value_cache
+
+        return model_inputs, is_prefill
+
+
+class NativeModel(MsModelBase):
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
+        super().__init__(vllm_config=vllm_config, prefix=prefix)
+        self.quant_config = vllm_config.quant_config
+        if vllm_config.lora_config is not None:
+            # native model lora only support pynative mode now
+            vllm_config.model_config.enforce_eager = True
+        self.is_graph_mode = False if vllm_config.model_config.enforce_eager else True
+        self.prev_prefill = False
+        self.run_model = None
+
+    def common_preprocess(self, vllm_config, prefix = ""):
+        self.set_modules({"model": self.model, "lm_head": self.lm_head})
+
+        self.casual_mask = LowerTriangularMask(dtype=self.model_config.dtype, 
+                                               max_model_len=self.model_config.max_model_len)
+        self.kv_caches = [AttentionWrapper() for i in range(self.config.num_hidden_layers)]
+
+        compilation_config = vllm_config.compilation_config
+        if prefix in compilation_config.static_forward_context:
+            raise ValueError(f"Duplicate layer name: {prefix}")
+        for i in range(self.config.num_hidden_layers):
+            compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
+
+
+    def set_model_inputs(self, is_prefill):
+        dyn_input_ids = Tensor(shape=[None], dtype=mstype.int32)
+        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int32)
+
+        block_size = self.cache_config.block_size
+        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
+        head_size = self.model_config.get_head_size()
+        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+
+        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
+            else self.cache_config.cache_dtype
+        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
+            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
+
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+
+        dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
+        dyn_value_caches = mutable([dyn_value_cache for _ in range(num_layers)])
+
+        dyn_slot_mapping = Tensor(shape=[None, ], dtype=mstype.int32)
+        dynamic_attention_mask = Tensor(shape=[None, None], dtype=self.model_config.dtype)
+        dyn_batch_valid_length = Tensor(shape=[None,], dtype=mstype.int32)
+        dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
+        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+        dyn_intermediate_tensors = None
+        dyn_inputs_embeds = None
+        self.model.set_inputs(
+            dyn_input_ids,
+            dyn_position_ids,
+            dyn_key_caches,
+            dyn_value_caches,
+            is_prefill,
+            dyn_slot_mapping,
+            dynamic_attention_mask,
+            dyn_batch_valid_length,
+            dyn_q_seq_lens,
+            dyn_block_tables,
+            dyn_intermediate_tensors,
+            dyn_inputs_embeds
+        )
+
+    def prepare_inputs(self, input_ids, positions, intermediate_tensors, inputs_embeds):
+        model_inputs, is_prefill = self.prepare_base_inputs(input_ids, positions)
+
+        # for multimodal model
+        model_inputs["intermediate_tensors"] = intermediate_tensors
+        model_inputs["inputs_embeds"] = inputs_embeds
+
+        return model_inputs, is_prefill
+
+    def exec_model(
+        self,
+        input_ids: Tensor,
+        positions: Tensor,
+        intermediate_tensors: IntermediateTensors = None,
+        inputs_embeds: Tensor = None,
+        **kwargs
+    ):
+        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions, intermediate_tensors, inputs_embeds)
+
+        if self.prev_prefill != is_prefill and self.is_graph_mode:
+            self.set_model_inputs(is_prefill)
+        self.prev_prefill = is_prefill
+
+        # for dummy_attention_metadata 
+        if is_prefill and not self.set_flags:
+            self.set_flags = True
+
+        if self.run_model is None:
+            self.run_model = ms.jit(function=self.model, jit_level='O0') if self.is_graph_mode else self.model
+        model_output = self.run_model(
+            input_ids=model_inputs["input_ids"],
+            positions=model_inputs["position_ids"],
+            key_caches=model_inputs["key_cache"],
+            value_caches=model_inputs["value_cache"],
+            is_prefill=is_prefill,
+            slot_mapping=model_inputs["slot_mapping"],
+            attn_mask=model_inputs["attention_mask"],
+            batch_valid_length=model_inputs["batch_valid_length"],
+            q_seq_lens=model_inputs["q_seq_lens"],
+            block_tables=model_inputs["block_tables"],
+            intermediate_tensors=model_inputs["intermediate_tensors"],
+            inputs_embeds=model_inputs["inputs_embeds"],
+            )
+
+        return model_output
