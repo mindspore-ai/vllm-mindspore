@@ -19,13 +19,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import mindspore
-from mindspore import Tensor, mint, ops
+from mindspore import Tensor, mint, ops, nn
 from mindspore.common import dtype as mstype
 
 from transformers import PretrainedConfig
-
-from vllm_mindspore.model_executor.custom_op import CustomOp
-
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -56,7 +53,7 @@ def _apply_rotary_emb(
         return mint.stack((o1, o2), dim=-1).flatten(-2)
 
 
-class RotaryEmbedding(CustomOp):
+class RotaryEmbedding(nn.Cell):
 
     def __init__(
         self,
@@ -102,7 +99,7 @@ class RotaryEmbedding(CustomOp):
         cache = mint.cat((cos, sin), dim=-1)
         return cache
 
-    def forward_native(
+    def construct(
         self,
         positions: Tensor,
         query: Tensor,
@@ -133,7 +130,7 @@ class RotaryEmbedding(CustomOp):
         return query, key
 
 
-class InferRotaryEmbedding(CustomOp):
+class InferRotaryEmbedding(nn.Cell):
 
     def __init__(
         self,
@@ -144,24 +141,43 @@ class InferRotaryEmbedding(CustomOp):
         is_neox_style: bool,
         dtype,
     ) -> None:
+        if not is_neox_style:
+            raise NotImplementedError(
+                "InferRotaryEmbedding only support Neox-style rotary embeddings."
+            )
         super().__init__()
-        freqs_base = np.arange(0, rotary_dim, 2)[:(rotary_dim // 2)].astype(
-            np.float32)  # (head_dim // 2, )
-        freqs = 1.0 / (base**(freqs_base / rotary_dim))  # (head_dim // 2, )
-        mscale = 1.0
-        t = np.arange(0, max_position_embeddings, 1).astype(np.float32)
-
-        self.freqs = Tensor(freqs.reshape(1, 1, 1, -1), dtype=dtype)
-        freqs = np.outer(t, freqs)  # (max_position_embedding, head_dim // 2)
-        emb = np.concatenate((freqs, freqs), axis=-1)
-        freqs_cos = np.cos(emb) * mscale  # (seq_len, head_dim)
-        freqs_sin = np.sin(emb) * mscale  # (seq_len, head_dim)
-        self.freqs_cos = Tensor(freqs_cos, dtype=dtype)
-        self.freqs_sin = Tensor(freqs_sin, dtype=dtype)
         self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
         self.gather = ops.Gather()
+        self.head_size = head_size
+        self.rotary_dim = rotary_dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.is_neox_style = is_neox_style
+        self.dtype = dtype
+        self.freqs_cos, self.freqs_sin = self._compute_cos_sin_cache()
 
-    def forward_native(
+    def _compute_inv_freq(self, base: Union[int, float]) -> Tensor:
+        """
+        Compute the inverse frequency with numpy.
+        Numpy process is faster during initialization.
+        """
+        freqs_base = np.arange(0, self.rotary_dim, 2).astype(
+            np.float32)  # (head_dim // 2, )
+        freqs = 1.0 / (base**(freqs_base / self.rotary_dim))  # (head_dim // 2, )
+        return freqs
+
+    def _compute_cos_sin_cache(self) -> Tuple[Tensor, Tensor]:
+        freqs = self._compute_inv_freq(self.base)
+        t = np.arange(0, self.max_position_embeddings, 1).astype(np.float32)
+        freqs = np.outer(t, freqs)  # (max_position_embedding, head_dim // 2)
+        emb = np.concatenate((freqs, freqs), axis=-1)
+        freqs_cos = np.cos(emb) # (seq_len, head_dim)
+        freqs_sin = np.sin(emb) # (seq_len, head_dim)
+        freqs_cos = Tensor(freqs_cos, dtype=self.dtype)
+        freqs_sin = Tensor(freqs_sin, dtype=self.dtype)
+        return freqs_cos, freqs_sin
+
+    def construct(
         self,
         positions: Tensor,
         query: Tensor,
@@ -206,7 +222,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
 
-    def forward_native(
+    def construct(
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
@@ -448,7 +464,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
 
-    def forward_native(
+    def construct(
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
@@ -547,7 +563,8 @@ def get_rope(
     if key in _ROPE_DICT:
         return _ROPE_DICT[key]
     if rope_scaling is None:
-        rotary_emb = InferRotaryEmbedding(
+        cls = InferRotaryEmbedding if is_neox_style else RotaryEmbedding
+        rotary_emb = cls(
             head_size,
             rotary_dim,
             max_position,
