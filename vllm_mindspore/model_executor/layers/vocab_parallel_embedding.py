@@ -25,6 +25,7 @@ from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.model_executor.layers.quantization.base_config import \
     QuantizationConfig
+from vllm.config import get_current_vllm_config
 
 from vllm_mindspore.distributed.communication_op import \
     ReduceFromModelParallelRegion
@@ -243,7 +244,7 @@ class VocabParallelEmbedding(nn.Cell):
         self.quant_method: QuantizeMethodBase = quant_method
 
         if params_dtype is None:
-            params_dtype = mstype.float16
+            params_dtype = get_current_vllm_config().model_config.dtype
         # Divide the weight matrix along the vocaburaly dimension.
         self.num_added_embeddings = self.num_embeddings - self.org_vocab_size
         self.num_embeddings_per_partition = divide(self.num_embeddings_padded,

@@ -79,14 +79,12 @@ class Qwen2MLP(nn.Cell):
             output_sizes=[intermediate_size] * 2,
             bias=bias,
             quant_config=quant_config,
-            prefix=f"{prefix}.gate_up_proj",
-            params_dtype=mstype.bfloat16)
+            prefix=f"{prefix}.gate_up_proj")
         self.down_proj = RowParallelLinear(input_size=intermediate_size,
                                            output_size=hidden_size,
                                            bias=bias,
                                            quant_config=quant_config,
-                                           prefix=f"{prefix}.down_proj",
-                                           params_dtype=mstype.bfloat16)
+                                           prefix=f"{prefix}.down_proj")
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
@@ -142,7 +140,6 @@ class Qwen2Attention(nn.Cell):
             bias=True,
             quant_config=quant_config,
             prefix=f"{prefix}.qkv_proj",
-            params_dtype=mstype.bfloat16,
         )
         self.o_proj = RowParallelLinear(
             input_size=self.total_num_heads * self.head_dim,
@@ -150,7 +147,6 @@ class Qwen2Attention(nn.Cell):
             bias=False,
             quant_config=quant_config,
             prefix=f"{prefix}.o_proj",
-            params_dtype=mstype.bfloat16,
         )
 
         self.rotary_emb = get_rope(
@@ -159,7 +155,6 @@ class Qwen2Attention(nn.Cell):
             max_position=max_position,
             base=self.rope_theta,
             rope_scaling=rope_scaling,
-            dtype=mstype.bfloat16,
         )
         self.attn = Attention(self.num_heads,
                               self.head_dim,
@@ -240,12 +235,10 @@ class Qwen2DecoderLayer(nn.Cell):
         self.input_layernorm = RMSNorm(
             config.hidden_size,
             eps=config.rms_norm_eps,
-            params_dtype=mstype.bfloat16,
         )
         self.post_attention_layernorm = RMSNorm(
             config.hidden_size,
             eps=config.rms_norm_eps,
-            params_dtype=mstype.bfloat16,
         )
 
     def construct(
@@ -302,7 +295,6 @@ class Qwen2Model(nn.Cell):
             self.embed_tokens = VocabParallelEmbedding(
                 self.vocab_size,
                 config.hidden_size,
-                params_dtype=mstype.bfloat16,
                 quant_config=quant_config,
                 prefix=f"{prefix}.embed_tokens",
             )
@@ -322,11 +314,7 @@ class Qwen2Model(nn.Cell):
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
         if get_pp_group().is_last_rank:
-            self.norm = RMSNorm(
-                config.hidden_size,
-                eps=config.rms_norm_eps,
-                params_dtype=mstype.bfloat16,
-            )
+            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         else:
             self.norm = PPMissingLayer()
 
@@ -469,7 +457,6 @@ class Qwen2ForCausalLM(MsModelBase, SupportsLoRA):
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
                                               config.hidden_size,
-                                              params_dtype=mstype.bfloat16,
                                               quant_config=quant_config,
                                               prefix=maybe_prefix(
                                                   prefix, "lm_head"))

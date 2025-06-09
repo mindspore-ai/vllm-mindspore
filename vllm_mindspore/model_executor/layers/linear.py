@@ -32,13 +32,13 @@ from vllm.distributed import (
     tensor_model_parallel_all_gather,
     tensor_model_parallel_all_reduce,
 )
+from vllm.config import get_current_vllm_config
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig,
     QuantizeMethodBase,
 )
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.distributed.communication_op import ReduceFromModelParallelRegion
-
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod",
@@ -170,8 +170,7 @@ class LinearBase(ms.nn.Cell):
         self.output_size = output_size
         self.skip_bias_add = skip_bias_add
         if params_dtype is None:
-            # params_dtype = torch.get_default_dtype()
-            params_dtype = ms.float16
+            params_dtype = get_current_vllm_config().model_config.dtype
         self.params_dtype = params_dtype
         if quant_config is None:
             self.quant_method: Optional[QuantizeMethodBase] = UnquantizedLinearMethod()
@@ -236,7 +235,7 @@ class ColumnParallelLinear(LinearBase):
         )
         if bias:
             self.bias = Parameter(
-                mint.zeros(self.output_size_per_partition, dtype=params_dtype)
+                mint.zeros(self.output_size_per_partition, dtype=self.params_dtype)
             )
             set_weight_attrs(
                 self.bias,
@@ -545,7 +544,7 @@ class RowParallelLinear(LinearBase):
             )
 
         if bias:
-            self.bias = Parameter(mint.zeros(self.output_size, dtype=params_dtype))
+            self.bias = Parameter(mint.zeros(self.output_size, dtype=self.params_dtype))
             set_weight_attrs(
                 self.bias,
                 {

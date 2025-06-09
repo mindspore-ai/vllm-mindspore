@@ -24,6 +24,8 @@ from mindspore.common import dtype as mstype
 
 from transformers import PretrainedConfig
 
+from vllm.config import get_current_vllm_config
+
 def _apply_rotary_emb(
     x: Tensor,
     cos: Tensor,
@@ -543,9 +545,12 @@ def get_rope(
     base: int,
     is_neox_style: bool = True,
     rope_scaling: Optional[Dict[str, Any]] = None,
-    dtype: Optional[Any] = mstype.float16,
+    dtype: Optional[Any] = None,
     partial_rotary_factor: float = 1.0,
 ) -> InferRotaryEmbedding:
+    if dtype is None:
+        dtype = get_current_vllm_config().model_config.dtype
+
     if rope_scaling is not None:
         # Transforms every value that is a list into a tuple for caching calls
         rope_scaling_tuple = {

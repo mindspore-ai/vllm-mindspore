@@ -22,8 +22,9 @@ from mindspore import Parameter, Tensor, mint, ops
 from mindspore.common import dtype as mstype
 from mindspore.common.dtype import typing
 
-from vllm_mindspore.model_executor.custom_op import CustomOp
+from vllm.config import get_current_vllm_config
 
+from vllm_mindspore.model_executor.custom_op import CustomOp
 
 class RMSNorm(CustomOp):
     def __init__(
@@ -31,9 +32,11 @@ class RMSNorm(CustomOp):
         hidden_size: int,
         eps: float = 1e-6,
         var_hidden_size: Optional[int] = None,
-        params_dtype: Optional[Any] = mstype.float16,
+        params_dtype: Optional[Any] = None,
     ) -> None:
         super().__init__()
+        if params_dtype is None:
+            params_dtype = get_current_vllm_config().model_config.dtype
         self.weight = Parameter(mint.ones(hidden_size, dtype=params_dtype))
         self.rms_norm = ops.RmsNorm(eps)
 
