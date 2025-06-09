@@ -158,7 +158,10 @@ def solve_for_q( params, target_time, pre_kv_len):
     return max(0, q)
 
 def get_optimize_chunks(length, params):
-    chunk_num = (length-1) // 2048 + 1
+    # get chunk step from env,default 2048
+    step_size = int(os.environ.get('CHUNK_STEP_SIZE', '2048'))
+    # get chunk num from chunk step
+    chunk_num = (length-1) // step_size + 1
     return [length] if chunk_num == 1 else optimize_chunks(params, length, chunk_num)
 
 def get_next_chunk_size(self) -> Optional[int]:

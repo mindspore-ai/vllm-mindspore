@@ -160,13 +160,21 @@ def add_num_batched_tokens_sub_rmd_prefill(self,
     self._num_cached_tokens += num_cached_tokens
     
     # vllm-mindspore begin:
-    # After scheduling the current chunk, decrement: reminding_num_prefill_seqs -= 1
-    self.reminding_num_prefill_seqs -= 1
+    # Only 1 long sequence allowed per batch
+    # These can be added without breaking batch compute balance:
+    # 1. Decode-phase requests
+    # 2. Beam search (width<=64)
+    # 3. Short prefills (len<=64)
+    if num_batched_tokens > 64:
+        # After scheduling the current chunk, decrement: reminding_num_prefill_seqs -= 1
+        self.reminding_num_prefill_seqs -= 1
     # vllm-mindspore end.
 
 def apply_scheduler_patch():
     if 'ADAPTIVE_CHUNK' in os.environ and os.environ['ADAPTIVE_CHUNK'] == '1':
-        SchedulingBudget.reminding_num_prefill_seqs = 1
+        long_req_in_budget = int(os.environ.get('LONG_REQ_IN_BUDGET', '1'))
+        # The batch size of chunk in a batch,default 1.
+        SchedulingBudget.reminding_num_prefill_seqs = long_req_in_budget
         SchedulingBudget.can_schedule = patched_can_schedule
         SchedulingBudget.add_num_batched_tokens = add_num_batched_tokens_sub_rmd_prefill
         Scheduler.enable_adaptive_chunked_prefill = True
