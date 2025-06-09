@@ -17,7 +17,7 @@
 """test mf deepseek r1."""
 import pytest
 import os
-from . import set_env
+from tests.st.python import set_env
 
 env_manager = set_env.EnvVarManager()
 # def env
@@ -27,15 +27,12 @@ env_vars = {
     "vLLM_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "on",
     "HCCL_OP_EXPANSION_MODE": "AIV",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "0",
-    "HCCL_IF_BASE_PORT": "60000",
-    "LCAL_COMM_ID": "127.0.0.1:10068"
+    "VLLM_USE_V1": "0"
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
@@ -43,9 +40,6 @@ import vllm_mindspore
 from vllm import LLM, SamplingParams
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
 def test_deepseek_r1():
     """
     test case deepseek r1 w8a8
@@ -61,7 +55,7 @@ def test_deepseek_r1():
 
     # Create an LLM.
     llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
-              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=8)
+              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
@@ -76,9 +70,7 @@ def test_deepseek_r1():
     # unset env
     env_manager.unset_all()
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
+
 def test_deepseek_mtp():
     """
     test case deepseek mtp with main model of r1-w8a8
@@ -94,7 +86,7 @@ def test_deepseek_mtp():
 
     # Create an LLM.
     llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-MTP",
-              trust_remote_code=True, gpu_memory_utilization=0.7, tensor_parallel_size=8, max_model_len=4096,
+              trust_remote_code=True, gpu_memory_utilization=0.7, tensor_parallel_size=2, max_model_len=4096,
               speculative_config={"num_speculative_tokens": 1})
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
