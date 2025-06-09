@@ -507,7 +507,7 @@ class Qwen2ForCausalLM(MsModelBase):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
     def set_model_inputs(self, is_prefill):
-        dyn_input_ids = Tensor(shape=[None, None], dtype=mstype.int64)
+        dyn_input_ids = Tensor(shape=[None], dtype=mstype.int64)
         dyn_position_ids = Tensor(shape=[None], dtype=mstype.int64)
 
         block_size = self.cache_config.block_size
@@ -596,12 +596,10 @@ class Qwen2ForCausalLM(MsModelBase):
             attn_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
             positions = positions.to(ms.int64)
         if is_prefill:
-            input_ids = ops.expand_dims(input_ids, 0)
             if not self.prefill:
                 self.prefill = True
                 self.set_model_inputs(self.prefill)
         else:
-            input_ids = ops.expand_dims(input_ids, 1)
             if self.prefill:
                 self.prefill = False
                 self.set_model_inputs(self.prefill)
@@ -617,10 +615,6 @@ class Qwen2ForCausalLM(MsModelBase):
                                   block_tables,
                                   intermediate_tensors,
                                   inputs_embeds)
-        if is_prefill:
-            model_output = ops.squeeze(model_output, 0)
-        else:
-            model_output = ops.squeeze(model_output, 1)
         return model_output
 
     def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
