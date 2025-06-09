@@ -12,6 +12,7 @@ from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetad
 from vllm_mindspore.utils import get_valid_dtype
 
 from vllm.v1.kv_cache_interface import FullAttentionSpec
+from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.utils import bind_kv_cache
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
 from vllm.distributed.parallel_state import get_pp_group
@@ -417,3 +418,26 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
 
     if batch_changed:
         self.input_batch.refresh_sampling_metadata()
+
+
+def wrapper_gpu_model_runner_execute_model(func):
+
+    def new_func(*args, **kwargs):
+        self = args[0]
+        try:
+            output = func(*args, **kwargs)
+            return output
+        except Exception as e:
+            logger.warning(
+                f"Caught exception {str(e)} when processing req_ids {self.input_batch.req_ids}"
+            )
+            return ModelRunnerOutput(
+                req_ids=self.input_batch.req_ids,
+                req_id_to_index=self.input_batch.req_id_to_index,
+                sampled_token_ids=None,
+                spec_token_ids=None,
+                logprobs=None,
+                prompt_logprobs_dict={},
+            )
+
+    return new_func

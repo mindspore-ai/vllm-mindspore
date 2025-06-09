@@ -261,6 +261,11 @@ vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
 from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = initialize_kv_cache
 
+from vllm_mindspore.v1.worker.gpu_model_runner import wrapper_gpu_model_runner_execute_model
+from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.execute_model = \
+    wrapper_gpu_model_runner_execute_model(GPUModelRunner.execute_model)
+
 import vllm.v1.worker.block_table
 from vllm_mindspore.v1.worker.block_table import BlockTable
 vllm.v1.worker.block_table.BlockTable = BlockTable
@@ -314,6 +319,10 @@ ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
 Worker.compile_or_warm_up_model = compile_or_warm_up_model
+
+from vllm_mindspore.v1.core.sched.scheduler import update_from_output
+from vllm.v1.core.sched.scheduler import Scheduler
+Scheduler.update_from_output = update_from_output
 
 from .utils import check_ready
 
