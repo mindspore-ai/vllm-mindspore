@@ -60,7 +60,11 @@ from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
 import vllm.v1.engine.core
-from vllm_mindspore.v1.engine.core import shutdown
+from vllm_mindspore.v1.engine.core import (
+    _init_data_parallel,
+    shutdown,
+)
+vllm.v1.engine.core.DPEngineCoreProc._init_data_parallel = _init_data_parallel
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
 from vllm_mindspore.utils import (
@@ -320,6 +324,14 @@ vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 from vllm_mindspore.distributed.shm_broadcast import initialize_ShmRingBuffer
 from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
+
+from vllm_mindspore.distributed.device_communicators.base_device_communicator import(
+    prepare_communication_buffer_for_model
+)
+import vllm.distributed.device_communicators.base_device_communicator
+vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase.prepare_communication_buffer_for_model = (
+    prepare_communication_buffer_for_model
+)
 
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
