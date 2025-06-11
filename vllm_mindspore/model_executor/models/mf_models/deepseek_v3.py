@@ -138,7 +138,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
         self.set_flags = False
         set_runtime_kernel_launch_group()
         self.casual_mask = MLALowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
-                                                  max_model_len=self.mf_model_config.seq_length)
+                                                  max_model_len=self.model_config.max_model_len)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()

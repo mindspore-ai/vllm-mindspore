@@ -71,7 +71,7 @@ class MfModelBase(MsModelBase):
         self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
         self._generate_model_config()
         self.casual_mask = LowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
-                                               max_model_len=self.mf_model_config.seq_length)
+                                               max_model_len=self.model_config.max_model_len)
         self.network, self.lm_head = self._create_network()
 
         affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
