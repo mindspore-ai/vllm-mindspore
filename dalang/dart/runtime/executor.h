@@ -17,12 +17,14 @@
 #ifndef __RUNTIME_EXECUTOR_H__
 #define __RUNTIME_EXECUTOR_H__
 
+#include <unordered_map>
+#include <vector>
+
 #include "common/common.h"
 #include "common/visible.h"
 #include "tensor/tensor.h"
-
-#include <unordered_map>
-#include <vector>
+#include "runtime/mempool.h"
+#include "runtime/kernel_lib.h"
 
 #define DUMP
 
@@ -51,6 +53,9 @@ public:
   tensor::DATensor *AddTensor(ops::Op op,
                               const std::vector<tensor::DATensor *> &inputs);
 
+  // Append node outputs to the given vector.
+  void AppendNodeOutputs(std::vector<tensor::DATensor *> &vec, tensor::DATensor *node);
+
   // Run the built graph.
   void RunGraph();
   // If the graph had been built.
@@ -61,12 +66,16 @@ public:
 #endif
 
 private:
-  void RunTensor(const tensor::DATensor *tensor);
+  void RunTensor(tensor::DATensor *tensor);
 
   std::string name_;
   tensor::DAContext *context_{nullptr};
   tensor::DAGraph *graph_{nullptr};
   std::vector<tensor::DATensor *> parameters_;
+  const KernelLib *kernelLib_{nullptr};
+  runtime::MemoryPool mempool_;
+  std::unordered_map<tensor::DATensor *, std::vector<tensor::DATensor *>> outputs_;
+  std::mutex outputsMutex_;
 #ifdef DUMP
   std::unordered_map<const tensor::DATensor *, ssize_t> paraNumMap_;
   std::unordered_map<const tensor::DATensor *, ssize_t> nodeNumMap_;
