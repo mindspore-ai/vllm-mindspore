@@ -126,7 +126,7 @@ def _prepare_inputs(
     self.seq_lens[num_reqs:].fill_(0)
     self.query_start_loc[num_reqs + 1:].fill_(-1)
 
-    query_start_loc = self.query_start_loc[:num_reqs + 1]
+    query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
 
     attn_metadata: dict[str, FlashAttentionMetadata] = {}
     # Prepare the attention metadata for each KV cache group and make layers
