@@ -19,14 +19,14 @@
 from dataclasses import dataclass, field
 from typing import List, Tuple, Union, Mapping, Optional, Iterable
 
+import mindspore as ms
+from mindspore import mint
+from mindspore import ops
+
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
 from vllm_mindspore.utils import get_valid_dtype
-
-import mindspore as ms
-from mindspore import mint
-from mindspore import ops
 
 
 WeightsMapping = Mapping[str, Optional[str]]
@@ -70,7 +70,6 @@ class WeightsMapper:
     ) -> Iterable[Tuple[str, ms.Tensor]]:
         return ((out_name, data) for name, data in weights
                 if (out_name := self._map_name(name)) is not None)
-
 
 class PPMissingLayer(ms.nn.Cell):
     """
