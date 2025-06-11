@@ -31,8 +31,7 @@ env_vars = {
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "0",
-    "HCCL_IF_BASE_PORT": "60000"
+    "VLLM_USE_V1": "0"
 }
 env_manager.setup_ai_environment(env_vars)
 import vllm_mindspore
