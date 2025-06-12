@@ -55,7 +55,7 @@ def test_deepseek_r1():
 
     # Create an LLM.
     llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
-              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2)
+              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2, max_model_len=4096)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
