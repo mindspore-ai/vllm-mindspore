@@ -148,7 +148,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
             self.mf_model_config.moe_config = self.mf_config.moe_config
             # dispatch/combine in moe need max_num_seqs as global_max_bs
             if hasattr(self.mf_model_config.moe_config, "dispatch_global_max_bs"):
-                self.mf_model_config.moe_config.dispatch_global_max_bs = self.scheduler_config.max_num_seqs
+                self.mf_model_config.moe_config.dispatch_global_max_bs = self.scheduler_config.max_num_batched_tokens
         self.mf_model_config.return_hidden_states = True
         setattr(self.mf_model_config, 'npu_mem_size', -1)
 
