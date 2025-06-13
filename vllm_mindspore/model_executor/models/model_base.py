@@ -87,6 +87,7 @@ class Fake_Attention_V1(Attention):
         self.dtype = vllm_config.model_config.dtype
         self.block_size = block_size
         self.sliding_window = None
+        self.kv_sharing_target_layer_name = None
 
 
 class Fake_MLA_V1(Fake_Attention_V1):

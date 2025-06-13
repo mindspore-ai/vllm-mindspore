@@ -11,7 +11,7 @@ from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetad
                                                              MLABackend)
 from vllm_mindspore.utils import get_valid_dtype
 
-from vllm.v1.kv_cache_interface import FullAttentionSpec
+from vllm.v1.kv_cache_interface import AttentionSpec, FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
 from vllm.distributed.parallel_state import get_pp_group
@@ -192,57 +192,95 @@ def create_block(shape, dtype, name=None, device=None):
     return blocks
 
 
-def initialize_kv_cache(self, kv_cache_config) -> None:
+def _allocate_kv_cache_tensors(
+        self, kv_cache_config):
     """
-    Initialize KV cache based on `kv_cache_config`.
+    Initializes the KV cache buffer with the correct size. The buffer needs
+    to be reshaped to the desired shape before being used by the models.
+
     Args:
-        kv_cache_config: Configuration for the KV cache, including the KV 
-        cache size of each layer
+        kv_cache_config: The KV cache config 
+    Returns:
+        dict[str, torch.Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+        """
+    kv_cache_raw_tensors: dict[str, torch.Tensor] = {}
+    for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
+        key_tensor = torch.zeros(kv_cache_tensor.size // 4,
+                                dtype=ms.bfloat16,
+                                device=self.device)
+        value_tensor = torch.zeros(kv_cache_tensor.size // 4,
+                                dtype=ms.bfloat16,
+                                device=self.device)
+        for layer_name in kv_cache_tensor.shared_by:
+            kv_cache_raw_tensors[layer_name] = (key_tensor, value_tensor)
+
+    layer_names = set()
+    for group in kv_cache_config.kv_cache_groups:
+        layer_names.update(group.layer_names)
+    assert layer_names == set(kv_cache_raw_tensors.keys(
+    )), "Some layers are not correctly initialized"
+    return kv_cache_raw_tensors
+
+
+def _reshape_kv_cache_tensors(
+    self,
+    kv_cache_config,
+    kv_cache_raw_tensors,
+):
     """
-    if len(kv_cache_config.kv_cache_groups) > 1:
-        raise NotImplementedError(
-            "Hybrid models with more than one KV cache type are not "
-            "supported yet.")
-    self.kv_cache_config = kv_cache_config
-    self.initialize_attn_backend(kv_cache_config)
+    Reshape the KV cache tensors to the desired shape and dtype.
 
-    kv_caches: Dict[str, torch.Tensor] = {}
-
-    for i, kv_cache_group in enumerate(kv_cache_config.kv_cache_groups):
-        kv_cache_spec = kv_cache_group.kv_cache_spec
-        for layer_name in kv_cache_group.layer_names:
-            tensor_config = kv_cache_config.tensors[layer_name]
-            assert tensor_config.size % kv_cache_spec.page_size_bytes == 0
-            num_blocks = tensor_config.size // kv_cache_spec.page_size_bytes
-            # `num_blocks` is the number of blocks the model runner can use.
-            # `kv_cache_config.num_blocks` is the number of blocks that
-            # KVCacheManager may allocate.
-            # Since different GPUs may have different number of layers and
-            # different memory capacities, `num_blocks` can be different on
-            # different GPUs, and `kv_cache_config.num_blocks` is set to
-            # the min of all `num_blocks`. Verify it here.
-            assert num_blocks >= kv_cache_config.num_blocks
-            if isinstance(kv_cache_spec, FullAttentionSpec):
+    Args:
+        kv_cache_config: The KV cache config 
+        kv_cache_raw_tensors: The KV cache buffer of each layer, with 
+        correct size but uninitialized shape.
+    Returns:
+        Dict[str, torch.Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+    """
+    kv_caches: dict[str, tuple] = {}
+    for i, kv_cache_group_spec in enumerate(
+            kv_cache_config.kv_cache_groups):
+        kv_cache_spec = kv_cache_group_spec.kv_cache_spec
+        for layer_name in kv_cache_group_spec.layer_names:
+            raw_tensor = kv_cache_raw_tensors[layer_name]
+            num_blocks = (raw_tensor[0].numel() * 4 //
+                            kv_cache_spec.page_size_bytes)
+            if isinstance(kv_cache_spec, AttentionSpec):
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
-                    num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
-                    kv_cache_spec.head_size)
+                    num_blocks, kv_cache_spec.block_size,
+                    kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
                 dtype = kv_cache_spec.dtype
                 dtype = get_valid_dtype(dtype)
-                current_cache = []
-                device_type = "CPU" if self.device.type == "cpu" else "Ascend"
-                for j in range(kv_cache_shape[0]):
-                    cache_blocks = create_block(
-                        kv_cache_shape[1:], dtype, device=device_type
-                    )
-                    current_cache.append(mutable(cache_blocks))
-                kv_caches[layer_name] = mutable(tuple(current_cache))
+                try:
+                    kv_cache_stride_order = self.attn_backends[
+                        i].get_kv_cache_stride_order()
+                    assert len(kv_cache_stride_order) == len(
+                        kv_cache_shape)
+                except (AttributeError, NotImplementedError):
+                    kv_cache_stride_order = tuple(
+                        range(len(kv_cache_shape)))
+                # The allocation respects the backend-defined stride order
+                # to ensure the semantic remains consistent for each
+                # backend. We first obtain the generic kv cache shape and
+                # then permute it according to the stride order which could
+                # result in a non-contiguous tensor.
+                kv_cache_shape = tuple(kv_cache_shape[i]
+                                        for i in kv_cache_stride_order)
+                # Maintain original KV shape view.
+                inv_order = [
+                    kv_cache_stride_order.index(i) - 1
+                    for i in range(len(kv_cache_stride_order))
+                ]
+                kv_cache_layer = []
+                for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
+                    cache_block = mutable(kv_cache_raw_tensor.view(kv_cache_shape[1:]).permute(*inv_order[1:]))
+                    kv_cache_layer.append(cache_block)
+                kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
                 raise NotImplementedError
-
-    bind_kv_cache(
-        kv_caches,
-        self.vllm_config.compilation_config.static_forward_context,
-        self.kv_caches)
+    return kv_caches
 
 
 def _update_states(self, scheduler_output: "SchedulerOutput") -> None:

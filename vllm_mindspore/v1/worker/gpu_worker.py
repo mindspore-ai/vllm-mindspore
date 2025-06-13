@@ -5,6 +5,7 @@ import gc
 import torch
 from vllm.logger import init_logger
 from vllm.distributed.parallel_state import get_pp_group
+from vllm.utils import MemorySnapshot
 
 logger = init_logger(__name__)
 
@@ -47,6 +48,9 @@ def init_device(self):
     # Construct the model runner
     self.model_runner: GPUModelRunner = GPUModelRunner(
         self.vllm_config, self.device)
+    self.init_snapshot = MemorySnapshot()
+    self.requested_memory = (self.init_snapshot.total_memory *
+                           self.cache_config.gpu_memory_utilization)
 
 
 def compile_or_warm_up_model(self) -> None:
