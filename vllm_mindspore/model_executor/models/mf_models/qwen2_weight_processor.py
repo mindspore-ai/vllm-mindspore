@@ -39,6 +39,59 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
 
     def __init__(self, config, network, is_quant):
         super().__init__(config, network, is_quant)
+        self.num_heads = config.model.model_config.num_heads
+        self.kv_heads = config.model.model_config.n_kv_heads
+        self.hidden_size = config.model.model_config.hidden_size
+
+    def qkv_concat_hf2mg(self, qkv_weights: np.ndarray, num_heads, n_kv_heads, hidden_size):
+        """
+        convert qkv_concat weight with huggingface format to megatron format.
+        """
+        w, h = qkv_weights.shape
+        n_rep = num_heads // n_kv_heads
+        q_channel = hidden_size // self.tp_group_size
+        kv_channel = (hidden_size // n_rep) // self.tp_group_size
+        q_weight = qkv_weights[: q_channel, :]
+        k_weight = qkv_weights[q_channel: q_channel + kv_channel, :]
+        v_weight = qkv_weights[q_channel + kv_channel: q_channel + 2 * kv_channel, :]
+        q_w_reshape = q_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // n_kv_heads, -1)
+        k_w_reshape = k_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // num_heads, -1)
+        v_w_reshape = v_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // num_heads, -1)
+        cat_qkv_weight = np.concatenate((q_w_reshape, k_w_reshape, v_w_reshape), axis=1)
+        out_qkv_weight = cat_qkv_weight.reshape(w, h)
+        return out_qkv_weight
+
+    def qkv_bias_concat_hf2mg(self, qkv_bias: np.ndarray, num_heads, n_kv_heads, hidden_size):
+        """
+        convert qkv_concat bias with huggingface format to megatron format.
+        """
+        w = qkv_bias.shape[0]
+        n_rep = num_heads // n_kv_heads
+        q_channel = hidden_size // self.tp_group_size
+        kv_channel = (hidden_size // n_rep) // self.tp_group_size
+        q_weight = qkv_bias[: q_channel]
+        k_weight = qkv_bias[q_channel: q_channel + kv_channel]
+        v_weight = qkv_bias[q_channel + kv_channel: q_channel + 2 * kv_channel]
+        q_w_reshape = q_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // n_kv_heads)
+        k_w_reshape = k_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // num_heads)
+        v_w_reshape = v_weight.reshape(n_kv_heads // self.tp_group_size, hidden_size // num_heads)
+
+        cat_qkv_weight = np.concatenate((q_w_reshape, k_w_reshape, v_w_reshape), axis=1)
+        out_qkv_weight = cat_qkv_weight.reshape(w,)
+        return out_qkv_weight
+
+    def ffn_concat_hf2mg(self, ffn_weights: np.ndarray, ffn_hidden_size):
+        """
+            convert ffn_concat weight with huggingface format to megatron format.
+        """
+        w, h = ffn_weights.shape
+        gate_weight = ffn_weights[: w // 2, :]
+        hidden_weight = ffn_weights[w // 2: w // 2 * 2, :]
+        gate_w_reshape = gate_weight.reshape(-1, 1, ffn_hidden_size)
+        hidden_w_reshape = hidden_weight.reshape(-1, 1, ffn_hidden_size)
+        cat_ffn_weight = np.concatenate((gate_w_reshape, hidden_w_reshape), axis=1)
+        out_ffn_weight = cat_ffn_weight.reshape(w, h)
+        return out_ffn_weight
 
     def infer_convert_outer_weight(self, src_hf_dir, hf_weight_map):
         """convert weight not in model"""
@@ -91,7 +144,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
     def infer_process_dense_ffn_weight(self, src_hf_dir, layer_id, hf_weight_map):
         """infer process dense ffn weight"""
 
-        ffn_concat = self.config.model.model_config.qkv_concat
+        ffn_concat = self.config.model.model_config.ffn_concat
         w1_hf_name = f"model.layers.{layer_id}.mlp.gate_proj.weight"
         w1_ms_name = self.convert_weight_name(w1_hf_name)
         w1_ms_param, _ = self.get_safetensor_from_file(w1_hf_name, src_hf_dir, hf_weight_map, is_split_param=True,
@@ -110,6 +163,7 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         if ffn_concat:
             w_gate_hidden_name = f"model.layers.{layer_id}.feed_forward.w_gate_hidden.weight"
             w_gate_hidden_param = np.concatenate((w1_ms_param, w3_ms_param), axis=0)
+            w_gate_hidden_param = self.ffn_concat_hf2mg(w_gate_hidden_param, self.hidden_size)
             self.parameter_dict[w_gate_hidden_name] = ms.Parameter(w_gate_hidden_param, name=w_gate_hidden_name,
                                                                    requires_grad=False)
         else:
@@ -166,11 +220,13 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
         if qkv_concat:
             w_qkv_name = f"model.layers.{layer_id}.attention.w_qkv.weight"
             w_qkv_param = np.concatenate((wq_ms_param, wk_ms_param, wv_ms_param), axis=0)
+            w_qkv_param = self.qkv_concat_hf2mg(w_qkv_param, self.num_heads, self.kv_heads, self.hidden_size)
             w_qkv_param = ms.from_numpy(w_qkv_param).astype(ms.float16)
             self.parameter_dict[w_qkv_name] = ms.Parameter(w_qkv_param, name=w_qkv_name, requires_grad=False)
 
             w_qkv_bias_name = f"model.layers.{layer_id}.attention.w_qkv.bias"
             w_qkv_bias_param = np.concatenate((wq_bias_ms_param, wk_bias_ms_param, wv_bias_ms_param), axis=0)
+            w_qkv_bias_param = self.qkv_bias_concat_hf2mg(w_qkv_bias_param, self.num_heads, self.kv_heads, self.hidden_size)
             w_qkv_bias_param = ms.from_numpy(w_qkv_bias_param).astype(ms.float16)
             self.parameter_dict[w_qkv_bias_name] = ms.Parameter(w_qkv_bias_param, name=w_qkv_bias_name,
                                                                 requires_grad=False)

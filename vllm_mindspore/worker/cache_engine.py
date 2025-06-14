@@ -28,7 +28,7 @@ logger = init_logger(__name__)
 
 
 def create_block(shape, dtype, name=None, device=None):
-    from mindspore.ops.function.array_func import empty as empty_tensor
+    from mindspore.mint import empty as empty_tensor
 
     blocks = empty_tensor(*shape, dtype=dtype, device=device)
     blocks = ops.auto_generate.format_cast(blocks, FORMAT_TYPE["nz"])

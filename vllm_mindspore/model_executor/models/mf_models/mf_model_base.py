@@ -122,8 +122,8 @@ class MfModelBase(MsModelBase):
         model_inputs = {}
         model_inputs["input_ids"] = _batch_seq(input_ids, is_prefill)
         model_inputs["batch_valid_length"] = ms.Tensor.from_numpy(np.expand_dims(seq_lens_np, 0))
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["block_tables"] = attn_metadata.block_tables + 0
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping + 0
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
