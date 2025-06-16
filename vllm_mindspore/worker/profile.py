@@ -17,7 +17,6 @@ class AdapterProfiler:
     def __init__(self, path):
         self.profiler = Profiler(
             profiler_level=ProfilerLevel.Level1,
-            activities=[ProfilerActivity.CPU, ProfilerActivity.NPU],
             output_path=path,
             start_profile=False
         )

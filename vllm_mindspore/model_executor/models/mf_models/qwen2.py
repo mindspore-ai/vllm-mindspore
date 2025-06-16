@@ -35,10 +35,25 @@ from vllm_mindspore.model_executor.models.model_base import Fake_Attention
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import Qwen2WeightProcessor
 from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerTriangularMask
+import os
+import mindspore as ms
 
 
 logger = init_logger(__name__)
 
+def set_runtime_kernel_launch_group():
+    kernel_launch_group = {'thread_num' : 2, 'kernel_group_num' : 8}
+    env_kernel_launch_group = os.getenv("EXPERIMENTAL_KERNEL_LAUNCH_GROUP", None)
+    if env_kernel_launch_group == None:
+        return
+    if env_kernel_launch_group is not None:
+        pairs = env_kernel_launch_group.split(',')
+        for pair in pairs:
+            key, val = pair.split(':')
+            kernel_launch_group[key] = val
+    thread_num = int(kernel_launch_group.get('thread_num', 2))
+    kernel_group_num = int(kernel_launch_group.get('kernel_group_num', 8))
+    ms.runtime.set_kernel_launch_group(thread_num=thread_num, kernel_group_num=kernel_group_num)
 
 class Qwen2ForCausalLM(MfModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
@@ -56,6 +71,7 @@ class Qwen2ForCausalLM(MfModelBase):
         for i in range(self.mf_model_config.num_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
+        set_runtime_kernel_launch_group()
         self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
         self.set_flags = False
 
@@ -67,9 +83,9 @@ class Qwen2ForCausalLM(MfModelBase):
         self.mf_model_config.return_hidden_states = True
 
         # qwen qkv concat will support in next version
-        self.mf_model_config.qkv_concat = False
+        # self.mf_model_config.qkv_concat = True
         setattr(self.mf_model_config, 'npu_mem_size', -1)
-        self.mf_config.model.model_config.qkv_concat = False
+        # self.mf_config.model.model_config.qkv_concat = True
 
     def _create_network(self):
         # Initial network
