@@ -9,7 +9,7 @@ import mindspore as ms
 from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetadata,
                                                              FlashAttentionBackend,
                                                              MLABackend)
-from vllm_mindspore.utils import get_valid_dtype
+from vllm_mindspore.utils import get_valid_dtype, get_dtype_size
 
 from vllm.v1.kv_cache_interface import AttentionSpec, FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
@@ -204,16 +204,32 @@ def _allocate_kv_cache_tensors(
         dict[str, torch.Tensor]: A map between layer names to their 
         corresponding memory buffer for KV cache.
         """
+    kv_cache_spec = kv_cache_config.kv_cache_groups[0].kv_cache_spec
+    use_mla = kv_cache_spec.use_mla
+    dtype = kv_cache_spec.dtype
+    coef = 1 if use_mla else 2
+
     kv_cache_raw_tensors: dict[str, torch.Tensor] = {}
+    target_dtype = get_valid_dtype(dtype)
+    dtype_size = get_dtype_size(target_dtype)
     for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
-        key_tensor = torch.zeros(kv_cache_tensor.size // 4,
-                                dtype=ms.bfloat16,
-                                device=self.device)
-        value_tensor = torch.zeros(kv_cache_tensor.size // 4,
-                                dtype=ms.bfloat16,
-                                device=self.device)
+        raw_tensors = []
+        raw_tensor_shape = kv_cache_tensor.size // dtype_size // coef
+        for i in range(coef):
+            # Formulas for calculating each parameter:
+            # 1. page_size = coef * self.block_size * self.num_kv_heads *
+            #    self.head_size * get_dtype_size(self.dtype)
+            # 2. num_blocks = kv_cache_tensors.size / page_size
+            # 3. kv_cache_tensors.size = num_blocks * (coef * 
+            #    self.block_size * self.num_kv_heads * self.head_size * 
+            #    get_dtype_size(self.dtype))
+            # 4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
+            raw_tensor_split = torch.zeros(raw_tensor_shape,
+                                           dtype=target_dtype,
+                                           device=self.device)
+            raw_tensors.append(raw_tensor_split)
         for layer_name in kv_cache_tensor.shared_by:
-            kv_cache_raw_tensors[layer_name] = (key_tensor, value_tensor)
+            kv_cache_raw_tensors[layer_name] = tuple(raw_tensors)
 
     layer_names = set()
     for group in kv_cache_config.kv_cache_groups:
@@ -243,16 +259,17 @@ def _reshape_kv_cache_tensors(
     for i, kv_cache_group_spec in enumerate(
             kv_cache_config.kv_cache_groups):
         kv_cache_spec = kv_cache_group_spec.kv_cache_spec
+        coef = 1 if kv_cache_spec.use_mla else 2
         for layer_name in kv_cache_group_spec.layer_names:
             raw_tensor = kv_cache_raw_tensors[layer_name]
-            num_blocks = (raw_tensor[0].numel() * 4 //
-                            kv_cache_spec.page_size_bytes)
+            target_dtype = get_valid_dtype(kv_cache_spec.dtype)
+            dtype_size = get_dtype_size(target_dtype)
+            num_blocks = (raw_tensor[0].numel() * coef *
+                          dtype_size // kv_cache_spec.page_size_bytes)
             if isinstance(kv_cache_spec, AttentionSpec):
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
                     kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
-                dtype = kv_cache_spec.dtype
-                dtype = get_valid_dtype(dtype)
                 try:
                     kv_cache_stride_order = self.attn_backends[
                         i].get_kv_cache_stride_order()
@@ -275,7 +292,7 @@ def _reshape_kv_cache_tensors(
                 ]
                 kv_cache_layer = []
                 for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
-                    cache_block = mutable(kv_cache_raw_tensor.view(kv_cache_shape[1:]).permute(*inv_order[1:]))
+                    cache_block = kv_cache_raw_tensor.view(kv_cache_shape[1:]).permute(*inv_order[1:])
                     kv_cache_layer.append(cache_block)
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
