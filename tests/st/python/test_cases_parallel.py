@@ -179,7 +179,9 @@ def test_cases_parallel_part5():
              (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_8b",
               "vllm_qwen3_test_vllm_qwen3_8b.log"),
              (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_0_6b",
-              "vllm_qwen3_test_vllm_qwen3_0_6b.log")]
+              "vllm_qwen3_test_vllm_qwen3_0_6b.log"),
+             (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_8b",
+              "vllm_llama3_8b_test_vllm_llama3.log")]
     run_tasks(cases)
 
 

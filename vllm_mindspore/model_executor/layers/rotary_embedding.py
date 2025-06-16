@@ -71,7 +71,7 @@ class RotaryEmbedding(nn.Cell):
         head_size: int,
         rotary_dim: int,
         max_position_embeddings: int,
-        base: int,
+        base: float,
         is_neox_style: bool,
         dtype,
     ) -> None:
@@ -148,7 +148,7 @@ class InferRotaryEmbedding(nn.Cell):
         head_size: int,
         rotary_dim: int,
         max_position_embeddings: int,
-        base: int,
+        base: float,
         is_neox_style: bool,
         dtype,
     ) -> None:
@@ -209,6 +209,52 @@ class InferRotaryEmbedding(nn.Cell):
                                         batch_valid_length)
 
 
+class InferLlama3RotaryEmbedding(InferRotaryEmbedding):
+
+    def __init__(
+        self,
+        head_size: int,
+        rotary_dim: int,
+        max_position_embeddings: int,
+        base: float,
+        is_neox_style: bool,
+        dtype,
+        scaling_factor: float,
+        low_freq_factor: float,
+        high_freq_factor: float,
+        orig_max_position: int,
+    ) -> None:
+        self.scaling_factor = scaling_factor
+        self.low_freq_factor = low_freq_factor
+        self.high_freq_factor = high_freq_factor
+        self.orig_max_position = orig_max_position
+        super().__init__(head_size, rotary_dim, max_position_embeddings, base,
+                         is_neox_style, dtype)
+
+    def _compute_inv_freq(self, base: Union[int, float]) -> np.ndarray:
+        inv_freqs = super()._compute_inv_freq(base)
+        low_freq_wavelen = self.orig_max_position / self.low_freq_factor
+        high_freq_wavelen = self.orig_max_position / self.high_freq_factor
+
+        wave_len = 2 * math.pi / inv_freqs
+        if self.low_freq_factor != self.high_freq_factor:
+            smooth = (self.orig_max_position / wave_len - self.low_freq_factor
+                      ) / (self.high_freq_factor - self.low_freq_factor)
+        else:
+            smooth = 0
+        new_freqs = np.where(
+            wave_len < high_freq_wavelen,
+            inv_freqs,
+            np.where(
+                wave_len > low_freq_wavelen,
+                inv_freqs / self.scaling_factor,
+                (1 - smooth) * inv_freqs / self.scaling_factor +
+                smooth * inv_freqs,
+            ),
+        )
+        return new_freqs
+
+
 class MRotaryEmbedding(RotaryEmbedding):
     """Rotary Embedding with Multimodal Sections."""
 
@@ -217,7 +263,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         head_size: int,
         rotary_dim: int,
         max_position_embeddings: int,
-        base: int,
+        base: float,
         is_neox_style: bool,
         dtype: mindspore.Type,
         mrope_section: Optional[list[int]] = None,
@@ -456,7 +502,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         head_size: int,
         rotary_dim: int,
         max_position_embeddings: int,
-        base: int,
+        base: float,
         is_neox_style: bool,
         dtype: mindspore.Type,
         mrope_section: Optional[list[int]] = None,
@@ -607,7 +653,7 @@ class InferYaRNScalingRotaryEmbedding(InferRotaryEmbedding):
         head_size: int,
         rotary_dim: int,
         max_position_embeddings: int,
-        base: int,
+        base: float,
         is_neox_style: bool,
         scaling_factor: float,
         dtype,
@@ -668,7 +714,7 @@ def get_rope(
     head_size: int,
     rotary_dim: int,
     max_position: int,
-    base: int,
+    base: float,
     is_neox_style: bool = True,
     rope_scaling: Optional[dict[str, Any]] = None,
     dtype: Optional[Any] = None,
@@ -707,7 +753,15 @@ def get_rope(
         scaling_type = rope_scaling["rope_type"]
 
         if scaling_type == "llama3":
-            raise NotImplementedError
+            scaling_factor = rope_scaling["factor"]
+            low_freq_factor = rope_scaling["low_freq_factor"]
+            high_freq_factor = rope_scaling["high_freq_factor"]
+            original_max_position = rope_scaling[
+                "original_max_position_embeddings"]
+            rotary_emb = InferLlama3RotaryEmbedding(
+                head_size, rotary_dim, max_position, base, is_neox_style,
+                dtype, scaling_factor, low_freq_factor, high_freq_factor,
+                original_max_position)
         elif scaling_type == "default":
             if "mrope_section" in rope_scaling:
                 rotary_emb = InferMRotaryEmbedding(
