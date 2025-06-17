@@ -279,7 +279,11 @@ class Qwen2DecoderLayer(nn.Cell):
 
 class Qwen2Model(nn.Cell):
 
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    def __init__(self,
+                 *,
+                 vllm_config: VllmConfig,
+                 prefix: str = "",
+                 decoder_layer_type: type[nn.Cell] = Qwen2DecoderLayer):
         super().__init__()
 
         config = vllm_config.model_config.hf_config
@@ -303,10 +307,10 @@ class Qwen2Model(nn.Cell):
 
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
-            lambda prefix: Qwen2DecoderLayer(config=config,
-                                             cache_config=cache_config,
-                                             quant_config=quant_config,
-                                             prefix=prefix),
+            lambda prefix: decoder_layer_type(config=config,
+                                              cache_config=cache_config,
+                                              quant_config=quant_config,
+                                              prefix=prefix),
             prefix=f"{prefix}.layers",
         )
 
