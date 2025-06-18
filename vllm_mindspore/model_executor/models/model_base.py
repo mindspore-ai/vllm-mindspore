@@ -26,12 +26,15 @@ from mindspore import Tensor, mutable, nn
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.distributed import get_dp_group, get_ep_group
 from vllm.forward_context import get_forward_context
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
+from vllm_mindspore.model_executor.models.interfaces import (
+    is_mixture_of_experts, supports_moe_dp_tp)
 from vllm_mindspore.model_executor.models.utils import (convert_pin,
                                                         is_use_ringmla)
 from vllm_mindspore.model_executor.utils import set_model_context
@@ -386,6 +389,27 @@ class NativeModel(MsModelBase):
         self.prefill_graph = None
         self.decode_graph = None
 
+        if is_mixture_of_experts(self):
+            ep_size = get_ep_group().world_size
+            custom_ep_size = \
+                vllm_config.additional_config.get("expert_parallel", ep_size) \
+                if vllm_config.additional_config is not None else ep_size
+            pure_ep = self.parallel_config.enable_expert_parallel and \
+                (ep_size // int(custom_ep_size)) == 1
+            if get_dp_group().world_size > 1 and not pure_ep:
+                if not supports_moe_dp_tp(self):
+                    raise ValueError(
+                        "The MoE Model do not support Data Parallel mix with "
+                        "Tensor Parallel. If want to use MoE with DP + TP, "
+                        "please implement `supports_moe_dp_tp` in models.")
+                self.moe_dp_need_pad = True
+                self.dp_group = get_dp_group().device_group._name
+                self.dp_cpu_group = get_dp_group().cpu_group._name
+                self.dp_world_size = get_dp_group().world_size
+                self.dp_rank = get_dp_group().rank_in_group
+            else:
+                self.moe_dp_need_pad = False
+
     @property
     def ready_model(self) -> nn.Cell:
         if self.model is None:
@@ -470,16 +494,86 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        self.ready_model.set_inputs(dyn_input_ids, dyn_position_ids,
-                                    dyn_key_caches, dyn_value_caches,
-                                    dyn_slot_mapping, dynamic_attention_mask,
-                                    dyn_batch_valid_length, dyn_q_seq_lens,
-                                    dyn_block_tables, dyn_intermediate_tensors,
-                                    dyn_inputs_embeds)
+
+        if supports_moe_dp_tp(self):
+            dyn_dp_pad_index = (Tensor(shape=[None], dtype=mstype.int32)
+                                if self.moe_dp_need_pad else None)
+            dyn_dp_unpad_index = (Tensor(shape=[None], dtype=mstype.int32)
+                                  if self.moe_dp_need_pad else None)
+            dyn_dp_pad_index_with_offset = (Tensor(shape=[None],
+                                                   dtype=mstype.int32)
+                                            if self.moe_dp_need_pad else None)
+            dyn_dp_unpad_index_total_with_offset = (Tensor(
+                shape=[None], dtype=mstype.int32) if self.moe_dp_need_pad else
+                                                    None)
+            self.ready_model.set_inputs(
+                dyn_input_ids, dyn_position_ids, dyn_key_caches,
+                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
+                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+                dyn_intermediate_tensors, dyn_inputs_embeds, dyn_dp_pad_index,
+                dyn_dp_unpad_index, dyn_dp_pad_index_with_offset,
+                dyn_dp_unpad_index_total_with_offset)
+        else:
+            self.ready_model.set_inputs(
+                dyn_input_ids, dyn_position_ids, dyn_key_caches,
+                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
+                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+                dyn_intermediate_tensors, dyn_inputs_embeds)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
         self.ready_lm_head.set_inputs(dynamic_hidden_states)
+
+    def prepare_moe_dp_tp_inputs(self):
+        """
+        prepare moe padding indices to support moe dp + tp.
+        """
+        if self.moe_dp_need_pad:
+            dp_meta = get_forward_context().dp_metadata
+            token_num_total_cumsum = dp_meta.cu_tokens_across_dp_cpu
+            max_token_num = dp_meta.max_tokens_across_dp_cpu
+            token_num_total_cumsum = token_num_total_cumsum.numpy()
+            max_token_num = max_token_num.numpy()
+
+            token_num_total = np.diff(token_num_total_cumsum, prepend=0)
+            total_pad_num = max_token_num - token_num_total
+            this_pad_num = total_pad_num[self.dp_rank]
+
+            dp_unpad_index = np.arange(token_num_total[self.dp_rank])
+            dp_pad_index = np.pad(dp_unpad_index, (0, this_pad_num))
+
+            dp_pad_index_total_with_offset = [
+                np.pad(
+                    np.arange(
+                        0 if rank == 0 else token_num_total_cumsum[rank - 1],
+                        token_num_total_cumsum[rank]),
+                    (0, total_pad_num[rank]))
+                for rank in range(self.dp_world_size)
+            ]
+            dp_pad_index_total_with_offset = \
+                np.concatenate(dp_pad_index_total_with_offset, axis=0)
+
+            dp_unpad_index_total_with_offset = [
+                np.arange(token_num_total[rank]) + rank * max_token_num
+                for rank in range(self.dp_world_size)
+            ]
+            dp_unpad_index_total_with_offset = \
+                np.concatenate(dp_unpad_index_total_with_offset, axis=0)
+
+            dp_unpad_index = ms.from_numpy(dp_unpad_index.astype(np.int32))
+            dp_pad_index = ms.from_numpy(dp_pad_index.astype(np.int32))
+            dp_pad_index_total_with_offset = ms.from_numpy(
+                dp_pad_index_total_with_offset.astype(np.int32))
+            dp_unpad_index_total_with_offset = ms.from_numpy(
+                dp_unpad_index_total_with_offset.astype(np.int32))
+        else:
+            dp_unpad_index = None
+            dp_pad_index = None
+            dp_pad_index_total_with_offset = None
+            dp_unpad_index_total_with_offset = None
+
+        return (dp_unpad_index, dp_pad_index, dp_pad_index_total_with_offset,
+                dp_unpad_index_total_with_offset)
 
     def prepare_inputs(self, input_ids, positions, intermediate_tensors,
                        inputs_embeds):
@@ -500,6 +594,16 @@ class NativeModel(MsModelBase):
         # for multimodal model
         new_model_inputs["intermediate_tensors"] = intermediate_tensors
         new_model_inputs["inputs_embeds"] = inputs_embeds
+
+        if supports_moe_dp_tp(self):
+            dp_unpad_index, dp_pad_index, dp_pad_index_total_with_offset, \
+            dp_unpad_index_total_with_offset = self.prepare_moe_dp_tp_inputs()
+            new_model_inputs["dp_unpad_index"] = dp_unpad_index
+            new_model_inputs["dp_pad_index"] = dp_pad_index
+            new_model_inputs["dp_pad_index_total_with_offset"] = \
+                dp_pad_index_total_with_offset
+            new_model_inputs["dp_unpad_index_total_with_offset"] = \
+                dp_unpad_index_total_with_offset
 
         return new_model_inputs, is_prefill
 

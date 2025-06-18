@@ -162,6 +162,86 @@ class LinearBase(nn.Cell):
         raise NotImplementedError
 
 
+class ReplicatedLinear(LinearBase):
+    """Replicated linear layer.
+
+    Args:
+        input_size: input dimension of the linear layer.
+        output_size: output dimension of the linear layer.
+        bias: If true, add bias.
+        skip_bias_add: If true, skip adding bias but instead return it.
+        params_dtype: Data type for the parameters.
+        quant_config: Quantization configure.
+        prefix: The name of the layer in the state dict, including all parents
+                        (e.g. model.layers.0.qkv_proj)
+        return_bias: If true, return bias together with outputs in forward pass.
+    """
+
+    def __init__(self,
+                 input_size: int,
+                 output_size: int,
+                 bias: bool = True,
+                 skip_bias_add: bool = False,
+                 params_dtype=None,
+                 quant_config: Optional[QuantizationConfig] = None,
+                 prefix: str = "",
+                 *,
+                 return_bias: bool = True):
+        super().__init__(input_size,
+                         output_size,
+                         skip_bias_add,
+                         params_dtype,
+                         quant_config,
+                         prefix=prefix,
+                         return_bias=return_bias)
+
+        # All the linear layer supports quant method.
+        assert self.quant_method is not None
+        self.quant_method.create_weights(self,
+                                         self.input_size, [self.output_size],
+                                         self.input_size,
+                                         self.output_size,
+                                         self.params_dtype,
+                                         weight_loader=self.weight_loader)
+
+        if bias:
+            self.bias = Parameter(
+                mint.empty(self.output_size, dtype=self.params_dtype))
+            set_weight_attrs(self.bias, {
+                "output_dim": 0,
+                "weight_loader": self.weight_loader,
+            })
+        else:
+            self.bias = None
+
+    def weight_loader(self, param: Parameter, loaded_weight: Tensor):
+        loaded_weight = loaded_weight[:]
+        if len(loaded_weight.shape) == 0:
+            loaded_weight = loaded_weight.reshape(1)
+
+        assert param.shape == loaded_weight.shape, (
+            f"Tried to load weights of size {loaded_weight.size()}"
+            f"to a parameter of size {param.size()}")
+
+        param.set_data(ms.from_numpy(loaded_weight))
+
+    def construct(
+            self,
+            x: Tensor) -> Union[Tensor, tuple[Tensor, Optional[Parameter]]]:
+        bias = self.bias if not self.skip_bias_add else None
+        output = self.quant_method.apply(self, x, bias)
+        output_bias = self.bias if self.skip_bias_add else None
+        if not self.return_bias:
+            return output
+        return output, output_bias
+
+    def extra_repr(self) -> str:
+        s = f"in_features={self.input_size}"
+        s += f", output_features={self.output_size}"
+        s += f", bias={self.bias is not None}"
+        return s
+
+
 class ColumnParallelLinear(LinearBase):
     """Linear layer with column parallelism.
 
