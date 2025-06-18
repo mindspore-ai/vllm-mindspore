@@ -25,10 +25,21 @@ def main(args):
     prompts = ["I am", "Today is", "What is"]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0, top_p=0.95)
+    sampling_params = SamplingParams(
+        temperature=0.0, top_p=0.95, max_tokens=args.max_tokens
+    )
 
     # Create an LLM.
-    llm = LLM(model=args.model_path, tensor_parallel_size=1)
+    _kwargs = {"model_impl": "transformers"} if args.use_transformers else {}
+    _kwargs.update(
+        {"gpu_memory_utilization": args.gpu_memory_utilization}
+        if args.gpu_memory_utilization
+        else {}
+    )
+    _kwargs.update(
+        {"max_model_len": args.max_model_len} if args.max_model_len else {}
+    )
+    llm = LLM(model=args.model_path, **_kwargs)
     # Generate texts from the prompts.
     # The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
@@ -41,11 +52,18 @@ def main(args):
 
 
 if __name__ == "__main__":
+    import ast
     import argparse
 
     parser = argparse.ArgumentParser(description="test")
     parser.add_argument(
         "--model_path", type=str, default="Qwen/Qwen2.5-32B-Instruct"
+    )
+    parser.add_argument("--max_tokens", type=int, default=16)
+    parser.add_argument("--max_model_len", type=int, default=None)
+    parser.add_argument("--gpu_memory_utilization", type=float, default=None)
+    parser.add_argument(
+        "--use_transformers", type=ast.literal_eval, default=False
     )
     args, _ = parser.parse_known_args()
 
