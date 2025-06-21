@@ -32,7 +32,7 @@ from vllm.distributed import (
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding,
 )
-from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.platforms import current_platform
 
 

@@ -50,7 +50,7 @@ from research.deepseek3.deepseek3 import (
 )
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm_mindspore.model_executor.models.model_base import Fake_MLA, Fake_MLA_V1
+from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import DeepseekV3WeightProcessor
 from vllm_mindspore.model_executor.models.attention_mask import MLALowerTriangularMask
@@ -124,10 +124,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-        if envs.VLLM_USE_V1:
-            self.kv_caches = [Fake_MLA_V1() for i in range(self.mf_model_config.num_layers)]
-        else:
-            self.kv_caches = [Fake_MLA() for i in range(self.mf_model_config.num_layers)]
+        self.kv_caches = [MLAAttentionWrapper() for i in range(self.mf_model_config.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
@@ -138,12 +135,13 @@ class DeepseekV3ForCausalLM(MfModelBase):
         self.set_flags = False
         set_runtime_kernel_launch_group()
         self.casual_mask = MLALowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
-                                                  max_model_len=self.mf_model_config.seq_length)
+                                                  max_model_len=self.model_config.max_model_len)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
 
         self.mf_model_config = DeepseekV3Config_MF(**self.mf_config.model.model_config)
+        self.mf_model_config.enable_micro_batch = self.enable_micro_batch
         if self.mf_config.moe_config:
             self.mf_model_config.moe_config = self.mf_config.moe_config
             # dispatch/combine in moe need max_num_seqs as global_max_bs
@@ -189,9 +187,9 @@ class DeepseekV3ForCausalLM(MfModelBase):
             weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
         return None
 
-    def prepare_inputs(self, input_ids, positions, attn_metadata):
+    def prepare_inputs(self, input_ids, positions):
         model_inputs, is_prefill = super().prepare_inputs(
-            input_ids, positions, attn_metadata)
+            input_ids, positions)
 
         attn_padding_idx, attn_unpadding_idx, ffn_padding_idx, ffn_unpadding_idx = _get_padding_index(
             model_inputs["q_seq_lens"])

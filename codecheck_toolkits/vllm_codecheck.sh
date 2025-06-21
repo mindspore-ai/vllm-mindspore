@@ -6,7 +6,7 @@ RET_FLAG=0
 
 # yapf check
 
-MERGEBASE="$(git merge-base origin/master HEAD)"
+MERGEBASE="$(git merge-base origin/develop HEAD)"
 if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
   git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs -P 5 \
   yapf --diff --recursive --parallel --exclude tests/
@@ -73,4 +73,4 @@ fi
 
 rm -f pyproject.toml
 
-exit 0
+exit ${RET_FLAG}

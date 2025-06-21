@@ -29,7 +29,7 @@ from transformers import GenerationConfig, GenerationMixin
 import vllm.envs as envs
 
 from vllm_mindspore.model_executor.layers.sampler import Sampler
-from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.utils import set_random_seed
 from vllm_mindspore.sequence import SamplingParams, SequenceData, SequenceGroupMetadata
 from vllm.utils import Counter, is_pin_memory_available

@@ -14,74 +14,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""
-test mf deepseek r1 osl.
-isort:skip_file
-"""
+"""test mf deepseek r1."""
 import pytest
 import os
-from . import set_env
+from tests.st.python import set_env
 
 env_manager = set_env.EnvVarManager()
 # def env
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG":
-        "./config/predict_deepseek_r1_671b_w8a8_osl.yaml",
+    "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
-    "MS_ENABLE_LCCL": "off",
+    "MS_ENABLE_LCCL": "on",
     "HCCL_OP_EXPANSION_MODE": "AIV",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
-    "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "0",
-    "HCCL_IF_BASE_PORT": "60000",
-    "LCAL_COMM_ID": "127.0.0.1:10068"
+    "ATB_LLM_LCOC_ENABLE": "0"
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
+import vllm_mindspore
+from vllm import LLM, SamplingParams
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_deepseek_r1():
+def test_deepseek_r1_bf16():
     """
-    test case deepseek r1 w8a8
+    test case deepseek r1 bf16
     """
 
     # Sample prompts.
     prompts = [
-        "介绍下北京故宫",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0,
-                                     max_tokens=10,
-                                     top_k=1)
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(
-        model=
-        "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl",
-        trust_remote_code=True,
-        gpu_memory_utilization=0.9,
-        tensor_parallel_size=8,
-        max_model_len=4096)
+    llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-bf16",
+              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2, max_model_len=4096)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
+    except_list = ['ugs611ాలు sic辨hara的开璞 SquaresInsp']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-        assert "博物院" in generated_text
+        assert generated_text == except_list[i]
 
     # unset env
     env_manager.unset_all()

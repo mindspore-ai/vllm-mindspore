@@ -14,40 +14,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""test mf deepseek r1."""
-import pytest
+"""test mf qwen."""
 import os
-from . import set_env
+
+import pytest
+
+from tests.st.python import set_env
 
 env_manager = set_env.EnvVarManager()
 # def env
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
-    "MS_ENABLE_LCCL": "on",
+    "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
-    "HCCL_IF_BASE_PORT": "60000",
-    "LCAL_COMM_ID": "127.0.0.1:10068"
+    "VLLM_USE_V1": "0"
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
+# isort: off
 import vllm_mindspore
 from vllm import LLM, SamplingParams
+# isort: on
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_deepseek_r1_bf16():
+def test_mf_qwen3():
     """
-    test case deepseek r1 bf16
+    test case qwen3 8B
     """
 
     # Sample prompts.
@@ -59,12 +57,13 @@ def test_deepseek_r1_bf16():
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-bf16",
-              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=8, max_model_len=4096)
+    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen3-8B",
+              gpu_memory_utilization=0.9,
+              tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    except_list = ['ugs611ాలు sic辨hara的开璞 SquaresInsp']
+    except_list = ['好的，我需要分析用户提供的文本“我认为']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt

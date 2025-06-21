@@ -51,11 +51,6 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                             recommend_to_remove=True)
         return False
 
-    if self.additional_config != EngineArgs.additional_config:
-        _raise_or_fallback(feature_name="--additional-config",
-                            recommend_to_remove=False)
-        return False
-
     # Xgrammar and Guidance are supported.
     SUPPORTED_GUIDED_DECODING = [
         "xgrammar", "xgrammar:disable-any-whitespace", "guidance",

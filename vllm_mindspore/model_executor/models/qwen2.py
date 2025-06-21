@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# encoding: utf-8
+# type: ignore
+# isort:skip_file
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -15,21 +16,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union, Iterable
+import numpy as np
+from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple,
+                    Union)
 
 if TYPE_CHECKING:
     from transformers import Qwen2Config
 else:
     Qwen2Config = None
 
-import numpy as np
-
-from mindspore import Parameter, Tensor, mint, nn, jit, ops, mutable
+import mindspore as ms
+from mindspore import Parameter, Tensor, mint, nn
 from mindspore.common import dtype as mstype
 
+import vllm.envs as envs
+from vllm.attention.backends.abstract import AttentionType
+from vllm.config import CacheConfig, VllmConfig
+from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
+from vllm.forward_context import get_forward_context
+from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.models.interfaces import SupportsLoRA
+from vllm.sequence import IntermediateTensors
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.attention import Attention
-
 from vllm_mindspore.model_executor.layers.activation import SwiGLU
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import (
@@ -43,27 +53,19 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
+from vllm_mindspore.model_executor.models.attention_mask import \
+    LowerTriangularMask
+from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
+                                                             NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
-from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
-from vllm_mindspore.model_executor.models.model_base import MsModelBase, Fake_Attention, Fake_Attention_V1
-from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 
-from vllm.config import CacheConfig, VllmConfig
-import vllm.envs as envs
-from vllm.model_executor.layers.quantization import \
-    QuantizationConfig
-from vllm.sequence import IntermediateTensors
-from vllm.attention.backends.abstract import AttentionType
-from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.forward_context import get_forward_context
-from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
-import mindspore as ms
-
 class Qwen2MLP(nn.Cell):
+
     def __init__(
         self,
         hidden_size: int,
@@ -79,23 +81,17 @@ class Qwen2MLP(nn.Cell):
             output_sizes=[intermediate_size] * 2,
             bias=bias,
             quant_config=quant_config,
-            prefix=f"{prefix}.gate_up_proj",
-            params_dtype=mstype.bfloat16
-        )
-        self.down_proj = RowParallelLinear(
-            input_size=intermediate_size,
-            output_size=hidden_size,
-            bias=bias,
-            quant_config=quant_config,
-            prefix=f"{prefix}.down_proj",
-            params_dtype=mstype.bfloat16
-        )
+            prefix=f"{prefix}.gate_up_proj")
+        self.down_proj = RowParallelLinear(input_size=intermediate_size,
+                                           output_size=hidden_size,
+                                           bias=bias,
+                                           quant_config=quant_config,
+                                           prefix=f"{prefix}.down_proj")
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
         self.act_fn = SwiGLU()
 
-    @jit
     def construct(self, x):
         x, _ = self.gate_up_proj(x)
         x = self.act_fn(x)
@@ -104,19 +100,18 @@ class Qwen2MLP(nn.Cell):
 
 
 class Qwen2Attention(nn.Cell):
-    def __init__(
-            self,
-            hidden_size: int,
-            num_heads: int,
-            num_kv_heads: int,
-            max_position: int = 4096 * 32,
-            rope_theta: float = 10000,
-            cache_config: Optional[CacheConfig] = None,
-            quant_config: Optional[QuantizationConfig] = None,
-            rope_scaling: Optional[Tuple] = None,
-            prefix: str = "",
-            attn_type: str = AttentionType.DECODER
-    ) -> None:
+
+    def __init__(self,
+                 hidden_size: int,
+                 num_heads: int,
+                 num_kv_heads: int,
+                 max_position: int = 4096 * 32,
+                 rope_theta: float = 10000,
+                 cache_config: Optional[CacheConfig] = None,
+                 quant_config: Optional[QuantizationConfig] = None,
+                 rope_scaling: Optional[Tuple] = None,
+                 prefix: str = "",
+                 attn_type: str = AttentionType.DECODER) -> None:
         super().__init__()
         self.hidden_size = hidden_size
         tp_size = get_tensor_model_parallel_world_size()
@@ -147,7 +142,6 @@ class Qwen2Attention(nn.Cell):
             bias=True,
             quant_config=quant_config,
             prefix=f"{prefix}.qkv_proj",
-            params_dtype=mstype.bfloat16,
         )
         self.o_proj = RowParallelLinear(
             input_size=self.total_num_heads * self.head_dim,
@@ -155,7 +149,6 @@ class Qwen2Attention(nn.Cell):
             bias=False,
             quant_config=quant_config,
             prefix=f"{prefix}.o_proj",
-            params_dtype=mstype.bfloat16,
         )
 
         self.rotary_emb = get_rope(
@@ -164,20 +157,16 @@ class Qwen2Attention(nn.Cell):
             max_position=max_position,
             base=self.rope_theta,
             rope_scaling=rope_scaling,
-            dtype=mstype.bfloat16,
         )
-        self.attn = Attention(
-            self.num_heads,
-            self.head_dim,
-            self.scaling,
-            num_kv_heads=self.num_kv_heads,
-            cache_config=cache_config,
-            quant_config=quant_config,
-            prefix=f"{prefix}.attn",
-            attn_type=attn_type
-        )
+        self.attn = Attention(self.num_heads,
+                              self.head_dim,
+                              self.scaling,
+                              num_kv_heads=self.num_kv_heads,
+                              cache_config=cache_config,
+                              quant_config=quant_config,
+                              prefix=f"{prefix}.attn",
+                              attn_type=attn_type)
 
-    @jit
     def construct(
         self,
         positions: Tensor,
@@ -192,10 +181,12 @@ class Qwen2Attention(nn.Cell):
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
-        q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size), -1)
+        q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
+                             -1)
         q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill, slot_mapping, attn_mask,
-                                batch_valid_length, q_seq_lens, block_tables)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
+                                slot_mapping, attn_mask, batch_valid_length,
+                                q_seq_lens, block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -243,14 +234,15 @@ class Qwen2DecoderLayer(nn.Cell):
             quant_config=quant_config,
             prefix=f"{prefix}.mlp",
         )
-        self.input_layernorm = RMSNorm(config.hidden_size,
-                                       eps=config.rms_norm_eps,
-                                       params_dtype=mstype.bfloat16,)
-        self.post_attention_layernorm = RMSNorm(config.hidden_size,
-                                                eps=config.rms_norm_eps,
-                                                params_dtype=mstype.bfloat16,)
+        self.input_layernorm = RMSNorm(
+            config.hidden_size,
+            eps=config.rms_norm_eps,
+        )
+        self.post_attention_layernorm = RMSNorm(
+            config.hidden_size,
+            eps=config.rms_norm_eps,
+        )
 
-    @jit
     def construct(
         self,
         positions: Tensor,
@@ -270,22 +262,16 @@ class Qwen2DecoderLayer(nn.Cell):
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
         else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
-        hidden_states = self.self_attn(
-            positions,
-            hidden_states,
-            key_cache,
-            value_cache,
-            is_prefill,
-            slot_mapping,
-            attn_mask,
-            batch_valid_length,
-            q_seq_lens,
-            block_tables
-        )
+            hidden_states, residual = self.input_layernorm(
+                hidden_states, residual)
+        hidden_states = self.self_attn(positions, hidden_states, key_cache,
+                                       value_cache, is_prefill, slot_mapping,
+                                       attn_mask, batch_valid_length,
+                                       q_seq_lens, block_tables)
 
         # Fully Connected
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(
+            hidden_states, residual)
         hidden_states = self.mlp(hidden_states)
         return hidden_states, residual
 
@@ -308,7 +294,6 @@ class Qwen2Model(nn.Cell):
             self.embed_tokens = VocabParallelEmbedding(
                 self.vocab_size,
                 config.hidden_size,
-                params_dtype=mstype.bfloat16,
                 quant_config=quant_config,
                 prefix=f"{prefix}.embed_tokens",
             )
@@ -328,15 +313,13 @@ class Qwen2Model(nn.Cell):
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
         if get_pp_group().is_last_rank:
-            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps,
-                                params_dtype=mstype.bfloat16,)
+            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         else:
             self.norm = PPMissingLayer()
 
     def get_input_embeddings(self, input_ids: Tensor) -> Tensor:
         return self.embed_tokens(input_ids)
 
-    @jit
     def construct(
         self,
         input_ids: Optional[Tensor],
@@ -364,19 +347,12 @@ class Qwen2Model(nn.Cell):
 
         for i in range(self.start_layer, self.end_layer):  # PP 并行对层进行切分
             layer = self.layers[i]
-            hidden_states, residual = layer(
-                positions,
-                hidden_states,
-                key_caches[i - self.start_layer],
-                value_caches[i - self.start_layer],
-                is_prefill,
-                slot_mapping,
-                attn_mask,
-                batch_valid_length,
-                q_seq_lens,
-                block_tables,
-                residual
-            )
+            hidden_states, residual = layer(positions, hidden_states,
+                                            key_caches[i - self.start_layer],
+                                            value_caches[i - self.start_layer],
+                                            is_prefill, slot_mapping,
+                                            attn_mask, batch_valid_length,
+                                            q_seq_lens, block_tables, residual)
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
                 "hidden_states": hidden_states,
@@ -385,7 +361,8 @@ class Qwen2Model(nn.Cell):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]], params_dict: Dict[str, Parameter]):
+    def load_weights(self, weights: Iterable[Tuple[str, Tensor]],
+                     params_dict: Dict[str, Parameter]):
         loaded_params: Set[str] = set()
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -405,7 +382,7 @@ class Qwen2Model(nn.Cell):
                 # the checkpoint. Skip them.
                 continue
             if (self.quant_config is not None and
-                    (scale_name := self.quant_config.get_cache_scale(name))):
+                (scale_name := self.quant_config.get_cache_scale(name))):
                 # Loading kv cache quantization scales
                 param = params_dict[scale_name]
                 weight_loader = getattr(param, "weight_loader",
@@ -436,7 +413,7 @@ class Qwen2Model(nn.Cell):
         return loaded_params
 
 
-class Qwen2ForCausalLM(MsModelBase):
+class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -478,76 +455,19 @@ class Qwen2ForCausalLM(MsModelBase):
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
                                               config.hidden_size,
-                                              params_dtype=mstype.bfloat16,
                                               quant_config=quant_config,
-                                              prefix=maybe_prefix(prefix, "lm_head"))
-            self.logits_processor = LogitsProcessor(config.vocab_size)
-            self.sampler = get_sampler()
+                                              prefix=maybe_prefix(
+                                                  prefix, "lm_head"))
         else:
             self.lm_head = PPMissingLayer()
 
+        self.logits_processor = LogitsProcessor(self.config.vocab_size)
+        self.sampler = get_sampler()
+
         self.make_empty_intermediate_tensors = (
             self.model.make_empty_intermediate_tensors)
-        self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
-        self.prefill = True
-        self.mstype = STR_DTYPE_TO_MS_DTYPE.get(self.model_config.dtype, self.model_config.dtype)
-        self.casual_mask = LowerTriangularMask(dtype=self.mstype, 
-                                               max_model_len=self.model_config.max_model_len)
-        self.set_model_inputs(self.prefill)
-        if envs.VLLM_USE_V1:
-            self.kv_caches = [Fake_Attention_V1() for i in range(config.num_hidden_layers)]
-        else:
-            self.kv_caches = [Fake_Attention() for i in range(config.num_hidden_layers)]
-        compilation_config = vllm_config.compilation_config
-
-        if prefix in compilation_config.static_forward_context:
-            raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(config.num_hidden_layers):
-            compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
-
-    def set_model_inputs(self, is_prefill):
-        dyn_input_ids = Tensor(shape=[None, None], dtype=mstype.int64)
-        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int64)
-
-        block_size = self.cache_config.block_size
-        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
-        head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
-
-        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
-            else self.cache_config.cache_dtype
-        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
-            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
-
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
-
-        dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
-        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
-        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
-        dyn_value_caches = mutable([dyn_value_cache for _ in range(num_layers)])
-
-        dyn_slot_mapping = Tensor(shape=[None, ], dtype=mstype.int32)
-        dynamic_attention_mask = Tensor(shape=[None, None], dtype=self.mstype)
-        dyn_batch_valid_length = Tensor(shape=[None,], dtype=mstype.int32)
-        dyn_q_seq_lens = Tensor(shape=[None, ], dtype=mstype.int32)
-        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
-        dyn_inputs_embeds = None
-        self.model.set_inputs(
-            dyn_input_ids,
-            dyn_position_ids,
-            dyn_key_caches,
-            dyn_value_caches,
-            is_prefill,
-            dyn_slot_mapping,
-            dynamic_attention_mask,
-            dyn_batch_valid_length,
-            dyn_q_seq_lens,
-            dyn_block_tables,
-            dyn_intermediate_tensors,
-            dyn_inputs_embeds
-        )
+        self.common_preprocess(vllm_config, prefix)
 
     def forward(
         self,
@@ -557,105 +477,16 @@ class Qwen2ForCausalLM(MsModelBase):
         inputs_embeds: Tensor = None,
         **kwargs
     ) -> Union[Tensor, IntermediateTensors]:
-        key_cache, value_cache = self.get_kvcache()
-        attn_metadata = get_forward_context().attn_metadata
-        input_ids = input_ids.to(ms.int64)
-        if attn_metadata is None:
-            attn_metadata = self._dummy_attention_metadata(input_ids, positions)
-        if not envs.VLLM_USE_V1:
-            seq_lens = attn_metadata.seq_lens
-            max_query_len = attn_metadata.max_query_len
-            # When Mutli-Step is enabled with Chunked-Prefill, prefills and
-            # decodes are scheduled together. In the first step, all the
-            # prefills turn into decodes and max_query_len will be 1.
-            if self.is_multi_step_chunked_prefill and max_query_len == 1:
-                query_lens = [1] * len(seq_lens)
-            else:
-                query_lens = attn_metadata.query_lens
-
-            seq_lens_np = np.array(seq_lens, dtype=np.int32)
-            query_lens_np = np.array(query_lens, dtype=np.int32)
-            kv_cache_lens = seq_lens_np - query_lens_np
-            is_prefill = attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max() == 0
-            slot_mapping = attn_metadata.slot_mapping
-            batch_valid_length = Tensor.from_numpy(np.array(attn_metadata.seq_lens, dtype=np.int32))
-            q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
-            block_tables = attn_metadata.block_tables
-            position_ids = ms.Tensor(positions, dtype=ms.int32)
-            attn_mask = self.casual_mask.gen_attention_mask(is_prefill, position_ids, query_lens)
-        else:
-            if attn_metadata.max_context_lens == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
-            slot_mapping = attn_metadata.slot_mapping
-            batch_valid_length = Tensor.from_numpy(attn_metadata.seq_lens_np)
-            q_seq_lens = attn_metadata.q_seq_lens
-            block_tables = attn_metadata.block_tables
-            query_lens_np = attn_metadata.q_seq_lens_np
-            attn_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
-            positions = positions.to(ms.int64)
-        if is_prefill:
-            input_ids = ops.expand_dims(input_ids, 0)
-            if not self.prefill:
-                self.prefill = True
-                self.set_model_inputs(self.prefill)
-        else:
-            input_ids = ops.expand_dims(input_ids, 1)
-            if self.prefill:
-                self.prefill = False
-                self.set_model_inputs(self.prefill)
-        model_output = self.model(input_ids,
-                                  positions,
-                                  key_cache,
-                                  value_cache,
-                                  is_prefill,
-                                  slot_mapping,
-                                  attn_mask,
-                                  batch_valid_length,
-                                  q_seq_lens,
-                                  block_tables,
-                                  intermediate_tensors,
-                                  inputs_embeds)
-        if is_prefill:
-            model_output = ops.squeeze(model_output, 0)
-        else:
-            model_output = ops.squeeze(model_output, 1)
-        return model_output
-
-    def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor) -> FlashAttentionMetadata:
-        input_len = input_ids.shape[0]
-        max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
-        seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
-        q_seq_lens = ms.Tensor([input_len], dtype=ms.int32)
-        q_seq_lens_np = np.array([input_len], dtype=np.int32)
-        seq_lens_np = np.array([input_len], dtype=np.int32)
-
-        block_tables = ms.Tensor([[0]], dtype=ms.int32)
-        slot_mapping = [-1 for _ in range(input_len)]
-        slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
-        return FlashAttentionMetadata(
-            max_seq_len=max_seq_len,
-            seq_lens=seq_lengths,
-            seq_lens_np=seq_lens_np,
-            block_tables=block_tables,
-            slot_mapping=slot_mapping,
-            q_seq_lens=q_seq_lens,
-            q_seq_lens_np=q_seq_lens_np,
-            context_lens=0,
-            # To enforce prefill and decode are both complied in warmup process.
-            # So set max_context_lens to 0 for prefill and 1 for decode.
-            max_context_lens=0 if self.prefill else 1,
-            query_start_loc = None
-        )
+        hidden_states = self.exec_model(input_ids, positions,
+                                        intermediate_tensors, inputs_embeds)
+        return hidden_states
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         params_dict = self.get_params_dict()
         self.model.load_weights(weights, params_dict)
 
-    def sample(
-        self, logits: Tensor, sampling_metadata: SamplingMetadata
-    ) -> Optional[SamplerOutput]:
+    def sample(self, logits: Tensor,
+               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
         next_tokens = self.sampler(logits, sampling_metadata)
         return next_tokens
 
@@ -664,5 +495,6 @@ class Qwen2ForCausalLM(MsModelBase):
         hidden_states: Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states, sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states,
+                                       sampling_metadata)
         return logits

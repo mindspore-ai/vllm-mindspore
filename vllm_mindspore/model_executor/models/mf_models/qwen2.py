@@ -33,9 +33,8 @@ from research.qwen2_5.infer.qwen2_5 import (
 )
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm_mindspore.model_executor.models.model_base import Fake_Attention, Fake_Attention_V1
+from vllm_mindspore.model_executor.models.model_base import AttentionWrapper
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
-
 from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import Qwen2WeightProcessor
 
 
@@ -49,10 +48,7 @@ class Qwen2ForCausalLM(MfModelBase):
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
-        if envs.VLLM_USE_V1:
-            self.kv_caches = [Fake_Attention_V1() for i in range(self.mf_model_config.num_layers)]
-        else:
-            self.kv_caches = [Fake_Attention() for i in range(self.mf_model_config.num_layers)]
+        self.kv_caches = [AttentionWrapper() for i in range(self.mf_model_config.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:

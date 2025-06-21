@@ -25,16 +25,16 @@ from vllm.model_executor.models.registry import (_LazyRegisteredModel,
 from vllm_mindspore.utils import (is_mindformers_model_backend,
                                   is_mindone_model_backend)
 
-_MINDSPORE_MODELS = {
+_NATIVE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),  # MCore
     "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
     "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
-    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
 }
 
 _MINDONE_MODELS = {
@@ -69,7 +69,7 @@ else:
             module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
             class_name=cls_name,
         )
-        for model_arch, (mod_relname, cls_name) in _MINDSPORE_MODELS.items()
+        for model_arch, (mod_relname, cls_name) in _NATIVE_MODELS.items()
     }
 
 MindSporeModelRegistry = _ModelRegistry(_registry_dict)
