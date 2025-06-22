@@ -3,6 +3,8 @@
 ## 目录
 - [模型介绍](#模型介绍)
 - [快速开始](#快速开始)
+- [服务化部署](#服务化部署)
+- [离线推理部署](#离线推理部署)
 - [声明](#声明)
 
 ## 模型介绍
@@ -26,7 +28,7 @@
 export HUB_WHITE_LIST_PATHS=/home/work/PanguProMoE
 ```
 
-执行以下 Python 脚本，从魔乐社区下载昇思 MindSpore 版本的 盘古Pro MoE模型权重文件至指定路径 `/home/work/PanguProMoE` 。下载的文件包含模型代码、权重、分词模型和示例代码，占用约 150GB 的磁盘空间：
+执行以下 Python 脚本，从魔乐社区下载昇思 MindSpore 版本的 盘古Pro MoE模型权重文件至指定路径 `/home/work/PanguProMoE` 。下载的文件包含模型配置、模型权重和分词模型，占用约 150GB 的磁盘空间：
 
 ```python
 from openmind_hub import snapshot_download
@@ -43,8 +45,8 @@ snapshot_download(
 ```text
 PanguProMoE
   ├── config.json                         # 模型配置
-  ├── tokenization_pangu_moe.py           # 词表文件
-  ├── tokenizer.model                     # 词表
+  ├── tokenization_pangu_moe.py           # 词表代码
+  ├── tokenizer.model                     # 词表模型
   ├── special_tokens_map.json             # 特殊词表映射
   ├── model-xxxxx-of-xxxxx.safetensors    # 模型权重文件
   ├── ...
@@ -180,5 +182,4 @@ if __name__ == "__main__":
 ```
 
 ## 声明
-
-本文档提供的模型代码、权重文件和部署镜像，当前仅限于基于昇思MindSpore AI框架体验盘古Pro MoE的部署效果，不支持生产环境部署。相关使用问题请反馈至[Issue](https://gitee.com/mindspore/vllm-mindspore/issues/new)。
+本文档提供的模型代码和镜像，当前仅限用于测试和体验昇思MindSpore盘古Pro MoE模型的推理服务化部署，不建议用于生产环境，正式商用版本计划于Q3发布。如遇使用问题，欢迎反馈至[Issue](https://gitee.com/mindspore/vllm-mindspore/issues/new)。
