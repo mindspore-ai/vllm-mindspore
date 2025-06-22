@@ -20,9 +20,12 @@ from typing import Iterable, Set, Tuple
 
 from vllm.config import VllmConfig
 from vllm.config import get_current_vllm_config
+from vllm.distributed.parallel_state import get_pp_group
+from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+from vllm.model_executor.models.interfaces import SupportsPP
 
-from mindspore import Tensor, JitConfig
+from mindspore import Tensor, mutable
 from mindspore.nn.utils import no_init_parameters
 
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
@@ -35,6 +38,7 @@ from vllm_mindspore.model_executor.models.model_base import Fake_Attention
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import Qwen2WeightProcessor
 from vllm_mindspore.model_executor.models.mf_models.attention_mask import LowerTriangularMask
+from vllm_mindspore.model_executor.models.utils import make_empty_intermediate_tensors_factory
 import os
 import mindspore as ms
 
@@ -55,25 +59,40 @@ def set_runtime_kernel_launch_group():
     kernel_group_num = int(kernel_launch_group.get('kernel_group_num', 8))
     ms.runtime.set_kernel_launch_group(thread_num=thread_num, kernel_group_num=kernel_group_num)
 
-class Qwen2ForCausalLM(MfModelBase):
+class Qwen2ForCausalLM(MfModelBase, SupportsPP):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super(Qwen2ForCausalLM, self).__init__(vllm_config=vllm_config, prefix=prefix)
         self.mf_kvcaches_init = False
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
+        self.num_layers = self.model_config.get_num_layers(self.parallel_config)
 
-        self.kv_caches = [Fake_Attention() for i in range(self.mf_model_config.num_layers)]
+        self.kv_caches = [Fake_Attention() for _ in range(self.num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(i)] = self.kv_caches[i]
 
         set_runtime_kernel_launch_group()
         self.casual_mask = LowerTriangularMask(mf_model_config=self.mf_model_config)
         self.set_flags = False
+        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(
+            ['hidden_states'], self.mf_model_config.hidden_size
+        )
+
+    def get_kvcache(self):
+        key_cache = []
+        value_cache = []
+        forward_context = get_forward_context()
+        for i in range(self.num_layers):
+            k_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            v_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+            key_cache.append(k_cache)
+            value_cache.append(v_cache)
+        return mutable(key_cache), mutable(value_cache)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
@@ -91,13 +110,16 @@ class Qwen2ForCausalLM(MfModelBase):
         # Initial network
         with no_init_parameters():  # Delay initialization
             network = ParallelQwenForCausalLM_MF(self.mf_model_config)
-        return network, network.lm_head
+
+        if get_pp_group().is_last_rank:
+            return network, network.lm_head
+        return network, None
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, False)
         weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
 
-        self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
-        self.lm_head.set_inputs(dynamic_hidden_states)
+        # self.network.set_dynamic_inputs()
+        # dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        # self.lm_head.set_inputs(dynamic_hidden_states)
         return None
