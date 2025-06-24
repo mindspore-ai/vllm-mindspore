@@ -50,6 +50,10 @@ import vllm.utils
 
 vllm.utils.current_platform = ascend_platform
 
+import vllm.executor.ray_utils
+
+vllm.executor.ray_utils.current_platform = ascend_platform
+
 import vllm.attention.selector
 
 vllm.attention.selector.current_platform = ascend_platform
@@ -60,8 +64,11 @@ from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
 import vllm.v1.engine.core
-from vllm_mindspore.v1.engine.core import shutdown
-
+from vllm_mindspore.v1.engine.core import (
+    _init_data_parallel,
+    shutdown,
+)
+vllm.v1.engine.core.DPEngineCoreProc._init_data_parallel = _init_data_parallel
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
 from vllm_mindspore.utils import (
@@ -127,7 +134,7 @@ from vllm.model_executor.model_loader import get_model_architecture
 vllm.model_executor.model_loader.get_model_architecture = get_ms_model_architecture
 vllm.model_executor.model_loader.utils.get_model_architecture = (
     get_ms_model_architecture)
-vllm.model_executor.model_loader.loader.get_model_architecture = (
+vllm.model_executor.model_loader.default_loader.get_model_architecture = (
     get_ms_model_architecture)
 
 from vllm_mindspore.model_executor.sampling_metadata import SamplingTensors
@@ -149,8 +156,9 @@ vllm.worker.cache_engine.CacheEngine.swap_out = ms_swap_out
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     safetensors_weights_iterator, )
 
-vllm.model_executor.model_loader.loader.safetensors_weights_iterator = (
-    safetensors_weights_iterator)
+vllm.model_executor.model_loader.default_loader.safetensors_weights_iterator = (
+    safetensors_weights_iterator
+)
 
 from vllm_mindspore.worker.worker import _warm_up_model
 from vllm_mindspore.worker.profile import (
@@ -308,10 +316,11 @@ from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
 
-from vllm_mindspore.v1.worker.gpu_model_runner import initialize_kv_cache, get_kv_cache_spec
-
-vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = initialize_kv_cache
+from vllm_mindspore.v1.worker.gpu_model_runner import _allocate_kv_cache_tensors, get_kv_cache_spec
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._allocate_kv_cache_tensors = _allocate_kv_cache_tensors
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_kv_cache_spec = get_kv_cache_spec
+from vllm_mindspore.v1.worker.gpu_model_runner import _reshape_kv_cache_tensors
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._reshape_kv_cache_tensors = _reshape_kv_cache_tensors
 
 from vllm_mindspore.v1.worker.gpu_model_runner import wrapper_gpu_model_runner_execute_model
 from vllm.v1.worker.gpu_model_runner import GPUModelRunner
@@ -375,15 +384,18 @@ from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 
+from vllm_mindspore.distributed.device_communicators.base_device_communicator import(
+    prepare_communication_buffer_for_model
+)
+import vllm.distributed.device_communicators.base_device_communicator
+vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase.prepare_communication_buffer_for_model = (
+    prepare_communication_buffer_for_model
+)
+
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
 
 Worker.compile_or_warm_up_model = compile_or_warm_up_model
-
-from vllm_mindspore.v1.core.sched.scheduler import update_from_output
-from vllm.v1.core.sched.scheduler import Scheduler
-
-Scheduler.update_from_output = update_from_output
 
 from .utils import check_ready
 

@@ -59,6 +59,12 @@ def get_valid_dtype(dtype):
         dtype = STR_DTYPE_TO_MS_DTYPE[dtype]
     return dtype
 
+def get_dtype_size(dtype: torch.dtype) -> int:
+    """Get the size of the data type in bytes."""
+    if isinstance(dtype, str):
+        dtype = STR_DTYPE_TO_TENSOR_DTYPE[dtype]
+    return torch.tensor([1], dtype=dtype).itemsize
+
 
 def _create_empty_tensor(ms_type):
     init_func = Zero()

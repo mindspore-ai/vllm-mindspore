@@ -20,6 +20,7 @@
 import math
 import torch
 
+
 from vllm.logger import init_logger
 
 from vllm_mindspore.utils import get_valid_dtype
