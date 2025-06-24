@@ -16,7 +16,7 @@
 # limitations under the License.
 # ============================================================================
 from collections import Counter
-from typing import Union
+from typing import Union, Optional
 import sys
 import socket
 import threading
@@ -31,12 +31,119 @@ from transformers import PretrainedConfig
 import vllm.envs as envs
 
 from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, _STR_DTYPE_TO_TORCH_DTYPE
-from vllm.utils import random_uuid
+from vllm.utils import random_uuid, common_broadcastable_dtype
 from vllm.logger import init_logger
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
 from vllm.platforms import CpuArchEnum
+from vllm.transformers_utils.config import try_get_safetensors_metadata
+from safetensors.torch import _TYPES as _SAFETENSORS_TO_TORCH_DTYPE
 
 logger = init_logger(__name__)
+
+_FLOAT16_NOT_SUPPORTED_MODELS = {
+    "gemma2": "Numerical instability. Please use bfloat16 or float32 instead.",
+    "gemma3": "Numerical instability. Please use bfloat16 or float32 instead.",
+    "plamo2": "Numerical instability. Please use bfloat16 or float32 instead.",
+    "glm4": "Numerical instability. Please use bfloat16 or float32 instead.",
+}
+
+
+def _is_valid_dtype(model_type: str, dtype: torch.dtype):
+    if model_type in _FLOAT16_NOT_SUPPORTED_MODELS and dtype == torch.float16:  # noqa: E501, SIM103
+        return False
+
+    return True
+
+
+def _check_valid_dtype(model_type: str, dtype: torch.dtype):
+    if model_type in _FLOAT16_NOT_SUPPORTED_MODELS and dtype == torch.float16:
+        reason = _FLOAT16_NOT_SUPPORTED_MODELS[model_type]
+        raise ValueError(f"The model type {model_type!r} "
+                         f"does not support float16. Reason: {reason}")
+
+    return True
+
+
+def _resolve_auto_dtype(
+    model_type: str,
+    config_dtype: torch.dtype,
+    *,
+    is_pooling_model: bool,
+):
+    from vllm.platforms import current_platform
+
+    supported_dtypes = [
+        dtype for dtype in current_platform.supported_dtypes
+        if _is_valid_dtype(model_type, dtype)
+    ]
+
+    if is_pooling_model and torch.float16 in supported_dtypes:
+        preferred_dtype = torch.float16
+    else:
+        preferred_dtype = supported_dtypes[0]
+
+    # Downcast for float32 models
+    if config_dtype == torch.float32:
+        config_dtype = preferred_dtype
+
+    if config_dtype in supported_dtypes:
+        return config_dtype
+
+    # Ensure device compatibility
+    device_name = current_platform.get_device_name()
+    device_capability = current_platform.get_device_capability()
+
+    device_str = f"{device_name!r}"
+
+    logger.warning(
+        "Your device %s doesn't support %s. "
+        "Falling back to %s for compatibility.",
+        device_str,
+        config_dtype,
+        preferred_dtype,
+    )
+
+    return preferred_dtype
+
+
+def _find_dtype(
+    model_id: str,
+    config: PretrainedConfig,
+    *,
+    revision: Optional[str],
+):
+    # NOTE: getattr(config, "torch_dtype", torch.float32) is not correct
+    # because config.torch_dtype can be None.
+    config_dtype = getattr(config, "torch_dtype", None)
+
+    # Fallbacks for multi-modal models if the root config
+    # does not define torch_dtype
+    if config_dtype is None:
+        config_dtype = getattr(config.get_text_config(), "torch_dtype", None)
+    if config_dtype is None and hasattr(config, "vision_config"):
+        config_dtype = getattr(config.vision_config, "torch_dtype", None)
+    if config_dtype is None and hasattr(config, "encoder_config"):
+        config_dtype = getattr(config.encoder_config, "torch_dtype", None)
+
+    # Try to read the dtype of the weights if they are in safetensors format
+    if config_dtype is None:
+        repo_mt = try_get_safetensors_metadata(model_id, revision=revision)
+
+        if repo_mt and (files_mt := repo_mt.files_metadata):
+            param_dtypes: set[torch.dtype] = {
+                _SAFETENSORS_TO_TORCH_DTYPE[dtype_str]
+                for file_mt in files_mt.values()
+                for dtype_str in file_mt.parameter_count
+                if dtype_str in _SAFETENSORS_TO_TORCH_DTYPE
+            }
+
+            if param_dtypes:
+                return common_broadcastable_dtype(param_dtypes)
+
+    if config_dtype is None:
+        config_dtype = torch.float32
+
+    return config_dtype
 
 
 def _verify_quantization(self) -> None:
@@ -214,80 +321,42 @@ def model_post_init(self, __context) -> None:
 
 
 def _get_and_verify_dtype(
+    model_id: str,
     config: PretrainedConfig,
     dtype: Union[str, torch.dtype],
+    *,
+    is_pooling_model: bool,
+    revision: Optional[str] = None,
 ) -> torch.dtype:
-    # NOTE: getattr(config, "torch_dtype", torch.float32) is not correct
-    # because config.torch_dtype can be None.
-    config_dtype = getattr(config, "torch_dtype", None)
-
-    # Fallbacks for multi-modal models if the root config
-    # does not define torch_dtype
-    if config_dtype is None and hasattr(config, "text_config"):
-        config_dtype = getattr(config.text_config, "torch_dtype", None)
-    if config_dtype is None and hasattr(config, "vision_config"):
-        config_dtype = getattr(config.vision_config, "torch_dtype", None)
-
-    if config_dtype is None:
-        config_dtype = torch.float32
+    config_dtype = _find_dtype(model_id, config, revision=revision)
+    model_type = config.model_type
 
     if isinstance(dtype, str):
         dtype = dtype.lower()
         if dtype == "auto":
-            if config_dtype == torch.float32:
-                # Following common practice, we use float16 for float32 models
-                torch_dtype = torch.float16
-            else:
-                torch_dtype = config_dtype
-
-            from vllm.platforms import current_platform
-            if (current_platform.is_cpu()
-                    and current_platform.get_cpu_architecture()
-                    == CpuArchEnum.POWERPC
-                    and (config_dtype == torch.float16
-                         or config_dtype == torch.float32)):
-                logger.info(
-                    "For POWERPC, we cast models to bfloat16 instead of "
-                    "using float16 by default. Float16 is not currently "
-                    "supported for POWERPC.")
-                torch_dtype = torch.bfloat16
-
-            # TODO: change this condition to check if the platform support bf16
-            # instead of checking the OS. For instance M2 shall supports bf16
-            # already. But we need to modify `cpu_extension.cmake` to activate
-            # the feature in the build.
-            if (current_platform.is_cpu() and sys.platform.startswith("darwin")
-                    and current_platform.get_cpu_architecture()
-                    == CpuArchEnum.ARM and config_dtype == torch.bfloat16):
-                logger.info("For macOS with Apple Silicon, currently bfloat16 "
-                            "is not supported. Setting dtype to float16.")
-                torch_dtype = torch.float16
-
-            if current_platform.is_hpu() and config_dtype == torch.float16:
-                logger.info(
-                    "For HPU, we cast models to bfloat16 instead of "
-                    "using float16 by default. Please specify `dtype` if you "
-                    "want to use float16.")
-                torch_dtype = torch.bfloat16
+            # Set default dtype from model config
+            torch_dtype = _resolve_auto_dtype(
+                model_type,
+                config_dtype,
+                is_pooling_model=is_pooling_model,
+            )
         else:
             if dtype not in _STR_DTYPE_TO_TORCH_DTYPE:
-                raise ValueError(f"Unknown dtype: {dtype}")
+                raise ValueError(f"Unknown dtype: {dtype!r}")
             torch_dtype = _STR_DTYPE_TO_TORCH_DTYPE[dtype]
     elif isinstance(dtype, torch.dtype):
         torch_dtype = dtype
     else:
         raise ValueError(f"Unknown dtype: {dtype}")
-
-    # Verify the dtype.
+    
+    _check_valid_dtype(model_type, torch_dtype)
     if torch_dtype != config_dtype:
         if torch_dtype == torch.float32:
             # Upcasting to float32 is allowed.
             logger.info("Upcasting %s to %s.", config_dtype, torch_dtype)
-            pass
         elif config_dtype == torch.float32:
             # Downcasting from float32 to float16 or bfloat16 is allowed.
             logger.info("Downcasting %s to %s.", config_dtype, torch_dtype)
-            pass
         else:
             # Casting between float16 and bfloat16 is allowed with a warning.
             logger.warning("Casting %s to %s.", config_dtype, torch_dtype)

@@ -45,7 +45,6 @@ def update_from_output(
         # None sampled_token_ids comes from exception model execution, set them to abort list
         # to keep main scheduler task running right.
         if sampled_token_ids is None:
-            self.scheduled_req_ids.remove(req_id)
             logger.warning(
                 f'Process aborted request {req_id} from running requests {running_req_ids}'
             )
@@ -153,7 +152,6 @@ def update_from_output(
             # Invariant: EngineCore returns no partial prefill outputs.
             assert not prompt_logprobs_tensors
 
-        self.scheduled_req_ids.remove(req_id)
         if not stopped:
             new_running.append(request)
 
@@ -169,9 +167,5 @@ def update_from_output(
         outputs=outputs,
         scheduler_stats=self.make_stats(spec_decoding_stats),
     )
-    if self.include_finished_set:
-        #TODO currently sending duplicates here, improve this
-        engine_core_outputs.finished_requests = (
-            scheduler_output.finished_req_ids | self.finished_req_ids)
 
     return engine_core_outputs

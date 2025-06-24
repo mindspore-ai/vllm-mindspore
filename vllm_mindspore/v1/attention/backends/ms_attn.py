@@ -174,8 +174,10 @@ class MsAttentionImpl(AttentionImpl):
 
 
 class MsAttentionMetadataBuilder:
-    def __init__(self, runner: "GPUModelRunner"):
+    def __init__(self, runner: "GPUModelRunner", kv_cache_spec,
+                 block_table):
         self.runner = runner
+        self.block_table = block_table
 
     def reorder_batch(self, input_batch: "InputBatch",
                       scheduler_output: "SchedulerOutput") -> bool:
@@ -187,7 +189,7 @@ class MsAttentionMetadataBuilder:
         # because it will cause a certain amount of host time.
         query_start_loc = ms.from_numpy(self.runner.query_start_loc_np[:num_reqs + 1])
         max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:num_reqs].max()
-        slot_mapping = ms.from_numpy(self.runner.slot_mapping_np[:num_actual_tokens])
+        slot_mapping = ms.from_numpy(self.block_table.slot_mapping_np[:num_actual_tokens])
         seq_lens_np = self.runner.seq_lens_np[:num_reqs]
         max_seq_len = seq_lens_np.max()
         seq_lens = ms.from_numpy(seq_lens_np)
@@ -198,7 +200,7 @@ class MsAttentionMetadataBuilder:
         attn_metadata = MsAttentionMetadata(
             seq_lens=seq_lens,
             seq_lens_np=seq_lens_np,
-            block_tables=(self.runner.input_batch.block_table.get_device_tensor()[:num_reqs]),
+            block_tables=(self.block_table.get_device_tensor()[:num_reqs]),
             slot_mapping=slot_mapping,
             q_seq_lens_np=q_seq_lens_np,
             max_seq_len=max_seq_len,
