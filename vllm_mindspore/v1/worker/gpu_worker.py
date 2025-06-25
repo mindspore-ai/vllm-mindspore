@@ -7,7 +7,6 @@ from vllm.logger import init_logger
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.utils import MemorySnapshot
 
-
 logger = init_logger(__name__)
 
 
@@ -20,10 +19,11 @@ def init_device(self):
 
     config = get_current_vllm_config()
     if config is not None and config.parallel_config.data_parallel_size > 1:
-        device_id = self.parallel_config.data_parallel_rank_local * self.parallel_config.world_size + self.local_rank
-        self.device = torch.device(f"cuda:{device_id}")
+        self.local_rank = self.parallel_config.data_parallel_rank_local * self.parallel_config.world_size + self.local_rank
+        self.device = torch.device(f"cuda:{self.local_rank}")
     else:
         self.device = torch.device(f"cuda:{self.local_rank}")
+    logger.debug(f"self.local_rank: {self.local_rank} / self.device: {self.device}")
     torch.cuda.set_device(self.device)
 
     _check_if_gpu_supports_dtype(self.model_config.dtype)

@@ -404,4 +404,16 @@ import vllm.engine.multiprocessing.engine
 
 vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
 
+from vllm_mindspore.entrypoints import patch_server_run_api_server_worker_proc
+patch_server_run_api_server_worker_proc()
+
+try:
+    from vllm.distributed.kv_transfer.kv_connector.factory import KVConnectorFactory
+
+    KVConnectorFactory.register_connector(
+        "DLLMDsConnector",
+        "dllm.dkvc.v1.dllm_ds_connector",
+        "DLLMDsConnector")
+except:
+    pass
 check_ready()
