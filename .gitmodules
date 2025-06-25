@@ -1,4 +1,4 @@
 [submodule "tests/mindformers"]
 	path = tests/mindformers
 	url = https://gitee.com/mindspore/mindformers.git
-	branch = dev
+	branch = br_infer_deepseek_os
