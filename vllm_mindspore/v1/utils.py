@@ -23,3 +23,4 @@ def copy_slice(from_tensor: torch.Tensor, to_tensor: torch.Tensor,
     to_tensor[:length] = from_tensor[:length]
     if return_tensor:
         return to_tensor[:length]
+
