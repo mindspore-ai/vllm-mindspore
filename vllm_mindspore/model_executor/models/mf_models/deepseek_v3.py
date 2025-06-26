@@ -188,7 +188,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
         for i in range(self.mf_model_config.num_layers):
             kv_cache_module = self.kv_caches[i]
             kv_cache = kv_cache_module.kv_cache[forward_context.virtual_engine][0]
-            maybe_save_kv_layer_to_connector(str(i), (k_cache, v_cache))
+            maybe_save_kv_layer_to_connector(str(i), kv_cache)
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
         if self.mf_config.load_ckpt_format == "ckpt":
