@@ -93,6 +93,7 @@ DATensor *NewDATensor(DAContext *context) {
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   tensor->type = Type_F32;
+  tensor->tensorType = UNKNOW_TENSOR;
   context->memUsed = newSize;
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;
@@ -112,6 +113,7 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
   tensor->type = type;
+  tensor->tensorType = UNKNOW_TENSOR;
   tensor->op = op;
   tensor->data = MakeTensorData(context, type, shape, data);
 
