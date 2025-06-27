@@ -44,8 +44,8 @@ from vllm.distributed.parallel_state import (
     get_dp_group, get_tensor_model_parallel_world_size)
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+from vllm.model_executor.layers.sampler import get_sampler
 
-from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.attention_mask import (
     MLALowerTriangularMask)
 

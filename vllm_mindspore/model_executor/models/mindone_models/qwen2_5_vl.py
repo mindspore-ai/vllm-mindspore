@@ -46,6 +46,7 @@ from mindspore import Tensor, mint, mutable, nn, ops
 from mindspore.common.api import _pynative_executor
 from vllm.attention.backends.abstract import AttentionMetadata
 from vllm.config import VllmConfig
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.models.qwen2_5_vl import (
     Qwen2_5_VLConfig, Qwen2_5_VLDummyInputsBuilder)
 from vllm.model_executor.models.qwen2_5_vl import (
@@ -65,8 +66,6 @@ from vllm.multimodal.processing import PromptReplacement
 from vllm.sequence import IntermediateTensors
 from vllm.transformers_utils.config import uses_mrope
 
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import SupportsMultiModal
