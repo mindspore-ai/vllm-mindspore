@@ -16,7 +16,9 @@
 # limitations under the License.
 # ============================================================================
 
+import numpy as np
 from typing import Iterable, Set, Tuple
+from collections import OrderedDict
 
 from vllm.config import VllmConfig
 from vllm.config import get_current_vllm_config
@@ -25,13 +27,18 @@ from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces import SupportsPP
 
-from mindspore import Tensor, mutable
+from mindspore import Tensor, mutable, Model
 from mindspore.nn.utils import no_init_parameters
-
+from mindspore.common import dtype as msdtype
 from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
+from mindformers.trainer.utils import transform_and_load_checkpoint
 from research.qwen2_5.infer.qwen2_5 import (
     ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF,
 )
+
+from mindspore_gs.ptq import PTQ
+from mindspore_gs.ptq import PTQMode, PTQConfig, OutliersSuppressionType
+from mindspore_gs.common import BackendTarget
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.model_base import Fake_Attention
@@ -64,6 +71,8 @@ class Qwen2ForCausalLM(MfModelBase, SupportsPP):
         super(Qwen2ForCausalLM, self).__init__(vllm_config=vllm_config, prefix=prefix)
         self.mf_kvcaches_init = False
 
+        self.is_quant = bool(hasattr(self.mf_model_config, "quantization_config") and
+                             self.mf_model_config.quantization_config)
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
         self.num_layers = self.model_config.get_num_layers(self.parallel_config)
@@ -111,15 +120,42 @@ class Qwen2ForCausalLM(MfModelBase, SupportsPP):
         with no_init_parameters():  # Delay initialization
             network = ParallelQwenForCausalLM_MF(self.mf_model_config)
 
+        if hasattr(self.mf_model_config, "quantization_config") and hasattr(self.mf_model_config.quantization_config, "quant_method"):
+            ptq = self.create_ptq(self.mf_model_config.quantization_config.quant_method, PTQMode.DEPLOY)
+            if ptq is not None:
+                ptq.apply(network)
+                ptq.convert(network)
         if get_pp_group().is_last_rank:
             return network, network.lm_head
         return network, None
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, False)
-        weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
-
+        if self.mf_config.auto_trans_ckpt:
+            weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, self.is_quant)
+            weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
+        else:
+            model = Model(self.network)
+            batch_size = self.mf_config.model.model_config.batch_size
+            seq_length = self.mf_config.model.model_config.seq_length
+            input_ids = np.ones(shape=tuple([batch_size, seq_length]))
+            infer_data = self.network.prepare_inputs_for_predict_layout(input_ids)
+            transform_and_load_checkpoint(
+                self.mf_config, model, self.network, infer_data, do_predict=True
+            )
         # self.network.set_dynamic_inputs()
         # dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
         # self.lm_head.set_inputs(dynamic_hidden_states)
         return None
+
+    def create_ptq(self, quant_type: str, quant_mode: PTQMode):
+        """create_ptq"""
+        if quant_type.lower() == 'ptq':
+            cfg = PTQConfig(mode=quant_mode, backend=BackendTarget.ASCEND, weight_quant_dtype=msdtype.int8,
+                            act_quant_dtype=msdtype.int8, outliers_suppression=OutliersSuppressionType.SMOOTH,
+                            opname_blacklist=['w2', 'lm_head'])
+            layer_policies = OrderedDict()
+        else:
+            logger.warning("Input unsupported quant type: %s.", quant_type)
+            return None
+        ptq = PTQ(config=cfg, layer_policies=layer_policies)
+        return ptq
