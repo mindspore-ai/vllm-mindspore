@@ -71,20 +71,17 @@ MODEL_COMMON_MAPPING = {
     'rope_theta': ('model_config.hf_config.rope_theta', None),
     'tie_word_embeddings': ('model_config.hf_config.tie_word_embeddings', None),
     'vocab_size': ('model_config.hf_config.vocab_size', None),
+    'attention_bias': ('model_config.hf_config.attention_bias', None),
 }
 
 
 # model default config
 MODEL_RELATED_MAPPING = {
-    'qwen2': {
-        "gated_linear_unit": True,
-        'params_dtype': 'float32', # need an input
-        'add_qkv_bias': True,
-    },
     'qwen3': {
-        "gated_linear_unit": True,
-        'params_dtype': 'float32', # need an input
-        'add_qkv_bias': False,
+        'gated_linear_unit': True,
+        'params_dtype': 'bfloat16', # need an input
+        'add_bias_linear': False,
+        'normalization': 'RMSNorm'
     }
     # Add anther model type...
 }

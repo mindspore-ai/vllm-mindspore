@@ -64,9 +64,9 @@ class Qwen3ForCausalLM(MsModelBase):
         build_parallel_config(self.mf_config)
 
         self._generate_model_config()
-        self.casual_mask = LowerTriangularMask(dtype=self.mf_model_config.compute_dtype,
-                                               max_model_len=self.model_config.max_model_len)
         self.network, self.lm_head = self._create_network()
+        self.casual_mask = LowerTriangularMask(dtype=self.network.compute_dtype,
+                                               max_model_len=self.model_config.max_model_len)
 
         affinity_config = self.mf_config.get('context', {}).get('affinity_cpu_list', {})
         if isinstance(affinity_config, dict):
@@ -93,7 +93,7 @@ class Qwen3ForCausalLM(MsModelBase):
 
     def _set_dynamic_inputs(self):
         self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)
+        dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.network.compute_dtype)
         self.lm_head.set_inputs(dynamic_hidden_states)
 
 
