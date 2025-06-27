@@ -25,8 +25,8 @@ from research.deepseek3.deepseek3_config import (  # noqa: E501
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+from vllm.model_executor.layers.sampler import get_sampler
 
-from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.attention_mask import (
     MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.mf_models.deepseekv3_weight_processor import (  # noqa: E501

@@ -419,6 +419,17 @@ from vllm_mindspore.v1.utils import copy_slice
 vllm.v1.utils.copy_slice = copy_slice
 vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
 
+from vllm_mindspore.model_executor.layers.sampler import (
+    _apply_top_k_top_p,
+    _apply_min_p,
+    _random_sample,
+)
+import vllm.model_executor.layers
+
+vllm.model_executor.layers.sampler._apply_top_k_top_p = _apply_top_k_top_p
+vllm.model_executor.layers.sampler._apply_min_p = _apply_min_p
+vllm.model_executor.layers.sampler._random_sample = _random_sample
+
 from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
 import vllm.v1.sample.ops.penalties
 

@@ -34,12 +34,12 @@ import torch
 import vllm.envs as envs
 
 from transformers import GenerationConfig, GenerationMixin
+from vllm.model_executor.layers.sampler import Sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.utils import set_random_seed
 from vllm.utils import Counter, is_pin_memory_available
-from vllm_mindspore.model_executor.layers.sampler import Sampler
-from vllm_mindspore.sequence import (SamplingParams, SequenceData,
-                                     SequenceGroupMetadata)
+from vllm.sequence import SamplingParams
+from vllm_mindspore.sequence import SequenceData, SequenceGroupMetadata
 
 from .utils import cleanup_subprocesses
 

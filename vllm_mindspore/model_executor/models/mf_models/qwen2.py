@@ -26,8 +26,8 @@ from research.qwen2_5.infer.qwen2_5 import (
 # yapf: enable
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.logger import init_logger
+from vllm.model_executor.layers.sampler import get_sampler
 
-from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
     MfModelBase)
 from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import (  # noqa: E501
