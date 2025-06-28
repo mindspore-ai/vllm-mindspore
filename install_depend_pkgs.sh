@@ -40,7 +40,7 @@ vllm_dir=vllm-v0.8.3
 if [ ! -d "$vllm_dir" ]; then
     git clone https://github.com/vllm-project/vllm.git -b v0.8.3 "$vllm_dir"
     cd "$vllm_dir" ||  { echo "Failed to git clone vllm!"; exit 1; }
-    git apply ../../vllm_dp/dp_scale_out.patch
+    git apply $script_dir/vllm_dp/dp_scale_out.patch
 else
     echo "The $vllm_dir folder already exists and will not be re-downloaded."
     cd "$vllm_dir" || { echo "Failed to git clone vllm!"; exit 1; }
@@ -49,7 +49,7 @@ pip uninstall msadapter -y
 pip uninstall vllm -y
 pip install -v -r requirements/cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
 VLLM_TARGET_DEVICE=empty python setup.py install || { echo "Failed to install vllm"; exit 1; }
-pip uninstall torch torch-npu torchvision -y
+pip uninstall torch torch-npu torchvision torchaudio -y
 cd ..
 
 
@@ -101,3 +101,4 @@ pip uninstall msadapter -y && pip install .  || { echo "Failed to install msadap
 cd ..
 
 echo "========= All dependencies installed successfully!"
+echo -e "[\033[0;34mnotice\033[0m]Please set the command: export PYTHONPATH=$(pwd)/$mf_dir/:\$PYTHONPATH"
