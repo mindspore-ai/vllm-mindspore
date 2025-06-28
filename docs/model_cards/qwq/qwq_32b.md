@@ -7,6 +7,8 @@
     - [vLLM](#vllm)
     - [MSAdapter （安装前一定一定要卸载torch）](#msadapter-安装前一定一定要卸载torch)
     - [vllm-mindspore](#vllm-mindspore)
+  - [开源镜像](#开源镜像)
+    - [启动镜像命令](#启动镜像命令)
   - [下载模型权重](#下载模型权重)
     - [注意事项：](#注意事项)
   - [服务化部署](#服务化部署)
@@ -92,6 +94,40 @@ python setup.py install
 git clone https://gitee.com/mindspore/vllm-mindspore.git -b duo-dev
 cd vllm_mindspore
 pip install .
+```
+
+
+## 开源镜像
+
+提供开源镜像供用户使用，镜像仓库地址为：hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:20250627，可使用以下命令拉取镜像。
+
+```shell
+docker pull hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:20250627
+```
+
+注：目前镜像基于vllm-0.7.3分支构建
+
+### 启动镜像命令
+
+假设您的NPU设备安装在/dev/davinci[0-3]上，并且您的NPU驱动程序安装在/usr/local/Ascend上：
+
+```shell
+docker run
+--name QWQ-32b
+--device /dev/davinci0
+--device=/dev/davinci1
+--device=/dev/davinci2
+--device=/dev/davinci3
+--device /dev/davinci_manager
+--device /dev/devmm_svm
+--device /dev/hisi_hdc
+--network host
+-v /usr/local/dcmi:/usr/local/dcmi
+-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi
+-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/
+-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info
+-v /etc/ascend_install.info:/etc/ascend_install.info
+-it mindspore_300iduo:20250627 /bin/bash
 ```
 
 ## 下载模型权重
