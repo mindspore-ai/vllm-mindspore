@@ -1,19 +1,34 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+# Copyright 2025 Huawei Technologies Co., Ltd
+# Copyright 2024 The vLLM team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 
 from typing import Dict, Tuple, List
 import gc
 import numpy as np
 import torch
 
-from mindspore import mutable
+from mindspore import mutable, ops
 import mindspore as ms
-from vllm_mindspore.v1.attention.backends.ms_attn import (MsAttentionMetadata,
-                                                          MsAttentionBackend,
-                                                          MLABackend)
-from vllm_mindspore.utils import get_valid_dtype
+from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetadata,
+                                                             FlashAttentionBackend,
+                                                             MLABackend)
+from vllm_mindspore.utils import get_valid_dtype, atlas_inference
 
-from vllm.v1.outputs import ModelRunnerOutput
-from vllm.attention import AttentionType
-from vllm.v1.kv_cache_interface import FullAttentionSpec, KVCacheSpec, SlidingWindowSpec
+from vllm.v1.kv_cache_interface import FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
 from vllm.distributed.parallel_state import get_pp_group
@@ -28,7 +43,7 @@ logger = init_logger(__name__)
 def _prepare_inputs(
     self,
     scheduler_output: "SchedulerOutput",
-) -> Tuple[MsAttentionMetadata, torch.Tensor]:
+) -> Tuple[FlashAttentionMetadata, torch.Tensor]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
@@ -126,8 +141,11 @@ def _prepare_inputs(
         num_scheduled_tokens)
 
     common_prefix_len = 0
-    # when common_prefix_len > 0 use cascade_attn,
-    # which is associated with device_properties.multi_processor_count(CUDA).
+    if self.cascade_attn_enabled:
+        common_prefix_len = self._compute_cascade_attn_prefix_len(
+            num_scheduled_tokens,
+            scheduler_output.num_common_prefix_blocks,
+        )
 
     attn_metadata = self.attn_metadata_builder.build(
         num_reqs=num_reqs,
@@ -168,9 +186,19 @@ def _prepare_inputs(
 
 
 def create_block(shape, dtype, name=None, device=None):
-    from mindspore import mint
-    blocks = mint.empty(shape, dtype=dtype, device=device)
+    from mindspore.ops.function.array_func import empty as empty_tensor
+    from mindspore.common.api import _pynative_executor
+    blocks = empty_tensor(*shape, dtype=dtype, device=device)
+    if device == "Ascend" and atlas_inference():
+        blocks_nz = ops.auto_generate.format_cast(blocks, 29)
+        _pynative_executor.sync()
+        import gc
+        del blocks
+        gc.collect()
+        ms.hal.empty_cache()
+        return blocks_nz
     return blocks
+
 
 def initialize_kv_cache(self, kv_cache_config) -> None:
     """
@@ -204,6 +232,9 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
                 kv_cache_shape = self.attn_backend.get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
                     kv_cache_spec.head_size)
+                if atlas_inference():
+                    *dims, second_last, last = kv_cache_shape
+                    kv_cache_shape = (*dims, second_last * last)
                 dtype = kv_cache_spec.dtype
                 dtype = get_valid_dtype(dtype)
                 current_cache = []
@@ -416,63 +447,3 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
 
     if batch_changed:
         self.input_batch.refresh_sampling_metadata()
-
-
-def wrapper_gpu_model_runner_execute_model(func):
-
-    def new_func(*args, **kwargs):
-        self = args[0]
-        try:
-            output = func(*args, **kwargs)
-            return output
-        except Exception as e:
-            logger.warning(
-                f"Caught exception {str(e)} when processing req_ids {self.input_batch.req_ids}"
-            )
-            return ModelRunnerOutput(
-                req_ids=self.input_batch.req_ids,
-                req_id_to_index=self.input_batch.req_id_to_index,
-                sampled_token_ids=None,
-                spec_token_ids=None,
-                logprobs=None,
-                prompt_logprobs_dict={},
-            )
-
-    return new_func
-
-
-def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
-    forward_ctx = self.vllm_config.compilation_config.static_forward_context
-    block_size = self.vllm_config.cache_config.block_size
-    use_mla = self.vllm_config.model_config.use_mla
-    kv_cache_spec: dict[str, KVCacheSpec] = {}
-    for layer_name, attn_module in forward_ctx.items():
-        # vllm-mindspore AttentionWrapper is not an Attention isinstance
-        # assert isinstance(attn_module, Attention)
-        if attn_module.attn_type == AttentionType.DECODER:
-            if attn_module.sliding_window is not None:
-                kv_cache_spec[layer_name] = SlidingWindowSpec(
-                    block_size=block_size,
-                    num_kv_heads=attn_module.num_kv_heads,
-                    head_size=attn_module.head_size,
-                    dtype=self.kv_cache_dtype,
-                    sliding_window=attn_module.sliding_window,
-                    use_mla=use_mla)
-            else:
-                kv_cache_spec[layer_name] = FullAttentionSpec(
-                    block_size=block_size,
-                    num_kv_heads=attn_module.num_kv_heads,
-                    head_size=attn_module.head_size,
-                    dtype=self.kv_cache_dtype,
-                    use_mla=use_mla)
-        elif attn_module.attn_type in (AttentionType.ENCODER,
-                                        AttentionType.ENCODER_ONLY):
-            # encoder-only attention does not need KV cache.
-            continue
-        elif attn_module.attn_type == AttentionType.ENCODER_DECODER:
-            raise NotImplementedError
-        else:
-            raise ValueError(
-                f"Unknown attention type: {attn_module.attn_type}")
-
-    return kv_cache_spec

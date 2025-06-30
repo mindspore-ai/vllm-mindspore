@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -16,12 +17,15 @@
 # ============================================================================
 """Ascend platform."""
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+import os
+from typing import (TYPE_CHECKING, Optional, Union, Tuple)
 
 import torch
-import vllm.envs as envs
+import mindspore as ms
+
+from vllm.platforms.interface import DeviceCapability, Platform, PlatformEnum, _Backend
 from vllm.logger import init_logger
-from vllm.platforms.interface import Platform, PlatformEnum, _Backend
+import vllm.envs as envs
 
 if TYPE_CHECKING:
     from vllm.config import ModelConfig, VllmConfig
@@ -36,14 +40,14 @@ class AscendPlatform(Platform):
 
     _enum = PlatformEnum.OOT
     device_name: str = "npu"
-    device_type: str = "cuda"  # To use cuda worker, executor...
+    device_type: str = "cuda" # To use cuda worker, executor...
     simple_compile_backend: str = "npu"
     ray_device_key: str = "NPU"
     device_control_env_var: str = "ASCEND_RT_VISIBLE_DEVICES"
 
     @classmethod
     def get_device_capability(cls, device_id: int = 0):
-        return True
+        return None
 
     @classmethod
     def has_device_capability(
@@ -65,34 +69,29 @@ class AscendPlatform(Platform):
 
     @classmethod
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
+        """
+        Check and update the configuration for the current platform.
+
+        It can raise an exception if the configuration is not compatible with
+        the current platform, or it can update the configuration to make it
+        compatible with the current platform.
+
+        The config is passed by reference, so it can be modified in place.
+        """
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
-        compilation_config = vllm_config.compilation_config
-        model_config = vllm_config.model_config
 
-        if parallel_config.worker_cls == "auto":
-            if scheduler_config.is_multi_step:
-                if envs.VLLM_USE_V1:
-                    raise NotImplementedError(
-                        "Multi-step scheduling is not supported (and not "
-                        "needed) on vLLM V1. Please launch without "
-                        "--num-scheduler-steps.")
-                else:
-                    parallel_config.worker_cls = \
-                        "vllm.worker.multi_step_worker.MultiStepWorker"
-            elif vllm_config.speculative_config:
-                if envs.VLLM_USE_V1:
-                    parallel_config.worker_cls = \
-                            "vllm.v1.worker.gpu_worker.Worker"
-                else:
-                    parallel_config.worker_cls = \
-                        "vllm.spec_decode.spec_decode_worker.create_spec_worker"
-                    parallel_config.sd_worker_cls = \
-                        "vllm.worker.worker.Worker"
-            else:
-                if envs.VLLM_USE_V1:
-                    parallel_config.worker_cls = \
-                            "vllm.v1.worker.gpu_worker.Worker"
+        import vllm.envs as envs
+        if envs.VLLM_USE_V1:
+            parallel_config.worker_cls = \
+                "vllm.v1.worker.gpu_worker.Worker"
+        else:
+            if parallel_config.worker_cls == "auto":
+                if scheduler_config.is_multi_step:
+                    parallel_config.worker_cls = "vllm.worker.multi_step_worker.MultiStepWorker"
+                elif vllm_config.speculative_config:
+                    parallel_config.worker_cls = "vllm.spec_decode.spec_decode_worker.create_spec_worker"
+                    parallel_config.sd_worker_cls = "vllm.worker.worker.Worker"
                 else:
                     parallel_config.worker_cls = "vllm.worker.worker.Worker"
 
@@ -104,13 +103,12 @@ class AscendPlatform(Platform):
         model_config.disable_cascade_attn = True
 
     @classmethod
-    def get_attn_backend_cls(cls, selected_backend, head_size, dtype,
-                             kv_cache_dtype, block_size, use_v1, use_mla):
+    def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
         """Get the attention backend class of a device."""
         if use_v1:
             if use_mla:
-                return "vllm_mindspore.v1.attention.backends.ms_attn.MLABackend"
-            return "vllm_mindspore.v1.attention.backends.ms_attn.MsAttentionBackend"
+                return "vllm_mindspore.v1.attention.backends.flash_attn.MLABackend"
+            return "vllm_mindspore.v1.attention.backends.flash_attn.FlashAttentionBackend"
             raise RuntimeError("vLLM-MindSpore do not support v1 egine now!")
         if use_mla:
             logger.info("Using MindSpore MLA backend.")
@@ -121,13 +119,12 @@ class AscendPlatform(Platform):
             return "vllm_mindspore.attention.backends.ms_attn.MsAttentionBackend"
 
         raise ValueError(
-            f"Invalid attention backend {str(selected_backend)} for vLLM-MindSpore with head_size: {str(head_size)}, dtype: {str(dtype)}, kv_cache_dtype: {str(kv_cache_dtype)}, block_size: {str(block_size)}."
+            "Invaild attention backend %s for vLLM-MindSpore with head_size: %s, dtype: %s, kv_cache_dtype: %s, block_size: %s."
+            % (str(selected_backend), str(head_size), str(dtype), str(kv_cache_dtype), str(block_size))
         )
 
     @classmethod
-    def get_current_memory_usage(cls,
-                                 device: Optional[torch.types.Device] = None
-                                 ) -> float:
+    def get_current_memory_usage(cls, device: Optional[torch.types.Device] = None) -> float:
         """Return the memory usage in bytes."""
         torch.cuda.reset_peak_memory_stats()
         return torch.cuda.max_memory_allocated(device)
@@ -148,6 +145,3 @@ class AscendPlatform(Platform):
     @classmethod
     def supports_v1(cls, model_config: ModelConfig) -> bool:
         return True
-
-    def get_punica_wrapper(cls) -> str:
-        return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"
