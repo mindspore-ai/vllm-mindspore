@@ -32,10 +32,10 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.distributed.communication_op import ReduceFromModelParallelRegion
+from vllm_mindspore.utils import atlas_inference
 from mindspore import jit
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
-
 
 class UnquantizedEmbeddingMethod(QuantizeMethodBase):
     """Unquantized method for embeddings."""

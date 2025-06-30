@@ -38,6 +38,8 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
 )
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.distributed.communication_op import ReduceFromModelParallelRegion
+from vllm_mindspore.utils import atlas_inference
+from mindspore.ops.auto_generate import GroupedMatmulV4
 
 
 WEIGHT_LOADER_V2_SUPPORTED = [
@@ -72,6 +74,8 @@ class LinearMethodBase(QuantizeMethodBase):
         input_size: int,
         output_size: int,
         params_dtype,
+        is_group_mm=False,
+        expert_num_per_partition=1,
         **extra_weight_attrs
     ):
         """Create weights for a linear layer.
@@ -109,31 +113,51 @@ class UnquantizedLinearMethod(LinearMethodBase):
         input_size: int,
         output_size: int,
         params_dtype,
+        is_group_mm=False,
+        expert_num_per_partition=1,
         **extra_weight_attrs
     ):
-        weight = Parameter(
-            mint.zeros(
-                (int(sum(output_partition_sizes)), int(input_size_per_partition)),
-                dtype=params_dtype,
-            ),
-            requires_grad=False,
-        )
         self.input_size_per_partition = int(input_size_per_partition)
         self.output_size_per_partition = int(sum(output_partition_sizes))
-        set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
-        # layer.register_parameter("weight", weight)
-        layer.insert_param_to_cell("weight", weight)
-        set_weight_attrs(weight, extra_weight_attrs)
-        self.matmul = ops.MatMul(transpose_b=True)
         self.bias_add = ops.Add()
+        self.is_group_mm = is_group_mm
+        self.gmm_transpose = False
+        if self.is_group_mm:
+            weight = Parameter(
+                mint.zeros(
+                    (expert_num_per_partition, int(input_size_per_partition),  (int(sum(output_partition_sizes)))),
+                    dtype=params_dtype,
+                ),requires_grad=False)
+            set_weight_attrs(weight, {"ep_dim":0, "input_dim": 1, "output_dim": 2})
+            # layer.register_parameter("weight", weight)
+            layer.insert_param_to_cell("weight", weight)
+            set_weight_attrs(weight, extra_weight_attrs)
+            self.matmul = GroupedMatmulV4()
+        else:
+            weight = Parameter(
+                mint.zeros(
+                    (int(sum(output_partition_sizes)), int(input_size_per_partition)),
+                    dtype=params_dtype,
+                ),
+                requires_grad=False,
+            )
+            set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
+            # layer.register_parameter("weight", weight)
+            layer.insert_param_to_cell("weight", weight)
+            set_weight_attrs(weight, extra_weight_attrs)
+            self.matmul = ops.MatMul(transpose_b=True)
 
     def apply(self,
               layer: ms.nn.Cell,
               x: Tensor,
-              bias: Parameter = None):
+              bias: Parameter = None, group_list=None, cumsum_flag=False):
         output_shape = x.shape[:-1] + (self.output_size_per_partition,)
         x = x.reshape(-1, self.input_size_per_partition)
-        x = self.matmul(x, layer.weight)
+        if self.is_group_mm:
+            x = self.matmul([x], [layer.weight], None, None, None, None, None, None,
+                            group_list, split_item=3, group_type=0, group_list_type=0 if cumsum_flag else 1)[0]
+        else:
+            x = self.matmul(x, layer.weight)
         if bias is not None:
             x = self.bias_add(x, bias)
         x = x.reshape(output_shape)
@@ -389,10 +413,15 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if not use_bitsandbytes_4bit:
                 loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
             assert param_data.shape == loaded_weight.shape
-            # param_data.copy_(loaded_weight)
-            # param_data.set_data(loaded_weight)
-            param[shard_offset: shard_offset + shard_size, :] = loaded_weight
-
+            if len(loaded_weight.shape) == 2:
+                param[shard_offset: shard_offset + shard_size, :] = loaded_weight
+            else:
+                param[shard_offset: shard_offset + shard_size] = loaded_weight
+        else:
+            assert param.shape == loaded_weight.shape
+            if loaded_weight.dtype == ms.float32 and param.dtype == ms.float16:
+                loaded_weight = loaded_weight.astype(ms.float16)
+            param.set_data(loaded_weight.contiguous())
 
 class QKVParallelLinear(ColumnParallelLinear):
     def __init__(
@@ -448,6 +477,11 @@ class QKVParallelLinear(ColumnParallelLinear):
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id):
         output_dim = getattr(param, "output_dim", None)
+        if output_dim == None:
+            if loaded_weight.dtype == ms.float32 and param.dtype == ms.float16:
+                loaded_weight = loaded_weight.astype(ms.float16)
+            param.set_data(loaded_weight.contiguous())
+            return
         tp_rank = get_tensor_model_parallel_rank()
         assert loaded_shard_id in ["q", "k", "v"]
         use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
@@ -475,10 +509,10 @@ class QKVParallelLinear(ColumnParallelLinear):
             if not use_bitsandbytes_4bit:
                 loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
             assert param_data.shape == loaded_weight.shape
-            if param.name.endswith("weight"):
-                self.weight[shard_offset: shard_offset + shard_size, :] = loaded_weight
-            if param.name.endswith("bias"):
-                self.bias[shard_offset: shard_offset + shard_size] = loaded_weight
+            if len(loaded_weight.shape) == 2:
+                param[shard_offset: shard_offset + shard_size, :] = loaded_weight
+            else:
+                param[shard_offset: shard_offset + shard_size] = loaded_weight
         # tp_rank = get_tensor_model_parallel_rank()
         # if shard_id is "q":
         #     start_index = self.num_heads * tp_rank * self.head_size
@@ -587,6 +621,7 @@ class RowParallelLinear(LinearBase):
 
     def weight_loader(self, param, loaded_weight):
         tp_rank = get_tensor_model_parallel_rank()
+        param_data = param.data
         input_dim = getattr(param, "input_dim", None)
         use_bitsandbytes_4bit = getattr(param, "use_bitsandbytes_4bit", False)
         is_sharded_weight = getattr(param, "is_sharded_weight", False)
@@ -607,6 +642,5 @@ class RowParallelLinear(LinearBase):
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        # param_data.copy_(loaded_weight)
+        param_data.copy_(loaded_weight)
         # self.weight[:, start_idx : start_idx + shard_size] = loaded_weight
-        param.set_data(loaded_weight.contiguous())

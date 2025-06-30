@@ -18,16 +18,26 @@
 """CacheEngine class for managing the KV cache."""
 
 import mindspore as ms
-from mindspore import mutable, mint
+from mindspore import mutable, mint, ops
 from typing import List
 from vllm.logger import init_logger
-from vllm_mindspore.utils import MsKVCache, get_valid_dtype
+from vllm_mindspore.utils import MsKVCache, get_valid_dtype, atlas_inference
 
 logger = init_logger(__name__)
 
 
 def create_block(shape, dtype, name=None, device=None):
-    blocks = mint.empty(shape, dtype=dtype, device=device)
+    from mindspore.ops.function.array_func import empty as empty_tensor
+    from mindspore.common.api import _pynative_executor
+    blocks = empty_tensor(*shape, dtype=dtype, device=device)
+    if device == "Ascend" and atlas_inference():
+        blocks_nz = ops.auto_generate.format_cast(blocks, 29)
+        _pynative_executor.sync()
+        import gc
+        del blocks
+        gc.collect()
+        ms.hal.empty_cache()
+        return blocks_nz
     return blocks
 
 
@@ -39,6 +49,9 @@ def ms_allocate_kv_cache(
     """Allocates KV cache on the specified device."""
     kv_cache_shape = self.attn_backend.get_kv_cache_shape(
         num_blocks, self.block_size, self.num_kv_heads, self.head_size)
+    if atlas_inference():
+        *dims, second_last, last = kv_cache_shape
+        kv_cache_shape = (*dims, second_last * last)
     kv_cache: List[MsKVCache] = []
 
     self.dtype = get_valid_dtype(self.dtype)

@@ -28,6 +28,7 @@ from vllm_mindspore.utils import (is_mindformers_model_backend,
 _MINDSPORE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "PanguProMoEForCausalLM": ("pangu_pro_moe", "PanguProMoEForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {

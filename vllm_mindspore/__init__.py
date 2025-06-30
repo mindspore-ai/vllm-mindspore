@@ -55,6 +55,10 @@ import vllm.engine.arg_utils
 from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = _is_v1_supported_oracle
 
+from vllm_mindspore.engine.arg_utils import add_cli_args
+
+vllm.engine.arg_utils.EngineArgs.add_cli_args = add_cli_args
+
 import vllm.v1.engine.core
 from vllm_mindspore.v1.engine.core import shutdown
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
@@ -107,6 +111,10 @@ vllm.model_executor.model_loader.utils.get_model_architecture = (
 vllm.model_executor.model_loader.loader.get_model_architecture = (
     get_ms_model_architecture
 )
+
+from vllm_mindspore.model_executor.model_loader.loader import _process_weights_after_loading
+
+vllm.model_executor.model_loader.loader._process_weights_after_loading = _process_weights_after_loading
 
 from vllm_mindspore.model_executor.sampling_metadata import (
     SequenceGroupToSample,
@@ -245,6 +253,16 @@ RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(RejectionSampler, '_smallest_positive_value')
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
+import vllm.distributed.communication_op
+import vllm.worker.worker_base
+from vllm_mindspore.distributed.communication_op import cpu_broadcast_tensor_dict
+vllm.distributed.communication_op.broadcast_tensor_dict = cpu_broadcast_tensor_dict
+vllm.worker.worker_base.broadcast_tensor_dict = cpu_broadcast_tensor_dict
+
+import vllm.distributed.parallel_state
+from vllm_mindspore.distributed.parallel_state import gc_broadcast_tensor_dict
+vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = gc_broadcast_tensor_dict
+
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor
 from vllm.inputs.registry import InputProcessingContext
@@ -339,4 +357,17 @@ from vllm_mindspore.engine.multiprocessing.engine import cleanup
 import vllm.engine.multiprocessing.engine
 vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
 
+from vllm.config import CacheConfig
+from vllm_mindspore.config import _verify_cache_dtype
+CacheConfig._verify_cache_dtype = _verify_cache_dtype
+
 check_ready()
+
+from vllm_mindspore.model_executor.layers.quantization import get_quantization_config
+vllm.model_executor.layers.quantization.get_quantization_config = get_quantization_config
+vllm.config.get_quantization_config = get_quantization_config
+vllm.model_executor.model_loader.weight_utils.get_quantization_config = get_quantization_config
+
+from vllm_mindspore.model_executor.model_loader.weight_utils import get_quant_config
+vllm.model_executor.model_loader.weight_utils.get_quant_config = get_quant_config
+vllm.config.get_quant_config = get_quant_config

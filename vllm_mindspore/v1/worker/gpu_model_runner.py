@@ -1,15 +1,32 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+# Copyright 2025 Huawei Technologies Co., Ltd
+# Copyright 2024 The vLLM team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 
 from typing import Dict, Tuple, List
 import gc
 import numpy as np
 import torch
 
-from mindspore import mutable
+from mindspore import mutable, ops
 import mindspore as ms
 from vllm_mindspore.v1.attention.backends.flash_attn import (FlashAttentionMetadata,
                                                              FlashAttentionBackend,
                                                              MLABackend)
-from vllm_mindspore.utils import get_valid_dtype
+from vllm_mindspore.utils import get_valid_dtype, atlas_inference
 
 from vllm.v1.kv_cache_interface import FullAttentionSpec
 from vllm.v1.utils import bind_kv_cache
@@ -169,9 +186,19 @@ def _prepare_inputs(
 
 
 def create_block(shape, dtype, name=None, device=None):
-    from mindspore import mint
-    blocks = mint.empty(shape, dtype=dtype, device=device)
+    from mindspore.ops.function.array_func import empty as empty_tensor
+    from mindspore.common.api import _pynative_executor
+    blocks = empty_tensor(*shape, dtype=dtype, device=device)
+    if device == "Ascend" and atlas_inference():
+        blocks_nz = ops.auto_generate.format_cast(blocks, 29)
+        _pynative_executor.sync()
+        import gc
+        del blocks
+        gc.collect()
+        ms.hal.empty_cache()
+        return blocks_nz
     return blocks
+
 
 def initialize_kv_cache(self, kv_cache_config) -> None:
     """
@@ -205,6 +232,9 @@ def initialize_kv_cache(self, kv_cache_config) -> None:
                 kv_cache_shape = self.attn_backend.get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
                     kv_cache_spec.head_size)
+                if atlas_inference():
+                    *dims, second_last, last = kv_cache_shape
+                    kv_cache_shape = (*dims, second_last * last)
                 dtype = kv_cache_spec.dtype
                 dtype = get_valid_dtype(dtype)
                 current_cache = []
