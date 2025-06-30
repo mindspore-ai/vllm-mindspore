@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -18,68 +17,62 @@
 
 import os
 from abc import abstractmethod
-from typing import Iterable, List, Optional, Set, Tuple, Union, Dict
+from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
+import torch
+from mindspore import Tensor, mutable, nn
+from vllm.attention.backends.abstract import AttentionType
+from vllm.attention.layer import Attention
 from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
-from vllm.attention.backends.abstract import AttentionType
-from vllm.forward_context import get_forward_context
-from vllm.attention.layer import Attention
-
-import torch
-
-from mindspore import Tensor, nn, mutable
 
 
 class Fake_Attention:
+
     def __init__(self):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
-            vllm_config.parallel_config
-        )
+            vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
         self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [
-            (
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        self.kv_cache = [(
+            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
+            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
+        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
         self.attn_type = AttentionType.DECODER
 
 
 class Fake_MLA(Fake_Attention):
+
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
+            (torch.zeros(self.kv_shape, dtype=torch.bfloat16,
+                         device="Ascend"), )
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
 
 class Fake_Attention_V1(Attention):
+
     def __init__(self):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
-            vllm_config.parallel_config
-        )
+            vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
         self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [
-            (
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        self.kv_cache = [(
+            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
+            torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
+        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
         self.attn_type = AttentionType.DECODER
         self.num_block = num_block
         self.num_kv_heads = num_kv_heads
@@ -90,18 +83,21 @@ class Fake_Attention_V1(Attention):
 
 
 class Fake_MLA_V1(Fake_Attention_V1):
+
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
+            (torch.zeros(self.kv_shape, dtype=torch.bfloat16,
+                         device="Ascend"), )
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
 
-class MsModelBase():
+class MsModelBase:
+
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
-        super(MsModelBase, self).__init__()
+        super().__init__()
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
@@ -125,7 +121,8 @@ class MsModelBase():
         if os.path.isdir(model_name_or_path):
             return model_name_or_path
         else:
-            from vllm.model_executor.model_loader.weight_utils import download_weights_from_hf
+            from vllm.model_executor.model_loader.weight_utils import \
+                download_weights_from_hf
             allow_patterns = ["*.safetensors"]
             revision = self.model_config.revision
             return download_weights_from_hf(
@@ -171,15 +168,24 @@ class MsModelBase():
     def named_modules(self, remove_duplicate: bool = True):
         self._check_modules_valid()
 
-        res_modules = set()
         for name, module in self.modules_dict.items():
             for module_name, sub_module in module.cells_and_names():
                 if name != "self":
                     module_name = name + "." + module_name
                 yield module_name, sub_module
 
-    def get_submodule(self):
-        raise RuntimeError("Cannot get submodule for mindspore model now!")
+    def get_submodule(self, target: str):
+        parts = target.split(".")
+        if target == "":
+            return self
+        for part in parts:
+            if not part:
+                raise ValueError(
+                    f"Invalid submodule path: empty part in '{target}'")
+        current = self
+        for part in parts:
+            current = getattr(current, part)
+        return current
 
     def eval(self):
         self._check_modules_valid()
@@ -198,23 +204,19 @@ class MsModelBase():
         previous_hidden_states: Optional[Tensor] = None,
         spec_step_idx: int = 0,
     ) -> Union[Tensor, IntermediateTensors]:
-        return self.forward(
-            input_ids,
-            positions,
-            intermediate_tensors,
-            inputs_embeds,
-            previous_hidden_states=previous_hidden_states,
-            spec_step_idx=spec_step_idx
-        )
+        return self.forward(input_ids,
+                            positions,
+                            intermediate_tensors,
+                            inputs_embeds,
+                            previous_hidden_states=previous_hidden_states,
+                            spec_step_idx=spec_step_idx)
 
-    def forward(
-        self,
-        input_ids: Tensor,
-        positions: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
-        inputs_embeds: Optional[Tensor] = None,
-        **kwargs
-    ) -> Union[Tensor, IntermediateTensors]:
+    def forward(self,
+                input_ids: Tensor,
+                positions: Tensor,
+                intermediate_tensors: Optional[IntermediateTensors] = None,
+                inputs_embeds: Optional[Tensor] = None,
+                **kwargs) -> Union[Tensor, IntermediateTensors]:
         raise NotImplementedError
 
     def set_model_inputs(self, is_prefill):
@@ -264,8 +266,10 @@ class MsModelBase():
         value_cache = []
         forward_context = get_forward_context()
         for i in range(self.config.num_hidden_layers):
-            k_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
-            v_cache = self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+            k_cache = self.kv_caches[i].kv_cache[
+                forward_context.virtual_engine][0]
+            v_cache = self.kv_caches[i].kv_cache[
+                forward_context.virtual_engine][1]
             key_cache.append(k_cache)
             value_cache.append(v_cache)
         return mutable(key_cache), mutable(value_cache)
@@ -276,7 +280,8 @@ class MsModelBase():
         hidden_states: Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        raise NotImplementedError("Function compute_logits should be Implemented!")
+        raise NotImplementedError(
+            "Function compute_logits should be Implemented!")
 
     @abstractmethod
     def sample(
@@ -288,4 +293,5 @@ class MsModelBase():
 
     @abstractmethod
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        raise NotImplementedError("Function load_weights should be Implemented!")
+        raise NotImplementedError(
+            "Function load_weights should be Implemented!")

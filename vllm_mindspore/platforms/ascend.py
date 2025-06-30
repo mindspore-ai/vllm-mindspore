@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -17,15 +16,12 @@
 # ============================================================================
 """Ascend platform."""
 
-import os
-from typing import (TYPE_CHECKING, Optional, Union, Tuple)
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import torch
-import mindspore as ms
-
-from vllm.platforms.interface import DeviceCapability, Platform, PlatformEnum, _Backend
-from vllm.logger import init_logger
 import vllm.envs as envs
+from vllm.logger import init_logger
+from vllm.platforms.interface import Platform, PlatformEnum, _Backend
 
 if TYPE_CHECKING:
     from vllm.config import ModelConfig, VllmConfig
@@ -40,7 +36,7 @@ class AscendPlatform(Platform):
 
     _enum = PlatformEnum.OOT
     device_name: str = "npu"
-    device_type: str = "cuda" # To use cuda worker, executor...
+    device_type: str = "cuda"  # To use cuda worker, executor...
     simple_compile_backend: str = "npu"
     ray_device_key: str = "NPU"
     device_control_env_var: str = "ASCEND_RT_VISIBLE_DEVICES"
@@ -103,7 +99,8 @@ class AscendPlatform(Platform):
         model_config.disable_cascade_attn = True
 
     @classmethod
-    def get_attn_backend_cls(cls, selected_backend, head_size, dtype, kv_cache_dtype, block_size, use_v1, use_mla):
+    def get_attn_backend_cls(cls, selected_backend, head_size, dtype,
+                             kv_cache_dtype, block_size, use_v1, use_mla):
         """Get the attention backend class of a device."""
         if use_v1:
             if use_mla:
@@ -119,12 +116,13 @@ class AscendPlatform(Platform):
             return "vllm_mindspore.attention.backends.ms_attn.MsAttentionBackend"
 
         raise ValueError(
-            "Invaild attention backend %s for vLLM-MindSpore with head_size: %s, dtype: %s, kv_cache_dtype: %s, block_size: %s."
-            % (str(selected_backend), str(head_size), str(dtype), str(kv_cache_dtype), str(block_size))
+            f"Invalid attention backend {str(selected_backend)} for vLLM-MindSpore with head_size: {str(head_size)}, dtype: {str(dtype)}, kv_cache_dtype: {str(kv_cache_dtype)}, block_size: {str(block_size)}."
         )
 
     @classmethod
-    def get_current_memory_usage(cls, device: Optional[torch.types.Device] = None) -> float:
+    def get_current_memory_usage(cls,
+                                 device: Optional[torch.types.Device] = None
+                                 ) -> float:
         """Return the memory usage in bytes."""
         torch.cuda.reset_peak_memory_stats()
         return torch.cuda.max_memory_allocated(device)
@@ -145,3 +143,6 @@ class AscendPlatform(Platform):
     @classmethod
     def supports_v1(cls, model_config: ModelConfig) -> bool:
         return True
+
+    def get_punica_wrapper(cls) -> str:
+        return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"

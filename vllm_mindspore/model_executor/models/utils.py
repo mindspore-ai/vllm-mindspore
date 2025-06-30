@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -18,9 +17,11 @@
 
 from dataclasses import dataclass, field
 from typing import List, Tuple, Union, Mapping, Optional, Iterable
+from functools import wraps
+from typing import List, Tuple
 
 import mindspore as ms
-from mindspore import mint
+from mindspore import jit, mint
 from mindspore import ops
 
 from vllm.sequence import IntermediateTensors
@@ -70,6 +71,7 @@ class WeightsMapper:
     ) -> Iterable[Tuple[str, ms.Tensor]]:
         return ((out_name, data) for name, data in weights
                 if (out_name := self._map_name(name)) is not None)
+enforce_eager = False
 
 class PPMissingLayer(ms.nn.Cell):
     """
@@ -117,9 +119,8 @@ def extract_layer_index(layer_name: str) -> int:
             int_vals.append(int(subname))
         except ValueError:
             continue
-    assert len(int_vals) == 1, (
-        f"layer name {layer_name} should" " only contain one integer"
-    )
+    assert len(int_vals) == 1, (f"layer name {layer_name} should"
+                                " only contain one integer")
     return int_vals[0]
 
 
@@ -134,17 +135,13 @@ def make_layers(
     from vllm.distributed.parallel_state import get_pp_group
     from vllm.distributed.utils import get_pp_indices
 
-    start_layer, end_layer = get_pp_indices(
-        num_hidden_layers, get_pp_group().rank_in_group, get_pp_group().world_size
-    )
-    modules = ms.nn.CellList(
-        [PPMissingLayer() for _ in range(start_layer)]
-        + [
-            maybe_offload_to_cpu(layer_fn(prefix=f"{prefix}.{idx}"))
-            for idx in range(start_layer, end_layer)
-        ]
-        + [PPMissingLayer() for _ in range(end_layer, num_hidden_layers)]
-    )
+    start_layer, end_layer = get_pp_indices(num_hidden_layers,
+                                            get_pp_group().rank_in_group,
+                                            get_pp_group().world_size)
+    modules = ms.nn.CellList([PPMissingLayer() for _ in range(start_layer)] + [
+        maybe_offload_to_cpu(layer_fn(prefix=f"{prefix}.{idx}"))
+        for idx in range(start_layer, end_layer)
+    ] + [PPMissingLayer() for _ in range(end_layer, num_hidden_layers)])
     return start_layer, end_layer, modules
 
 
@@ -156,9 +153,10 @@ def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
         device,
     ) -> IntermediateTensors:
         dtype = get_valid_dtype(dtype)
-        return IntermediateTensors(
-            {key: mint.zeros((batch_size, hidden_size), dtype=dtype) for key in keys}
-        )
+        return IntermediateTensors({
+            key: mint.zeros((batch_size, hidden_size), dtype=dtype)
+            for key in keys
+        })
 
     return make_empty_intermediate_tensors
 
@@ -263,3 +261,27 @@ def merge_multimodal_embeddings(
         (input_ids == placeholder_token_id),
         multimodal_embeddings,
     )
+def set_enforce_eager(value):
+    """
+    set global variable enforce_eager to value.
+    """
+    global enforce_eager
+    enforce_eager = value
+
+
+def _jit(func):
+    """
+    A decorator to apply JIT compilation to a function or method.
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if enforce_eager:
+            # If enforce_eager is True, we do not apply JIT compilation.
+            return func(*args, **kwargs)
+        if hasattr(func, "__wrapped_by_jit__"):
+            # If the function is already wrapped by JIT, we call it directly.
+            return func(*args, **kwargs)
+        return jit(func, jit_level="O0", infer_boost="on")(*args, **kwargs)
+
+    return wrapper
