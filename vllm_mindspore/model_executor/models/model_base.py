@@ -30,11 +30,12 @@ from vllm.attention.layer import Attention
 
 import torch
 
-from mindspore import Tensor, nn, mutable
+from mindspore import Tensor, nn, mutable, ops
+from vllm_mindspore.utils import atlas_inference
 
 
 class Fake_Attention:
-    def __init__(self):
+    def __init__(self, kv_cache_dtype):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
@@ -42,14 +43,35 @@ class Fake_Attention:
         )
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [
-            (
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        if atlas_inference():
+            self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        torch.zeros(
+                            self.kv_shape, dtype=kv_cache_dtype, device="Ascend"
+                        ),
+                        29,
+                    ),
+                    ops.auto_generate.format_cast(
+                        torch.zeros(
+                            self.kv_shape, dtype=kv_cache_dtype, device="Ascend"
+                        ),
+                        29,
+                    ),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
+            self.kv_cache = [
+                (
+                    torch.zeros(self.kv_shape, dtype=kv_cache_dtype, device="Ascend"),
+                    torch.zeros(self.kv_shape, dtype=kv_cache_dtype, device="Ascend"),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+
         self.attn_type = AttentionType.DECODER
 
 
@@ -58,13 +80,14 @@ class Fake_MLA(Fake_Attention):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
+            (torch.zeros(self.kv_shape, dtype=torch.float16 if atlas_inference()
+                         else torch.bfloat16, device="Ascend"),)
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
 
 class Fake_Attention_V1(Attention):
-    def __init__(self):
+    def __init__(self, kv_cache_dtype):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
@@ -72,19 +95,40 @@ class Fake_Attention_V1(Attention):
         )
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [
-            (
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-                torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),
-            )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        if atlas_inference():
+            self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        torch.zeros(
+                            self.kv_shape, dtype=kv_cache_dtype, device="Ascend"
+                        ),
+                        29,
+                    ),
+                    ops.auto_generate.format_cast(
+                        torch.zeros(
+                            self.kv_shape, dtype=kv_cache_dtype, device="Ascend"
+                        ),
+                        29,
+                    ),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
+            self.kv_cache = [
+                (
+                    torch.zeros(self.kv_shape, dtype=kv_cache_dtype, device="Ascend"),
+                    torch.zeros(self.kv_shape, dtype=kv_cache_dtype, device="Ascend"),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+
         self.attn_type = AttentionType.DECODER
         self.num_block = num_block
         self.num_kv_heads = num_kv_heads
         self.head_size = head_size
-        self.dtype = vllm_config.model_config.dtype
+        self.dtype = kv_cache_dtype
         self.block_size = block_size
         self.sliding_window = None
 
@@ -94,7 +138,8 @@ class Fake_MLA_V1(Fake_Attention_V1):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (torch.zeros(self.kv_shape, dtype=torch.bfloat16, device="Ascend"),)
+            (torch.zeros(self.kv_shape, dtype=torch.float16 if atlas_inference()
+                         else torch.bfloat16, device="Ascend"),)
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
@@ -112,7 +157,7 @@ class MsModelBase():
         self.parallel_config = vllm_config.parallel_config
         self.load_config = vllm_config.load_config
         self.scheduler_config = vllm_config.scheduler_config
-
+        self.additional_config = vllm_config.additional_config
         self.modules_dict = None
 
         self.enable_chunked_prefill = vllm_config.scheduler_config.enable_chunked_prefill
@@ -201,8 +246,8 @@ class MsModelBase():
         return self.forward(
             input_ids,
             positions,
-            intermediate_tensors,
-            inputs_embeds,
+            intermediate_tensors=intermediate_tensors,
+            inputs_embeds=inputs_embeds,
             previous_hidden_states=previous_hidden_states,
             spec_step_idx=spec_step_idx
         )

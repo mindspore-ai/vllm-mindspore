@@ -143,9 +143,12 @@ class InferRotaryEmbedding(CustomOp):
         max_position_embeddings: int,
         base: int,
         is_neox_style: bool,
-        dtype,
+        dtype: mstype,
+        use_pfa: bool=False,
     ) -> None:
         super().__init__()
+        self.use_pfa = use_pfa
+        self.rotary_dim = rotary_dim
         freqs_base = np.arange(0, rotary_dim, 2)[: (rotary_dim // 2)].astype(np.float32)  # (head_dim // 2, )
         freqs = 1.0 / (base ** (freqs_base / rotary_dim))  # (head_dim // 2, )
         mscale = 1.0
@@ -160,6 +163,8 @@ class InferRotaryEmbedding(CustomOp):
         self.freqs_sin = Tensor(freqs_sin, dtype=dtype)
         self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
         self.gather = ops.Gather()
+        self.slice = ops.StridedSlice()
+        self.tile = ops.Tile()
 
     def forward_native(
         self,
@@ -171,10 +176,21 @@ class InferRotaryEmbedding(CustomOp):
         offsets: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
         if is_prefill:
-            return self.rotary_embedding_op(query, key, self.freqs_cos, self.freqs_sin, batch_valid_length)
+            if self.use_pfa:
+                batch_size, seq_length, _ = query.shape
+                freqs_cos = self.tile(self.slice(
+                    self.freqs_cos, (0, 0), (seq_length, self.rotary_dim), (1, 1)), (batch_size, 1))
+                freqs_sin = self.tile(self.slice(
+                    self.freqs_sin, (0, 0), (seq_length, self.rotary_dim), (1, 1)), (batch_size, 1))
+            else:
+                freqs_cos = self.freqs_cos
+                freqs_sin = self.freqs_sin
+        else:
+            freqs_cos = self.gather(self.freqs_cos, positions, 0)
+            freqs_sin = self.gather(self.freqs_sin, positions, 0)
 
-        freqs_cos = self.gather(self.freqs_cos, positions, 0)
-        freqs_sin = self.gather(self.freqs_sin, positions, 0)
+        query = query.contiguous()
+        key = key.contiguous()
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin, batch_valid_length)
 
 
@@ -366,7 +382,7 @@ class MRotaryEmbedding(RotaryEmbedding):
                 (llm_grid_t, -1, llm_grid_w)).flatten().int()
             w_index = ops.arange(llm_grid_w).view(1, 1, -1).broadcast_to(
                 (llm_grid_t, llm_grid_h, -1)).flatten().int()
-            
+
             llm_pos_ids_list.append(
                 ops.stack([t_index, h_index, w_index]) + text_len + st_idx)
             st = ed + llm_grid_t * llm_grid_h * llm_grid_w
@@ -525,6 +541,7 @@ def get_rope(
     rope_scaling: Optional[Dict[str, Any]] = None,
     dtype: Optional[Any] = mstype.float16,
     partial_rotary_factor: float = 1.0,
+    use_pfa: bool = False,
 ) -> InferRotaryEmbedding:
     if rope_scaling is not None:
         # Transforms every value that is a list into a tuple for caching calls
@@ -550,6 +567,7 @@ def get_rope(
             base,
             is_neox_style,
             dtype,
+            use_pfa
         )
     else:
         scaling_type = rope_scaling["rope_type"]

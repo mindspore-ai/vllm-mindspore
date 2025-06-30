@@ -52,6 +52,7 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8": ms.uint8,
     "fp8_e4m3": ms.uint8,
     "fp8_e5m2": ms.uint8,
+    "int8": ms.int8,
 }
 
 
@@ -140,6 +141,7 @@ STR_DTYPE_TO_TENSOR_DTYPE = {
     "fp8": torch.uint8,
     "fp8_e4m3": torch.uint8,
     "fp8_e5m2": torch.uint8,
+    "int8": ms.int8,
 }
 
 STR_DTYPE_TO_MS_DTYPE = {
@@ -150,6 +152,7 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8": mstype.uint8,
     "fp8_e4m3": mstype.uint8,
     "fp8_e5m2": mstype.uint8,
+    "int8": ms.int8,
 }
 
 
@@ -213,40 +216,6 @@ def is_mindone_model_backend():
     return (os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
             and os.environ["vLLM_MODEL_BACKEND"] == "MindONE"  # noqa: SIM112
             )
-
-
-def check_ready():
-    import vllm.envs as envs
-    from mindspore import set_context
-
-
-    # Common environment variables of predict.
-    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
-    default_env = {
-        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
-        "FlashAttentionScore,PagedAttention",
-    }
-    env_setup(default_env)
-
-    if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
-        set_context(
-            mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
-
-    if is_mindformers_model_backend():
-        logger.info("Run with Mindformers backend!")
-        necessary_envs = ("MINDFORMERS_MODEL_CONFIG", )
-        lost_envs = [
-            env_item for env_item in necessary_envs if not os.getenv(env_item)
-        ]
-
-        if lost_envs:
-            raise RuntimeError(
-                f'For "MindFormers" model backend, environments {str(lost_envs)} should be set!'
-            )
-    elif is_mindone_model_backend():
-        logger.info("Run with MindONE backend!")
-    else:
-        logger.info("Run with native model backend!")
 
 
 def convert_np_to_ms_dtype(value):
@@ -350,3 +319,77 @@ def ms_memory_profiling(
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp
     result.non_kv_cache_memory = result.non_torch_increase + result.torch_peak_increase + result.weights_memory  # noqa
+
+
+def is_version_ge(current_version, base_version):
+    """
+        return current_version >= base_version.
+        Check whether the current version is higher than or equal to the base version.
+        for current_version: 1.8.1, base_version: 1.11.0, it return False.
+    """
+    version_split_char = '.'
+    if version_split_char not in base_version or version_split_char not in current_version:
+        raise ValueError("The version string will contain the `.`."
+                         "For example, current_version 1.8.1， base_version: 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char), base_version.split(version_split_char)):
+        if not x.isdigit() or not y.isdigit():
+            continue
+        if int(x) != int(y):
+            return int(x) >= int(y)
+    return True
+
+def get_ascend_soc_version():
+    """Get ascend soc version."""
+    if is_version_ge(ms.__version__, "2.2.0"):
+        from mindspore._c_expression import MSContext
+        return MSContext.get_instance().get_ascend_soc_version()
+    ascend_chip_type = os.getenv("ASCEND_CHIP_TYPE", "UNSET")
+    if ascend_chip_type not in ["910a", "910b", "UNSET"]:
+        raise EnvironmentError(f"ASCEND_CHIP_TYPE should be in ['910a', '910b'],but get {ascend_chip_type}")
+    if ascend_chip_type == "UNSET":
+        logger.info("Environment variables need to be set manually to obtain the chip type,"
+                    "which can be set as follows: \n"
+                    "For Atlas 800, run 'export ASCEND_CHIP_TYPE=910a' before the program runs.\n"
+                    "For Atlas 800T A2, run 'export ASCEND_CHIP_TYPE=910b' before the program runs.\n"
+                    "If you need to get chip information automatically, MindSpore 2.2 and above is recommended")
+    return ascend_chip_type
+
+def atlas_inference():
+    device = get_ascend_soc_version()
+    return device in ['310p', 'ascend310p']
+
+def check_ready():
+    import vllm.envs as envs
+    from mindspore import set_context
+
+    # Common environment variables of predict.
+    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
+    custom_kernels = "FlashAttentionScore,PagedAttention"
+    if atlas_inference():
+        set_context(graph_kernel_flags="--disable_pass=add_rms_norm_fusion")
+        custom_kernels = "InferenceMatmulSplit," + custom_kernels + ",AddRmsNorm"
+
+    default_env = {
+        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST": custom_kernels
+    }
+    env_setup(default_env)
+
+    if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
+        set_context(
+            mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
+
+    if is_mindformers_model_backend():
+        logger.info("Run with Mindformers backend!")
+        necessary_envs = ("MINDFORMERS_MODEL_CONFIG", )
+        lost_envs = [
+            env_item for env_item in necessary_envs if not os.getenv(env_item)
+        ]
+
+        if lost_envs:
+            raise RuntimeError(
+                f'For "MindFormers" model backend, environments {str(lost_envs)} should be set!'
+            )
+    elif is_mindone_model_backend():
+        logger.info("Run with MindONE backend!")
+    else:
+        logger.info("Run with native model backend!")

@@ -20,6 +20,7 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 import mindspore as ms
+from vllm.model_executor.layers.quantization.base_config import QuantizationConfig as BaseQuantizationConfig
 
 
 class QuantizeMethodBase(ABC):
@@ -54,7 +55,7 @@ class QuantizeMethodBase(ABC):
         return
 
 
-class QuantizationConfig(ABC):
+class QuantizationConfig(BaseQuantizationConfig):
     """Base class for quantization configs."""
 
     def __init__(self):

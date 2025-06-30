@@ -24,7 +24,7 @@ from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
-from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
+from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE, atlas_inference
 
 from mindspore import mutable
 
@@ -137,7 +137,8 @@ def _dummy_run(self,
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_shape = [0, block_size, num_kv_heads, head_size]
+        kv_shape = [0, block_size, num_kv_heads * head_size] if atlas_inference else \
+                   [0, block_size, num_kv_heads, head_size]
         kv_caches = mutable([
             mutable((
                 mutable(torch.tensor([], dtype=kv_cache_dtype, device=self.device).reshape(kv_shape)),
