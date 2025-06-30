@@ -783,10 +783,20 @@ class MLABackend(AttentionBackend):
         src_kv_cache: ms.Tensor,
         dst_kv_cache: ms.Tensor,
         src_to_dst: ms.Tensor,
+        swap_type: bool,
     ) -> None:
+        """
+        Swap key/value cache for mla between host and device, to support multi-batch and long-sequence inference.
+
+        Args:
+            src_kv_cache: Source KV cache block.
+            dst_kv_cache: Destination KV cache block.
+            src_to_dst: A 2-D array contains src and dst blocks to swap.
+            swap_type: A bool value indicating the data direction: "True" for device-to-host, and "False" for host-to-device.
+        """
         src_key_cache = src_kv_cache[0]
         dst_key_cache = dst_kv_cache[0]
-        swap_cache(src_key_cache, dst_key_cache, src_to_dst)
+        swap_cache(src_key_cache, dst_key_cache, src_to_dst, swap_type)
 
 
     @staticmethod
