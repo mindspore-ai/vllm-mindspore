@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -19,32 +20,35 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 from mindspore import Parameter, Tensor, mint, nn, ops
+from mindspore.common import dtype as mstype
 from mindspore.common.dtype import typing
-from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
-                              get_tensor_model_parallel_world_size)
+                              get_tensor_model_parallel_world_size,
+                              tensor_model_parallel_all_reduce,)
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
-from vllm_mindspore.distributed.communication_op import (
-    ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.distributed.communication_op import ReduceFromModelParallelRegion
+from vllm_mindspore.utils import atlas_inference
+from mindspore import jit
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
-
 
 class UnquantizedEmbeddingMethod(QuantizeMethodBase):
     """Unquantized method for embeddings."""
 
-    def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
+    def create_weights(self, layer: nn.Cell,
+                       input_size_per_partition: int,
                        output_partition_sizes: List[int], input_size: int,
-                       output_size: int, params_dtype, **extra_weight_attrs):
+                       output_size: int, params_dtype,
+                       **extra_weight_attrs):
         """Create weights for embedding layer."""
-        weight = Parameter(mint.zeros(
-            (sum(output_partition_sizes), input_size_per_partition),
-            dtype=params_dtype),
+        weight = Parameter(mint.zeros((sum(output_partition_sizes),
+                                       input_size_per_partition),
+                                      dtype=params_dtype),
                            requires_grad=False)
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
         layer.insert_param_to_cell("weight", weight)
@@ -60,7 +64,7 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
               layer: nn.Cell,
               x: Tensor,
               bias: Optional[Tensor] = None) -> Tensor:
-        output_shape = x.shape[:-1] + (self.output_size_per_partition, )
+        output_shape = x.shape[:-1] + (self.output_size_per_partition,)
         x = x.reshape(-1, self.input_size_per_partition)
         x = self.matmul(x, layer.weight)
         if bias is not None:
@@ -68,7 +72,8 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
         x = x.reshape(output_shape)
         return x
 
-    def embedding(self, layer: nn.Cell, input_: Tensor) -> Tensor:
+    def embedding(self, layer: nn.Cell,
+                  input_: Tensor) -> Tensor:
         return self.gather(layer.weight, input_, 0)
 
 
@@ -82,15 +87,12 @@ def get_masked_input_and_mask(
 ) -> Tuple[Tensor, Tensor]:
     displaced_x = mint.sub(input_, org_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(
-        down_truncated_x, (org_vocab_end_index - org_vocab_start_index - 1))
+    truncated_x = mint.minimum(down_truncated_x, (org_vocab_end_index - org_vocab_start_index - 1))
     org_vocab_mask = mint.eq(displaced_x, truncated_x)
 
     displaced_x = mint.sub(input_, added_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(
-        down_truncated_x,
-        (added_vocab_end_index - added_vocab_start_index - 1))
+    truncated_x = mint.minimum(down_truncated_x, (added_vocab_end_index - added_vocab_start_index - 1))
     added_vocab_mask = mint.eq(displaced_x, truncated_x)
     added_offset = added_vocab_start_index - (
         org_vocab_end_index - org_vocab_start_index) - num_org_vocab_padding
@@ -101,29 +103,26 @@ def get_masked_input_and_mask(
     return input_, vocab_mask.expand_dims(-1)
 
 
-def pad_vocab_size(vocab_size: int,
-                   pad_to: int = DEFAULT_VOCAB_PADDING_SIZE) -> int:
+def pad_vocab_size(vocab_size: int, pad_to: int = DEFAULT_VOCAB_PADDING_SIZE) -> int:
     """Pad the vocab size to the given value."""
     return ((vocab_size + pad_to - 1) // pad_to) * pad_to
 
 
 def vocab_range_from_per_partition_vocab_size(
-        per_partition_vocab_size: int,
-        rank: int,
-        offset: int = 0) -> Sequence[int]:
+    per_partition_vocab_size: int, rank: int, offset: int = 0
+) -> Sequence[int]:
     index_f = rank * per_partition_vocab_size
     index_l = index_f + per_partition_vocab_size
     return index_f + offset, index_l + offset
 
 
-def vocab_range_from_global_vocab_size(global_vocab_size: int,
-                                       rank: int,
-                                       world_size: int,
-                                       offset: int = 0) -> Sequence[int]:
+def vocab_range_from_global_vocab_size(
+    global_vocab_size: int, rank: int, world_size: int, offset: int = 0
+) -> Sequence[int]:
     per_partition_vocab_size = divide(global_vocab_size, world_size)
-    return vocab_range_from_per_partition_vocab_size(per_partition_vocab_size,
-                                                     rank,
-                                                     offset=offset)
+    return vocab_range_from_per_partition_vocab_size(
+        per_partition_vocab_size, rank, offset=offset
+    )
 
 
 @dataclass
@@ -186,7 +185,6 @@ class VocabParallelEmbeddingShardIndices:
 
 
 class VocabParallelEmbedding(nn.Cell):
-
     def __init__(
         self,
         num_embeddings: int,
@@ -205,11 +203,12 @@ class VocabParallelEmbedding(nn.Cell):
         self.padding_size = padding_size
         self.org_vocab_size = org_num_embeddings or num_embeddings
         num_added_embeddings = num_embeddings - self.org_vocab_size
-        self.org_vocab_size_padded = pad_vocab_size(self.org_vocab_size,
-                                                    self.padding_size)
+        self.org_vocab_size_padded = pad_vocab_size(
+            self.org_vocab_size, self.padding_size
+        )
         self.num_embeddings_padded = pad_vocab_size(
-            self.org_vocab_size_padded + num_added_embeddings,
-            self.padding_size)
+            self.org_vocab_size_padded + num_added_embeddings, self.padding_size
+        )
         assert self.org_vocab_size_padded <= self.num_embeddings_padded
 
         self.shard_indices = self._get_indices(
@@ -234,28 +233,34 @@ class VocabParallelEmbedding(nn.Cell):
         # layer type like ParallelLMHead, this is not important.
         is_embedding_layer = type(self) is VocabParallelEmbedding
         quant_method_implements_embedding = method_has_implemented_embedding(
-            type(quant_method))
+            type(quant_method)
+        )
         if is_embedding_layer and not quant_method_implements_embedding:
             raise NotImplementedError(
                 f"The class {type(quant_method).__name__} must implement "
-                "the 'embedding' method, see UnquantizedEmbeddingMethod.")
+                "the 'embedding' method, see UnquantizedEmbeddingMethod."
+            )
 
         self.quant_method: QuantizeMethodBase = quant_method
 
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = mstype.float16
         # Divide the weight matrix along the vocaburaly dimension.
         self.num_added_embeddings = self.num_embeddings - self.org_vocab_size
-        self.num_embeddings_per_partition = divide(self.num_embeddings_padded,
-                                                   self.tp_size)
-        assert (self.shard_indices.num_elements_padded ==
-                self.num_embeddings_per_partition)
+        self.num_embeddings_per_partition = divide(
+            self.num_embeddings_padded, self.tp_size
+        )
+        assert (
+            self.shard_indices.num_elements_padded == self.num_embeddings_per_partition
+        )
         self.num_org_embeddings_per_partition = (
-            self.shard_indices.org_vocab_end_index -
-            self.shard_indices.org_vocab_start_index)
+            self.shard_indices.org_vocab_end_index
+            - self.shard_indices.org_vocab_start_index
+        )
         self.num_added_embeddings_per_partition = (
-            self.shard_indices.added_vocab_end_index -
-            self.shard_indices.added_vocab_start_index)
+            self.shard_indices.added_vocab_end_index
+            - self.shard_indices.added_vocab_start_index
+        )
 
         self.quant_method.create_weights(
             self,
@@ -283,19 +288,17 @@ class VocabParallelEmbedding(nn.Cell):
         tp_size."""
         num_added_embeddings_padded = vocab_size_padded - org_vocab_size_padded
         padded_org_vocab_start_index, padded_org_vocab_end_index = (
-            vocab_range_from_global_vocab_size(org_vocab_size_padded, tp_rank,
-                                               tp_size))
+            vocab_range_from_global_vocab_size(org_vocab_size_padded, tp_rank, tp_size)
+        )
         padded_added_vocab_start_index, padded_added_vocab_end_index = (
-            vocab_range_from_global_vocab_size(num_added_embeddings_padded,
-                                               tp_rank,
-                                               tp_size,
-                                               offset=org_vocab_size))
+            vocab_range_from_global_vocab_size(
+                num_added_embeddings_padded, tp_rank, tp_size, offset=org_vocab_size
+            )
+        )
         # remove padding
-        org_vocab_start_index = min(padded_org_vocab_start_index,
-                                    org_vocab_size)
+        org_vocab_start_index = min(padded_org_vocab_start_index, org_vocab_size)
         org_vocab_end_index = min(padded_org_vocab_end_index, org_vocab_size)
-        added_vocab_start_index = min(padded_added_vocab_start_index,
-                                      vocab_size)
+        added_vocab_start_index = min(padded_added_vocab_start_index, vocab_size)
         added_vocab_end_index = min(padded_added_vocab_end_index, vocab_size)
         return VocabParallelEmbeddingShardIndices(
             padded_org_vocab_start_index,
@@ -308,15 +311,18 @@ class VocabParallelEmbedding(nn.Cell):
             added_vocab_end_index,
         )
 
+    @jit
     def construct(self, input_):
         if self.tp_size > 1:
             # Build the mask.
             masked_input, input_mask = get_masked_input_and_mask(
-                input_, self.shard_indices.org_vocab_start_index,
+                input_,
+                self.shard_indices.org_vocab_start_index,
                 self.shard_indices.org_vocab_end_index,
                 self.shard_indices.num_org_vocab_padding,
                 self.shard_indices.added_vocab_start_index,
-                self.shard_indices.added_vocab_end_index)
+                self.shard_indices.added_vocab_end_index
+            )
         else:
             masked_input, input_mask = input_, None
         # Get the embeddings.
@@ -348,13 +354,11 @@ class VocabParallelEmbedding(nn.Cell):
         if loaded_weight.shape[output_dim] != self.org_vocab_size:
             raise ValueError(
                 f"'loaded_weight.shape[output_dim]' should be equal to 'org_vocab_size',"
-                f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}"
-            )
+                f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}")
 
         # Copy the data.
-        loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                             shard_size).contiguous()
-        param[:loaded_weight.shape[0]] = loaded_weight
+        loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size).contiguous()
+        param[: loaded_weight.shape[0]] = loaded_weight
         param[loaded_weight.shape[0]:] = 0
 
 
@@ -397,8 +401,8 @@ class ParallelLMHead(VocabParallelEmbedding):
         self.quant_config = quant_config
         if bias:
             self.bias = Parameter(
-                mint.zeros(self.num_embeddings_per_partition,
-                           dtype=params_dtype))
+                mint.zeros(self.num_embeddings_per_partition, dtype=params_dtype)
+            )
             set_weight_attrs(
                 self.bias,
                 {
@@ -407,6 +411,7 @@ class ParallelLMHead(VocabParallelEmbedding):
                 },
             )
         else:
+            # self.register_parameter("bias", None)
             self.bias = None
 
     def tie_weights(self, embed_tokens: VocabParallelEmbedding):
@@ -415,7 +420,8 @@ class ParallelLMHead(VocabParallelEmbedding):
         if self.quant_config and self.quant_config.get_name() == "gguf":
             return embed_tokens
         else:
-            self.weight = embed_tokens.weight
+            # self.weight = embed_tokens.weight
+            self.weight.set_data(embed_tokens.weight)
             return self
 
     def forward(self, input_):
