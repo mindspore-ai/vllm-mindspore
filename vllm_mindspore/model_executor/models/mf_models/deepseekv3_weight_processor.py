@@ -1144,6 +1144,60 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             weight_name = weight_name.replace('shared_head.', '')
         return weight_name
 
+    def infer_process_moe_with_ep_tp(self, src_hf_dir, hf_weight_map,
+                                     layer_id):
+        w1_list = []
+        w2_list = []
+        w3_list = []
+
+        for index in range(self.ep_start, self.ep_stop):
+            w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
+            w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
+            w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
+
+            w1_ms_param, _ = self.get_safetensor_from_file_split_moe_tp_group(
+                w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+            w2_ms_param, _ = self.get_safetensor_from_file_split_moe_tp_group(
+                w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
+            w3_ms_param, _ = self.get_safetensor_from_file_split_moe_tp_group(
+                w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
+
+            w1_list.append(w1_ms_param)
+            w2_list.append(w2_ms_param)
+            w3_list.append(w3_ms_param)
+
+        return w1_list, w2_list, w3_list
+
+    def infer_process_moe_with_ep(self, src_hf_dir, hf_weight_map, layer_id):
+        w1_list = []
+        w2_list = []
+        w3_list = []
+
+        for index in range(self.ep_start, self.ep_stop):
+            w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
+            w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
+            w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
+
+            w1_ms_param, _ = self.get_safetensor_from_file(
+                w1_hf_name, src_hf_dir, hf_weight_map)
+            w2_ms_param, _ = self.get_safetensor_from_file(
+                w2_hf_name, src_hf_dir, hf_weight_map)
+            w3_ms_param, _ = self.get_safetensor_from_file(
+                w3_hf_name, src_hf_dir, hf_weight_map)
+
+            w1_list.append(w1_ms_param)
+            w2_list.append(w2_ms_param)
+            w3_list.append(w3_ms_param)
+
+        return w1_list, w2_list, w3_list
+
+    def infer_process_moe(self, src_hf_dir, hf_weight_map, layer_id):
+        if self.moe_tp_size > 1:
+            return self.infer_process_moe_with_ep_tp(src_hf_dir, hf_weight_map,
+                                                     layer_id)
+        return self.infer_process_moe_with_ep(src_hf_dir, hf_weight_map,
+                                              layer_id)
+
     def infer_process_moe_routed_expert_ffn_weight(self, src_hf_dir, layer_id,
                                                    hf_weight_map):
         """process moe router expert weight"""
@@ -1170,9 +1224,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             name=e_score_correction_bias_ms_name,
             requires_grad=False)
 
-        w1_list = []
-        w2_list = []
-        w3_list = []
+        w1_list, w2_list, w3_list = \
+            self.infer_process_moe(src_hf_dir, hf_weight_map, layer_id)
 
         w1_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w1.weight"
         w1_ms_name = w1_ms_name if layer_id < self.num_layers else self.convert_mtp_weight_name(
@@ -1183,23 +1236,6 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w3_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts.ffn.w3.weight"
         w3_ms_name = w3_ms_name if layer_id < self.num_layers else self.convert_mtp_weight_name(
             w3_ms_name)
-
-        for index in range(0, self.num_router_experts):
-            w1_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.gate_proj.weight"
-            w1_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-                w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-
-            w2_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.down_proj.weight"
-            w2_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-                w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
-
-            w3_hf_name = f"model.layers.{layer_id}.mlp.experts.{index}.up_proj.weight"
-            w3_ms_param, _ = self.get_safetensor_from_file_split_tp_group(
-                w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-
-            w1_list.append(w1_ms_param)
-            w2_list.append(w2_ms_param)
-            w3_list.append(w3_ms_param)
 
         w1_ms_stack_param = np.stack(w1_list, axis=0)
         w2_ms_stack_param = np.stack(w2_list, axis=0)
