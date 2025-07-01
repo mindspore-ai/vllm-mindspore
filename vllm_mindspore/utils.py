@@ -195,6 +195,42 @@ def register_connector():
         pass
 
 
+def is_version_at_least(current_version, base_version):
+    """
+        return current_version >= base_version.
+        Check whether the current version is higher than or equal to the
+        base version.
+        for current_version: 1.8.1, base_version: 1.11.0, it return False.
+    """
+    version_split_char = '.'
+    if version_split_char not in base_version or version_split_char \
+        not in current_version:
+        raise ValueError(
+            "The version string will contain the `.`."
+            "For example, current_version 1.8.1， base_version: 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char),
+                    base_version.split(version_split_char)):
+        if not x.isdigit() or not y.isdigit():
+            continue
+        if int(x) != int(y):
+            return int(x) >= int(y)
+    return True
+
+
+def get_ascend_soc_version():
+    """Get ascend soc version."""
+    if is_version_at_least(ms.__version__, "2.2.0"):
+        from mindspore._c_expression import MSContext
+        return MSContext.get_instance().get_ascend_soc_version()
+    raise ValueError("The get_ascend_soc_version function is only "
+                     "supported on MindSpore 2.6 and above.")
+
+
+def is_310p():
+    device = get_ascend_soc_version()
+    return device in ['310p', 'ascend310p']
+
+
 def check_ready():
     from mindspore import set_context
 
