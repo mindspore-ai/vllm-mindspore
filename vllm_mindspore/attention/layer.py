@@ -28,6 +28,8 @@ from vllm.config import CacheConfig
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
+from vllm_mindspore.model_executor.utils import get_model_context
+
 
 class Attention(nn.Cell):
     """Attention layer.
@@ -84,10 +86,9 @@ class Attention(nn.Cell):
                                               kv_head_num=num_kv_heads)
 
     def construct(self, query: Tensor, key: Tensor, value: Tensor,
-                  key_cache: Tensor, value_cache: Tensor, is_prefill: bool,
-                  slot_mapping: Tensor, attn_mask: Tensor,
-                  batch_valid_length: Tensor, q_seq_lens: Tensor,
-                  block_tables: Tensor) -> Tensor:
+                  key_cache: Tensor, value_cache: Tensor, slot_mapping: Tensor,
+                  attn_mask: Tensor, batch_valid_length: Tensor,
+                  q_seq_lens: Tensor, block_tables: Tensor) -> Tensor:
         """Attention forward, support MHA and GQA.
 
         Args:
@@ -106,7 +107,7 @@ class Attention(nn.Cell):
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)
-        if is_prefill:
+        if get_model_context("is_prefill"):
             output = self._run_prefill_forward(query, key, value, attn_mask,
                                                batch_valid_length,
                                                batch_valid_length)

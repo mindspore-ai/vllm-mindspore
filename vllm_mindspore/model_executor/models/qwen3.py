@@ -156,7 +156,6 @@ class Qwen3Attention(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -174,10 +173,10 @@ class Qwen3Attention(nn.Cell):
                            self.head_dim)
         k_by_head = self.k_norm(k_by_head)
         k = k_by_head.view(k.shape)
-        q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
-                                slot_mapping, attn_mask, batch_valid_length,
-                                q_seq_lens, block_tables)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,
+                                attn_mask, batch_valid_length, q_seq_lens,
+                                block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -239,7 +238,6 @@ class Qwen3DecoderLayer(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -255,9 +253,9 @@ class Qwen3DecoderLayer(nn.Cell):
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
         hidden_states = self.self_attn(positions, hidden_states, key_cache,
-                                       value_cache, is_prefill, slot_mapping,
-                                       attn_mask, batch_valid_length,
-                                       q_seq_lens, block_tables)
+                                       value_cache, slot_mapping, attn_mask,
+                                       batch_valid_length, q_seq_lens,
+                                       block_tables)
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(

@@ -173,7 +173,6 @@ class Qwen2Attention(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -183,10 +182,10 @@ class Qwen2Attention(nn.Cell):
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
-        q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
-                                slot_mapping, attn_mask, batch_valid_length,
-                                q_seq_lens, block_tables)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,
+                                attn_mask, batch_valid_length, q_seq_lens,
+                                block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -249,7 +248,6 @@ class Qwen2DecoderLayer(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -265,9 +263,9 @@ class Qwen2DecoderLayer(nn.Cell):
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
         hidden_states = self.self_attn(positions, hidden_states, key_cache,
-                                       value_cache, is_prefill, slot_mapping,
-                                       attn_mask, batch_valid_length,
-                                       q_seq_lens, block_tables)
+                                       value_cache, slot_mapping, attn_mask,
+                                       batch_valid_length, q_seq_lens,
+                                       block_tables)
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(
@@ -330,7 +328,6 @@ class Qwen2Model(nn.Cell):
         positions: Tensor,
         key_caches: list[Tensor],
         value_caches: list[Tensor],
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -350,14 +347,14 @@ class Qwen2Model(nn.Cell):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        for i in range(self.start_layer, self.end_layer):  # PP 并行对层进行切分
+        for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
                                             key_caches[i - self.start_layer],
                                             value_caches[i - self.start_layer],
-                                            is_prefill, slot_mapping,
-                                            attn_mask, batch_valid_length,
-                                            q_seq_lens, block_tables, residual)
+                                            slot_mapping, attn_mask,
+                                            batch_valid_length, q_seq_lens,
+                                            block_tables, residual)
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
                 "hidden_states": hidden_states,
