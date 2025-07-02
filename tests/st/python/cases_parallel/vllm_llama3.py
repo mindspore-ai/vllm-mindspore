@@ -14,39 +14,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-
-# isort:skip_file
 """test vllm llama3."""
 import os
 
-import pytest
+from tests.st.python import utils
 
-from tests.st.python import set_env
+env_manager = utils.EnvVarManager()
 
-env_manager = set_env.EnvVarManager()
-# def env
-env_vars = {
-    "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
-    "MS_ENABLE_LCCL": "off",
-    "HCCL_OP_EXPANSION_MODE": "AIV",
-    "MS_ALLOC_CONF": "enable_vmm:True",
-    "LCCL_DETERMINISTIC": "1",
-    "HCCL_DETERMINISTIC": "true",
-    "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
-    "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "1",
-    "HCCL_IF_BASE_PORT": "60000"
-}
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
+
+def setup_function():
+    # def env
+    env_vars = {
+        "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
+        "MS_ENABLE_LCCL": "off",
+        "HCCL_OP_EXPANSION_MODE": "AIV",
+        "MS_ALLOC_CONF": "enable_vmm:True",
+        "LCCL_DETERMINISTIC": "1",
+        "HCCL_DETERMINISTIC": "true",
+        "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
+        "ATB_LLM_LCOC_ENABLE": "0",
+        "VLLM_USE_V1": "1",
+        "HCCL_IF_BASE_PORT": "60000"
+    }
+    # set env
+    env_manager.setup_ai_environment(env_vars)
+    # Enable vllm-mindsproe.
+    import vllm_mindspore
+
+
+def teardown_function():
+    # unset env
+    env_manager.unset_all()
+    utils.cleanup_subprocesses()
 
 
 def test_vllm_llama3_8b():
     """
     test case llama3.1 8B
     """
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -74,14 +80,12 @@ def test_vllm_llama3_8b():
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
 
-    # unset env
-    env_manager.unset_all()
-
 
 def test_vllm_llama3_1b():
     """
     test case llama3.2 1B
     """
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [

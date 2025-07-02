@@ -16,12 +16,20 @@
 # limitations under the License.
 # ============================================================================
 """test mf deepseek r1 gptq int4 quantization."""
+
+# type: ignore
+# isort: skip_file
+
 import os
 import yaml
-import pytest
-from tests.st.python import set_env
+from tests.st.python import utils
 
-env_manager = set_env.EnvVarManager()
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b_a16w4.yaml",

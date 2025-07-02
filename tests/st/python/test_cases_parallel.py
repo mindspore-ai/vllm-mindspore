@@ -22,6 +22,12 @@ from multiprocessing.pool import Pool
 
 import pytest
 
+from .utils import cleanup_subprocesses, tasks_resource_alloc
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
 
 def run_command(command_info):
     cmd, log_path = command_info
@@ -48,27 +54,19 @@ def test_cases_parallel_part0():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b.py::test_mf_qwen > vllm_mf_qwen_7b_test_mf_qwen.log",
+    cases = [
+        (2, "cases_parallel/vllm_mf_qwen_7b.py::test_mf_qwen",
          "vllm_mf_qwen_7b_test_mf_qwen.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py::test_mf_qwen_7b_chunk_prefill "
-         "> vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log",
+        (2,
+         "cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py::test_mf_qwen_7b_chunk_prefill",
          "vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 &&"
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py::test_mf_qwen_7b_chunk_prefill "
-         "> vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log",
+        (2,
+         "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py::test_mf_qwen_7b_chunk_prefill",
          "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=6,7 && export LCAL_COMM_ID=127.0.0.1:10071 && "
-         "export HCCL_IF_BASE_PORT=61006 && "
-         "pytest -s -v cases_parallel/multilora_inference.py::test_multilora_inference "
-         "> multilora_inference_test_multilora_inference.log",
+        (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
          "multilora_inference_test_multilora_inference.log")
     ]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -84,28 +82,20 @@ def test_cases_parallel_part1():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss "
-         "> vllm_mf_qwen_7b_mss_test_mf_qwen_7b_mss.log",
+    cases = [
+        (2, "cases_parallel/vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss",
          "vllm_mf_qwen_7b_mss_test_mf_qwen_7b_mss.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_prefix_caching.py::test_mf_qwen_7b_prefix_caching "
-         "> vllm_mf_qwen_7b_prefix_caching_test_mf_qwen_7b_prefix_caching.log",
+        (2,
+         "cases_parallel/vllm_mf_qwen_7b_prefix_caching.py::test_mf_qwen_7b_prefix_caching",
          "vllm_mf_qwen_7b_prefix_caching_test_mf_qwen_7b_prefix_caching.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py::test_mf_qwen_7b_prefix_caching "
-         "> vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log",
+        (2,
+         "cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py::test_mf_qwen_7b_prefix_caching",
          "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"
          ),
-        ("export ASCEND_RT_VISIBLE_DEVICES=6,7 && export LCAL_COMM_ID=127.0.0.1:10071 && "
-         "export HCCL_IF_BASE_PORT=61006 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_v1.py::test_mf_qwen > vllm_mf_qwen_7b_v1_test_mf_qwen.log",
+        (2, "cases_parallel/vllm_mf_qwen_7b_v1.py::test_mf_qwen",
          "vllm_mf_qwen_7b_v1_test_mf_qwen.log")
     ]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -121,23 +111,13 @@ def test_cases_parallel_part2():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_qwen_7b.py::test_vllm_qwen "
-         "> vllm_qwen_7b_test_vllm_qwen.log",
-         "vllm_qwen_7b_test_vllm_qwen.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_qwen_7b_v1.py::test_vllm_qwen "
-         "> vllm_qwen_7b_v1_test_vllm_qwen.log",
-         "vllm_qwen_7b_v1_test_vllm_qwen.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5,6,7 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/shm_broadcast.py::test_shm_broadcast "
-         "> shm_broadcast_test_shm_broadcast.log",
-         "shm_broadcast_test_shm_broadcast.log")
-    ]
+    cases = [(2, "cases_parallel/vllm_qwen_7b.py::test_vllm_qwen",
+              "vllm_qwen_7b_test_vllm_qwen.log"),
+             (2, "cases_parallel/vllm_qwen_7b_v1.py::test_vllm_qwen",
+              "vllm_qwen_7b_v1_test_vllm_qwen.log"),
+             (4, "cases_parallel/shm_broadcast.py::test_shm_broadcast",
+              "shm_broadcast_test_shm_broadcast.log")]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -153,23 +133,17 @@ def test_cases_parallel_part3():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_bf16_part.py::test_deepseek_r1_bf16 "
-         "> vllm_deepseek_bf16_part_test_deepseek_r1_bf16.log",
+    cases = [
+        (2, "cases_parallel/vllm_deepseek_bf16_part.py::test_deepseek_r1_bf16",
          "vllm_deepseek_bf16_part_test_deepseek_r1_bf16.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16 "
-         "> vllm_deepseek_bf16_part_v1_test_deepseek_r1_bf16.log",
+        (2,
+         "cases_parallel/vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16",
          "vllm_deepseek_bf16_part_v1_test_deepseek_r1_bf16.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5,6,7 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_gptq_a16w4.py::test_deepseek_r1_gptq_a16w4 "
-         "> vllm_deepseek_gptq_a16w4_test_deepseek_r1_gptq_a16w4.log",
+        (4,
+         "cases_parallel/vllm_deepseek_gptq_a16w4.py::test_deepseek_r1_gptq_a16w4",
          "vllm_deepseek_gptq_a16w4_test_deepseek_r1_gptq_a16w4.log")
     ]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -185,28 +159,15 @@ def test_cases_parallel_part4():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1_mss "
-         "> vllm_deepseek_osl_test_deepseek_r1_mss.log",
-         "vllm_deepseek_osl_test_deepseek_r1_mss.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_part.py::test_deepseek_r1 "
-         "> vllm_deepseek_part_test_deepseek_r1.log",
-         "vllm_deepseek_part_test_deepseek_r1.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp "
-         "> vllm_deepseek_part_test_deepseek_mtp.log",
-         "vllm_deepseek_part_test_deepseek_mtp.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=6,7 && export LCAL_COMM_ID=127.0.0.1:10071 && "
-         "export HCCL_IF_BASE_PORT=61006 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1 "
-         "> vllm_deepseek_part_v1_test_deepseek_r1.log",
-         "vllm_deepseek_part_v1_test_deepseek_r1.log")
-    ]
+    cases = [(2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1_mss",
+              "vllm_deepseek_osl_test_deepseek_r1_mss.log"),
+             (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_r1",
+              "vllm_deepseek_part_test_deepseek_r1.log"),
+             (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
+              "vllm_deepseek_part_test_deepseek_mtp.log"),
+             (2, "cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1",
+              "vllm_deepseek_part_v1_test_deepseek_r1.log")]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -222,28 +183,15 @@ def test_cases_parallel_part5():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3 "
-         "> vllm_mf_qwen3_8b_test_mf_qwen3.log",
-         "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen3_8b_v1.py::test_mf_qwen3 "
-         "> vllm_mf_qwen3_8b_v1_test_mf_qwen3.log",
-         "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/vllm_llama3.py::test_vllm_llama3_8b "
-         "> vllm_llama3_8b_test_vllm_llama3.log",
-         "vllm_llama3_8b_test_vllm_llama3.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=5 && export LCAL_COMM_ID=127.0.0.1:10071 && "
-         "export HCCL_IF_BASE_PORT=61006 && "
-         "pytest -s -v cases_parallel/vllm_llama3.py::test_vllm_llama3_1b "
-         "> vllm_llama3_1b_test_vllm_llama3.log",
-         "vllm_llama3_1b_test_vllm_llama3.log"),
-    ]
+    cases = [(2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3",
+              "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
+             (2, "cases_parallel/vllm_mf_qwen3_8b_v1.py::test_mf_qwen3",
+              "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
+             (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_8b",
+              "vllm_llama3_8b_test_vllm_llama3.log"),
+             (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_1b",
+              "vllm_llama3_1b_test_vllm_llama3.log")]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -259,12 +207,11 @@ def test_cases_parallel_part6():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1 "
-         "> vllm_qwen2_5_vl_7b_v1.log", "vllm_qwen2_5_vl_7b_v1.log"),
+    cases = [
+        (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
+         "vllm_qwen2_5_vl_7b_v1.log")
     ]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))
@@ -280,28 +227,19 @@ def test_cases_parallel_level1_part0():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    commands = [
-        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
-         "export HCCL_IF_BASE_PORT=61000 && "
-         "pytest -s -v cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss "
-         "> vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log",
+    cases = [
+        (2,
+         "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss",
          "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
-         "export HCCL_IF_BASE_PORT=61002 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1 "
-         "> vllm_deepseek_osl_test_deepseek_r1.log",
+        (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
          "vllm_deepseek_osl_test_deepseek_r1.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=4,5 && export LCAL_COMM_ID=127.0.0.1:10070 && "
-         "export HCCL_IF_BASE_PORT=61004 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1 "
-         "> vllm_deepseek_smoothquant_test_deepseek_r1.log",
+        (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
          "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
-        ("export ASCEND_RT_VISIBLE_DEVICES=6,7 && export LCAL_COMM_ID=127.0.0.1:10071 && "
-         "export HCCL_IF_BASE_PORT=61006 && "
-         "pytest -s -v cases_parallel/vllm_deepseek_smoothquant_mss.py::test_deepseek_r1_mss "
-         "> vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log",
+        (2,
+         "cases_parallel/vllm_deepseek_smoothquant_mss.py::test_deepseek_r1_mss",
          "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
     ]
+    commands = tasks_resource_alloc(cases)
 
     with Pool(len(commands)) as pool:
         results = list(pool.imap(run_command, commands))

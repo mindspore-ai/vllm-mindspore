@@ -15,16 +15,26 @@
 # limitations under the License.
 # ============================================================================
 """test mf deepseek r1."""
-import pytest
-import os
-import tempfile
-import re
 
-from . import set_env
+# type: ignore
+# isort: skip_file
+
+import os
+import re
+import tempfile
 from multiprocessing import Process, Queue
 
-env_manager = set_env.EnvVarManager()
+import pytest
 
+from . import utils
+from .utils import cleanup_subprocesses
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b_w8a8.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -41,13 +51,14 @@ env_vars = {
     "LCAL_COMM_ID": "127.0.0.1:10068"
 }
 env_manager.setup_ai_environment(env_vars)
+
 import vllm_mindspore
 from vllm import LLM, SamplingParams
 from vllm.utils import get_open_port
 
 
-def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip, dp_master_port,
-            GPUs_per_dp_rank, prompts, except_list, result_q):
+def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip,
+            dp_master_port, GPUs_per_dp_rank, prompts, except_list, result_q):
     os.environ["VLLM_DP_RANK"] = str(global_dp_rank)
     os.environ["VLLM_DP_LOCAL"] = str(local_dp_rank)
     os.environ["VLLM_DP_SIZE"] = str(dp_size)
@@ -70,14 +81,15 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip, dp_master_port
                                      max_tokens=3)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
-              tensor_parallel_size=GPUs_per_dp_rank,
-              max_model_len = 4096,
-              max_num_batched_tokens=8,
-              max_num_seqs=8,
-              trust_remote_code=True,
-              enforce_eager=True,
-              enable_expert_parallel=True)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
+        tensor_parallel_size=GPUs_per_dp_rank,
+        max_model_len=4096,
+        max_num_batched_tokens=8,
+        max_num_seqs=8,
+        trust_remote_code=True,
+        enforce_eager=True,
+        enable_expert_parallel=True)
     outputs = llm.generate(prompts, sampling_params)
     # Print the outputs.
     for i, output in enumerate(outputs):
@@ -88,7 +100,8 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip, dp_master_port
         result_q.put(generated_text == except_list[i])
 
 
-def exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list):
+def exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list):
     file = open('./config/predict_deepseek_r1_671b_w8a8.yaml', 'r')
     content = file.read()
     file.close()
@@ -114,14 +127,14 @@ def exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, excep
 
         dp_per_node = dp_size // node_size
 
-        result_q = Queue()
+        result_q = Queue()  # type: Queue[bool]
         procs = []
         for local_dp_rank, global_dp_rank in enumerate(
                 range(node_rank * dp_per_node, (node_rank + 1) * dp_per_node)):
             proc = Process(target=dp_func,
-                           args=(dp_size, local_dp_rank,
-                                 global_dp_rank, dp_master_ip, dp_master_port,
-                                 tp_size, prompts, except_list, result_q))
+                           args=(dp_size, local_dp_rank, global_dp_rank,
+                                 dp_master_ip, dp_master_port, tp_size,
+                                 prompts, except_list, result_q))
             proc.start()
             procs.append(proc)
         exit_code = 0
@@ -165,14 +178,20 @@ def exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list):
             f.write(content)
         env_manager.set_env_var("MINDFORMERS_MODEL_CONFIG", new_yaml_path)
 
-
         # Create a sampling params object.
-        sampling_params = SamplingParams(temperature=0.0, max_tokens=3, top_k=1, top_p=1.0,
+        sampling_params = SamplingParams(temperature=0.0,
+                                         max_tokens=3,
+                                         top_k=1,
+                                         top_p=1.0,
                                          repetition_penalty=1.0)
 
         # Create an LLM.
-        llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
-                  trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=8, max_model_len=4096)
+        llm = LLM(
+            model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
+            trust_remote_code=True,
+            gpu_memory_utilization=0.9,
+            tensor_parallel_size=8,
+            max_model_len=4096)
         # Generate texts from the prompts. The output is a list of RequestOutput objects
         # that contain the prompt, generated text, and other information.
         outputs = llm.generate(prompts, sampling_params)
@@ -187,7 +206,6 @@ def exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list):
     env_manager.unset_all()
 
 
-
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -197,7 +215,9 @@ def test_deepseek_r1_dp4_tp2_ep4():
     """
 
     new_yaml = "dp4_tp2_ep4.yaml"
-    replaced_pattern = ['data_parallel: 4', 'model_parallel: 2', 'expert_parallel: 4']
+    replaced_pattern = [
+        'data_parallel: 4', 'model_parallel: 2', 'expert_parallel: 4'
+    ]
     dp_size = 4
     tp_size = 2
     # Sample prompts.
@@ -207,17 +227,23 @@ def test_deepseek_r1_dp4_tp2_ep4():
     ] * 4
 
     except_list = ['ugs611ాలు'] * 4
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
-@pytest.mark.skip(reason="Currently does not support relevant communication fusion operators in 910b")
+@pytest.mark.skip(
+    reason=
+    "Currently does not support relevant communication fusion operators in 910b"
+)
 def test_deepseek_r1_dp8_tp1_ep8():
     """
     test case deepseek r1 w8a8 Dp8 tp1 ep8
     """
 
     new_yaml = "dp8_tp1_ep8.yaml"
-    replaced_pattern = ['data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 8']
+    replaced_pattern = [
+        'data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 8'
+    ]
     dp_size = 8
     tp_size = 1
     # Sample prompts.
@@ -227,7 +253,8 @@ def test_deepseek_r1_dp8_tp1_ep8():
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
 @pytest.mark.level1
@@ -239,7 +266,9 @@ def test_deepseek_r1_dp2_tp4_ep1():
     """
 
     new_yaml = "dp2_tp4_ep1.yaml"
-    replaced_pattern = ['data_parallel: 2', 'model_parallel: 4', 'expert_parallel: 1']
+    replaced_pattern = [
+        'data_parallel: 2', 'model_parallel: 4', 'expert_parallel: 1'
+    ]
     dp_size = 2
     tp_size = 4
     # Sample prompts.
@@ -249,17 +278,23 @@ def test_deepseek_r1_dp2_tp4_ep1():
     ] * 2
 
     except_list = ['ugs611ాలు'] * 2
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
-@pytest.mark.skip(reason="Currently does not support relevant communication fusion operators in 910b")
+@pytest.mark.skip(
+    reason=
+    "Currently does not support relevant communication fusion operators in 910b"
+)
 def test_deepseek_r1_dp4_tp2_ep8():
     """
     test case deepseek r1 w8a8 dp4 tp2 ep8
     """
 
     new_yaml = "dp4_tp2_ep8.yaml"
-    replaced_pattern = ['data_parallel: 4', 'model_parallel: 2', 'expert_parallel: 8']
+    replaced_pattern = [
+        'data_parallel: 4', 'model_parallel: 2', 'expert_parallel: 8'
+    ]
     dp_size = 4
     tp_size = 2
     # Sample prompts.
@@ -269,7 +304,8 @@ def test_deepseek_r1_dp4_tp2_ep8():
     ] * 4
 
     except_list = ['ugs611ాలు'] * 4
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
 @pytest.mark.level1
@@ -281,7 +317,9 @@ def test_deepseek_r1_dp8_tp1_ep1():
     """
 
     new_yaml = "dp8_tp1_ep1.yaml"
-    replaced_pattern = ['data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 1']
+    replaced_pattern = [
+        'data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 1'
+    ]
     dp_size = 8
     tp_size = 1
     # Sample prompts.
@@ -291,7 +329,8 @@ def test_deepseek_r1_dp8_tp1_ep1():
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
 @pytest.mark.level1
@@ -303,7 +342,9 @@ def test_deepseek_r1_dp8_tp1_ep4():
     """
 
     new_yaml = "dp8_tp1_ep4.yaml"
-    replaced_pattern = ['data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 4']
+    replaced_pattern = [
+        'data_parallel: 8', 'model_parallel: 1', 'expert_parallel: 4'
+    ]
     dp_size = 8
     tp_size = 1
     # Sample prompts.
@@ -313,7 +354,8 @@ def test_deepseek_r1_dp8_tp1_ep4():
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
-    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts, except_list)
+    exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
+                    except_list)
 
 
 @pytest.mark.level1
@@ -325,14 +367,16 @@ def test_deepseek_r1_tp8_ep8():
     """
 
     new_yaml = "tp8_ep8.yaml"
-    replaced_pattern = ['data_parallel: 1', 'model_parallel: 8', 'expert_parallel: 8']
+    replaced_pattern = [
+        'data_parallel: 1', 'model_parallel: 8', 'expert_parallel: 8'
+    ]
     # Sample prompts.
     prompts = [
         "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
         "\n情感：<｜Assistant｜>\n",
     ]
 
-    except_list=['ugs611ాలు']
+    except_list = ['ugs611ాలు']
     exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list)
 
 
@@ -345,12 +389,14 @@ def test_deepseek_r1_tp8_ep4():
     """
 
     new_yaml = "tp8_ep4.yaml"
-    replaced_pattern = ['data_parallel: 1', 'model_parallel: 8', 'expert_parallel: 4']
+    replaced_pattern = [
+        'data_parallel: 1', 'model_parallel: 8', 'expert_parallel: 4'
+    ]
     # Sample prompts.
     prompts = [
         "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
         "\n情感：<｜Assistant｜>\n",
     ]
 
-    except_list=['ugs611ాలు']
+    except_list = ['ugs611ాలు']
     exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list)

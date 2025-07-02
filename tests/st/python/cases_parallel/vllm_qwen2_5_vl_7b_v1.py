@@ -15,14 +15,23 @@
 # limitations under the License.
 # ============================================================================
 """test mf qwen2.5 vl 7B."""
+
+# type: ignore
+# isort: skip_file
+
 import os
 
 from PIL import Image
 
-from tests.st.python import set_env
+from tests.st.python import utils
 from tests.st.python.cases_parallel.similarity import compare_distance
 
-env_manager = set_env.EnvVarManager()
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
