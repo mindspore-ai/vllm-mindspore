@@ -19,8 +19,6 @@
 from tqdm.auto import tqdm
 from typing import Generator, List, Tuple
 
-import torch
-
 import mindspore as ms
 from mindspore import Parameter, Tensor
 
@@ -28,7 +26,7 @@ from mindspore import Parameter, Tensor
 def safetensors_weights_iterator(
     hf_weights_files: List[str],
     use_tqdm_on_load: bool,
-) -> Generator[Tuple[str, torch.Tensor], None, None]:
+) -> Generator[Tuple[str, ms.Tensor], None, None]:
     """Iterate over the weights in the model safetensor files."""
     from safetensors import safe_open
     from vllm.model_executor.model_loader.weight_utils import _BAR_FORMAT, enable_tqdm

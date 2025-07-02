@@ -255,13 +255,27 @@ from vllm.spec_decode.top1_proposer import Top1Proposer
 
 Top1Proposer._merge_outputs = _merge_outputs
 
-from vllm_mindspore.model_executor.layers.rejection_sampler import _smallest_positive_value, _multinomial
+from vllm_mindspore.model_executor.layers.rejection_sampler import _smallest_positive_value
 from vllm.model_executor.layers.rejection_sampler import RejectionSampler
 
 RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(
     RejectionSampler, '_smallest_positive_value')
-vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
+
+# patch for v0 sampler
+from vllm_mindspore.model_executor.layers.utils import apply_penalties
+import vllm.model_executor.layers.utils
+vllm.model_executor.layers.utils.apply_penalties = apply_penalties
+
+from vllm_mindspore.model_executor.layers.sampler import (
+    _apply_top_k_top_p,
+    _apply_min_p,
+    _random_sample
+)
+import vllm.model_executor.layers.sampler
+vllm.model_executor.layers.sampler._apply_top_k_top_p = _apply_top_k_top_p
+vllm.model_executor.layers.sampler._apply_min_p = _apply_min_p
+vllm.model_executor.layers.sampler._random_sample = _random_sample
 
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor

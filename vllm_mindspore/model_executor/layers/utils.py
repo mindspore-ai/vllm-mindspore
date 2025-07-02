@@ -17,31 +17,30 @@
 # ============================================================================
 """Utility methods for model layers."""
 from typing import Tuple
-import torch
+
 import mindspore as ms
 
 def get_token_bin_counts_and_mask(
-    tokens: torch.Tensor,
+    tokens: ms.Tensor,
     vocab_size: int,
     num_seqs: int,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[ms.Tensor, ms.Tensor]:
     # Compute the bin counts for the tokens.
     # vocab_size + 1 for padding.
-    bin_counts = torch.zeros((num_seqs, vocab_size + 1),
-                             dtype=torch.long,
-                             device=tokens.device)
-    bin_counts.scatter_add_(1, tokens, torch.ones_like(tokens))
+    bin_counts = ms.mint.zeros((num_seqs, vocab_size + 1),
+                               dtype=ms.int64)
+    bin_counts.scatter_add_(1, tokens, ms.mint.ones_like(tokens))
     bin_counts = bin_counts[:, :vocab_size]
     mask = bin_counts > 0
 
     return bin_counts, mask
 
 
-def apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
-                    output_tokens_tensor: torch.Tensor,
-                    presence_penalties: torch.Tensor,
-                    frequency_penalties: torch.Tensor,
-                    repetition_penalties: torch.Tensor) -> torch.Tensor:
+def apply_penalties(logits: ms.Tensor, prompt_tokens_tensor: ms.Tensor,
+                    output_tokens_tensor: ms.Tensor,
+                    presence_penalties: ms.Tensor,
+                    frequency_penalties: ms.Tensor,
+                    repetition_penalties: ms.Tensor) -> ms.Tensor:
     """
     Applies penalties out of place implement to imporve performance.
     logits : The input logits tensor of shape [num_seqs, vocab_size]
@@ -72,8 +71,8 @@ def apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
     # use out of place computation instead of inplace setitem to improve performance
     # 'tensor[tensor > 0]' will result in setitem, which is slow.
     mask = prompt_mask | output_mask
-    logits = torch.where(mask & (logits > 0), logits / repetition_penalties, logits)
-    logits = torch.where(mask & (logits <= 0), logits * repetition_penalties, logits)
+    logits = ms.mint.where(mask & (logits > 0), logits / repetition_penalties, logits)
+    logits = ms.mint.where(mask & (logits <= 0), logits * repetition_penalties, logits)
     # We follow the definition in OpenAI API.
     # Refer to https://platform.openai.com/docs/api-reference/parameter-details
     logits -= frequency_penalties.unsqueeze(dim=1) * output_bin_counts

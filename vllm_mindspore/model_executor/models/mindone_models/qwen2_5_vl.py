@@ -43,6 +43,9 @@ from vllm.model_executor.models.qwen2_5_vl import (
 from vllm.model_executor.models.qwen2_5_vl import (
     Qwen2_5_VLProcessingInfo, Qwen2_5_VLVideoEmbeddingInputs,
     Qwen2_5_VLVideoInputs, Qwen2_5_VLVideoPixelInputs)
+from vllm.model_executor.layers.sampler import (SamplerOutput,
+                                                get_sampler)
+
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import MultiModalKwargs
 from vllm.multimodal.parse import MultiModalDataItems
@@ -50,8 +53,6 @@ from vllm.multimodal.processing import PromptReplacement
 from vllm.sequence import IntermediateTensors
 from vllm.transformers_utils.config import uses_mrope
 
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import SupportsMultiModal
