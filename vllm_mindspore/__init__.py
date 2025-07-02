@@ -153,7 +153,7 @@ vllm.model_executor.model_loader.loader.safetensors_weights_iterator = (
     safetensors_weights_iterator)
 
 from vllm_mindspore.worker.worker import _warm_up_model
-from vllm_mindspore.worker.profile import (
+from vllm_mindspore.worker.profile_controller import (
     wrapper_worker_init,
     wrapper_worker_init_device,
 )
@@ -403,6 +403,9 @@ from vllm_mindspore.v1.executor.multiproc_executor import executor_ensure_worker
 from vllm.v1.executor.multiproc_executor import MultiprocExecutor
 
 MultiprocExecutor._ensure_worker_termination = executor_ensure_worker_termination
+# init vllm-mindspore profile controller
+from vllm_mindspore.worker.profile_controller import init_vllm_mindspore_profile_controller
+init_vllm_mindspore_profile_controller()
 
 from .utils import check_ready
 

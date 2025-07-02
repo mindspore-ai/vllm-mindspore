@@ -37,6 +37,7 @@ from mindspore.common import dtype as mstype
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
+from vllm_mindspore.worker.profile_controller import vllm_mindspore_profile_controller
 
 
 class AttentionWrapper:
@@ -195,6 +196,9 @@ class MsModelBase:
         spec_step_idx: int = 0,
         **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:
+        # check if need profile
+        vllm_mindspore_profile_controller.check_profile_point()
+        
         return self.forward(input_ids,
                             positions,
                             intermediate_tensors,
