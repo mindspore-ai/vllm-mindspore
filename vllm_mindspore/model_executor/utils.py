@@ -28,3 +28,15 @@ def set_weight_attrs(
         return
     for key, value in weight_attrs.items():
         setattr(weight, key, value)
+
+
+_native_model_context = {
+    "is_prefill": True
+}
+
+def set_model_context(key, value):
+    global _native_model_context
+    _native_model_context[key] = value
+
+def get_model_context(key):
+    return _native_model_context[key]

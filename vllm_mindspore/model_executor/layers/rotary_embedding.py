@@ -30,6 +30,7 @@ from mindspore.ops.auto_generate.gen_ops_prim import SliceExt
 from transformers import PretrainedConfig
 from vllm.config import get_current_vllm_config
 
+from vllm_mindspore.model_executor.utils import get_model_context
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -191,12 +192,11 @@ class InferRotaryEmbedding(nn.Cell):
         query: Tensor,
         key: Tensor,
         batch_valid_length: Tensor,
-        is_prefill: bool,
         offsets: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
         query = query.contiguous()
         key = key.contiguous()
-        if is_prefill:
+        if get_model_context("is_prefill"):
             return self.rotary_embedding_op(query, key, self.freqs_cos,
                                             self.freqs_sin, batch_valid_length)
 
@@ -282,7 +282,6 @@ class MRotaryEmbedding(RotaryEmbedding):
         query: mindspore.Tensor,
         key: mindspore.Tensor,
         batch_valid_length: Tensor = None,
-        is_prefill: bool = False,
     ) -> Tuple[mindspore.Tensor, mindspore.Tensor]:
         """
         Args:
@@ -526,7 +525,6 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         query: mindspore.Tensor,
         key: mindspore.Tensor,
         batch_valid_length: Tensor = None,
-        is_prefill: bool = False,
     ) -> Tuple[mindspore.Tensor, mindspore.Tensor]:
         """
         Args:
@@ -538,7 +536,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         """
         half_rotary_dim = self.rotary_dim // 2
         # prefill
-        if is_prefill:
+        if get_model_context("is_prefill"):
             num_tokens = positions.shape[-1]
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
             cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
