@@ -26,6 +26,8 @@ from vllm.config import CacheConfig
 from vllm.model_executor.layers.quantization.base_config import \
     QuantizationConfig
 
+from vllm_mindspore.model_executor.utils import get_model_context
+
 
 def _pad_to_max_tensor(input_: Tensor,
                        max_len: int,
@@ -142,7 +144,6 @@ class Attention(nn.Cell):
         value: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -167,7 +168,7 @@ class Attention(nn.Cell):
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)
-        if is_prefill:
+        if get_model_context("is_prefill"):
             output = self._run_prefill_forward(query, key, value, attn_mask,
                                                batch_valid_length,
                                                batch_valid_length)

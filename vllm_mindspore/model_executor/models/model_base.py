@@ -22,6 +22,10 @@ from abc import abstractmethod
 from typing import Iterable, Optional, Set, Tuple, Union, Dict
 import numpy as np
 
+import mindspore as ms
+from mindspore import Tensor, mutable, nn
+from mindspore.common import dtype as mstype
+
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
@@ -30,14 +34,11 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 import vllm.envs as envs
 
-import mindspore as ms
-from mindspore import Tensor, nn, mutable
-from mindspore.common import dtype as mstype
-
 from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 from vllm_mindspore.worker.profile_controller import vllm_mindspore_profile_controller
+from vllm_mindspore.model_executor.utils import set_model_context
 
 
 class AttentionWrapper:
@@ -340,9 +341,10 @@ class NativeModel(MsModelBase):
         if vllm_config.lora_config is not None:
             # native model lora only support pynative mode now
             vllm_config.model_config.enforce_eager = True
-        self.is_graph_mode = bool(not vllm_config.model_config.enforce_eager)
-        self.prev_prefill = False
-        self.run_model = None
+        self.is_eager_mode = vllm_config.model_config.enforce_eager
+        self.fa_network = None
+        self.pa_network = None
+
 
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
@@ -364,8 +366,8 @@ class NativeModel(MsModelBase):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
-    def set_model_inputs(self, input_ids, position_ids, intermediate_tensors,
-                         inputs_embeds, is_prefill):
+    def set_model_inputs(self, input_ids=None, position_ids=None, intermediate_tensors=None,
+                         inputs_embeds=None):
         if input_ids is None:
             dyn_input_ids = None
         else:
@@ -420,7 +422,6 @@ class NativeModel(MsModelBase):
             dyn_position_ids,
             dyn_key_caches,  # type: ignore[attr-defined]
             dyn_value_caches,
-            is_prefill,
             dyn_slot_mapping,
             dynamic_attention_mask,
             dyn_batch_valid_length,
@@ -439,11 +440,21 @@ class NativeModel(MsModelBase):
         model_inputs, is_prefill = self.prepare_base_inputs(
             input_ids, positions)
 
+        new_model_inputs = {}
+        new_model_inputs["input_ids"] = model_inputs["input_ids"]
+        new_model_inputs["batch_valid_length"] =model_inputs["batch_valid_length"]
+        new_model_inputs["block_tables"] = model_inputs["block_tables"]
+        new_model_inputs["slot_mapping"] = model_inputs["slot_mapping"]
+        new_model_inputs["positions"] = model_inputs["position_ids"]
+        new_model_inputs["q_seq_lens"] = model_inputs["q_seq_lens"]
+        new_model_inputs["attn_mask"] = model_inputs["attention_mask"]
+        new_model_inputs["key_caches"] = model_inputs["key_cache"]
+        new_model_inputs["value_caches"] = model_inputs["value_cache"]
         # for multimodal model
-        model_inputs["intermediate_tensors"] = intermediate_tensors
-        model_inputs["inputs_embeds"] = inputs_embeds
+        new_model_inputs["intermediate_tensors"] = intermediate_tensors
+        new_model_inputs["inputs_embeds"] = inputs_embeds
 
-        return model_inputs, is_prefill
+        return new_model_inputs, is_prefill
 
     def exec_model(self,
                    input_ids: Tensor,
@@ -455,33 +466,32 @@ class NativeModel(MsModelBase):
                                                        intermediate_tensors,
                                                        inputs_embeds)
 
-        if self.prev_prefill != is_prefill and self.is_graph_mode:
-            self.set_model_inputs(input_ids, positions, intermediate_tensors,
-                                  inputs_embeds, is_prefill)
-        self.prev_prefill = is_prefill
-
         # for dummy_attention_metadata
         if is_prefill and not self.set_flags:
             self.set_flags = True
 
-        if self.run_model is None:
-            self.run_model = ms.jit(
-                function=self.model,  # type: ignore[attr-defined]
-                jit_level='O0'
-            ) if self.is_graph_mode else self.model  # type: ignore[attr-defined]
-        model_output = self.run_model(  # type: ignore[misc]
-            input_ids=model_inputs["input_ids"],
-            positions=model_inputs["position_ids"],
-            key_caches=model_inputs["key_cache"],
-            value_caches=model_inputs["value_cache"],
-            is_prefill=is_prefill,
-            slot_mapping=model_inputs["slot_mapping"],
-            attn_mask=model_inputs["attention_mask"],
-            batch_valid_length=model_inputs["batch_valid_length"],
-            q_seq_lens=model_inputs["q_seq_lens"],
-            block_tables=model_inputs["block_tables"],
-            intermediate_tensors=model_inputs["intermediate_tensors"],
-            inputs_embeds=model_inputs["inputs_embeds"],
-        )
+        # eager mode
+        if self.is_eager_mode:
+            set_model_context("is_prefill", is_prefill)
+            model_output = self.model(**model_inputs)
+            return model_output
+
+        # graph mode
+        if is_prefill:
+            self.model.phase = "prefill"  # For better performance, it will be improved.
+            if self.fa_network is None:
+                set_model_context("is_prefill", True)
+                self.model._set_jit_graph_name("prefill")
+                self.set_model_inputs()
+                self.fa_network = ms.jit(function=self.model, jit_level="O0")
+            model_output = self.fa_network(**model_inputs)
+        else:
+            self.model.phase = "increment"  # For better performance, it will be improved.
+            if self.pa_network is None:
+                set_model_context("is_prefill", False)
+                self.model._set_jit_graph_name("decode")
+                self.set_model_inputs()
+                self.pa_network = ms.jit(function=self.model, jit_level="O0")
+            model_output = self.pa_network(**model_inputs)
 
         return model_output
