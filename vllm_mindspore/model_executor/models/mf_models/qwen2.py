@@ -22,7 +22,7 @@ from vllm.config import VllmConfig
 from vllm.config import get_current_vllm_config
 from vllm.logger import init_logger
 import vllm.envs as envs
-
+from vllm.model_executor.layers.sampler import get_sampler
 
 from mindspore import Tensor, JitConfig
 from mindspore.nn.utils import no_init_parameters
@@ -32,7 +32,6 @@ from research.qwen2_5.infer.qwen2_5 import (
     ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF,
 )
 
-from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.model_base import AttentionWrapper
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import MfModelBase
 from vllm_mindspore.model_executor.models.mf_models.qwen2_weight_processor import Qwen2WeightProcessor
