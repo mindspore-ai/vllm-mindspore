@@ -15,11 +15,19 @@
 # limitations under the License.
 # ============================================================================
 """test mf qwen chunk prefill, prefix cache, mss."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
@@ -46,25 +54,40 @@ def test_mf_qwen_7b_cp_pc_mss():
     """
 
     # Sample prompts.
-    batch_datas = [{
-        "prompt": "I love Beijing, because it is a city with a long history and profound cultural heritage. Walking through "
-                  "its ancient hutongs, one can almost feel the whispers of the past. The Forbidden City, an architectural "
-                  "marvel that once housed emperors, stands as a testament to the city's imperial past. Meanwhile, the Great "
-                  "Wall, though not within the city limits, is easily accessible from Beijing and offers a glimpse into the "
-                  "strategic genius and resilience of ancient China.",
-        "answer": ""},
-        {"prompt": "I love Beijing, because",
-         "answer": " it is a city with a long history. Which of the following options correctly expresses this sentence?\nA. I love Beijing, because it is a city with a"},
+    batch_datas = [
+        {
+            "prompt":
+            "I love Beijing, because it is a city with a long history and profound cultural heritage. Walking through "
+            "its ancient hutongs, one can almost feel the whispers of the past. The Forbidden City, an architectural "
+            "marvel that once housed emperors, stands as a testament to the city's imperial past. Meanwhile, the Great "
+            "Wall, though not within the city limits, is easily accessible from Beijing and offers a glimpse into the "
+            "strategic genius and resilience of ancient China.",
+            "answer":
+            ""
+        },
+        {
+            "prompt":
+            "I love Beijing, because",
+            "answer":
+            " it is a city with a long history. Which of the following options correctly expresses this sentence?\nA. I love Beijing, because it is a city with a"
+        },
     ]
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=32, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
-              max_model_len=8192, max_num_seqs=16, max_num_batched_tokens=32,
-              block_size=32, gpu_memory_utilization=0.9, tensor_parallel_size=2,
-              enable_chunked_prefill=True, enable_prefix_caching=True, num_scheduler_steps=8)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        max_model_len=8192,
+        max_num_seqs=16,
+        max_num_batched_tokens=32,
+        block_size=32,
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2,
+        enable_chunked_prefill=True,
+        enable_prefix_caching=True,
+        num_scheduler_steps=8)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     for _ in range(3):
@@ -75,7 +98,9 @@ def test_mf_qwen_7b_cp_pc_mss():
             # Print the outputs.
             for i, output in enumerate(outputs):
                 generated_text = output.outputs[0].text
-                print(f"Prompt: {output.prompt!r}, Generated text: {generated_text!r}")
+                print(
+                    f"Prompt: {output.prompt!r}, Generated text: {generated_text!r}"
+                )
                 assert generated_text == answer
 
     # unset env

@@ -20,9 +20,14 @@ for offline inference.
 """
 import pytest
 import os
-from . import set_env
 
-env_manager = set_env.EnvVarManager()
+from .utils import EnvVarManager, cleanup_subprocesses
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
+env_manager = EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),

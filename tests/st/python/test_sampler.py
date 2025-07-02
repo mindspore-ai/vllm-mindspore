@@ -14,25 +14,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-import vllm_mindspore
+
+# type: ignore
+# isort: skip_file
+
 import itertools
 import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 from unittest.mock import Mock, patch
-from mindspore import mint
 
+import vllm_mindspore
 import pytest
 import torch
-from transformers import GenerationConfig, GenerationMixin
-
 import vllm.envs as envs
 
-from vllm_mindspore.model_executor.layers.sampler import Sampler
+from transformers import GenerationConfig, GenerationMixin
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.model_executor.utils import set_random_seed
-from vllm_mindspore.sequence import SamplingParams, SequenceData, SequenceGroupMetadata
 from vllm.utils import Counter, is_pin_memory_available
+from vllm_mindspore.model_executor.layers.sampler import Sampler
+from vllm_mindspore.sequence import (SamplingParams, SequenceData,
+                                     SequenceGroupMetadata)
+
+from .utils import cleanup_subprocesses
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
 
 class MockLogitsSampler(Sampler):
 
@@ -88,6 +98,7 @@ def _do_sample(
         pin_memory=is_pin_memory_available())
     return sampler(logits=input_tensor, sampling_metadata=sampling_metadata)
 
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
@@ -105,6 +116,7 @@ def test_sampler_all_greedy(seed: int, device: str):
     for i, sequence_output in enumerate(sampler_output):
         for nth_output in sequence_output.samples:
             assert nth_output.output_token == expected[i].item()
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
@@ -130,6 +142,7 @@ def test_sampler_all_random(seed: int, device: str):
         for nth_output in sequence_output.samples:
             assert nth_output.output_token == i
 
+
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
 @pytest.mark.parametrize("device", CUDA_DEVICES)
@@ -154,6 +167,7 @@ def test_sampler_all_random_seed(seed: int, device: str):
         for nth_output in sequence_output.samples:
             assert nth_output.output_token == i
 
+
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
 @pytest.mark.parametrize("device", CUDA_DEVICES)
@@ -175,6 +189,7 @@ def test_sampler_all_random_seed_deterministic(seed: int, device: str):
                                        sampling_params, device)
 
     assert first_sampler_output == second_sampler_output
+
 
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
@@ -463,6 +478,7 @@ def test_sampler_min_tokens_penalty(seed: int, device: str):
     for test_case in test_cases:
         run_test_case(**test_case)
 
+
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
 @pytest.mark.parametrize("device", CUDA_DEVICES)
@@ -566,6 +582,7 @@ def test_sampler_mixed(seed: int, device: str):
     # the corresponding sample in the pre-shuffled batch
     test_sampling()
 
+
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
 @pytest.mark.parametrize("device", CUDA_DEVICES)
@@ -648,6 +665,7 @@ def test_sampler_top_k_top_p(seed: int, device: str):
     torch.testing.assert_close(hf_probs, sample_probs, rtol=0.0, atol=1e-5)
     assert torch.equal(hf_probs.eq(0), sample_probs.eq(0))
 
+
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("seed", RANDOM_SEEDS)
 @pytest.mark.parametrize("device", CUDA_DEVICES)
@@ -678,6 +696,7 @@ def test_flashinfer_fallback(seed: int, device: str):
                                              sampling_params, device)
 
     assert sampler_output == fallback_sampler_output
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
@@ -749,6 +768,7 @@ def test_sampler_repetition_penalty_mixed(device: str):
 
     assert tokens1[0] == tokens2[1]
     assert tokens1[1] == tokens2[0]
+
 
 @pytest.mark.skip(reason="Not implemented yet")
 @pytest.mark.parametrize("device", CUDA_DEVICES)

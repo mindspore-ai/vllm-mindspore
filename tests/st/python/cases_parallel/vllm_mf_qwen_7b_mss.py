@@ -15,11 +15,19 @@
 # limitations under the License.
 # ============================================================================
 """test mf qwen mss."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
@@ -54,9 +62,14 @@ def test_mf_qwen_7b_mss():
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
-              max_model_len=8192, max_num_batched_tokens=8192,
-              block_size=32, gpu_memory_utilization=0.9, num_scheduler_steps=8, tensor_parallel_size=2)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        max_model_len=8192,
+        max_num_batched_tokens=8192,
+        block_size=32,
+        gpu_memory_utilization=0.9,
+        num_scheduler_steps=8,
+        tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
