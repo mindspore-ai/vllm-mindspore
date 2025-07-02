@@ -34,7 +34,8 @@ from vllm.config import CacheConfig
 
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
-from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.model_executor.utils import (get_model_context,
+                                                 set_weight_attrs)
 from vllm_mindspore.utils import is_310p
 
 
@@ -134,7 +135,6 @@ class BaseKVCacheMethod(QuantizeMethodBase):
         value: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -147,6 +147,7 @@ class BaseKVCacheMethod(QuantizeMethodBase):
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)
+        is_prefill = get_model_context("is_prefill")
         if self.use_fused_attn:
             if not is_prefill:
                 key = self.reshape(
@@ -351,7 +352,6 @@ class KVCacheInt8Method(BaseKVCacheMethod):
         value: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -370,7 +370,7 @@ class KVCacheInt8Method(BaseKVCacheMethod):
         cache_out = self.reshape_and_cache(quant_key, quant_value, key_cache,
                                            value_cache, slot_mapping)
         query = ops.depend(query, cache_out)
-        if is_prefill:
+        if get_model_context("is_prefill"):
             output = self._run_prefill_forward(query, key, value, attn_mask,
                                                batch_valid_length,
                                                batch_valid_length)

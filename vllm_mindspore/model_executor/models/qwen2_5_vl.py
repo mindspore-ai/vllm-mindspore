@@ -1204,7 +1204,7 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             quant_config=self._maybe_ignore_quant_config(quant_config),
             prefix=maybe_prefix(prefix, "visual"),
         )
-        if self.is_graph_mode:
+        if not self.is_eager_mode:
             self.visual.construct = ms.jit(function=self.visual,
                                            jit_level='O0')
             self.visual.set_model_inputs()
