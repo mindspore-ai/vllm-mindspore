@@ -80,7 +80,7 @@ struct DAGraph {
 
 struct DATensor {
   // Device type of tensor
-  TensorType tensorType{HOST_TENSOR};
+  TensorType tensorType{UNKNOW_TENSOR};
 
   // Data type of tensor
   Type type{Type_End};

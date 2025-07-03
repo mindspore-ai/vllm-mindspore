@@ -32,6 +32,7 @@ namespace tensor {
 enum Type {
   Type_Tuple,
   Type_Monad,
+  Type_None,
   Type_Bool,
   Type_F16,
   Type_F32,
@@ -43,7 +44,7 @@ enum Type {
   Type_End
 };
 
-enum TensorType { HOST_TENSOR, DEVICE_TENSOR };
+enum TensorType { HOST_TENSOR, DEVICE_TENSOR, UNKNOW_TENSOR };
 
 // Shape vaule type of tensor
 using ShapeValueType = size_t;
@@ -79,21 +80,21 @@ inline size_t ShapeDims(const ShapeArray &shape) {
 
 inline size_t DataTypeSize(da::tensor::Type dtype) {
   switch (dtype) {
-    case da::tensor::Type_Bool:
-      return sizeof(bool);
-    case da::tensor::Type_F32:
-      return sizeof(float);
-    case da::tensor::Type_F64:
-      return sizeof(double);
-    case da::tensor::Type_I16:
-      return sizeof(int16_t);
-    case da::tensor::Type_I32:
-      return sizeof(int32_t);
-    case da::tensor::Type_I64:
-      return sizeof(int64_t);
-    default:
-      LOG_ERROR << "Unknown data type: " << dtype;
-      exit(EXIT_FAILURE);
+  case da::tensor::Type_Bool:
+    return sizeof(bool);
+  case da::tensor::Type_F32:
+    return sizeof(float);
+  case da::tensor::Type_F64:
+    return sizeof(double);
+  case da::tensor::Type_I16:
+    return sizeof(int16_t);
+  case da::tensor::Type_I32:
+    return sizeof(int32_t);
+  case da::tensor::Type_I64:
+    return sizeof(int64_t);
+  default:
+    LOG_ERROR << "Unknown data type: " << dtype;
+    exit(EXIT_FAILURE);
   }
 }
 
