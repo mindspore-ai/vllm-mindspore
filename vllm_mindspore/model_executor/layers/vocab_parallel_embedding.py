@@ -18,6 +18,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
+import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore.common.dtype import typing
 from vllm.config import get_current_vllm_config
@@ -30,6 +31,8 @@ from vllm_mindspore.distributed.communication_op import (
     ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
@@ -330,7 +333,7 @@ class VocabParallelEmbedding(nn.Cell):
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor):
         output_dim = getattr(param, "output_dim", None)
-
+        get_tensor_model_parallel_rank()
         # If parameter does not have output dim, then it should
         # be copied onto all gpus (e.g. g_idx for act_order gptq).
         if output_dim is None:
@@ -345,16 +348,16 @@ class VocabParallelEmbedding(nn.Cell):
         # Shard indexes for loading the weight
         start_idx = self.shard_indices.org_vocab_start_index
         shard_size = self.shard_indices.org_vocab_end_index - start_idx
-        if loaded_weight.shape[output_dim] != self.org_vocab_size:
+        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                            start_idx, shard_size)
+        org_vocab_size_per_rank = self.org_vocab_size // self.tp_size
+        if loaded_weight.shape[output_dim] != org_vocab_size_per_rank:
             raise ValueError(
                 f"'loaded_weight.shape[output_dim]' should be equal to 'org_vocab_size',"
                 f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}"
             )
 
-        # Copy the data.
-        loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                             shard_size).contiguous()
-        param[:loaded_weight.shape[0]] = loaded_weight
+        param[:loaded_weight.shape[0]] = ms.from_numpy(loaded_weight)
         param[loaded_weight.shape[0]:] = 0
 
 
