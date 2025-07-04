@@ -22,7 +22,7 @@ from typing import Any, Optional, Union, cast
 import mindspore as ms
 import numpy as np
 import vllm.envs as envs
-from mindspore import Tensor, mutable, nn
+from mindspore import Tensor, mutable, nn, ops
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
@@ -35,7 +35,7 @@ from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
-
+from vllm_mindspore.utils import atlas_inference, FORMAT_TYPE
 
 class AttentionWrapper:
 
@@ -46,11 +46,32 @@ class AttentionWrapper:
             vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [(
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
+        if atlas_inference():
+            self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        ms.mint.zeros(
+                            self.kv_shape, dtype=vllm_config.model_config.dtype
+                        ),
+                        FORMAT_TYPE['nz'],
+                    ),
+                    ops.auto_generate.format_cast(
+                        ms.mint.zeros(
+                            self.kv_shape, dtype=vllm_config.model_config.dtype
+                        ),
+                        FORMAT_TYPE['nz'],
+                    ),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
+            self.kv_cache = [(
+                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
+                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
+            ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
+
         self.attn_type = AttentionType.DECODER
 
         # add for v1
@@ -67,13 +88,26 @@ class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        self.kv_cache = [
-            (
+        if atlas_inference():
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        ms.mint.zeros(
+                            self.kv_shape, dtype=vllm_config.model_config.dtype
+                        ),
+                        FORMAT_TYPE['nz'],
+                    ),
+                )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            self.kv_cache = [
+                (
                 ms.mint.zeros(
                     self.kv_shape,  # type: ignore[misc]
-                    dtype=vllm_config.model_config.dtype), )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+                     dtype=vllm_config.model_config.dtype), )
+                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
 
 
 class MsModelBase:
@@ -406,7 +440,8 @@ class NativeModel(MsModelBase):
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+        kv_cache_shape = (None, block_size, num_kv_heads * head_size) if atlas_inference() \
+            else (None, block_size, num_kv_heads, head_size)
 
         kv_cache_dtype = (self.model_config.dtype
                           if self.cache_config.cache_dtype == "auto" else

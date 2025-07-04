@@ -25,6 +25,8 @@ import mindspore as ms
 from mindspore import Parameter
 from safetensors import safe_open
 from tqdm.auto import tqdm
+from vllm_mindspore.utils import atlas_inference
+import numpy as np
 from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
                                                            enable_tqdm)
 
@@ -66,12 +68,11 @@ def safetensors_weights_iterator(
     ):
         with safe_open(st_file, framework="np") as f:
             for name in f.keys():  # noqa: SIM118
-                # Return a lightweight PySafeSlice object that uses file
-                # pointer offset internally to read Safetensor on demand,
-                # avoiding memory explosion. Actual data can be obtained
-                # through slicing operation like param[start:end]
-                param = f.get_slice(name)
-                yield name, param
+                # TODO： use slice
+                x = f.get_tensor(name)
+                x = x.astype(np.float16) \
+                    if (str(x.dtype) == 'bfloat16' and atlas_inference()) else x
+                yield name, ms.tensor(x)
 
 
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:

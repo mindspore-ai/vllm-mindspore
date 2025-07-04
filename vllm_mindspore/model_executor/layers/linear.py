@@ -580,6 +580,7 @@ class RowParallelLinear(LinearBase):
 
     def weight_loader(self, param, loaded_weight):
         tp_rank = get_tensor_model_parallel_rank()
+        param_data = param.data
         input_dim = getattr(param, "input_dim", None)
         shard_size = self.input_size_per_partition
         start_idx = tp_rank * shard_size

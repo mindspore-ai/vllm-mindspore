@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 else:
     Qwen2Config = None
 
-from mindspore import Parameter, Tensor, mint, nn
+from mindspore import Parameter, Tensor, mint, nn, ops
+import mindspore as ms
 
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
@@ -45,6 +46,7 @@ from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
+from vllm_mindspore.utils import atlas_inference, FORMAT_TYPE
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SwiGLU
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
@@ -413,8 +415,34 @@ class Qwen2Model(nn.Cell):
                     param = params_dict[name]
                     weight_loader = getattr(param, "weight_loader",
                                             default_weight_loader)
+                    # Norm type in weights may be f32
+                    if(loaded_weight.dtype != param.dtype):
+                        loaded_weight = loaded_weight.to(dtype=param.dtype)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
+
+        def adjust_weight(params_dict):
+            if not atlas_inference():
+                return
+
+            target_keywords = [
+                "qkv_proj.weight",
+                "o_proj.weight",
+                "gate_up_proj.weight",
+                "down_proj.weight",
+                # "lm_head.weight",
+            ]
+
+            for name, param in params_dict.items():
+                if any(name.endswith(keyword) for keyword in target_keywords):
+                    cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+                    ms.runtime.synchronize()
+                    param.set_data(cast_weight)
+
+        if atlas_inference():
+            ms.runtime.synchronize()
+            adjust_weight(params_dict)
+            ms.runtime.synchronize()
 
         return loaded_params
 
