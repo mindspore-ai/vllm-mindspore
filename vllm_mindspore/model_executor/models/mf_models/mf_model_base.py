@@ -157,7 +157,7 @@ class MfModelBase(MsModelBase):
             model_inputs = {}
             model_inputs["input_ids"] = input_ids.astype(ms.int32)
             model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-            model_inputs["block_tables"] = attn_metadata.block_tables
+            model_inputs["block_tables"] = attn_metadata.block_tables * 1
             model_inputs["slot_mapping"] = attn_metadata.slot_mapping
             model_inputs["position_ids"] = position_ids
             model_inputs["q_seq_lens"] = q_seq_lens
@@ -176,7 +176,7 @@ class MfModelBase(MsModelBase):
             model_inputs = {}
             model_inputs["input_ids"] = input_ids.astype(ms.int32)
             model_inputs["batch_valid_length"] = ms.from_numpy(attn_metadata.seq_lens_np)
-            model_inputs["block_tables"] = attn_metadata.block_tables
+            model_inputs["block_tables"] = attn_metadata.block_tables * 1
             model_inputs["slot_mapping"] = attn_metadata.slot_mapping
             model_inputs["position_ids"] = positions.to(ms.int32)
             model_inputs["q_seq_lens"] = q_seq_lens
