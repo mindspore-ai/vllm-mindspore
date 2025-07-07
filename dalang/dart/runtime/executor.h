@@ -17,14 +17,15 @@
 #ifndef __RUNTIME_EXECUTOR_H__
 #define __RUNTIME_EXECUTOR_H__
 
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
 #include "common/common.h"
 #include "common/visible.h"
-#include "tensor/tensor.h"
-#include "runtime/mempool.h"
 #include "runtime/kernel_lib.h"
+#include "runtime/mempool.h"
+#include "tensor/tensor.h"
 
 #define DUMP
 
@@ -49,17 +50,21 @@ public:
                               size_t dim = 0,
                               const tensor::ShapeArray &shape = {0},
                               void *data = nullptr);
+  // Add tensor for graph
+  void AddTensor(tensor::DATensor *tensor);
   // Add operation result tensor.
   tensor::DATensor *AddTensor(ops::Op op,
-                              const std::vector<tensor::DATensor *> &inputs);
-
-  // Append node outputs to the given vector.
-  void AppendNodeOutputs(std::vector<tensor::DATensor *> &vec, tensor::DATensor *node);
+                              const std::vector<tensor::DATensor *> &inputs,
+                              size_t outputSize = 1);
 
   // Run the built graph.
   void RunGraph();
   // If the graph had been built.
   bool HasGraph() const { return graph_ != nullptr; }
+  // Set memory free func for DATensor
+  void SetFreeFunc(std::function<void(void *)> &&func) {
+    memPool_->SetFreeFunc(std::move(func));
+  }
 #ifdef DUMP
   // Dump the built graph.
   void DumpGraph();
@@ -72,8 +77,7 @@ private:
   tensor::DAContext *context_{nullptr};
   tensor::DAGraph *graph_{nullptr};
   std::vector<tensor::DATensor *> parameters_;
-  runtime::MemoryPool *mempool_{nullptr};
-  std::unordered_map<tensor::DATensor *, std::vector<tensor::DATensor *>> outputs_;
+  runtime::MemoryPool *memPool_{nullptr};
   std::mutex outputsMutex_;
 #ifdef DUMP
   std::unordered_map<const tensor::DATensor *, ssize_t> paraNumMap_;

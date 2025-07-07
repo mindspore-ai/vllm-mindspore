@@ -32,6 +32,7 @@ namespace tensor {
 enum Type {
   Type_Tuple,
   Type_Monad,
+  Type_Tensor,
   Type_None,
   Type_Bool,
   Type_F16,

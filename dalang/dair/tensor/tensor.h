@@ -120,6 +120,27 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
                       const ShapeArray &shape = {0}, void *data = nullptr,
                       ops::Op op = ops::Op_End, size_t inputSize = 0,
                       const TensorArrayPtr &input = {nullptr});
+// Create a new DATensorList with given length
+DATensor **NewDATensorList(DAContext *context, size_t len);
+
+// Whether a DATensor is weight or const value
+bool IsDATensorConst(DATensor *tensor);
+
+// whether a DATensor's output is from input
+bool IsDATensorOutputFromInput(DATensor *tensor);
+
+template <typename T>
+const T GetValue(const DATensor *tensor) {
+  if (tensor->tensorType != HOST_TENSOR || tensor->dim != 0) {
+    LOG_ERROR << "Input DATensor is not HOST_TENSOR or is not a scalar";
+    exit(EXIT_FAILURE);
+  }
+
+  const T *dataPtr = reinterpret_cast<const T *>(tensor->data);
+  LOG_OUT << "GetValue for DATensor: " << tensor << ", dataPtr: " << dataPtr;
+  CHECK_IF_NULL(dataPtr);
+  return *dataPtr;
+}
 
 // directly use the original data address, no copy
 template <typename T>
