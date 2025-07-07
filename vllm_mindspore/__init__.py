@@ -327,6 +327,14 @@ from vllm.v1.worker.gpu_model_runner import GPUModelRunner
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.execute_model = \
     wrapper_gpu_model_runner_execute_model(GPUModelRunner.execute_model)
 
+from vllm_mindspore.v1.worker.gpu_model_runner import get_dp_padding
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_dp_padding = get_dp_padding
+
+from vllm_mindspore.forward_context import set_forward_context
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.set_forward_context = set_forward_context
+
 import vllm.v1.worker.block_table
 from vllm_mindspore.v1.worker.block_table import BlockTable
 

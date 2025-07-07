@@ -616,3 +616,11 @@ def _calc_mrope_positions(
                 )
 
             mrope_pos_ptr += completion_part_len
+
+
+def get_dp_padding(self, num_tokens: int):
+    # Skip unnecessary padding processes to ensure the shape consistency
+    # of model_inputs. Shape of `input_ids` and `positions` will be
+    # padded based on `num_tokens_across_dp`, while the model only accepts
+    # inputs with actual shape.
+    return 0, None
