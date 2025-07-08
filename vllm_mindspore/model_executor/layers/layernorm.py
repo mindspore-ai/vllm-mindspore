@@ -21,23 +21,26 @@ from typing import Optional, Tuple, Union, Any
 from mindspore import Parameter, Tensor, mint, ops
 from mindspore.common import dtype as mstype
 from mindspore.common.dtype import typing
+from mindspore import nn
 
-from vllm_mindspore.model_executor.custom_op import CustomOp
+from vllm.config import get_current_vllm_config
 
 
-class RMSNorm(CustomOp):
+class RMSNorm(nn.Cell):
     def __init__(
         self,
         hidden_size: int,
         eps: float = 1e-6,
         var_hidden_size: Optional[int] = None,
-        params_dtype: Optional[Any] = mstype.float16,
+        params_dtype: Optional[Any] = None,
     ) -> None:
         super().__init__()
+        if params_dtype is None:
+            params_dtype = get_current_vllm_config().model_config.dtype
         self.weight = Parameter(mint.ones(hidden_size, dtype=params_dtype))
         self.rms_norm = ops.RmsNorm(eps)
 
-    def forward_native(
+    def construct(
         self,
         x: Tensor,
         residual: Optional[Tensor] = None

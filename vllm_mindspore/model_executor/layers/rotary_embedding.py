@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -20,13 +19,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import mindspore
-from mindspore import Tensor, mint, ops
+from mindspore import Tensor, mint, ops, nn
 from mindspore.common import dtype as mstype
 
 from transformers import PretrainedConfig
 
-from vllm_mindspore.model_executor.custom_op import CustomOp
-
+from vllm.config import get_current_vllm_config
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -57,7 +55,8 @@ def _apply_rotary_emb(
         return mint.stack((o1, o2), dim=-1).flatten(-2)
 
 
-class RotaryEmbedding(CustomOp):
+class RotaryEmbedding(nn.Cell):
+
     def __init__(
         self,
         head_size: int,
@@ -86,10 +85,8 @@ class RotaryEmbedding(CustomOp):
         # use CPU to compute the cache and then move it to GPU. However, we
         # create the cache on GPU for faster initialization. This may cause
         # a slight numerical difference between the HF implementation and ours.
-        inv_freq = 1.0 / (
-            base
-            ** (mint.arange(0, self.rotary_dim, 2, dtype=mstype.float32) / self.rotary_dim)
-        )
+        inv_freq = 1.0 / (base**(mint.arange(
+            0, self.rotary_dim, 2, dtype=mstype.float32) / self.rotary_dim))
         return inv_freq
 
     def _compute_cos_sin_cache(self) -> Tensor:
@@ -104,7 +101,7 @@ class RotaryEmbedding(CustomOp):
         cache = mint.cat((cos, sin), dim=-1)
         return cache
 
-    def forward_native(
+    def construct(
         self,
         positions: Tensor,
         query: Tensor,
@@ -121,21 +118,22 @@ class RotaryEmbedding(CustomOp):
 
         query_shape = query.shape
         query = query.view(num_tokens, -1, self.head_size)
-        query_rot = query[..., : self.rotary_dim]
+        query_rot = query[..., :self.rotary_dim]
         query_pass = query[..., self.rotary_dim:]
         query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
         query = mint.cat((query_rot, query_pass), dim=-1).reshape(query_shape)
 
         key_shape = key.shape
         key = key.view(num_tokens, -1, self.head_size)
-        key_rot = key[..., : self.rotary_dim]
+        key_rot = key[..., :self.rotary_dim]
         key_pass = key[..., self.rotary_dim:]
         key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
         key = mint.cat((key_rot, key_pass), dim=-1).reshape(key_shape)
         return query, key
 
 
-class InferRotaryEmbedding(CustomOp):
+class InferRotaryEmbedding(nn.Cell):
+
     def __init__(
         self,
         head_size: int,
@@ -145,23 +143,43 @@ class InferRotaryEmbedding(CustomOp):
         is_neox_style: bool,
         dtype,
     ) -> None:
+        if not is_neox_style:
+            raise NotImplementedError(
+                "InferRotaryEmbedding only support Neox-style rotary embeddings."
+            )
         super().__init__()
-        freqs_base = np.arange(0, rotary_dim, 2)[: (rotary_dim // 2)].astype(np.float32)  # (head_dim // 2, )
-        freqs = 1.0 / (base ** (freqs_base / rotary_dim))  # (head_dim // 2, )
-        mscale = 1.0
-        t = np.arange(0, max_position_embeddings, 1).astype(np.float32)
-
-        self.freqs = Tensor(freqs.reshape(1, 1, 1, -1), dtype=dtype)
-        freqs = np.outer(t, freqs)  # (max_position_embedding, head_dim // 2)
-        emb = np.concatenate((freqs, freqs), axis=-1)
-        freqs_cos = np.cos(emb) * mscale  # (seq_len, head_dim)
-        freqs_sin = np.sin(emb) * mscale  # (seq_len, head_dim)
-        self.freqs_cos = Tensor(freqs_cos, dtype=dtype)
-        self.freqs_sin = Tensor(freqs_sin, dtype=dtype)
         self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
         self.gather = ops.Gather()
+        self.head_size = head_size
+        self.rotary_dim = rotary_dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        self.is_neox_style = is_neox_style
+        self.dtype = dtype
+        self.freqs_cos, self.freqs_sin = self._compute_cos_sin_cache()
 
-    def forward_native(
+    def _compute_inv_freq(self, base: Union[int, float]) -> Tensor:
+        """
+        Compute the inverse frequency with numpy.
+        Numpy process is faster during initialization.
+        """
+        freqs_base = np.arange(0, self.rotary_dim, 2).astype(
+            np.float32)  # (head_dim // 2, )
+        freqs = 1.0 / (base**(freqs_base / self.rotary_dim))  # (head_dim // 2, )
+        return freqs
+
+    def _compute_cos_sin_cache(self) -> Tuple[Tensor, Tensor]:
+        freqs = self._compute_inv_freq(self.base)
+        t = np.arange(0, self.max_position_embeddings, 1).astype(np.float32)
+        freqs = np.outer(t, freqs)  # (max_position_embedding, head_dim // 2)
+        emb = np.concatenate((freqs, freqs), axis=-1)
+        freqs_cos = np.cos(emb) # (seq_len, head_dim)
+        freqs_sin = np.sin(emb) # (seq_len, head_dim)
+        freqs_cos = Tensor(freqs_cos, dtype=self.dtype)
+        freqs_sin = Tensor(freqs_sin, dtype=self.dtype)
+        return freqs_cos, freqs_sin
+
+    def construct(
         self,
         positions: Tensor,
         query: Tensor,
@@ -170,12 +188,16 @@ class InferRotaryEmbedding(CustomOp):
         is_prefill: bool,
         offsets: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Tensor]:
+        query = query.contiguous()
+        key = key.contiguous()
         if is_prefill:
-            return self.rotary_embedding_op(query, key, self.freqs_cos, self.freqs_sin, batch_valid_length)
+            return self.rotary_embedding_op(query, key, self.freqs_cos,
+                                            self.freqs_sin, batch_valid_length)
 
         freqs_cos = self.gather(self.freqs_cos, positions, 0)
         freqs_sin = self.gather(self.freqs_sin, positions, 0)
-        return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin, batch_valid_length)
+        return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
+                                        batch_valid_length)
 
 
 class MRotaryEmbedding(RotaryEmbedding):
@@ -202,7 +224,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
 
-    def forward_native(
+    def construct(
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
@@ -444,7 +466,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
 
-    def forward_native(
+    def construct(
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
@@ -523,9 +545,12 @@ def get_rope(
     base: int,
     is_neox_style: bool = True,
     rope_scaling: Optional[Dict[str, Any]] = None,
-    dtype: Optional[Any] = mstype.float16,
+    dtype: Optional[Any] = None,
     partial_rotary_factor: float = 1.0,
 ) -> InferRotaryEmbedding:
+    if dtype is None:
+        dtype = get_current_vllm_config().model_config.dtype
+
     if rope_scaling is not None:
         # Transforms every value that is a list into a tuple for caching calls
         rope_scaling_tuple = {
@@ -543,7 +568,8 @@ def get_rope(
     if key in _ROPE_DICT:
         return _ROPE_DICT[key]
     if rope_scaling is None:
-        rotary_emb = InferRotaryEmbedding(
+        cls = InferRotaryEmbedding if is_neox_style else RotaryEmbedding
+        rotary_emb = cls(
             head_size,
             rotary_dim,
             max_position,

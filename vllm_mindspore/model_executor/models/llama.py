@@ -48,7 +48,7 @@ from vllm_mindspore.model_executor.models.utils import (
 from vllm_mindspore.model_executor.layers.sampler import get_sampler, SamplerOutput
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.rotary_embedding import get_rope
-from vllm_mindspore.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
 

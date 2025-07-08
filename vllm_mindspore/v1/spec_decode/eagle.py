@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from vllm.config import VllmConfig
 from vllm.forward_context import set_forward_context
-from vllm_mindspore.v1.attention.backends.flash_attn import FlashAttentionMetadata
+from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 from vllm.v1.sample.metadata import SamplingMetadata
 
 
@@ -56,7 +56,8 @@ class EagleProposer:
         # FIXME(woosuk): The below two ops cause synchronization. Optimize.
         max_seq_len = seq_lens.max().item()
         max_num_tokens = (cu_num_tokens[1:] - cu_num_tokens[:-1]).max().item()
-        attn_metadata = FlashAttentionMetadata(
+        # TODO: new members need to be added to the MsAttentionMetadata for Eagle feature
+        attn_metadata = MsAttentionMetadata(
             num_actual_tokens=num_tokens,
             max_query_len=max_num_tokens,
             query_start_loc=cu_num_tokens,
