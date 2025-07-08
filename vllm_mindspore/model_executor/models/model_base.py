@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# type: ignore
-# isort:skip_file
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -19,22 +17,22 @@
 
 import os
 from abc import abstractmethod
-from typing import Iterable, Optional, Set, Tuple, Union, Dict
-import numpy as np
+from typing import Any, Dict, Iterable, Optional, Set, Tuple, Union
 
+import mindspore as ms
+import numpy as np
+import vllm.envs as envs
+from mindspore import Tensor, mutable, nn
+from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
-import vllm.envs as envs
 
-import mindspore as ms
-from mindspore import Tensor, nn, mutable
-from mindspore.common import dtype as mstype
-
-from vllm_mindspore.model_executor.models.attention_mask import LowerTriangularMask
+from vllm_mindspore.model_executor.models.attention_mask import (
+    LowerTriangularMask)
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
@@ -69,8 +67,10 @@ class MLAAttentionWrapper(AttentionWrapper):
         super().__init__()
         vllm_config = get_current_vllm_config()
         self.kv_cache = [
-            (ms.mint.zeros(self.kv_shape,
-                           dtype=vllm_config.model_config.dtype), )
+            (
+                ms.mint.zeros(
+                    self.kv_shape,  # type: ignore[misc]
+                    dtype=vllm_config.model_config.dtype), )
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
@@ -93,7 +93,7 @@ class MsModelBase:
                 vllm_config.additional_config.get('enable_micro_batch', 0) == 1 \
                 if vllm_config.additional_config is not None else False
 
-        self.modules_dict = None
+        self.modules_dict: Any = None
 
         self.enable_chunked_prefill = vllm_config.scheduler_config.enable_chunked_prefill
         self.enable_prefix_caching = vllm_config.cache_config.enable_prefix_caching
@@ -107,8 +107,8 @@ class MsModelBase:
         if os.path.isdir(model_name_or_path):
             return model_name_or_path
         else:
-            from vllm.model_executor.model_loader.weight_utils import \
-                download_weights_from_hf
+            from vllm.model_executor.model_loader.weight_utils import (
+                download_weights_from_hf)
             allow_patterns = ["*.safetensors"]
             revision = self.model_config.revision
             return download_weights_from_hf(
@@ -129,8 +129,7 @@ class MsModelBase:
     def named_parameters(self):
         self._check_modules_valid()
 
-        for cell_name, module in self.modules_dict.items(
-        ):  # type: ignore[attr-defined]
+        for cell_name, module in self.modules_dict.items():
             for par_name, par in module.parameters_and_names():
                 if cell_name != "self":
                     par_name = cell_name + "." + par_name
@@ -141,8 +140,7 @@ class MsModelBase:
         self._check_modules_valid()
 
         params_dict = dict()
-        for name, module in self.modules_dict.items(
-        ):  # type: ignore[attr-defined]
+        for name, module in self.modules_dict.items():
             module_params = module.parameters_dict()
             if name != "self":
                 new_module_params = dict()
@@ -156,8 +154,7 @@ class MsModelBase:
     def named_modules(self, remove_duplicate: bool = True):
         self._check_modules_valid()
 
-        for name, module in self.modules_dict.items(
-        ):  # type: ignore[attr-defined]
+        for name, module in self.modules_dict.items():
             for module_name, sub_module in module.cells_and_names():
                 if name != "self":
                     module_name = name + "." + module_name
@@ -179,8 +176,7 @@ class MsModelBase:
     def eval(self):
         self._check_modules_valid()
 
-        for _, module in self.modules_dict.items(
-        ):  # type: ignore[attr-defined]
+        for _, module in self.modules_dict.items():
             module.set_train(False)
 
         return self
@@ -339,12 +335,11 @@ class NativeModel(MsModelBase):
         self.is_graph_mode = bool(not vllm_config.model_config.enforce_eager)
         self.prev_prefill = False
         self.run_model = None
+        self.model = None
+        self.lm_head = None
 
     def common_preprocess(self, vllm_config, prefix=""):
-        self.set_modules({
-            "model": self.model,
-            "lm_head": self.lm_head
-        })  # type: ignore[attr-defined]
+        self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -411,24 +406,16 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        self.model.set_inputs(
-            dyn_input_ids,
-            dyn_position_ids,
-            dyn_key_caches,  # type: ignore[attr-defined]
-            dyn_value_caches,
-            is_prefill,
-            dyn_slot_mapping,
-            dynamic_attention_mask,
-            dyn_batch_valid_length,
-            dyn_q_seq_lens,
-            dyn_block_tables,
-            dyn_intermediate_tensors,
-            dyn_inputs_embeds)
+        self.model.set_inputs(  # type: ignore[attr-defined]
+            dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
+            is_prefill, dyn_slot_mapping, dynamic_attention_mask,
+            dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+            dyn_intermediate_tensors, dyn_inputs_embeds)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
-        self.lm_head.set_inputs(
-            dynamic_hidden_states)  # type: ignore[attr-defined]
+        self.lm_head.set_inputs(  # type: ignore[attr-defined]
+            dynamic_hidden_states)
 
     def prepare_inputs(self, input_ids, positions, intermediate_tensors,
                        inputs_embeds):
@@ -462,9 +449,8 @@ class NativeModel(MsModelBase):
 
         if self.run_model is None:
             self.run_model = ms.jit(
-                function=self.model,  # type: ignore[attr-defined]
-                jit_level='O0'
-            ) if self.is_graph_mode else self.model  # type: ignore[attr-defined]
+                function=self.model,
+                jit_level='O0') if self.is_graph_mode else self.model
         model_output = self.run_model(  # type: ignore[misc]
             input_ids=model_inputs["input_ids"],
             positions=model_inputs["position_ids"],

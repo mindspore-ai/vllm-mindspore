@@ -57,6 +57,15 @@ else
 fi
 
 # mypy check type
+# download vllm
+
+cd codecheck_toolkits
+git clone https://gitee.com/mirrors/vllm.git -b v0.8.3
+cd -
+
+export MYPYPATH=codecheck_toolkits/vllm
+
+# check
 
 PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 
