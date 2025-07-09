@@ -14,13 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-
 """test mf qwen prefix caching."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -56,9 +63,13 @@ def test_mf_qwen_7b_prefix_caching():
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
-              max_model_len=8192, block_size=16, enable_prefix_caching=True,
-              gpu_memory_utilization=0.9, tensor_parallel_size=2)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        max_model_len=8192,
+        block_size=16,
+        enable_prefix_caching=True,
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
@@ -67,11 +78,15 @@ def test_mf_qwen_7b_prefix_caching():
     second_except_list = [' in Beijing, but I have to say that the']
     for i, (output, second_output) in enumerate(zip(outputs, second_outputs)):
         generated_text = output.outputs[i].text
-        print(f"Output1 - Prompt: {prompts[i]!r}, Generated text: {generated_text!r}")
+        print(
+            f"Output1 - Prompt: {prompts[i]!r}, Generated text: {generated_text!r}"
+        )
         assert generated_text == except_list[i]
 
         second_generated_text = second_output.outputs[i].text
-        print(f"Output2 - Prompt: {second_prompts[i]!r}, Generated text: {second_generated_text!r}")
+        print(
+            f"Output2 - Prompt: {second_prompts[i]!r}, Generated text: {second_generated_text!r}"
+        )
         assert second_generated_text == second_except_list[i]
 
     env_manager.unset_all()

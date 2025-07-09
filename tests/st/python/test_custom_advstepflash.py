@@ -15,23 +15,25 @@
 # limitations under the License.
 # ============================================================================
 """test case for custom op adv_step_flash"""
-
 import time
-import pytest
-from vllm_mindspore import npu_ops
-import numpy as np
+
 import mindspore as ms
+import numpy as np
+import pytest
 import torch
 
+from vllm_mindspore import npu_ops
 
-def benchmark_advance_step_op(sampled_token_ids,
-                              input_tokens,
-                              input_positions,
-                              seq_lens_tensor,
-                              num_queries,
-                              block_size,
-                              block_tables,
-                              slot_mapping):
+from .utils import cleanup_subprocesses
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
+
+def benchmark_advance_step_op(sampled_token_ids, input_tokens, input_positions,
+                              seq_lens_tensor, num_queries, block_size,
+                              block_tables, slot_mapping):
     # update input_tokens
     sampled_token_ids_list = sampled_token_ids[:num_queries].squeeze(-1)
     input_tokens[:num_queries] = sampled_token_ids_list
@@ -48,7 +50,8 @@ def benchmark_advance_step_op(sampled_token_ids,
     block_idx = next_input_pos // block_size
     block_offset = next_input_pos % block_size
 
-    current_block_table = block_tables.gather(1, block_idx.unsqueeze(-1)).squeeze(-1)
+    current_block_table = block_tables.gather(
+        1, block_idx.unsqueeze(-1)).squeeze(-1)
     slot_num = current_block_table * block_size + block_offset
 
     # update slot_mapping
@@ -58,12 +61,21 @@ def benchmark_advance_step_op(sampled_token_ids,
 def gendata(seed, num_seqs, block_size, block_num, make_tensor):
     """generate inputs"""
     np.random.seed(seed)
-    sampled_token_ids = np.random.randint(65536, size=(num_seqs,), dtype=np.int64)
-    input_tokens = np.random.randint(100, size=(num_seqs,), dtype=np.int64)  # out
-    input_positions = np.random.randint(100, size=(num_seqs,), dtype=np.int64)  # out
-    seq_lens_tensor = np.random.randint(block_size * block_num - 1, size=(num_seqs,), dtype=np.int64)  # inplace
-    block_tables = np.random.randint(1024, size=(num_seqs, block_num), dtype=np.int64)
-    slot_mapping = np.random.randint(100, size=(num_seqs,), dtype=np.int64)  # out
+    sampled_token_ids = np.random.randint(65536,
+                                          size=(num_seqs, ),
+                                          dtype=np.int64)
+    input_tokens = np.random.randint(100, size=(num_seqs, ),
+                                     dtype=np.int64)  # out
+    input_positions = np.random.randint(100, size=(num_seqs, ),
+                                        dtype=np.int64)  # out
+    seq_lens_tensor = np.random.randint(block_size * block_num - 1,
+                                        size=(num_seqs, ),
+                                        dtype=np.int64)  # inplace
+    block_tables = np.random.randint(1024,
+                                     size=(num_seqs, block_num),
+                                     dtype=np.int64)
+    slot_mapping = np.random.randint(100, size=(num_seqs, ),
+                                     dtype=np.int64)  # out
     return (make_tensor(sampled_token_ids), \
             make_tensor(input_tokens), \
             make_tensor(input_positions), \
@@ -87,14 +99,9 @@ def test_advstepflash():
     print("test seed:", seed, flush=True)
     sampled_token_ids1, input_tokens1, input_positions1, seq_lens_tensor1, block_tables1, slot_mapping1 = \
         gendata(seed, num_seqs, block_size, block_num, torch.Tensor)
-    benchmark_advance_step_op(sampled_token_ids1,
-                              input_tokens1,
-                              input_positions1,
-                              seq_lens_tensor1,
-                              num_queries,
-                              block_size,
-                              block_tables1,
-                              slot_mapping1)
+    benchmark_advance_step_op(sampled_token_ids1, input_tokens1,
+                              input_positions1, seq_lens_tensor1, num_queries,
+                              block_size, block_tables1, slot_mapping1)
 
     sampled_token_ids2, input_tokens2, input_positions2, seq_lens_tensor2, block_tables2, slot_mapping2 = \
         gendata(seed, num_seqs, block_size, block_num, ms.Tensor)

@@ -18,11 +18,19 @@ This example shows how to use the multi-LoRA functionality
 for offline inference.
 
 """
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -59,7 +67,7 @@ def create_test_prompts(
 
 def process_requests(engine: LLMEngine,
                      test_prompts: List[Tuple[str, SamplingParams,
-                     Optional[LoRARequest]]]):
+                                              Optional[LoRARequest]]]):
     """Continuously process a list of prompts and handle the outputs."""
     request_id = 0
 

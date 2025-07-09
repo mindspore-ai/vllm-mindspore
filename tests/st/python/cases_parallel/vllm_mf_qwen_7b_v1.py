@@ -15,11 +15,20 @@
 # limitations under the License.
 # ============================================================================
 """test mf qwen."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+import pytest
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
@@ -54,8 +63,10 @@ def test_mf_qwen():
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
-              gpu_memory_utilization=0.9, tensor_parallel_size=2)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
@@ -78,26 +89,29 @@ def test_mf_qwen_batch():
     """
     # Sample prompts.
     prompts = [
-                  "北京烤鸭是",
-                  "请介绍一下华为，华为是",
-                  "今年似乎大模型之间的内卷已经有些偃旗息鼓了，各大技术公司逐渐聪单纯追求模型参数量的竞赛中抽身,"
-                  "转向更加注重模型的实际>应用效果和效率",
-              ] * 2
+        "北京烤鸭是",
+        "请介绍一下华为，华为是",
+        "今年似乎大模型之间的内卷已经有些偃旗息鼓了，各大技术公司逐渐聪单纯追求模型参数量的竞赛中抽身,"
+        "转向更加注重模型的实际>应用效果和效率",
+    ] * 2
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct", block_size=32,
-              gpu_memory_utilization=0.9, tensor_parallel_size=2)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        block_size=32,
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
     except_list = [
-                      "享誉世界的中华美食，其制作工艺独特，",
-                      "做什么的？ 华为是一家中国公司，",
-                      "。 \n在这一背景下，阿里云发布了通",
-                  ] * 2
+        "享誉世界的中华美食，其制作工艺独特，",
+        "做什么的？ 华为是一家中国公司，",
+        "。 \n在这一背景下，阿里云发布了通",
+    ] * 2
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt

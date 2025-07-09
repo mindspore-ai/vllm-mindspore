@@ -15,6 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+
+# type: ignore
+# isort: skip_file
+
 from typing import Optional
 
 import numpy as np
@@ -26,11 +30,16 @@ from vllm.utils import make_tensor_with_pad
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.sample.sampler import Sampler
 
+from .utils import cleanup_subprocesses
+
+
+def teardown_function():
+    cleanup_subprocesses()
+
+
 VOCAB_SIZE = 1024
 NUM_OUTPUT_TOKENS = 20
-CUDA_DEVICES = [
-    f"cuda:{0}"
-]
+CUDA_DEVICES = [f"cuda:{0}"]
 MAX_NUM_PROMPT_TOKENS = 64
 
 
@@ -239,6 +248,7 @@ def _create_weighted_output_token_list(
         output_token_ids.append(output_token_ids_for_batch)
     return output_token_ids, sorted_token_ids_in_output
 
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
@@ -269,6 +279,7 @@ def test_sampler_min_tokens_penalty(device: str, batch_size: int):
                 assert logits[batch_idx][token_id] == -float("inf")
             else:
                 assert logits[batch_idx][token_id] != -float("inf")
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
@@ -315,6 +326,7 @@ def test_sampler_presence_penalty(device: str, batch_size: int,
             # token ID does not.
             assert non_penalized_token_id in output_token_ids[batch_idx]
             assert penalized_token_id not in output_token_ids[batch_idx]
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
@@ -370,6 +382,7 @@ def test_sampler_frequency_penalty(device: str, batch_size: int,
             assert non_penalized_token_id == most_frequent_token_id
             assert penalized_token_id not in distinct_sorted_token_ids_in_output
 
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
@@ -417,6 +430,7 @@ def test_sampler_repetition_penalty(device: str, batch_size: int,
             assert (non_penalized_token_id in prompt_tokens
                     or non_penalized_token_id in output_tokens)
 
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
@@ -458,6 +472,7 @@ def test_sampler_min_p(device: str, batch_size: int, min_p: float):
                     # No masking when min_p is 0
                     assert logits[batch_idx][token_id] != -float("inf")
 
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
@@ -488,10 +503,11 @@ def test_sampler_logit_bias(device: str, batch_size: int, bias_value: float):
         biased_index = min(batch_idx, VOCAB_SIZE - 1)
         for token_id in range(VOCAB_SIZE):
             if biased_index == token_id:
-                assert logits_for_req[token_id].item() == pytest.approx(bias_value +
-                                                                 1e-2)
+                assert logits_for_req[token_id].item() == pytest.approx(
+                    bias_value + 1e-2)
             else:
                 assert logits_for_req[token_id].item() == pytest.approx(1e-2)
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
@@ -534,6 +550,7 @@ def test_sampler_allowed_token_ids(device: str, batch_size: int,
                     "inf"), f"{batch_idx}, {token_id}"
             else:
                 assert logits_for_req[token_id] != -float("inf")
+
 
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training

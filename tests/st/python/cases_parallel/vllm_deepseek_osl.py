@@ -18,15 +18,23 @@
 test mf deepseek r1 osl.
 isort:skip_file
 """
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG":
-        "./config/predict_deepseek_r1_671b_w8a8_osl.yaml",
+    "./config/predict_deepseek_r1_671b_w8a8_osl.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
@@ -55,14 +63,11 @@ def test_deepseek_r1():
     ]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0,
-                                     max_tokens=10,
-                                     top_k=1)
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
     llm = LLM(
-        model=
-        "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl",
+        model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl",
         trust_remote_code=True,
         gpu_memory_utilization=0.9,
         tensor_parallel_size=2,
@@ -92,14 +97,11 @@ def test_deepseek_r1_mss():
     ]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0,
-                                     max_tokens=10,
-                                     top_k=1)
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
     llm = LLM(
-        model=
-        "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl",
+        model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-osl",
         trust_remote_code=True,
         gpu_memory_utilization=0.9,
         tensor_parallel_size=2,
