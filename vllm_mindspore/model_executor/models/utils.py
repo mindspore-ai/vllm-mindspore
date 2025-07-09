@@ -16,19 +16,14 @@
 # ============================================================================
 
 from dataclasses import dataclass, field
-from typing import List, Tuple, Union, Mapping, Optional, Iterable
-from functools import wraps
-from typing import List, Tuple
+from typing import Iterable, List, Mapping, Optional, Tuple, Union
 
 import mindspore as ms
-from mindspore import jit, mint
-from mindspore import ops
-
+from mindspore import mint, ops
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
 from vllm_mindspore.utils import get_valid_dtype
-
 
 WeightsMapping = Mapping[str, Optional[str]]
 """If a key maps to a value of `None`, the corresponding weight is ignored."""
@@ -71,6 +66,8 @@ class WeightsMapper:
     ) -> Iterable[Tuple[str, ms.Tensor]]:
         return ((out_name, data) for name, data in weights
                 if (out_name := self._map_name(name)) is not None)
+
+
 enforce_eager = False
 
 class PPMissingLayer(ms.nn.Cell):
@@ -163,6 +160,7 @@ def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
 
 ########################### for multi model ###########################
 
+
 def _flatten_embeddings(embeddings: NestedTensors) -> ms.Tensor:
     """
     Recursively flattens and concatenates NestedTensors on all but the last
@@ -249,7 +247,7 @@ def merge_multimodal_embeddings(
     """
     if isinstance(placeholder_token_id, list):
         placeholder_token_id = ms.Tensor(placeholder_token_id,
-                                            device=input_ids.device)
+                                         device=input_ids.device)
         return _merge_multimodal_embeddings(
             inputs_embeds,
             ms.numpy.isin(input_ids, placeholder_token_id),

@@ -94,7 +94,8 @@ def test_cases_parallel_part1():
          "export HCCL_IF_BASE_PORT=60004 && "
          "pytest -s -v cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py::test_mf_qwen_7b_prefix_caching "
          "> vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log",
-         "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"),
+         "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"
+         ),
         ("export ASCEND_RT_VISIBLE_DEVICES=6,7 && export LCAL_COMM_ID=127.0.0.1:10071 && "
          "export HCCL_IF_BASE_PORT=60006 && "
          "pytest -s -v cases_parallel/vllm_mf_qwen_7b_v1.py::test_mf_qwen > vllm_mf_qwen_7b_v1_test_mf_qwen.log",
@@ -205,6 +206,33 @@ def test_cases_parallel_part4():
          "pytest -s -v cases_parallel/vllm_deepseek_smoothquant_mss.py::test_deepseek_r1_mss "
          "> vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log",
          "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
+    ]
+
+    with Pool(len(commands)) as pool:
+        results = list(pool.imap(run_command, commands))
+    check_results(commands, results)
+
+
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+def test_cases_parallel_part5():
+    """
+    Feature: test cases parallel.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    commands = [
+        ("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
+         "export HCCL_IF_BASE_PORT=61000 && "
+         "pytest -s -v cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v0 "
+         "> vllm_mf_qwen3_8b_test_mf_qwen3.log",
+         "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
+        ("export ASCEND_RT_VISIBLE_DEVICES=2,3 && export LCAL_COMM_ID=127.0.0.1:10069 && "
+         "export HCCL_IF_BASE_PORT=61002 && "
+         "pytest -s -v cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1 "
+         "> vllm_mf_qwen3_8b_v1_test_mf_qwen3.log",
+         "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log")
     ]
 
     with Pool(len(commands)) as pool:

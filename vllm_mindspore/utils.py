@@ -20,8 +20,7 @@ import gc
 import os
 import sys
 from enum import Enum
-from typing import (TYPE_CHECKING, Callable, Generator, List, Optional, Tuple,
-                    Union)
+from typing import TYPE_CHECKING, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -31,11 +30,10 @@ if TYPE_CHECKING:
 else:
     Library = None
 
-from vllm.logger import init_logger
-
 import mindspore as ms
 from mindspore import dtype as mstype
 from mindspore.common.initializer import Zero
+from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
                         MemorySnapshot, T, make_ndarray_with_pad)
 
@@ -148,37 +146,40 @@ class vllmModelBackendEnum(str, Enum):
     MIND_ONE = 'MindONE'
 
 
+class vllmModelBackendEnum(str, Enum):
+    """Define the variable Enum of vLLM_MODEL_BACKEND"""
+    MF = 'MindFormers'
+    MIND_ONE = 'MindONE'
+
+
 def ascend_is_initialized():
     # Just return true for check.
     return True
 
 
 def is_mindformers_model_backend():
-    vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")
+    vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
     if vllm_model_backend:
         try:
             vllmModelBackendEnum(vllm_model_backend)
+            return vllm_model_backend == vllmModelBackendEnum.MF
         except ValueError as exc:
             allowed_values = [member.value for member in vllmModelBackendEnum]
             raise ValueError(
                 f"Illegal value of vLLM_MODEL_BACKEND '{vllm_model_backend}',"
-                f" allowed_values: {', '.join(allowed_values)}"
-            ) from exc
-        finally:
-            return vllm_model_backend == vllmModelBackendEnum.MF
-    return False
+                f" allowed_values: {', '.join(allowed_values)}") from exc
+    else:
+        return False
 
 
 def is_mindone_model_backend():
     return (os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
-            and os.environ["vLLM_MODEL_BACKEND"] == vllmModelBackendEnum.MIND_ONE  # noqa: SIM112
-            )
+            and os.environ["vLLM_MODEL_BACKEND"]  # noqa: SIM112
+            == vllmModelBackendEnum.MIND_ONE)
 
 
 def check_ready():
-    import vllm.envs as envs
     from mindspore import set_context
-
 
     # Common environment variables of predict.
     set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
