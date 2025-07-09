@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# encoding: utf-8
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -32,8 +31,8 @@ if __name__ == "__main__":
         module = importlib.import_module(module_name)
     except Exception as e:
         raise ValueError(
-            "Invalid entrypoint(%s) for vllm, error: %s!" % (module_name, str(e))
-        )
+            f"Invalid entrypoint({module_name}) for vllm, error: {str(e)}!"
+        ) from e
 
     module_code = inspect.getsource(module)
     vllm_mindspore_enable_line = "import vllm_mindspore\n"
@@ -44,4 +43,4 @@ if __name__ == "__main__":
         with open(exec_file, "w") as f:
             f.writelines(module_code)
 
-        subprocess.run([sys.executable, exec_file] + sys.argv[2:])
+        subprocess.run([sys.executable, str(exec_file)] + sys.argv[2:])
