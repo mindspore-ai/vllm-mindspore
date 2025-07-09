@@ -1,5 +1,5 @@
-# Qwen3-32B Atlas 300I Duo vLLM+MindSpore 推理指南
-- [Qwen3-32B Atlas 300I Duo vLLM+MindSpore 推理指南](#qwen3-32b-atlas-300i-duo-vllmmindspore-推理指南)
+# QwQ-32B Atlas 300I Duo vLLM MindSpore 推理指南
+- [QwQ-32B Atlas 300I Duo vLLM MindSpore 推理指南](#qwq-32b-atlas-300i-duo-vllm-mindspore-推理指南)
   - [模型介绍](#模型介绍)
   - [运行环境准备](#运行环境准备)
     - [MindSpore](#mindspore)
@@ -99,10 +99,10 @@ pip install .
 
 ## 开源镜像
 
-提供开源镜像供用户使用，镜像仓库地址为：hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:20250627，可使用以下命令拉取镜像。
+提供开源镜像供用户使用，镜像仓库地址为：hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:v0.7.3，可使用以下命令拉取镜像。
 
 ```shell
-docker pull hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:20250627
+docker pull hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:v0.7.3
 ```
 
 注：目前镜像基于vllm-0.7.3分支构建
@@ -112,22 +112,22 @@ docker pull hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:20250627
 假设您的NPU设备安装在/dev/davinci[0-3]上，并且您的NPU驱动程序安装在/usr/local/Ascend上：
 
 ```shell
-docker run
---name QWQ-32b
---device /dev/davinci0
---device=/dev/davinci1
---device=/dev/davinci2
---device=/dev/davinci3
---device /dev/davinci_manager
---device /dev/devmm_svm
---device /dev/hisi_hdc
---network host
--v /usr/local/dcmi:/usr/local/dcmi
--v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi
--v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/
--v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info
--v /etc/ascend_install.info:/etc/ascend_install.info
--it mindspore_300iduo:20250627 /bin/bash
+docker run \
+--name QWQ-32b \
+--device /dev/davinci0 \
+--device=/dev/davinci1 \
+--device=/dev/davinci2 \
+--device=/dev/davinci3 \
+--device /dev/davinci_manager \
+--device /dev/devmm_svm \
+--device /dev/hisi_hdc \
+--network host \
+-v /usr/local/dcmi:/usr/local/dcmi \
+-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ \
+-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \
+-v /etc/ascend_install.info:/etc/ascend_install.info \
+-it hub.oepkgs.net/oedeploy/openeuler/aarch64/mindspore_300iduo:v0.7.3 /bin/bash
 ```
 
 ## 下载模型权重
@@ -136,7 +136,7 @@ docker run
 
 下面以下载到`/home/ckpt/QwQ-32B` 目录为例。
 
-在300I Duo上运行是还需要执行权重转化。脚本见附录[convert\_weights.py \(权重转换脚本\)](#convert_weightspy-%E6%9D%83%E9%87%8D%E8%BD%AC%E6%8D%A2%E8%84%9A%E6%9C%AC)：
+在300I Duo上运行还需要执行权重转化。脚本见附录[convert\_weights.py \(权重转换脚本\)](#convert_weightspy-%E6%9D%83%E9%87%8D%E8%BD%AC%E6%8D%A2%E8%84%9A%E6%9C%AC)：
 
 将脚本保存在本地，执行转换脚本 `python convert_weights.py --input_path /home/ckpt/QwQ-32B --output_path /home/ckpt/QwQ`  
 此时 `/home/ckpt/QwQ` 目录下有转换完成的权重，需要将其他文件也拷贝到该目录下。
@@ -208,7 +208,7 @@ export MS_ALLOC_CONF=enable_vmm:true
 export MINDFORMERS_MODEL_CONFIG=/home/ckpt/QwQ/predict_qwq_32b.yaml
 
 # --model 需要设置为权重的绝对路径
-python3 -m vllm_mindspore.entrypoints vllm.entrypoints.openai.api_server --model "/home/ckpt/QwQ" --trust_remote_code --tensor_parallel_size=4 --max-num-seqs=256 --block-size=128 --gpu-memory-utilization=0.7  --max_model_len=32768 --max-num-batched-tokens=16384 --max-model-len=8192 2>&1 | tee log.txt
+python3 -m vllm_mindspore.entrypoints vllm.entrypoints.openai.api_server --model "/home/ckpt/QwQ" --trust-remote-code --tensor-parallel-size=4 --max-num-seqs=256 --block-size=128 --gpu-memory-utilization=0.7 --max-num-batched-tokens=16384 --max-model-len=8192 2>&1 | tee log.txt
 ```
 
 参数含义可参考 [vLLM参数](https://wiki.huawei.com/domains/77253/wiki/192114/WIKI202501145732773)
