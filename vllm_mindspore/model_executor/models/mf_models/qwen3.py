@@ -172,7 +172,7 @@ class Qwen3ForCausalLM(MsModelBase):
 
     def _generate_model_config(self):
         self.mf_model_config = gen_model_config(self.mf_config, Qwen3Config)
-        logger.debug("=====mf_model_config====\n", self.mf_model_config)
+        logger.debug("=====mf_model_config====\n%s", self.mf_model_config)
 
     def _create_network(self):
         # Initial network
