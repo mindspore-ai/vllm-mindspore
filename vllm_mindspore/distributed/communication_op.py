@@ -1,7 +1,10 @@
-#!/usr/bin/env python3
-# encoding: utf-8
-# Copyright 2025 Huawei Technologies Co., Ltd
-# Copyright 2024 The vLLM team.
+# SPDX-License-Identifier: Apache-2.0
+
+# Communication functions are adapted from
+# https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/distributed/communication_op.py
+#
+# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +17,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ============================================================================
-
-
-# 该文件实现底层通信接口， 要求动静统一， 最后才可以在网络中入图。
-# 不要去照搬mindspeed的， 因为训练当中包含太多的特性， 推理只需要非常简单的通信，可以提升性能。
+"""Implement a unified communication interface for both graph and pynative mode."""
 
 from typing import Any, Dict, Optional, Union
 
@@ -90,9 +89,6 @@ def broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[Tensor,
                                                                 Any]]] = None,
                           src: int = 0):
     ...
-    # if not torch.distributed.is_initialized():
-    #     return tensor_dict
-    # return get_tp_group().broadcast_tensor_dict(tensor_dict, src)
 
 
 def send_to_next_pp_rank(tensor):

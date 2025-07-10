@@ -1,6 +1,9 @@
-#!/usr/bin/env python3
-# Copyright 2025 Huawei Technologies Co., Ltd
-# Copyright 2024 The vLLM team.
+# SPDX-License-Identifier: Apache-2.0
+
+# Adapted from
+# https://github.com/vllm-project/vllm-ascend/blob/v0.7.3/vllm_ascend/lora/punica_wrapper/punica_npu.py
+#
+# Copyright 2025 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +16,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ============================================================================
-
-"""
-refer to https://github.com/vllm-project/vllm-ascend/blob/v0.7.3/vllm_ascend/lora/punica_wrapper/punica_npu.py
-"""
+"""Punica warpper for NPU."""
 from typing import Callable
 
 from mindspore import mint
