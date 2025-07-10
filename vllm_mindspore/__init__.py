@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# isort:skip_file
+# SPDX-License-Identifier: Apache-2.0
+
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -14,7 +14,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ============================================================================
+"""Main entry point for monkey patching vllm."""
+
+# isort:skip_file
 
 import sys
 import warnings
@@ -369,7 +371,13 @@ Worker.compile_or_warm_up_model = compile_or_warm_up_model
 
 from vllm_mindspore.v1.core.sched.scheduler import update_from_output
 from vllm.v1.core.sched.scheduler import Scheduler
+
 Scheduler.update_from_output = update_from_output
+
+from vllm_mindspore.v1.executor.multiproc_executor import executor_ensure_worker_termination
+from vllm.v1.executor.multiproc_executor import MultiprocExecutor
+
+MultiprocExecutor._ensure_worker_termination = executor_ensure_worker_termination
 
 from .utils import check_ready
 
