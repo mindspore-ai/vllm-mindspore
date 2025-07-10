@@ -16,11 +16,17 @@ usage()
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
+  echo "    -r Enable run tensor, default off"
+}
+
+default_options()
+{
+    export RUN_TENSOR="-DENABLE_RUN_TENSOR=off"
 }
 
 process_options()
 {
-    while getopts 'Dd:hi' OPT; do
+    while getopts 'Dd:hir' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -36,6 +42,7 @@ process_options()
                 done
                 ;;
             i) export INC_BUILD=1;;
+            r) export RUN_TENSOR="-DENABLE_RUN_TENSOR=on";;
             h)
                 usage
                 exit 0
@@ -47,9 +54,11 @@ process_options()
         esac
     done
 }
+
+default_options
 process_options $@
-DALANG_CMAKE_ARGS="${DALANG_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
+DALANG_CMAKE_ARGS="${DALANG_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
 
 
 ##################################################

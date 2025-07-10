@@ -30,6 +30,28 @@ namespace da {
 namespace runtime {
 using namespace tensor;
 
+const std::vector<std::string> GetEnvKernelLibPaths() {
+  std::vector<std::string> kernelLibPaths{};
+  const char kKernelLibPathsEnvName[] = "DART_KERNEL_LIB_PATH";
+  const char *pathsCStr = std::getenv(kKernelLibPathsEnvName);
+  if (pathsCStr == nullptr) {
+    return kernelLibPaths;
+  }
+
+  size_t pathLen = 0;
+  while (pathsCStr[pathLen] != '\0') {
+    if (pathsCStr[pathLen] == ',') {
+      (void)kernelLibPaths.emplace_back(std::string(pathsCStr, pathLen));
+      pathsCStr += pathLen+1;
+      pathLen = 0;
+    } else {
+      pathLen++;
+    }
+  }
+  (void)kernelLibPaths.emplace_back(std::string(pathsCStr, pathLen));
+  return kernelLibPaths;
+}
+
 const std::string GetEnvKernelLibName() {
   const char kDefaultKernelLibName[] = "Mindspore";
   const char kKernelLibEnvName[] = "DART_KERNEL_LIB_NAME";
@@ -50,16 +72,25 @@ size_t GetEnvThreadPoolSize() {
   return std::stoul(poolSizeStr);
 }
 
-GraphExecutor::GraphExecutor()
-    : context_{tensor::NewDAContext()}, kernelLib_{KernelLibRegistry::Instance().Get(GetEnvKernelLibName())} {
+GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(context_);
-  CHECK_IF_NULL(kernelLib_);
+
+  mempool_ = new MemoryPool();
+  CHECK_IF_NULL(mempool_);
+
+  for (auto &&path : GetEnvKernelLibPaths()) {
+    KernelLibRegistry::Instance().Load(path);
+  }
 }
 
 GraphExecutor::~GraphExecutor() {
   CHECK_IF_NULL(context_);
   FreeDAContext(context_);
   context_ = nullptr;
+
+  CHECK_IF_NULL(mempool_);
+  delete mempool_;
+  mempool_ = nullptr;
 }
 
 // Start building graph.
@@ -139,11 +170,14 @@ enum {
   kSecondInput = 1,
 };
 static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
-  {ops::Op_return, kFirstInput},       {ops::Op_depend, kFirstInput},   {ops::Op_load, kFirstInput},
+  {ops::Op_return, kFirstInput},
+  {ops::Op_depend, kFirstInput},
+  {ops::Op_load, kFirstInput},
   {ops::Op_update_state, kSecondInput},
 };
 static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT_DATA = {
-  {ops::Op_reshape, kFirstInput},       {ops::Op_expand_dims, kFirstInput},
+  {ops::Op_reshape, kFirstInput},
+  {ops::Op_expand_dims, kFirstInput},
 };
 void GraphExecutor::RunTensor(DATensor *node) {
   LOG_OUT << "Run tensor, ops." << ops::ToStr(node->op) << ", tensor: " << node;
@@ -185,7 +219,12 @@ void GraphExecutor::RunTensor(DATensor *node) {
   for (size_t i = 0; i < node->inputSize; ++i) {
     node->input[i] = inputs[i];
   }
-  CHECK_IF_FAIL(kernelLib_->RunTensor(node, &mempool_));
+
+#ifndef SKIP_RUN_TENSOR
+  auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
+  CHECK_IF_NULL(kernelLib);
+  CHECK_IF_FAIL(kernelLib->RunTensor(node, mempool_));
+#endif
 }
 
 // Run the built graph.
@@ -194,7 +233,7 @@ void GraphExecutor::RunGraph() {
   CHECK_IF_NULL(context_);
   CHECK_IF_NULL(graph_);
 
-  mempool_.Reset();
+  mempool_->Reset();
   outputs_.clear();
 
 #ifdef SERIAL
@@ -339,5 +378,5 @@ void GraphExecutor::DumpGraph() {
   std::cout << "}" << std::endl;
 }
 #endif
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da
