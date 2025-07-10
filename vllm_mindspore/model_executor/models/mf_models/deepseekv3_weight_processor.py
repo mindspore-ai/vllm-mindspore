@@ -1208,6 +1208,14 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         router_dense_ms_name = self.convert_weight_name(router_dense_hf_name)
         router_dense_ms_param, _ = self.get_safetensor_from_file(
             router_dense_hf_name, src_hf_dir, hf_weight_map)
+
+        if self.moe_split_ep and self.ep_method != EPMethod.ALLTOALL:
+            expert_idx = [idx for idx in range(router_dense_ms_param.shape[0])]
+            in_start_expert_idx = self.ep_group_nums * self.moe_ep_rank_id
+            expert_idx = expert_idx[
+                in_start_expert_idx:] + expert_idx[:in_start_expert_idx]
+            router_dense_ms_param = np.array(router_dense_ms_param)[expert_idx]
+
         self.parameter_dict[router_dense_ms_name] = ms.Parameter(
             ms.from_numpy(router_dense_ms_param).astype(ms.bfloat16),
             name=router_dense_ms_name,
