@@ -15,11 +15,19 @@
 # limitations under the License.
 # ============================================================================
 """test mf deepseek r1."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b.yaml",

@@ -15,11 +15,19 @@
 # limitations under the License.
 # ============================================================================
 """test mf deepseek r1."""
-import pytest
-import os
-from tests.st.python import set_env
 
-env_manager = set_env.EnvVarManager()
+# type: ignore
+# isort: skip_file
+
+import os
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b_w8a8.yaml",
@@ -53,12 +61,18 @@ def test_deepseek_r1():
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
-              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2, max_model_len=4096)
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
+        trust_remote_code=True,
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2,
+        max_model_len=4096)
     # Generate texts from the prompts. The output is a list of RequestOutput objects
     # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    except_list = ['ugs611ాలు哒ాలు mahassisemaSTE的道德', 'ugs611ాలు哒ాలు mah战区rollerOVERlaid']
+    except_list = [
+        'ugs611ాలు哒ాలు mahassisemaSTE的道德', 'ugs611ాలు哒ాలు mah战区rollerOVERlaid'
+    ]
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt

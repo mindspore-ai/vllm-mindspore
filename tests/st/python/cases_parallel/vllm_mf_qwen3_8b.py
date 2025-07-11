@@ -17,9 +17,14 @@
 """test mf qwen3."""
 import os
 
-from tests.st.python import set_env
+from tests.st.python import utils
 
-env_manager = set_env.EnvVarManager()
+
+def teardown_function():
+    utils.cleanup_subprocesses()
+
+
+env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),

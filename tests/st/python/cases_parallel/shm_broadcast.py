@@ -15,7 +15,10 @@
 # limitations under the License.
 # ============================================================================
 """test cpu communicator and share memory"""
-import pytest
+
+# type: ignore
+# isort: skip_file
+
 import multiprocessing
 import random
 import time
@@ -27,8 +30,12 @@ import torch.distributed as dist
 import vllm_mindspore
 
 from vllm.distributed.device_communicators.shm_broadcast import MessageQueue
-from vllm.distributed.utils import StatelessProcessGroup
-from vllm.utils import get_ip, get_open_port, update_environment_variables, get_distributed_init_method
+from vllm.utils import get_ip, get_open_port, get_distributed_init_method
+from tests.st.python import utils
+
+
+def teardown_function():
+    utils.cleanup_subprocesses()
 
 
 def get_arrays(n: int, seed: int = 0) -> List[np.ndarray]:
@@ -47,7 +54,9 @@ def distributed_run(fn, world_size):
     distributed_init_method = get_distributed_init_method("127.0.0.1", port)
 
     for i in range(number_of_processes):
-        p = multiprocessing.Process(target=fn, args=(distributed_init_method, i, world_size))
+        p = multiprocessing.Process(target=fn,
+                                    args=(distributed_init_method, i,
+                                          world_size))
         processes.append(p)
         p.start()
 
