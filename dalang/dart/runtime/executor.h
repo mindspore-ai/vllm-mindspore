@@ -72,8 +72,7 @@ private:
   tensor::DAContext *context_{nullptr};
   tensor::DAGraph *graph_{nullptr};
   std::vector<tensor::DATensor *> parameters_;
-  const KernelLib *kernelLib_{nullptr};
-  runtime::MemoryPool mempool_;
+  runtime::MemoryPool *mempool_{nullptr};
   std::unordered_map<tensor::DATensor *, std::vector<tensor::DATensor *>> outputs_;
   std::mutex outputsMutex_;
 #ifdef DUMP

@@ -21,6 +21,12 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
+#ifndef _WIN32
+#include <libgen.h>
+#include <dlfcn.h>
+#else
+#include <windows.h>
+#endif
 
 #include "runtime/mempool.h"
 #include "common/common.h"
@@ -54,28 +60,52 @@ class DA_API KernelLibRegistry {
     return instance;
   }
 
-  virtual ~KernelLibRegistry() {
-    for (auto &iter : kernel_libs_) {
+  ~KernelLibRegistry() {
+    for (auto &iter : kernelLibs_) {
       delete iter.second;
     }
-    kernel_libs_.clear();
+    kernelLibs_.clear();
   }
 
   void Register(const std::string &name, KernelLibCreator &&creator) {
-    if (kernel_lib_creators_.find(name) == kernel_lib_creators_.end()) {
+    if (kernelLibCreators_.find(name) == kernelLibCreators_.end()) {
       LOG_OUT << "KernelLibCreator for " << name << " registered.";
-      (void)kernel_lib_creators_.emplace(name, std::move(creator));
+      (void)kernelLibCreators_.emplace(name, std::move(creator));
     }
   }
 
+  void Load(const std::string &path) {
+    if (kernelLibHandles_.count(path) > 0) {
+      return;
+    }
+
+    LOG_OUT << "Load kernel lib path: " << path;
+    void *handle;
+    std::string errMsg = "";
+#ifndef _WIN32
+    handle = dlopen(path.c_str(), RTLD_LAZY);
+    const char *result = dlerror();
+    errMsg = (result == nullptr) ? "Unknown" : result;
+#else
+    handle = LoadLibrary(path.c_str());
+    errMsg = std::to_string(GetLastError());
+#endif
+
+    if (handle == nullptr) {
+      LOG_ERROR << "Load " + path + " failed, error: " + errMsg;
+      return;
+    }
+    (void)kernelLibHandles_.emplace(path, handle);
+  }
+
   const KernelLib *Get(const std::string &name) {
-    if (auto iter = kernel_libs_.find(name); iter != kernel_libs_.end()) {
+    if (auto iter = kernelLibs_.find(name); iter != kernelLibs_.end()) {
       return iter->second;
     }
-    if (auto iter = kernel_lib_creators_.find(name); iter != kernel_lib_creators_.end()) {
-      auto kernel_lib = (iter->second)();
-      kernel_libs_[name] = kernel_lib;
-      return kernel_lib;
+    if (auto iter = kernelLibCreators_.find(name); iter != kernelLibCreators_.end()) {
+      auto kernelLib = (iter->second)();
+      kernelLibs_[name] = kernelLib;
+      return kernelLib;
     }
     LOG_ERROR << "KernelLib " << name << " is not exist.";
     return nullptr;
@@ -85,8 +115,9 @@ class DA_API KernelLibRegistry {
   KernelLibRegistry() = default;
 
  private:
-  std::unordered_map<std::string, const KernelLib *> kernel_libs_;
-  std::unordered_map<std::string, KernelLibCreator> kernel_lib_creators_;
+  std::unordered_map<std::string, const KernelLib *> kernelLibs_;
+  std::unordered_map<std::string, KernelLibCreator> kernelLibCreators_;
+  std::unordered_map<std::string, void *> kernelLibHandles_;
 };
 
 class KernelLibRegistrar {
