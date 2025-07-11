@@ -569,13 +569,16 @@ class Qwen2_5_VisionTransformer(nn.Cell):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
+                param = params_dict[name]
                 if name == "visual.patch_embed.proj.weight":
+                    loaded_weight = loaded_weight[:]
                     loaded_weight = loaded_weight.reshape(
                         loaded_weight.shape[0], -1)
-                param = params_dict[name]
-                weight_loader = getattr(param, "weight_loader",
-                                        default_weight_loader)
-                weight_loader(param, loaded_weight)
+                    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+                else:
+                    weight_loader = getattr(param, "weight_loader",
+                                            default_weight_loader)
+                    weight_loader(param, loaded_weight)
             loaded_params.add(name)
         return loaded_params
 
@@ -652,9 +655,10 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             quant_config=self._maybe_ignore_quant_config(quant_config),
             prefix=maybe_prefix(prefix, "visual"),
         )
-        self.visual = ms.jit(
-            function=self.visual,
-            jit_level='O0') if self.is_graph_mode else self.visual
+        if self.is_graph_mode:
+            self.visual.construct = ms.jit(function=self.visual,
+                                           jit_level='O0')
+            self.visual.set_model_inputs()
 
         self.model = Qwen2Model(vllm_config=vllm_config,
                                 prefix=maybe_prefix(prefix, "model"))
@@ -684,8 +688,6 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         self.num_heads = config.vision_config.num_heads
         head_dim = self.hidden_size // self.num_heads
         self.rotary_pos_emb = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
-        if self.is_graph_mode:
-            self.visual.set_model_inputs()
 
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({

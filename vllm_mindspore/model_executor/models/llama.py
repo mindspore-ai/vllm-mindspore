@@ -41,14 +41,12 @@ from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
                                                           get_sampler)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     DEFAULT_VOCAB_PADDING_SIZE, ParallelLMHead, VocabParallelEmbedding)
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    default_weight_loader)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, extract_layer_index,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
-
-
-def default_weight_loader(param, loaded_weight) -> None:
-    param.set_data(loaded_weight)
 
 
 class LlamaMLP(nn.Cell):
