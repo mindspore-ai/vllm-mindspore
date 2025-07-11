@@ -116,4 +116,4 @@ pip uninstall msadapter -y && pip install .  || { echo "Failed to install msadap
 cd ..
 
 echo "========= All dependencies installed successfully!"
-echo -e "[\033[0;34mnotice\033[0m]Please set the command: export PYTHONPATH=$(pwd)/$mf_dir/:\$PYTHONPATH"
+echo -e "[\033[0;34mnotice\033[0m] Please set the command: export PYTHONPATH=$(pwd)/$mf_dir/:\$PYTHONPATH"

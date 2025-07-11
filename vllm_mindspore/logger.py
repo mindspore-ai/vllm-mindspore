@@ -20,6 +20,7 @@
 """init logger for vllm-mindspore."""
 
 from logging.config import dictConfig
+
 import vllm.envs as envs
 from vllm.logger import DEFAULT_LOGGING_CONFIG, init_logger
 
@@ -30,7 +31,7 @@ VLLM_LOGGING_PREFIX = envs.VLLM_LOGGING_PREFIX
 
 _DATE_FORMAT = "%m-%d %H:%M:%S"
 _MS_FORMAT = (f"{VLLM_LOGGING_PREFIX}%(levelname)s %(asctime)s "
-           "vllm-mindspore[%(filename)s:%(lineno)d] %(message)s")
+              "vllm-mindspore[%(filename)s:%(lineno)d] %(message)s")
 
 _MS_FORMATTERS = {
     "vllm_mindspore": {
@@ -57,6 +58,7 @@ _MS_LOGGERS = {
     }
 }
 
+
 def _update_configure_vllm_root_logger() -> None:
     if VLLM_CONFIGURE_LOGGING and not VLLM_LOGGING_CONFIG_PATH:
         logging_config = DEFAULT_LOGGING_CONFIG
@@ -66,7 +68,9 @@ def _update_configure_vllm_root_logger() -> None:
 
         dictConfig(logging_config)
 
+
 _update_configure_vllm_root_logger()
 
 logger = init_logger(__name__)
-logger.info("The config of vllm-mindspore logger has been updated successfully.")
+logger.info(
+    "The config of vllm-mindspore logger has been updated successfully.")
