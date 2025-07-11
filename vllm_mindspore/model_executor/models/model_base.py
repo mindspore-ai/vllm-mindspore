@@ -298,9 +298,14 @@ class MsModelBase:
         attention_mask = self.casual_mask.gen_attention_mask(is_prefill, positions, query_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids.astype(ms.int32)
+        # Convert input_ids and block_tables into contiguous tensors.
+        # Since `contiguous()` does not support converting contiguous slices
+        # into regular tensors, use multiplication to make tensor contiguous.
+        # TODO: Multiplication will be removed after the release of permanent
+        # solution.
+        model_inputs["input_ids"] = input_ids.astype(ms.int32) * 1
+        model_inputs["block_tables"] = attn_metadata.block_tables * 1
         model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
         model_inputs["slot_mapping"] = attn_metadata.slot_mapping
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
