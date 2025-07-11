@@ -15,13 +15,12 @@
 # limitations under the License.
 """test case for custom op adv_step_flash"""
 import time
-
 import mindspore as ms
 import numpy as np
 import pytest
 import torch
 
-from vllm_mindspore import npu_ops
+from vllm_mindspore import _custom_ops as custom_ops
 
 from .utils import cleanup_subprocesses
 
@@ -75,12 +74,9 @@ def gendata(seed, num_seqs, block_size, block_num, make_tensor):
                                      dtype=np.int64)
     slot_mapping = np.random.randint(100, size=(num_seqs, ),
                                      dtype=np.int64)  # out
-    return (make_tensor(sampled_token_ids), \
-            make_tensor(input_tokens), \
-            make_tensor(input_positions), \
-            make_tensor(seq_lens_tensor), \
-            make_tensor(block_tables), \
-            make_tensor(slot_mapping))
+    return (make_tensor(sampled_token_ids), make_tensor(input_tokens),
+            make_tensor(input_positions), make_tensor(seq_lens_tensor),
+            make_tensor(block_tables), make_tensor(slot_mapping))
 
 
 @pytest.mark.level0
@@ -96,23 +92,25 @@ def test_advstepflash():
     block_num = 4
     num_queries = num_seqs  # no padding
     print("test seed:", seed, flush=True)
-    sampled_token_ids1, input_tokens1, input_positions1, seq_lens_tensor1, block_tables1, slot_mapping1 = \
+    sampled_token_ids1, input_tokens1, input_positions1, seq_lens_tensor1, \
+        block_tables1, slot_mapping1 = \
         gendata(seed, num_seqs, block_size, block_num, torch.Tensor)
     benchmark_advance_step_op(sampled_token_ids1, input_tokens1,
                               input_positions1, seq_lens_tensor1, num_queries,
                               block_size, block_tables1, slot_mapping1)
 
-    sampled_token_ids2, input_tokens2, input_positions2, seq_lens_tensor2, block_tables2, slot_mapping2 = \
+    sampled_token_ids2, input_tokens2, input_positions2, seq_lens_tensor2, \
+        block_tables2, slot_mapping2 = \
         gendata(seed, num_seqs, block_size, block_num, ms.Tensor)
-    npu_ops.adv_step_flash(num_seqs=num_seqs,
-                           num_queries=num_queries,
-                           block_size=block_size,
-                           input_tokens=input_tokens2,
-                           sampled_token_ids=sampled_token_ids2,
-                           input_positions=input_positions2,
-                           seq_lens=seq_lens_tensor2,
-                           slot_mapping=slot_mapping2,
-                           block_tables=block_tables2)
+    custom_ops.advance_step_flashattn(num_seqs=num_seqs,
+                                      num_queries=num_queries,
+                                      block_size=block_size,
+                                      input_tokens=input_tokens2,
+                                      sampled_token_ids=sampled_token_ids2,
+                                      input_positions=input_positions2,
+                                      seq_lens=seq_lens_tensor2,
+                                      slot_mapping=slot_mapping2,
+                                      block_tables=block_tables2)
 
     assert np.allclose(sampled_token_ids1, sampled_token_ids2.asnumpy())
     assert np.allclose(input_tokens1, input_tokens2.asnumpy())

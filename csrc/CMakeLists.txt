@@ -14,7 +14,7 @@ endif()
 add_subdirectory(ascendc)
 
 # Collect source files
-file(GLOB SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/module/*.cpp)
+file(GLOB_RECURSE SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/module/*.cpp)
 
 # Generate a temporary python script file to build custom ops with MindSpore's CustomOpBuilder
 set(PYTHON_SCRIPT_PATH "${CMAKE_BINARY_DIR}/build_custom_with_ms.py")

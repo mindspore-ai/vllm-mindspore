@@ -23,9 +23,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from itertools import accumulate
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
-import os
-
-import numpy as np
 
 from vllm.attention.backends.abstract import (
     AttentionBackend,
