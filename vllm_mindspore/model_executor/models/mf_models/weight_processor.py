@@ -53,11 +53,11 @@ class BaseWeightProcessor:
 
     def get_layer_index(self, num_layers):
         offset = self.config.model.model_config.offset
-        stage_layers = num_layers // self.pp_group_siz
+        stage_layers = num_layers // self.pp_group_size
         start_layer_index = self.pp_stage * stage_layers
         end_layer_index = start_layer_index + stage_layers
 
-        if self.pp_group_siz > 1 and num_layers % self.pp_group_siz != 0:
+        if self.pp_group_size > 1 and num_layers % self.pp_group_size != 0:
             for num in range(0, self.pp_stage):
                 start_layer_index += offset[num]
                 end_layer_index += offset[num]
