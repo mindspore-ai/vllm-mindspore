@@ -1,6 +1,11 @@
-#!/usr/bin/env python3
-# Copyright 2025 Huawei Technologies Co., Ltd
-# Copyright 2024 The vLLM team.
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+
+# Adapted from
+# https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/openai/tool_parsers/deepseekv3_tool_parser.py
+#
+# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +18,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ============================================================================
-# SPDX-License-Identifier: Apache-2.0
-"""
-Adapted from
-https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/openai/tool_parsers/deepseekv3_tool_parser.py
-"""
+"""Tool parser for deepseek v3."""
 import re
 from collections.abc import Sequence
 from typing import Union

@@ -1,8 +1,16 @@
-#!/usr/bin/env python3
-# type: ignore
-# isort:skip_file
-# Copyright 2025 Huawei Technologies Co., Ltd
-# Copyright 2024 The vLLM team.
+# SPDX-License-Identifier: Apache-2.0
+
+# Adapted from
+# https://github.com/huggingface/transformers/blob/v4.28.0/src/transformers/models/qwen2/modeling_qwen2.py
+# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2024 The Qwen team.
+# Copyright 2023 The vLLM team.
+# Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
+#
+# This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
+# and OPT implementations in this library. It has been modified from its
+# original forms to accommodate minor architectural differences compared
+# to GPT-NeoX and OPT used by the Meta AI team that trained the model.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +23,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ============================================================================
+
+# type: ignore
+# isort:skip_file
+
 import numpy as np
 from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple,
                     Union)

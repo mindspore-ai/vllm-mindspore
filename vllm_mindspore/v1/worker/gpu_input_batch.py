@@ -1,3 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Adapted from
+# https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/v1/worker/gpu_input_batch.py
+#
+# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025 The vLLM team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import Dict, List, Optional, Set, Tuple, cast
 
 import numpy as np
@@ -79,4 +99,3 @@ def _make_prompt_token_ids_tensor(self) -> torch.Tensor:
         prompt_token_ids[i, self.num_prompt_tokens[i]:] = self.vocab_size
     prompt_token_ids_cpu_tensor = torch.from_numpy(prompt_token_ids)
     return prompt_token_ids_cpu_tensor
-
