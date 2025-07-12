@@ -15,9 +15,6 @@
 # limitations under the License.
 """test mf deepseek r1."""
 
-# type: ignore
-# isort: skip_file
-
 import os
 from tests.st.python import utils
 
@@ -42,8 +39,8 @@ env_vars = {
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
+import vllm_mindspore  # noqa: F401, E402
+from vllm import LLM, SamplingParams  # noqa: E402
 
 
 def test_deepseek_r1_bf16():
@@ -53,17 +50,22 @@ def test_deepseek_r1_bf16():
 
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
     # Create an LLM.
-    llm = LLM(model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-bf16",
-              trust_remote_code=True, gpu_memory_utilization=0.9, tensor_parallel_size=2, max_model_len=4096)
-    # Generate texts from the prompts. The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
+    llm = LLM(
+        model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-bf16",
+        trust_remote_code=True,
+        gpu_memory_utilization=0.9,
+        tensor_parallel_size=2,
+        max_model_len=4096)
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
     except_list = ['ugs611ాలు sic辨hara的开璞 SquaresInsp']
     # Print the outputs.
