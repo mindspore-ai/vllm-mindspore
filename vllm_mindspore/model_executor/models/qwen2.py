@@ -27,24 +27,19 @@
 # type: ignore
 # isort:skip_file
 
-import numpy as np
-from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple,
-                    Union)
+from typing import (TYPE_CHECKING, Optional, Union)
+from collections.abc import Iterable
 
 if TYPE_CHECKING:
     from transformers import Qwen2Config
 else:
     Qwen2Config = None
 
-import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn
-from mindspore.common import dtype as mstype
 
-import vllm.envs as envs
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
@@ -64,15 +59,10 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
-from vllm_mindspore.model_executor.models.attention_mask import \
-    LowerTriangularMask
-from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
-                                                             NativeModel)
+from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
-from vllm.model_executor.sampling_metadata import SamplingMetadata
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 
 class Qwen2MLP(nn.Cell):
@@ -120,7 +110,7 @@ class Qwen2Attention(nn.Cell):
                  rope_theta: float = 10000,
                  cache_config: Optional[CacheConfig] = None,
                  quant_config: Optional[QuantizationConfig] = None,
-                 rope_scaling: Optional[Tuple] = None,
+                 rope_scaling: Optional[tuple] = None,
                  prefix: str = "",
                  attn_type: str = AttentionType.DECODER) -> None:
         super().__init__()
@@ -267,7 +257,7 @@ class Qwen2DecoderLayer(nn.Cell):
         q_seq_lens: Tensor,
         block_tables: Tensor,
         residual: Optional[Tensor],
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor]:
         # Self Attention
         if residual is None:
             residual = hidden_states
@@ -335,8 +325,8 @@ class Qwen2Model(nn.Cell):
         self,
         input_ids: Optional[Tensor],
         positions: Tensor,
-        key_caches: List[Tensor],
-        value_caches: List[Tensor],
+        key_caches: list[Tensor],
+        value_caches: list[Tensor],
         is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
@@ -346,6 +336,7 @@ class Qwen2Model(nn.Cell):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
+
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -372,9 +363,9 @@ class Qwen2Model(nn.Cell):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]],
-                     params_dict: Dict[str, Parameter]):
-        loaded_params: Set[str] = set()
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]],
+                     params_dict: dict[str, Parameter]):
+        loaded_params: set[str] = set()
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
             (".qkv_proj", ".q_proj", "q"),
@@ -480,19 +471,17 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
 
         self.common_preprocess(vllm_config, prefix)
 
-    def forward(
-        self,
-        input_ids: Tensor,
-        positions: Tensor,
-        intermediate_tensors: IntermediateTensors = None,
-        inputs_embeds: Tensor = None,
-        **kwargs
-    ) -> Union[Tensor, IntermediateTensors]:
+    def forward(self,
+                input_ids: Tensor,
+                positions: Tensor,
+                intermediate_tensors: IntermediateTensors = None,
+                inputs_embeds: Tensor = None,
+                **kwargs) -> Union[Tensor, IntermediateTensors]:
         hidden_states = self.exec_model(input_ids, positions,
                                         intermediate_tensors, inputs_embeds)
         return hidden_states
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
         self.model.load_weights(weights, params_dict)
 

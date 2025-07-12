@@ -18,36 +18,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tqdm.auto import tqdm
-from typing import Generator, List, Tuple
-
-import torch
+from collections.abc import Generator
 
 import mindspore as ms
+import torch
 from mindspore import Parameter, Tensor
+from tqdm.auto import tqdm
 
 
 def safetensors_weights_iterator(
-    hf_weights_files: List[str],
+    hf_weights_files: list[str],
     use_tqdm_on_load: bool,
-) -> Generator[Tuple[str, torch.Tensor], None, None]:
+) -> Generator[tuple[str, torch.Tensor], None, None]:
     """Iterate over the weights in the model safetensor files."""
     from safetensors import safe_open
-    from vllm.model_executor.model_loader.weight_utils import _BAR_FORMAT, enable_tqdm
+    from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
+                                                               enable_tqdm)
 
     for st_file in tqdm(
-        hf_weights_files,
-        desc="Loading safetensors checkpoint shards",
-        disable=not enable_tqdm(use_tqdm_on_load),
-        bar_format=_BAR_FORMAT,
+            hf_weights_files,
+            desc="Loading safetensors checkpoint shards",
+            disable=not enable_tqdm(use_tqdm_on_load),
+            bar_format=_BAR_FORMAT,
     ):
         with safe_open(st_file, framework="np") as f:
-            for name in f.keys():
+            for name in f.keys():  # noqa: SIM118
                 param = f.get_tensor(name)
                 yield name, ms.tensor(param)
 
 
-def default_weight_loader(param: Parameter,
-                          loaded_weight: Tensor) -> None:
+def default_weight_loader(param: Parameter, loaded_weight: Tensor) -> None:
     """Default weight loader."""
     param.set_data(loaded_weight)
