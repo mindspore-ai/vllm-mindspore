@@ -21,23 +21,24 @@
 from typing import List
 
 import torch
+from mindspore import mutable
 from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
-from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
 
-from mindspore import mutable
+from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
 
 logger = init_logger(__name__)
 
 LORA_WARMUP_RANK = 8
 
 
-def _get_cuda_graph_pad_size(
-    self, num_seqs: int, max_decode_seq_len: int, max_encoder_seq_len: int = 0
-) -> int:
+def _get_cuda_graph_pad_size(self,
+                             num_seqs: int,
+                             max_decode_seq_len: int,
+                             max_encoder_seq_len: int = 0) -> int:
     # No need to use cuda graph for mindspore.
     return -1
 
@@ -67,7 +68,7 @@ def _dummy_run(self,
                         lora_path="/not/a/real/path",
                     )
                     self.lora_manager.add_dummy_lora(dummy_lora_request,
-                                                        rank=LORA_WARMUP_RANK)
+                                                     rank=LORA_WARMUP_RANK)
                     dummy_lora_requests.append(dummy_lora_request)
                 dummy_lora_requests_per_seq = [
                     dummy_lora_requests[idx % len(dummy_lora_requests)]
@@ -89,7 +90,7 @@ def _dummy_run(self,
         if max_mm_tokens > 0:
             max_num_seqs_orig = max_num_seqs
             max_num_seqs = min(max_num_seqs,
-                                max_num_batched_tokens // max_mm_tokens)
+                               max_num_batched_tokens // max_mm_tokens)
             if max_num_seqs < 1:
                 expr = (f"min({max_num_seqs_orig}, "
                         f"{max_num_batched_tokens} // {max_mm_tokens})")
@@ -101,7 +102,7 @@ def _dummy_run(self,
         batch_size = 0
         for group_id in range(max_num_seqs):
             seq_len = (max_num_batched_tokens // max_num_seqs +
-                        (group_id < max_num_batched_tokens % max_num_seqs))
+                       (group_id < max_num_batched_tokens % max_num_seqs))
             batch_size += seq_len
 
             dummy_data = self.input_registry \
@@ -118,8 +119,7 @@ def _dummy_run(self,
                 lora_request=dummy_lora_requests_per_seq[group_id]
                 if dummy_lora_requests_per_seq else None,
                 multi_modal_data=dummy_data.multi_modal_data,
-                multi_modal_placeholders=dummy_data.
-                multi_modal_placeholders,
+                multi_modal_placeholders=dummy_data.multi_modal_placeholders,
             )
             seqs.append(seq)
 
@@ -132,8 +132,9 @@ def _dummy_run(self,
         # it is important to create tensors inside the loop, rather than
         # multiplying the list, to avoid Dynamo from treating them as
         # tensor aliasing.
-        kv_cache_dtype = self.model_config.dtype if self.cache_config.cache_dtype == "auto" \
-            else self.cache_config.cache_dtype
+        kv_cache_dtype = (self.model_config.dtype
+                          if self.cache_config.cache_dtype == "auto" else
+                          self.cache_config.cache_dtype)
         if kv_cache_dtype in STR_DTYPE_TO_TENSOR_DTYPE:
             kv_cache_dtype = STR_DTYPE_TO_TENSOR_DTYPE[kv_cache_dtype]
         block_size = self.cache_config.block_size
@@ -141,11 +142,17 @@ def _dummy_run(self,
         head_size = self.model_config.get_head_size()
         kv_shape = [0, block_size, num_kv_heads, head_size]
         kv_caches = mutable([
-            mutable((
-                mutable(torch.tensor([], dtype=kv_cache_dtype, device=self.device).reshape(kv_shape)),
-                mutable(torch.tensor([], dtype=kv_cache_dtype, device=self.device).reshape(kv_shape)),
-            ))
-            for _ in range(num_layers)
+            mutable(
+                (
+                    mutable(
+                        torch.tensor([],
+                                     dtype=kv_cache_dtype,
+                                     device=self.device).reshape(kv_shape)),
+                    mutable(
+                        torch.tensor([],
+                                     dtype=kv_cache_dtype,
+                                     device=self.device).reshape(kv_shape)),
+                )) for _ in range(num_layers)
         ])
         finished_requests_ids = [seq.request_id for seq in seqs]
         model_input = self.prepare_model_input(
@@ -171,9 +178,7 @@ def _dummy_run(self,
         return
 
 
-MULTI_STEP_ATTENTION_BACKENDS = [
-    "MS_MLA", "MS_ATTN", "NO_ATTENTION"
-]
+MULTI_STEP_ATTENTION_BACKENDS = ["MS_MLA", "MS_ATTN", "NO_ATTENTION"]
 MULTI_STEP_CHUNKED_PREFILL_ATTENTION_BACKENDS = ["MS_MLA", "MS_ATTN"]
 
 def _get_supported_attention_backends(chunked_prefill_enabled: bool) \
