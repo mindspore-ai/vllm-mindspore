@@ -22,45 +22,41 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import torch
-
-from vllm.worker.worker_base import WorkerBase
-from vllm.spec_decode.proposer_worker_base import ProposerWorkerBase
-from vllm.spec_decode.metrics import AsyncMetricsCollector
-from vllm.spec_decode.interfaces import (SpeculativeProposals,
-                                         SpeculativeScorer, SpeculativeScores)
-from vllm.sequence import (VLLM_INVALID_TOKEN_ID,
-                           CompletionSequenceGroupOutput, ExecuteModelRequest,
-                           HiddenStates, SequenceGroupMetadata,
-                           get_all_seq_ids_and_request_ids)
+from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.layers.spec_decode_base_sampler import (
     SpecDecodeBaseSampler, SpecDecodeStochasticBaseSampler)
-
-from vllm.spec_decode.util import (Timer, create_logprobs_output,
-                                   create_sequence_group_output,
-                                   get_all_num_logprobs,
-                                   get_sampled_token_logprobs, nvtx_range,
+from vllm.sequence import (VLLM_INVALID_TOKEN_ID, ExecuteModelRequest,
+                           HiddenStates, SequenceGroupMetadata)
+from vllm.spec_decode.interfaces import (SpeculativeProposals,
+                                         SpeculativeScorer, SpeculativeScores)
+from vllm.spec_decode.metrics import AsyncMetricsCollector
+from vllm.spec_decode.proposer_worker_base import ProposerWorkerBase
+from vllm.spec_decode.spec_decode_worker import prepare_prefill_hidden_states
+from vllm.spec_decode.util import (nvtx_range, sampler_output_to_torch,
                                    split_batch_by_proposal_len)
+from vllm.worker.worker_base import WorkerBase
 
+
+# Override the spec_decode_worker_init method because
 # MQAScore is only supported in FLASH_ATTN and eager mode.
 def spec_decode_worker_init(
-        self,
-        proposer_worker: ProposerWorkerBase,
-        scorer_worker: WorkerBase,
-        spec_decode_sampler: SpecDecodeBaseSampler,
-        disable_mqa_scorer: bool = False,
-        disable_logprobs: bool = False,
-        disable_log_stats: bool = False,
-        metrics_collector: Optional[AsyncMetricsCollector] = None,
-        disable_by_batch_size: Optional[int] = None,
-        allow_zero_draft_token_step: Optional[bool] = True,
-        enable_lm_head_weight_load: Optional[bool] = False,
-        num_spec_prefill_steps: int = 1,
+    self,
+    proposer_worker: ProposerWorkerBase,
+    scorer_worker: WorkerBase,
+    spec_decode_sampler: SpecDecodeBaseSampler,
+    disable_mqa_scorer: bool = False,
+    disable_logprobs: bool = False,
+    disable_log_stats: bool = False,
+    metrics_collector: Optional[AsyncMetricsCollector] = None,
+    disable_by_batch_size: Optional[int] = None,
+    allow_zero_draft_token_step: Optional[bool] = True,
+    enable_lm_head_weight_load: Optional[bool] = False,
+    num_spec_prefill_steps: int = 1,
 ):
     self.proposer_worker = proposer_worker
     self.scorer_worker = scorer_worker
     scorer_runner = getattr(self.scorer_worker, "model_runner", None)
-    self.generators = scorer_runner.get_generators(
-    ) if scorer_runner else None
+    self.generators = scorer_runner.get_generators() if scorer_runner else None
     self.disable_by_batch_size = disable_by_batch_size or float("inf")
     self.spec_decode_sampler = spec_decode_sampler
     self._allow_zero_draft_token_step = allow_zero_draft_token_step
@@ -71,34 +67,38 @@ def spec_decode_worker_init(
     # Tracks the sequence IDs that received a bonus token ID in
     # their last forward pass. Needed only if KV cache is being
     # used for token generation such as in the case of MultiStepWorker.
-    self._seq_with_bonus_token_in_last_step: Set[int] = set()
+    self._seq_with_bonus_token_in_last_step: Set[  # type: ignore[misc]
+        int] = set()
     # Tracks the currently active request ids and the sequence IDs
     # corresponding to them
-    self._request_id_seq_id_mapping: Dict[str, Set[int]] = defaultdict(set)
+    self._request_id_seq_id_mapping: Dict[  # type: ignore[misc]
+        str, Set[int]] = defaultdict(set)
     # Tracks if the proposer worker uses the KV cache or not.
 
     self.probs_dtype = self.spec_decode_sampler.probs_dtype
     self.token_id_dtype = self.spec_decode_sampler.token_id_dtype
     # Lazy initialization.
-    self.scorer: SpeculativeScorer
+    self.scorer: SpeculativeScorer  # type: ignore[misc]
     self.disable_mqa_scorer = False
 
     # Hidden states from target model to pass to proposer
     # in the subsequent step.
-    self.previous_hidden_states: Optional[HiddenStates] = None
+    self.previous_hidden_states: Optional[  # type: ignore[misc]
+        HiddenStates] = None
     self._disable_logprobs = disable_logprobs
     self._disable_log_stats = disable_log_stats
     self._num_spec_prefill_steps = num_spec_prefill_steps
+
 
 # msadapter does not support to slice tensor with empty index,
 # rewrite this method to optimize the performance(almost 2ms)
 @nvtx_range("spec_decode_worker._verify_tokens")
 def _verify_tokens(
-        self,
-        seq_group_metadata_list: List[SequenceGroupMetadata],
-        proposal_scores: SpeculativeScores,
-        proposals: SpeculativeProposals,
-        max_proposal_len: int,
+    self,
+    seq_group_metadata_list: List[SequenceGroupMetadata],
+    proposal_scores: SpeculativeScores,
+    proposals: SpeculativeProposals,
+    max_proposal_len: int,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Determine which speculative tokens are accepted using the
     probabilities of each token according to the proposer and scorer models.
@@ -149,12 +149,14 @@ def _verify_tokens(
     )
     if non_spec_indices:
         # Get non-speculative sampled tokens from target model.
-        non_spec_token_ids = proposal_scores.token_ids[non_spec_indices].expand(-1, max_proposal_len + 1).clone()
+        non_spec_token_ids = proposal_scores.token_ids[
+            non_spec_indices].expand(-1, max_proposal_len + 1).clone()
 
         # Append output tokens from non-speculative sequences to
         # the accepted token ids tensor.
         non_spec_token_ids[:, 1:] = -1
-        accepted_token_ids = torch.cat([accepted_token_ids, non_spec_token_ids])
+        accepted_token_ids = torch.cat(
+            [accepted_token_ids, non_spec_token_ids])
         # Rearrange so that results are in the order of the original seq group
         # metadata.
         accepted_token_ids[original_indices] = accepted_token_ids.clone()
@@ -174,23 +176,22 @@ def _verify_tokens(
         accepted_index = accepted_index.count_nonzero(dim=1).add_(-1)  # b
         # Drop non-terminal prefill chunks hidden states.
         if VLLM_INVALID_TOKEN_ID in accepted_index.tolist():
-            hidden_states = hidden_states[accepted_index != VLLM_INVALID_TOKEN_ID]
-            accepted_index = accepted_index[accepted_index != VLLM_INVALID_TOKEN_ID]
-        assert len(accepted_index) == hidden_states.shape[0] == len( terminal_metadata)
-        index = accepted_index[:, None, None].expand(-1, 1, hs_size)  # b x 1 x d
+            hidden_states = hidden_states[accepted_index !=
+                                          VLLM_INVALID_TOKEN_ID]
+            accepted_index = accepted_index[accepted_index !=
+                                            VLLM_INVALID_TOKEN_ID]
+        assert len(accepted_index) == hidden_states.shape[0] == len(
+            terminal_metadata)
+        index = accepted_index[:, None, None].expand(-1, 1, hs_size)
         second_last_token_hidden_states = hidden_states[:, -2]  # b x d
         hidden_states = hidden_states.gather(1, index).squeeze(1)  # b x d
         # Store hidden states from target model for subsequent decode step
         self.previous_hidden_states = HiddenStates(
-            hidden_states, terminal_metadata,
-            second_last_token_hidden_states)
+            hidden_states, terminal_metadata, second_last_token_hidden_states)
     return accepted_token_ids, logprobs
 
 
-from vllm.model_executor.layers.sampler import SamplerOutput
-from vllm.spec_decode.spec_decode_worker import prepare_prefill_hidden_states
-
-# the 'where' ops in msadapter does not support condition-only inputs, use nonzero
+# 'where' in msadapter does not support condition-only inputs, use nonzero
 @nvtx_range("spec_decode_worker._run_no_spec")
 def _run_no_spec(self, execute_model_req: ExecuteModelRequest,
                  skip_proposer: bool) -> List[SamplerOutput]:
@@ -215,14 +216,14 @@ def _run_no_spec(self, execute_model_req: ExecuteModelRequest,
         ]
         if any(seq.is_prompt for seq in seq_group_meta_with_hidden):
             # Drop hidden_states with no prediction (eg non-terminal chunks)
-            hidden_states = hidden_states[
-                (sampler_output.sampled_token_ids - VLLM_INVALID_TOKEN_ID).nonzero(as_tuple=True)[0]]
+            hidden_states = hidden_states[(sampler_output.sampled_token_ids -
+                                           VLLM_INVALID_TOKEN_ID).nonzero(
+                                               as_tuple=True)[0]]
         if self.previous_hidden_states is None and len(
                 seq_group_meta_with_hidden):
             self.previous_hidden_states = HiddenStates(
                 hidden_states, seq_group_meta_with_hidden)
-        elif self.previous_hidden_states and len(
-                seq_group_meta_with_hidden):
+        elif self.previous_hidden_states and len(seq_group_meta_with_hidden):
             self.previous_hidden_states.update(hidden_states,
                                                seq_group_meta_with_hidden)
 
@@ -238,9 +239,8 @@ def _run_no_spec(self, execute_model_req: ExecuteModelRequest,
             self.proposer_worker.execute_model(execute_model_req)
 
     sampler_output_to_return = (self._serialize_sampler_output_no_logprobs(
-        execute_model_req=execute_model_req, sampler_output=sampler_output)
-                                if self._disable_logprobs else
-                                [sampler_output])
+        execute_model_req=execute_model_req, sampler_output=sampler_output) if
+                                self._disable_logprobs else [sampler_output])
 
     # Clear device tensors from sampler output. This reduces communication
     # overhead when the engine runs in a different process than the workers.
@@ -278,7 +278,8 @@ def _create_output(
     """
     # the return type of max is a tuple in msadapter
     batch_size, k = substitute_token_ids.shape
-    assert self._num_bonus_tokens == 1    # ToDo: only support 1 mtp layer to optimize performance(almost 2ms)
+    # only support 1 mtp layer to optimize performance(almost 2ms)
+    assert self._num_bonus_tokens == 1
 
     # Create an extended output tensor
     output_with_bonus_tokens = -torch.ones(
@@ -286,13 +287,11 @@ def _create_output(
         dtype=self.token_id_dtype,
         device=accepted.device)
 
-    # Fill in the first k columns of the output tensor using masks and data tensors.
-    output_with_bonus_tokens[:, :k] = draft_token_ids * accepted + substitute_token_ids * (~accepted)
+    output_with_bonus_tokens[:, : k] = \
+        draft_token_ids * accepted + substitute_token_ids * (~accepted)
 
-    # Fill the last column.
-    # We check output directly as accepted may have True values inconsistentwith causal acceptance.
-    # Fill the recovered token ids.
-    output_with_bonus_tokens[:, -1:] = bonus_token_ids * accepted + (-1) * (~accepted)
+    output_with_bonus_tokens[:, -1:] = \
+        bonus_token_ids * accepted + (-1) * (~accepted)
 
     self.num_accepted_tokens += accepted.sum()
     self.num_emitted_tokens += (output_with_bonus_tokens != -1).sum()
@@ -301,16 +300,16 @@ def _create_output(
     return output_with_bonus_tokens
 
 
-# msadapter does not support 'new_full', and the operator 'new_zero' only supports a list or a tuple as an input
-from vllm.spec_decode.util import sampler_output_to_torch
+# msadapter does not support 'new_full',
+# and the operator 'new_zero' only supports a list or a tuple as an input
 def _merge_outputs(
-        self,
-        batch_size: int,
-        proposal_len: int,
-        maybe_sampler_output: Optional[List[SamplerOutput]],
-        proposal_lens: List[int],
-        nonzero_proposal_len_indices: List[int],
-        sampler_transposed: bool,
+    self,
+    batch_size: int,
+    proposal_len: int,
+    maybe_sampler_output: Optional[List[SamplerOutput]],
+    proposal_lens: List[int],
+    nonzero_proposal_len_indices: List[int],
+    sampler_transposed: bool,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """After speculations are produced, merge the speculation results with
     the skipped sequences.
@@ -321,16 +320,16 @@ def _merge_outputs(
         proposal_tokens = torch.tensor(-1,
                                        dtype=torch.long,
                                        device=self._device).expand(
-            batch_size, proposal_len)
+                                           batch_size, proposal_len)
         proposal_probs = torch.tensor(0,
                                       dtype=torch.float32,
                                       device=self._device).expand(
-            batch_size, proposal_len,
-            self._vocab_size)
+                                          batch_size, proposal_len,
+                                          self._vocab_size)
         proposal_lens_tensor = torch.tensor(0,
                                             dtype=torch.long,
                                             device=self._device).expand(
-            len(proposal_lens))
+                                                len(proposal_lens))
         return proposal_tokens, proposal_probs, proposal_lens_tensor
 
     sampler_output = maybe_sampler_output
@@ -339,17 +338,14 @@ def _merge_outputs(
 
     # Now, reformat the output GPU tensors such that each sequence has
     # a proposal. the proposal can be empty, e.g. [-1, -1, -1]
-
-    # entire_proposal_tokens = proposal_tokens.new_full(
-    #     size=(batch_size, *proposal_tokens.shape[1:]),
-    #     fill_value=-1,
-    # )
-    entire_proposal_tokens = torch.full(size=(batch_size, *proposal_tokens.shape[1:]), fill_value=-1)
+    entire_proposal_tokens = torch.full(size=(batch_size,
+                                              *proposal_tokens.shape[1:]),
+                                        fill_value=-1)
     entire_proposal_tokens[nonzero_proposal_len_indices] = proposal_tokens
     entire_proposal_probs = proposal_probs.new_zeros((
         batch_size,
-        *proposal_probs.shape[1:],)
-    )
+        *proposal_probs.shape[1:],
+    ))
     entire_proposal_probs[nonzero_proposal_len_indices] = proposal_probs
 
     proposal_tokens, proposal_probs = (
