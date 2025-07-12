@@ -15,9 +15,6 @@
 # limitations under the License.
 """test vllm qwen."""
 
-# type: ignore
-# isort: skip_file
-
 import os
 from tests.st.python import utils
 
@@ -41,8 +38,8 @@ env_vars = {
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
+import vllm_mindspore  # noqa: F401, E402
+from vllm import LLM, SamplingParams  # noqa: E402
 
 
 def test_vllm_qwen():
@@ -52,7 +49,8 @@ def test_vllm_qwen():
 
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
     # Create a sampling params object.
@@ -63,8 +61,8 @@ def test_vllm_qwen():
         model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
         gpu_memory_utilization=0.9,
         tensor_parallel_size=2)
-    # Generate texts from the prompts. The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
     except_list = ['中性<｜Assistant｜> 这句话']
     # Print the outputs.
