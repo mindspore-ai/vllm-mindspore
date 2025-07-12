@@ -23,6 +23,7 @@
 
 import mindspore as ms
 from mindspore import mutable, mint
+
 from typing import List
 from vllm.logger import init_logger
 from vllm_mindspore.utils import MsKVCache, get_valid_dtype
