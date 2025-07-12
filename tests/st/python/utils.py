@@ -18,7 +18,7 @@ import contextlib
 import os
 import signal
 import sys
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional
 
 import psutil
 
@@ -26,8 +26,8 @@ import psutil
 class EnvVarManager:
 
     def __init__(self):
-        self._original_env: Dict[str, Optional[str]] = {}
-        self._managed_vars: Dict[str, str] = {}
+        self._original_env: dict[str, Optional[str]] = {}
+        self._managed_vars: dict[str, str] = {}
 
     def set_env_var(self, var_name: str, value: str) -> None:
         """Set environment variable and record original value."""
@@ -59,14 +59,15 @@ class EnvVarManager:
         for var_name in list(self._managed_vars.keys()):
             self.unset_env_var(var_name)
 
-    def get_managed_vars(self) -> Dict[str, str]:
+    def get_managed_vars(self) -> dict[str, str]:
         """get all managered variables."""
         return self._managed_vars.copy()
 
-    def setup_ai_environment(self, env_vars: Dict[str, str]) -> None:
+    def setup_ai_environment(self, env_vars: dict[str, str]) -> None:
         """Set ai environment by given values."""
         # Insert mindformers to PYTHONPATH.
-        mindformers_path = "/home/jenkins/mindspore/testcases/testcases/tests/mindformers"
+        mindformers_path =\
+            "/home/jenkins/mindspore/testcases/testcases/tests/mindformers"
 
         if mindformers_path not in sys.path:
             sys.path.insert(0, mindformers_path)
@@ -92,33 +93,38 @@ def cleanup_subprocesses() -> None:
             os.killpg(child.pid, signal.SIGKILL)
 
 
-def tasks_resource_alloc(tasks: List[Tuple[int]]) -> List[Tuple[str]]:
+def tasks_resource_alloc(tasks: list[tuple[int]]) -> list[tuple[str]]:
     """
-    Allocate devices, lccl base port, hccl base port to tasks according to device requirement of each task.
+    Allocate devices, lccl base port, hccl base port to tasks
+    according to device requirement of each task.
 
     For example:
         [(2, "cases_parallel/vllm_task.py::test_1", "test_1.log")]
-        ==> [("export ASCEND_RT_VISIBLE_DEVICES=0,1 && export LCAL_COMM_ID=127.0.0.1:10068 && "
+        ==> [("export ASCEND_RT_VISIBLE_DEVICES=0,1 &&
+               export LCAL_COMM_ID=127.0.0.1:10068 && "
               "export HCCL_IF_BASE_PORT=61000 && "
               "pytest -s -v cases_parallel/vllm_task.py::test_1 > test_1.log",
               "test_1.log")]
 
     Args:
-        tasks (List[Tuple[int]]): List of tasks. Each task contain 3 elements.
-            1. device_req (int): Num of device requirements, which will occur device_req devices,
-                                 device_req ports for lccl, device_req ports for hccl.
-            2. case_desc (str): The case description, such as "path_to_case/case.py::target_case".
+        tasks (list[tuple[int]]): list of tasks. Each task contain 3 elements.
+            1. device_req (int): Num of device requirements,
+                                 which will occur device_req devices,
+                                 device_req ports for lccl,
+                                 device_req ports for hccl.
+            2. case_desc (str): The case description,
+               such as "path_to_case/case.py::target_case".
             3. log_file (str): The logging file path.
 
     Returns:
-        List[Tuple[str]]: Append resource environment to the task commands.
+        list[tuple[str]]: Append resource environment to the task commands.
     """
     device_limit = 8
     device_base = 0
     lccl_base_port = 10068
     hccl_base_port = 61000
 
-    out_tasks: List[Tuple[str]] = []
+    out_tasks: list[tuple[str]] = []
     for task in tasks:
         assert len(task) == 3
         resource_req, task_case, log_file = task

@@ -36,9 +36,8 @@ def run_command(command_info):
 def check_results(commands, results):
     error_idx = [_ for _ in range(len(results)) if results[_][0] != 0]
     for idx in error_idx:
-        print(
-            f"testcase {commands[idx]} failed. Please check log {results[idx][1]}."
-        )
+        print(f"testcase {commands[idx]} failed. "
+              f"Please check log {results[idx][1]}.")
         os.system(f"grep -E 'ERROR|error|Error' {results[idx][1]} -C 5")
     assert error_idx == []
 
@@ -63,11 +62,11 @@ def test_cases_parallel_part0():
     cases = [
         (2, "cases_parallel/vllm_mf_qwen_7b.py::test_mf_qwen",
          "vllm_mf_qwen_7b_test_mf_qwen.log"),
-        (2,
-         "cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py::test_mf_qwen_7b_chunk_prefill",
+        (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py"
+         "::test_mf_qwen_7b_chunk_prefill",
          "vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log"),
-        (2,
-         "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py::test_mf_qwen_7b_chunk_prefill",
+        (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py"
+         "::test_mf_qwen_7b_chunk_prefill",
          "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log")
     ]
     run_tasks(cases)
@@ -85,11 +84,11 @@ def test_cases_parallel_part1():
     cases = [
         (2, "cases_parallel/vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss",
          "vllm_mf_qwen_7b_mss_test_mf_qwen_7b_mss.log"),
-        (2,
-         "cases_parallel/vllm_mf_qwen_7b_prefix_caching.py::test_mf_qwen_7b_prefix_caching",
+        (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching.py"
+         "::test_mf_qwen_7b_prefix_caching",
          "vllm_mf_qwen_7b_prefix_caching_test_mf_qwen_7b_prefix_caching.log"),
-        (2,
-         "cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py::test_mf_qwen_7b_prefix_caching",
+        (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py"
+         "::test_mf_qwen_7b_prefix_caching",
          "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"
          ),
         (2, "cases_parallel/vllm_mf_qwen_7b_v1.py::test_mf_qwen",
@@ -155,8 +154,8 @@ def test_cases_parallel_part4():
          "vllm_deepseek_part_v1_test_deepseek_r1.log"),
         (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
          "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
-        (2,
-         "cases_parallel/vllm_deepseek_smoothquant_mss.py::test_deepseek_r1_mss",
+        (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"
+         "::test_deepseek_r1_mss",
          "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
     ]
     run_tasks(cases)
@@ -185,11 +184,11 @@ def test_cases_parallel_level1_part0():
     """
     Feature: test cases parallel.
     Description:
-        vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss: accuracy error happens occasionally
+        vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss:
+            accuracy error happens occasionally
     Expectation: Pass.
     """
-    cases = [(
-        2,
-        "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss",
-        "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
+    cases = [(2, "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py"
+              "::test_mf_qwen_7b_cp_pc_mss",
+              "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
     run_tasks(cases)
