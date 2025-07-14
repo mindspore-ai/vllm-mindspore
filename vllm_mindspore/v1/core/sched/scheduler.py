@@ -55,7 +55,8 @@ def update_from_output(
 
     # Add by vllm-mindspore begin:
     running_req_ids = [req.request_id for req in self.running]
-    # abort_req_ids used to keep track of failed requests caused by model execution exception
+    # abort_req_ids used to keep track of failed requests
+    # caused by model execution exception
     abort_req_ids: list[str] = []
     # Add by vllm-mindspore end.
 
@@ -63,13 +64,14 @@ def update_from_output(
         req_id = request.request_id
 
         # Add by vllm-mindspore begin:
-        # None sampled_token_ids comes from exception model execution, set them to abort list
+        # None sampled_token_ids comes from exception model execution,
+        # set them to abort list
         # to keep main scheduler task running right.
         if sampled_token_ids is None:
             self.scheduled_req_ids.remove(req_id)
             logger.warning(
-                f'Process aborted request {req_id} from running requests {running_req_ids}'
-            )
+                'Process aborted request %s from running requests %s', req_id,
+                running_req_ids)
             outputs.append(
                 EngineCoreOutput(request_id=req_id,
                                  new_token_ids=[],
@@ -179,9 +181,10 @@ def update_from_output(
             new_running.append(request)
 
     # Add by vllm-mindspore begin:
-    # make failed requests finished to make the server can continue to process new request
+    # make failed requests finished to make the server
+    # can continue to process new request
     if len(abort_req_ids) > 0:
-        logger.warning(f'Aborted requests are {abort_req_ids}')
+        logger.warning('Aborted requests are %s', abort_req_ids)
         self.finish_requests(abort_req_ids, RequestStatus.FINISHED_ABORTED)
     # Add by vllm-mindspore end.
 
