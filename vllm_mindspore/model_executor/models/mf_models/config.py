@@ -71,7 +71,7 @@ MODEL_COMMON_MAPPING = {
 MODEL_RELATED_MAPPING = {
     'qwen3': {
         'gated_linear_unit': True,
-        'params_dtype': 'bfloat16', # need an input
+        'params_dtype': 'bfloat16',  # need an input
         'add_bias_linear': False,
         'normalization': 'RMSNorm'
     }
