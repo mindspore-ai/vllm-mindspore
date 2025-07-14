@@ -20,7 +20,8 @@
 
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Optional
+
 import mindspore as ms
 
 
@@ -28,7 +29,8 @@ class QuantizeMethodBase(ABC):
     """Base class for different quantized methods."""
 
     @abstractmethod
-    def create_weights(self, layer: ms.nn.Cell, *weight_args, **extra_weight_attrs):
+    def create_weights(self, layer: ms.nn.Cell, *weight_args,
+                       **extra_weight_attrs):
         """Create weights for a layer.
 
         The weights will be set as attributes of the layer."""
@@ -62,7 +64,7 @@ class QuantizationConfig(ABC):
     def __init__(self):
         super().__init__()
         # mapping is updated by models as they initialize
-        self.packed_modules_mapping: Dict[str, List[str]] = dict()
+        self.packed_modules_mapping: dict[str, list[str]] = dict()
 
     @abstractmethod
     def get_name(self) -> str:
@@ -71,7 +73,7 @@ class QuantizationConfig(ABC):
 
     @abstractmethod
     def get_supported_act_dtypes(self):
-        """List of supported activation dtypes."""
+        """list of supported activation dtypes."""
         raise NotImplementedError
 
     @classmethod
@@ -87,18 +89,19 @@ class QuantizationConfig(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_config_filenames() -> List[str]:
-        """List of filenames to search for in the model directory."""
+    def get_config_filenames() -> list[str]:
+        """list of filenames to search for in the model directory."""
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    def from_config(cls, config: Dict[str, Any]) -> "QuantizationConfig":
+    def from_config(cls, config: dict[str, Any]) -> "QuantizationConfig":
         """Create a config class from the model's quantization config."""
         raise NotImplementedError
 
     @classmethod
-    def override_quantization_method(cls, hf_quant_cfg, user_quant) -> Optional[str]:
+    def override_quantization_method(cls, hf_quant_cfg,
+                                     user_quant) -> Optional[str]:
         """
         Detects if this quantization method can support a given checkpoint
         format by overriding the user specified quantization method --
@@ -108,15 +111,17 @@ class QuantizationConfig(ABC):
         return None
 
     @staticmethod
-    def get_from_keys(config: Dict[str, Any], keys: List[str]) -> Any:
+    def get_from_keys(config: dict[str, Any], keys: list[str]) -> Any:
         """Get a value from the model's quantization config."""
         for key in keys:
             if key in config:
                 return config[key]
-        raise ValueError(f"Cannot find any of {keys} in the model's " "quantization config.")
+        raise ValueError(f"Cannot find any of {keys} in the model's "
+                         "quantization config.")
 
     @staticmethod
-    def get_from_keys_or(config: Dict[str, Any], keys: List[str], default: Any) -> Any:
+    def get_from_keys_or(config: dict[str, Any], keys: list[str],
+                         default: Any) -> Any:
         """Get a optional value from the model's quantization config."""
         try:
             return QuantizationConfig.get_from_keys(config, keys)
@@ -124,7 +129,8 @@ class QuantizationConfig(ABC):
             return default
 
     @abstractmethod
-    def get_quant_method(self, layer: ms.nn.Cell, prefix: str) -> Optional[QuantizeMethodBase]:
+    def get_quant_method(self, layer: ms.nn.Cell,
+                         prefix: str) -> Optional[QuantizeMethodBase]:
         """Get the quantize method to use for the quantized layer.
 
         Args:
@@ -137,13 +143,15 @@ class QuantizationConfig(ABC):
         raise NotImplementedError
 
 
-def method_has_implemented_embedding(method_class: Type[QuantizeMethodBase]) -> bool:
+def method_has_implemented_embedding(
+        method_class: type[QuantizeMethodBase]) -> bool:
     """
     Not all quant methods have embedding implemented, so we need to check that
     it exists for our given method. We check this by making sure the function
     has been changed from the base implementation.
     """
-    base_embedding = inspect.getattr_static(QuantizeMethodBase, "embedding", None)
+    base_embedding = inspect.getattr_static(QuantizeMethodBase, "embedding",
+                                            None)
     class_embedding = inspect.getattr_static(method_class, "embedding", None)
 
     return class_embedding is not None and class_embedding is not base_embedding
