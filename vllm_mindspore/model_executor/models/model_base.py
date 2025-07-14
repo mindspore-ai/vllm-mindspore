@@ -318,10 +318,13 @@ class MsModelBase:
             is_prefill, positions, query_lens_np, attn_metadata)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids
+        # Convert input_ids, block_tables, slot_mapping into contiguous tensors
+        # Since `contiguous()` does not support converting contiguous slices
+        # into regular tensors, use multiplication to make tensor contiguous.  
+        model_inputs["input_ids"] = input_ids * 1
         model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["block_tables"] = attn_metadata.block_tables * 1
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping * 1
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
