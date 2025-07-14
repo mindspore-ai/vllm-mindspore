@@ -19,21 +19,13 @@
 # limitations under the License.
 """Attention layer with MsAttention."""
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Optional
 
+import mindspore as ms
 import numpy as np
-
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionMetadata, AttentionType)
 from vllm.logger import init_logger
-
-
-from vllm_mindspore.utils import MsKVCache
-
-import mindspore as ms
-from mindspore import mutable
-from mindspore._c_expression import swap_cache
-
 
 logger = init_logger(__name__)
 
@@ -43,7 +35,7 @@ class MsAttentionBackend(AttentionBackend):
     accept_output_buffer: bool = True
 
     @staticmethod
-    def get_supported_head_sizes() -> List[int]:
+    def get_supported_head_sizes() -> list[int]:
         return [32, 64, 96, 128, 160, 192, 224, 256]
 
     @staticmethod
@@ -51,15 +43,15 @@ class MsAttentionBackend(AttentionBackend):
         return "MS_ATTN"
 
     @staticmethod
-    def get_impl_cls() -> Type["AttentionImpl"]:
+    def get_impl_cls() -> type["AttentionImpl"]:
         return MsAttentionImpl
 
     @staticmethod
-    def get_metadata_cls() -> Type["AttentionMetadata"]:
+    def get_metadata_cls() -> type["AttentionMetadata"]:
         return MsAttentionMetadata
 
     @staticmethod
-    def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
+    def get_builder_cls() -> type["MsAttentionMetadataBuilder"]:
         return MsAttentionMetadataBuilder
 
     @staticmethod
@@ -68,7 +60,7 @@ class MsAttentionBackend(AttentionBackend):
         block_size: int,
         num_kv_heads: int,
         head_size: int,
-    ) -> Tuple[int, ...]:
+    ) -> tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
         return (2, num_blocks, block_size, num_kv_heads, head_size)
@@ -79,20 +71,21 @@ class MsAttentionBackend(AttentionBackend):
 
 
 class MLABackend(AttentionBackend):
+
     @staticmethod
     def get_name() -> str:
         return "MS_MLA"
 
     @staticmethod
-    def get_impl_cls() -> Type["AttentionImpl"]:
+    def get_impl_cls() -> type["AttentionImpl"]:
         return MsAttentionImpl
 
     @staticmethod
-    def get_metadata_cls() -> Type["AttentionMetadata"]:
+    def get_metadata_cls() -> type["AttentionMetadata"]:
         return MsAttentionMetadata
 
     @staticmethod
-    def get_builder_cls() -> Type["MsAttentionMetadataBuilder"]:
+    def get_builder_cls() -> type["MsAttentionMetadataBuilder"]:
         return MsAttentionMetadataBuilder
 
     @staticmethod
@@ -101,7 +94,7 @@ class MLABackend(AttentionBackend):
         block_size: int,
         num_kv_heads: int,
         head_size: int,
-    ) -> Tuple[int, ...]:
+    ) -> tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
         return (1, num_blocks, block_size, 1, head_size)
@@ -111,9 +104,8 @@ class MLABackend(AttentionBackend):
         return False
 
     @staticmethod
-    def get_supported_head_sizes() -> List[int]:
+    def get_supported_head_sizes() -> list[int]:
         return [576]
-
 
 
 @dataclass
@@ -138,7 +130,7 @@ class MsAttentionMetadata:
     # add by vllm-mindspore end
 
     #num_actual_tokens: int = None  # Number of tokens excluding padding.
-    #max_query_len: int 
+    #max_query_len: int
     query_start_loc: ms.Tensor
     max_seq_len: int
     seq_lens: ms.Tensor
@@ -167,10 +159,10 @@ class MsAttentionImpl(AttentionImpl):
         head_size: int,
         scale: float,
         num_kv_heads: int,
-        alibi_slopes: Optional[List[float]],
+        alibi_slopes: Optional[list[float]],
         sliding_window: Optional[int],
         kv_cache_dtype: str,
-        blocksparse_params: Optional[Dict[str, Any]] = None,
+        blocksparse_params: Optional[dict[str, Any]] = None,
         logits_soft_cap: Optional[float] = None,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> None:
@@ -192,38 +184,44 @@ class MsAttentionImpl(AttentionImpl):
 
 
 class MsAttentionMetadataBuilder:
-    def __init__(self, runner: "GPUModelRunner"):
+
+    def __init__(self, runner):
         self.runner = runner
 
-    def reorder_batch(self, input_batch: "InputBatch",
-                      scheduler_output: "SchedulerOutput") -> bool:
+    def reorder_batch(self, input_batch, scheduler_output) -> bool:
         return False
 
     def build(self, num_reqs: int, num_actual_tokens: int, max_query_len: int,
               common_prefix_len: int):
         # do not manually call 'tensor.move_to("Ascend", blocking=False)' here,
         # because it will cause a certain amount of host time.
-        query_start_loc = ms.from_numpy(self.runner.query_start_loc_np[:num_reqs + 1])
-        max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:num_reqs].max()
-        slot_mapping = ms.from_numpy(self.runner.slot_mapping_np[:num_actual_tokens])
+        query_start_loc = ms.from_numpy(
+            self.runner.query_start_loc_np[:num_reqs + 1])
+        max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:
+                                                                           num_reqs].max(
+                                                                           )
+        slot_mapping = ms.from_numpy(
+            self.runner.slot_mapping_np[:num_actual_tokens])
         seq_lens_np = self.runner.seq_lens_np[:num_reqs]
         max_seq_len = seq_lens_np.max()
         seq_lens = ms.from_numpy(seq_lens_np)
-        context_lens = ms.from_numpy(self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
+        context_lens = ms.from_numpy(
+            self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
 
         q_seq_lens_np = np.diff(self.runner.query_start_loc_np[:num_reqs + 1])
 
         attn_metadata = MsAttentionMetadata(
             seq_lens=seq_lens,
             seq_lens_np=seq_lens_np,
-            block_tables=(self.runner.input_batch.block_table.get_device_tensor()[:num_reqs]),
+            block_tables=(self.runner.input_batch.block_table.
+                          get_device_tensor()[:num_reqs]),
             slot_mapping=slot_mapping,
             q_seq_lens_np=q_seq_lens_np,
             max_seq_len=max_seq_len,
             context_lens=context_lens,
             max_context_lens=max_context_lens,
-            query_start_loc = query_start_loc
-        )
+            query_start_loc=query_start_loc)
         return attn_metadata
+
 
 FlashAttentionMetadata = MsAttentionMetadata
