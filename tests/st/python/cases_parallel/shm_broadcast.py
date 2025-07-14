@@ -25,7 +25,6 @@
 import multiprocessing
 import random
 import time
-from typing import List
 
 import numpy as np
 
@@ -40,7 +39,7 @@ def teardown_function():
     utils.cleanup_subprocesses()
 
 
-def get_arrays(n: int, seed: int = 0) -> List[np.ndarray]:
+def get_arrays(n: int, seed: int = 0) -> list[np.ndarray]:
     np.random.seed(seed)
     sizes = np.random.randint(1, 10_000, n)
     # on average, each array will have 5k elements
