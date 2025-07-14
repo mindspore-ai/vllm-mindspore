@@ -18,20 +18,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional
 
 from mindspore import Parameter, Tensor, mint, nn, ops
-from mindspore.common import dtype as mstype
 from mindspore.common.dtype import typing
+from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
-from vllm.model_executor.layers.quantization.base_config import \
-    QuantizationConfig
-from vllm.config import get_current_vllm_config
+from vllm.model_executor.layers.quantization.base_config import (
+    QuantizationConfig)
 
-from vllm_mindspore.distributed.communication_op import \
-    ReduceFromModelParallelRegion
+from vllm_mindspore.distributed.communication_op import (
+    ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
@@ -43,7 +43,7 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
     """Unquantized method for embeddings."""
 
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
-                       output_partition_sizes: List[int], input_size: int,
+                       output_partition_sizes: list[int], input_size: int,
                        output_size: int, params_dtype, **extra_weight_attrs):
         """Create weights for embedding layer."""
         weight = Parameter(mint.zeros(
@@ -83,7 +83,7 @@ def get_masked_input_and_mask(
     num_org_vocab_padding: int,
     added_vocab_start_index: int,
     added_vocab_end_index: int,
-) -> Tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor]:
     displaced_x = mint.sub(input_, org_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
     truncated_x = mint.minimum(
@@ -154,11 +154,13 @@ class VocabParallelEmbeddingShardIndices:
 
     @property
     def num_org_elements_padded(self) -> int:
-        return self.padded_org_vocab_end_index - self.padded_org_vocab_start_index
+        return self.padded_org_vocab_end_index - \
+            self.padded_org_vocab_start_index
 
     @property
     def num_added_elements_padded(self) -> int:
-        return self.padded_added_vocab_end_index - self.padded_added_vocab_start_index
+        return self.padded_added_vocab_end_index - \
+            self.padded_added_vocab_start_index
 
     @property
     def num_org_vocab_padding(self) -> int:
@@ -174,14 +176,17 @@ class VocabParallelEmbeddingShardIndices:
 
     def __post_init__(self):
         # sanity checks
-        assert self.padded_org_vocab_start_index <= self.padded_org_vocab_end_index
-        assert self.padded_added_vocab_start_index <= self.padded_added_vocab_end_index
+        assert self.padded_org_vocab_start_index <= \
+            self.padded_org_vocab_end_index
+        assert self.padded_added_vocab_start_index <= \
+            self.padded_added_vocab_end_index
 
         assert self.org_vocab_start_index <= self.org_vocab_end_index
         assert self.added_vocab_start_index <= self.added_vocab_end_index
 
         assert self.org_vocab_start_index <= self.padded_org_vocab_start_index
-        assert self.added_vocab_start_index <= self.padded_added_vocab_start_index
+        assert self.added_vocab_start_index <= \
+            self.padded_added_vocab_start_index
         assert self.org_vocab_end_index <= self.padded_org_vocab_end_index
         assert self.added_vocab_end_index <= self.padded_added_vocab_end_index
 
@@ -341,7 +346,8 @@ class VocabParallelEmbedding(nn.Cell):
             assert param.data.shape == loaded_weight.shape
             if param.data.shape != loaded_weight.shape:
                 raise ValueError(
-                    f"'param.data.shape' should be equal to 'loaded_weight.shape',"
+                    f"'param.data.shape' should be equal "
+                    f"to 'loaded_weight.shape',"
                     f" but got {param.data.shape} and {loaded_weight.shape}")
             param.set_data(loaded_weight)
             return
@@ -350,10 +356,10 @@ class VocabParallelEmbedding(nn.Cell):
         start_idx = self.shard_indices.org_vocab_start_index
         shard_size = self.shard_indices.org_vocab_end_index - start_idx
         if loaded_weight.shape[output_dim] != self.org_vocab_size:
-            raise ValueError(
-                f"'loaded_weight.shape[output_dim]' should be equal to 'org_vocab_size',"
-                f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}"
-            )
+            raise ValueError(f"'loaded_weight.shape[output_dim]' should "
+                             f"be equal to 'org_vocab_size',"
+                             f" but got {loaded_weight.shape[output_dim]} "
+                             f"and {self.org_vocab_size}")
 
         # Copy the data.
         loaded_weight = loaded_weight.narrow(output_dim, start_idx,
@@ -411,7 +417,6 @@ class ParallelLMHead(VocabParallelEmbedding):
                 },
             )
         else:
-            # self.register_parameter("bias", None)
             self.bias = None
 
     def tie_weights(self, embed_tokens: VocabParallelEmbedding):
@@ -420,7 +425,6 @@ class ParallelLMHead(VocabParallelEmbedding):
         if self.quant_config and self.quant_config.get_name() == "gguf":
             return embed_tokens
         else:
-            # self.weight = embed_tokens.weight
             self.weight.set_data(embed_tokens.weight)
             return self
 
