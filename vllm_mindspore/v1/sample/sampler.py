@@ -20,6 +20,7 @@
 
 import torch
 
+
 def apply_temperature(
     self,
     logits: torch.Tensor,

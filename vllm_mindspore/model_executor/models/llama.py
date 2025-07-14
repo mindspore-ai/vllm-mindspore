@@ -539,6 +539,7 @@ class LlamaForCausalLM(MsModelBase, SupportsPP):
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         params_dict = self.get_params_dict()
         self.model.load_weights(weights, params_dict)
+        return  # type: ignore
 
     def sample(self, logits: Tensor,
                sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:

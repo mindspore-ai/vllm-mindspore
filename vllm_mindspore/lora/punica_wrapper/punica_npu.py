@@ -16,15 +16,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Punica warpper for NPU."""
+
+# isort: skip_file
+"""Punica wrapper for NPU."""
 from typing import Callable
 
 from mindspore import mint
 from mindspore.common import dtype as mstype
-from vllm_mindspore.lora.ops.torch_ops.lora_ops import (bgmv_expand, bgmv_expand_slice,
-                                                        bgmv_shrink, sgmv_expand,
-                                                        sgmv_expand_slice, sgmv_shrink)
 from vllm.lora.punica_wrapper.punica_base import PunicaWrapperBase
+
+from vllm_mindspore.lora.ops.torch_ops.lora_ops import (
+    bgmv_expand, bgmv_expand_slice, bgmv_shrink, sgmv_expand,
+    sgmv_expand_slice, sgmv_shrink)
 
 
 # The platforms that are compatible with the PyTorch-native implementation can
@@ -47,7 +50,7 @@ class PunicaWrapperNPU(PunicaWrapperBase):
         w_t_all,
         scale,
     ):
-        sgmv_shrink(
+        sgmv_shrink(  # type: ignore
             x,
             w_t_all,
             y,
@@ -71,7 +74,7 @@ class PunicaWrapperNPU(PunicaWrapperBase):
         w_t_all,
         add_inputs,
     ):
-        sgmv_expand(
+        sgmv_expand(  # type: ignore
             x,
             w_t_all,
             y,
@@ -97,7 +100,7 @@ class PunicaWrapperNPU(PunicaWrapperBase):
         y_slice_size,
         add_inputs,
     ):
-        sgmv_expand_slice(
+        sgmv_expand_slice(  # type: ignore
             x,
             w_t_all,
             y,
