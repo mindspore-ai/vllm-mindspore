@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import torch
 import mindspore as ms
+import numpy as np
+from mindspore import Tensor
 
-def _copy_slice_from_np(from_np: np.ndarray, to_tensor: torch.Tensor,
+
+def _copy_slice_from_np(from_np: np.ndarray, to_tensor: Tensor,
                         length: int) -> None:
     """
     Copy the first length elements of a numpy array into a tensor in a
@@ -28,8 +29,11 @@ def _copy_slice_from_np(from_np: np.ndarray, to_tensor: torch.Tensor,
     return to_tensor
 
 
-def copy_slice(from_tensor: torch.Tensor, to_tensor: torch.Tensor,
-               length: int, *, return_tensor=True) -> None:
+def copy_slice(from_tensor: Tensor,
+               to_tensor: Tensor,
+               length: int,
+               *,
+               return_tensor=True) -> None:
     """
     Copy the first length elements of a tensor into another tensor in a
     non-blocking manner.
