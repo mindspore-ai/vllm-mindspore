@@ -136,10 +136,10 @@ class Qwen3ForCausalLM(MsModelBase):
             is_prefill, positions, query_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids.astype(ms.int32)
+        model_inputs["input_ids"] = input_ids.astype(ms.int32) * 1
         model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["block_tables"] = attn_metadata.block_tables * 1
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping * 1
         model_inputs["positions"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
