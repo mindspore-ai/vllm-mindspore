@@ -24,16 +24,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-import numpy as np
 import mindspore
-from mindspore import Tensor, mint, ops, nn
+import numpy as np
+from mindspore import Tensor, mint, nn, ops
 from mindspore.common import dtype as mstype
-
 from transformers import PretrainedConfig
-
 from vllm.config import get_current_vllm_config
+
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -116,7 +115,7 @@ class RotaryEmbedding(nn.Cell):
         query: Tensor,
         key: Tensor,
         offsets: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor]:
         """A PyTorch-native implementation of forward()."""
         if offsets is not None:
             positions = positions + offsets
@@ -153,9 +152,8 @@ class InferRotaryEmbedding(nn.Cell):
         dtype,
     ) -> None:
         if not is_neox_style:
-            raise NotImplementedError(
-                "InferRotaryEmbedding only support Neox-style rotary embeddings."
-            )
+            raise NotImplementedError("InferRotaryEmbedding only support"
+                                      "Neox-style rotary embeddings.")
         super().__init__()
         self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
         self.gather = ops.Gather()
@@ -172,18 +170,19 @@ class InferRotaryEmbedding(nn.Cell):
         Compute the inverse frequency with numpy.
         Numpy process is faster during initialization.
         """
-        freqs_base = np.arange(0, self.rotary_dim, 2).astype(
-            np.float32)  # (head_dim // 2, )
-        freqs = 1.0 / (base**(freqs_base / self.rotary_dim))  # (head_dim // 2, )
+        freqs_base = np.arange(0, self.rotary_dim,
+                               2).astype(np.float32)  # (head_dim // 2, )
+        freqs = 1.0 / (base**(freqs_base / self.rotary_dim)
+                       )  # (head_dim // 2, )
         return freqs
 
-    def _compute_cos_sin_cache(self) -> Tuple[Tensor, Tensor]:
+    def _compute_cos_sin_cache(self) -> tuple[Tensor, Tensor]:
         freqs = self._compute_inv_freq(self.base)
         t = np.arange(0, self.max_position_embeddings, 1).astype(np.float32)
         freqs = np.outer(t, freqs)  # (max_position_embedding, head_dim // 2)
         emb = np.concatenate((freqs, freqs), axis=-1)
-        freqs_cos = np.cos(emb) # (seq_len, head_dim)
-        freqs_sin = np.sin(emb) # (seq_len, head_dim)
+        freqs_cos = np.cos(emb)  # (seq_len, head_dim)
+        freqs_sin = np.sin(emb)  # (seq_len, head_dim)
         freqs_cos = Tensor(freqs_cos, dtype=self.dtype)
         freqs_sin = Tensor(freqs_sin, dtype=self.dtype)
         return freqs_cos, freqs_sin
@@ -196,7 +195,7 @@ class InferRotaryEmbedding(nn.Cell):
         batch_valid_length: Tensor,
         is_prefill: bool,
         offsets: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor]:
         query = query.contiguous()
         key = key.contiguous()
         if is_prefill:
@@ -220,7 +219,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         base: int,
         is_neox_style: bool,
         dtype: mindspore.Type,
-        mrope_section: Optional[List[int]] = None,
+        mrope_section: Optional[list[int]] = None,
     ) -> None:
         # In Qwen2.5-VL, the maximum index value is related to the duration of
         # the input video. We enlarge max_position_embeddings to 4 times to get
@@ -240,7 +239,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         key: mindspore.Tensor,
         batch_valid_length: Tensor = None,
         is_prefill: bool = False,
-    ) -> Tuple[mindspore.Tensor, mindspore.Tensor]:
+    ) -> tuple[mindspore.Tensor, mindspore.Tensor]:
         """
         Args:
             positions:
@@ -263,9 +262,9 @@ class MRotaryEmbedding(RotaryEmbedding):
             cos_l = ops.split(cos, self.mrope_section, axis=-1)
             sin_l = ops.split(sin, self.mrope_section, axis=-1)
             cos, sin = (), ()
-            for i in range(len(self.mrope_section)):
-                cos += (cos_l[i][i],)
-                sin += (sin_l[i][i],)
+            for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
+                cos += (cos_l[i][i], )
+                sin += (sin_l[i][i], )
             cos = ops.cat(cos, axis=-1)
             sin = ops.cat(sin, axis=-1)
 
@@ -286,14 +285,14 @@ class MRotaryEmbedding(RotaryEmbedding):
 
     @staticmethod
     def get_input_positions(
-        input_tokens: List[int],
+        input_tokens: list[int],
         hf_config: PretrainedConfig,
-        image_grid_thw: Union[List[List[int]], mindspore.Tensor],
-        video_grid_thw: Union[List[List[int]], mindspore.Tensor],
-        second_per_grid_ts: Optional[List[float]] = None,
+        image_grid_thw: Union[list[list[int]], mindspore.Tensor],
+        video_grid_thw: Union[list[list[int]], mindspore.Tensor],
+        second_per_grid_ts: Optional[list[float]] = None,
         context_len: int = 0,
         seq_len: Optional[int] = None,
-    ) -> Tuple[List[List[int]], int]:
+    ) -> tuple[list[list[int]], int]:
         """Get mrope input positions and delta value."""
 
         llm_positions, mrope_position_delta = \
@@ -311,14 +310,14 @@ class MRotaryEmbedding(RotaryEmbedding):
 
     @staticmethod
     def get_input_positions_tensor(
-        input_tokens: List[int],
+        input_tokens: list[int],
         hf_config: PretrainedConfig,
-        image_grid_thw: Union[List[List[int]], mindspore.Tensor],
-        video_grid_thw: Union[List[List[int]], mindspore.Tensor],
-        second_per_grid_ts: Optional[List[float]] = None,
+        image_grid_thw: Union[list[list[int]], mindspore.Tensor],
+        video_grid_thw: Union[list[list[int]], mindspore.Tensor],
+        second_per_grid_ts: Optional[list[float]] = None,
         context_len: int = 0,
         seq_len: Optional[int] = None,
-    ) -> Tuple[mindspore.Tensor, int]:
+    ) -> tuple[mindspore.Tensor, int]:
         """Get mrope input positions and delta value."""
 
         image_token_id = hf_config.image_token_id
@@ -388,7 +387,8 @@ class MRotaryEmbedding(RotaryEmbedding):
             st_idx = llm_pos_ids_list[-1].max() + 1 if len(
                 llm_pos_ids_list) > 0 else 0
             llm_pos_ids_list.append(
-                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() + st_idx)
+                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() +
+                st_idx)
 
             t_index = (ops.arange(llm_grid_t).view(-1, 1).broadcast_to(
                 (-1, llm_grid_h * llm_grid_w)) * video_second_per_grid_t *
@@ -397,7 +397,7 @@ class MRotaryEmbedding(RotaryEmbedding):
                 (llm_grid_t, -1, llm_grid_w)).flatten().int()
             w_index = ops.arange(llm_grid_w).view(1, 1, -1).broadcast_to(
                 (llm_grid_t, llm_grid_h, -1)).flatten().int()
-            
+
             llm_pos_ids_list.append(
                 ops.stack([t_index, h_index, w_index]) + text_len + st_idx)
             st = ed + llm_grid_t * llm_grid_h * llm_grid_w
@@ -407,7 +407,8 @@ class MRotaryEmbedding(RotaryEmbedding):
                 llm_pos_ids_list) > 0 else 0
             text_len = len(input_tokens) - st
             llm_pos_ids_list.append(
-                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() + st_idx)
+                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() +
+                st_idx)
 
         llm_positions = ops.cat(llm_pos_ids_list, axis=1).view(3, -1)
         mrope_position_delta = (llm_positions.max() + 1 -
@@ -421,7 +422,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         mrope_position_delta: int,
         context_len: int,
         seq_len: int,
-    ) -> List[List[int]]:
+    ) -> list[list[int]]:
         return [
             list(
                 range(context_len + mrope_position_delta,
@@ -446,7 +447,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
     get_input_positions = MRotaryEmbedding.get_input_positions
     get_input_positions_tensor = MRotaryEmbedding.get_input_positions_tensor
     get_next_input_positions = MRotaryEmbedding.get_next_input_positions
-    get_next_input_positions_tensor = MRotaryEmbedding.get_next_input_positions_tensor
+    get_next_input_positions_tensor = \
+        MRotaryEmbedding.get_next_input_positions_tensor
 
     def __init__(
         self,
@@ -456,7 +458,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         base: int,
         is_neox_style: bool,
         dtype: mindspore.Type,
-        mrope_section: Optional[List[int]] = None,
+        mrope_section: Optional[list[int]] = None,
     ) -> None:
         # In Qwen2.5-VL, the maximum index value is related to the duration of
         # the input video. We enlarge max_position_embeddings to 4 times to get
@@ -466,7 +468,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         self.rotary_dim = rotary_dim
         self.max_position_embeddings = max_position_embeddings
         self.base = base
-        self.is_neox_style = is_neox_style
+        self.is_neox_style = is_neox_style  # type: ignore[assignment]
         self.dtype = dtype
         super().__init__(head_size, rotary_dim, self.cache_max_position_num,
                          base, is_neox_style, dtype)
@@ -475,14 +477,14 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
 
-    def construct(
+    def construct(  # type: ignore[override]
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
         key: mindspore.Tensor,
         batch_valid_length: Tensor = None,
         is_prefill: bool = False,
-    ) -> Tuple[mindspore.Tensor, mindspore.Tensor]:
+    ) -> tuple[mindspore.Tensor, mindspore.Tensor]:
         """
         Args:
             positions:
@@ -495,14 +497,16 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         if is_prefill:
             num_tokens = positions.shape[-1]
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
-            cos, sin = cos[..., :self.rotary_dim//2], sin[..., :self.rotary_dim//2]
+            cos, sin = cos[..., :self.rotary_dim //
+                           2], sin[..., :self.rotary_dim // 2]
             if positions.ndim == 2:
                 cos_l = ops.split(cos, self.mrope_section, axis=-1)
                 sin_l = ops.split(sin, self.mrope_section, axis=-1)
                 cos, sin = (), ()
-                for i in range(len(self.mrope_section)):
-                    cos += (cos_l[i][i],)
-                    sin += (sin_l[i][i],)
+                for i in range(len(
+                        self.mrope_section)):  # type: ignore[arg-type]
+                    cos += (cos_l[i][i], )
+                    sin += (sin_l[i][i], )
                 cos = ops.cat(cos, axis=-1)
                 sin = ops.cat(sin, axis=-1)
 
@@ -510,7 +514,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             query = query.view(num_tokens, -1, self.head_size)
             query_rot = query[..., :self.rotary_dim]
             query_pass = query[..., self.rotary_dim:]
-            query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
+            query_rot = _apply_rotary_emb(query_rot, cos, sin,
+                                          self.is_neox_style)
             query = ops.cat((query_rot, query_pass), axis=-1).view(query_shape)
 
             key_shape = key.shape
@@ -522,16 +527,18 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             return query, key
 
         # decode
-        if positions.ndim == 2 and positions.shape[0] == len(self.mrope_section):
+        if positions.ndim == 2 and positions.shape[0] == len(
+                self.mrope_section):  # type: ignore[arg-type]
             num_tokens = positions.shape[-1]
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
-            cos, sin = cos[..., :self.rotary_dim//2], sin[..., :self.rotary_dim//2]
+            cos, sin = cos[..., :self.rotary_dim //
+                           2], sin[..., :self.rotary_dim // 2]
             cos_l = ops.split(cos, self.mrope_section, axis=-1)
             sin_l = ops.split(sin, self.mrope_section, axis=-1)
             cos, sin = (), ()
-            for i in range(len(self.mrope_section)):
-                cos += (cos_l[i][i],)
-                sin += (sin_l[i][i],)
+            for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
+                cos += (cos_l[i][i], )
+                sin += (sin_l[i][i], )
             cos = ops.cat(cos, axis=-1)
             sin = ops.cat(sin, axis=-1)
             freqs_cos = ops.cat([cos, cos], axis=-1).squeeze(1)
@@ -541,10 +548,11 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             freqs_cos = self.freqs_cos.index_select(0, positions)
             freqs_sin = self.freqs_sin.index_select(0, positions)
 
-        return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin, batch_valid_length)
+        return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
+                                        batch_valid_length)
 
 
-_ROPE_DICT: Dict[Tuple, InferRotaryEmbedding] = {}
+_ROPE_DICT: dict[tuple, Union[InferRotaryEmbedding, RotaryEmbedding]] = {}
 
 
 def get_rope(
@@ -553,10 +561,10 @@ def get_rope(
     max_position: int,
     base: int,
     is_neox_style: bool = True,
-    rope_scaling: Optional[Dict[str, Any]] = None,
+    rope_scaling: Optional[dict[str, Any]] = None,
     dtype: Optional[Any] = None,
     partial_rotary_factor: float = 1.0,
-) -> InferRotaryEmbedding:
+):
     if dtype is None:
         dtype = get_current_vllm_config().model_config.dtype
 
@@ -607,5 +615,5 @@ def get_rope(
         else:
             raise NotImplementedError
 
-    _ROPE_DICT[key] = rotary_emb
+    _ROPE_DICT[key] = rotary_emb  # type: ignore[assignment]
     return rotary_emb
