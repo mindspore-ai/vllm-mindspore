@@ -2239,6 +2239,6 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         param_not_load, ckpt_not_load = ms.load_param_into_net(
             self.network, self.parameter_dict)
         logger.info("param_not_load: %s, ckpt_not_load: %s",
-                    (str(param_not_load), str(ckpt_not_load)))
+                    str(param_not_load), str(ckpt_not_load))
         del self.parameter_dict
         gc.collect()
