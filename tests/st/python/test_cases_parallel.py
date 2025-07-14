@@ -202,7 +202,9 @@ def test_cases_parallel_part6():
          "vllm_qwen2_5_vl_7b_v1_enforce_eager.log"),
         (1, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py"
          "::test_qwen2_5_vl_7b_v1_video_infer",
-         "vllm_qwen2_5_vl_7b_v1_video_infer.log")
+         "vllm_qwen2_5_vl_7b_v1_video_infer.log"),
+        (2, "cases_parallel/vllm_deepseek_a8w4.py::test_deepseek_r1_a8w4",
+         "vllm_deepseek_a8w4_test_deepseek_r1_a8w4.log")
     ]
     run_tasks(cases)
 
@@ -220,5 +222,8 @@ def test_cases_parallel_level1_part0():
     """
     cases = [(2, "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py"
               "::test_mf_qwen_7b_cp_pc_mss",
-              "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
+              "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log"),
+             (4, "cases_parallel/vllm_deepseek_a16w4.py"
+              "::test_deepseek_r1_gptq_a16w4",
+              "vllm_deepseek_a16w4_test_deepseek_r1_gptq_a16w4.log")]
     run_tasks(cases)
