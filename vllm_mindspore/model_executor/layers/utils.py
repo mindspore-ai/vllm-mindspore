@@ -18,15 +18,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Utility methods for model layers."""
-from typing import Tuple
-import torch
 import mindspore as ms
+import torch
+
 
 def get_token_bin_counts_and_mask(
     tokens: torch.Tensor,
     vocab_size: int,
     num_seqs: int,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     # Compute the bin counts for the tokens.
     # vocab_size + 1 for padding.
     bin_counts = torch.zeros((num_seqs, vocab_size + 1),
@@ -45,7 +45,7 @@ def apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
                     frequency_penalties: torch.Tensor,
                     repetition_penalties: torch.Tensor) -> torch.Tensor:
     """
-    Applies penalties out of place implement to imporve performance.
+    Applies penalties out of place implement to improve performance.
     logits : The input logits tensor of shape [num_seqs, vocab_size]
     prompt_tokens_tensor: A tensor containing the prompt tokens. The prompts 
         are padded to the maximum prompt length within the batch using 
@@ -65,20 +65,21 @@ def apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
     output_bin_counts, output_mask = get_token_bin_counts_and_mask(
         output_tokens_tensor, vocab_size, num_seqs)
 
-    # use 'broadcast_to' to replace 'tensor.repeat' to imporve performance
+    # use 'broadcast_to' to replace 'tensor.repeat' to improve performance
     # when tensor shape is (num,seqs, 1), then 'tensor.repeat(1, vocab_size)'
     # is equal to 'broadcast_to(tensor, (num_seqs, vocab_size))'
-    repetition_penalties = ms.mint.broadcast_to(repetition_penalties.unsqueeze(dim=1),
-                                                (num_seqs, vocab_size))
+    repetition_penalties = ms.mint.broadcast_to(
+        repetition_penalties.unsqueeze(dim=1), (num_seqs, vocab_size))
 
-    # use out of place computation instead of inplace setitem to improve performance
-    # 'tensor[tensor > 0]' will result in setitem, which is slow.
+    # use out of place computation instead of inplace setitem to improve
+    # performance 'tensor[tensor > 0]' will result in setitem, which is slow.
     mask = prompt_mask | output_mask
-    logits = torch.where(mask & (logits > 0), logits / repetition_penalties, logits)
-    logits = torch.where(mask & (logits <= 0), logits * repetition_penalties, logits)
+    logits = torch.where(mask & (logits > 0), logits / repetition_penalties,
+                         logits)
+    logits = torch.where(mask & (logits <= 0), logits * repetition_penalties,
+                         logits)
     # We follow the definition in OpenAI API.
     # Refer to https://platform.openai.com/docs/api-reference/parameter-details
     logits -= frequency_penalties.unsqueeze(dim=1) * output_bin_counts
     logits -= presence_penalties.unsqueeze(dim=1) * output_mask
     return logits
-

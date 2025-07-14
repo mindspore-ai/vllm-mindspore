@@ -40,11 +40,11 @@ class SwiGLU(nn.Cell):
     """An activation function for SwiGLU.
 
     Shapes:
-        x: (batch_size, seq_len, 2 * hidden_size)
-        return: (batch_size, seq_len, hidden_size)
+        x: (num_tokens, 2 * d) or (batch_size, seq_len, 2 * d)
+        return: (num_tokens, d) or (batch_size, seq_len, d)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.silu = nn.SiLU()
         self.split = ops.auto_generate.SplitWithSize()

@@ -13,14 +13,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """
 infer attention mask.
 """
 import numpy as np
-
-from mindspore import Tensor, mint
+from mindspore import Tensor
 from mindspore import dtype as mstype
+from mindspore import mint
+
+# yapf conflicts with isort
+# yapf: disable
 
 r"""
 PA:ASD-V2.1.5
@@ -33,6 +35,8 @@ FA:ASD-V2.1.5
 1.MLA: not implement;
 2.normal: mask BF16(0/1), FP16 mask(0/-10000);
 """
+
+# yapf: enable
 
 
 class LowerTriangularMask:
@@ -49,10 +53,14 @@ class LowerTriangularMask:
 
         prefill_mask_coeff = 1.0 if self.dtype == mstype.bfloat16 else -10000.0
 
-        self.prefill_mask = Tensor(np.triu(np.ones(shape=(128, 128), dtype=np.float16), k=1) * prefill_mask_coeff,
-                                   dtype=self.dtype)
+        self.prefill_mask = Tensor(
+            np.triu(np.ones(shape=(128, 128), dtype=np.float16), k=1) *
+            prefill_mask_coeff,
+            dtype=self.dtype)
 
-        self.decode_mask = Tensor(np.triu(np.ones(shape=(self.max_model_len, self.max_model_len), dtype=np.int8), k=1),
+        self.decode_mask = Tensor(np.triu(np.ones(
+            shape=(self.max_model_len, self.max_model_len), dtype=np.int8),
+                                          k=1),
                                   dtype=self.dtype) * -10000
 
         self.hard_mask = mint.zeros((1, 1), dtype=dtype)
@@ -62,7 +70,8 @@ class LowerTriangularMask:
             attention_mask = self.prefill_mask
         else:
             if max(query_lens) > 1:
-                attention_mask = mint.index_select(self.decode_mask, 0, position_ids)
+                attention_mask = mint.index_select(self.decode_mask, 0,
+                                                   position_ids)
             else:
                 attention_mask = self.hard_mask
         return attention_mask
@@ -80,5 +89,7 @@ class MLALowerTriangularMask(LowerTriangularMask):
 
         super().__init__(dtype, max_model_len)
         decode_mask_coeff = 1.0 if self.dtype == mstype.bfloat16 else -10000.0
-        self.decode_mask = Tensor(np.triu(np.ones(shape=(self.max_model_len, self.max_model_len), dtype=np.int8), k=1),
+        self.decode_mask = Tensor(np.triu(np.ones(
+            shape=(self.max_model_len, self.max_model_len), dtype=np.int8),
+                                          k=1),
                                   dtype=self.dtype) * decode_mask_coeff
