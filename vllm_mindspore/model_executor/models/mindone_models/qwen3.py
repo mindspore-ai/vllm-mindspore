@@ -1,6 +1,12 @@
-#!/usr/bin/env python3
-# Copyright 2025 Huawei Technologies Co., Ltd
-# Copyright 2024 The vLLM team.
+# SPDX-License-Identifier: Apache-2.0
+
+# Adapted from
+# https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py
+#
+# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2024 The Qwen team.
+# Copyright 2023 The vLLM team.
+# Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +20,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 if TYPE_CHECKING:
     from transformers import Qwen3Config
@@ -62,7 +68,8 @@ class vLLMQwen3Attention(Qwen3Attention):
             self.scaling,
             num_kv_heads=self.config.num_key_value_heads,
             prefix=f"model.layers.{self.layer_idx}.self_attn.attn",
-            attn_type=AttentionType.DECODER)
+            attn_type=AttentionType.DECODER,
+        )
         self.attn_mask = mint.triu(
             mint.ones(size=(128, 128), dtype=mstype.bfloat16), 1)
         self.hard_mask = Tensor([0], dtype=mstype.bfloat16).reshape(1, 1)
@@ -86,7 +93,7 @@ class vLLMQwen3Attention(Qwen3Attention):
         q = self.q_proj(hidden_states)
         k = self.k_proj(hidden_states)
         v = self.v_proj(hidden_states)
-        #Add qk-norm
+        # Add qk-norm
         q_by_head = q.view(*q.shape[:-1], q.shape[-1] // self.head_dim,
                            self.head_dim)
         q_by_head = self.q_norm(q_by_head)
@@ -97,9 +104,19 @@ class vLLMQwen3Attention(Qwen3Attention):
         k = k_by_head.view(k.shape)
 
         q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
-                                slot_mapping, attn_mask, batch_valid_length,
-                                q_seq_lens, block_tables)
+        attn_output = self.attn(
+            q,
+            k,
+            v,
+            key_cache,
+            value_cache,
+            is_prefill,
+            slot_mapping,
+            attn_mask,
+            batch_valid_length,
+            q_seq_lens,
+            block_tables,
+        )
         output = self.o_proj(attn_output)
         return output
 
@@ -129,16 +146,23 @@ class vLLMQwen3DecoderLayer(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-    ) -> Tuple[Tensor, Tensor]:
-
+    ) -> tuple[Tensor, Tensor]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
-        hidden_states = self.self_attn(positions, hidden_states, key_cache,
-                                       value_cache, is_prefill, slot_mapping,
-                                       attn_mask, batch_valid_length,
-                                       q_seq_lens, block_tables)
+        hidden_states = self.self_attn(
+            positions,
+            hidden_states,
+            key_cache,
+            value_cache,
+            is_prefill,
+            slot_mapping,
+            attn_mask,
+            batch_valid_length,
+            q_seq_lens,
+            block_tables,
+        )
         hidden_states = residual + hidden_states
 
         # Fully Connected
@@ -179,8 +203,8 @@ class vLLMQwen3Model(Qwen3PreTrainedModel):
         self,
         input_ids: Optional[Tensor],
         positions: Tensor,
-        key_caches: List[Tensor],
-        value_caches: List[Tensor],
+        key_caches: list[Tensor],
+        value_caches: list[Tensor],
         is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
@@ -190,18 +214,23 @@ class vLLMQwen3Model(Qwen3PreTrainedModel):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
-
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
         hidden_states = inputs_embeds
 
         for i in range(len(self.layers)):
-
-            hidden_states = self.layers[i](positions, hidden_states,
-                                           key_caches[i], value_caches[i],
-                                           is_prefill, slot_mapping, attn_mask,
-                                           batch_valid_length, q_seq_lens,
-                                           block_tables)
+            hidden_states = self.layers[i](
+                positions,
+                hidden_states,
+                key_caches[i],
+                value_caches[i],
+                is_prefill,
+                slot_mapping,
+                attn_mask,
+                batch_valid_length,
+                q_seq_lens,
+                block_tables,
+            )
 
         hidden_states = self.norm(hidden_states)
         return hidden_states
@@ -263,14 +292,16 @@ class Qwen3ForCausalLM(MindONEModelBase):
     def get_input_embeddings(self, input_ids: Tensor) -> Tensor:
         return self.model.get_input_embeddings(input_ids)
 
-    def forward(self,
-                input_ids: Tensor,
-                positions: Tensor,
-                kv_caches: List[Tuple[Tensor, Tensor]],
-                attn_metadata: AttentionMetadata,
-                intermediate_tensors: IntermediateTensors = None,
-                inputs_embeds: Tensor = None,
-                **kwargs) -> Union[Tensor, IntermediateTensors]:
+    def forward(
+        self,
+        input_ids: Tensor,
+        positions: Tensor,
+        kv_caches: list[tuple[Tensor, Tensor]],
+        attn_metadata: AttentionMetadata,
+        intermediate_tensors: IntermediateTensors = None,
+        inputs_embeds: Tensor = None,
+        **kwargs,
+    ) -> Union[Tensor, IntermediateTensors]:
         key_cache, value_cache = self.get_kvcache()
 
         seq_lens = attn_metadata.seq_lens
@@ -302,7 +333,7 @@ class Qwen3ForCausalLM(MindONEModelBase):
             np.array(attn_metadata.query_lens, dtype=np.int32))
         block_tables = attn_metadata.block_tables
 
-        model_inputs = (\
+        model_inputs = (
             input_ids,
             positions,
             key_cache,
@@ -314,7 +345,7 @@ class Qwen3ForCausalLM(MindONEModelBase):
             q_seq_lens,
             block_tables,
             intermediate_tensors,
-            inputs_embeds
+            inputs_embeds,
         )
 
         if is_prefill:

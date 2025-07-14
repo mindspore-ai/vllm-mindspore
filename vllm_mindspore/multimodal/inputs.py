@@ -18,22 +18,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Adaption for mindspore."""
+
 from typing import Union, cast
 
 import mindspore
+from vllm.multimodal.inputs import (BatchedTensorInputs, JSONTree,
+                                    json_map_leaves)
 
-from vllm.multimodal.inputs import BatchedTensorInputs, JSONTree, json_map_leaves
+NestedTensors = Union[
+    list["NestedTensors"],
+    list[mindspore.Tensor],
+    mindspore.Tensor,
+    tuple[mindspore.Tensor, ...],
+]
 
 
-NestedTensors = Union[list["NestedTensors"], list[mindspore.Tensor], mindspore.Tensor,
-                      tuple[mindspore.Tensor, ...]]
-
-
-@staticmethod
+@staticmethod  # type: ignore
 def as_kwargs(
     batched_inputs: BatchedTensorInputs,
     *,
-    device = None,
+    device=None,
 ) -> BatchedTensorInputs:
     # replace as_kwargs of vLLM for multi-model
     json_inputs = cast(JSONTree[mindspore.Tensor], batched_inputs)
