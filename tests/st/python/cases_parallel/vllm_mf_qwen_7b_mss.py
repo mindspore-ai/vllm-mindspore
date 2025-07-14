@@ -15,9 +15,6 @@
 # limitations under the License.
 """test mf qwen mss."""
 
-# type: ignore
-# isort: skip_file
-
 import os
 from tests.st.python import utils
 
@@ -69,8 +66,8 @@ def test_mf_qwen_7b_mss():
         gpu_memory_utilization=0.9,
         num_scheduler_steps=8,
         tensor_parallel_size=2)
-    # Generate texts from the prompts. The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
     except_list = [' it is a city with a long history. Which']
     # Print the outputs.
