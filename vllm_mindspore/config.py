@@ -19,7 +19,6 @@
 # limitations under the License.
 import pickle
 import socket
-import sys
 import threading
 import time
 from collections import Counter
@@ -27,15 +26,14 @@ from typing import Optional, Union
 
 import torch
 import vllm.envs as envs
+from safetensors.torch import _TYPES as _SAFETENSORS_TO_TORCH_DTYPE
 from transformers import PretrainedConfig
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
 from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CompilationConfig,
                          CompilationLevel, VllmConfig)
 from vllm.logger import init_logger
-from vllm.platforms import CpuArchEnum
-from vllm.utils import random_uuid, common_broadcastable_dtype
 from vllm.transformers_utils.config import try_get_safetensors_metadata
-from safetensors.torch import _TYPES as _SAFETENSORS_TO_TORCH_DTYPE
+from vllm.utils import common_broadcastable_dtype, random_uuid
 
 logger = init_logger(__name__)
 
@@ -48,9 +46,7 @@ def _resolve_auto_dtype(
 ):
     from vllm.platforms import current_platform
 
-    supported_dtypes = [
-        dtype for dtype in current_platform.supported_dtypes
-    ]
+    supported_dtypes = [dtype for dtype in current_platform.supported_dtypes]
 
     if is_pooling_model and torch.float16 in supported_dtypes:
         preferred_dtype = torch.float16
@@ -66,7 +62,6 @@ def _resolve_auto_dtype(
 
     # Ensure device compatibility
     device_name = current_platform.get_device_name()
-    device_capability = current_platform.get_device_capability()
 
     device_str = f"{device_name!r}"
 
@@ -322,7 +317,7 @@ def _get_and_verify_dtype(
         torch_dtype = dtype
     else:
         raise ValueError(f"Unknown dtype: {dtype}")
-    
+
     if torch_dtype != config_dtype:
         if torch_dtype == torch.float32:
             # Upcasting to float32 is allowed.

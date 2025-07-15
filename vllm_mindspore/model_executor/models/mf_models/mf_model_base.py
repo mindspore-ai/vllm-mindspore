@@ -42,10 +42,11 @@ from vllm_mindspore.model_executor.models.model_base import MsModelBase
 
 try:
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
-    from vllm.attention.layer import maybe_save_kv_layer_to_connector, wait_for_kv_layer_from_connector
+    from vllm.attention.layer import (maybe_save_kv_layer_to_connector,
+                                      wait_for_kv_layer_from_connector)
     from vllm.distributed.kv_transfer import is_v1_kv_transfer_group
     kv_transfer_supported = True
-except:
+except:  # noqa: E722
     kv_transfer_supported = False
 
 logger = init_logger(__name__)
@@ -131,9 +132,11 @@ class MfModelBase(MsModelBase):
         return model_inputs
 
     def connector_send_kvcache(self):
-        logger.debug(f"reached connector_send_kvcache")
+        logger.debug("reached connector_send_kvcache")
         _pynative_executor.sync()
         forward_context = get_forward_context()
+        if not hasattr(self, 'mf_model_config'):
+            raise RuntimeError('mf_model_config not initialized')
         for i in range(self.mf_model_config.num_layers):
             kv_cache = self.kv_caches[i]
             k_cache = kv_cache.kv_cache[forward_context.virtual_engine][0]
@@ -141,7 +144,9 @@ class MfModelBase(MsModelBase):
             maybe_save_kv_layer_to_connector(str(i), (k_cache, v_cache))
 
     def connector_wait_for_kv_layer(self):
-        logger.debug(f"reached connector_wait_for_kv_layer")
+        logger.debug("reached connector_wait_for_kv_layer")
+        if not hasattr(self, 'mf_model_config'):
+            raise RuntimeError('mf_model_config not initialized')
         for i in range(self.mf_model_config.num_layers):
             wait_for_kv_layer_from_connector("key." + str(i))
 
@@ -163,9 +168,8 @@ class MfModelBase(MsModelBase):
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom(is_first_iteration=False)
                 self.set_flags = True
-            if kv_transfer_supported:
-                if is_v1_kv_transfer_group():
-                    self.connector_send_kvcache()
+            if kv_transfer_supported and is_v1_kv_transfer_group():
+                self.connector_send_kvcache()
         else:
             if kv_transfer_supported:
                 if is_v1_kv_transfer_group() and self.is_prefill_task():
@@ -173,7 +177,7 @@ class MfModelBase(MsModelBase):
 
                 if is_v1_kv_transfer_group() and self.is_decoder_task():
                     self.connector_wait_for_kv_layer()
-                    logger.debug(f"connector_wait_for_kv_layer success")
+                    logger.debug("connector_wait_for_kv_layer success")
             hidden_states = self.network(**model_inputs)
 
         return hidden_states

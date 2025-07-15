@@ -38,11 +38,13 @@ def init_device(self):
 
     config = get_current_vllm_config()
     if config is not None and config.parallel_config.data_parallel_size > 1:
-        self.local_rank = self.parallel_config.data_parallel_rank_local * self.parallel_config.world_size + self.local_rank
+        self.local_rank = (self.parallel_config.data_parallel_rank_local *
+                           self.parallel_config.world_size + self.local_rank)
         self.device = torch.device(f"cuda:{self.local_rank}")
     else:
         self.device = torch.device(f"cuda:{self.local_rank}")
-    logger.debug(f"self.local_rank: {self.local_rank} / self.device: {self.device}")
+    logger.debug("self.local_rank: %s, self.device: %s", self.local_rank,
+                 self.device)
     torch.cuda.set_device(self.device)
 
     _check_if_gpu_supports_dtype(self.model_config.dtype)
@@ -62,7 +64,7 @@ def init_device(self):
     self.model_runner = GPUModelRunner(self.vllm_config, self.device)
     self.init_snapshot = MemorySnapshot()
     self.requested_memory = (self.init_snapshot.total_memory *
-                           self.cache_config.gpu_memory_utilization)
+                             self.cache_config.gpu_memory_utilization)
 
 
 def compile_or_warm_up_model(self) -> None:

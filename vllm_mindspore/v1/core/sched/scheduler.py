@@ -21,8 +21,8 @@
 
 # ruff: noqa: G004:
 
-from typing import Optional
 from collections import defaultdict
+from typing import Optional
 
 from vllm.logger import init_logger
 from vllm.v1.core.sched.output import SchedulerOutput
@@ -33,6 +33,7 @@ from vllm.v1.request import Request, RequestStatus
 from vllm.v1.spec_decode.metrics import SpecDecodingStats
 
 logger = init_logger(__name__)
+
 
 def update_from_output(
     self,
@@ -69,7 +70,7 @@ def update_from_output(
             logger.warning(
                 'Process aborted request %s from running requests %s', req_id,
                 running_req_ids)
-            outputs.append(
+            outputs.append(  # type: ignore[attr-defined]
                 EngineCoreOutput(request_id=req_id,
                                  new_token_ids=[],
                                  finish_reason=FinishReason.ABORT,
@@ -235,4 +236,3 @@ def update_from_output(
             self.make_stats(spec_decoding_stats))
 
     return engine_core_outputs
-

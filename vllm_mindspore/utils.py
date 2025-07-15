@@ -62,6 +62,7 @@ def get_valid_dtype(dtype):
         dtype = STR_DTYPE_TO_MS_DTYPE[dtype]
     return dtype
 
+
 def get_dtype_size(dtype: torch.dtype) -> int:
     """Get the size of the data type in bytes."""
     if isinstance(dtype, str):

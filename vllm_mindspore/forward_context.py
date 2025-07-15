@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -21,10 +22,9 @@ from contextlib import contextmanager
 from typing import Any, Optional
 
 import torch
-
 import vllm.envs as envs
-from vllm.forward_context import DPMetadata, ForwardContext
 from vllm.config import VllmConfig
+from vllm.forward_context import DPMetadata, ForwardContext
 from vllm.logger import init_logger
 
 logger = init_logger(__name__)
@@ -46,14 +46,14 @@ def set_forward_context(attn_metadata: Any,
     global forward_start_time
     need_to_track_batchsize = track_batchsize and attn_metadata is not None
     if need_to_track_batchsize:
-        forward_start_time = time.perf_counter()
+        forward_start_time = time.perf_counter()  # type: ignore[name-defined]
 
     # Set dp_metadata to None and skip padding process.
     dp_metadata: Optional[DPMetadata] = None
 
     global _forward_context
-    prev_context = _forward_context
-    _forward_context = ForwardContext(
+    prev_context = _forward_context  # type: ignore[name-defined]
+    _forward_context = ForwardContext(  # type: ignore[name-defined]
         no_compile_layers=vllm_config.compilation_config.
         static_forward_context,
         virtual_engine=virtual_engine,
@@ -82,9 +82,10 @@ def set_forward_context(attn_metadata: Any,
             now = time.perf_counter()
             # time measurement is in milliseconds
             batchsize_forward_time[batchsize].append(
-                (now - forward_start_time) * 1000)
-            if now - last_logging_time > batchsize_logging_interval:
-                last_logging_time = now
+                (now - forward_start_time)  # type: ignore[name-defined]
+                * 1000)
+            if now - last_logging_time > batchsize_logging_interval:  # type: ignore[name-defined]
+                last_logging_time = now  # type: ignore[name-defined]
                 forward_stats = []
                 for bs, times in batchsize_forward_time.items():
                     if len(times) <= 1:
@@ -99,4 +100,4 @@ def set_forward_context(attn_metadata: Any,
                                  "(batchsize, count, median_time(ms)): %s"),
                                 forward_stats)
 
-        _forward_context = prev_context
+        _forward_context = prev_context  # type: ignore[name-defined]

@@ -20,8 +20,8 @@
 import os
 import signal
 import time
-
 from multiprocessing.process import BaseProcess
+
 from vllm.logger import init_logger
 
 logger = init_logger(__name__)
@@ -57,7 +57,8 @@ def executor_ensure_worker_termination(worker_procs: list[BaseProcess]):
             # calling p.kill.
             pid = p.pid
             try:
-                os.killpg(pid, signal.SIGKILL)
+                if pid is not None:
+                    os.killpg(pid, signal.SIGKILL)
             except Exception as e:
                 logger.debug("Kill process %d error: %s!", pid, str(e))
             # vllm-mindspore end.

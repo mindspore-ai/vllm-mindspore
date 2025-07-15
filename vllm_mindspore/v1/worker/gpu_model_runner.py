@@ -18,13 +18,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import mindspore as ms
 import numpy as np
 from mindspore import Generator as msGenerator
-from mindspore import mint
-from mindspore import Tensor, mutable
+from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
 from vllm.logger import init_logger
 from vllm.model_executor.layers.rotary_embedding import MRotaryEmbedding
@@ -33,10 +32,9 @@ from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
                                         SlidingWindowSpec)
 from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
-from vllm.v1.utils import bind_kv_cache
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
-from vllm_mindspore.utils import get_valid_dtype, get_dtype_size
+from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 logger = init_logger(__name__)
@@ -45,7 +43,8 @@ logger = init_logger(__name__)
 def _prepare_inputs(
     self,
     scheduler_output,
-) -> Tuple[dict[str, MsAttentionMetadata], Tensor]:
+) -> tuple[dict[str, MsAttentionMetadata], Tensor,
+           Optional[SpecDecodeMetadata]]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
@@ -112,8 +111,7 @@ def _prepare_inputs(
     for kv_cache_group_id, kv_cache_group_spec in enumerate(
             self.kv_cache_config.kv_cache_groups):
         block_size = kv_cache_group_spec.kv_cache_spec.block_size
-        block_table: BlockTable = self.input_batch.block_table[
-            kv_cache_group_id]
+        block_table = self.input_batch.block_table[kv_cache_group_id]
         # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
         # -> [0, 0, K, K, K + 1, K + 1, K + 2, 2 * K, 2 * K, 2 * K + 1]
         # where K is the max_num_blocks_per_req and the block size is 2.
@@ -125,10 +123,9 @@ def _prepare_inputs(
             positions_np // block_size)
         block_numbers = block_table.block_table_np.ravel()[block_table_indices]
         block_offsets = positions_np % block_size
-        np.add(
-            block_numbers * block_size,
-            block_offsets,
-            out=block_table.slot_mapping_np[:total_num_scheduled_tokens])
+        np.add(block_numbers * block_size,
+               block_offsets,
+               out=block_table.slot_mapping_np[:total_num_scheduled_tokens])
 
     # # Prepare the attention metadata.
     self.query_start_loc_np[0] = 0
@@ -138,7 +135,8 @@ def _prepare_inputs(
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
 
-    self.query_start_loc[:num_reqs + 1] = self.query_start_loc_cpu[:num_reqs + 1]
+    self.query_start_loc[:num_reqs + 1] = self.query_start_loc_cpu[:num_reqs +
+                                                                   1]
     self.seq_lens[:num_reqs] = self.seq_lens_cpu[:num_reqs]
 
     # Fill unused with -1. Needed for reshape_and_cache
@@ -147,7 +145,7 @@ def _prepare_inputs(
 
     query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
 
-    attn_metadata: dict[str, FlashAttentionMetadata] = {}
+    attn_metadata = {}
     # Prepare the attention metadata for each KV cache group and make layers
     # in the same group share the same metadata.
     for kv_cache_group_id, kv_cache_group_spec in enumerate(
@@ -158,8 +156,7 @@ def _prepare_inputs(
         if self.cascade_attn_enabled:
             common_prefix_len = self._compute_cascade_attn_prefix_len(
                 num_scheduled_tokens,
-                scheduler_output.
-                num_common_prefix_blocks[kv_cache_group_id],
+                scheduler_output.num_common_prefix_blocks[kv_cache_group_id],
                 kv_cache_group_spec.kv_cache_spec,
                 self.attn_metadata_builders[kv_cache_group_id],
             )
@@ -170,7 +167,7 @@ def _prepare_inputs(
                 num_actual_tokens=total_num_scheduled_tokens,
                 max_query_len=max_num_scheduled_tokens,
                 common_prefix_len=common_prefix_len,
-                ))
+            ))
         for layer_name in kv_cache_group_spec.layer_names:
             attn_metadata[layer_name] = attn_metadata_i
 
@@ -209,8 +206,7 @@ def create_block(shape, dtype, name=None, device=None):
     return blocks
 
 
-def _allocate_kv_cache_tensors(
-        self, kv_cache_config):
+def _allocate_kv_cache_tensors(self, kv_cache_config):
     """
     Initializes the KV cache buffer with the correct size. The buffer needs
     to be reshaped to the desired shape before being used by the models.
@@ -237,13 +233,14 @@ def _allocate_kv_cache_tensors(
             # 1. page_size = coef * self.block_size * self.num_kv_heads *
             #    self.head_size * get_dtype_size(self.dtype)
             # 2. num_blocks = kv_cache_tensors.size / page_size
-            # 3. kv_cache_tensors.size = num_blocks * (coef * 
-            #    self.block_size * self.num_kv_heads * self.head_size * 
+            # 3. kv_cache_tensors.size = num_blocks * (coef *
+            #    self.block_size * self.num_kv_heads * self.head_size *
             #    get_dtype_size(self.dtype))
             # 4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
-            raw_tensor_split = mint.zeros(raw_tensor_shape,
-                                           dtype=target_dtype,
-                                           )
+            raw_tensor_split = mint.zeros(
+                raw_tensor_shape,
+                dtype=target_dtype,
+            )
             raw_tensors.append(raw_tensor_split)
         for layer_name in kv_cache_tensor.shared_by:
             kv_cache_raw_tensors[layer_name] = tuple(raw_tensors)
@@ -251,8 +248,8 @@ def _allocate_kv_cache_tensors(
     layer_names = set()
     for group in kv_cache_config.kv_cache_groups:
         layer_names.update(group.layer_names)
-    assert layer_names == set(kv_cache_raw_tensors.keys(
-    )), "Some layers are not correctly initialized"
+    assert layer_names == set(kv_cache_raw_tensors.keys()
+                              ), "Some layers are not correctly initialized"
     return kv_cache_raw_tensors
 
 
@@ -273,16 +270,15 @@ def _reshape_kv_cache_tensors(
         corresponding memory buffer for KV cache.
     """
     kv_caches: dict[str, tuple] = {}
-    for i, kv_cache_group_spec in enumerate(
-            kv_cache_config.kv_cache_groups):
+    for i, kv_cache_group_spec in enumerate(kv_cache_config.kv_cache_groups):
         kv_cache_spec = kv_cache_group_spec.kv_cache_spec
         coef = 1 if kv_cache_spec.use_mla else 2
         for layer_name in kv_cache_group_spec.layer_names:
             raw_tensor = kv_cache_raw_tensors[layer_name]
             target_dtype = get_valid_dtype(kv_cache_spec.dtype)
             dtype_size = get_dtype_size(target_dtype)
-            num_blocks = (raw_tensor[0].numel() * coef *
-                          dtype_size // kv_cache_spec.page_size_bytes)
+            num_blocks = (raw_tensor[0].numel() * coef * dtype_size //
+                          kv_cache_spec.page_size_bytes)
             if isinstance(kv_cache_spec, FullAttentionSpec):
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
@@ -290,18 +286,16 @@ def _reshape_kv_cache_tensors(
                 try:
                     kv_cache_stride_order = self.attn_backends[
                         i].get_kv_cache_stride_order()
-                    assert len(kv_cache_stride_order) == len(
-                        kv_cache_shape)
+                    assert len(kv_cache_stride_order) == len(kv_cache_shape)
                 except (AttributeError, NotImplementedError):
-                    kv_cache_stride_order = tuple(
-                        range(len(kv_cache_shape)))
+                    kv_cache_stride_order = tuple(range(len(kv_cache_shape)))
                 # The allocation respects the backend-defined stride order
                 # to ensure the semantic remains consistent for each
                 # backend. We first obtain the generic kv cache shape and
                 # then permute it according to the stride order which could
                 # result in a non-contiguous tensor.
                 kv_cache_shape = tuple(kv_cache_shape[i]
-                                        for i in kv_cache_stride_order)
+                                       for i in kv_cache_stride_order)
                 # Maintain original KV shape view.
                 inv_order = [
                     kv_cache_stride_order.index(i) - 1
@@ -309,7 +303,8 @@ def _reshape_kv_cache_tensors(
                 ]
                 kv_cache_layer = []
                 for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
-                    cache_block = kv_cache_raw_tensor.view(kv_cache_shape[1:]).permute(*inv_order[1:])
+                    cache_block = kv_cache_raw_tensor.view(
+                        kv_cache_shape[1:]).permute(*inv_order[1:])
                     kv_cache_layer.append(cache_block)
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
@@ -561,9 +556,7 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     return kv_cache_spec
 
 
-def _calc_mrope_positions(
-        self,
-        scheduler_output: "SchedulerOutput"):  # type: ignore[name-defined]
+def _calc_mrope_positions(self, scheduler_output):
     mrope_pos_ptr = 0
     for index, req_id in enumerate(self.input_batch.req_ids):
         req = self.requests[req_id]
@@ -622,4 +615,3 @@ def get_dp_padding(self, num_tokens: int):
     # padded based on `num_tokens_across_dp`, while the model only accepts
     # inputs with actual shape.
     return 0, None
-

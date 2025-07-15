@@ -23,16 +23,21 @@ import tempfile
 from pathlib import Path
 
 _original_run_api_server_worker_proc = None
-def mokey_patch_server_run_api_server_worker_proc(*arg,**kwargs):
+
+
+def monkey_patch_server_run_api_server_worker_proc(*arg, **kwargs):
     import vllm_mindspore
-    print("[DEBUG][MonkeyPatch] Patched run_api_server_worker_proc called")
-    return _original_run_api_server_worker_proc(*arg,**kwargs)
+    assert _original_run_api_server_worker_proc is not None
+    return _original_run_api_server_worker_proc(*arg, **kwargs)
+
 
 def patch_server_run_api_server_worker_proc():
     global _original_run_api_server_worker_proc
     import vllm.entrypoints.cli.serve as sever_mod
     _original_run_api_server_worker_proc = sever_mod.run_api_server_worker_proc
-    sever_mod.run_api_server_worker_proc = mokey_patch_server_run_api_server_worker_proc
+    sever_mod.run_api_server_worker_proc = \
+        monkey_patch_server_run_api_server_worker_proc
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -185,8 +185,7 @@ class MsAttentionImpl(AttentionImpl):
 
 class MsAttentionMetadataBuilder:
 
-    def __init__(self, runner: "GPUModelRunner", kv_cache_spec,
-                 block_table):
+    def __init__(self, runner, kv_cache_spec, block_table):
         self.runner = runner
         self.block_table = block_table
 
