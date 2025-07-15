@@ -21,7 +21,7 @@ repos:
   hooks:
   - id: codespell
     additional_dependencies: ['tomli']
-    args: ['--toml', 'codecheck_toolkits/pyproject.toml']
+    args: ['--skip', '*.c,*cpp,*.h', '--toml', 'codecheck_toolkits/pyproject.toml']
 - repo: https://gitee.com/moran3/isort
   rev: 6.0.1
   hooks:

@@ -16,7 +16,8 @@
 
 sed -i "9c\    args: [--diff]" .pre-commit-config.yaml
 sed -i "16c\    args: ['--exit-non-zero-on-fix']" .pre-commit-config.yaml
-sed -i "29c\    args: ['--check-only', '--diff']" .pre-commit-config.yaml
+sed -i "18i\    args: ['--diff']" .pre-commit-config.yaml
+sed -i "30c\    args: ['--check-only', '--diff']" .pre-commit-config.yaml
 
 git add .pre-commit-config.yaml
 
