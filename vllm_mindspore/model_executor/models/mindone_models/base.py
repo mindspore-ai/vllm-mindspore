@@ -63,10 +63,9 @@ class MindONEModelBase(MsModelBase):
         self._check_modules_valid()
 
         for name, module in self.modules_dict.items():
-
             if isinstance(module, MindONEModelBase):
                 for name, sub_module in module.modules_dict.items():
-                    for module_name, sub_sub_module in sub_module.cells_and_names(
+                    for module_name, sub_sub_module in sub_module.cells_and_names(  # noqa: E501
                     ):
                         if name != "self":
                             module_name = name + "." + module_name
