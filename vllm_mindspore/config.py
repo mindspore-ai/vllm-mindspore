@@ -23,6 +23,7 @@ import threading
 import pickle
 import time
 
+import msgspec
 import torch
 
 from transformers import PretrainedConfig
@@ -381,7 +382,7 @@ def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> boo
         results = [has_unfinished]
         for conn in dp_group.sockets:
             data = conn.recv(1024)
-            worker_result = pickle.loads(data)
+            worker_result = msgspec.msgpack.decode(data)
             results.append(worker_result)
         
         # Perform OR operation (any True means unfinished)
@@ -389,16 +390,16 @@ def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> boo
         
         # Broadcast the result back to workers
         for conn in dp_group.sockets:
-            conn.send(pickle.dumps(aggregated_result))
+            conn.send(msgspec.msgpack.encode(aggregated_result))
         
         return aggregated_result
     else:
         # Worker node: send result to master
-        dp_group.client_socket.send(pickle.dumps(has_unfinished))
+        dp_group.client_socket.send(msgspec.msgpack.encode(has_unfinished))
         
         # Receive aggregated result from master
         data = dp_group.client_socket.recv(1024)
-        aggregated_result = pickle.loads(data)
+        aggregated_result = msgspec.msgpack.decode(data)
         return aggregated_result
 
 def stateless_destroy_socket_process_group(dp_group: "SocketProcessGroup") -> None:
