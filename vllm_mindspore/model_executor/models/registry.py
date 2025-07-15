@@ -14,13 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import pickle
 import sys
-from typing import TypeVar
 
 from vllm.model_executor.models.registry import (_LazyRegisteredModel,
-                                                 _ModelRegistry)
+                                                 _ModelRegistry, _run)
 
 from vllm_mindspore.utils import (is_mindformers_model_backend,
                                   is_mindone_model_backend)
@@ -73,25 +70,9 @@ else:
 
 MindSporeModelRegistry = _ModelRegistry(_registry_dict)
 
-_T = TypeVar("_T")
-
 _SUBPROCESS_COMMAND = [
     sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"
 ]
-
-
-def _run() -> None:
-    # Setup plugins
-    from vllm.plugins import load_general_plugins
-    load_general_plugins()
-
-    fn, output_file = pickle.loads(sys.stdin.buffer.read())
-
-    result = fn()
-
-    with open(output_file, "wb") as f:
-        f.write(pickle.dumps(result))
-
 
 if __name__ == "__main__":
     _run()
