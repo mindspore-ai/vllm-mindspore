@@ -18,11 +18,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# isort: skip_file
+
 from typing import Optional
 
 import torch
 import torch.nn as nn
-
 from vllm.logger import init_logger
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.sample.ops.topk_topp_sampler import apply_top_k_top_p
@@ -35,8 +36,6 @@ GREEDY_TEMPERATURE = -1
 # Maximum number of speculative draft tokens allowed per request in a single
 # step. This value is chosen to be large enough to handle typical use cases.
 MAX_SPEC_LEN = 32
-
-
 
 
 class RejectionSampler(nn.Module):
@@ -197,7 +196,7 @@ def rejection_sample(
     if not sampling_metadata.all_random:
         # Rejection sampling for greedy sampling requests.
         target_argmax = target_probs.argmax(dim=-1)
-        rejection_greedy_sample_kernel[(batch_size, )](
+        rejection_greedy_sample_kernel[(batch_size, )](  # type: ignore
             output_token_ids,
             cu_num_draft_tokens,
             draft_token_ids,
@@ -233,7 +232,7 @@ def rejection_sample(
     )
 
     # Rejection sampling for random sampling requests.
-    rejection_random_sample_kernel[(batch_size, )](
+    rejection_random_sample_kernel[(batch_size, )](  # type: ignore
         output_token_ids,
         cu_num_draft_tokens,
         draft_token_ids,
@@ -341,7 +340,7 @@ def expand_batch_to_tokens(
     batch_size = x.shape[0]
     assert cu_num_tokens.shape[0] == batch_size
     expanded_x = x.new_empty(num_tokens)
-    expand_kernel[(batch_size, )](
+    expand_kernel[(batch_size, )](  # type: ignore
         expanded_x,
         x,
         cu_num_tokens,
@@ -417,34 +416,7 @@ def sample_recovered_tokens(
     sampling_metadata: SamplingMetadata,
     device: torch.device,
 ) -> torch.Tensor:
-    # NOTE(woosuk): Create only one distribution for each request.
-    batch_size = len(num_draft_tokens)
-    vocab_size = target_probs.shape[-1]
-    q = torch.empty(
-        (batch_size, vocab_size),
-        dtype=torch.float32,
-        device=device,
-    )
-    q.exponential_()
-    for i, generator in sampling_metadata.generators.items():
-        # Do not generate random numbers for requests with no draft tokens.
-        # This can be important for reproducibility.
-        if num_draft_tokens[i] > 0:
-            q[i].exponential_(generator=generator)
-
-    recovered_token_ids = torch.empty_like(draft_token_ids)
-    sample_recovered_tokens_kernel[(batch_size, max_spec_len)](
-        recovered_token_ids,
-        cu_num_draft_tokens,
-        draft_token_ids,
-        draft_probs,
-        target_probs,
-        q,
-        vocab_size,
-        triton.next_power_of_2(vocab_size),
-        IS_NGRAM=draft_probs is None,
-    )
-    return recovered_token_ids
+    raise NotImplementedError("sample_recovered_tokens is not implemented.")
 
 
 # NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.
@@ -457,41 +429,8 @@ def rejection_greedy_sample_kernel(
     is_greedy_ptr,  # [batch_size] or None
     max_spec_len,
 ):
-    req_idx = tl.program_id(0)
-    # FIXME(woosuk): Because is_greedy_ptr is not None at profiling run,
-    # re-compilation may happen during runtime when is_greedy_ptr is None.
-    if is_greedy_ptr is None:
-        is_greedy = True
-    else:
-        is_greedy = tl.load(is_greedy_ptr + req_idx)
-    if not is_greedy:
-        # Early exit for non-greedy sampling requests.
-        return
-
-    if req_idx == 0:
-        start_idx = 0
-    else:
-        start_idx = tl.load(cu_num_draft_tokens_ptr + req_idx - 1)
-    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)
-    num_draft_tokens = end_idx - start_idx
-
-    rejected = False
-    for pos in range(num_draft_tokens):
-        if not rejected:
-            draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
-            target_argmax_id = tl.load(target_argmax_ptr + start_idx + pos)
-            tl.store(output_token_ids_ptr + req_idx * (max_spec_len + 1) + pos,
-                     target_argmax_id)
-            if draft_token_id != target_argmax_id:
-                # Reject.
-                rejected = True
-
-    if not rejected:
-        # If all tokens are accepted, append the bonus token.
-        bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)
-        tl.store(
-            output_token_ids_ptr + req_idx * (max_spec_len + 1) +
-            num_draft_tokens, bonus_token_id)
+    raise NotImplementedError(
+        "rejection_greedy_sample_kernel is not implemented.")
 
 
 # NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.
@@ -509,51 +448,8 @@ def rejection_random_sample_kernel(
     vocab_size,
     IS_NGRAM,
 ):
-    req_idx = tl.program_id(0)
-    is_greedy = tl.load(is_greedy_ptr + req_idx)
-    if is_greedy:
-        # Early exit for greedy sampling requests.
-        return
-
-    if req_idx == 0:
-        start_idx = 0
-    else:
-        start_idx = tl.load(cu_num_draft_tokens_ptr + req_idx - 1)
-    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)
-    num_draft_tokens = end_idx - start_idx
-
-    rejected = False
-    for pos in range(num_draft_tokens):
-        if not rejected:
-            draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
-            if IS_NGRAM:
-                draft_prob = 1
-            else:
-                draft_prob = tl.load(draft_probs_ptr +
-                                     (start_idx + pos) * vocab_size +
-                                     draft_token_id)
-            target_prob = tl.load(target_probs_ptr +
-                                  (start_idx + pos) * vocab_size +
-                                  draft_token_id)
-            uniform_prob = tl.load(uniform_probs_ptr + start_idx + pos)
-            # NOTE(woosuk): While the draft probability should never be 0,
-            # we check it to avoid NaNs. If it happens to be 0, we reject.
-            if draft_prob > 0 and target_prob / draft_prob >= uniform_prob:
-                # Accept.
-                token_id = draft_token_id
-            else:
-                # Reject. Use recovered token.
-                rejected = True
-                token_id = tl.load(recovered_token_ids_ptr + start_idx + pos)
-            tl.store(output_token_ids_ptr + req_idx * (max_spec_len + 1) + pos,
-                     token_id)
-
-    if not rejected:
-        # If all tokens are accepted, append the bonus token.
-        bonus_token_id = tl.load(bonus_token_ids_ptr + req_idx)
-        tl.store(
-            output_token_ids_ptr + req_idx * (max_spec_len + 1) +
-            num_draft_tokens, bonus_token_id)
+    raise NotImplementedError(
+        "rejection_random_sample_kernel is not implemented.")
 
 
 # NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.
@@ -565,20 +461,7 @@ def expand_kernel(
     replace_to,
     MAX_NUM_TOKENS,
 ):
-    req_idx = tl.program_id(0)
-    if req_idx == 0:  # noqa: SIM108
-        start_idx = 0
-    else:
-        start_idx = tl.load(cu_num_tokens_ptr + req_idx - 1)
-    end_idx = tl.load(cu_num_tokens_ptr + req_idx)
-    num_tokens = end_idx - start_idx
-
-    src_val = tl.load(input_ptr + req_idx)
-    src_val = tl.where(src_val == replace_from, replace_to, src_val)
-    offset = tl.arange(0, MAX_NUM_TOKENS)
-    tl.store(output_ptr + start_idx + offset,
-             src_val,
-             mask=offset < num_tokens)
+    raise NotImplementedError("expand_kernel is not implemented.")
 
 
 def sample_recovered_tokens_kernel(
@@ -592,55 +475,5 @@ def sample_recovered_tokens_kernel(
     PADDED_VOCAB_SIZE,
     IS_NGRAM,
 ):
-    req_idx = tl.program_id(0)
-    if req_idx == 0:
-        start_idx = 0
-    else:
-        start_idx = tl.load(cu_num_draft_tokens_ptr + req_idx - 1)
-    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)
-    num_draft_tokens = end_idx - start_idx
-
-    # Early exit for out-of-range positions.
-    pos = tl.program_id(1)
-    if pos >= num_draft_tokens:
-        return
-
-    vocab_offset = tl.arange(0, PADDED_VOCAB_SIZE)
-    if IS_NGRAM:
-        draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
-        orig_prob = tl.load(target_probs_ptr + (start_idx + pos) * vocab_size +
-                            draft_token_id)
-        # Temporarily zero out the probability of the draft token.
-        # This is essentially the same as target_prob - draft_prob, except that
-        # n-gram does not have draft_prob. We regard it as 1.
-        tl.store(
-            target_probs_ptr + (start_idx + pos) * vocab_size + draft_token_id,
-            0)
-        prob = tl.load(target_probs_ptr + (start_idx + pos) * vocab_size +
-                       vocab_offset,
-                       mask=vocab_offset < vocab_size,
-                       other=0)
-    else:
-        draft_prob = tl.load(draft_probs_ptr + (start_idx + pos) * vocab_size +
-                             vocab_offset,
-                             mask=vocab_offset < vocab_size,
-                             other=0)
-        target_prob = tl.load(target_probs_ptr +
-                              (start_idx + pos) * vocab_size + vocab_offset,
-                              mask=vocab_offset < vocab_size,
-                              other=0)
-        prob = tl.maximum(target_prob - draft_prob, 0)
-        # NOTE(woosuk): We don't need `prob = prob / tl.sum(prob)` here because
-        # `tl.argmax` will select the maximum value.
-
-    q = tl.load(q_ptr + req_idx * vocab_size + vocab_offset,
-                mask=vocab_offset < vocab_size,
-                other=float("-inf"))
-    recovered_id = tl.argmax(prob / q, axis=-1)
-    tl.store(output_token_ids_ptr + start_idx + pos, recovered_id)
-
-    if IS_NGRAM:
-        # Restore the original probability.
-        tl.store(
-            target_probs_ptr + (start_idx + pos) * vocab_size + draft_token_id,
-            orig_prob)
+    raise NotImplementedError(
+        "sample_recovered_tokens_kernel is not implemented.")

@@ -20,7 +20,7 @@
 """Models for Multi-LoRA."""
 
 import os
-from typing import Dict, List, Optional, Union
+from typing import Optional, Union
 
 import safetensors.torch
 import torch
@@ -50,19 +50,19 @@ def register_module(self, module_name: str, module: "BaseLayerWithLoRA"):
 def from_lora_tensors(
     cls,
     lora_model_id: int,
-    tensors: Dict[str, torch.Tensor],
+    tensors: dict[str, torch.Tensor],
     peft_helper: PEFTHelper,
     device: str = "cuda",
     dtype: Optional[torch.dtype] = None,
-    embeddings: Optional[Dict[str, torch.Tensor]] = None,
+    embeddings: Optional[dict[str, torch.Tensor]] = None,
     target_embedding_padding: Optional[int] = None,
-    embedding_modules: Optional[Dict[str, str]] = None,
-    embedding_padding_modules: Optional[List[str]] = None,
+    embedding_modules: Optional[dict[str, str]] = None,
+    embedding_padding_modules: Optional[list[str]] = None,
     weights_mapper: Optional[WeightsMapper] = None,
 ):
     """Create a LoRAModel from a dictionary of tensors."""
     pin_memory = str(device) == "cpu" and is_pin_memory_available()
-    loras: Dict[str, LoRALayerWeights] = {}
+    loras: dict[str, LoRALayerWeights] = {}
     for tensor_name, tensor in tensors.items():
         module_name, is_lora_a, is_bias = parse_fine_tuned_lora_name(
             tensor_name, weights_mapper)
@@ -120,15 +120,15 @@ def from_lora_tensors(
 def from_local_checkpoint(
     cls,
     lora_dir: str,
-    expected_lora_modules: List[str],
+    expected_lora_modules: list[str],
     peft_helper: PEFTHelper,
     *,
     lora_model_id: Optional[int] = None,
     device: str = "cuda",
     dtype: Optional[torch.dtype] = None,
     target_embedding_padding: Optional[int] = None,
-    embedding_modules: Optional[Dict[str, str]] = None,
-    embedding_padding_modules: Optional[List[str]] = None,
+    embedding_modules: Optional[dict[str, str]] = None,
+    embedding_padding_modules: Optional[list[str]] = None,
     weights_mapper: Optional[WeightsMapper] = None,
 ):
     """Create a LoRAModel from a local checkpoint.
@@ -152,9 +152,9 @@ def from_local_checkpoint(
                                               "new_embeddings.safetensors")
     new_embeddings_bin_file_path = os.path.join(lora_dir, "new_embeddings.bin")
 
-    unexpected_modules: List[Union[list[str], str]]
+    unexpected_modules: list[Union[list[str], str]]
     if os.path.isfile(lora_tensor_path):
-        tensors: Dict[str, torch.Tensor] = {}
+        tensors: dict[str, torch.Tensor] = {}
         # Find unexpected modules.
         # Use safetensor key as a source of truth to find expected modules.
         # in peft if you have target_modules A, B, C and C does not exist
