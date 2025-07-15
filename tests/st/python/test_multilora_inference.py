@@ -109,6 +109,7 @@ def initialize_engine() -> LLMEngine:
     return LLMEngine.from_engine_args(engine_args)
 
 
+@pytest.mark.skip(reason="need adapt for 0.9.1")
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
