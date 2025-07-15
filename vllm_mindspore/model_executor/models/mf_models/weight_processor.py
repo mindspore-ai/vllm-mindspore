@@ -18,6 +18,7 @@ transform huggingface safetensor.
 """
 
 import os
+import numpy as np
 from enum import Enum
 
 from mindformers.parallel_core.inference.parallel_state import (
@@ -26,9 +27,10 @@ from mindformers.parallel_core.inference.parallel_state import (
     get_tensor_and_data_parallel_rank,
     get_tensor_and_data_parallel_world_size,
     get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size)
-from mindformers.parallel_core.inference.utils import get_tp_world_size
+import mindspore as ms
 from mindspore.communication.management import get_group_size, get_rank
 from safetensors import safe_open
+from vllm_mindspore.utils import atlas_inference
 
 
 class EPMethod(Enum):
@@ -39,6 +41,23 @@ class EPMethod(Enum):
     ALLTOALL = 'alltoall'
     ALLGATHER = 'allgather'
 
+def convert_np_to_ms_dtype(value):
+    """convert_np_to_ms_dtype"""
+    if value.dtype == np.int8:
+        value_dtype = ms.int8
+    elif value.dtype == np.int32:
+        value_dtype = ms.int32
+    elif value.dtype == np.int64:
+        value_dtype = ms.int64
+    elif value.dtype == np.float64:
+        value_dtype = ms.float64
+    elif value.dtype == np.float32:
+        value_dtype = ms.float32
+    elif value.dtype == np.float16:
+        value_dtype = ms.float16
+    else:
+        value_dtype = ms.bfloat16
+    return value_dtype
 
 class BaseWeightProcessor:
     r"""
@@ -51,6 +70,7 @@ class BaseWeightProcessor:
 
     def __init__(self, config, network, is_quant, vllm_config):
         self.vllm_config = vllm_config
+        self.is_atlas_inference = atlas_inference()
         self.config = config
         self.network = network
         self.is_quant = is_quant
@@ -103,6 +123,9 @@ class BaseWeightProcessor:
             qint4 = True
 
         np_data = sf_file.get_tensor(hf_param_name)
+        data_dtype = convert_np_to_ms_dtype(np_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            np_data = np_data.astype(np.float32).astype(np.float16)
         return np_data, qint4
 
     def get_safetensor_from_file_split_tp_group(self,
@@ -138,6 +161,9 @@ class BaseWeightProcessor:
         else:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
     def get_safetensor_from_file_split_tp_dp_group(self, hf_param_name, src_hf_dir, hf_weight_map, split_axis=0):
@@ -167,6 +193,9 @@ class BaseWeightProcessor:
             split_data = np_data[:, :, start:stop]
         else:
             raise ValueError("split_axis:{} is not supported.".format(split_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
 
@@ -203,6 +232,9 @@ class BaseWeightProcessor:
         else:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
     def get_safetensor_from_file_split_moe_tp_group(self,
@@ -233,6 +265,9 @@ class BaseWeightProcessor:
         else:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
     def get_routed_safetensor_3_dim(self,
@@ -276,6 +311,9 @@ class BaseWeightProcessor:
                 start:stop] if split_ep else np_data[:, :, start:stop]
         else:
             raise ValueError("tp_axis:{} is not supported.".format(tp_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
     def get_routed_safetensor_2_dim(self,
@@ -314,6 +352,9 @@ class BaseWeightProcessor:
             raise ValueError(
                 "split_tp is True but tp_axis:{} is not supported.".format(
                     tp_axis))
+        data_dtype = convert_np_to_ms_dtype(split_data)
+        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+            split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
     def split_weight_by_rank(self, weight, split_axis=0):
