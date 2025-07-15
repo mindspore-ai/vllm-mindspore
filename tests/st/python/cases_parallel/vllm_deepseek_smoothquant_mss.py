@@ -70,8 +70,8 @@ def test_deepseek_r1_mss():
         tensor_parallel_size=2,
         num_scheduler_steps=8,
         max_model_len=4096)
-    # Generate texts from the prompts. The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
     # Print the outputs.
     for i, output in enumerate(outputs):
