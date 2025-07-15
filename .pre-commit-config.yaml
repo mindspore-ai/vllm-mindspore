@@ -26,7 +26,7 @@ repos:
   rev: 6.0.1
   hooks:
   - id: isort
-    args: ['--settings-path', 'codecheck_toolkits/pyproject.toml']
+    args: ['--settings-file', 'codecheck_toolkits/pyproject.toml', '--settings-path', '']
     exclude: ^(examples/|tests/|vllm_mindspore/__init__.py)
 - repo: https://gitee.com/moran3/mirrors-clang-format
   rev: v20.1.3
