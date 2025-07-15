@@ -23,7 +23,9 @@ import numpy as np
 from mindformers.trainer.utils import transform_and_load_checkpoint
 from mindspore import Model, Tensor, mutable
 from mindspore.common import dtype as msdtype
+from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
+
 from mindspore_gs.common import BackendTarget
 from mindspore_gs.ptq import (PTQ, GPTQQuantConfig, OutliersSuppressionType,
                               PrecisionRecovery, PTQConfig, PTQMode,
@@ -53,6 +55,13 @@ from vllm_mindspore.model_executor.models.mf_models \
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
     MfModelBase)
 from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
+
+try:
+    # Need to apply dllm pd patch on vllm to use pd disagg related functions
+    from vllm.attention.layer import maybe_save_kv_layer_to_connector
+except ImportError:
+    pass
+
 
 logger = init_logger(__name__)
 
@@ -185,6 +194,15 @@ class DeepseekV3ForCausalLM(MfModelBase):
                 forward_context.virtual_engine][0]
             key_cache.append(k_cache)
         return mutable(key_cache), None
+
+    def connector_send_kvcache(self):
+        logger.debug(f"reached deepseek_v3 connector_send_kvcache")
+        _pynative_executor.sync()
+        forward_context = get_forward_context()
+        for i in range(self.mf_model_config.num_layers):
+            kv_cache_module = self.kv_caches[i]
+            kv_cache = kv_cache_module.kv_cache[forward_context.virtual_engine][0]
+            maybe_save_kv_layer_to_connector(str(i), kv_cache)
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         if self.mf_config.load_ckpt_format == "ckpt":

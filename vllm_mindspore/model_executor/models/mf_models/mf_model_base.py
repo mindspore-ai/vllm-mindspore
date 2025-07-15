@@ -26,8 +26,11 @@ from mindformers.tools.register.config import MindFormerConfig
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, nn
 from mindspore.common.api import _pynative_executor
+from mindspore.communication import get_rank
 from vllm.config import VllmConfig
 from vllm.distributed import get_tensor_model_parallel_world_size
+from vllm.distributed.parallel_state import get_dp_group
+from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -36,6 +39,14 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
+
+try:
+    # Need to apply dllm pd patch on vllm to use pd disagg related functions
+    from vllm.attention.layer import maybe_save_kv_layer_to_connector, wait_for_kv_layer_from_connector
+    from vllm.distributed.kv_transfer import is_v1_kv_transfer_group
+    kv_transfer_supported = True
+except:
+    kv_transfer_supported = False
 
 logger = init_logger(__name__)
 
@@ -51,6 +62,10 @@ class MfModelBase(MsModelBase):
                                'MINDFORMERS_MODEL_CONFIG should be set!')
 
         self.mf_config = MindFormerConfig(model_config_path)
+        self.rank_id = get_rank()
+        self.dp_size = get_dp_group()
+
+        self.kv_transfer_config = vllm_config.kv_transfer_config
         build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
         self.mf_config.model.model_config.parallel_config = (
@@ -89,6 +104,18 @@ class MfModelBase(MsModelBase):
         raise NotImplementedError(
             "Function _create_network should be Implemented!")
 
+    def is_decoder_task(self) -> bool:
+        if self.kv_transfer_config is None:
+            return False
+
+        return self.kv_transfer_config.is_kv_consumer
+
+    def is_prefill_task(self) -> bool:
+        if self.kv_transfer_config is None:
+            return False
+
+        return self.kv_transfer_config.is_kv_producer
+
     def _set_dynamic_inputs(self):
         self.network.set_dynamic_inputs()
         if not hasattr(self, 'mf_model_config'):
@@ -102,6 +129,21 @@ class MfModelBase(MsModelBase):
 
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
+
+    def connector_send_kvcache(self):
+        logger.debug(f"reached connector_send_kvcache")
+        _pynative_executor.sync()
+        forward_context = get_forward_context()
+        for i in range(self.mf_model_config.num_layers):
+            kv_cache = self.kv_caches[i]
+            k_cache = kv_cache.kv_cache[forward_context.virtual_engine][0]
+            v_cache = kv_cache.kv_cache[forward_context.virtual_engine][1]
+            maybe_save_kv_layer_to_connector(str(i), (k_cache, v_cache))
+
+    def connector_wait_for_kv_layer(self):
+        logger.debug(f"reached connector_wait_for_kv_layer")
+        for i in range(self.mf_model_config.num_layers):
+            wait_for_kv_layer_from_connector("key." + str(i))
 
     def forward(self,
                 input_ids: Tensor,
@@ -121,7 +163,17 @@ class MfModelBase(MsModelBase):
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom(is_first_iteration=False)
                 self.set_flags = True
+            if kv_transfer_supported:
+                if is_v1_kv_transfer_group():
+                    self.connector_send_kvcache()
         else:
+            if kv_transfer_supported:
+                if is_v1_kv_transfer_group() and self.is_prefill_task():
+                    self.connector_send_kvcache()
+
+                if is_v1_kv_transfer_group() and self.is_decoder_task():
+                    self.connector_wait_for_kv_layer()
+                    logger.debug(f"connector_wait_for_kv_layer success")
             hidden_states = self.network(**model_inputs)
 
         return hidden_states
