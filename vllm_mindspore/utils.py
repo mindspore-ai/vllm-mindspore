@@ -279,7 +279,12 @@ def convert_np_to_ms_dtype(value):
 
 
 # Replace the directly loaded module in vllm, such as 'from module import xxx'
-def update_modules(name, module):
+def update_modules(name: str, module):
+    valid_modules = ("vllm", )
+    if name.split(".")[0] not in valid_modules:
+        raise KeyError(
+            "The target module should be one of {}, but got {}!".format(
+                valid_modules, name))
     logger.debug(f"replace module {0} by {1}".format(name, module))
     sys.modules.update({name: module})
 
