@@ -67,6 +67,7 @@ line-length = 80
 # Python 3.8 typing - skip utils for ROCm
 "vllm_mindspore/utils.py" = ["UP006", "UP035"]
 "vllm_mindspore/__init__.py" = ["E402"]
+"tests/**/*.py" = ["F401", "E402"]
 "tests/st/python/cases_parallel/*.py" = ["F401", "E402"]
 
 [tool.ruff.lint]
