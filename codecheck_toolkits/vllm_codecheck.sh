@@ -14,20 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-sed -i "9c\    args: [--diff]" .pre-commit-config.yaml
-sed -i "16c\    args: ['--exit-non-zero-on-fix']" .pre-commit-config.yaml
-sed -i "18i\    args: ['--diff']" .pre-commit-config.yaml
-sed -i "30c\    args: ['--check-only', '--diff']" .pre-commit-config.yaml
+# only check in CI
+sed -i "18c\    args: [--diff]" .pre-commit-config.yaml  # yapf
+sed -i "25c\    args: ['--exit-non-zero-on-fix']" .pre-commit-config.yaml  # ruff
+sed -i "27i\    args: ['--diff']" .pre-commit-config.yaml  # ruff-format
+sed -i "39i\    args: ['--check-only', '--diff']" .pre-commit-config.yaml  # isort
 
 git add .pre-commit-config.yaml
 
 pip install -r codecheck_toolkits/requirements-lint.txt
 
-ln -s codecheck_toolkits/pyproject.toml pyproject.toml
-
 pre-commit run --from-ref origin/develop --to-ref HEAD
 RET_FLAG=$?
-
-rm -f pyproject.toml
 
 exit ${RET_FLAG}
