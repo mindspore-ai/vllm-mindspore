@@ -26,94 +26,15 @@ from typing import Optional, Union
 
 import torch
 import vllm.envs as envs
-from safetensors.torch import _TYPES as _SAFETENSORS_TO_TORCH_DTYPE
 from transformers import PretrainedConfig
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
 from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CompilationConfig,
-                         CompilationLevel, VllmConfig)
+                         CompilationLevel, VllmConfig, _find_dtype,
+                         _resolve_auto_dtype)
 from vllm.logger import init_logger
-from vllm.transformers_utils.config import try_get_safetensors_metadata
-from vllm.utils import common_broadcastable_dtype, random_uuid
+from vllm.utils import random_uuid
 
 logger = init_logger(__name__)
-
-
-def _resolve_auto_dtype(
-    model_type: str,
-    config_dtype: torch.dtype,
-    *,
-    is_pooling_model: bool,
-):
-    from vllm.platforms import current_platform
-
-    supported_dtypes = [dtype for dtype in current_platform.supported_dtypes]
-
-    if is_pooling_model and torch.float16 in supported_dtypes:
-        preferred_dtype = torch.float16
-    else:
-        preferred_dtype = supported_dtypes[0]
-
-    # Downcast for float32 models
-    if config_dtype == torch.float32:
-        config_dtype = preferred_dtype
-
-    if config_dtype in supported_dtypes:
-        return config_dtype
-
-    # Ensure device compatibility
-    device_name = current_platform.get_device_name()
-
-    device_str = f"{device_name!r}"
-
-    logger.warning(
-        "Your device %s doesn't support %s. "
-        "Falling back to %s for compatibility.",
-        device_str,
-        config_dtype,
-        preferred_dtype,
-    )
-
-    return preferred_dtype
-
-
-def _find_dtype(
-    model_id: str,
-    config: PretrainedConfig,
-    *,
-    revision: Optional[str],
-):
-    # NOTE: getattr(config, "torch_dtype", torch.float32) is not correct
-    # because config.torch_dtype can be None.
-    config_dtype = getattr(config, "torch_dtype", None)
-
-    # Fallbacks for multi-modal models if the root config
-    # does not define torch_dtype
-    if config_dtype is None:
-        config_dtype = getattr(config.get_text_config(), "torch_dtype", None)
-    if config_dtype is None and hasattr(config, "vision_config"):
-        config_dtype = getattr(config.vision_config, "torch_dtype", None)
-    if config_dtype is None and hasattr(config, "encoder_config"):
-        config_dtype = getattr(config.encoder_config, "torch_dtype", None)
-
-    # Try to read the dtype of the weights if they are in safetensors format
-    if config_dtype is None:
-        repo_mt = try_get_safetensors_metadata(model_id, revision=revision)
-
-        if repo_mt and (files_mt := repo_mt.files_metadata):
-            param_dtypes: set[torch.dtype] = {
-                _SAFETENSORS_TO_TORCH_DTYPE[dtype_str]
-                for file_mt in files_mt.values()
-                for dtype_str in file_mt.parameter_count
-                if dtype_str in _SAFETENSORS_TO_TORCH_DTYPE
-            }
-
-            if param_dtypes:
-                return common_broadcastable_dtype(param_dtypes)
-
-    if config_dtype is None:
-        config_dtype = torch.float32
-
-    return config_dtype
 
 
 def _verify_quantization(self) -> None:

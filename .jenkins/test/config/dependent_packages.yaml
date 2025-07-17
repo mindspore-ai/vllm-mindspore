@@ -1,5 +1,5 @@
 mindspore:
-  'https://repo.mindspore.cn/mindspore/mindspore/version/202507/20250715/br_infer_iter_20250715031508_4a1c05507ed221ad7557813816990c8e20d7d090_newest/'
+  'https://repo.mindspore.cn/mindspore/mindspore/version/202507/20250717/br_infer_iter_20250717031508_4a22a0fff06e31e66c543c710941c9518577125f_newest/'
 
 mindspore_gs:
   'https://repo.mindspore.cn/mindspore/golden-stick/version/202507/20250709/master_20250709010018_5f01a0211ca36690a577d3d456c5ba194c88771d_newest/'

@@ -434,13 +434,11 @@ from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 
-from vllm_mindspore.distributed.device_communicators.base_device_communicator \
-    import prepare_communication_buffer_for_model
 import vllm.distributed.device_communicators.base_device_communicator
 
 vllm.distributed.device_communicators.base_device_communicator.\
-    DeviceCommunicatorBase.prepare_communication_buffer_for_model = (
-    prepare_communication_buffer_for_model)
+    DeviceCommunicatorBase.prepare_communication_buffer_for_model = \
+        lambda self, model : None
 
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
@@ -484,13 +482,4 @@ from vllm_mindspore.entrypoints.__main__ import (
 
 patch_server_run_api_server_worker_proc()
 
-try:
-    from vllm.distributed.kv_transfer.kv_connector.factory import (
-        KVConnectorFactory, )
-
-    KVConnectorFactory.register_connector("DLLMDsConnector",
-                                          "dllm.dkvc.v1.dllm_ds_connector",
-                                          "DLLMDsConnector")
-except:  # noqa: E722
-    pass
 check_ready()
