@@ -51,9 +51,9 @@ except Exception as e:
 }
 
 echo "========= Installing vllm"
-vllm_dir=vllm-v0.8.3
+vllm_dir=vllm-v0.9.1
 if [ ! -d "$vllm_dir" ]; then
-    git clone https://github.com/vllm-project/vllm.git -b v0.8.3 "$vllm_dir"
+    git clone https://github.com/vllm-project/vllm.git -b v0.9.1 "$vllm_dir"
     cd "$vllm_dir" ||  { echo "Failed to git clone vllm!"; exit 1; }
     git apply $script_dir/vllm_dp/dp_scale_out.patch
 else
@@ -81,8 +81,7 @@ pip uninstall mindspore -y && pip install "$mindspore_name" || { echo "Failed to
 echo "========= Installing mindformers"
 mf_dir=mindformers-dev
 if [ ! -d "$mf_dir" ]; then
-    git clone https://gitee.com/mindspore/mindformers.git -b dev "$mf_dir"
-    git checkout 3e257a44384b927bc0fe26348047d7fe44a954db
+    git clone https://gitee.com/mindspore/mindformers.git -b br_infer_boom "$mf_dir"
 else
     echo "The $mf_dir folder already exists and will not be re-downloaded."
 fi

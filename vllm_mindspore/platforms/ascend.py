@@ -46,7 +46,7 @@ class AscendPlatform(Platform):
 
     @classmethod
     def get_device_capability(cls, device_id: int = 0):
-        return True
+        return None
 
     @classmethod
     def has_device_capability(

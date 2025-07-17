@@ -22,9 +22,11 @@ import warnings
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.
-    warnings.warn("vllm import before vllm_mindspore, vllm_mindspore cannot \
+    warnings.warn(
+        "vllm import before vllm_mindspore, vllm_mindspore cannot \
                    worker right!",
-                  stacklevel=2)
+        stacklevel=2,
+    )
 
 # 1. set env before import mindspore.
 from vllm_mindspore.scripts import env_setup
@@ -50,6 +52,10 @@ import vllm.utils
 
 vllm.utils.current_platform = ascend_platform
 
+import vllm.executor.ray_utils
+
+vllm.executor.ray_utils.current_platform = ascend_platform
+
 import vllm.attention.selector
 
 vllm.attention.selector.current_platform = ascend_platform
@@ -57,12 +63,16 @@ vllm.attention.selector.current_platform = ascend_platform
 import vllm.engine.arg_utils
 from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 
-vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = \
-    _is_v1_supported_oracle
+vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = (
+    _is_v1_supported_oracle)
 
 import vllm.v1.engine.core
-from vllm_mindspore.v1.engine.core import shutdown
+from vllm_mindspore.v1.engine.core import (
+    _init_data_parallel,
+    shutdown,
+)
 
+vllm.v1.engine.core.DPEngineCoreProc._init_data_parallel = _init_data_parallel
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
 from vllm_mindspore.utils import (
@@ -86,26 +96,31 @@ vllm.lora.utils._all_lora_classes = _all_lora_classes
 vllm.lora.utils.LinearBase = LinearBase
 
 import vllm.lora.models
-from vllm_mindspore.lora.models import (register_module, from_local_checkpoint,
-                                        from_lora_tensors)
+from vllm_mindspore.lora.models import (
+    register_module,
+    from_local_checkpoint,
+    from_lora_tensors,
+)
 
 vllm.lora.models.LoRAModelManager.register_module = register_module
 vllm.lora.models.LoRAModel.from_local_checkpoint = from_local_checkpoint
 vllm.lora.models.LoRAModel.from_lora_tensors = from_lora_tensors
 
-from vllm_mindspore.lora.layers import (ColumnParallelLinearWithLoRA,
-                                        MergedColumnParallelLinearWithLoRA,
-                                        MergedQKVParallelLinearWithLoRA,
-                                        QKVParallelLinearWithLoRA,
-                                        RowParallelLinearWithLoRA)
+from vllm_mindspore.lora.layers import (
+    ColumnParallelLinearWithLoRA,
+    MergedColumnParallelLinearWithLoRA,
+    MergedQKVParallelLinearWithLoRA,
+    QKVParallelLinearWithLoRA,
+    RowParallelLinearWithLoRA,
+)
 
 import vllm.lora.layers
 
 vllm.lora.layers.ColumnParallelLinearWithLoRA = ColumnParallelLinearWithLoRA
-vllm.lora.layers.MergedColumnParallelLinearWithLoRA = \
-    MergedColumnParallelLinearWithLoRA
-vllm.lora.layers.MergedQKVParallelLinearWithLoRA = \
-    MergedQKVParallelLinearWithLoRA
+vllm.lora.layers.MergedColumnParallelLinearWithLoRA = (
+    MergedColumnParallelLinearWithLoRA)
+vllm.lora.layers.MergedQKVParallelLinearWithLoRA = (
+    MergedQKVParallelLinearWithLoRA)
 vllm.lora.layers.QKVParallelLinearWithLoRA = QKVParallelLinearWithLoRA
 vllm.lora.layers.RowParallelLinearWithLoRA = RowParallelLinearWithLoRA
 
@@ -124,23 +139,23 @@ vllm.model_executor.models.ModelRegistry = MindSporeModelRegistry
 vllm.model_executor.models.registry._SUBPROCESS_COMMAND = _SUBPROCESS_COMMAND
 
 from vllm_mindspore.model_executor.model_loader.utils import (
-    get_ms_model_architecture)
+    get_ms_model_architecture, )
 
 # To patching the get_model_architecture, should import it first.
 from vllm.model_executor.model_loader import get_model_architecture  # noqa F401
 
-vllm.model_executor.model_loader.get_model_architecture = \
-    get_ms_model_architecture
+vllm.model_executor.model_loader.get_model_architecture = (
+    get_ms_model_architecture)
 vllm.model_executor.model_loader.utils.get_model_architecture = (
     get_ms_model_architecture)
-vllm.model_executor.model_loader.loader.get_model_architecture = (
+vllm.model_executor.model_loader.default_loader.get_model_architecture = (
     get_ms_model_architecture)
 
 from vllm_mindspore.model_executor.sampling_metadata import SamplingTensors
 
 vllm.model_executor.sampling_metadata.async_tensor_h2d = async_tensor_h2d
-vllm.model_executor.sampling_metadata.SamplingTensors.from_lists = \
-    SamplingTensors.from_lists
+vllm.model_executor.sampling_metadata.SamplingTensors.from_lists = (
+    SamplingTensors.from_lists)
 from vllm_mindspore.worker.cache_engine import (
     ms_allocate_kv_cache,
     ms_swap_in,
@@ -156,7 +171,7 @@ vllm.worker.cache_engine.CacheEngine.swap_out = ms_swap_out
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     safetensors_weights_iterator, )
 
-vllm.model_executor.model_loader.loader.safetensors_weights_iterator = (
+vllm.model_executor.model_loader.default_loader.safetensors_weights_iterator = (
     safetensors_weights_iterator)
 
 from vllm_mindspore.worker.worker import _warm_up_model
@@ -197,8 +212,8 @@ vllm.executor.multiproc_worker_utils.get_mp_context = ms_get_mp_context
 
 import vllm.executor.multiproc_worker_utils
 
-vllm.executor.multiproc_worker_utils.ProcessWorkerWrapper.terminate_worker = \
-    ms_terminate_worker
+vllm.executor.multiproc_worker_utils.ProcessWorkerWrapper.terminate_worker = (
+    ms_terminate_worker)
 
 import vllm.v1.executor.multiproc_executor
 
@@ -216,8 +231,8 @@ from vllm.executor.ray_distributed_executor import RayDistributedExecutor
 
 RayDistributedExecutor._init_workers_ray = ms_init_workers_ray
 
-vllm.executor.ray_distributed_executor.initialize_ray_cluster = \
-    initialize_ray_cluster
+vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
+    initialize_ray_cluster)
 vllm.executor.ray_utils.initialize_ray_cluster = initialize_ray_cluster
 
 import vllm.engine.llm_engine
@@ -226,9 +241,15 @@ import vllm.engine.async_llm_engine
 vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
 vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
-from .config import (_verify_quantization, _verify_args, vllm_config_post_init,
-                     model_post_init, _get_and_verify_dtype,
-                     stateless_init_dp_group, has_unfinished_dp)
+from .config import (
+    _verify_quantization,
+    _verify_args,
+    vllm_config_post_init,
+    model_post_init,
+    _get_and_verify_dtype,
+    stateless_init_dp_group,
+    has_unfinished_dp,
+)
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
@@ -257,7 +278,7 @@ SpecDecodeWorker._verify_tokens = _verify_tokens
 SpecDecodeWorker._run_no_spec = _run_no_spec
 
 from vllm.model_executor.layers.spec_decode_base_sampler import (
-    SpecDecodeBaseSampler)
+    SpecDecodeBaseSampler, )
 
 SpecDecodeBaseSampler._create_output = _create_output
 
@@ -266,12 +287,14 @@ from vllm.spec_decode.top1_proposer import Top1Proposer
 Top1Proposer._merge_outputs = _merge_outputs
 
 from vllm_mindspore.model_executor.layers.rejection_sampler import (
-    _smallest_positive_value, _multinomial)
+    _smallest_positive_value,
+    _multinomial,
+)
 from vllm.model_executor.layers.rejection_sampler import RejectionSampler
 
 RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(
-    RejectionSampler, '_smallest_positive_value')
+    RejectionSampler, "_smallest_positive_value")
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
 ######### for multi-model
@@ -286,9 +309,10 @@ from vllm.multimodal.inputs import MultiModalKwargs
 MultiModalKwargs.as_kwargs = as_kwargs
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
+    InferMRotaryEmbedding, )
+
+vllm.model_executor.layers.rotary_embedding.MRotaryEmbedding = (
     InferMRotaryEmbedding)
-vllm.model_executor.layers.rotary_embedding.MRotaryEmbedding = \
-    InferMRotaryEmbedding
 
 # patch for V1
 from vllm_mindspore.v1.sample import rejection_sampler
@@ -307,25 +331,41 @@ import vllm.v1.worker.gpu_model_runner
 
 from vllm_mindspore.v1.worker.gpu_model_runner import _prepare_inputs
 
-vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = \
-    _prepare_inputs
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = _prepare_inputs
 
 from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
 
-from vllm_mindspore.v1.worker.gpu_model_runner import (initialize_kv_cache,
-                                                       get_kv_cache_spec)
-vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache = \
-    initialize_kv_cache
-vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_kv_cache_spec = \
-    get_kv_cache_spec
+from vllm_mindspore.v1.worker.gpu_model_runner import (
+    _allocate_kv_cache_tensors,
+    get_kv_cache_spec,
+)
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._allocate_kv_cache_tensors = (
+    _allocate_kv_cache_tensors)
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_kv_cache_spec = (
+    get_kv_cache_spec)
+from vllm_mindspore.v1.worker.gpu_model_runner import _reshape_kv_cache_tensors
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._reshape_kv_cache_tensors = (
+    _reshape_kv_cache_tensors)
 
 from vllm_mindspore.v1.worker.gpu_model_runner import (
-    wrapper_gpu_model_runner_execute_model)
+    wrapper_gpu_model_runner_execute_model, )
 from vllm.v1.worker.gpu_model_runner import GPUModelRunner
-vllm.v1.worker.gpu_model_runner.GPUModelRunner.execute_model = \
-    wrapper_gpu_model_runner_execute_model(GPUModelRunner.execute_model)
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.execute_model = (
+    wrapper_gpu_model_runner_execute_model(GPUModelRunner.execute_model))
+
+from vllm_mindspore.v1.worker.gpu_model_runner import get_dp_padding
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_dp_padding = get_dp_padding
+
+from vllm_mindspore.forward_context import set_forward_context
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.set_forward_context = (
+    set_forward_context)
 
 import vllm.v1.worker.block_table
 from vllm_mindspore.v1.worker.block_table import BlockTable
@@ -335,16 +375,18 @@ vllm.v1.worker.gpu_input_batch.BlockTable = BlockTable
 
 import vllm.v1.worker.gpu_input_batch
 from vllm_mindspore.v1.worker.gpu_input_batch import (
-    _make_sampling_metadata, _make_prompt_token_ids_tensor)
+    _make_sampling_metadata,
+    _make_prompt_token_ids_tensor,
+)
 
-vllm.v1.worker.gpu_input_batch.InputBatch._make_sampling_metadata = \
-    _make_sampling_metadata
-vllm.v1.worker.gpu_model_runner.InputBatch._make_sampling_metadata = \
-    _make_sampling_metadata
-vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = \
-    _make_prompt_token_ids_tensor
-vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = \
-    _make_prompt_token_ids_tensor
+vllm.v1.worker.gpu_input_batch.InputBatch._make_sampling_metadata = (
+    _make_sampling_metadata)
+vllm.v1.worker.gpu_model_runner.InputBatch._make_sampling_metadata = (
+    _make_sampling_metadata)
+vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = (
+    _make_prompt_token_ids_tensor)
+vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = (
+    _make_prompt_token_ids_tensor)
 
 from vllm.v1.worker.gpu_worker import Worker
 from vllm_mindspore.v1.worker.gpu_worker import init_device
@@ -369,8 +411,11 @@ vllm.model_executor.layers.utils.apply_penalties = apply_penalties
 vllm.v1.sample.ops.penalties.apply_penalties = apply_penalties
 
 from vllm_mindspore.v1.sample.ops.topk_topp_sampler import (
-    apply_top_k_top_p, random_sample, apply_top_k_only,
-    topk_topp_sampler_forward_native)
+    apply_top_k_top_p,
+    random_sample,
+    apply_top_k_only,
+    topk_topp_sampler_forward_native,
+)
 
 import vllm.v1.sample.ops.topk_topp_sampler
 from vllm.v1.sample.ops.topk_topp_sampler import TopKTopPSampler
@@ -389,6 +434,12 @@ from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 
+import vllm.distributed.device_communicators.base_device_communicator
+
+vllm.distributed.device_communicators.base_device_communicator.\
+    DeviceCommunicatorBase.prepare_communication_buffer_for_model = \
+        lambda self, model : None
+
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 from vllm.v1.worker.gpu_worker import Worker
 
@@ -400,11 +451,11 @@ from vllm.v1.core.sched.scheduler import Scheduler
 Scheduler.update_from_output = update_from_output
 
 from vllm_mindspore.v1.executor.multiproc_executor import (
-    executor_ensure_worker_termination)
+    executor_ensure_worker_termination, )
 from vllm.v1.executor.multiproc_executor import MultiprocExecutor
 
-MultiprocExecutor._ensure_worker_termination = \
-    executor_ensure_worker_termination
+MultiprocExecutor._ensure_worker_termination = staticmethod(
+    executor_ensure_worker_termination)
 
 from .utils import check_ready
 
@@ -415,15 +466,20 @@ vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
 
 from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
 from vllm_mindspore.entrypoints.openai.serving_chat import (
+    chat_completion_stream_generator, )
+
+OpenAIServingChat.chat_completion_stream_generator = (
     chat_completion_stream_generator)
 
-OpenAIServingChat.chat_completion_stream_generator = \
-    chat_completion_stream_generator
-
 from vllm_mindspore.entrypoints.openai.tool_parsers import (
+    deepseekv3_tool_parser, )
+
+sys.modules["vllm.entrypoints.openai.tool_parsers.deepseekv3_tool_parser"] = (
     deepseekv3_tool_parser)
 
-sys.modules['vllm.entrypoints.openai.tool_parsers.deepseekv3_tool_parser'] = \
-    deepseekv3_tool_parser
+from vllm_mindspore.entrypoints.__main__ import (
+    patch_server_run_api_server_worker_proc, )
+
+patch_server_run_api_server_worker_proc()
 
 check_ready()

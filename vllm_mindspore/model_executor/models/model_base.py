@@ -59,6 +59,7 @@ class AttentionWrapper:
         self.dtype = vllm_config.model_config.dtype
         self.block_size = block_size
         self.sliding_window = None
+        self.kv_sharing_target_layer_name = None
 
 
 class MLAAttentionWrapper(AttentionWrapper):
@@ -272,6 +273,10 @@ class MsModelBase:
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata
+        # 0.9.1 attn_metadata[layer_name], don't have layer_name here
+        # so we just take one by default
+        if isinstance(attn_metadata, dict) and '1' in attn_metadata:
+            attn_metadata = attn_metadata['1']
         if attn_metadata is None:
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
