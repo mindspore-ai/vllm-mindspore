@@ -20,10 +20,12 @@
 """Adaption for arguments utils."""
 
 import threading
+from typing import get_args
 
 import torch
 import vllm.envs as envs
-from vllm.config import LoadFormat, ModelConfig
+from vllm.config import (GuidedDecodingBackendV1, LoadFormat, ModelConfig,
+                         ParallelConfig, SchedulerConfig)
 from vllm.engine.arg_utils import (EngineArgs, _raise_or_fallback,
                                    _warn_or_fallback)
 
@@ -34,8 +36,7 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
     #############################################################
     # Unsupported Feature Flags on V1.
 
-    if (self.load_format == LoadFormat.TENSORIZER.value
-            or self.load_format == LoadFormat.SHARDED_STATE.value):
+    if self.load_format == LoadFormat.SHARDED_STATE.value:
         _raise_or_fallback(feature_name=f"--load_format {self.load_format}",
                            recommend_to_remove=False)
         return False
@@ -45,7 +46,7 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                            recommend_to_remove=False)
         return False
 
-    if self.preemption_mode != EngineArgs.preemption_mode:
+    if self.preemption_mode != SchedulerConfig.preemption_mode:
         _raise_or_fallback(feature_name="--preemption-mode",
                            recommend_to_remove=True)
         return False
@@ -56,29 +57,26 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                            recommend_to_remove=True)
         return False
 
-    if self.scheduling_policy != EngineArgs.scheduling_policy:
+    if self.scheduling_policy != SchedulerConfig.policy:
         _raise_or_fallback(feature_name="--scheduling-policy",
                            recommend_to_remove=False)
         return False
 
-    if self.num_scheduler_steps != EngineArgs.num_scheduler_steps:
+    if self.num_scheduler_steps != SchedulerConfig.num_scheduler_steps:
         _raise_or_fallback(feature_name="--num-scheduler-steps",
                            recommend_to_remove=True)
         return False
 
-    if self.scheduler_delay_factor != EngineArgs.scheduler_delay_factor:
+    if self.scheduler_delay_factor != SchedulerConfig.delay_factor:
         _raise_or_fallback(feature_name="--scheduler-delay-factor",
                            recommend_to_remove=True)
         return False
 
-    # Xgrammar and Guidance are supported.
-    SUPPORTED_GUIDED_DECODING = [
-        "xgrammar", "xgrammar:disable-any-whitespace", "guidance",
-        "guidance:disable-any-whitespace", "auto"
-    ]
-    if self.guided_decoding_backend not in SUPPORTED_GUIDED_DECODING:
-        _raise_or_fallback(feature_name="--guided-decoding-backend",
-                           recommend_to_remove=False)
+    if self.guided_decoding_backend not in get_args(GuidedDecodingBackendV1):
+        _raise_or_fallback(
+            feature_name=
+            f"--guided-decoding-backend={self.guided_decoding_backend}",
+            recommend_to_remove=False)
         return False
 
     # Need at least Ampere for now (FA support required).
@@ -100,8 +98,10 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                        and not envs.is_set("VLLM_ATTENTION_BACKEND")
                        ) or envs.VLLM_ATTENTION_BACKEND == "FLASH_ATTN_VLLM_V1"
         supported = False
-        if fp8_attention and will_use_fa:
-            from vllm.vllm_flash_attn.fa_utils import flash_attn_supports_fp8
+        if current_platform.is_rocm():
+            supported = True
+        elif fp8_attention and will_use_fa:
+            from vllm.attention.utils.fa_utils import flash_attn_supports_fp8
             supported = flash_attn_supports_fp8()
         if not supported:
             _raise_or_fallback(feature_name="--kv-cache-dtype",
@@ -114,19 +114,17 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                            recommend_to_remove=False)
         return False
 
+    # No text embedding inputs so far.
+    if self.enable_prompt_embeds:
+        _raise_or_fallback(feature_name="--enable-prompt-embeds",
+                           recommend_to_remove=False)
+        return False
+
     # Only Fp16 and Bf16 dtypes since we only support FA.
     V1_SUPPORTED_DTYPES = [torch.bfloat16, torch.float16]
     if model_config.dtype not in V1_SUPPORTED_DTYPES:
         _raise_or_fallback(feature_name=f"--dtype {model_config.dtype}",
                            recommend_to_remove=False)
-        return False
-
-    # Some quantization is not compatible with torch.compile.
-    V1_UNSUPPORTED_QUANT = ["gguf"]
-    if model_config.quantization in V1_UNSUPPORTED_QUANT:
-        _raise_or_fallback(
-            feature_name=f"--quantization {model_config.quantization}",
-            recommend_to_remove=False)
         return False
 
     # No Embedding Models so far.
@@ -142,9 +140,10 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
         return False
 
     # No Concurrent Partial Prefills so far.
-    if (self.max_num_partial_prefills != EngineArgs.max_num_partial_prefills
+    if (self.max_num_partial_prefills
+            != SchedulerConfig.max_num_partial_prefills
             or self.max_long_partial_prefills
-            != EngineArgs.max_long_partial_prefills):
+            != SchedulerConfig.max_long_partial_prefills):
         _raise_or_fallback(feature_name="Concurrent Partial Prefill",
                            recommend_to_remove=False)
         return False
@@ -155,31 +154,45 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                            recommend_to_remove=False)
         return False
 
-    # Only Ngram speculative decoding so far.
+    # V1 supports N-gram, Medusa, and Eagle speculative decoding.
     is_ngram_enabled = False
     is_eagle_enabled = False
+    is_medusa_enabled = False
     if self.speculative_config is not None:
         # This is supported but experimental (handled below).
         speculative_method = self.speculative_config.get("method")
         if speculative_method:
             if speculative_method in ("ngram", "[ngram]"):
                 is_ngram_enabled = True
-            elif speculative_method == "eagle":
+            elif speculative_method == "medusa":
+                is_medusa_enabled = True
+            elif speculative_method in ("eagle", "eagle3", "deepseek_mtp"):
                 is_eagle_enabled = True
         else:
             speculative_model = self.speculative_config.get("model")
             if speculative_model in ("ngram", "[ngram]"):
                 is_ngram_enabled = True
-        if not (is_ngram_enabled or is_eagle_enabled):
+        if not (is_ngram_enabled or is_eagle_enabled or is_medusa_enabled):
             # Other speculative decoding methods are not supported yet.
             _raise_or_fallback(feature_name="Speculative Decoding",
                                recommend_to_remove=False)
             return False
 
-    # No FlashInfer or XFormers so far.
+    # No XFormers so far.
     V1_BACKENDS = [
-        "FLASH_ATTN_VLLM_V1", "FLASH_ATTN", "PALLAS", "PALLAS_VLLM_V1",
-        "TRITON_ATTN_VLLM_V1", "TRITON_MLA", "FLASHMLA"
+        "FLASH_ATTN_VLLM_V1",
+        "FLASH_ATTN",
+        "PALLAS",
+        "PALLAS_VLLM_V1",
+        "TRITON_ATTN_VLLM_V1",
+        "TRITON_MLA",
+        "CUTLASS_MLA_VLLM_V1",
+        "FLASHMLA",
+        "FLASHINFER",
+        "FLASHINFER_VLLM_V1",
+        "ROCM_AITER_MLA",
+        "TORCH_SDPA_VLLM_V1",
+        "FLEX_ATTENTION",
     ]
     if (envs.is_set("VLLM_ATTENTION_BACKEND")
             and envs.VLLM_ATTENTION_BACKEND not in V1_BACKENDS):
@@ -201,28 +214,12 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
             and _warn_or_fallback("Engine in background thread")):
         return False
 
-    # PP is supported on V1 with Ray distributed executor,
-    # but off for MP distributed executor for now.
-    if (self.pipeline_parallel_size > 1
-            and self.distributed_executor_backend != "ray"):
-        name = "Pipeline Parallelism without Ray distributed executor"
+    if (self.pipeline_parallel_size > 1 and self.distributed_executor_backend
+            not in (ParallelConfig.distributed_executor_backend, "ray", "mp",
+                    "external_launcher")):
+        name = "Pipeline Parallelism without Ray distributed executor " \
+                "or multiprocessing executor or external launcher"
         _raise_or_fallback(feature_name=name, recommend_to_remove=False)
-        return False
-
-    # ngram is supported on V1, but off by default for now.
-    if is_ngram_enabled and _warn_or_fallback("ngram"):
-        return False
-
-    # Eagle is under development, so we don't support it yet.
-    if is_eagle_enabled and _warn_or_fallback("Eagle"):
-        return False
-
-    # Non-CUDA is supported on V1, but off by default for now.
-    # support vllm-mindspore defined AscendPlatform
-    not_cuda = not current_platform.is_cuda(
-    ) and not current_platform.is_out_of_tree()
-    if not_cuda and _warn_or_fallback(  # noqa: SIM103
-            current_platform.device_name):
         return False
     #############################################################
 

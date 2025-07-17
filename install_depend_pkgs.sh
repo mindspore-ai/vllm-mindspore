@@ -55,7 +55,6 @@ vllm_dir=vllm-v0.9.1
 if [ ! -d "$vllm_dir" ]; then
     git clone https://github.com/vllm-project/vllm.git -b v0.9.1 "$vllm_dir"
     cd "$vllm_dir" ||  { echo "Failed to git clone vllm!"; exit 1; }
-    git apply $script_dir/vllm_dp/dp_scale_out.patch
 else
     echo "The $vllm_dir folder already exists and will not be re-downloaded."
     cd "$vllm_dir" || { echo "Failed to git clone vllm!"; exit 1; }
