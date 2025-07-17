@@ -39,6 +39,7 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
+from vllm_mindspore.model_executor.models.utils import get_mf_offset
 
 try:
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
@@ -75,6 +76,8 @@ class MfModelBase(MsModelBase):
             get_tensor_model_parallel_world_size())
         self.mf_config.model.model_config.parallel_config.pipeline_stage = (
             get_pp_group().world_size)
+        self.mf_config.model.model_config.offset = get_mf_offset(
+            self.mf_config.model.model_config)
         self._generate_model_config()
         if not hasattr(self, 'mf_model_config'):
             raise RuntimeError('mf_model_config not initialized')
