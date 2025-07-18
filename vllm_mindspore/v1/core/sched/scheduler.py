@@ -70,7 +70,7 @@ def update_from_output(
             logger.warning(
                 'Process aborted request %s from running requests %s', req_id,
                 running_req_ids)
-            outputs.append(  # type: ignore[attr-defined]
+            outputs[request.client_index].append(
                 EngineCoreOutput(request_id=req_id,
                                  new_token_ids=[],
                                  finish_reason=FinishReason.ABORT,

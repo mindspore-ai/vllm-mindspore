@@ -18,7 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Optional
 
 import mindspore as ms
 import numpy as np
@@ -35,7 +35,6 @@ from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
 from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
-from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 logger = init_logger(__name__)
 
@@ -43,8 +42,7 @@ logger = init_logger(__name__)
 def _prepare_inputs(
     self,
     scheduler_output,
-) -> tuple[dict[str, MsAttentionMetadata], Tensor,
-           Optional[SpecDecodeMetadata]]:
+) -> tuple[dict[str, Any], Tensor, Optional[SpecDecodeMetadata]]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
@@ -55,29 +53,18 @@ def _prepare_inputs(
     self.input_batch.block_table.commit(num_reqs)
 
     # Get the number of scheduled tokens for each request.
-    # TODO: The Python loop can be slow. Optimize.
-    num_scheduled_tokens = np.empty(num_reqs, dtype=np.int32)
-    max_num_scheduled_tokens = 0
-    for i, req_id in enumerate(self.input_batch.req_ids):
-        num_tokens = scheduler_output.num_scheduled_tokens[req_id]
-        num_scheduled_tokens[i] = num_tokens
-        max_num_scheduled_tokens = max(max_num_scheduled_tokens, num_tokens)
+    req_ids = self.input_batch.req_ids
+    tokens = [scheduler_output.num_scheduled_tokens[i] for i in req_ids]
+    num_scheduled_tokens = np.array(tokens, dtype=np.int32)
+    max_num_scheduled_tokens = max(tokens)
 
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
     req_indices = np.repeat(self.arange_np[:num_reqs], num_scheduled_tokens)
 
-    # Get batched arange.
-    # E.g., [2, 5, 3] -> [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    # Equivalent to but faster than:
-    # np.concatenate([np.arange(n) for n in num_scheduled_tokens])
-    # Step 1. [2, 5, 3] -> [2, 7, 10]
-    cu_num_tokens = np.cumsum(num_scheduled_tokens)
-    # Step 2. [2, 7, 10] -> [0, 0, 2, 2, 2, 2, 2, 7, 7, 7]
-    cumsums_offsets = np.repeat(cu_num_tokens - num_scheduled_tokens,
-                                num_scheduled_tokens)
-    # Step 3. [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    arange = self.arange_np[:total_num_scheduled_tokens] - cumsums_offsets
+    # cu_num_tokens: [2, 5, 3] -> [2, 7, 10]
+    # arange: [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+    cu_num_tokens, arange = self._get_cumsum_and_arange(num_scheduled_tokens)
 
     # Get positions.
     positions_np = self.positions_np[:total_num_scheduled_tokens]
@@ -85,17 +72,10 @@ def _prepare_inputs(
            arange,
            out=positions_np)
 
+    # Calculate M-RoPE positions.
+    # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
     if self.uses_mrope:
         self._calc_mrope_positions(scheduler_output)
-
-    if self.uses_mrope:
-        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
-        self.mrope_positions[:, :total_num_scheduled_tokens].copy_(
-            self.mrope_positions_cpu[:, :total_num_scheduled_tokens],
-            non_blocking=True)
-    else:
-        self.positions[:total_num_scheduled_tokens] = ms.from_numpy(
-            positions_np)
 
     # Get token indices.
     # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
@@ -104,8 +84,10 @@ def _prepare_inputs(
     token_indices = (positions_np +
                      req_indices * self.input_batch.token_ids_cpu.shape[1])
 
+    # vllm-mindspore begin
     self.input_ids[:total_num_scheduled_tokens] = ms.from_numpy(
         np.take(self.input_batch.token_ids_cpu.ravel(), token_indices, 0))
+    # vllm-mindspore end
 
     # Calculate the slot mapping for each KV cache group.
     for kv_cache_group_id, kv_cache_group_spec in enumerate(
@@ -121,7 +103,9 @@ def _prepare_inputs(
         block_table_indices = (
             req_indices * block_table.max_num_blocks_per_req +
             positions_np // block_size)
+        # vllm-mindspore begin
         block_numbers = block_table.block_table_np.ravel()[block_table_indices]
+        # vllm-mindspore end
         block_offsets = positions_np % block_size
         np.add(block_numbers * block_size,
                block_offsets,
@@ -135,17 +119,34 @@ def _prepare_inputs(
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
 
+    if self.uses_mrope:
+        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+        self.mrope_positions[:, :total_num_scheduled_tokens] = \
+            self.mrope_positions_cpu[:, :total_num_scheduled_tokens]
+    else:
+        # Common case (1D positions)
+        # vllm-mindspore begin
+        self.positions[:total_num_scheduled_tokens] = ms.from_numpy(
+            positions_np)
+        # vllm-mindspore end
+
     self.query_start_loc[:num_reqs + 1] = self.query_start_loc_cpu[:num_reqs +
                                                                    1]
     self.seq_lens[:num_reqs] = self.seq_lens_cpu[:num_reqs]
 
     # Fill unused with -1. Needed for reshape_and_cache
     self.seq_lens[num_reqs:].fill_(0)
-    self.query_start_loc[num_reqs + 1:].fill_(-1)
+    # Note: pad query_start_loc to be non-decreasing, as kernels
+    # like FlashAttention requires that
+    self.query_start_loc[num_reqs + 1:].fill_(
+        self.query_start_loc_cpu[num_reqs].item())
 
+    # vllm-mindspore begin
     query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
 
     attn_metadata = {}
+    # vllm-mindspore end
+
     # Prepare the attention metadata for each KV cache group and make layers
     # in the same group share the same metadata.
     for kv_cache_group_id, kv_cache_group_spec in enumerate(

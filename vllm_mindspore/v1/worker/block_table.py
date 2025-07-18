@@ -107,8 +107,7 @@ class BlockTable:
 
     def get_cpu_tensor(self) -> Tensor:
         """Returns the CPU tensor of the block table."""
-        self.block_table_cpu.copy_(ms.from_numpy(self.block_table_np),
-                                   non_blocking=True)
+        self.block_table_cpu = ms.from_numpy(self.block_table_np)
         return self.block_table_cpu
 
     def get_numpy_array(self) -> np.ndarray:
