@@ -56,7 +56,7 @@ def vllm_config_post_init(self):
     if self.lora_config:
         self.lora_config.verify_with_cache_config(self.cache_config)
         self.lora_config.verify_with_model_config(self.model_config)
-        self.lora_config.verify_with_scheduler_config(self.scheduler_config)
+        self.lora_config.verify_lora_support()
     if self.prompt_adapter_config:
         self.prompt_adapter_config.verify_with_model_config(self.model_config)
 
