@@ -42,7 +42,7 @@ const std::vector<std::string> GetEnvKernelLibPaths() {
   while (pathsCStr[pathLen] != '\0') {
     if (pathsCStr[pathLen] == ',') {
       (void)kernelLibPaths.emplace_back(std::string(pathsCStr, pathLen));
-      pathsCStr += pathLen+1;
+      pathsCStr += pathLen + 1;
       pathLen = 0;
     } else {
       pathLen++;
@@ -75,8 +75,8 @@ size_t GetEnvThreadPoolSize() {
 GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(context_);
 
-  mempool_ = new MemoryPool();
-  CHECK_IF_NULL(mempool_);
+  memPool_ = new MemoryPool();
+  CHECK_IF_NULL(memPool_);
 
   for (auto &&path : GetEnvKernelLibPaths()) {
     KernelLibRegistry::Instance().Load(path);
@@ -88,9 +88,9 @@ GraphExecutor::~GraphExecutor() {
   FreeDAContext(context_);
   context_ = nullptr;
 
-  CHECK_IF_NULL(mempool_);
-  delete mempool_;
-  mempool_ = nullptr;
+  CHECK_IF_NULL(memPool_);
+  delete memPool_;
+  memPool_ = nullptr;
 }
 
 // Start building graph.
@@ -135,12 +135,23 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
   return tensor;
 }
 
+// Add tensor for graph
+void GraphExecutor::AddTensor(tensor::DATensor *tensor) {
+  LOG_OUT << "Add const tensor";
+  CHECK_IF_NULL(context_);
+  CHECK_IF_NULL(tensor);
+  CHECK_IF_NULL(graph_);
+  tensor::AddTensor(graph_, tensor);
+}
+
 // Add operation result tensor.
 DATensor *GraphExecutor::AddTensor(ops::Op op,
-                                   const std::vector<DATensor *> &inputs) {
+                                   const std::vector<DATensor *> &inputs,
+                                   size_t outputSize) {
   LOG_OUT << "Add tensor";
   auto tensorSize = inputs.size();
-  LOG_OUT << "tensorSize: " << tensorSize;
+  LOG_OUT << "tensor input size: " << tensorSize;
+  LOG_OUT << "tensor output size: " << outputSize;
   CHECK_IF_FAIL(tensorSize <= DA_TENSOR_MAX_INPUT);
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_);
@@ -150,19 +161,16 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
     tensor->input[i] = inputs[i];
     ++tensor->inputSize;
   }
+  if (outputSize > 1) {
+    tensor->type = tensor::Type_Tensor;
+    tensor->dim = 1;
+    tensor->shape[0] = outputSize;
+    auto **tensorList = tensor::NewDATensorList(context_, outputSize);
+    tensor->data = static_cast<void *>(tensorList);
+  }
   CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
   return tensor;
-}
-
-void GraphExecutor::AppendNodeOutputs(std::vector<DATensor *> &vec, DATensor *node) {
-  if (outputs_.count(node) >= 1) {
-    for (auto &output : outputs_[node]) {
-      (void)vec.emplace_back(output);
-    }
-  } else {
-    (void)vec.emplace_back(node);
-  }
 }
 
 enum {
@@ -170,14 +178,14 @@ enum {
   kSecondInput = 1,
 };
 static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
-  {ops::Op_return, kFirstInput},
-  {ops::Op_depend, kFirstInput},
-  {ops::Op_load, kFirstInput},
-  {ops::Op_update_state, kSecondInput},
+    {ops::Op_return, kFirstInput},
+    {ops::Op_depend, kFirstInput},
+    {ops::Op_load, kFirstInput},
+    {ops::Op_update_state, kFirstInput},
 };
 static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT_DATA = {
-  {ops::Op_reshape, kFirstInput},
-  {ops::Op_expand_dims, kFirstInput},
+    {ops::Op_reshape, kFirstInput},
+    {ops::Op_expand_dims, kFirstInput},
 };
 void GraphExecutor::RunTensor(DATensor *node) {
   LOG_OUT << "Run tensor, ops." << ops::ToStr(node->op) << ", tensor: " << node;
@@ -187,43 +195,82 @@ void GraphExecutor::RunTensor(DATensor *node) {
   }
 
   if (node->op == ops::Op_make_tuple) {
-    auto &outputs = outputs_[node];
+    CHECK_IF_FAIL(node->type == Type_Tensor);
+    CHECK_IF_FAIL(node->shape[0] == node->inputSize);
+    auto **tensorList = static_cast<DATensor **>(node->data);
+    CHECK_IF_NULL(tensorList);
     for (size_t i = 0; i < node->inputSize; ++i) {
       std::unique_lock<std::mutex> lock(outputsMutex_);
-      AppendNodeOutputs(outputs, node->input[i]);
+      tensorList[i]->data = node->input[i]->data;
     }
+    return;
+  }
+
+  if (node->op == ops::Op_tuple_getitem) {
+    CHECK_IF_FAIL(node->input[kFirstInput]->type == Type_Tensor);
+    auto index =
+        static_cast<size_t>(GetValue<int64_t>(node->input[kSecondInput]));
+    std::unique_lock<std::mutex> lock(outputsMutex_);
+    LOG_OUT << "Run Op_tuple_getitem, tensor: " << node
+            << ", input_tensor: " << node->input[kFirstInput]
+            << ", index_tensor: " << node->input[kSecondInput]
+            << ", index: " << index;
+    CHECK_IF_FAIL(index < node->input[kFirstInput]->shape[0]);
+    auto **inputTensorList =
+        static_cast<DATensor **>(node->input[kFirstInput]->data);
+    CHECK_IF_NULL(inputTensorList);
+    node->data = inputTensorList[index]->data;
     return;
   }
 
   auto iter1 = OPS_OUTPUT_FROM_INPUT.find(node->op);
   if (iter1 != OPS_OUTPUT_FROM_INPUT.end()) {
-    auto input_index = iter1->second;
+    auto inputIndex = iter1->second;
     std::unique_lock<std::mutex> lock(outputsMutex_);
-    AppendNodeOutputs(outputs_[node], node->input[input_index]);
+    node->data = node->input[inputIndex]->data;
+    node->type = node->input[inputIndex]->type;
     return;
   }
 
   auto iter2 = OPS_OUTPUT_FROM_INPUT_DATA.find(node->op);
   if (iter2 != OPS_OUTPUT_FROM_INPUT_DATA.end()) {
-    auto input_index = iter2->second;
-    node->data = node->input[input_index]->data;
+    auto inputIndex = iter2->second;
+    std::unique_lock<std::mutex> lock(outputsMutex_);
+    node->data = node->input[inputIndex]->data;
+    node->type = node->input[inputIndex]->type;
     return;
   }
 
   // Get real inputs of the node.
-  std::vector<DATensor *> inputs;
+  std::vector<DATensor *> realInputs;
   for (size_t i = 0; i < node->inputSize; ++i) {
-    AppendNodeOutputs(inputs, node->input[i]);
+    CHECK_IF_NULL(node->input[i]);
+    if (node->input[i]->type == Type_Tensor) {
+      auto **tensorList = static_cast<DATensor **>(node->input[i]->data);
+      CHECK_IF_NULL(tensorList);
+      for (size_t j = 0; j < node->input[i]->shape[0]; j++) {
+        CHECK_IF_NULL(tensorList[j]);
+        if (tensorList[j]->type == Type_Monad) {
+          continue;
+        }
+        (void)realInputs.emplace_back(tensorList[j]);
+      }
+      continue;
+    }
+    if (node->input[i]->type == Type_Monad) {
+      continue;
+    }
+    (void)realInputs.emplace_back(node->input[i]);
   }
-  node->inputSize = inputs.size();
+  node->inputSize = realInputs.size();
   for (size_t i = 0; i < node->inputSize; ++i) {
-    node->input[i] = inputs[i];
+    node->input[i] = realInputs[i];
   }
 
 #ifndef SKIP_RUN_TENSOR
   auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
   CHECK_IF_NULL(kernelLib);
-  CHECK_IF_FAIL(kernelLib->RunTensor(node, mempool_));
+  CHECK_IF_FAIL(kernelLib->RunTensor(node, memPool_));
 #endif
 }
 
@@ -233,12 +280,18 @@ void GraphExecutor::RunGraph() {
   CHECK_IF_NULL(context_);
   CHECK_IF_NULL(graph_);
 
-  mempool_->Reset();
-  outputs_.clear();
+  memPool_->Reset();
 
-#ifdef SERIAL
+  // record ref counts
+  TensorDataRecycler recycler(memPool_);
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    recycler.IncreaseInputsRefCounts(graph_->node[i]);
+  }
+
+#ifndef SERIAL
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     RunTensor(graph_->node[i]);
+    recycler.DecreaseInputsRefCounts(graph_->node[i]);
   }
 #else
   std::unordered_map<DATensor *, size_t> waitingCount;
@@ -378,5 +431,5 @@ void GraphExecutor::DumpGraph() {
   std::cout << "}" << std::endl;
 }
 #endif
-}  // namespace runtime
-}  // namespace da
+} // namespace runtime
+} // namespace da

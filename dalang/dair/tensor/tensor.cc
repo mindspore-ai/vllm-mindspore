@@ -100,6 +100,27 @@ DATensor *NewDATensor(DAContext *context) {
   return tensor;
 }
 
+DATensor **NewDATensorList(DAContext *context, size_t len) {
+  CHECK_IF_NULL(context);
+  CHECK_IF_NULL(context->memPool);
+  CHECK_IF_FAIL(len > 0);
+
+  size_t tensorListSize = sizeof(DATensor *[len]);
+  auto newSize = context->memUsed + tensorListSize;
+  CHECK_IF_FAIL(newSize < context->memSize);
+
+  DATensor **tensorList =
+      (DATensor **)((char *)context->memPool + context->memUsed);
+  context->memUsed = newSize;
+  for (size_t i = 0; i < len; ++i) {
+    tensorList[i] = NewDATensor(context);
+  }
+  LOG_OUT << "Create DATensorList " << tensorList
+          << ", size: " << sizeof(DATensor *[len]) << ", for DAContext "
+          << context;
+  return tensorList;
+}
+
 DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
                       const ShapeArray &shape, void *data, ops::Op op,
                       size_t inputSize, const TensorArrayPtr &input) {
@@ -132,6 +153,18 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;
   return tensor;
+}
+
+bool IsDATensorConst(DATensor *tensor) {
+  CHECK_IF_NULL(tensor);
+  return tensor->op == ops::Op_End;
+}
+
+bool IsDATensorOutputFromInput(DATensor *tensor) {
+  CHECK_IF_NULL(tensor);
+  return (tensor->op == ops::Op_tuple_getitem || tensor->op == ops::Op_depend ||
+          tensor->op == ops::Op_make_tuple || tensor->op == ops::Op_return ||
+          tensor->op == ops::Op_update_state || tensor->op == ops::Op_load);
 }
 } // namespace tensor
 } // namespace da

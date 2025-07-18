@@ -18,21 +18,29 @@
 #define __RUNTIME_MEMPOOL_H__
 
 #include <cstdlib>
+#include <functional>
 #include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "common/common.h"
+#include "tensor/tensor.h"
 
 namespace da {
 namespace runtime {
+using namespace da::tensor;
 constexpr size_t MAX_MEM_SIZE = 1024 * 1024 * 1024 * 4UL;
 
 class MemoryPool {
- public:
+public:
+  using memoryFreeFunc = std::function<void(void *)>;
+
   MemoryPool() = default;
   ~MemoryPool() = default;
 
   void Reset() { memUsed = 0; }
+
+  void SetFreeFunc(memoryFreeFunc &&func) { freeFunc_ = func; }
 
   void *Allocate(size_t size) {
     std::lock_guard<std::mutex> lock(allocMutex_);
@@ -46,12 +54,32 @@ class MemoryPool {
     return ptr;
   }
 
- private:
+  void Free(DATensor *tensor) const;
+
+private:
   size_t memUsed{0};
   u_char memPool[MAX_MEM_SIZE];
   std::mutex allocMutex_;
+  memoryFreeFunc freeFunc_;
 };
 
-}  // namespace runtime
-}  // namespace da
-#endif  // __RUNTIME_MEMPOOL_H__
+class TensorDataRecycler {
+public:
+  explicit TensorDataRecycler(MemoryPool *memPool) : memPool_(memPool) {}
+  ~TensorDataRecycler() = default;
+
+  void IncreaseInputsRefCounts(DATensor *node);
+  void DecreaseInputsRefCounts(DATensor *node);
+
+protected:
+  void IncreaseInner(DATensor *tensor);
+  void DecreaseInner(DATensor *tensor);
+
+private:
+  MemoryPool *memPool_;
+  std::unordered_map<DATensor *, size_t> refCounts_;
+};
+
+} // namespace runtime
+} // namespace da
+#endif // __RUNTIME_MEMPOOL_H__
