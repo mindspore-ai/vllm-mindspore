@@ -126,6 +126,9 @@ DATensor **NewDATensorList(DAContext *context, size_t len);
 // Whether a DATensor is weight or const value
 bool IsDATensorConst(DATensor *tensor);
 
+// Whether skip increase/decrease refCount
+bool IsSkipRecordRefCount(DATensor* tensor);
+
 // whether a DATensor's output is from input
 bool IsDATensorOutputFromInput(DATensor *tensor);
 

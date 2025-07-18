@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-#include "tensor/tensor.h"
+#include <set>
+
 #include "common/common.h"
+#include "tensor/tensor.h"
 
 namespace da {
 namespace tensor {
@@ -162,9 +164,18 @@ bool IsDATensorConst(DATensor *tensor) {
 
 bool IsDATensorOutputFromInput(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
-  return (tensor->op == ops::Op_tuple_getitem || tensor->op == ops::Op_depend ||
-          tensor->op == ops::Op_make_tuple || tensor->op == ops::Op_return ||
-          tensor->op == ops::Op_update_state || tensor->op == ops::Op_load);
+  static std::set<ops::Op> outputFromInputSet = {
+      ops::Op_tuple_getitem, ops::Op_depend,  ops::Op_make_tuple,
+      ops::Op_return,        ops::Op_reshape, ops::Op_reshape_ext,
+  };
+
+  return outputFromInputSet.find(tensor->op) != outputFromInputSet.end();
+}
+
+bool IsSkipRecordRefCount(DATensor *tensor) {
+  CHECK_IF_NULL(tensor);
+  return (tensor->op == ops::Op_End || tensor->op == ops::Op_load ||
+          tensor->op == ops::Op_update_state);
 }
 } // namespace tensor
 } // namespace da
