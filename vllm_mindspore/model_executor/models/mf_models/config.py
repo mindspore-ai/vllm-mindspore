@@ -65,15 +65,31 @@ MODEL_COMMON_MAPPING = {
     ('model_config.hf_config.tie_word_embeddings', None),
     'vocab_size': ('model_config.hf_config.vocab_size', None),
     'attention_bias': ('model_config.hf_config.attention_bias', None),
+    'decoder_sparse_step': ('model_config.hf_config.decoder_sparse_step',
+                            None),
+    'moe_intermediate_size': ('model_config.hf_config.moe_intermediate_size',
+                              None),
+    'num_experts_per_tok': ('model_config.hf_config.num_experts_per_tok',
+                            None),
+    'num_experts': ('model_config.hf_config.num_experts', None),
+    'norm_topk_prob': ('model_config.hf_config.norm_topk_prob', None),
+    'output_router_logits': ('model_config.hf_config.output_router_logits',
+                             None),
+    'router_aux_loss_coef': ('model_config.hf_config.router_aux_loss_coef',
+                             None),
+    'mlp_only_layers': ('model_config.hf_config.mlp_only_layers', None),
 }
 
 # model default config
 MODEL_RELATED_MAPPING = {
     'qwen3': {
-        'gated_linear_unit': True,
         'params_dtype': 'bfloat16',  # need an input
-        'add_bias_linear': False,
-        'normalization': 'RMSNorm'
+    },
+    'qwen3_moe': {
+        'params_dtype': 'bfloat16',  # need an input
+        'layernorm_compute_dtype': 'bfloat16',
+        'rotary_dtype': 'bfloat16',
+        'router_dense_type': 'bfloat16',
     }
     # Add anther model type...
 }
