@@ -78,7 +78,7 @@ pip uninstall mindspore -y && pip install "$mindspore_name" || { echo "Failed to
 
 
 echo "========= Installing mindformers"
-mf_dir=mindformers-dev
+mf_dir=mindformers-br_infer_boom
 if [ ! -d "$mf_dir" ]; then
     git clone https://gitee.com/mindspore/mindformers.git -b br_infer_boom "$mf_dir"
 else
