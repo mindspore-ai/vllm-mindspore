@@ -18,6 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ utils for load model """
+import numpy as np
 from torch import nn
 from vllm.config import ModelConfig
 from vllm.model_executor.models import ModelRegistry
@@ -46,3 +47,27 @@ def get_ms_model_architecture(
         raise RecursionError("MindSpore unsupported reward model task now!")
 
     return model_cls, arch
+
+def convert_uint64_to_fp32(arr: np.ndarray):
+    arr_fp32 = arr.view(np.float32)
+    output = arr_fp32[:, :, 0::2]
+    return output
+
+def np_int4data_pack_to_int8_3d(np_data):
+    np_data = np_data.astype(np.int8)
+    np_data &= 0x000F
+    np_data[::, ::, 0::2] <<= 0
+    np_data[::, ::, 1::2] <<= 4
+    np_int4_data = np_data[::, ::, 0::2] | np_data[::, ::, 1::2]
+    return np_int4_data
+
+def unpack_int8_to_int4_3d(packed_data):
+    low_nibbles = (packed_data & 0x0F).astype(np.uint8)
+    high_nibbles = ((packed_data >> 4) & 0x0F).astype(np.uint8)
+
+    unpacked = np.empty((*packed_data.shape[:2], packed_data.shape[2] * 2),
+                        dtype=np.uint8)
+    unpacked[..., 0::2] = low_nibbles
+    unpacked[..., 1::2] = high_nibbles
+
+    return unpacked

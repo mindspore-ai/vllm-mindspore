@@ -31,8 +31,11 @@ from tqdm import tqdm
 from vllm.distributed import get_pp_group, get_pp_indices
 from vllm.logger import init_logger
 
+from vllm_mindspore.utils import convert_np_to_ms_dtype
+from vllm_mindspore.model_executor.model_loader.utils import (
+   convert_uint64_to_fp32, unpack_int8_to_int4_3d, np_int4data_pack_to_int8_3d)
 from vllm_mindspore.model_executor.models.mf_models.weight_processor import (
-    BaseWeightProcessor, EPMethod, convert_np_to_ms_dtype)
+   BaseWeightProcessor, EPMethod)
 
 logger = init_logger(__name__)
 
@@ -55,6 +58,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             get_pp_group().rank_in_group,
             get_pp_group().world_size,
         )
+        self.col_moe_split_axis = 2 if self.is_310p else 1
+        self.row_moe_split_axis = 1 if self.is_310p else 2
         self.expert_num = self.config.moe_config.expert_num
         self.moe_split_tp = self.moe_tp_size > 1
         self.moe_split_ep = self.moe_ep_size > 1
@@ -188,6 +193,29 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         weight_name = weight_name.replace('model.norm.weight',
                                           'model.norm_out.weight')
         return weight_name
+
+    def small_cache_weight(self, src_hf_dir, layer_id, hf_weight_map,
+                           parameter_dict):
+        k_nope_weight_name = (f"model.layers.{layer_id}.attention."
+                              f"lkv2kv_k_nope.weight")
+        k_nope_weight_param, _ = self.get_safetensor_from_file_split_tp_group(
+            k_nope_weight_name, src_hf_dir,hf_weight_map, split_axis=0)
+        qabsorb_matmul_name = (f"model.layers.{layer_id}.attention."
+                               f"qabsorb_matmul.weight")
+        qabsorb_param = k_nope_weight_param.reshape(-1, 128, 512)
+        parameter_dict[qabsorb_matmul_name] = ms.Parameter(
+            ms.Tensor(qabsorb_param, dtype=ms.float16),
+            name=qabsorb_matmul_name, requires_grad=False)
+
+        v_weight_name = f"model.layers.{layer_id}.attention.lkv2kv_v.weight"
+        v_weight_param, _ = self.get_safetensor_from_file_split_tp_group(
+            v_weight_name, src_hf_dir, hf_weight_map, split_axis=0)
+        outabsorb_matmul_name = (f"model.layers.{layer_id}.attention."
+                                 f"outabsorb_matmul.weight")
+        outabsorb_param = v_weight_param.reshape(-1, 128, 512)
+        parameter_dict[outabsorb_matmul_name] = ms.Parameter(
+            ms.Tensor(outabsorb_param, dtype=ms.float16),
+            name=outabsorb_matmul_name, requires_grad=False)
 
     def infer_trans_rope_weight(self, weight, qk_rope_head_dim):
         """process rope router weight"""
@@ -1901,6 +1929,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_param, _ = self.get_safetensor_from_file(
             w2_scale_name, src_hf_dir, hf_weight_map)
 
+        w_scale_dtype = ms.float32 if self.is_310p else ms.bfloat16
+
         if ffn_concat:
             concat_weight_name = f"{base_name}.w_gate_hidden._layer.weight"
             concat_weight_param = ms.Tensor(np.concatenate(
@@ -1915,7 +1945,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 f"{base_name}.w_gate_hidden._layer.matmul.weight_scale")
             concat_scale_param = ms.Tensor(np.concatenate(
                 [w1_scale_param, w3_scale_param], axis=0),
-                                           dtype=ms.bfloat16)
+                                           dtype=w_scale_dtype)
             parameter_dict[concat_scale_name] = ms.Parameter(
                 concat_scale_param,
                 name=concat_scale_name,
@@ -1933,11 +1963,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                           requires_grad=False)
 
             parameter_dict[w1_scale_name] = ms.Parameter(ms.Tensor(
-                w1_scale_param, ms.bfloat16),
+                w1_scale_param, w_scale_dtype),
                                                          name=w1_scale_name,
                                                          requires_grad=False)
             parameter_dict[w3_scale_name] = ms.Parameter(ms.Tensor(
-                w3_scale_param, ms.bfloat16),
+                w3_scale_param, w_scale_dtype),
                                                          name=w3_scale_name,
                                                          requires_grad=False)
 
@@ -1946,7 +1976,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                       name=w2_weight_name,
                                                       requires_grad=False)
         parameter_dict[w2_scale_name] = ms.Parameter(ms.Tensor(
-            w2_scale_param, ms.bfloat16),
+            w2_scale_param, w_scale_dtype),
                                                      name=w2_scale_name,
                                                      requires_grad=False)
 
@@ -1978,6 +2008,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_param, _ = self.get_safetensor_from_file(
             w2_scale_name, src_hf_dir, hf_weight_map)
 
+        w_scale_dtype = ms.float32 if self.is_310p else ms.bfloat16
+
         if ffn_concat:
             concat_weight_name = f"{base_name}.w_gate_hidden._layer.weight"
             concat_weight_param = ms.Tensor(np.concatenate(
@@ -1992,7 +2024,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 f"{base_name}.w_gate_hidden._layer.matmul.weight_scale")
             concat_scale_param = ms.Tensor(np.concatenate(
                 [w1_scale_param, w3_scale_param], axis=0),
-                                           dtype=ms.bfloat16)
+                                           dtype=w_scale_dtype)
             parameter_dict[concat_scale_name] = ms.Parameter(
                 concat_scale_param,
                 name=concat_scale_name,
@@ -2009,11 +2041,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                           requires_grad=False)
 
             parameter_dict[w1_scale_name] = ms.Parameter(ms.Tensor(
-                w1_scale_param, ms.bfloat16),
+                w1_scale_param, w_scale_dtype),
                                                          name=w1_scale_name,
                                                          requires_grad=False)
             parameter_dict[w3_scale_name] = ms.Parameter(ms.Tensor(
-                w3_scale_param, ms.bfloat16),
+                w3_scale_param, w_scale_dtype),
                                                          name=w3_scale_name,
                                                          requires_grad=False)
 
@@ -2022,7 +2054,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                       name=w2_weight_name,
                                                       requires_grad=False)
         parameter_dict[w2_scale_name] = ms.Parameter(ms.Tensor(
-            w2_scale_param, ms.bfloat16),
+            w2_scale_param, w_scale_dtype),
                                                      name=w2_scale_name,
                                                      requires_grad=False)
 
@@ -2066,6 +2098,15 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         kv2l_quant_scale_param, _ = self.get_safetensor_from_file(
             kv2l_quant_scale, src_hf_dir, hf_weight_map)
 
+        if self.is_310p:
+            q2l_scale_param = q2l_scale_param.astype(np.float32).view(np.int32).astype(np.int64)
+            kv2l_scale_param = kv2l_scale_param.astype(np.float32).view(np.int32).astype(np.int64)
+            deq_scale_dtype = ms.int64
+            quant_scale_dtype = ms.float16
+        else:
+            deq_scale_dtype = ms.float32
+            quant_scale_dtype = ms.bfloat16
+
         if qkv_concat:
             qkv2l_weight_name = f"{base_name}.qkv2l._layer.weight"
             qkv2l_bias_name = f"{base_name}.qkv2l._layer.matmul.quant_bias"
@@ -2087,7 +2128,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             qkv2l_scale = np.concatenate((q2l_scale_param, kv2l_scale_param),
                                          0)
             parameter_dict[qkv2l_scale_name] = ms.Parameter(
-                ms.Tensor(qkv2l_scale, ms.float32),
+                ms.Tensor(qkv2l_scale, deq_scale_dtype),
                 name=qkv2l_scale_name,
                 requires_grad=False)
             parameter_dict[qkv2l_quant_zp_name] = ms.Parameter(
@@ -2095,7 +2136,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 name=qkv2l_quant_zp_name,
                 requires_grad=False)
             parameter_dict[qkv2l_quant_scale_name] = ms.Parameter(
-                ms.Tensor(q2l_quant_scale_param, ms.bfloat16),
+                ms.Tensor(q2l_quant_scale_param, quant_scale_dtype),
                 name=qkv2l_quant_scale_name,
                 requires_grad=False)
         else:
@@ -2116,11 +2157,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                           name=kv2l_bias_name,
                                                           requires_grad=False)
             parameter_dict[q2l_scale_name] = ms.Parameter(ms.Tensor(
-                q2l_scale_param, ms.float32),
+                q2l_scale_param, deq_scale_dtype),
                                                           name=q2l_scale_name,
                                                           requires_grad=False)
             parameter_dict[kv2l_scale_name] = ms.Parameter(
-                ms.Tensor(kv2l_scale_param, ms.float32),
+                ms.Tensor(kv2l_scale_param, deq_scale_dtype),
                 name=kv2l_scale_name,
                 requires_grad=False)
             parameter_dict[q2l_quant_zp] = ms.Parameter(ms.Tensor(
@@ -2132,11 +2173,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                          name=kv2l_quant_zp,
                                                          requires_grad=False)
             parameter_dict[q2l_quant_scale] = ms.Parameter(
-                ms.Tensor(q2l_quant_scale_param, ms.bfloat16),
+                ms.Tensor(q2l_quant_scale_param, quant_scale_dtype),
                 name=q2l_quant_scale,
                 requires_grad=False)
             parameter_dict[kv2l_quant_scale] = ms.Parameter(
-                ms.Tensor(kv2l_quant_scale_param, ms.bfloat16),
+                ms.Tensor(kv2l_quant_scale_param, quant_scale_dtype),
                 name=kv2l_quant_scale,
                 requires_grad=False)
 
@@ -2341,6 +2382,267 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                                           requires_grad=False)
             _, _ = ms.load_param_into_net(self.network, parameter_dict)
 
+    def process_route_ffn_weight_a8w4(self, src_hf_dir, layer_id,
+                                      hf_weight_map, parameter_dict,
+                                      layer_type):
+        """qqq_process_route_ffn_weight"""
+
+        ffn_concat = self.config.model.model_config.ffn_concat
+        w1_weight_name = (f"model.layers.{layer_id}.{layer_type}.w1."
+                          f"_layer.weight")
+        w1_scale_name = (f"model.layers.{layer_id}.{layer_type}.w1."
+                         f"_layer.matmul.weight_scale")
+        w1_bias_name = (f"model.layers.{layer_id}.{layer_type}.w1."
+                        f"_layer.matmul.gmm_bias")
+
+        w3_weight_name = (f"model.layers.{layer_id}.{layer_type}.w3."
+                          f"_layer.weight")
+        w3_scale_name = (f"model.layers.{layer_id}.{layer_type}.w3."
+                         f"_layer.matmul.weight_scale")
+        w3_bias_name = (f"model.layers.{layer_id}.{layer_type}.w3."
+                        f"_layer.matmul.gmm_bias")
+
+        w2_weight_name = (f"model.layers.{layer_id}.{layer_type}.w2."
+                          f"_layer.weight")
+        w2_scale_name = (f"model.layers.{layer_id}.{layer_type}.w2."
+                         f"_layer.matmul.weight_scale")
+        w2_bias_name = (f"model.layers.{layer_id}.{layer_type}.w2."
+                        f"_layer.matmul.gmm_bias")
+
+        w1_weight_param, _ = self.get_routed_safetensor_3_dim(
+            w1_weight_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=self.col_moe_split_axis)
+        w1_scale_param, _ = self.get_routed_safetensor_3_dim(w1_scale_name,
+                                                             src_hf_dir,
+                                                             hf_weight_map,
+                                                             split_ep=False,
+                                                             split_tp=True,
+                                                             tp_axis=2)
+        w1_bias_param, _ = self.get_routed_safetensor_2_dim(w1_bias_name,
+                                                            src_hf_dir,
+                                                            hf_weight_map,
+                                                            split_ep=False,
+                                                            split_tp=True,
+                                                            tp_axis=1)
+
+        w3_weight_param, _ = self.get_routed_safetensor_3_dim(
+            w3_weight_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=self.col_moe_split_axis)
+        w3_scale_param, _ = self.get_routed_safetensor_3_dim(w3_scale_name,
+                                                             src_hf_dir,
+                                                             hf_weight_map,
+                                                             split_ep=False,
+                                                             split_tp=True,
+                                                             tp_axis=2)
+        w3_bias_param, _ = self.get_routed_safetensor_2_dim(
+            w3_bias_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=1)
+
+        w2_weight_param, _ = self.get_routed_safetensor_3_dim(
+            w2_weight_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=self.row_moe_split_axis)
+        w2_scale_param, _ = self.get_routed_safetensor_3_dim(
+            w2_scale_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=1)
+        w2_bias_param, _ = self.get_routed_safetensor_2_dim(
+            w2_bias_name, src_hf_dir, hf_weight_map, split_ep=False,
+            split_tp=True, tp_axis=1)
+
+        if self.is_310p:
+            w1_weight_param = w1_weight_param.astype(np.int8)
+            w1_weight_param = unpack_int8_to_int4_3d(w1_weight_param)
+            w1_weight_param = np_int4data_pack_to_int8_3d(
+                w1_weight_param.transpose(0, 2, 1))
+
+            w2_weight_param = w2_weight_param.astype(np.int8)
+            w2_weight_param = unpack_int8_to_int4_3d(w2_weight_param)
+            w2_weight_param = np_int4data_pack_to_int8_3d(
+                w2_weight_param.transpose(0, 2, 1))
+
+            w3_weight_param = w3_weight_param.astype(np.int8)
+            w3_weight_param = unpack_int8_to_int4_3d(w3_weight_param)
+            w3_weight_param = np_int4data_pack_to_int8_3d(
+                w3_weight_param.transpose(0, 2, 1))
+
+            w1_scale_param = convert_uint64_to_fp32(w1_scale_param)
+            w2_scale_param = convert_uint64_to_fp32(w2_scale_param)
+            w3_scale_param = convert_uint64_to_fp32(w3_scale_param)
+            w_scale_dtype = ms.float32
+        else:
+            w_scale_dtype = ms.uint64
+
+
+        if ffn_concat:
+            concat_weight_name = (f"model.layers.{layer_id}.{layer_type}."
+                                  f"w_gate_hidden._layer.weight")
+            concat_weight_param = ms.Tensor(np.concatenate(
+                [w1_weight_param, w3_weight_param], axis=1), dtype=ms.qint4x2)
+            parameter_dict[concat_weight_name] = ms.Parameter(
+                concat_weight_param, name=concat_weight_name,
+                requires_grad=False)
+
+            concat_scale_name = (f"model.layers.{layer_id}.{layer_type}."
+                                 f"w_gate_hidden._layer.matmul.weight_scale")
+            concat_scale_param = ms.Tensor(np.concatenate(
+                [w1_scale_param, w3_scale_param], axis=2),
+                dtype=w_scale_dtype)
+            parameter_dict[concat_scale_name] = ms.Parameter(
+                concat_scale_param, name=concat_scale_name,
+                requires_grad=False)
+
+            concat_scale_name = (f"model.layers.{layer_id}.{layer_type}."
+                                 f"w_gate_hidden._layer.matmul.gmm_bias")
+            concat_scale_param = ms.Tensor(np.concatenate(
+                [w1_bias_param, w3_bias_param], axis=1), dtype=ms.float32)
+            parameter_dict[concat_scale_name] = ms.Parameter(
+                concat_scale_param, name=concat_scale_name,
+                requires_grad=False)
+        else:
+            # w1 w3
+            parameter_dict[w1_weight_name] = ms.Parameter(ms.Tensor(
+                w1_weight_param, ms.qint4x2), name=w1_weight_name,
+                requires_grad=False)
+            parameter_dict[w3_weight_name] = ms.Parameter(ms.Tensor(
+                w3_weight_param, ms.qint4x2), name=w3_weight_name,
+                requires_grad=False)
+
+            parameter_dict[w1_scale_name] = ms.Parameter(ms.Tensor(
+                w1_scale_param, w_scale_dtype),
+                name=w1_scale_name, requires_grad=False)
+            parameter_dict[w3_scale_name] = ms.Parameter(ms.Tensor(
+                w3_scale_param, w_scale_dtype),
+                name=w3_scale_name, requires_grad=False)
+
+            parameter_dict[w1_bias_name] = ms.Parameter(ms.Tensor(
+                w1_bias_param, ms.float32),
+                name=w1_bias_name, requires_grad=False)
+            parameter_dict[w3_bias_name] = ms.Parameter(ms.Tensor(
+                w3_bias_param, ms.float32),
+                name=w3_bias_name, requires_grad=False)
+
+        parameter_dict[w2_weight_name] = ms.Parameter(ms.Tensor(
+            w2_weight_param, ms.qint4x2), name=w2_weight_name,
+            requires_grad=False)
+        parameter_dict[w2_scale_name] = ms.Parameter(ms.Tensor(
+            w2_scale_param, w_scale_dtype),
+            name=w2_scale_name, requires_grad=False)
+        parameter_dict[w2_bias_name] = ms.Parameter(ms.Tensor(
+            w2_bias_param, ms.float32),
+            name=w2_bias_name, requires_grad=False)
+
+
+    def infer_a8w4_get_value(self, param_name, src_hf_dir,
+                             hf_weight_map, no_need_split_layer):
+        '''infer_smooth_quant_get_value'''
+
+        if any([name in param_name for name in no_need_split_layer]):
+            value, is_int4 = self.get_safetensor_from_file(param_name,
+                                                           src_hf_dir,
+                                                           hf_weight_map)
+        elif any([name in param_name for name in [".l2q_proj."]]):
+            if param_name.endswith(".weight") or "matmul" in param_name:
+                value, is_int4 = self.get_safetensor_from_file_split_tp_group(
+                    param_name, src_hf_dir, hf_weight_map, split_axis=0)
+                if self.is_310p and "dequant_scale" in param_name:
+                    value = value.view(np.int32).astype(np.int64)
+            else:
+                value, is_int4 = self.get_safetensor_from_file(param_name,
+                                                               src_hf_dir,
+                                                               hf_weight_map)
+        elif any([name in param_name for name in [".feed_forward.w2.", ".wo.",
+                                                  "shared_experts.w2"]]):
+            value = self.infer_smooth_quant_row_linear_split(param_name,
+                                                             src_hf_dir,
+                                                             hf_weight_map)
+            if self.is_310p and "dequant_scale" in param_name:
+                value = value.view(np.int32).astype(np.int64)
+            is_int4 = False
+        elif ".routed_experts.ffn.w2" in param_name:
+            value, is_int4 = self.get_safetensor_from_file_split_tp_group(
+                param_name, src_hf_dir, hf_weight_map, split_axis=1)
+        elif any([name in param_name for name in ["lkv2kv_k_nope", "lkv2kv_v",
+                                                  "absorb"]]):
+            value, is_int4 = self.get_safetensor_from_file_split_tp_group(
+                param_name, src_hf_dir, hf_weight_map, split_axis=0)
+        elif "lm_head" in param_name:
+            if not self.config.parallel_config.vocab_emb_dp:
+                value, is_int4 = self.get_safetensor_from_file_split_tp_group(
+                    param_name, src_hf_dir, hf_weight_map, split_axis=0)
+            else:
+                value, is_int4 = self.get_safetensor_from_file(param_name,
+                                                               src_hf_dir,
+                                                               hf_weight_map)
+        else:
+            raise ValueError(f"not found layer {param_name},"
+                             f" please check safetensors file.")
+        return value, is_int4
+
+    def infer_a8w4_net_ms_convert_layer_weight(self, src_hf_dir,
+                                               hf_weight_map):
+        '''infer_qqq_net_ms_convert_layer_weight'''
+        parameter_dict = {}
+        network_names = []
+        for m in self.network.parameters_and_names():
+            network_names.append(m[0])
+        no_need_split_layer = ["tok_embeddings", "norm",
+                               "routed_experts.router.dense",
+                               "routed_experts.router.e_score_correction_bias",
+                               "topk_bias"]
+        for layer_id in tqdm(range(self.start_layer, self.end_layer),
+                             desc="qkv/ffn params load"):
+            if layer_id >= 3:
+                self.process_route_ffn_weight_a8w4(
+                    src_hf_dir, layer_id, hf_weight_map, parameter_dict,
+                    "feed_forward.routed_experts.ffn")
+                self.smooth_quant_process_shared_ffn_weight(
+                    src_hf_dir, layer_id, hf_weight_map, parameter_dict,
+                    "feed_forward.shared_experts")
+
+            else:
+                self.smooth_quant_process_ffn_weight(src_hf_dir, layer_id,
+                                                     hf_weight_map,
+                                                     parameter_dict,
+                                                     "feed_forward")
+            self.smooth_quant_process_qkv_weight(src_hf_dir, layer_id,
+                                                 hf_weight_map,
+                                                 parameter_dict)
+
+            if self.is_310p:
+                self.small_cache_weight(src_hf_dir, layer_id, hf_weight_map,
+                                        parameter_dict)
+
+        skip_layer = ["feed_forward.routed_experts.ffn",
+                      "feed_forward.shared_experts", "feed_forward.w",
+                      "attention.kv2l", "attention.q2l", "attention.qkv"]
+
+        for param_name, _ in tqdm(hf_weight_map.items(),
+                                  desc="remaining params load"):
+            if param_name not in network_names:
+                continue
+
+            if any([name in param_name for name in skip_layer]):
+                continue
+
+            value, is_int4 = self.infer_a8w4_get_value(param_name,
+                                                       src_hf_dir,
+                                                       hf_weight_map,
+                                                       no_need_split_layer)
+            dst_dtype = convert_np_to_ms_dtype(value)
+
+            if is_int4:
+                parameter_dict[param_name] = ms.Parameter(ms.Tensor(
+                    value, dtype=dtype.qint4x2),
+                    name=param_name, requires_grad=False)
+            else:
+                parameter_dict[param_name] = ms.Parameter(ms.Tensor(
+                    value, dtype=dst_dtype),
+                    name=param_name, requires_grad=False)
+
+        param_not_load, ckpt_not_load = ms.load_param_into_net(
+            self.network, parameter_dict)
+        print(f"a8w4 param_not_load:{param_not_load}")
+        print(f"a8w4 ckpt_not_load:{ckpt_not_load}")
+
     def load_safetensors_shard(self, src_hf_dir, is_mtp_model=False):
         """deepseek load safetensors and shard """
         rank_id = get_rank()
@@ -2371,7 +2673,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         quantization_config = self.config.model.model_config.quantization_config
         quant_method = (quantization_config.quant_method
                         if quantization_config else None)
-        support_quant_method = ["gptq-pergroup", "smoothquant", "osl"]
+        support_quant_method = ["gptq-pergroup", "smoothquant", "osl", "a8w4"]
         if not quant_method or (quant_method not in support_quant_method) and \
                 not is_mtp_model:
             self.infer_convert_outer_weight(src_hf_dir, hf_weight_map)
@@ -2386,6 +2688,10 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             return
         if quant_method and quant_method == "osl":
             self.infer_smooth_quant_net_ms_convert_layer_weight(
+                src_hf_dir, self.num_layers, hf_weight_map)
+            return
+        if quant_method and quant_method == "a8w4":
+            self.infer_a8w4_net_ms_convert_layer_weight(
                 src_hf_dir, self.num_layers, hf_weight_map)
             return
 

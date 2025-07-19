@@ -31,9 +31,7 @@ from mindformers.parallel_core.inference.parallel_state import (
 import mindspore as ms
 from mindspore.communication.management import get_group_size, get_rank
 from safetensors import safe_open
-from vllm_mindspore.utils import atlas_inference
-
-from vllm_mindspore.utils import is_310p
+from vllm_mindspore.utils import is_310p, convert_np_to_ms_dtype
 
 
 class EPMethod(Enum):
@@ -43,25 +41,6 @@ class EPMethod(Enum):
     DEFAULT = 'default'
     ALLTOALL = 'alltoall'
     ALLGATHER = 'allgather'
-
-def convert_np_to_ms_dtype(value):
-    """convert_np_to_ms_dtype"""
-    if value.dtype == np.int8:
-        value_dtype = ms.int8
-    elif value.dtype == np.int32:
-        value_dtype = ms.int32
-    elif value.dtype == np.int64:
-        value_dtype = ms.int64
-    elif value.dtype == np.float64:
-        value_dtype = ms.float64
-    elif value.dtype == np.float32:
-        value_dtype = ms.float32
-    elif value.dtype == np.float16:
-        value_dtype = ms.float16
-    else:
-        value_dtype = ms.bfloat16
-    return value_dtype
-
 
 class BaseWeightProcessor:
     r"""
