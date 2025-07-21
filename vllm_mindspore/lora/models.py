@@ -205,7 +205,9 @@ def from_local_checkpoint(
                 f" target modules in {expected_lora_modules}"
                 f" but received {unexpected_modules}."
                 f" Please verify that the loaded LoRA module is correct")
-        tensors = torch.load(lora_bin_file_path, map_location=device)
+        tensors = torch.load(lora_bin_file_path,
+                             map_location=device,
+                             weights_only=True)
     else:
         raise ValueError(f"{lora_dir} doesn't contain tensors")
 
