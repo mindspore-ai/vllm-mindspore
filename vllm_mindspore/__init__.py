@@ -464,13 +464,6 @@ import vllm.engine.multiprocessing.engine
 
 vllm.engine.multiprocessing.engine.MQLLMEngine.cleanup = cleanup
 
-from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
-from vllm_mindspore.entrypoints.openai.serving_chat import (
-    chat_completion_stream_generator, )
-
-OpenAIServingChat.chat_completion_stream_generator = (
-    chat_completion_stream_generator)
-
 from vllm_mindspore.entrypoints.openai.tool_parsers import (
     deepseekv3_tool_parser, )
 

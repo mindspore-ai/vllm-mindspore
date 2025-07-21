@@ -54,6 +54,15 @@ class AdapterProfiler:
         path = ProfilerContext().ascend_ms_dir
         shell_analyse(path)
 
+    def key_averages(self):
+
+        class _inner:
+
+            def table(self, sort_by=None):
+                return ""
+
+        return _inner()
+
 
 def wrapper_worker_init(fun):
 
