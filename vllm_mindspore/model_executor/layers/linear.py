@@ -22,6 +22,7 @@
 from abc import abstractmethod
 from typing import Optional, Union
 
+import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
 from vllm.config import get_current_vllm_config
@@ -34,6 +35,8 @@ from vllm_mindspore.distributed.communication_op import (
     ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 
 WEIGHT_LOADER_V2_SUPPORTED = [
@@ -180,7 +183,7 @@ class ColumnParallelLinear(LinearBase):
         output_sizes: list of output sizes packed into one output, like for QKV
                        the list would be size 3.
         prefix: The name of the layer in the state dict, including all parents
-                        (e.g. model.layers.0.qkv_proj) 
+                        (e.g. model.layers.0.qkv_proj)
     """
 
     def __init__(
@@ -263,21 +266,21 @@ class ColumnParallelLinear(LinearBase):
             return output
         return output, output_bias
 
-    def weight_loader(self, param: Parameter, loaded_weight: Tensor):
+    def weight_loader(self, param, loaded_weight):
         tp_rank = get_tensor_model_parallel_rank()
         output_dim = getattr(param, "output_dim", None)
+        shard_size = self.output_size_per_partition
+        start_idx = tp_rank * shard_size
+        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                            start_idx, shard_size)
 
-        if output_dim is not None:
-            shard_size = param.shape[output_dim]
-            start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                                 shard_size).contiguous()
-
+        # Special case for loading scales off disk, which often do not
+        # have a shape (such as in the case of AutoFP8).
         if len(loaded_weight.shape) == 0:
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        param.set_data(loaded_weight)
+        param.set_data(ms.from_numpy(loaded_weight))
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -327,29 +330,27 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                          prefix=prefix,
                          return_bias=return_bias)
 
-
-# type: ignore[override]
-
     def weight_loader(self,
-                      param: Parameter,
-                      loaded_weight: Tensor,
+                      param,
+                      loaded_weight,
                       loaded_shard_id: Optional[int] = None):
-        param_data = param.data
         output_dim = getattr(param, "output_dim", None)
         tp_rank = get_tensor_model_parallel_rank()
         tp_size = get_tensor_model_parallel_world_size()
-        if output_dim is not None and loaded_shard_id is not None:
+        shard_size = 0
+        shard_offset = 0
+        if loaded_shard_id is not None:
             assert loaded_shard_id < len(self.output_sizes)
             shard_offset = sum(self.output_sizes[:loaded_shard_id]) // tp_size
             shard_size = self.output_sizes[loaded_shard_id] // tp_size
-            param_data = param.data
-            param_data = param_data.narrow(output_dim, shard_offset,
-                                           shard_size)
-            start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                                 shard_size).contiguous()
-            assert param_data.shape == loaded_weight.shape
-            param[shard_offset:shard_offset + shard_size, :] = loaded_weight
+
+        start_idx = tp_rank * shard_size
+        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                            start_idx, shard_size)
+
+        assert loaded_weight.shape == (shard_size, param.shape[1])
+        param[shard_offset:shard_offset +
+              shard_size, :] = ms.from_numpy(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -427,19 +428,13 @@ class QKVParallelLinear(ColumnParallelLinear):
                          prefix=prefix,
                          return_bias=return_bias)
 
-
-# type: ignore[override]
-
     def weight_loader(self,
-                      param: Parameter,
-                      loaded_weight: Tensor,
+                      param,
+                      loaded_weight,
                       loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
         tp_rank = get_tensor_model_parallel_rank()
         assert loaded_shard_id in ["q", "k", "v"]
-        # If output dim is defined, use the default loading process.
-        # if output_dim is not None:
-        param_data = param.data
         if loaded_shard_id == "q":
             shard_offset = 0
             shard_size = self.num_heads * self.head_size
@@ -451,21 +446,20 @@ class QKVParallelLinear(ColumnParallelLinear):
                             self.num_kv_heads) * self.head_size
             shard_size = self.num_kv_heads * self.head_size
 
-        param_data = param_data.narrow(output_dim, shard_offset, shard_size)
         if loaded_shard_id == "q":
             shard_id = tp_rank
         else:
             shard_id = tp_rank // self.num_kv_head_replicas
         start_idx = shard_id * shard_size
+        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                            start_idx, shard_size)
+        loaded_weight = ms.from_numpy(loaded_weight)
 
-        loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                             shard_size).contiguous()
-        assert param_data.shape == loaded_weight.shape
         if param.name.endswith("weight"):
-            self.weight[shard_offset:shard_offset +
-                        shard_size, :] = loaded_weight
+            assert loaded_weight.shape == (shard_size, param.shape[1])
         if param.name.endswith("bias"):
-            self.bias[shard_offset:shard_offset + shard_size] = loaded_weight
+            assert loaded_weight.shape == (shard_size, )
+        param[shard_offset:shard_offset + shard_size] = loaded_weight
 
 
 class RowParallelLinear(LinearBase):
@@ -587,14 +581,15 @@ class RowParallelLinear(LinearBase):
     def weight_loader(self, param, loaded_weight):
         tp_rank = get_tensor_model_parallel_rank()
         input_dim = getattr(param, "input_dim", None)
-        is_sharded_weight = getattr(param, "is_sharded_weight", False)
-        is_sharded_weight = is_sharded_weight
-        if input_dim is not None and not is_sharded_weight:
-            shard_size = param.shape[input_dim]
-            start_idx = tp_rank * shard_size
-            loaded_weight = loaded_weight.narrow(input_dim, start_idx,
-                                                 shard_size).contiguous()
+        shard_size = self.input_size_per_partition
+        start_idx = tp_rank * shard_size
+        loaded_weight = split_loaded_weight(loaded_weight, input_dim,
+                                            start_idx, shard_size)
+
+        # Special case for loading scales off disk, which often do not
+        # have a shape (such as in the case of AutoFP8).
         if len(loaded_weight.shape) == 0:
             loaded_weight = loaded_weight.reshape(1)
+
         assert param.shape == loaded_weight.shape
-        param.set_data(loaded_weight.contiguous())
+        param.set_data(ms.from_numpy(loaded_weight))
