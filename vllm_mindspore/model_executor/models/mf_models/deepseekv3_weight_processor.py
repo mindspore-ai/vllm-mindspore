@@ -349,6 +349,19 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_ms_name = f"{base_path}.w2._layer.matmul.weight_scale"
         w3_scale_ms_name = f"{base_path}.w3._layer.matmul.weight_scale"
 
+        if self.ep_method == EPMethod.ALLTOALL:
+            # use dispatch_quant and dequantSwiGluQuant
+            # which supports group_list to optimize performance
+            w1_ms_name = w1_ms_name.replace("._layer.weight", ".weight")
+            w2_ms_name = w2_ms_name.replace("._layer.weight", ".weight")
+            w3_ms_name = w3_ms_name.replace("._layer.weight", ".weight")
+            w1_scale_ms_name = w1_scale_ms_name.replace(
+                "._layer.matmul.weight_scale", ".weight_scale")
+            w2_scale_ms_name = w2_scale_ms_name.replace(
+                "._layer.matmul.weight_scale", ".weight_scale")
+            w3_scale_ms_name = w3_scale_ms_name.replace(
+                "._layer.matmul.weight_scale", ".weight_scale")
+
         (w1_list, w2_list, w3_list,
          w1_scale_list, w2_scale_list, w3_scale_list) = \
             self.infer_quant_process_moe(src_hf_dir, hf_weight_map, layer_id)
@@ -364,6 +377,16 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         if ffn_concat:
             # w_gate_hidden
             w_gate_hidden_name = f"{base_path}.w_gate_hidden._layer.weight"
+            # w_scale_gate_hidden
+            w_scale_gate_hidden_name = \
+                f"{base_path}.w_gate_hidden._layer.matmul.weight_scale"
+
+            if self.ep_method == EPMethod.ALLTOALL:
+                w_gate_hidden_name = w_gate_hidden_name.replace(
+                    "._layer.weight", ".weight")
+                w_scale_gate_hidden_name = w_scale_gate_hidden_name.replace(
+                    "._layer.matmul.weight_scale", ".weight_scale")
+
             w_gate_hidden_np = np.concatenate(
                 [w1_ms_stack_param, w3_ms_stack_param], axis=1)
             w_gate_hidden_param = ms.from_numpy(w_gate_hidden_np).permute(
@@ -372,14 +395,13 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 w_gate_hidden_param,
                 name=w_gate_hidden_name,
                 requires_grad=False)
-            # w_scale_gate_hidden
-            w_scale_gate_hidden_name = \
-                f"{base_path}.w_gate_hidden._layer.matmul.weight_scale"
 
             w_scale_gate_hidden_np = np.concatenate(
                 [w1_scale_ms_stack_param, w3_scale_ms_stack_param], axis=1)
+            weight_scale_dtype = (ms.bfloat16 if self.ep_method
+                                  != EPMethod.ALLTOALL else ms.float32)
             w_scale_gate_hidden_param = ms.from_numpy(
-                w_scale_gate_hidden_np).astype(ms.bfloat16)
+                w_scale_gate_hidden_np).astype(weight_scale_dtype)
             self.parameter_dict[w_scale_gate_hidden_name] = ms.Parameter(
                 w_scale_gate_hidden_param,
                 name=w_scale_gate_hidden_name,
@@ -994,19 +1016,30 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             qkv2l_quant_scale_name = f"{base_path}.quant_op.input_scale"
             qkv2l_rmsnorm_beta_name = f"{base_path}.quant_op.beta"
 
-            qkv2l_weight = np.concatenate((q2l_ms_param, kv2l_ms_param), 0)
+            if hasattr(self.config.model.model_config, "use_mla_pre"
+                       ) and self.config.model.model_config.use_mla_pre:
+                qkv2l_weight = np.concatenate((kv2l_ms_param, q2l_ms_param), 0)
+                qkv2l_bias = np.concatenate(
+                    (kv2l_quant_bias_ms_param, q2l_quant_bias_ms_param), 0)
+                qkv2l_scale = np.concatenate(
+                    (kv2l_dequant_scale_ms_param, q2l_dequant_scale_ms_param),
+                    0)
+            else:
+                qkv2l_weight = np.concatenate((q2l_ms_param, kv2l_ms_param), 0)
+                qkv2l_bias = np.concatenate(
+                    (q2l_quant_bias_ms_param, kv2l_quant_bias_ms_param), 0)
+                qkv2l_scale = np.concatenate(
+                    (q2l_dequant_scale_ms_param, kv2l_dequant_scale_ms_param),
+                    0)
+
             parameter_dict[qkv2l_weight_name] = ms.Parameter(
                 ms.Tensor(qkv2l_weight, ms.int8),
                 name=qkv2l_weight_name,
                 requires_grad=False)
-            qkv2l_bias = np.concatenate(
-                (q2l_quant_bias_ms_param, kv2l_quant_bias_ms_param), 0)
             parameter_dict[qkv2l_bias_name] = ms.Parameter(
                 ms.Tensor(qkv2l_bias, ms.int32),
                 name=qkv2l_bias_name,
                 requires_grad=False)
-            qkv2l_scale = np.concatenate(
-                (q2l_dequant_scale_ms_param, kv2l_dequant_scale_ms_param), 0)
             parameter_dict[qkv2l_scale_name] = ms.Parameter(
                 ms.Tensor(qkv2l_scale, ms.float32),
                 name=qkv2l_scale_name,
