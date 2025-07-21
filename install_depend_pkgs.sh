@@ -81,6 +81,7 @@ echo "========= Installing mindformers"
 mf_dir=mindformers-br_infer_boom
 if [ ! -d "$mf_dir" ]; then
     git clone https://gitee.com/mindspore/mindformers.git -b br_infer_boom "$mf_dir"
+    git checkout a96a0cf9a0b1e3efee819c17dcf050604caa3512
 else
     echo "The $mf_dir folder already exists and will not be re-downloaded."
 fi
