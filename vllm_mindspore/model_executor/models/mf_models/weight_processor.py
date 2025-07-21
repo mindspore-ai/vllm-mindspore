@@ -19,10 +19,12 @@ transform huggingface safetensor.
 
 import os
 from enum import Enum
-from safetensors import safe_open
-from mindspore.communication.management import get_rank, get_group_size
+
+from mindformers.parallel_core.inference.parallel_state import (
+    get_data_parallel_world_size)
 from mindformers.parallel_core.inference.utils import get_tp_world_size
-from mindformers.parallel_core.inference.parallel_state import get_data_parallel_world_size
+from mindspore.communication.management import get_group_size, get_rank
+from safetensors import safe_open
 
 
 class EPMethod(Enum):
@@ -51,12 +53,14 @@ class BaseWeightProcessor:
         self.global_group_size = get_group_size()
         self.tp_group_size = get_tp_world_size()
         self.dp_group_size = get_data_parallel_world_size()
-        self.num_router_experts = self.config.moe_config.expert_num if self.config.moe_config.expert_num else 1
+        self.num_router_experts = self.config.moe_config.expert_num if \
+                self.config.moe_config.expert_num else 1
         self.moe_ep_size = self.config.parallel_config.expert_parallel \
             if self.config.parallel_config.expert_parallel else 1
         self.moe_tp_size = self.global_group_size // self.moe_ep_size
         self.ep_method = EPMethod.DEFAULT
-        if self.dp_group_size > 1 and self.moe_ep_size == self.global_group_size:
+        if self.dp_group_size > 1\
+                and self.moe_ep_size == self.global_group_size:
             self.ep_method = EPMethod.ALLTOALL
         elif self.dp_group_size > 1:
             self.ep_method = EPMethod.ALLGATHER
@@ -80,23 +84,30 @@ class BaseWeightProcessor:
     def release_file_handles(self):
         del self.file_handles
 
-    def get_safetensor_from_file(self, hf_param_name, src_hf_dir, hf_weight_map):
+    def get_safetensor_from_file(self, hf_param_name, src_hf_dir,
+                                 hf_weight_map):
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
 
         np_data = sf_file.get_tensor(hf_param_name)
         return np_data, qint4
 
-    def get_safetensor_from_file_split_tp_group(self, hf_param_name, src_hf_dir, hf_weight_map, split_axis=0):
+    def get_safetensor_from_file_split_tp_group(self,
+                                                hf_param_name,
+                                                src_hf_dir,
+                                                hf_weight_map,
+                                                split_axis=0):
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
 
         np_data = sf_file.get_slice(hf_param_name)
@@ -117,15 +128,21 @@ class BaseWeightProcessor:
             stop = (self.tp_rank_id + 1) * split_size
             split_data = np_data[:, :, start:stop]
         else:
-            raise ValueError("split_axis:{} is not supported.".format(split_axis))
+            raise ValueError(
+                "split_axis:{} is not supported.".format(split_axis))
         return split_data, qint4
 
-    def get_safetensor_from_file_split_global_group(self, hf_param_name, src_hf_dir, hf_weight_map, split_axis=0):
+    def get_safetensor_from_file_split_global_group(self,
+                                                    hf_param_name,
+                                                    src_hf_dir,
+                                                    hf_weight_map,
+                                                    split_axis=0):
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
 
         np_data = sf_file.get_slice(hf_param_name)
@@ -146,15 +163,21 @@ class BaseWeightProcessor:
             stop = (self.global_rank_id + 1) * split_size
             split_data = np_data[:, :, start:stop]
         else:
-            raise ValueError("split_axis:{} is not supported.".format(split_axis))
+            raise ValueError(
+                "split_axis:{} is not supported.".format(split_axis))
         return split_data, qint4
 
-    def get_safetensor_from_file_split_moe_tp_group(self, hf_param_name, src_hf_dir, hf_weight_map, split_axis=0):
+    def get_safetensor_from_file_split_moe_tp_group(self,
+                                                    hf_param_name,
+                                                    src_hf_dir,
+                                                    hf_weight_map,
+                                                    split_axis=0):
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
 
         np_data = sf_file.get_slice(hf_param_name)
@@ -170,17 +193,24 @@ class BaseWeightProcessor:
             stop = (self.moe_tp_rank_id + 1) * split_size
             split_data = np_data[:, start:stop]
         else:
-            raise ValueError("split_axis:{} is not supported.".format(split_axis))
+            raise ValueError(
+                "split_axis:{} is not supported.".format(split_axis))
         return split_data, qint4
 
-    def get_routed_safetensor_3_dim(self, hf_param_name, src_hf_dir, hf_weight_map, split_ep=False, split_tp=False,
+    def get_routed_safetensor_3_dim(self,
+                                    hf_param_name,
+                                    src_hf_dir,
+                                    hf_weight_map,
+                                    split_ep=False,
+                                    split_tp=False,
                                     tp_axis=-1):
         '''get_routed_safetensor_3_dim'''
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
         if not split_tp and not split_ep:
             np_data = sf_file.get_tensor(hf_param_name)
@@ -196,24 +226,34 @@ class BaseWeightProcessor:
             split_size = shape[1] // self.moe_tp_size
             start = self.moe_tp_rank_id * split_size
             stop = (self.moe_tp_rank_id + 1) * split_size
-            split_data = np_data[self.ep_start:self.ep_stop, start:stop, :] if split_ep else np_data[:, start:stop, :]
+            split_data = np_data[
+                self.ep_start:self.ep_stop,
+                start:stop, :] if split_ep else np_data[:, start:stop, :]
         elif tp_axis == 2:
             split_size = shape[2] // self.moe_tp_size
             start = self.moe_tp_rank_id * split_size
             stop = (self.moe_tp_rank_id + 1) * split_size
-            split_data = np_data[self.ep_start:self.ep_stop, :, start:stop] if split_ep else np_data[:, :, start:stop]
+            split_data = np_data[
+                self.ep_start:self.ep_stop, :,
+                start:stop] if split_ep else np_data[:, :, start:stop]
         else:
             raise ValueError("tp_axis:{} is not supported.".format(tp_axis))
         return split_data, qint4
 
-    def get_routed_safetensor_2_dim(self, hf_param_name, src_hf_dir, hf_weight_map, split_ep=False, split_tp=False,
+    def get_routed_safetensor_2_dim(self,
+                                    hf_param_name,
+                                    src_hf_dir,
+                                    hf_weight_map,
+                                    split_ep=False,
+                                    split_tp=False,
                                     tp_axis=-1):
         '''get_moe_routed_safetensor_2_dim'''
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
         if not split_tp and not split_ep:
             np_data = sf_file.get_tensor(hf_param_name)
@@ -229,9 +269,13 @@ class BaseWeightProcessor:
             split_size = shape[1] // self.moe_tp_size
             start = self.moe_tp_rank_id * split_size
             stop = (self.moe_tp_rank_id + 1) * split_size
-            split_data = np_data[self.ep_start:self.ep_stop, start:stop] if split_ep else np_data[:, start:stop]
+            split_data = np_data[
+                self.ep_start:self.ep_stop,
+                start:stop] if split_ep else np_data[:, start:stop]
         else:
-            raise ValueError("split_tp is True but tp_axis:{} is not supported.".format(tp_axis))
+            raise ValueError(
+                "split_tp is True but tp_axis:{} is not supported.".format(
+                    tp_axis))
         return split_data, qint4
 
     def split_weight_by_rank(self, weight, split_axis=0):
@@ -250,9 +294,11 @@ class BaseWeightProcessor:
             stop = (self.tp_rank_id + 1) * split_size
             split_data = weight[:, start:stop]
         else:
-            raise ValueError("split_axis:{} is not supported.".format(split_axis))
+            raise ValueError(
+                "split_axis:{} is not supported.".format(split_axis))
         return split_data
 
     def load_safetensors_shard(self, src_hf_dir):
         """ load safetensors and shards """
-        raise NotImplementedError("load_safetensors_shard method is not implemented.")
+        raise NotImplementedError(
+            "load_safetensors_shard method is not implemented.")
