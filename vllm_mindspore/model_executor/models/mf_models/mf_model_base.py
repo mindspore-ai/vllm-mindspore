@@ -105,12 +105,14 @@ class MfModelBase(MsModelBase):
         raise NotImplementedError(
             "Function _create_network should be Implemented!")
 
+    # DLLM
     def is_decoder_task(self) -> bool:
         if self.kv_transfer_config is None:
             return False
 
         return self.kv_transfer_config.is_kv_consumer
 
+    # DLLM
     def is_prefill_task(self) -> bool:
         if self.kv_transfer_config is None:
             return False
@@ -131,6 +133,7 @@ class MfModelBase(MsModelBase):
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
 
+    # DLLM
     def connector_send_kvcache(self):
         logger.debug("reached connector_send_kvcache")
         _pynative_executor.sync()
@@ -143,6 +146,7 @@ class MfModelBase(MsModelBase):
             v_cache = kv_cache.kv_cache[forward_context.virtual_engine][1]
             maybe_save_kv_layer_to_connector(str(i), (k_cache, v_cache))
 
+    # DLLM
     def connector_wait_for_kv_layer(self):
         logger.debug("reached connector_wait_for_kv_layer")
         if not hasattr(self, 'mf_model_config'):
@@ -170,6 +174,7 @@ class MfModelBase(MsModelBase):
                 self.set_flags = True
             if kv_transfer_supported and is_v1_kv_transfer_group():
                 self.connector_send_kvcache()
+        # DLLM
         else:
             if kv_transfer_supported:
                 if is_v1_kv_transfer_group() and self.is_prefill_task():

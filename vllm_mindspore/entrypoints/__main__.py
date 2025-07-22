@@ -25,6 +25,9 @@ from pathlib import Path
 _original_run_api_server_worker_proc = None
 
 
+# DLLM
+# use monkey patch to add "import vllm_mindspore"
+# avoid no initialing when use multi-apiserver
 def monkey_patch_server_run_api_server_worker_proc(*arg, **kwargs):
     import vllm_mindspore
     assert _original_run_api_server_worker_proc is not None
