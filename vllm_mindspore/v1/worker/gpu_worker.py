@@ -38,6 +38,7 @@ def init_device(self):
 
     config = get_current_vllm_config()
     if config is not None and config.parallel_config.data_parallel_size > 1:
+        # DLLM
         self.local_rank = (self.parallel_config.data_parallel_rank_local *
                            self.parallel_config.world_size + self.local_rank)
         self.device = torch.device(f"cuda:{self.local_rank}")

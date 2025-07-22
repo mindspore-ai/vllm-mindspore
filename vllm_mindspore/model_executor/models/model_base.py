@@ -101,7 +101,7 @@ class MsModelBase:
         self.is_multi_step_chunked_prefill = (self.is_multi_step
                                               and self.enable_chunked_prefill)
 
-        self.set_flags = False
+        self.set_flags: bool = False
         self.kv_caches: list[Any] = []
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,

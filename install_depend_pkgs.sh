@@ -91,9 +91,9 @@ fi
 
 
 echo "========= Installing mindspore golden-stick"
-gs_dir=gs-master
+gs_dir=gs-develop
 if [ ! -d "$gs_dir" ]; then
-    git clone https://gitee.com/mindspore/golden-stick.git  "$gs_dir"
+    git clone https://gitee.com/mindspore/golden-stick.git -b develop "$gs_dir"
 else
     echo "The $gs_dir folder already exists and will not be re-downloaded."
 fi
