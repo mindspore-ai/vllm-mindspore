@@ -57,6 +57,7 @@ from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
 from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
 
 with contextlib.suppress(ImportError):
+    # DLLM
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
     from vllm.attention.layer import maybe_save_kv_layer_to_connector
 
@@ -192,6 +193,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
             key_cache.append(k_cache)
         return mutable(key_cache), None
 
+    # DLLM
     def connector_send_kvcache(self):
         logger.debug("reached deepseek_v3 connector_send_kvcache")
         _pynative_executor.sync()

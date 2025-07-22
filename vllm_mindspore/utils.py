@@ -183,14 +183,20 @@ def is_mindone_model_backend():
             == vllmModelBackendEnum.MIND_ONE)
 
 
+# DLLM
 def register_connector():
     try:
         from vllm.distributed.kv_transfer.kv_connector.factory import (
             KVConnectorFactory)
 
+        # use D2H for KVtransfer
         KVConnectorFactory.register_connector(
             "DLLMDsConnector", "dllm.dkvc.v1.dllm_ds_connector",
             "DLLMDsConnector")
+        # use D2D for KVtransfer
+        KVConnectorFactory.register_connector(
+            "DLLMDsD2DConnector", "dllm.dkvc.v1.dllm_ds_d2d_connector",
+            "DLLMDsD2DConnector")
     except:  # noqa: E722
         pass
 
