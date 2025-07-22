@@ -155,14 +155,23 @@ void GraphExecutor::AddTensor(tensor::DATensor *tensor) {
   tensor::AddTensor(graph_, tensor);
 }
 
+// Add tensor list to tensor.
+void GraphExecutor::AddTensorList(DATensor *tensor, size_t len) {
+  LOG_OUT << "Add tensor list";
+  CHECK_IF_NULL(context_);
+  tensor->type = tensor::Type_Tensor;
+  tensor->dim = 1;
+  tensor->shape[0] = len;
+  auto **tensorList = tensor::NewDATensorList(context_, len);
+  tensor->data = static_cast<void *>(tensorList);
+}
+
 // Add operation result tensor.
 DATensor *GraphExecutor::AddTensor(ops::Op op,
-                                   const std::vector<DATensor *> &inputs,
-                                   size_t outputSize) {
+                                   const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
   auto tensorSize = inputs.size();
   LOG_OUT << "tensor input size: " << tensorSize;
-  LOG_OUT << "tensor output size: " << outputSize;
   CHECK_IF_FAIL(tensorSize <= DA_TENSOR_MAX_INPUT);
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_);
@@ -171,13 +180,6 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
   for (size_t i = 0; i < inputs.size(); ++i) {
     tensor->input[i] = inputs[i];
     ++tensor->inputSize;
-  }
-  if (outputSize > 1) {
-    tensor->type = tensor::Type_Tensor;
-    tensor->dim = 1;
-    tensor->shape[0] = outputSize;
-    auto **tensorList = tensor::NewDATensorList(context_, outputSize);
-    tensor->data = static_cast<void *>(tensorList);
   }
   CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
