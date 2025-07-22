@@ -6,7 +6,7 @@ import torch.distributed
 from torch.distributed import ProcessGroup
 from vllm.distributed.parallel_state import TensorMetadata, _split_tensor_dict
 
-from vllm_mindspore.utils import atlas_inference
+from vllm_mindspore.utils import is_310p
 
 
 def gc_broadcast_tensor_dict(
@@ -23,7 +23,7 @@ def gc_broadcast_tensor_dict(
     if (not torch.distributed.is_initialized() or self.world_size == 1):
         return tensor_dict
 
-    if not atlas_inference():
+    if not is_310p():
         group = self.device_group
     metadata_group = self.cpu_group
     assert src < self.world_size, f"Invalid src rank ({src})"

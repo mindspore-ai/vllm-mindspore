@@ -27,7 +27,7 @@ from mindspore import Parameter
 from safetensors import safe_open
 from tqdm.auto import tqdm
 
-from vllm_mindspore.utils import atlas_inference
+from vllm_mindspore.utils import is_310p
 from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
                                                            enable_tqdm)
 
@@ -72,7 +72,7 @@ def safetensors_weights_iterator(
                 # TODO： use slice
                 x = f.get_tensor(name)
                 x = x.astype(np.float16) \
-                    if (str(x.dtype) == 'bfloat16' and atlas_inference()) else x
+                    if (str(x.dtype) == 'bfloat16' and is_310p()) else x
                 yield name, ms.tensor(x)
 
 

@@ -251,7 +251,7 @@ def check_ready():
         "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
         "FlashAttentionScore,PagedAttention",
     }
-    if atlas_inference():
+    if is_310p():
         default_env["MS_ENABLE_INTERNAL_BOOST"] = "off"
     env_setup(default_env)
 
@@ -422,25 +422,3 @@ def is_version_ge(current_version, base_version):
         if int(x) != int(y):
             return int(x) >= int(y)
     return True
-
-
-def get_ascend_soc_version():
-    """Get ascend soc version."""
-    if is_version_ge(ms.__version__, "2.2.0"):
-        from mindspore._c_expression import MSContext
-        return MSContext.get_instance().get_ascend_soc_version()
-    ascend_chip_type = os.getenv("ASCEND_CHIP_TYPE", "UNSET")
-    if ascend_chip_type not in ["910a", "910b", "UNSET"]:
-        raise OSError(f"ASCEND_CHIP_TYPE should be in ['910a', '910b'], "
-                      f"but get {ascend_chip_type}")
-    if ascend_chip_type == "UNSET":
-        logger.info(
-            "Environment variables need to be set manually to obtain the chip "
-            "type, which can be set as follows: \n"
-            "For Atlas 800, run 'export ASCEND_CHIP_TYPE=910a' "
-            "before the program runs.\n"
-            "For Atlas 800T A2, run 'export ASCEND_CHIP_TYPE=910b' "
-            "before the program runs.\n"
-            "If you need to get chip information automatically, "
-            "MindSpore 2.2 and above is recommended")
-    return ascend_chip_type

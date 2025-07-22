@@ -35,8 +35,8 @@ from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
-from vllm_mindspore.utils import (FORMAT_TYPE, atlas_inference, get_dtype_size,
-                                  get_valid_dtype)
+from vllm_mindspore.utils import (FORMAT_TYPE, get_dtype_size, get_valid_dtype,
+                                  is_310p)
 
 logger = init_logger(__name__)
 
@@ -286,7 +286,7 @@ def _reshape_kv_cache_tensors(
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
                     kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
-                if atlas_inference():
+                if is_310p():
                     *dims, second_last, last = kv_cache_shape
                     kv_cache_shape = (*dims, second_last * last)
                 try:
@@ -311,7 +311,7 @@ def _reshape_kv_cache_tensors(
                 for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
                     cache_block = kv_cache_raw_tensor.view(
                         kv_cache_shape[1:]).permute(*inv_order[1:])
-                    if atlas_inference():
+                    if is_310p():
                         from mindspore.common.api import _pynative_executor
                         cache_block_nz = ops.auto_generate.format_cast(
                             cache_block, FORMAT_TYPE['nz'])

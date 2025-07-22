@@ -30,7 +30,7 @@ from mindformers.parallel_core.inference.parallel_state import (
 from mindspore.communication.management import get_group_size, get_rank
 from safetensors import safe_open
 
-from vllm_mindspore.utils import atlas_inference
+from vllm_mindspore.utils import is_310p
 
 
 class EPMethod(Enum):
@@ -72,7 +72,7 @@ class BaseWeightProcessor:
 
     def __init__(self, config, network, is_quant, vllm_config):
         self.vllm_config = vllm_config
-        self.is_atlas_inference = atlas_inference()
+        self.is_310p = is_310p()
         self.config = config
         self.network = network
         self.is_quant = is_quant
@@ -127,7 +127,7 @@ class BaseWeightProcessor:
 
         np_data = sf_file.get_tensor(hf_param_name)
         data_dtype = convert_np_to_ms_dtype(np_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             np_data = np_data.astype(np.float32).astype(np.float16)
         return np_data, qint4
 
@@ -165,7 +165,7 @@ class BaseWeightProcessor:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
@@ -203,7 +203,7 @@ class BaseWeightProcessor:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
@@ -241,7 +241,7 @@ class BaseWeightProcessor:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
@@ -274,7 +274,7 @@ class BaseWeightProcessor:
             raise ValueError(
                 "split_axis:{} is not supported.".format(split_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
@@ -320,7 +320,7 @@ class BaseWeightProcessor:
         else:
             raise ValueError("tp_axis:{} is not supported.".format(tp_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
@@ -361,7 +361,7 @@ class BaseWeightProcessor:
                 "split_tp is True but tp_axis:{} is not supported.".format(
                     tp_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
-        if self.is_atlas_inference and data_dtype == ms.bfloat16:
+        if self.is_310p and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 

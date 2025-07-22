@@ -33,8 +33,7 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.utils import (FORMAT_TYPE, STR_DTYPE_TO_MS_DTYPE,
-                                  atlas_inference)
+from vllm_mindspore.utils import FORMAT_TYPE, STR_DTYPE_TO_MS_DTYPE, is_310p
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
@@ -47,7 +46,7 @@ class AttentionWrapper:
             vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        if atlas_inference():
+        if is_310p():
             self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
             self.kv_cache = [(
                 ops.auto_generate.format_cast(
@@ -88,13 +87,17 @@ class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        if atlas_inference():
-            self.kv_cache = [(ops.auto_generate.format_cast(
-                ms.mint.zeros(self.kv_shape, # type: ignore[misc]
-                              dtype=vllm_config.model_config.dtype),
-                FORMAT_TYPE['nz'],
-            ), ) for _ in range(
-                vllm_config.parallel_config.pipeline_parallel_size)]
+        if is_310p():
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        ms.mint.zeros(
+                            self.kv_shape,  # type: ignore[misc]
+                            dtype=vllm_config.model_config.dtype),
+                        FORMAT_TYPE['nz'],
+                    ), ) for _ in range(
+                        vllm_config.parallel_config.pipeline_parallel_size)
+            ]
         else:
             self.kv_cache = [
                 (
@@ -438,7 +441,7 @@ class NativeModel(MsModelBase):
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
         kv_cache_shape = (None, block_size, num_kv_heads * head_size) \
-            if atlas_inference() else (None, block_size, num_kv_heads,
+            if is_310p() else (None, block_size, num_kv_heads,
                                        head_size)
 
         kv_cache_dtype = (self.model_config.dtype

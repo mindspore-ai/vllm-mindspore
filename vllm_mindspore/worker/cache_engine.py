@@ -26,7 +26,7 @@ from mindspore import mutable, mint, ops
 
 from typing import List
 from vllm.logger import init_logger
-from vllm_mindspore.utils import (MsKVCache, get_valid_dtype, atlas_inference,
+from vllm_mindspore.utils import (MsKVCache, get_valid_dtype, is_310p,
                                   FORMAT_TYPE)
 
 logger = init_logger(__name__)
@@ -35,7 +35,7 @@ logger = init_logger(__name__)
 def create_block(shape, dtype, name=None, device=None):
     from mindspore.common.api import _pynative_executor
     blocks = mint.empty(*shape, dtype=dtype, device=device)
-    if device == "Ascend" and atlas_inference():
+    if device == "Ascend" and is_310p():
         blocks_nz = ops.auto_generate.format_cast(blocks, FORMAT_TYPE['nz'])
         _pynative_executor.sync()
         import gc
@@ -54,7 +54,7 @@ def ms_allocate_kv_cache(
     """Allocates KV cache on the specified device."""
     kv_cache_shape = self.attn_backend.get_kv_cache_shape(
         num_blocks, self.block_size, self.num_kv_heads, self.head_size)
-    if atlas_inference():
+    if is_310p():
         *dims, second_last, last = kv_cache_shape
         kv_cache_shape = (*dims, second_last * last)
     kv_cache: List[MsKVCache] = []

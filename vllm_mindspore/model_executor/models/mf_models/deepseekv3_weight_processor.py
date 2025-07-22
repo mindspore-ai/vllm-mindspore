@@ -373,7 +373,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_ms_stack_param = np.stack(w2_scale_list, axis=0)
         w3_scale_ms_stack_param = np.stack(w3_scale_list, axis=0)
 
-        if self.is_atlas_inference:
+        if self.is_310p:
             weight_scale_dtype = ms.float32
             weight_concat_axis = 2
             w1_ms_stack_param = w1_ms_stack_param.transpose(0, 2, 1)
@@ -408,7 +408,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
             w_scale_gate_hidden_np = np.concatenate(
                 [w1_scale_ms_stack_param, w3_scale_ms_stack_param], axis=1)
-            if not self.is_atlas_inference:
+            if not self.is_310p:
                 weight_scale_dtype = (ms.bfloat16 if self.ep_method
                                       != EPMethod.ALLTOALL else ms.float32)
             w_scale_gate_hidden_param = ms.from_numpy(
@@ -523,10 +523,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_ms_param = w2_scale_ms_param.squeeze(axis=-1)
         w3_scale_ms_param = w3_scale_ms_param.squeeze(axis=-1)
 
-        if self.is_atlas_inference:
-            weight_scale_type = ms.float32
-        else:
-            weight_scale_type = ms.bfloat16
+        weight_scale_type = ms.float32 if self.is_310p else ms.bfloat16
 
         if ffn_concat:
             base_path2 = f"model.layers.{layer_id}.feed_forward.shared_experts"
@@ -617,10 +614,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         w2_scale_ms_param = w2_scale_ms_param.squeeze(axis=-1)
         w3_scale_ms_param = w3_scale_ms_param.squeeze(axis=-1)
 
-        if self.is_atlas_inference:
-            weight_scale_type = ms.float32
-        else:
-            weight_scale_type = ms.bfloat16
+        weight_scale_type = ms.float32 if self.is_310p else ms.bfloat16
 
         if ffn_concat:
             base_path = f"model.layers.{layer_id}.feed_forward.w_gate_hidden"
@@ -811,7 +805,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             dequant_scale_ms_param = self.split_weight_by_rank(
                 dequant_scale_ms_param, split_axis=0)
 
-        if self.is_atlas_inference:
+        if self.is_310p:
             dequant_scale_ms_param = dequant_scale_ms_param.astype(
                 np.float32).view(np.int32).astype(np.int64)
             dequant_scale_dtype = ms.int64
@@ -942,7 +936,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             name=name_v,
             requires_grad=False)
 
-        if self.is_atlas_inference:
+        if self.is_310p:
             qabsorb_param = value_k_nope.copy()
             qabsorb_param = qabsorb_param.reshape(-1, 128, 512)
             qabsorb_matmul_name = \
@@ -1072,7 +1066,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         l2q_proj_bias_ms_param, _ = self.get_safetensor_from_file(
             l2q_proj_bias_hf_name, src_hf_dir, hf_weight_map)
 
-        if self.is_atlas_inference:
+        if self.is_310p:
             quant_scale_dtype = ms.float16
             deq_scale_dtype = ms.int64
             beta_dtype = ms.float16

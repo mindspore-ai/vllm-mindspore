@@ -46,7 +46,7 @@ from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
-from vllm_mindspore.utils import atlas_inference, FORMAT_TYPE
+from vllm_mindspore.utils import is_310p, FORMAT_TYPE
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SwiGLU
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
@@ -422,7 +422,7 @@ class Qwen2Model(nn.Cell):
                     loaded_params.add(name)
 
         def adjust_weight(params_dict):
-            if not atlas_inference():
+            if not is_310p():
                 return
 
             target_keywords = [
@@ -440,7 +440,7 @@ class Qwen2Model(nn.Cell):
                     ms.runtime.synchronize()
                     param.set_data(cast_weight)
 
-        if atlas_inference():
+        if is_310p():
             ms.runtime.synchronize()
             adjust_weight(params_dict)
             ms.runtime.synchronize()
