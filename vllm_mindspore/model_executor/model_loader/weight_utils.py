@@ -22,11 +22,12 @@ from collections.abc import Generator
 from typing import Any
 
 import mindspore as ms
+import numpy as np
 from mindspore import Parameter
 from safetensors import safe_open
 from tqdm.auto import tqdm
+
 from vllm_mindspore.utils import atlas_inference
-import numpy as np
 from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
                                                            enable_tqdm)
 

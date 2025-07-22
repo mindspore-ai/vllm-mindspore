@@ -169,7 +169,8 @@ class MfModelBase(MsModelBase):
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
         model_inputs["hidden_states"] = None
         if intermediate_tensors is not None:
-            model_inputs["hidden_states"] = intermediate_tensors["hidden_states"]
+            model_inputs["hidden_states"] = \
+                intermediate_tensors["hidden_states"]
 
         if is_prefill:
             self.network.phase = "prefill"

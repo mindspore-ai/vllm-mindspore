@@ -35,7 +35,8 @@ from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
-from vllm_mindspore.utils import get_dtype_size, get_valid_dtype, atlas_inference, FORMAT_TYPE
+from vllm_mindspore.utils import (FORMAT_TYPE, atlas_inference, get_dtype_size,
+                                  get_valid_dtype)
 
 logger = init_logger(__name__)
 
@@ -312,7 +313,8 @@ def _reshape_kv_cache_tensors(
                         kv_cache_shape[1:]).permute(*inv_order[1:])
                     if atlas_inference():
                         from mindspore.common.api import _pynative_executor
-                        cache_block_nz = ops.auto_generate.format_cast(cache_block, FORMAT_TYPE['nz'])
+                        cache_block_nz = ops.auto_generate.format_cast(
+                            cache_block, FORMAT_TYPE['nz'])
                         _pynative_executor.sync()
                         import gc
                         del cache_block

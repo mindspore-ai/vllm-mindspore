@@ -140,8 +140,8 @@ def _dummy_run(self,
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_shape = [0, block_size, num_kv_heads * head_size] if atlas_inference() else \
-                   [0, block_size, num_kv_heads, head_size]
+        kv_shape = [0, block_size, num_kv_heads * head_size] \
+            if atlas_inference() else [0, block_size, num_kv_heads, head_size]
         kv_caches = mutable([
             mutable(
                 (

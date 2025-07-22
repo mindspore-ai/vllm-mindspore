@@ -22,12 +22,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
-import numpy as np
-
 import mindspore as ms
+import numpy as np
+import vllm.envs as envs
 from mindspore import mint, ops
 from vllm.sequence import IntermediateTensors
-import vllm.envs as envs
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
 from vllm_mindspore.utils import get_valid_dtype
@@ -267,6 +266,7 @@ def merge_multimodal_embeddings(
         (input_ids == placeholder_token_id),
         multimodal_embeddings,
     )
+
 
 def get_mf_offset(model_config):
     """ get mindformers offset from vllm style"""

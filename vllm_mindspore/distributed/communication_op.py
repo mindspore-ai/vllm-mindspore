@@ -21,19 +21,23 @@
 Implement a unified communication interface for both graph and pynative mode.
 """
 
-from typing import Any, Dict, Optional, Union
-import torch
+from typing import Any, Optional, Union
 
+import torch
 from mindspore import nn, ops
 from vllm.distributed.parallel_state import (
     get_tensor_model_parallel_world_size, get_tp_group)
 
-def cpu_broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[torch.Tensor,
-                                                                Any]]] = None,
-                          src: int = 0):
+
+def cpu_broadcast_tensor_dict(tensor_dict: Optional[dict[Any,
+                                                         Union[torch.Tensor,
+                                                               Any]]] = None,
+                              src: int = 0):
     if not torch.distributed.is_initialized():
         return tensor_dict
-    return get_tp_group().broadcast_tensor_dict(tensor_dict, src, group=get_tp_group().cpu_group)
+    return get_tp_group().broadcast_tensor_dict(tensor_dict,
+                                                src,
+                                                group=get_tp_group().cpu_group)
 
 
 class ReduceFromModelParallelRegion(nn.Cell):

@@ -301,13 +301,18 @@ vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
 import vllm.distributed.communication_op
 import vllm.worker.worker_base
-from vllm_mindspore.distributed.communication_op import cpu_broadcast_tensor_dict
-vllm.distributed.communication_op.broadcast_tensor_dict = cpu_broadcast_tensor_dict
+from vllm_mindspore.distributed.communication_op import (
+    cpu_broadcast_tensor_dict, )
+
+vllm.distributed.communication_op.broadcast_tensor_dict = (
+    cpu_broadcast_tensor_dict)
 vllm.worker.worker_base.broadcast_tensor_dict = cpu_broadcast_tensor_dict
 
 import vllm.distributed.parallel_state
 from vllm_mindspore.distributed.parallel_state import gc_broadcast_tensor_dict
-vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = gc_broadcast_tensor_dict
+
+vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = (
+    gc_broadcast_tensor_dict)
 
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor
@@ -509,4 +514,5 @@ check_ready()
 
 from vllm_mindspore.utils import view
 from mindspore import Tensor
+
 Tensor.view = view

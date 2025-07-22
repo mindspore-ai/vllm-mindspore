@@ -28,8 +28,8 @@ from mindformers.parallel_core.inference.parallel_state import (
 from mindspore import dtype
 from mindspore.communication.management import get_rank
 from tqdm import tqdm
-from vllm.logger import init_logger
 from vllm.distributed import get_pp_group, get_pp_indices
+from vllm.logger import init_logger
 
 from vllm_mindspore.model_executor.models.mf_models.weight_processor import (
     BaseWeightProcessor, EPMethod, convert_np_to_ms_dtype)
@@ -945,7 +945,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         if self.is_atlas_inference:
             qabsorb_param = value_k_nope.copy()
             qabsorb_param = qabsorb_param.reshape(-1, 128, 512)
-            qabsorb_matmul_name = f"model.layers.{layer_id}.attention.qabsorb_matmul.weight"
+            qabsorb_matmul_name = \
+                f"model.layers.{layer_id}.attention.qabsorb_matmul.weight"
             self.parameter_dict[qabsorb_matmul_name] = ms.Parameter(
                 ms.from_numpy(qabsorb_param).astype(norm_dtype),
                 name=qabsorb_matmul_name,
@@ -953,7 +954,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
             outabsorb_param = value_v.copy()
             outabsorb_param = outabsorb_param.reshape(-1, 128, 512)
-            outabsorb_matmul_name = f"model.layers.{layer_id}.attention.outabsorb_matmul.weight"
+            outabsorb_matmul_name = \
+                f"model.layers.{layer_id}.attention.outabsorb_matmul.weight"
             self.parameter_dict[outabsorb_matmul_name] = ms.Parameter(
                 ms.from_numpy(outabsorb_param).astype(norm_dtype),
                 name=outabsorb_matmul_name,
@@ -1059,10 +1061,12 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         attn_rmsnorm_beta_ms_param, _ = self.get_safetensor_from_file(
             attn_rmsnorm_beta_hf_name, src_hf_dir, hf_weight_map)
 
-        kv2l_beta_ms_name = f"model.layers.{layer_id}.attention.kv2l.quant_op.beta"
+        kv2l_beta_ms_name = \
+            f"model.layers.{layer_id}.attention.kv2l.quant_op.beta"
         kv2l_beta_ms_param = attn_rmsnorm_beta_ms_param.copy()
 
-        l2q_proj_bias_hf_name = f"model.layers.{layer_id}.self_attn.q_a_layernorm.bias"
+        l2q_proj_bias_hf_name = \
+            f"model.layers.{layer_id}.self_attn.q_a_layernorm.bias"
         l2q_proj_bias_ms_name = self.quant_convert_weight_name(
             l2q_proj_bias_hf_name)
         l2q_proj_bias_ms_param, _ = self.get_safetensor_from_file(
@@ -2393,7 +2397,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         enable_tqdm = rank_id == 0
         mtp_layers = self.config.model.model_config.num_nextn_predict_layers
-        self.start_layer = self.start_layer if not is_mtp_model else self.end_layer
+        self.start_layer = (self.start_layer
+                            if not is_mtp_model else self.end_layer)
         self.end_layer = (self.end_layer
                           if not is_mtp_model else self.end_layer + mtp_layers)
         for layer_id in tqdm(range(self.start_layer, self.end_layer),

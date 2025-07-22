@@ -18,18 +18,18 @@ transform huggingface safetensor.
 """
 
 import os
-import numpy as np
 from enum import Enum
 
+import mindspore as ms
+import numpy as np
 from mindformers.parallel_core.inference.parallel_state import (
     get_data_parallel_world_size, get_moe_expert_parallel_rank,
     get_moe_tensor_parallel_rank, get_pipeline_model_parallel_world_size,
-    get_tensor_and_data_parallel_rank,
-    get_tensor_and_data_parallel_world_size,
+    get_tensor_and_data_parallel_rank, get_tensor_and_data_parallel_world_size,
     get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size)
-import mindspore as ms
 from mindspore.communication.management import get_group_size, get_rank
 from safetensors import safe_open
+
 from vllm_mindspore.utils import atlas_inference
 
 
@@ -40,6 +40,7 @@ class EPMethod(Enum):
     DEFAULT = 'default'
     ALLTOALL = 'alltoall'
     ALLGATHER = 'allgather'
+
 
 def convert_np_to_ms_dtype(value):
     """convert_np_to_ms_dtype"""
@@ -58,6 +59,7 @@ def convert_np_to_ms_dtype(value):
     else:
         value_dtype = ms.bfloat16
     return value_dtype
+
 
 class BaseWeightProcessor:
     r"""
@@ -85,7 +87,8 @@ class BaseWeightProcessor:
                 self.config.moe_config.expert_num else 1
         self.moe_ep_size = self.config.parallel_config.expert_parallel \
             if self.config.parallel_config.expert_parallel else 1
-        self.moe_tp_size = self.global_group_size // self.moe_ep_size // self.pp_group_size
+        self.moe_tp_size = (self.global_group_size // self.moe_ep_size //
+                            self.pp_group_size)
         self.ep_method = EPMethod.DEFAULT
         if self.dp_group_size > 1\
                 and self.moe_ep_size == self.global_group_size:
@@ -166,12 +169,17 @@ class BaseWeightProcessor:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
 
-    def get_safetensor_from_file_split_tp_dp_group(self, hf_param_name, src_hf_dir, hf_weight_map, split_axis=0):
+    def get_safetensor_from_file_split_tp_dp_group(self,
+                                                   hf_param_name,
+                                                   src_hf_dir,
+                                                   hf_weight_map,
+                                                   split_axis=0):
         safetensor_file = hf_weight_map[hf_param_name]
         filename = os.path.join(src_hf_dir, safetensor_file)
         sf_file = self.get_file_handles(filename)
         qint4 = False
-        if sf_file.metadata() is not None and hf_param_name in sf_file.metadata().keys():
+        if sf_file.metadata(
+        ) is not None and hf_param_name in sf_file.metadata():
             qint4 = True
 
         np_data = sf_file.get_slice(hf_param_name)
@@ -192,12 +200,12 @@ class BaseWeightProcessor:
             stop = (self.tp_dp_gourp_id + 1) * split_size
             split_data = np_data[:, :, start:stop]
         else:
-            raise ValueError("split_axis:{} is not supported.".format(split_axis))
+            raise ValueError(
+                "split_axis:{} is not supported.".format(split_axis))
         data_dtype = convert_np_to_ms_dtype(split_data)
         if self.is_atlas_inference and data_dtype == ms.bfloat16:
             split_data = split_data.astype(np.float32).astype(np.float16)
         return split_data, qint4
-
 
     def get_safetensor_from_file_split_global_group(self,
                                                     hf_param_name,

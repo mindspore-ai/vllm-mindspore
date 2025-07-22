@@ -35,8 +35,8 @@ else:
 
 import mindspore as ms
 from mindspore import dtype as mstype
-from mindspore.common.initializer import Zero
 from mindspore._c_expression import typing
+from mindspore.common.initializer import Zero
 from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
                         MemorySnapshot, T, make_ndarray_with_pad)
@@ -60,6 +60,7 @@ STR_DTYPE_TO_MS_DTYPE = {
 FORMAT_TYPE = {
     "nz": 29,
 }
+
 
 def get_valid_dtype(dtype):
     if isinstance(dtype, str):
@@ -241,6 +242,32 @@ def is_310p():
     return device in ['310p', 'ascend310p']
 
 
+def check_ready():
+    from mindspore import set_context
+
+    # Common environment variables of predict.
+    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
+    default_env = {
+        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
+        "FlashAttentionScore,PagedAttention",
+    }
+    if atlas_inference():
+        default_env["MS_ENABLE_INTERNAL_BOOST"] = "off"
+    env_setup(default_env)
+
+    if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
+        set_context(
+            mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
+
+    if is_mindformers_model_backend():
+        logger.info("Run with Mindformers backend!")
+    elif is_mindone_model_backend():
+        logger.info("Run with MindONE backend!")
+    else:
+        logger.info("Run with native model backend!")
+    register_connector()
+
+
 def convert_np_to_ms_dtype(value):
     """convert_np_to_ms_dtype"""
     if value.dtype == np.int8:
@@ -349,14 +376,17 @@ def view(self, *shape_or_dtype):
     if len(shape_or_dtype) == 1 and isinstance(shape_or_dtype[0], typing.Type):
         target_dtype = shape_or_dtype[0]
         ori_shape = self.shape
-        target_shape = (-1,)
+        target_shape = (-1, )
         if len(ori_shape) > 1:
             target_shape = ori_shape[:-1] + target_shape
-        out = np.frombuffer(self.numpy(), torch.ops.creation._TypeDict.get(target_dtype, np.float32))
+        out = np.frombuffer(
+            self.numpy(),
+            torch.ops.creation._TypeDict.get(target_dtype, np.float32))
         if not out.flags.aligned:
             out = np.require(out, requirements=["ALIGNED"])
         if target_dtype == ms.bfloat16:
-            return ms.Tensor.from_numpy(out.astype(np.float32)).astype(target_dtype).reshape(target_shape)
+            return ms.Tensor.from_numpy(out.astype(
+                np.float32)).astype(target_dtype).reshape(target_shape)
         return ms.Tensor.from_numpy(out).reshape(target_shape)
     result = []
     if type(shape_or_dtype) is tuple:
@@ -375,19 +405,24 @@ def view(self, *shape_or_dtype):
 def is_version_ge(current_version, base_version):
     """
         return current_version >= base_version.
-        Check whether the current version is higher than or equal to the base version.
+        Check whether the current version is higher than 
+        or equal to the base version.
         for current_version: 1.8.1, base_version: 1.11.0, it return False.
     """
     version_split_char = '.'
-    if version_split_char not in base_version or version_split_char not in current_version:
-        raise ValueError("The version string will contain the `.`."
-                         "For example, current_version 1.8.1， base_version: 1.11.0.")
-    for x, y in zip(current_version.split(version_split_char), base_version.split(version_split_char)):
+    if version_split_char not in base_version or version_split_char \
+        not in current_version:
+        raise ValueError(
+            "The version string will contain the `.`."
+            "For example, current_version 1.8.1， base_version: 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char),
+                    base_version.split(version_split_char)):
         if not x.isdigit() or not y.isdigit():
             continue
         if int(x) != int(y):
             return int(x) >= int(y)
     return True
+
 
 def get_ascend_soc_version():
     """Get ascend soc version."""
@@ -396,40 +431,16 @@ def get_ascend_soc_version():
         return MSContext.get_instance().get_ascend_soc_version()
     ascend_chip_type = os.getenv("ASCEND_CHIP_TYPE", "UNSET")
     if ascend_chip_type not in ["910a", "910b", "UNSET"]:
-        raise EnvironmentError(f"ASCEND_CHIP_TYPE should be in ['910a', '910b'],but get {ascend_chip_type}")
+        raise OSError(f"ASCEND_CHIP_TYPE should be in ['910a', '910b'], "
+                      f"but get {ascend_chip_type}")
     if ascend_chip_type == "UNSET":
-        logger.info("Environment variables need to be set manually to obtain the chip type,"
-                    "which can be set as follows: \n"
-                    "For Atlas 800, run 'export ASCEND_CHIP_TYPE=910a' before the program runs.\n"
-                    "For Atlas 800T A2, run 'export ASCEND_CHIP_TYPE=910b' before the program runs.\n"
-                    "If you need to get chip information automatically, MindSpore 2.2 and above is recommended")
+        logger.info(
+            "Environment variables need to be set manually to obtain the chip "
+            "type, which can be set as follows: \n"
+            "For Atlas 800, run 'export ASCEND_CHIP_TYPE=910a' "
+            "before the program runs.\n"
+            "For Atlas 800T A2, run 'export ASCEND_CHIP_TYPE=910b' "
+            "before the program runs.\n"
+            "If you need to get chip information automatically, "
+            "MindSpore 2.2 and above is recommended")
     return ascend_chip_type
-
-def atlas_inference():
-    device = get_ascend_soc_version()
-    return device in ['310p', 'ascend310p']
-
-def check_ready():
-    from mindspore import set_context
-
-    # Common environment variables of predict.
-    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
-    default_env = {
-        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
-        "FlashAttentionScore,PagedAttention",
-    }
-    if atlas_inference():
-        default_env["MS_ENABLE_INTERNAL_BOOST"] = "off"
-    env_setup(default_env)
-
-    if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
-        set_context(
-            mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
-
-    if is_mindformers_model_backend():
-        logger.info("Run with Mindformers backend!")
-    elif is_mindone_model_backend():
-        logger.info("Run with MindONE backend!")
-    else:
-        logger.info("Run with native model backend!")
-    register_connector()

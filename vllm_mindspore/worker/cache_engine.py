@@ -26,7 +26,8 @@ from mindspore import mutable, mint, ops
 
 from typing import List
 from vllm.logger import init_logger
-from vllm_mindspore.utils import MsKVCache, get_valid_dtype, atlas_inference, FORMAT_TYPE
+from vllm_mindspore.utils import (MsKVCache, get_valid_dtype, atlas_inference,
+                                  FORMAT_TYPE)
 
 logger = init_logger(__name__)
 

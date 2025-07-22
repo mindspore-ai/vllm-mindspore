@@ -33,9 +33,10 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.utils import (FORMAT_TYPE, STR_DTYPE_TO_MS_DTYPE,
+                                  atlas_inference)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
-from vllm_mindspore.utils import atlas_inference, FORMAT_TYPE
+
 
 class AttentionWrapper:
 
@@ -48,29 +49,28 @@ class AttentionWrapper:
         num_block = 0
         if atlas_inference():
             self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
-            self.kv_cache = [
-                (
-                    ops.auto_generate.format_cast(
-                        ms.mint.zeros(
-                            self.kv_shape, dtype=vllm_config.model_config.dtype
-                        ),
-                        FORMAT_TYPE['nz'],
-                    ),
-                    ops.auto_generate.format_cast(
-                        ms.mint.zeros(
-                            self.kv_shape, dtype=vllm_config.model_config.dtype
-                        ),
-                        FORMAT_TYPE['nz'],
-                    ),
-                )
-                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-            ]
+            self.kv_cache = [(
+                ops.auto_generate.format_cast(
+                    ms.mint.zeros(self.kv_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                    FORMAT_TYPE['nz'],
+                ),
+                ops.auto_generate.format_cast(
+                    ms.mint.zeros(self.kv_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                    FORMAT_TYPE['nz'],
+                ),
+            ) for _ in range(
+                vllm_config.parallel_config.pipeline_parallel_size)]
         else:
             self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
             self.kv_cache = [(
-                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-                ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-            ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
+                ms.mint.zeros(self.kv_shape,
+                              dtype=vllm_config.model_config.dtype),
+                ms.mint.zeros(self.kv_shape,
+                              dtype=vllm_config.model_config.dtype),
+            ) for _ in range(
+                vllm_config.parallel_config.pipeline_parallel_size)]
 
         self.attn_type = AttentionType.DECODER
 
@@ -89,24 +89,19 @@ class MLAAttentionWrapper(AttentionWrapper):
         super().__init__()
         vllm_config = get_current_vllm_config()
         if atlas_inference():
-            self.kv_cache = [
-                (
-                    ops.auto_generate.format_cast(
-                        ms.mint.zeros(
-                            self.kv_shape, dtype=vllm_config.model_config.dtype
-                        ),
-                        FORMAT_TYPE['nz'],
-                    ),
-                )
-                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-            ]
+            self.kv_cache = [(ops.auto_generate.format_cast(
+                ms.mint.zeros(self.kv_shape, # type: ignore[misc]
+                              dtype=vllm_config.model_config.dtype),
+                FORMAT_TYPE['nz'],
+            ), ) for _ in range(
+                vllm_config.parallel_config.pipeline_parallel_size)]
         else:
             self.kv_cache = [
                 (
-                ms.mint.zeros(
-                    self.kv_shape,  # type: ignore[misc]
-                     dtype=vllm_config.model_config.dtype), )
-                for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+                    ms.mint.zeros(
+                        self.kv_shape,  # type: ignore[misc]
+                        dtype=vllm_config.model_config.dtype), ) for _ in
+                range(vllm_config.parallel_config.pipeline_parallel_size)
             ]
 
 
@@ -401,15 +396,14 @@ class NativeModel(MsModelBase):
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
             max_model_len=self.model_config.max_model_len)
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
         self.kv_caches = [
-            AttentionWrapper() for _ in range(num_layers)
+            AttentionWrapper() for i in range(self.config.num_hidden_layers)
         ]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(num_layers):
+        for i in range(self.config.num_hidden_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -443,8 +437,9 @@ class NativeModel(MsModelBase):
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads * head_size) if atlas_inference() \
-            else (None, block_size, num_kv_heads, head_size)
+        kv_cache_shape = (None, block_size, num_kv_heads * head_size) \
+            if atlas_inference() else (None, block_size, num_kv_heads,
+                                       head_size)
 
         kv_cache_dtype = (self.model_config.dtype
                           if self.cache_config.cache_dtype == "auto" else
@@ -466,6 +461,8 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+        dyn_intermediate_tensors = None
+        dyn_inputs_embeds = None
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
             is_prefill, dyn_slot_mapping, dynamic_attention_mask,
@@ -480,14 +477,6 @@ class NativeModel(MsModelBase):
                        inputs_embeds):
         model_inputs, is_prefill = self.prepare_base_inputs(
             input_ids, positions)
-
-        #for pp
-        if intermediate_tensors is not None:
-            model_inputs["hidden_states"] = intermediate_tensors["hidden_states"]
-            model_inputs["residual"] = intermediate_tensors["residual"]
-        else:
-            model_inputs["hidden_states"] = None
-            model_inputs["residual"] = None
 
         # for multimodal model
         model_inputs["intermediate_tensors"] = intermediate_tensors
@@ -531,8 +520,7 @@ class NativeModel(MsModelBase):
             batch_valid_length=model_inputs["batch_valid_length"],
             q_seq_lens=model_inputs["q_seq_lens"],
             block_tables=model_inputs["block_tables"],
-            hidden_states=model_inputs["hidden_states"],
-            residual=model_inputs["residual"],
+            intermediate_tensors=model_inputs["intermediate_tensors"],
             inputs_embeds=model_inputs["inputs_embeds"],
         )  # type: ignore[misc]
 

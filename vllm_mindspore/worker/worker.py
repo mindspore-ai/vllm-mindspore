@@ -21,13 +21,13 @@ import subprocess
 
 import psutil
 import torch
+from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 from vllm.model_executor import set_random_seed
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
 
 from vllm_mindspore.utils import get_valid_dtype, is_310p
-from vllm.distributed import get_pp_group
 
 logger = init_logger(__name__)
 
@@ -213,9 +213,11 @@ def _warm_up_model(self) -> None:
         self.model_config.hf_config.model_type == "deepseek_mtp"
     intermediate_tensors = None
     if self.vllm_config.scheduler_config.is_multi_step:
-        make_empty_intermediate_tensors = self.model_runner._base_model_runner.model.make_empty_intermediate_tensors
+        make_empty_intermediate_tensors = \
+            self.model_runner._base_model_runner.model.make_empty_intermediate_tensors
     else:
-        make_empty_intermediate_tensors = self.model_runner.model.make_empty_intermediate_tensors
+        make_empty_intermediate_tensors = \
+            self.model_runner.model.make_empty_intermediate_tensors
     if not get_pp_group().is_first_rank:
         intermediate_tensors = make_empty_intermediate_tensors(
             batch_size=1,

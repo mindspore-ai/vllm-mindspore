@@ -40,12 +40,12 @@ from research.deepseek3.deepseek3_config import (DeepseekV3Config as
 from research.deepseek3.deepseek3_model_infer import DeepseekV3DecodeLayer
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import (
-    get_dp_group, get_tensor_model_parallel_world_size, get_pp_group)
+    get_dp_group, get_pp_group, get_tensor_model_parallel_world_size)
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
+from vllm.model_executor.models.interfaces import SupportsPP
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
-from vllm.model_executor.models.interfaces import SupportsPP
 from vllm_mindspore.model_executor.models.attention_mask import (
     MLALowerTriangularMask)
 
@@ -56,7 +56,8 @@ from vllm_mindspore.model_executor.models.mf_models \
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
     MfModelBase)
 from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
-from vllm_mindspore.model_executor.models.utils import make_empty_intermediate_tensors_factory
+from vllm_mindspore.model_executor.models.utils import (
+    make_empty_intermediate_tensors_factory)
 
 with contextlib.suppress(ImportError):
     # DLLM
@@ -137,10 +138,10 @@ class DeepseekV3ForCausalLM(MfModelBase, SupportsPP):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-        self.num_layers = self.model_config.get_num_layers(self.parallel_config)
+        self.num_layers = self.model_config.get_num_layers(
+            self.parallel_config)
         self.kv_caches = [
-            MLAAttentionWrapper()
-            for _ in range(self.num_layers)
+            MLAAttentionWrapper() for _ in range(self.num_layers)
         ]
         compilation_config = get_current_vllm_config().compilation_config
 
@@ -155,8 +156,10 @@ class DeepseekV3ForCausalLM(MfModelBase, SupportsPP):
         self.casual_mask = MLALowerTriangularMask(
             dtype=self.mf_model_config.compute_dtype,
             max_model_len=self.model_config.max_model_len)
-        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(keys=["hidden_states"],
-                                                                                       hidden_size=self.model_config.hf_config.hidden_size)
+        self.make_empty_intermediate_tensors = \
+            make_empty_intermediate_tensors_factory(
+                keys=["hidden_states"],
+                hidden_size=self.model_config.hf_config.hidden_size)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
