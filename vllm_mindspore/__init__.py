@@ -508,6 +508,46 @@ sys.modules["vllm.entrypoints.openai.tool_parsers.deepseekv3_tool_parser"] = (
 from vllm_mindspore.entrypoints.__main__ import (
     patch_server_run_api_server_worker_proc, )
 
+from vllm_mindspore.model_executor.model_loader.utils import (
+    process_weights_after_loading)
+
+vllm.model_executor.model_loader.utils.process_weights_after_loading = (
+    process_weights_after_loading)
+vllm.model_executor.model_loader.base_loader.process_weights_after_loading = (
+    process_weights_after_loading)
+
+from vllm_mindspore.model_executor.layers.quantization import (
+    get_quantization_config)
+
+vllm.model_executor.layers.quantization.get_quantization_config = (
+    get_quantization_config)
+vllm.config.get_quantization_config = get_quantization_config
+vllm.model_executor.model_loader.weight_utils.get_quantization_config = (
+    get_quantization_config)
+
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    get_quant_config)
+
+vllm.model_executor.model_loader.weight_utils.get_quant_config = (
+    get_quant_config)
+vllm.config.get_quant_config = get_quant_config
+
+from vllm_mindspore.model_executor.layers.quantization import (
+    QuantizationMethods)
+
+vllm.model_executor.layers.quantization.QuantizationMethods = (
+    QuantizationMethods)
+
+from vllm_mindspore.engine.arg_utils import get_kwargs
+
+vllm.engine.arg_utils.get_kwargs = get_kwargs
+
+from vllm_mindspore.model_executor.model_loader.default_loader import (
+    _prepare_weights)
+from vllm.model_executor.model_loader.default_loader import DefaultModelLoader
+
+DefaultModelLoader._prepare_weights = _prepare_weights
+
 patch_server_run_api_server_worker_proc()
 
 check_ready()

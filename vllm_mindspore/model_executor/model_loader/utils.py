@@ -19,10 +19,14 @@
 # limitations under the License.
 """ utils for load model """
 import numpy as np
+import torch
 from torch import nn
+from vllm.attention import Attention
 from vllm.config import ModelConfig
 from vllm.model_executor.models import ModelRegistry
 
+from vllm_mindspore.model_executor.layers.quantization.base_config import (
+    QuantizeMethodBase)
 from vllm_mindspore.model_executor.models.registry import (
     MindSporeModelRegistry)
 
@@ -48,10 +52,12 @@ def get_ms_model_architecture(
 
     return model_cls, arch
 
+
 def convert_uint64_to_fp32(arr: np.ndarray):
     arr_fp32 = arr.view(np.float32)
     output = arr_fp32[:, :, 0::2]
     return output
+
 
 def np_int4data_pack_to_int8_3d(np_data):
     np_data = np_data.astype(np.int8)
@@ -60,6 +66,7 @@ def np_int4data_pack_to_int8_3d(np_data):
     np_data[::, ::, 1::2] <<= 4
     np_int4_data = np_data[::, ::, 0::2] | np_data[::, ::, 1::2]
     return np_int4_data
+
 
 def unpack_int8_to_int4_3d(packed_data):
     low_nibbles = (packed_data & 0x0F).astype(np.uint8)
@@ -71,3 +78,27 @@ def unpack_int8_to_int4_3d(packed_data):
     unpacked[..., 1::2] = high_nibbles
 
     return unpacked
+
+
+def process_weights_after_loading(model: nn.Module, model_config: ModelConfig,
+                                  target_device: torch.device) -> None:
+    for _, module in model.named_modules():
+        quant_method = getattr(module, "quant_method", None)
+        if isinstance(quant_method, QuantizeMethodBase):
+            # # When quant methods need to process weights after loading
+            # # (for repacking, quantizing, etc), they expect parameters
+            # # to be on the global target device. This scope is for the
+            # # case where cpu offloading is used, where we will move the
+            # # parameters onto device for processing and back off after.
+            # with device_loading_context(module, target_device):
+            quant_method.process_weights_after_loading(module)
+
+    # Currently only used by MLA.
+    # NOTE: This intentionally happens after other modules so we can easily
+    # decompress the weights for MLA.
+    for _, module in model.named_modules():
+        if isinstance(module, Attention) and \
+            hasattr(module, "process_weights_after_loading"):
+            # TODO(lucas): see if there is a way to unify the signatures
+            # of process_weights_after_loading
+            module.process_weights_after_loading(model_config.dtype)

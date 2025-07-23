@@ -18,7 +18,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Linear methods for quantized linear layers. """
-
 from abc import abstractmethod
 from typing import Optional, Union
 
@@ -343,14 +342,23 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             assert loaded_shard_id < len(self.output_sizes)
             shard_offset = sum(self.output_sizes[:loaded_shard_id]) // tp_size
             shard_size = self.output_sizes[loaded_shard_id] // tp_size
-
-        start_idx = tp_rank * shard_size
-        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
-                                            start_idx, shard_size)
-
-        assert loaded_weight.shape == (shard_size, param.shape[1])
-        param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+            param_data = param.data
+            param_data = param_data.narrow(output_dim, shard_offset,
+                                           shard_size)
+            start_idx = tp_rank * shard_size
+            loaded_weight = loaded_weight.narrow(output_dim, start_idx,
+                                                 shard_size).contiguous()
+            assert param_data.shape == loaded_weight.shape
+            if len(loaded_weight.shape) == 2:
+                param[shard_offset:shard_offset +
+                      shard_size, :] = loaded_weight
+            else:
+                param[shard_offset:shard_offset + shard_size] = loaded_weight
+        else:
+            assert param.shape == loaded_weight.shape
+            if loaded_weight.dtype == ms.float32 and param.dtype == ms.float16:
+                loaded_weight = loaded_weight.astype(ms.float16)
+            param.set_data(loaded_weight.contiguous())
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -433,6 +441,11 @@ class QKVParallelLinear(ColumnParallelLinear):
                       loaded_weight,
                       loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
+        if output_dim is None:
+            if loaded_weight.dtype == ms.float32 and param.dtype == ms.float16:
+                loaded_weight = loaded_weight.astype(ms.float16)
+            param.set_data(loaded_weight.contiguous())
+            return
         tp_rank = get_tensor_model_parallel_rank()
         assert loaded_shard_id in ["q", "k", "v"]
         if loaded_shard_id == "q":
@@ -455,11 +468,13 @@ class QKVParallelLinear(ColumnParallelLinear):
                                             start_idx, shard_size)
         loaded_weight = ms.from_numpy(loaded_weight)
 
-        if param.name.endswith("weight"):
-            assert loaded_weight.shape == (shard_size, param.shape[1])
-        if param.name.endswith("bias"):
-            assert loaded_weight.shape == (shard_size, )
-        param[shard_offset:shard_offset + shard_size] = loaded_weight
+        loaded_weight = loaded_weight.narrow(output_dim, start_idx,
+                                             shard_size).contiguous()
+        assert param_data.shape == loaded_weight.shape
+        if len(loaded_weight.shape) == 2:
+            param[shard_offset:shard_offset + shard_size, :] = loaded_weight
+        else:
+            param[shard_offset:shard_offset + shard_size] = loaded_weight
 
 
 class RowParallelLinear(LinearBase):
