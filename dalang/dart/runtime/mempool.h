@@ -22,6 +22,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "common/common.h"
 #include "tensor/tensor.h"
@@ -68,16 +69,20 @@ public:
   explicit TensorDataRecycler(MemoryPool *memPool) : memPool_(memPool) {}
   ~TensorDataRecycler() = default;
 
-  void IncreaseInputsRefCounts(DATensor *node);
+  void ForwardRecordInputsRefCounts(DATensor *node);
   void DecreaseInputsRefCounts(DATensor *node);
+  void PrintRefCountInfo() const;
+  void CheckRefCountInfo() const;
 
 protected:
   void IncreaseInner(DATensor *tensor);
   void DecreaseInner(DATensor *tensor);
+  void AppendNodeRefRelations(DATensor *dst, DATensor *src);
 
 private:
   MemoryPool *memPool_;
   std::unordered_map<DATensor *, size_t> refCounts_;
+  std::unordered_map<DATensor *, std::vector<DATensor *>> refRelations_;
 };
 
 } // namespace runtime

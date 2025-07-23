@@ -14,21 +14,32 @@
  * limitations under the License.
  */
 
+#include <atomic>
+#include <condition_variable>
 #include <cstdlib>
+#include <mutex>
+#include <queue>
 #include <sstream>
 #include <thread>
-#include <atomic>
-#include <mutex>
 #include <unordered_map>
 #include <vector>
-#include <queue>
-#include <condition_variable>
 
 #include "runtime/executor.h"
 
 namespace da {
 namespace runtime {
 using namespace tensor;
+namespace {
+constexpr size_t kFirstInput = 0;
+constexpr size_t kSecondInput = 1;
+
+const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
+    {ops::Op_return, kFirstInput},      {ops::Op_depend, kFirstInput},
+    {ops::Op_load, kFirstInput},        {ops::Op_update_state, kFirstInput},
+    {ops::Op_reshape, kFirstInput},     {ops::Op_reshape_ext, kFirstInput},
+    {ops::Op_expand_dims, kFirstInput},
+};
+} // namespace
 
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
@@ -173,23 +184,8 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
   return tensor;
 }
 
-enum {
-  kFirstInput = 0,
-  kSecondInput = 1,
-};
-static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
-    {ops::Op_return, kFirstInput},
-    {ops::Op_depend, kFirstInput},
-    {ops::Op_load, kFirstInput},
-    {ops::Op_update_state, kFirstInput},
-};
-static const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT_DATA = {
-    {ops::Op_reshape, kFirstInput},
-    {ops::Op_expand_dims, kFirstInput},
-};
+// Run DATensor node
 void GraphExecutor::RunTensor(DATensor *node) {
-  LOG_OUT << "Run tensor, ops." << ops::ToStr(node->op) << ", tensor: " << node;
-
   if (node->op == ops::Op_End) {
     return;
   }
@@ -223,18 +219,9 @@ void GraphExecutor::RunTensor(DATensor *node) {
     return;
   }
 
-  auto iter1 = OPS_OUTPUT_FROM_INPUT.find(node->op);
-  if (iter1 != OPS_OUTPUT_FROM_INPUT.end()) {
-    auto inputIndex = iter1->second;
-    std::unique_lock<std::mutex> lock(outputsMutex_);
-    node->data = node->input[inputIndex]->data;
-    node->type = node->input[inputIndex]->type;
-    return;
-  }
-
-  auto iter2 = OPS_OUTPUT_FROM_INPUT_DATA.find(node->op);
-  if (iter2 != OPS_OUTPUT_FROM_INPUT_DATA.end()) {
-    auto inputIndex = iter2->second;
+  auto iter = OPS_OUTPUT_FROM_INPUT.find(node->op);
+  if (iter != OPS_OUTPUT_FROM_INPUT.end()) {
+    auto inputIndex = iter->second;
     std::unique_lock<std::mutex> lock(outputsMutex_);
     node->data = node->input[inputIndex]->data;
     node->type = node->input[inputIndex]->type;
@@ -285,14 +272,22 @@ void GraphExecutor::RunGraph() {
   // record ref counts
   TensorDataRecycler recycler(memPool_);
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    recycler.IncreaseInputsRefCounts(graph_->node[i]);
+    recycler.ForwardRecordInputsRefCounts(graph_->node[i]);
   }
+  recycler.PrintRefCountInfo();
 
 #ifndef SERIAL
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    LOG_OUT << "Run tensor, ops." << ops::ToStr(graph_->node[i]->op)
+            << ", DATensor: " << graph_->node[i] << ", index: " << i;
     RunTensor(graph_->node[i]);
+#ifndef SKIP_RUN_TENSOR
     recycler.DecreaseInputsRefCounts(graph_->node[i]);
   }
+  recycler.CheckRefCountInfo();
+#else
+  }
+#endif
 #else
   std::unordered_map<DATensor *, size_t> waitingCount;
   std::unordered_map<DATensor *, std::vector<DATensor *>> nextNodes;

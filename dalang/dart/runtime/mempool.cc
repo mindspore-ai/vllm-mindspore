@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <vector>
+
 #include "runtime/mempool.h"
 
 namespace da {
@@ -33,42 +35,54 @@ void MemoryPool::Free(DATensor *tensor) const {
   }
 }
 
-void TensorDataRecycler::IncreaseInputsRefCounts(DATensor *node) {
+void TensorDataRecycler::ForwardRecordInputsRefCounts(DATensor *node) {
   CHECK_IF_NULL(node);
-  LOG_OUT << "Increase refCount for ops." << ops::ToStr(node->op)
-          << ", DATensor: " << node;
+  if (IsSkipRecordRefCount(node)) {
+    return;
+  }
   for (size_t i = 0; i < node->inputSize; ++i) {
-    // Skip weight and const node
-    if (IsDATensorConst(node->input[i])) {
+    if (IsSkipRecordRefCount(node->input[i])) {
       continue;
     }
     CHECK_IF_NULL(node->input[i]);
-    IncreaseInner(node->input[i]);
-    if (IsDATensorOutputFromInput(node->input[i])) {
-      IncreaseInputsRefCounts(node->input[i]);
+    AppendNodeRefRelations(node, node->input[i]);
+  }
+}
+
+void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
+  CHECK_IF_NULL(dst);
+  CHECK_IF_NULL(src);
+  std::vector<DATensor *> relations;
+  if (IsDATensorOutputFromInput(src)) {
+    for (auto related : refRelations_[src]) {
+      (void)relations.emplace_back(related);
     }
+  } else {
+    (void)relations.emplace_back(src);
+  }
+  for (auto relation : relations) {
+    if (!IsDATensorOutputFromInput(dst)) {
+      IncreaseInner(relation);
+    }
+    (void)refRelations_[dst].emplace_back(relation);
   }
 }
 
 void TensorDataRecycler::DecreaseInputsRefCounts(DATensor *node) {
   CHECK_IF_NULL(node);
-  LOG_OUT << "Decrease refCount for ops." << ops::ToStr(node->op)
-          << ", DATensor: " << node;
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    // Skip weight and const node
-    if (IsDATensorConst(node->input[i])) {
-      continue;
-    }
-    CHECK_IF_NULL(node->input[i]);
-    DecreaseInner(node->input[i]);
-    if (IsDATensorOutputFromInput(node->input[i])) {
-      DecreaseInputsRefCounts(node->input[i]);
-    }
+  if (node->op == ops::Op_return || IsSkipRecordRefCount(node) ||
+      IsDATensorOutputFromInput(node)) {
+    return;
+  }
+  for (auto related : refRelations_[node]) {
+    DecreaseInner(related);
   }
 }
 
 void TensorDataRecycler::IncreaseInner(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
+  LOG_OUT << "Increase refCount for ops." << ops::ToStr(tensor->op)
+          << ", DATensor: " << tensor;
   if (auto iter = refCounts_.find(tensor); iter != refCounts_.end()) {
     iter->second++;
   } else {
@@ -80,12 +94,33 @@ void TensorDataRecycler::DecreaseInner(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
   CHECK_IF_FAIL(refCounts_.count(tensor) != 0);
   CHECK_IF_FAIL(refCounts_[tensor] > 0);
+  LOG_OUT << "Decrease refCount for ops." << ops::ToStr(tensor->op)
+          << ", DATensor: " << tensor;
   refCounts_[tensor]--;
-  if (refCounts_[tensor] == 0 && !IsDATensorOutputFromInput(tensor)) {
+  if (refCounts_[tensor] == 0) {
     LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op)
             << ", DATensor: " << tensor
             << ", is DATensorList: " << (tensor->type == Type_Tensor);
     memPool_->Free(tensor);
+  }
+}
+
+void TensorDataRecycler::PrintRefCountInfo() const {
+  for (auto refCount : refCounts_) {
+    LOG_OUT << "ops." << ops::ToStr(refCount.first->op)
+            << ", DATensor: " << refCount.first
+            << ", refCount: " << refCount.second;
+  }
+}
+
+void TensorDataRecycler::CheckRefCountInfo() const {
+  for (auto refCount : refCounts_) {
+    if (refCount.second != 0) {
+      LOG_ERROR << "ops." << ops::ToStr(refCount.first->op)
+                << ", DATensor: " << refCount.first
+                << ", refCount: " << refCount.second
+                << ", there may be memory leak";
+    }
   }
 }
 } // namespace runtime
