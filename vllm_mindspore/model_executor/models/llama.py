@@ -23,6 +23,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# The adaptation of llama in vllm-mindspore mainly includes the
+# following points:
+# 1. Additional model input parameters have been added, such as
+#    `key_cache`, `block_tables`, etc., to accommodate the
+#    vllm-mindspore calling convention.
+# 2. During model initialization, methods from the NativeModel base
+#    class, such as `common_preprocess`, are invoked to adapt to the
+#    vllm-mindspore workflow.
+# 3. In the `forward` function, the `exec_model` method is called to
+#    perform the model’s forward computation, aligning with the
+#    vllm-mindspore execution flow.
+# 4. In the `load_weights` function, due to the lack of `skip_prefix`
+#    functionality, the handling of `tie_word_embeddings` has been
+#    adapted.
+"""Inference-only LLaMA model compatible with HuggingFace weights."""
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -31,9 +46,7 @@ if TYPE_CHECKING:
 else:
     LlamaConfig = None
 
-from mindspore import Tensor
-from mindspore import dtype as mstype
-from mindspore import jit, mint, nn
+from mindspore import Tensor, mint, nn
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -53,7 +66,7 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     DEFAULT_VOCAB_PADDING_SIZE, ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader)
-from vllm_mindspore.model_executor.models.model_base import MsModelBase
+from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, extract_layer_index,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
@@ -90,7 +103,6 @@ class LlamaMLP(nn.Cell):
                              "Only silu is supported for now.")
         self.act_fn = SiluAndMul()
 
-    @jit
     def construct(self, x):
         x, _ = self.gate_up_proj(x)
         x = self.act_fn(x)
@@ -198,32 +210,27 @@ class LlamaAttention(nn.Cell):
             per_layer_sliding_window=sliding_window,
             prefix=f"{prefix}.attn",
         )
-        self.attn_mask = mint.triu(
-            mint.ones(size=(128, 128), dtype=mstype.float16), 1) * -10000.0
 
-    @jit
     def construct(
         self,
         positions: Tensor,
         hidden_states: Tensor,
-        kv_cache: tuple[Tensor, Tensor],
-        # attn_metadata: AttentionMetadata,
-        num_prefill_tokens: int,
-        num_decode_tokens: int,
+        key_cache: Tensor,
+        value_cache: Tensor,
+        is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: tuple[int],
-        context_lens: Tensor,
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
+        q_seq_lens: Tensor,
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
-        q, k = self.rotary_emb(positions, q, k, context_lens,
-                               num_prefill_tokens)
-        attn_output = self.attn(q, k, v, kv_cache, num_prefill_tokens,
-                                num_decode_tokens, slot_mapping,
-                                batch_valid_length, context_lens, block_tables,
-                                self.attn_mask)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
+                                slot_mapping, attn_mask, batch_valid_length,
+                                q_seq_lens, block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -284,18 +291,17 @@ class LlamaDecoderLayer(nn.Cell):
         self.post_attention_layernorm = RMSNorm(config.hidden_size,
                                                 eps=config.rms_norm_eps)
 
-    @jit
     def construct(
         self,
         positions: Tensor,
         hidden_states: Tensor,
-        kv_cache: tuple[Tensor, Tensor],
-        # attn_metadata: AttentionMetadata,
-        num_prefill_tokens: int,
-        num_decode_tokens: int,
+        key_cache: Tensor,
+        value_cache: Tensor,
+        is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: tuple[int],
-        context_lens: Tensor,
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
+        q_seq_lens: Tensor,
         block_tables: Tensor,
         residual: Optional[Tensor],
     ) -> tuple[Tensor, Tensor]:
@@ -307,10 +313,10 @@ class LlamaDecoderLayer(nn.Cell):
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
 
-        hidden_states = self.self_attn(positions, hidden_states, kv_cache,
-                                       num_prefill_tokens, num_decode_tokens,
-                                       slot_mapping, batch_valid_length,
-                                       context_lens, block_tables)
+        hidden_states = self.self_attn(positions, hidden_states, key_cache,
+                                       value_cache, is_prefill, slot_mapping,
+                                       attn_mask, batch_valid_length,
+                                       q_seq_lens, block_tables)
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(
@@ -331,14 +337,15 @@ class LlamaModel(nn.Cell):
         layer_type: type[LlamaDecoderLayer] = LlamaDecoderLayer,
     ):
         super().__init__()
-        config = vllm_config
+        config = vllm_config.model_config.hf_config
         self.config = config
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
         self.org_vocab_size = config.vocab_size
-        # TODO: Support quant_config cache_config
-        quant_config = None
-        cache_config = None
+        quant_config = vllm_config.quant_config
+        self.quant_config = quant_config
+        cache_config = vllm_config.cache_config
+        lora_config = vllm_config.lora_config  # noqa: F841
 
         if get_pp_group().is_first_rank or (config.tie_word_embeddings
                                             and get_pp_group().is_last_rank):
@@ -374,18 +381,17 @@ class LlamaModel(nn.Cell):
     def get_input_embeddings(self, input_ids: Tensor) -> Tensor:
         return self.embed_tokens(input_ids)
 
-    @jit
     def construct(
         self,
         input_ids: Optional[Tensor],
         positions: Tensor,
-        kv_caches: list[tuple[Tensor, Tensor]],
-        # attn_metadata: AttentionMetadata,
-        num_prefill_tokens: int,
-        num_decode_tokens: int,
+        key_caches: list[Tensor],
+        value_caches: list[Tensor],
+        is_prefill: bool,
         slot_mapping: Tensor,
-        batch_valid_length: tuple[int],
-        context_lens: Tensor,
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
+        q_seq_lens: Tensor,
         block_tables: Tensor,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
@@ -401,14 +407,14 @@ class LlamaModel(nn.Cell):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        for i in range(self.start_layer, self.end_layer):  # PP 并行对层进行切分
+        for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
-                                            kv_caches[i - self.start_layer],
-                                            num_prefill_tokens,
-                                            num_decode_tokens, slot_mapping,
-                                            batch_valid_length, context_lens,
-                                            block_tables, residual)
+                                            key_caches[i - self.start_layer],
+                                            value_caches[i - self.start_layer],
+                                            is_prefill, slot_mapping,
+                                            attn_mask, batch_valid_length,
+                                            q_seq_lens, block_tables, residual)
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -460,13 +466,13 @@ class LlamaModel(nn.Cell):
         return loaded_params
 
 
-class LlamaForCausalLM(MsModelBase, SupportsPP):
+class LlamaForCausalLM(NativeModel, SupportsPP):
 
     def __init__(self, vllm_config, prefix: str = ""):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
 
         quant_config = vllm_config.quant_config
-        self.model = LlamaModel(vllm_config=self.config)
+        self.model = LlamaModel(vllm_config=vllm_config)
 
         if get_pp_group().is_last_rank:
             self.unpadded_vocab_size = self.config.vocab_size
@@ -488,9 +494,9 @@ class LlamaForCausalLM(MsModelBase, SupportsPP):
                 quant_config=quant_config,
                 prefix=maybe_prefix(prefix, "lm_head"),
             )
-            # if self.config.tie_word_embeddings:
-            #     self.lm_head = self.lm_head.tie_weights(
-            #         self.model.embed_tokens)
+            if self.config.tie_word_embeddings:
+                self.lm_head = self.lm_head.tie_weights(
+                    self.model.embed_tokens)
 
             logit_scale = getattr(self.config, "logit_scale", 1.0)
             self.logits_processor = LogitsProcessor(self.unpadded_vocab_size,
@@ -505,39 +511,24 @@ class LlamaForCausalLM(MsModelBase, SupportsPP):
 
         self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
-        self.set_model_inputs()
-
-    def tie_lmhead_weights(self):
-        self.lm_head = self.lm_head.tie_weights(self.model.embed_tokens)
+        self.common_preprocess(vllm_config, prefix)
 
     def forward(self,
                 input_ids,
                 positions,
-                kv_caches,
-                attn_metadata,
                 intermediate_tensors=None,
                 inputs_embeds=None,
                 **kwargs):
-        if attn_metadata.num_prefill_tokens > 0:
-            input_ids = input_ids.expand_dims(0)
-        if attn_metadata.num_decode_tokens > 0:
-            input_ids = input_ids.expand_dims(1)
-        model_output = self.model(input_ids,
-                                  positions,
-                                  kv_caches,
-                                  **dict(attn_metadata),
-                                  intermediate_tensors=intermediate_tensors,
-                                  inputs_embeds=inputs_embeds)
-        if attn_metadata.num_prefill_tokens > 0:
-            model_output = model_output.squeeze(0)
-        if attn_metadata.num_decode_tokens > 0:
-            model_output = model_output.squeeze(1)
-        return model_output
+        hidden_states = self.exec_model(input_ids, positions,
+                                        intermediate_tensors, inputs_embeds)
+        return hidden_states
 
-    def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
-        self.model.load_weights(weights, params_dict)
-        return  # type: ignore
+        load_params = self.model.load_weights(weights, params_dict)
+        if self.config.tie_word_embeddings:
+            load_params.add("lm_head.weight")
+        return load_params
 
     def sample(self, logits: Tensor,
                sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
