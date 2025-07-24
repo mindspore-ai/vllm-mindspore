@@ -43,7 +43,7 @@ const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
 
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
-  const char kKernelLibPathsEnvName[] = "DART_KERNEL_LIB_PATH";
+  constexpr char kKernelLibPathsEnvName[] = "DART_KERNEL_LIB_PATH";
   const char *pathsCStr = std::getenv(kKernelLibPathsEnvName);
   if (pathsCStr == nullptr) {
     return kernelLibPaths;
@@ -56,7 +56,7 @@ const std::vector<std::string> GetEnvKernelLibPaths() {
       pathsCStr += pathLen + 1;
       pathLen = 0;
     } else {
-      pathLen++;
+      ++pathLen;
     }
   }
   (void)kernelLibPaths.emplace_back(std::string(pathsCStr, pathLen));
@@ -64,8 +64,8 @@ const std::vector<std::string> GetEnvKernelLibPaths() {
 }
 
 const std::string GetEnvKernelLibName() {
-  const char kDefaultKernelLibName[] = "Mindspore";
-  const char kKernelLibEnvName[] = "DART_KERNEL_LIB_NAME";
+  constexpr char kDefaultKernelLibName[] = "Mindspore";
+  constexpr char kKernelLibEnvName[] = "DART_KERNEL_LIB_NAME";
   const char *name = std::getenv(kKernelLibEnvName);
   if (name == nullptr) {
     name = kDefaultKernelLibName;
@@ -75,7 +75,7 @@ const std::string GetEnvKernelLibName() {
 
 size_t GetEnvThreadPoolSize() {
   const size_t kDefaultThreadPoolSize = 1;
-  const char kThreadPoolSizeEnvName[] = "DART_THREAD_POOL_SIZE";
+  constexpr char kThreadPoolSizeEnvName[] = "DART_THREAD_POOL_SIZE";
   const char *poolSizeStr = std::getenv(kThreadPoolSizeEnvName);
   if (poolSizeStr == nullptr) {
     return kDefaultThreadPoolSize;
@@ -156,9 +156,10 @@ void GraphExecutor::AddTensor(tensor::DATensor *tensor) {
 }
 
 // Add tensor list to tensor.
-void GraphExecutor::AddTensorList(DATensor *tensor, size_t len) {
+void GraphExecutor::CastToTensorList(DATensor *tensor, size_t len) {
   LOG_OUT << "Add tensor list";
   CHECK_IF_NULL(context_);
+  CHECK_IF_NULL(tensor);
   tensor->type = tensor::Type_Tensor;
   tensor->dim = 1;
   tensor->shape[0] = len;
