@@ -16,6 +16,7 @@
 """Adapted functions for mindspore in Worker."""
 
 import math
+import subprocess
 import os
 import subprocess
 
