@@ -216,13 +216,15 @@ class MsModelBase:
         inputs_embeds: Optional[Tensor] = None,
         previous_hidden_states: Optional[Tensor] = None,
         spec_step_idx: int = 0,
+        **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:
         return self.forward(input_ids,
                             positions,
                             intermediate_tensors,
                             inputs_embeds,
                             previous_hidden_states=previous_hidden_states,
-                            spec_step_idx=spec_step_idx)
+                            spec_step_idx=spec_step_idx,
+                            **kwargs)
 
     def forward(self,
                 input_ids: Tensor,
@@ -268,7 +270,12 @@ class MsModelBase:
             "Function load_weights should be Implemented!")
 
     def _dummy_attention_metadata(self, input_ids: Tensor, positions: Tensor):
-        input_len = input_ids.shape[0]
+        if input_ids is not None:
+            input_len = input_ids.shape[0]
+        elif positions is not None:
+            # input_ids is None in multi modal model with v1 arch
+            input_len = positions.shape[-1]
+
         max_seq_len = ms.Tensor(input_len, dtype=ms.int32)
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
@@ -327,21 +334,18 @@ class MsModelBase:
             query_lens_np = attn_metadata.q_seq_lens_np
             seq_lens_np = attn_metadata.seq_lens_np
 
+        if input_ids is not None:
+            input_ids = input_ids.astype(ms.int32)
         q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
         position_ids = ms.Tensor(positions, dtype=ms.int32)
         attention_mask = self.casual_mask.gen_attention_mask(
-            is_prefill, positions, query_lens_np)
+            is_prefill, positions, query_lens_np, attn_metadata)
 
         model_inputs = {}
-        # Convert input_ids and block_tables into contiguous tensors.
-        # Since `contiguous()` does not support converting contiguous slices
-        # into regular tensors, use multiplication to make tensor contiguous.
-        # TODO: Multiplication will be removed after the release of permanent
-        # solution.
-        model_inputs["input_ids"] = input_ids.astype(ms.int32) * 1
-        model_inputs["block_tables"] = attn_metadata.block_tables * 1
+        model_inputs["input_ids"] = input_ids
         model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping * 1
+        model_inputs["block_tables"] = attn_metadata.block_tables
+        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask
@@ -369,6 +373,12 @@ class NativeModel(MsModelBase):
             raise RuntimeError("Model not initialized")
         return self.model
 
+    @property
+    def ready_lm_head(self) -> nn.Cell:
+        if self.lm_head is None:
+            raise RuntimeError("lm head not initialized")
+        return self.lm_head
+
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
@@ -386,9 +396,32 @@ class NativeModel(MsModelBase):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
-    def set_model_inputs(self, is_prefill):
-        dyn_input_ids = Tensor(shape=[None], dtype=mstype.int32)
-        dyn_position_ids = Tensor(shape=[None], dtype=mstype.int32)
+    def set_model_inputs(self, input_ids, position_ids, intermediate_tensors,
+                         inputs_embeds, is_prefill):
+        if input_ids is None:
+            dyn_input_ids = None
+        else:
+            dyn_input_ids = ms.Tensor(shape=[None] * input_ids.ndim,
+                                      dtype=mstype.int32)
+
+        if position_ids is None:
+            dyn_position_ids = None
+        else:
+            dyn_position_ids = ms.Tensor(shape=[None] * position_ids.ndim,
+                                         dtype=mstype.int32)
+
+        if inputs_embeds is None:
+            dyn_inputs_embeds = None
+        else:
+            dyn_inputs_embeds = ms.Tensor(shape=[None] * inputs_embeds.ndim,
+                                          dtype=inputs_embeds.dtype)
+
+        if intermediate_tensors is None:
+            dyn_intermediate_tensors = None
+        else:
+            dyn_intermediate_tensors = ms.Tensor(
+                shape=[None] * intermediate_tensors.ndim,
+                dtype=intermediate_tensors.dtype)
 
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
@@ -409,25 +442,21 @@ class NativeModel(MsModelBase):
         dyn_value_caches = mutable(
             [dyn_value_cache for _ in range(num_layers)])
 
-        dyn_slot_mapping = Tensor(shape=[
-            None,
-        ], dtype=mstype.int32)
+        dyn_slot_mapping = Tensor(shape=[None], dtype=mstype.int32)
         dynamic_attention_mask = Tensor(shape=[None, None],
                                         dtype=self.model_config.dtype)
-        dyn_batch_valid_length = Tensor(shape=[
-            None,
-        ], dtype=mstype.int32)
-        dyn_q_seq_lens = Tensor(shape=[
-            None,
-        ], dtype=mstype.int32)
+        dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
+        dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
-        dyn_inputs_embeds = None
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
             is_prefill, dyn_slot_mapping, dynamic_attention_mask,
             dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
             dyn_intermediate_tensors, dyn_inputs_embeds)
+
+        dynamic_hidden_states = Tensor(shape=[None, None],
+                                       dtype=self.model_config.dtype)
+        self.ready_lm_head.set_inputs(dynamic_hidden_states)
 
     def prepare_inputs(self, input_ids, positions, intermediate_tensors,
                        inputs_embeds):
@@ -451,7 +480,8 @@ class NativeModel(MsModelBase):
                                                        inputs_embeds)
 
         if self.prev_prefill != is_prefill and self.is_graph_mode:
-            self.set_model_inputs(is_prefill)
+            self.set_model_inputs(input_ids, positions, intermediate_tensors,
+                                  inputs_embeds, is_prefill)
         self.prev_prefill = is_prefill
 
         # for dummy_attention_metadata
