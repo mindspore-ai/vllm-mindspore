@@ -53,7 +53,7 @@ public:
   // Add tensor for graph.
   void AddTensor(tensor::DATensor *tensor);
   // Add tensor list to tensor.
-  void AddTensorList(tensor::DATensor *tensor, size_t len);
+  void CastToTensorList(tensor::DATensor *tensor, size_t len);
   // Add operation result tensor.
   tensor::DATensor *AddTensor(ops::Op op,
                               const std::vector<tensor::DATensor *> &inputs);
