@@ -2,20 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-CI=${1:-0}
-PYTHON_VERSION=${2:-local}
+PYTHON_VERSION=${1:-local}
 
-if [ "$CI" -eq 1 ]; then
-    set -e
-fi
+run_mypy() {
+    mypy --python-version "${PYTHON_VERSION}" "$@"
+}
 
-if [ $PYTHON_VERSION == "local" ]; then
-    PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-fi
+run_mypy
+run_mypy tests
+run_mypy vllm_mindspore/attention
+run_mypy vllm_mindspore/compilation
+run_mypy vllm_mindspore/distributed
+run_mypy vllm_mindspore/engine
+run_mypy vllm_mindspore/executor
+run_mypy vllm_mindspore/inputs
+run_mypy vllm_mindspore/lora
+run_mypy vllm_mindspore/model_executor
+run_mypy vllm_mindspore/plugins
+run_mypy vllm_mindspore/prompt_adapter
+run_mypy vllm_mindspore/spec_decode
+run_mypy vllm_mindspore/worker
+run_mypy vllm_mindspore/v1
 
-MERGEBASE="$(git merge-base origin/develop HEAD)"
-
-if ! git diff --cached --diff-filter=ACM --quiet --exit-code "$MERGEBASE" -- '*.py' '*.pyi' &> /dev/null; then
-  git diff --cached --name-only --diff-filter=ACM "$MERGEBASE" -- '*.py' '*.pyi' | xargs \
-  mypy --follow-imports skip --python-version "${PYTHON_VERSION}" --config-file "codecheck_toolkits/pyproject.toml"
-fi
