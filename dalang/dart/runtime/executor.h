@@ -50,12 +50,13 @@ public:
                               size_t dim = 0,
                               const tensor::ShapeArray &shape = {0},
                               void *data = nullptr);
-  // Add tensor for graph
+  // Add tensor for graph.
   void AddTensor(tensor::DATensor *tensor);
+  // Add tensor list to tensor.
+  void AddTensorList(tensor::DATensor *tensor, size_t len);
   // Add operation result tensor.
   tensor::DATensor *AddTensor(ops::Op op,
-                              const std::vector<tensor::DATensor *> &inputs,
-                              size_t outputSize = 1);
+                              const std::vector<tensor::DATensor *> &inputs);
 
   // Run the built graph.
   void RunGraph();
