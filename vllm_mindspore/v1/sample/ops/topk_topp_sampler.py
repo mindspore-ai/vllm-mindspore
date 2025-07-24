@@ -19,6 +19,7 @@
 # limitations under the License.
 
 from typing import Optional
+
 import torch
 from mindspore import mint
 

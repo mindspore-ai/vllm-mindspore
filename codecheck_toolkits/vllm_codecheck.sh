@@ -24,7 +24,12 @@ git add .pre-commit-config.yaml
 
 pip install -r codecheck_toolkits/requirements-lint.txt
 
-pre-commit run --from-ref origin/develop --to-ref HEAD
+RUN_GATE=${1:-0}
+if [ "$RUN_GATE" -eq 0 ]; then
+  pre-commit run --from-ref origin/develop --to-ref HEAD
+else
+  pre-commit run --all-files
+fi
 RET_FLAG=$?
 
 exit ${RET_FLAG}

@@ -15,22 +15,27 @@
 # limitations under the License.
 """Unified interface for LoRA layers in vllm-mindspore."""
 
-from typing import Set, Type
-
 from vllm.lora.fully_sharded_layers import (
     ColumnParallelLinearWithShardedLoRA,
     MergedColumnParallelLinearWithShardedLoRA,
     MergedQKVParallelLinearWithShardedLoRA, QKVParallelLinearWithShardedLoRA,
     RowParallelLinearWithShardedLoRA)
 
-from vllm_mindspore.lora.layers import (
-    BaseLayerWithLoRA, ColumnParallelLinearWithLoRA,
-    LinearScalingRotaryEmbeddingWithLoRA, LogitsProcessorWithLoRA,
-    MergedColumnParallelLinearWithLoRA, MergedQKVParallelLinearWithLoRA,
-    QKVParallelLinearWithLoRA, RowParallelLinearWithLoRA,
-    VocabParallelEmbeddingWithLoRA)
+# yapf conflicts with isort for this block
+# yapf: disable
+from vllm_mindspore.lora.layers import (BaseLayerWithLoRA,
+                                        ColumnParallelLinearWithLoRA,
+                                        LinearScalingRotaryEmbeddingWithLoRA,
+                                        LogitsProcessorWithLoRA,
+                                        MergedColumnParallelLinearWithLoRA,
+                                        MergedQKVParallelLinearWithLoRA,
+                                        QKVParallelLinearWithLoRA,
+                                        RowParallelLinearWithLoRA,
+                                        VocabParallelEmbeddingWithLoRA)
 
-_all_lora_classes: Set[Type[BaseLayerWithLoRA]] = {
+# yapf: enable
+
+_all_lora_classes: set[type[BaseLayerWithLoRA]] = {
     VocabParallelEmbeddingWithLoRA,
     ColumnParallelLinearWithLoRA,
     MergedColumnParallelLinearWithLoRA,
