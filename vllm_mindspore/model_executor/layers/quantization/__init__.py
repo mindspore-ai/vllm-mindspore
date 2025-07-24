@@ -21,7 +21,10 @@ from typing import Literal, get_args
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
-QuantizationMethods = Literal["smoothquant"]
+QuantizationMethods = Literal[
+    "smoothquant",
+    "sparsequant"
+]
 QUANTIZATION_METHODS: list[str] = list(get_args(QuantizationMethods))
 
 # The customized quantization methods which will be added to this dict.
@@ -34,8 +37,10 @@ def get_quantization_config(quantization: str) -> type[QuantizationConfig]:
 
     # lazy import to avoid triggering `torch.compile` too early
     from .smooth_quant_modelslim import SmoothQuantModelSlimConfig
+    from .sparse_quant_modelslim import SparseQuantModelSlimConfig
     method_to_config: dict[str, type[QuantizationConfig]] = {
-        "smoothquant": SmoothQuantModelSlimConfig
+        "smoothquant": SmoothQuantModelSlimConfig,
+        "sparsequant": SparseQuantModelSlimConfig
     }
     # Update the `method_to_config` with customized quantization methods.
     method_to_config.update(_CUSTOMIZED_METHOD_TO_QUANT_CONFIG)
