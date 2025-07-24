@@ -16,6 +16,7 @@
 
 #include <vector>
 
+#include "runtime/utils.h"
 #include "runtime/mempool.h"
 
 namespace da {
@@ -53,7 +54,7 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
   CHECK_IF_NULL(dst);
   CHECK_IF_NULL(src);
   std::vector<DATensor *> relations;
-  if (IsDATensorOutputFromInput(src)) {
+  if (IsDummyDATensorNode(src)) {
     for (auto related : refRelations_[src]) {
       (void)relations.emplace_back(related);
     }
@@ -61,7 +62,7 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
     (void)relations.emplace_back(src);
   }
   for (auto relation : relations) {
-    if (!IsDATensorOutputFromInput(dst)) {
+    if (!IsDummyDATensorNode(dst)) {
       IncreaseInner(relation);
     }
     (void)refRelations_[dst].emplace_back(relation);
@@ -71,7 +72,7 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
 void TensorDataRecycler::DecreaseInputsRefCounts(DATensor *node) {
   CHECK_IF_NULL(node);
   if (node->op == ops::Op_return || IsSkipRecordRefCount(node) ||
-      IsDATensorOutputFromInput(node)) {
+      IsDummyDATensorNode(node)) {
     return;
   }
   for (auto related : refRelations_[node]) {

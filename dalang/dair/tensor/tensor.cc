@@ -156,26 +156,5 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
           << ", for DAContext " << context;
   return tensor;
 }
-
-bool IsDATensorConst(DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  return tensor->op == ops::Op_End;
-}
-
-bool IsDATensorOutputFromInput(DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  static std::set<ops::Op> outputFromInputSet = {
-      ops::Op_tuple_getitem, ops::Op_depend,  ops::Op_make_tuple,
-      ops::Op_return,        ops::Op_reshape, ops::Op_reshape_ext,
-  };
-
-  return outputFromInputSet.find(tensor->op) != outputFromInputSet.end();
-}
-
-bool IsSkipRecordRefCount(DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  return (tensor->op == ops::Op_End || tensor->op == ops::Op_load ||
-          tensor->op == ops::Op_update_state);
-}
 } // namespace tensor
 } // namespace da

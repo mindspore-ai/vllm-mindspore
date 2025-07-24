@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "common/visible.h"
+#include "runtime/utils.h"
 #include "runtime/kernel_lib.h"
 #include "runtime/mempool.h"
 #include "tensor/tensor.h"
