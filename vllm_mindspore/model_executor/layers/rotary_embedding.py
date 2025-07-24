@@ -31,6 +31,7 @@ import mindspore
 import numpy as np
 from mindspore import Tensor, mint, nn, ops
 from mindspore.common import dtype as mstype
+from mindspore.ops.auto_generate.gen_ops_prim import SliceExt
 from transformers import PretrainedConfig
 from vllm.config import get_current_vllm_config
 
@@ -482,9 +483,9 @@ class MRotaryEmbedding(RotaryEmbedding):
         context_len: int,
         seq_len: int,
     ) -> mindspore.Tensor:
-        return ops.arange(
-            mrope_position_delta + context_len,
-            mrope_position_delta + seq_len,
+        return mint.arange(
+            int(mrope_position_delta + context_len),
+            int(mrope_position_delta + seq_len),
         ).broadcast_to((3, -1))
 
 
@@ -540,52 +541,60 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             query: [num_tokens, num_heads * head_size]
             key: [num_tokens, num_kv_heads * head_size]
         """
+        half_rotary_dim = self.rotary_dim // 2
         # prefill
         if is_prefill:
             num_tokens = positions.shape[-1]
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
-            cos, sin = cos[..., :self.rotary_dim //
-                           2], sin[..., :self.rotary_dim // 2]
+            cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
+            sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
             if positions.ndim == 2:
-                cos_l = ops.split(cos, self.mrope_section, axis=-1)
-                sin_l = ops.split(sin, self.mrope_section, axis=-1)
+                cos_l = mint.split(cos, self.mrope_section, dim=-1)
+                sin_l = mint.split(sin, self.mrope_section, dim=-1)
                 cos, sin = (), ()
                 for i in range(len(
                         self.mrope_section)):  # type: ignore[arg-type]
-                    cos += (cos_l[i][i], )
-                    sin += (sin_l[i][i], )
+                    cos_l_select = mint.index_select(cos_l[i], 0,
+                                                     Tensor([i])).squeeze(0)
+                    cos += (cos_l_select, )
+                    sin_l_select = mint.index_select(sin_l[i], 0,
+                                                     Tensor([i])).squeeze(0)
+                    sin += (sin_l_select, )
                 cos = ops.cat(cos, axis=-1)
                 sin = ops.cat(sin, axis=-1)
 
             query_shape = query.shape
             query = query.view(num_tokens, -1, self.head_size)
-            query_rot = query[..., :self.rotary_dim]
-            query_pass = query[..., self.rotary_dim:]
+            query_rot = SliceExt()(query, -1, 0, self.rotary_dim, 1)
+            query_pass = SliceExt()(query, -1, self.rotary_dim,
+                                    query_shape[-1], 1)
             query_rot = _apply_rotary_emb(query_rot, cos, sin,
                                           self.is_neox_style)
             query = ops.cat((query_rot, query_pass), axis=-1).view(query_shape)
 
             key_shape = key.shape
             key = key.view(num_tokens, -1, self.head_size)
-            key_rot = key[..., :self.rotary_dim]
-            key_pass = key[..., self.rotary_dim:]
+            key_rot = SliceExt()(key, -1, 0, self.rotary_dim, 1)
+            key_pass = SliceExt()(key, -1, self.rotary_dim, key_shape[-1], 1)
             key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
             key = ops.cat((key_rot, key_pass), axis=-1).view(key_shape)
             return query, key
 
         # decode
-        if positions.ndim == 2 and positions.shape[0] == len(
-                self.mrope_section):  # type: ignore[arg-type]
-            num_tokens = positions.shape[-1]
+        if positions.ndim == 2:
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
-            cos, sin = cos[..., :self.rotary_dim //
-                           2], sin[..., :self.rotary_dim // 2]
-            cos_l = ops.split(cos, self.mrope_section, axis=-1)
-            sin_l = ops.split(sin, self.mrope_section, axis=-1)
+            cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
+            sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
+            cos_l = mint.split(cos, self.mrope_section, dim=-1)
+            sin_l = mint.split(sin, self.mrope_section, dim=-1)
             cos, sin = (), ()
             for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
-                cos += (cos_l[i][i], )
-                sin += (sin_l[i][i], )
+                cos_l_select = mint.index_select(cos_l[i], 0,
+                                                 Tensor([i])).squeeze(0)
+                cos += (cos_l_select, )
+                sin_l_select = mint.index_select(sin_l[i], 0,
+                                                 Tensor([i])).squeeze(0)
+                sin += (sin_l_select, )
             cos = ops.cat(cos, axis=-1)
             sin = ops.cat(sin, axis=-1)
             freqs_cos = ops.cat([cos, cos], axis=-1).squeeze(1)
