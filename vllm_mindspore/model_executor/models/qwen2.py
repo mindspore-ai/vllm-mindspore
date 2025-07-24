@@ -62,6 +62,7 @@ from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
+from mindspore.communication.management import get_rank
 
 
 class Qwen2MLP(nn.Cell):
@@ -363,6 +364,50 @@ class Qwen2Model(nn.Cell):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
+    def load_split_weights(self, weights: Iterable[tuple[str, Tensor]],
+                           params_dict: dict[str, Parameter]):
+        weights_dict = dict(weights)
+
+        for name, loaded_weight in weights_dict.items():
+            if get_tensor_model_parallel_rank(
+            ) > 0 and "o_proj.quant_bias" in name:
+                continue
+
+            if name not in params_dict:
+                continue
+
+            param = params_dict[name]
+            param.set_data(loaded_weight.contiguous())
+
+        def adjust_weight(params_dict):
+            if not is_310p():
+                return
+
+            target_keywords = [
+                "qkv_proj.weight",
+                "o_proj.weight",
+                "gate_up_proj.weight",
+                "down_proj.weight",
+                # "lm_head.weight",
+            ]
+
+            rank_id = get_rank()
+            for name, param in params_dict.items():
+                if any(name.endswith(keyword) for keyword in target_keywords):
+                    weight_type = self.quant_config.full_config[f"rank_{rank_id}"][name]
+                    if weight_type.lower() == "w8a8s":
+                        # 压缩后权重不需要转Nz
+                        continue
+
+                    cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+                    ms.runtime.synchronize()
+                    param.set_data(cast_weight)
+
+        if is_310p():
+            ms.runtime.synchronize()
+            adjust_weight(params_dict)
+            ms.runtime.synchronize()
+
     def load_weights(self, weights: Iterable[tuple[str, Tensor]],
                      params_dict: dict[str, Parameter]):
         loaded_params: set[str] = set()
@@ -486,7 +531,10 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
-        self.model.load_weights(weights, params_dict)
+        if self.vllm_config.model_config.quantization == "sparsequant":
+            self.model.load_split_weights(weights, params_dict)
+        else:
+            self.model.load_weights(weights, params_dict)
 
     def compute_logits(
         self,
