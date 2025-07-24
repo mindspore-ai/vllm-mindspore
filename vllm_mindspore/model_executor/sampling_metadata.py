@@ -20,17 +20,12 @@
 
 from array import array
 from dataclasses import dataclass
-from typing import List
 
-from vllm.utils import (
-    is_pin_memory_available,
-    make_tensor_with_pad,
-)
+import mindspore as ms
+from mindspore import Tensor
+from vllm.utils import is_pin_memory_available, make_tensor_with_pad
 
 _SAMPLING_EPS = 1e-5
-
-from mindspore import Tensor
-import mindspore as ms
 
 
 @dataclass
@@ -50,15 +45,15 @@ class SamplingTensors:
     @classmethod
     def from_lists(
         cls,
-        temperatures: List[float],
-        top_ps: List[float],
-        top_ks: List[int],
-        min_ps: List[float],
-        presence_penalties: List[float],
-        frequency_penalties: List[float],
-        repetition_penalties: List[float],
-        prompt_tokens: List[array],
-        output_tokens: List[array],
+        temperatures: list[float],
+        top_ps: list[float],
+        top_ks: list[int],
+        min_ps: list[float],
+        presence_penalties: list[float],
+        frequency_penalties: list[float],
+        repetition_penalties: list[float],
+        prompt_tokens: list[array],
+        output_tokens: list[array],
         vocab_size: int,
         device,
         dtype,
