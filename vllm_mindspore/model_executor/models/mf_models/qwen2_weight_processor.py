@@ -39,8 +39,8 @@ class Qwen2WeightProcessor(BaseWeightProcessor):
 
     """
 
-    def __init__(self, config, network, is_quant):
-        super().__init__(config, network, is_quant)
+    def __init__(self, config, network, is_quant, weights_iter):
+        super().__init__(config, network, is_quant, weights_iter)
 
     def infer_convert_outer_weight(self, src_hf_dir, hf_weight_map):
         """convert weight not in model"""

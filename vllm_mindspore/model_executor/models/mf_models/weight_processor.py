@@ -43,7 +43,7 @@ class BaseWeightProcessor:
 
     """
 
-    def __init__(self, config, network, is_quant):
+    def __init__(self, config, network, is_quant, weights_iter):
         self.config = config
         self.network = network
         self.is_quant = is_quant
@@ -70,6 +70,10 @@ class BaseWeightProcessor:
 
         self.parameter_dict = {}
         self.file_handles = {}
+
+        # Trigger the time initial of vllm native loading weights, make sure correct of Loading weights time costs.
+        for _, _ in weights_iter:
+            break
 
     def get_file_handles(self, filename):
         if filename not in self.file_handles:

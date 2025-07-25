@@ -75,7 +75,7 @@ class Qwen2ForCausalLM(MfModelBase):
         return network, network.lm_head
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, False)
+        weight_processor = Qwen2WeightProcessor(self.mf_config, self.network, False, weights)
         weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
 
         return None

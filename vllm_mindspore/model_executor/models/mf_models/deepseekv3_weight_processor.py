@@ -58,8 +58,8 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
     """
 
-    def __init__(self, config, network, is_quant):
-        super().__init__(config, network, is_quant)
+    def __init__(self, config, network, is_quant, weights_iter):
+        super().__init__(config, network, is_quant, weights_iter)
         self.num_layers = self.config.model.model_config.num_layers
         self.expert_num = self.config.moe_config.expert_num
         self.moe_split_tp = self.moe_tp_size > 1
