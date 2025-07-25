@@ -29,17 +29,6 @@
 namespace da {
 namespace runtime {
 using namespace tensor;
-namespace {
-constexpr size_t kFirstInput = 0;
-constexpr size_t kSecondInput = 1;
-
-const std::unordered_map<ops::Op, size_t> OPS_OUTPUT_FROM_INPUT = {
-    {ops::Op_return, kFirstInput},      {ops::Op_depend, kFirstInput},
-    {ops::Op_load, kFirstInput},        {ops::Op_update_state, kFirstInput},
-    {ops::Op_reshape, kFirstInput},     {ops::Op_reshape_ext, kFirstInput},
-    {ops::Op_expand_dims, kFirstInput},
-};
-} // namespace
 
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
@@ -147,7 +136,7 @@ DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
 }
 
 // Add tensor for graph
-void GraphExecutor::AddTensor(tensor::DATensor *tensor) {
+void GraphExecutor::AddTensor(DATensor *tensor) {
   LOG_OUT << "Add const tensor";
   CHECK_IF_NULL(context_);
   CHECK_IF_NULL(tensor);
@@ -201,6 +190,7 @@ void GraphExecutor::RunTensor(DATensor *node) {
     for (size_t i = 0; i < node->inputSize; ++i) {
       std::unique_lock<std::mutex> lock(outputsMutex_);
       tensorList[i]->data = node->input[i]->data;
+      CloneDATensorShape(tensorList[i], node->input[i]);
     }
     return;
   }
@@ -219,43 +209,20 @@ void GraphExecutor::RunTensor(DATensor *node) {
         static_cast<DATensor **>(node->input[kFirstInput]->data);
     CHECK_IF_NULL(inputTensorList);
     node->data = inputTensorList[index]->data;
+    CloneDATensorShape(node, inputTensorList[index]);
     return;
   }
 
-  auto iter = OPS_OUTPUT_FROM_INPUT.find(node->op);
-  if (iter != OPS_OUTPUT_FROM_INPUT.end()) {
-    auto inputIndex = iter->second;
+  if (IsDATensorOutputFromInput(node)) {
+    auto inputIndex = GetDATensorOuputFromInputIndex(node);
     std::unique_lock<std::mutex> lock(outputsMutex_);
     node->data = node->input[inputIndex]->data;
-    node->type = node->input[inputIndex]->type;
+    CloneDATensorShape(node, node->input[inputIndex]);
     return;
   }
 
   // Get real inputs of the node.
-  std::vector<DATensor *> realInputs;
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    CHECK_IF_NULL(node->input[i]);
-    if (node->input[i]->type == Type_Tensor) {
-      auto **tensorList = static_cast<DATensor **>(node->input[i]->data);
-      CHECK_IF_NULL(tensorList);
-      for (size_t j = 0; j < node->input[i]->shape[0]; j++) {
-        CHECK_IF_NULL(tensorList[j]);
-        if (tensorList[j]->type == Type_Monad) {
-          continue;
-        }
-        (void)realInputs.emplace_back(tensorList[j]);
-      }
-      continue;
-    }
-    if (node->input[i]->type == Type_Monad) {
-      continue;
-    }
-    (void)realInputs.emplace_back(node->input[i]);
-  }
-  node->inputSize = realInputs.size();
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    node->input[i] = realInputs[i];
-  }
+  GetNodeRealInputs(node);
 
 #ifndef SKIP_RUN_TENSOR
   auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
