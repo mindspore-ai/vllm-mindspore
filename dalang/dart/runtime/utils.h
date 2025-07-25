@@ -25,24 +25,11 @@
 namespace da {
 namespace runtime {
 using namespace tensor;
-namespace {
 constexpr size_t kFirstInput = 0;
 constexpr size_t kSecondInput = 1;
-
-const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex = {
-    {ops::Op_return, kFirstInput},
-    {ops::Op_depend, kFirstInput},
-    {ops::Op_load, kFirstInput},
-    {ops::Op_update_state, kFirstInput},
-};
-
-const std::set<ops::Op> dummyDATensorNodeSet = {
-    ops::Op_tuple_getitem,
-    ops::Op_depend,
-    ops::Op_make_tuple,
-    ops::Op_return,
-};
-} // namespace
+extern const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex;
+extern const std::set<ops::Op> dummyOpsSet;
+extern const std::set<ops::Op> forceResizeOpsSet;
 
 template <typename T>
 const T GetValue(const DATensor *tensor) {
@@ -92,7 +79,18 @@ inline size_t GetDATensorOuputFromInputIndex(DATensor *node) {
 
 inline bool IsDummyDATensorNode(DATensor *node) {
   CHECK_IF_NULL(node);
-  return dummyDATensorNodeSet.find(node->op) != dummyDATensorNodeSet.end();
+  return dummyOpsSet.find(node->op) != dummyOpsSet.end();
+}
+
+inline bool IsSkipBuildDAKernel(DATensor *node) {
+  CHECK_IF_NULL(node);
+  return (IsDATensorOutputFromInput(node) || node->op == ops::Op_End ||
+          node->op == ops::Op_make_tuple || node->op == ops::Op_tuple_getitem);
+}
+
+inline bool IsDAKernelNeedForceResize(DATensor *node) {
+  CHECK_IF_NULL(node);
+  return forceResizeOpsSet.find(node->op) != forceResizeOpsSet.end();
 }
 } // namespace runtime
 } // namespace da

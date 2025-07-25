@@ -45,6 +45,8 @@ public:
   void EndGraph();
   // Optimize the graph.
   void OptGraph();
+  // Build DAKernels for graph.
+  void BuildKernels();
   // Add a parameter for graph.
   void AddParameter(DATensor *param);
   // Add parameters for graph.
@@ -64,13 +66,16 @@ public:
   DATensor *AddReturn();
 
   // Run the built graph.
-  void RunGraph();
+  void RunGraph(bool isDynamic = false);
   // If the graph had been built.
   bool HasGraph() const { return graph_ != nullptr; }
   // Set memory free func for DATensor
   void SetFreeFunc(std::function<void(void *)> &&func) {
-    memPool_->SetFreeFunc(std::move(func));
+    CHECK_IF_NULL(recycler_);
+    recycler_->SetFreeFunc(std::move(func));
   }
+  // Record tensor refCount
+  void RecordTensorRefCount();
 #ifdef DUMP
   // Dump the built graph.
   void DumpGraph();
@@ -83,7 +88,9 @@ private:
   DAContext *context_{nullptr};
   DAGraph *graph_{nullptr};
   std::vector<DATensor *> parameters_;
-  runtime::MemoryPool *memPool_{nullptr};
+  bool isDynamic_{false};
+  std::unordered_map<tensor::DATensor *, DAKernel *> kernels_;
+  TensorDataRecycler *recycler_{nullptr};
   std::mutex outputsMutex_;
 #ifdef DUMP
   std::unordered_map<const DATensor *, ssize_t> paraNumMap_;

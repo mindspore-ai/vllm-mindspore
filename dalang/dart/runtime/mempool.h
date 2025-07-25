@@ -31,11 +31,10 @@ namespace da {
 namespace runtime {
 using namespace da::tensor;
 constexpr size_t MAX_MEM_SIZE = 1024 * 1024 * 1024 * 4UL;
+using memoryFreeFunc = std::function<void(void *)>;
 
 class MemoryPool {
 public:
-  using memoryFreeFunc = std::function<void(void *)>;
-
   MemoryPool() = default;
   ~MemoryPool() = default;
 
@@ -66,13 +65,18 @@ private:
 
 class TensorDataRecycler {
 public:
-  explicit TensorDataRecycler(MemoryPool *memPool) : memPool_(memPool) {}
-  ~TensorDataRecycler() = default;
+  TensorDataRecycler();
+  ~TensorDataRecycler();
 
   void ForwardRecordInputsRefCounts(DATensor *node);
-  void DecreaseInputsRefCounts(DATensor *node);
+  void FreeUnusedNodes(DATensor *node);
   void PrintRefCountInfo() const;
   void CheckRefCountInfo() const;
+
+  void SetFreeFunc(memoryFreeFunc &&func) {
+    CHECK_IF_NULL(memPool_);
+    memPool_->SetFreeFunc(std::move(func));
+  }
 
 protected:
   void IncreaseInner(DATensor *tensor);
@@ -80,9 +84,10 @@ protected:
   void AppendNodeRefRelations(DATensor *dst, DATensor *src);
 
 private:
-  MemoryPool *memPool_;
+  MemoryPool *memPool_{nullptr};
   std::unordered_map<DATensor *, size_t> refCounts_;
   std::unordered_map<DATensor *, std::vector<DATensor *>> refRelations_;
+  std::unordered_map<DATensor *, std::vector<DATensor *>> nodeReleaseList_;
 };
 
 } // namespace runtime

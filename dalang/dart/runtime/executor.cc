@@ -20,6 +20,7 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -29,7 +30,7 @@
 namespace da {
 namespace runtime {
 using namespace tensor;
-
+namespace {
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
   constexpr char kKernelLibPathsEnvName[] = "DART_KERNEL_LIB_PATH";
@@ -52,6 +53,7 @@ const std::vector<std::string> GetEnvKernelLibPaths() {
   return kernelLibPaths;
 }
 
+#ifndef SKIP_RUN_TENSOR
 const std::string GetEnvKernelLibName() {
   constexpr char kDefaultKernelLibName[] = "Mindspore";
   constexpr char kKernelLibEnvName[] = "DART_KERNEL_LIB_NAME";
@@ -61,7 +63,9 @@ const std::string GetEnvKernelLibName() {
   }
   return name;
 }
+#endif
 
+#ifdef SERIAL
 size_t GetEnvThreadPoolSize() {
   const size_t kDefaultThreadPoolSize = 1;
   constexpr char kThreadPoolSizeEnvName[] = "DART_THREAD_POOL_SIZE";
@@ -71,12 +75,55 @@ size_t GetEnvThreadPoolSize() {
   }
   return std::stoul(poolSizeStr);
 }
+#endif
+
+void ProcessMakeTuple(DATensor *makeTupleNode, std::mutex &outputsMutex) {
+  CHECK_IF_NULL(makeTupleNode);
+  CHECK_IF_FAIL(makeTupleNode->type == Type_Tensor);
+  CHECK_IF_FAIL(makeTupleNode->shape[0] == makeTupleNode->inputSize);
+  auto **tensorList = static_cast<DATensor **>(makeTupleNode->data);
+  CHECK_IF_NULL(tensorList);
+  for (size_t i = 0; i < makeTupleNode->inputSize; ++i) {
+    std::unique_lock<std::mutex> lock(outputsMutex);
+    tensorList[i]->data = makeTupleNode->input[i]->data;
+    CloneDATensorShape(tensorList[i], makeTupleNode->input[i]);
+  }
+}
+
+void ProcessTupleGetItem(DATensor *tupleGetItemNode, std::mutex &outputsMutex) {
+  CHECK_IF_NULL(tupleGetItemNode)
+  CHECK_IF_FAIL(tupleGetItemNode->input[kFirstInput]->type == Type_Tensor);
+  auto index = static_cast<size_t>(
+      GetValue<int64_t>(tupleGetItemNode->input[kSecondInput]));
+  std::unique_lock<std::mutex> lock(outputsMutex);
+  LOG_OUT << "Run Op_tuple_getitem, tensor: " << tupleGetItemNode
+          << ", input_tensor: " << tupleGetItemNode->input[kFirstInput]
+          << ", index_tensor: " << tupleGetItemNode->input[kSecondInput]
+          << ", index: " << index;
+  CHECK_IF_FAIL(index < tupleGetItemNode->input[kFirstInput]->shape[0]);
+  auto **inputTensorList =
+      static_cast<DATensor **>(tupleGetItemNode->input[kFirstInput]->data);
+  CHECK_IF_NULL(inputTensorList);
+  tupleGetItemNode->data = inputTensorList[index]->data;
+  CloneDATensorShape(tupleGetItemNode, inputTensorList[index]);
+}
+
+void ProcessOutputFromInput(DATensor *outputFromInputNode,
+                            std::mutex &outputsMutex) {
+  CHECK_IF_NULL(outputFromInputNode);
+  auto inputIndex = GetDATensorOuputFromInputIndex(outputFromInputNode);
+  std::unique_lock<std::mutex> lock(outputsMutex);
+  outputFromInputNode->data = outputFromInputNode->input[inputIndex]->data;
+  CloneDATensorShape(outputFromInputNode,
+                     outputFromInputNode->input[inputIndex]);
+}
+} // namespace
 
 GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(context_);
 
-  memPool_ = new MemoryPool();
-  CHECK_IF_NULL(memPool_);
+  recycler_ = new TensorDataRecycler();
+  CHECK_IF_NULL(recycler_);
 
   for (auto &&path : GetEnvKernelLibPaths()) {
     KernelLibRegistry::Instance().Load(path);
@@ -88,9 +135,13 @@ GraphExecutor::~GraphExecutor() {
   FreeDAContext(context_);
   context_ = nullptr;
 
-  CHECK_IF_NULL(memPool_);
-  delete memPool_;
-  memPool_ = nullptr;
+  CHECK_IF_NULL(recycler_);
+  delete recycler_;
+  recycler_ = nullptr;
+  for (auto kernelPair : kernels_) {
+    CHECK_IF_NULL(kernelPair.second);
+    delete kernelPair.second;
+  }
 }
 
 // Start building graph.
@@ -118,6 +169,25 @@ void GraphExecutor::OptGraph() {
                 this, std::placeholders::_1, std::placeholders::_2,
                 std::placeholders::_3);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
+}
+
+// Build DAKernels for graph.
+void GraphExecutor::BuildKernels() {
+  CHECK_IF_NULL(graph_);
+#ifndef SKIP_RUN_TENSOR
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    if (IsSkipBuildDAKernel(graph_->node[i])) {
+      continue;
+    }
+    CHECK_IF_NULL(graph_->node[i]);
+    auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
+    CHECK_IF_NULL(kernelLib);
+    auto kernel = kernelLib->CreateKernel(graph_->node[i]);
+    CHECK_IF_NULL(kernel);
+    kernel->Init();
+    kernels_[graph_->node[i]] = kernel;
+  }
+#endif
 }
 
 // Add a parameter for graph.
@@ -228,41 +298,17 @@ void GraphExecutor::RunTensor(DATensor *node) {
   }
 
   if (node->op == ops::Op_make_tuple) {
-    CHECK_IF_FAIL(node->type == Type_Tensor);
-    CHECK_IF_FAIL(node->shape[0] == node->inputSize);
-    auto **tensorList = static_cast<DATensor **>(node->data);
-    CHECK_IF_NULL(tensorList);
-    for (size_t i = 0; i < node->inputSize; ++i) {
-      std::unique_lock<std::mutex> lock(outputsMutex_);
-      tensorList[i]->data = node->input[i]->data;
-      CloneDATensorShape(tensorList[i], node->input[i]);
-    }
+    ProcessMakeTuple(node, outputsMutex_);
     return;
   }
 
   if (node->op == ops::Op_tuple_getitem) {
-    CHECK_IF_FAIL(node->input[kFirstInput]->type == Type_Tensor);
-    auto index =
-        static_cast<size_t>(GetValue<int64_t>(node->input[kSecondInput]));
-    std::unique_lock<std::mutex> lock(outputsMutex_);
-    LOG_OUT << "Run Op_tuple_getitem, tensor: " << node
-            << ", input_tensor: " << node->input[kFirstInput]
-            << ", index_tensor: " << node->input[kSecondInput]
-            << ", index: " << index;
-    CHECK_IF_FAIL(index < node->input[kFirstInput]->shape[0]);
-    auto **inputTensorList =
-        static_cast<DATensor **>(node->input[kFirstInput]->data);
-    CHECK_IF_NULL(inputTensorList);
-    node->data = inputTensorList[index]->data;
-    CloneDATensorShape(node, inputTensorList[index]);
+    ProcessTupleGetItem(node, outputsMutex_);
     return;
   }
 
   if (IsDATensorOutputFromInput(node)) {
-    auto inputIndex = GetDATensorOuputFromInputIndex(node);
-    std::unique_lock<std::mutex> lock(outputsMutex_);
-    node->data = node->input[inputIndex]->data;
-    CloneDATensorShape(node, node->input[inputIndex]);
+    ProcessOutputFromInput(node, outputsMutex_);
     return;
   }
 
@@ -270,26 +316,36 @@ void GraphExecutor::RunTensor(DATensor *node) {
   GetNodeRealInputs(node);
 
 #ifndef SKIP_RUN_TENSOR
-  auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
-  CHECK_IF_NULL(kernelLib);
-  CHECK_IF_FAIL(kernelLib->RunTensor(node, memPool_));
+  if (kernels_.find(node) != kernels_.end()) {
+    CHECK_IF_NULL(kernels_[node]);
+    kernels_[node]->RunKernel(isDynamic_);
+  } else {
+    LOG_ERROR << "Can not find DAKernel for ops." << ops::ToStr(node->op)
+              << ", DATensor: " << node;
+  }
 #endif
 }
 
+// Record tensor refCount
+void GraphExecutor::RecordTensorRefCount() {
+  CHECK_IF_NULL(recycler_);
+  CHECK_IF_NULL(graph_);
+  CHECK_IF_NULL(context_);
+
+  for (size_t i = 0; i < graph_->nodeSize; ++i) {
+    recycler_->ForwardRecordInputsRefCounts(graph_->node[i]);
+  }
+  recycler_->PrintRefCountInfo();
+}
+
 // Run the built graph.
-void GraphExecutor::RunGraph() {
-  LOG_OUT << "Run graph";
+void GraphExecutor::RunGraph(bool isDynamic) {
+  LOG_OUT << "Run graph, isDynamic: " << isDynamic;
   CHECK_IF_NULL(context_);
   CHECK_IF_NULL(graph_);
+  CHECK_IF_NULL(recycler_);
 
-  memPool_->Reset();
-
-  // record ref counts
-  TensorDataRecycler recycler(memPool_);
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    recycler.ForwardRecordInputsRefCounts(graph_->node[i]);
-  }
-  recycler.PrintRefCountInfo();
+  isDynamic_ = isDynamic;
 
 #ifndef SERIAL
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
@@ -297,9 +353,9 @@ void GraphExecutor::RunGraph() {
             << ", DATensor: " << graph_->node[i] << ", index: " << i;
     RunTensor(graph_->node[i]);
 #ifndef SKIP_RUN_TENSOR
-    recycler.DecreaseInputsRefCounts(graph_->node[i]);
+    recycler_->FreeUnusedNodes(graph_->node[i]);
   }
-  recycler.CheckRefCountInfo();
+  recycler_->CheckRefCountInfo();
 #else
   }
 #endif
