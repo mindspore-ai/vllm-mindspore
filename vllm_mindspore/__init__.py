@@ -303,10 +303,24 @@ from vllm.inputs.registry import InputProcessingContext
 
 InputProcessingContext.call_hf_processor = call_hf_processor
 
-from vllm_mindspore.multimodal.inputs import as_kwargs
+from vllm_mindspore.multimodal.inputs import as_kwargs, \
+    from_items, MultiModalFieldElem, build_elems
+
 from vllm.multimodal.inputs import MultiModalKwargs
+from vllm.multimodal.inputs import MultiModalFlatField
 
 MultiModalKwargs.as_kwargs = as_kwargs
+MultiModalKwargs.from_items = from_items
+
+MultiModalFlatField.build_elems = build_elems
+vllm.multimodal.inputs.MultiModalFieldElem = MultiModalFieldElem
+vllm.v1.serial_utils.MultiModalFieldElem = MultiModalFieldElem
+
+from vllm_mindspore.v1.serial_utils import _encode_tensor, _decode_tensor
+from vllm.v1.serial_utils import MsgpackEncoder, MsgpackDecoder
+
+MsgpackEncoder._encode_tensor = _encode_tensor
+MsgpackDecoder._decode_tensor = _decode_tensor
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding, )
@@ -332,6 +346,11 @@ import vllm.v1.worker.gpu_model_runner
 from vllm_mindspore.v1.worker.gpu_model_runner import _prepare_inputs
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._prepare_inputs = _prepare_inputs
+
+from vllm_mindspore.v1.worker.gpu_model_runner import _calc_mrope_positions
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner._calc_mrope_positions = \
+    _calc_mrope_positions
 
 from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
 

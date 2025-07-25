@@ -41,3 +41,26 @@ class ReduceFromModelParallelRegion(nn.Cell):
             return input_
         output = self.all_reduce(input_)
         return output
+
+
+class AllGatherFromModelParallelRegion(nn.Cell):
+    """
+    Gather the input from world parallel region and concatenate,
+    simultaneously perform transpose operation on input.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.world_size = get_tensor_model_parallel_world_size()
+        if self.world_size > 1:
+            self.tp_group = get_tp_group().device_group._name
+            self.all_gather_into_tensor = ops.AllGather(group=self.tp_group)
+
+    def construct(self, input_):
+        # Size and dimension.
+        if self.world_size == 1:
+            return input_
+        input_ = ops.swapaxes(input_, 0, -1)
+        output = self.all_gather_into_tensor(input_)
+        output = ops.swapaxes(output, 0, -1)
+        return output

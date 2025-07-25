@@ -26,7 +26,6 @@ from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
 from vllm.logger import init_logger
-from vllm.model_executor.layers.rotary_embedding import MRotaryEmbedding
 from vllm.sampling_params import SamplingType
 from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
                                         SlidingWindowSpec)
@@ -34,6 +33,8 @@ from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
+from vllm_mindspore.model_executor.layers.rotary_embedding import (
+    InferMRotaryEmbedding as MRotaryEmbedding)
 from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
 
 logger = init_logger(__name__)
@@ -454,7 +455,6 @@ def _update_states(self, scheduler_output) -> None:
         # Update the persistent batch.
         self.input_batch.num_computed_tokens_cpu[req_index] = (
             num_computed_tokens)
-        start_index = (len(req_state.block_ids) - len(req_data.new_block_ids))
         self.input_batch.block_table.append_row(req_data.new_block_ids,
                                                 req_index)
         # Add new_token_ids to token_ids_cpu.

@@ -252,8 +252,7 @@ def merge_multimodal_embeddings(
         This updates ``inputs_embeds`` in place.
     """
     if isinstance(placeholder_token_id, list):
-        placeholder_token_id = ms.Tensor(placeholder_token_id,
-                                         device=input_ids.device)
+        placeholder_token_id = ms.Tensor(placeholder_token_id)
         return _merge_multimodal_embeddings(
             inputs_embeds,
             ms.numpy.isin(input_ids, placeholder_token_id),

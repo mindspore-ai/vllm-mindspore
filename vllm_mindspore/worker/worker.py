@@ -41,11 +41,17 @@ def _prepare_input_for_warmup(model_config,
     block_tables_num = [
         i for i in range(math.ceil(seq_len / cache_engine.block_size))
     ]
+
+    # adapter multi modal warm up
+    seq_data = dummy_data.seq_data
+    if seq_len == 1:
+        seq_data = dummy_data.seq_data.from_prompt_token_counts((0, seq_len))
+
     seqs = [
         SequenceGroupMetadata(
             request_id=str(idx),
             is_prompt=is_prefill,
-            seq_data={idx: dummy_data.seq_data},
+            seq_data={idx: seq_data},
             sampling_params=SamplingParams(),
             block_tables={idx: block_tables_num},
             lora_request=None,
@@ -55,11 +61,6 @@ def _prepare_input_for_warmup(model_config,
     ]
 
     model_input = model_runner.prepare_model_input(seqs)
-    block_tables = model_input.attn_metadata.block_tables
-    if block_tables is not None and block_tables.numel() <= 0:
-        model_input.attn_metadata.block_tables = torch.zeros((1, 1),
-                                                             dtype=torch.int32)
-
     previous_hidden_states = None if not is_mtp_model else torch.ones(
         [bs, seq_len, model_config.get_hidden_size()],
         dtype=get_valid_dtype(model_config.dtype))

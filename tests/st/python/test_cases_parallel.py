@@ -183,6 +183,22 @@ def test_cases_parallel_part5():
     run_tasks(cases)
 
 
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+def test_cases_parallel_part6():
+    """
+    Feature: test cases parallel.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
+         "vllm_qwen2_5_vl_7b_v1.log")
+    ]
+    run_tasks(cases)
+
+
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
