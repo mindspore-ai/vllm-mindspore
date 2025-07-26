@@ -108,7 +108,7 @@ class DeepseekV3MTPForCausalLM(MfModelBase):
 
 
     def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
-        weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, False)
+        weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, False, weights)
         weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint, is_mtp_model=True)
         self.network.set_dynamic_inputs()
         dynamic_hidden_states = Tensor(shape=[None, None], dtype=self.mf_model_config.compute_dtype)

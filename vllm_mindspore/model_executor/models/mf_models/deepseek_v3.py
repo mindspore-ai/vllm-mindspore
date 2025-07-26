@@ -180,7 +180,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
                 self.mf_config, model, self.network, infer_data, do_predict=True
             )
         else:
-            weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, self.is_quant)
+            weight_processor = DeepseekV3WeightProcessor(self.mf_config, self.network, self.is_quant, weights)
             weight_processor.load_safetensors_shard(self.mf_config.load_checkpoint)
         return None
 
