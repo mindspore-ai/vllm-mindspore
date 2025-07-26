@@ -34,6 +34,8 @@ from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CacheConfig,
                          CompilationConfig, CompilationLevel, VllmConfig,
                          _find_dtype, _resolve_auto_dtype, get_attr_docs)
 from vllm.logger import init_logger
+from vllm.lora.request import LoRARequest
+from vllm.sampling_params import SamplingParams
 from vllm.utils import random_uuid
 
 from vllm_mindspore.utils import is_310p
@@ -463,3 +465,34 @@ class _CacheConfig(CacheConfig):
     """Data type for kv cache storage. If "auto", will use model data type.
     CUDA 11.8+ supports fp8 (=fp8_e4m3) and fp8_e5m2. ROCm (AMD GPU) supports
     fp8 (=fp8_e4m3)."""
+
+
+def v1_process_validate_sampling_params(
+    self,
+    params: SamplingParams,
+    lora_request: Optional[LoRARequest],
+) -> None:
+
+    model_config = self.vllm_config.model_config
+    vocab_size = model_config.get_vocab_size()
+    if params.top_k > vocab_size:
+        raise ValueError(
+            f"top_k cannot be greater than vocabulary size({vocab_size}), "
+            f"but got {params.top_k}.")
+    scheduler_config = self.vllm_config.scheduler_config
+    max_num_seqs = scheduler_config.max_num_seqs
+    if params.n > max_num_seqs:
+        raise ValueError(f"SchedulerConfig.n cannot be greater than "
+                         f"max_num_seqs({max_num_seqs}), but got {params.n}.")
+
+    self._validate_structured_output(params)
+    self._validate_logit_bias(params)
+
+    if params.allowed_token_ids is None:
+        return
+    if not params.allowed_token_ids:
+        raise ValueError("allowed_token_ids is not None and empty!")
+    tokenizer = self.tokenizer.get_lora_tokenizer(lora_request)
+    vocab_size = len(tokenizer)
+    if not all(0 <= tid < vocab_size for tid in params.allowed_token_ids):
+        raise ValueError("allowed_token_ids contains out-of-vocab token id!")
