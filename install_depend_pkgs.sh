@@ -118,6 +118,7 @@ install_mindformers() {
     cd "$MF_DIR"
     git checkout "$commit_id"
     cd "$SCRIPT_DIR"
+    pip install $PIP_TRUSTED_HOSTS $PIP_INDEX -r mindformers/requirements.txt
     
     log "Using mindformers commit: $commit_id"
 }
@@ -183,7 +184,7 @@ main() {
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_package_url "mindspore" "unified/$ARCH")
+    local mindspore_url=$(get_package_url "mindspore" "unified/${ARCH}")
     local msadapter_url=$(get_package_url "msadapter" "any")
     local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
     
@@ -208,7 +209,5 @@ main() {
     log ""
     log "When using MindFormers backend, please configure environment variables manually:"
     echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
-    echo "  export VLLM_MS_MODEL_BACKEND=MindFormers"
 }
-
 main "$@"
