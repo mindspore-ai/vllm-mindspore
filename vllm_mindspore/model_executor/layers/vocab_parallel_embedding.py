@@ -346,13 +346,14 @@ class VocabParallelEmbedding(nn.Cell):
         # If parameter does not have output dim, then it should
         # be copied onto all gpus (e.g. g_idx for act_order gptq).
         if output_dim is None:
+            loaded_weight = loaded_weight[:]
             assert param.data.shape == loaded_weight.shape
             if param.data.shape != loaded_weight.shape:
                 raise ValueError(
                     f"'param.data.shape' should be equal to "
                     f"'loaded_weight.shape', but got {param.data.shape} "
                     f"and {loaded_weight.shape}")
-            param.set_data(loaded_weight)
+            param.set_data(ms.from_numpy(loaded_weight))
             return
 
         # Shard indexes for loading the weight
