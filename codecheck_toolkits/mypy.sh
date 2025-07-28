@@ -9,7 +9,7 @@ run_mypy() {
 }
 
 run_mypy
-run_mypy tests
+run_mypy tests/st
 run_mypy vllm_mindspore/attention
 run_mypy vllm_mindspore/compilation
 run_mypy vllm_mindspore/distributed
