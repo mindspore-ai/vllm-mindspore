@@ -1,104 +1,97 @@
 #!/bin/bash
 
-script_dir=$(cd "$(dirname $0)"; pwd)
-yaml_file="$script_dir/.jenkins/test/config/dependent_packages.yaml"
-work_dir="install_depend_pkgs"
+set -euo pipefail
 
-if [ ! -f "$yaml_file" ]; then
-    echo "$yaml_file does not exist."
-    exit 1
-fi
+readonly SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
+readonly CONFIG_FILE="$SCRIPT_DIR/.jenkins/test/config/dependent_packages.yaml"
+readonly WORK_DIR="/workspace/install_depend_pkgs"
+readonly MF_DIR="/workspace/mindformers"
 
-if [ ! -d "$work_dir" ]; then
-    mkdir -p "$work_dir"
-    echo "Created $work_dir directory."
-else
-    echo "$work_dir already exists. Removing existing whl packages."
-    rm -f "$work_dir"/*.whl
-fi
+log() { echo "========= $*"; }
 
-cd "$work_dir" || exit 1
+log "Installing uv package manager"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
 
-get_yaml_value() {
-    local file="$1"
-    local key="$2"
+alias pip="uv pip"
+get_config() { python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['$1'])" 2>/dev/null; }
 
-    python3 -c "
-import yaml
-try:
-    with open('$file', 'r') as f:
-        data = yaml.safe_load(f)
-        print(data.get('$key', ''))
-except Exception as e:
-    print(f'Error: {e}')
-    exit(1)
-"
+get_package_url() {
+    local package="$1"
+    local arch="${2:-any}"
+    local base_url=$(grep -A 1 -w "${package}:" "$CONFIG_FILE" | tail -n 1 | xargs)
+    base_url="${base_url}${arch}/"
+    
+    if [[ "$package" == "mindspore" && "$arch" == "unified/aarch64" ]]; then
+        local wheel_url=$(curl -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | grep "cp311-cp311" | head -n 1)
+    else
+        local wheel_url=$(curl -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | head -n 1)
+    fi
+    
+    echo "${base_url}${wheel_url}"
 }
 
-echo "========= Installing vllm"
-vllm_dir=vllm-v0.8.3
-if [ ! -d "$vllm_dir" ]; then
-    git clone https://github.com/vllm-project/vllm.git -b v0.8.3 "$vllm_dir"
-    cd "$vllm_dir" ||  { echo "Failed to git clone vllm!"; exit 1; }
-    git apply $script_dir/vllm_dp/dp_scale_out.patch
-else
-    echo "The $vllm_dir folder already exists and will not be re-downloaded."
-    cd "$vllm_dir" || { echo "Failed to git clone vllm!"; exit 1; }
-fi
-pip uninstall msadapter -y
-pip uninstall vllm -y
-pip install -v -r requirements/cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
-VLLM_TARGET_DEVICE=empty python setup.py install || { echo "Failed to install vllm"; exit 1; }
-pip uninstall torch torch-npu torchvision torchaudio -y
-cd ..
+install_from_url() {
+    local name="$1" url="$2"
+    log "Installing $name from $url"
+    pip install --no-cache-dir "$url"
+}
 
-
-echo "========= Installing mindspore"
-python_v="cp$(python3 --version 2>&1 | grep -oP 'Python \K\d+\.\d+' | tr -d .)"
-mindspore_path=$(get_yaml_value "$yaml_file" "mindspore")
-mindspore_name="mindspore-2.7.0-${python_v}-${python_v}-linux_$(arch).whl"
-mindspore_pkg="${mindspore_path}unified/$(arch)/${mindspore_name}"
-
-wget "$mindspore_pkg" --no-check-certificate || { echo "Failed to download mindspore"; exit 1; }
-pip uninstall mindspore -y && pip install "$mindspore_name" || { echo "Failed to install mindspore"; exit 1; }
-
-
-echo "========= Installing mindformers"
-mf_dir=mindformers-dev
-if [ ! -d "$mf_dir" ]; then
-    git clone https://gitee.com/mindspore/mindformers.git -b dev "$mf_dir"
+install_mindformers() {
+    log "Installing mindformers"
+    git clone https://gitee.com/mindspore/mindformers.git -b dev "$MF_DIR"
+    cd "$MF_DIR"
+    git fetch origin
+    git checkout dev && git pull origin dev
     git checkout dfb8aa3a59401495b2d8c8c107d46fe0d36c949a
-else
-    echo "The $mf_dir folder already exists and will not be re-downloaded."
-fi
-if [ ! -d "$mf_dir" ]; then
-    echo "Failed to git clone mindformers!"
-    exit 1 
-fi
+}
 
+cleanup_torch() {
+    log "Cleaning torch packages"
+    pip uninstall torch torch-npu torchvision torchaudio -y || true
+}
 
-echo "========= Installing mindspore golden-stick"
-gs_dir=gs-master
-if [ ! -d "$gs_dir" ]; then
-    git clone https://gitee.com/mindspore/golden-stick.git  "$gs_dir"
-else
-    echo "The $gs_dir folder already exists and will not be re-downloaded."
-fi
-cd "$gs_dir" || { echo "Failed to git clone golden-stick!"; exit 1; }
-pip uninstall mindspore-gs -y && pip install .|| { echo "Failed to install golden-stick"; exit 1; }
-cd ..
+cleanup_cache() {
+    log "Cleaning up package caches"
+    uv cache clean
+    pip cache purge || true
+    rm -rf ~/.cache/pip
+    rm -rf ~/.local/share/uv
+}
 
+main() {
+    [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
+    
+    mkdir -p "$WORK_DIR"
+    
+    log "Starting dependency installation"
+    
+    local vllm_url=$(get_package_url "vllm" "any")
+    local mindspore_url=$(get_package_url "mindspore" "unified/aarch64")
+    local msadapter_url=$(get_package_url "msadapter" "any")
+    local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
+    
+    log "Package URLs:"
+    log "vLLM: $vllm_url"
+    log "MindSpore: $mindspore_url"
+    log "MSAdapter: $msadapter_url"
+    log "MindSpore GS: $mindspore_gs_url"
+    
+    install_from_url "vllm" "$vllm_url"
+    install_from_url "mindspore" "$mindspore_url"
+    cleanup_torch
+    install_from_url "msadapter" "$msadapter_url"
+    install_mindformers
+    install_from_url "mindspore-gs" "$mindspore_gs_url"
+    
+    cleanup_cache
+    
+    export PYTHONPATH="$MF_DIR/:$PYTHONPATH"
+    export vLLM_MODEL_BACKEND=MindFormers
+    
+    log "All dependencies installed successfully!"
+    log "PYTHONPATH set to: $PYTHONPATH"
+    log "vLLM_MODEL_BACKEND set to: $vLLM_MODEL_BACKEND"
+}
 
-echo "========= Installing msadapter"
-msadapter_dir="MSAdapter"
-if [ ! -d "$msadapter_dir" ]; then
-    git clone https://git.openi.org.cn/OpenI/MSAdapter.git
-else
-    echo "The $msadapter_dir folder already exists and will not be re-downloaded."
-fi
-cd "$msadapter_dir" || { echo "Failed to git clone msadapter!"; exit 1; }
-pip uninstall msadapter -y && pip install .  || { echo "Failed to install msadapter"; exit 1; }
-cd ..
-
-echo "========= All dependencies installed successfully!"
-echo -e "[\033[0;34mnotice\033[0m]Please set the command: export PYTHONPATH=$(pwd)/$mf_dir/:\$PYTHONPATH"
+main "$@"
