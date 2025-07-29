@@ -101,6 +101,16 @@ struct DATensor {
   TensorArrayPtr input{nullptr};
 };
 
+inline std::string ToString(const DATensor *tensor) {
+  // CHECK_IF_NULL(tensor);
+  std::stringstream ss;
+  ss << "tensor{";
+  ss << ops::ToStr(tensor->op);
+  ss << ", ptr: " << tensor;
+  ss << "}";
+  return ss.str();
+}
+
 // Create a new DAContext.
 DAContext *NewDAContext(size_t deviceId = 0, size_t memSize = kMemPoolSize);
 // Free the DAContext.

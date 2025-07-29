@@ -796,7 +796,11 @@ void VM::FinishGraph(const Frame &frame) {
     return;
   }
   if (graphExecutor_.HasGraph()) {
+    (void)graphExecutor_.AddReturn();
     graphExecutor_.EndGraph();
+
+    graphExecutor_.DumpGraph();
+    graphExecutor_.OptGraph();
     graphExecutor_.DumpGraph();
   } else {
     LOG_ERROR << "No graph building.";

@@ -23,15 +23,17 @@
 
 #include "common/common.h"
 #include "common/visible.h"
-#include "runtime/utils.h"
+#include "pass/pass.h"
 #include "runtime/kernel_lib.h"
 #include "runtime/mempool.h"
+#include "runtime/utils.h"
 #include "tensor/tensor.h"
 
 #define DUMP
 
 namespace da {
 namespace runtime {
+using namespace tensor;
 class DA_API GraphExecutor {
 public:
   GraphExecutor();
@@ -41,23 +43,25 @@ public:
   void BeginGraph(const std::string &name);
   // Finish building graph.
   void EndGraph();
+  // Optimize the graph.
+  void OptGraph();
   // Add a parameter for graph.
-  void AddParameter(tensor::DATensor *param);
+  void AddParameter(DATensor *param);
   // Add parameters for graph.
-  void AddParameters(const std::vector<tensor::DATensor *> &params);
+  void AddParameters(const std::vector<DATensor *> &params);
 
   // Add a const tensor.
-  tensor::DATensor *AddTensor(tensor::Type type = tensor::Type_F32,
-                              size_t dim = 0,
-                              const tensor::ShapeArray &shape = {0},
-                              void *data = nullptr);
+  DATensor *AddTensor(Type type = Type_F32, size_t dim = 0,
+                      const ShapeArray &shape = {0}, void *data = nullptr);
   // Add tensor for graph.
-  void AddTensor(tensor::DATensor *tensor);
+  void AddTensor(DATensor *tensor);
   // Add tensor list to tensor.
-  void CastToTensorList(tensor::DATensor *tensor, size_t len);
+  void CastToTensorList(DATensor *tensor, size_t len);
   // Add operation result tensor.
-  tensor::DATensor *AddTensor(ops::Op op,
-                              const std::vector<tensor::DATensor *> &inputs);
+  DATensor *AddTensor(ops::Op op, DATensor **start, size_t size);
+  DATensor *AddTensor(ops::Op op, const std::vector<DATensor *> &inputs);
+  // Add return node.
+  DATensor *AddReturn();
 
   // Run the built graph.
   void RunGraph();
@@ -73,17 +77,17 @@ public:
 #endif
 
 private:
-  void RunTensor(tensor::DATensor *tensor);
+  void RunTensor(DATensor *tensor);
 
   std::string name_;
-  tensor::DAContext *context_{nullptr};
-  tensor::DAGraph *graph_{nullptr};
-  std::vector<tensor::DATensor *> parameters_;
+  DAContext *context_{nullptr};
+  DAGraph *graph_{nullptr};
+  std::vector<DATensor *> parameters_;
   runtime::MemoryPool *memPool_{nullptr};
   std::mutex outputsMutex_;
 #ifdef DUMP
-  std::unordered_map<const tensor::DATensor *, ssize_t> paraNumMap_;
-  std::unordered_map<const tensor::DATensor *, ssize_t> nodeNumMap_;
+  std::unordered_map<const DATensor *, ssize_t> paraNumMap_;
+  std::unordered_map<const DATensor *, ssize_t> nodeNumMap_;
 #endif
 };
 } // namespace runtime

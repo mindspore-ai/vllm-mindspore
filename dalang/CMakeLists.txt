@@ -38,7 +38,7 @@ add_subdirectory(dac)
 add_subdirectory(dair)
 add_subdirectory(dart)
 
-set(DALANG_OBJ lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj stdc++fs)
+set(DALANG_OBJ lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj pass_obj stdc++fs)
 
 # Create da execution file
 add_executable(da cli/main.cc cli/options.cc)

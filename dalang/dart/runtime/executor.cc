@@ -108,6 +108,18 @@ void GraphExecutor::EndGraph() {
   CHECK_IF_NULL(graph_);
 }
 
+// Finish building graph.
+void GraphExecutor::OptGraph() {
+  LOG_OUT << "Opt graph";
+  CHECK_IF_NULL(graph_);
+  pass::TensorCreator tensorCreator =
+      std::bind((DATensor * (GraphExecutor::*)(ops::Op, DATensor **, size_t)) &
+                    GraphExecutor::AddTensor,
+                this, std::placeholders::_1, std::placeholders::_2,
+                std::placeholders::_3);
+  pass::PassManager::Instance().Run(graph_, tensorCreator);
+}
+
 // Add a parameter for graph.
 void GraphExecutor::AddParameter(DATensor *param) {
   LOG_OUT << "Add parameter: " << param << " for graph: " << graph_;
@@ -144,25 +156,31 @@ void GraphExecutor::AddTensor(DATensor *tensor) {
   tensor::AddTensor(graph_, tensor);
 }
 
-// Add tensor list to tensor.
-void GraphExecutor::CastToTensorList(DATensor *tensor, size_t len) {
-  LOG_OUT << "Add tensor list";
+// Add operation result tensor.
+DATensor *GraphExecutor::AddTensor(ops::Op op, DATensor **start, size_t size) {
+  LOG_OUT << "Add tensor";
+  const auto tensorListSize = size;
+  LOG_OUT << "tensor input size: " << tensorListSize;
+  CHECK_IF_FAIL(tensorListSize <= DA_TENSOR_MAX_INPUT);
   CHECK_IF_NULL(context_);
+  auto *tensor = tensor::NewDATensor(context_);
   CHECK_IF_NULL(tensor);
-  tensor->type = tensor::Type_Tensor;
-  tensor->dim = 1;
-  tensor->shape[0] = len;
-  auto **tensorList = tensor::NewDATensorList(context_, len);
-  tensor->data = static_cast<void *>(tensorList);
+  tensor->op = op;
+  for (size_t i = 0; i < tensorListSize; ++i) {
+    tensor->input[i] = start[i];
+    ++tensor->inputSize;
+  }
+  CHECK_IF_NULL(graph_);
+  tensor::AddTensor(graph_, tensor);
+  return tensor;
 }
 
 // Add operation result tensor.
 DATensor *GraphExecutor::AddTensor(ops::Op op,
                                    const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
-  auto tensorSize = inputs.size();
-  LOG_OUT << "tensor input size: " << tensorSize;
-  CHECK_IF_FAIL(tensorSize <= DA_TENSOR_MAX_INPUT);
+  LOG_OUT << "tensor input size: " << inputs.size();
+  CHECK_IF_FAIL(inputs.size() <= DA_TENSOR_MAX_INPUT);
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_);
   CHECK_IF_NULL(tensor);
@@ -174,6 +192,33 @@ DATensor *GraphExecutor::AddTensor(ops::Op op,
   CHECK_IF_NULL(graph_);
   tensor::AddTensor(graph_, tensor);
   return tensor;
+}
+
+// Add return node.
+DATensor *GraphExecutor::AddReturn() {
+  LOG_OUT << "Add return";
+  CHECK_IF_NULL(context_);
+  auto *tensor = tensor::NewDATensor(context_);
+  CHECK_IF_NULL(tensor);
+  tensor->op = ops::Op_return;
+  tensor->inputSize = 1;
+  CHECK_IF_NULL(graph_);
+  CHECK_IF_FAIL(graph_->nodeSize > 0);
+  tensor->input[0] = graph_->node[graph_->nodeSize - 1];
+  tensor::AddTensor(graph_, tensor);
+  return tensor;
+}
+
+// Add tensor list to tensor.
+void GraphExecutor::CastToTensorList(DATensor *tensor, size_t len) {
+  LOG_OUT << "Add tensor list";
+  CHECK_IF_NULL(context_);
+  CHECK_IF_NULL(tensor);
+  tensor->type = tensor::Type_Tensor;
+  tensor->dim = 1;
+  tensor->shape[0] = len;
+  auto **tensorList = tensor::NewDATensorList(context_, len);
+  tensor->data = static_cast<void *>(tensorList);
 }
 
 // Run DATensor node
@@ -270,7 +315,8 @@ void GraphExecutor::RunGraph() {
       (void)nextNodes[node->input[j]].emplace_back(node);
     }
   }
-  // Initialize ready queue with parameters nodes and nodes with no dependencies.
+  // Initialize ready queue with parameters nodes and nodes with no
+  // dependencies.
   for (size_t i = 0; i < graph_->paramSize; ++i) {
     (void)readyQueue.emplace(graph_->param[i]);
   }
@@ -290,7 +336,8 @@ void GraphExecutor::RunGraph() {
       DATensor *node = nullptr;
       {
         std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [&]() { return runningCount == 0 || !readyQueue.empty(); });
+        cv.wait(lock,
+                [&]() { return runningCount == 0 || !readyQueue.empty(); });
         if (runningCount == 0 && readyQueue.empty()) {
           return;
         }

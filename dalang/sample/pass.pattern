@@ -1,0 +1,17 @@
+
+graph pattern(x, y) {
+    z = ops.matmul(x, y)
+    z = ops.gelu(z)
+    z = ops.softmax(z)
+    return ops.add(ops.add(x, y), z)
+}
+
+graph replacement(x, y) {
+    z = ops.matmul(x, y)
+    z = ops.norm(z)      # Add norm here.
+    z = ops.gelu(z)
+    z = ops.softmax(z)
+    return ops.add(ops.add(x, y), z)
+}
+
+pattern ==> replacement
