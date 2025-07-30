@@ -15,105 +15,176 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-script_dir=$(cd "$(dirname $0)"; pwd)
-yaml_file="$script_dir/.jenkins/test/config/dependent_packages.yaml"
-work_dir="install_depend_pkgs"
+set -euo pipefail
 
-if [ ! -f "$yaml_file" ]; then
-    echo "$yaml_file does not exist."
-    exit 1
-fi
+readonly SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
+readonly CONFIG_FILE="$SCRIPT_DIR/.jenkins/test/config/dependent_packages.yaml"
+readonly MF_DIR="$SCRIPT_DIR/mindformers"
 
-if [ ! -d "$work_dir" ]; then
-    mkdir -p "$work_dir"
-    echo "Created $work_dir directory."
-else
-    echo "$work_dir already exists. Removing existing whl packages."
-    rm -f "$work_dir"/*.whl
-fi
+FORCE_REINSTALL=false
 
-cd "$work_dir" || exit 1
+log() { echo "========= $*"; }
 
-get_yaml_value() {
-    local file="$1"
-    local key="$2"
-
-    python3 -c "
-import yaml
-try:
-    with open('$file', 'r') as f:
-        data = yaml.safe_load(f)
-        print(data.get('$key', ''))
-except Exception as e:
-    print(f'Error: {e}')
-    exit(1)
-"
+pip_install() {
+    if [ "$FORCE_REINSTALL" = true ]; then
+        uv pip install --system --no-cache-dir --force-reinstall --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+    else
+        uv pip install --system --no-cache-dir --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+    fi
 }
 
-echo "========= Installing vllm"
-vllm_dir=vllm-v0.8.3
-if [ ! -d "$vllm_dir" ]; then
-    git clone https://github.com/vllm-project/vllm.git -b v0.8.3 "$vllm_dir"
-    cd "$vllm_dir" ||  { echo "Failed to git clone vllm!"; exit 1; }
-    git apply $script_dir/vllm_dp/dp_scale_out.patch
-else
-    echo "The $vllm_dir folder already exists and will not be re-downloaded."
-    cd "$vllm_dir" || { echo "Failed to git clone vllm!"; exit 1; }
-fi
-pip uninstall msadapter -y
-pip uninstall vllm -y
-pip install -v -r requirements/cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu
-VLLM_TARGET_DEVICE=empty python setup.py install || { echo "Failed to install vllm"; exit 1; }
-pip uninstall torch torch-npu torchvision torchaudio -y
-cd ..
+get_config() { python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['$1'])" 2>/dev/null; }
 
+get_mindformers_commit() {
+    local mindformers_commit
+    
+    if [ -d ".git" ] && git submodule status tests/mindformers >/dev/null 2>&1; then
+        mindformers_commit=$(git submodule status tests/mindformers | awk '{print $1}' | sed 's/^-//')
+    else
+        if [ -z "${MINDFORMERS_COMMIT:-}" ]; then
+            log "Error: Script requires MINDFORMERS_COMMIT environment variable when running independently"
+            exit 1
+        fi
+        mindformers_commit="$MINDFORMERS_COMMIT"
+    fi
+    
+    if [ -z "$mindformers_commit" ]; then
+        log "Failed to get mindformers commit"
+        exit 1
+    fi
+    
+    echo "$mindformers_commit"
+}
 
-echo "========= Installing mindspore"
-python_v="cp$(python3 --version 2>&1 | grep -oP 'Python \K\d+\.\d+' | tr -d .)"
-mindspore_path=$(get_yaml_value "$yaml_file" "mindspore")
-mindspore_name="mindspore-2.7.0-${python_v}-${python_v}-linux_$(arch).whl"
-mindspore_pkg="${mindspore_path}unified/$(arch)/${mindspore_name}"
+get_package_url() {
+    local package="$1"
+    local arch="${2:-any}"
+    local base_url=$(grep -A 1 -w "${package}:" "$CONFIG_FILE" | tail -n 1 | xargs)
+    base_url="${base_url}${arch}/"
+    
+    if [[ "$package" == "mindspore" ]]; then
+        local python_v="cp$(python3 --version 2>&1 | grep -oP 'Python \K\d+\.\d+' | tr -d .)"
+        local wheel_url=$(curl -k -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | grep "${python_v}-${python_v}" | head -n 1)
+    else
+        local wheel_url=$(curl -k -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | head -n 1)
+    fi
+    
+    echo "${base_url}${wheel_url}"
+}
 
-wget "$mindspore_pkg" --no-check-certificate || { echo "Failed to download mindspore"; exit 1; }
-pip uninstall mindspore -y && pip install "$mindspore_name" || { echo "Failed to install mindspore"; exit 1; }
+install_mindformers() {
+    log "Installing mindformers"
+    local commit_id=$(get_mindformers_commit)
+    
+    if [ "$FORCE_REINSTALL" = true ] && [ -d "$MF_DIR" ]; then
+        log "Force reinstall: removing existing mindformers directory"
+        rm -rf "$MF_DIR"
+    fi
+    
+    if [ ! -d "$MF_DIR" ]; then
+        git clone https://gitee.com/mindspore/mindformers.git "$MF_DIR"
+    fi
+    cd "$MF_DIR"
+    git checkout "$commit_id"
+    cd "$SCRIPT_DIR"
+    
+    log "Using mindformers commit: $commit_id"
+}
 
+cleanup_torch() {
+    log "Cleaning torch packages"
+    pip uninstall torch torch-npu torchvision torchaudio -y || true
+}
 
-echo "========= Installing mindformers"
-mf_dir=mindformers-dev
-if [ ! -d "$mf_dir" ]; then
-    git clone https://gitee.com/mindspore/mindformers.git -b dev "$mf_dir"
-    git checkout 3e257a44384b927bc0fe26348047d7fe44a954db
-else
-    echo "The $mf_dir folder already exists and will not be re-downloaded."
-fi
-if [ ! -d "$mf_dir" ]; then
-    echo "Failed to git clone mindformers!"
-    exit 1 
-fi
+cleanup_cache() {
+    log "Cleaning up package caches"
+    uv cache clean
+    pip cache purge || true
+    rm -rf ~/.cache/pip
+    rm -rf ~/.local/share/uv
+}
 
+usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Install vLLM-MindSpore dependencies"
+    echo ""
+    echo "OPTIONS:"
+    echo "  -F, --force-reinstall    Force reinstall all packages (with --force-reinstall)"
+    echo "  -h, --help              Show this help message and exit"
+    echo ""
+    echo "Examples:"
+    echo "  $0                      Normal installation"
+    echo "  $0 -F                   Force reinstall all packages"
+    echo "  $0 --force-reinstall    Force reinstall all packages"
+}
 
-echo "========= Installing mindspore golden-stick"
-gs_dir=gs-master
-if [ ! -d "$gs_dir" ]; then
-    git clone https://gitee.com/mindspore/golden-stick.git  "$gs_dir"
-else
-    echo "The $gs_dir folder already exists and will not be re-downloaded."
-fi
-cd "$gs_dir" || { echo "Failed to git clone golden-stick!"; exit 1; }
-pip uninstall mindspore-gs -y && pip install .|| { echo "Failed to install golden-stick"; exit 1; }
-cd ..
+main() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -F|--force-reinstall)
+                export FORCE_REINSTALL=true
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Error: Unknown option '$1'"
+                echo ""
+                usage
+                exit 1
+                ;;
+        esac
+    done
 
+    if [ "$FORCE_REINSTALL" = true ]; then
+        log "WARNING: Force reinstall mode enabled - all packages will be reinstalled"
+        log "This will remove existing mindformers directory and reinstall all dependencies"
+    fi
 
-echo "========= Installing msadapter"
-msadapter_dir="MSAdapter"
-if [ ! -d "$msadapter_dir" ]; then
-    git clone https://git.openi.org.cn/OpenI/MSAdapter.git
-else
-    echo "The $msadapter_dir folder already exists and will not be re-downloaded."
-fi
-cd "$msadapter_dir" || { echo "Failed to git clone msadapter!"; exit 1; }
-pip uninstall msadapter -y && pip install .  || { echo "Failed to install msadapter"; exit 1; }
-cd ..
+    pip install --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple uv
 
-echo "========= All dependencies installed successfully!"
-echo -e "[\033[0;34mnotice\033[0m]Please set the command: export PYTHONPATH=$(pwd)/$mf_dir/:\$PYTHONPATH"
+    [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
+    
+    log "Starting dependency installation"
+    
+    local vllm_url=$(get_package_url "vllm" "any")
+    local mindspore_url=$(get_package_url "mindspore" "unified/aarch64")
+    local msadapter_url=$(get_package_url "msadapter" "any")
+    local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
+    
+    log "Package URLs:"
+    log "vLLM: $vllm_url"
+    log "MindSpore: $mindspore_url"
+    log "msadapter: $msadapter_url"
+    log "mindspore-gs: $mindspore_gs_url"
+    
+    pip_install "$vllm_url"
+    cleanup_torch
+    pip_install "$mindspore_url" "$msadapter_url" "$mindspore_gs_url"
+    install_mindformers
+
+    cleanup_cache
+    
+    log "All dependencies installed successfully!"
+    log ""
+    log "To use vLLM-MindSpore, environment variables need to be configured:"
+    log "- export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
+    log "- export vLLM_MODEL_BACKEND=MindFormers"
+    log ""
+    echo -n "Add these to ~/.bashrc automatically? (y/N): "
+    read -r response
+    
+    if [[ "$response" == "y" || "$response" == "Y" ]]; then
+        echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
+        echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
+        log "Environment variables added to ~/.bashrc"
+        log "Run: source ~/.bashrc"
+    else
+        log "Please add the environment variables manually and run 'source ~/.bashrc'"
+    fi
+}
+
+main "$@"
