@@ -64,12 +64,13 @@ public:
 
   DATensor *NewTensor(ops::Op op, DATensor **start, size_t size) {
     CHECK_IF_FAIL(tensorCreator_);
-    tensorCreator_(op, start, size);
+    return tensorCreator_(op, start, size);
   }
 
   DATensor *NewTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
     CHECK_IF_FAIL(tensorCreator_);
-    tensorCreator_(op, const_cast<DATensor **>(inputs.data()), inputs.size());
+    return tensorCreator_(op, const_cast<DATensor **>(inputs.data()),
+                          inputs.size());
   }
 
 private:
