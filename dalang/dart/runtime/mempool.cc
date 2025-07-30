@@ -16,8 +16,8 @@
 
 #include <vector>
 
-#include "runtime/utils.h"
 #include "runtime/mempool.h"
+#include "runtime/utils.h"
 
 namespace da {
 namespace runtime {
@@ -34,6 +34,17 @@ void MemoryPool::Free(DATensor *tensor) const {
   } else {
     freeFunc_(tensor->data);
   }
+}
+
+TensorDataRecycler::TensorDataRecycler() {
+  memPool_ = new MemoryPool();
+  CHECK_IF_NULL(memPool_);
+}
+
+TensorDataRecycler::~TensorDataRecycler() {
+  CHECK_IF_NULL(memPool_);
+  delete memPool_;
+  memPool_ = nullptr;
 }
 
 void TensorDataRecycler::ForwardRecordInputsRefCounts(DATensor *node) {
@@ -69,15 +80,26 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
   }
 }
 
-void TensorDataRecycler::DecreaseInputsRefCounts(DATensor *node) {
+void TensorDataRecycler::FreeUnusedNodes(DATensor *node) {
   CHECK_IF_NULL(node);
   if (node->op == ops::Op_return || IsSkipRecordRefCount(node) ||
       IsDummyDATensorNode(node)) {
     return;
   }
+  if (nodeReleaseList_.find(node) != nodeReleaseList_.end()) {
+    CHECK_IF_NULL(memPool_);
+    for (auto releasedNode : nodeReleaseList_[node]) {
+      memPool_->Free(releasedNode);
+    }
+    return;
+  }
   for (auto related : refRelations_[node]) {
     DecreaseInner(related);
+    if (refCounts_[related] == 0) {
+      nodeReleaseList_[node].emplace_back(related);
+    }
   }
+  (void)nodeReleaseList_[node];
 }
 
 void TensorDataRecycler::IncreaseInner(DATensor *tensor) {

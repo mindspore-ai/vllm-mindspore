@@ -28,6 +28,7 @@
 #include <windows.h>
 #endif
 
+#include "dart/runtime/kernel.h"
 #include "runtime/mempool.h"
 #include "common/common.h"
 #include "tensor/tensor.h"
@@ -38,15 +39,16 @@ namespace runtime {
 #define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                   \
   static const da::runtime::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
     KERNEL_LIB_NAME, []() { return new (std::nothrow) KERNEL_LIB_CLASS(); });
+
 class KernelLib;
 using KernelLibCreator = std::function<KernelLib *()>;
 
 class KernelLib {
  public:
-  KernelLib(std::string name) : name_(name) {}
+  KernelLib(std::string &&name) : name_(std::move(name)) {}
   virtual ~KernelLib() = default;
 
-  virtual bool RunTensor(tensor::DATensor *tensorNode, runtime::MemoryPool *mempool) const = 0;
+  virtual DAKernel* CreateKernel(tensor::DATensor *tensorNode) const = 0;
   std::string Name() const { return name_; }
 
  protected:

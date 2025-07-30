@@ -14,12 +14,32 @@
  * limitations under the License.
  */
 
-#include <vector>
-
 #include "runtime/utils.h"
+#include <set>
+#include <unordered_map>
+#include <vector>
 
 namespace da {
 namespace runtime {
+const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex = {
+    {ops::Op_return, kFirstInput},
+    {ops::Op_depend, kFirstInput},
+    {ops::Op_load, kFirstInput},
+    {ops::Op_update_state, kFirstInput},
+};
+
+const std::set<ops::Op> dummyOpsSet = {
+    ops::Op_tuple_getitem,
+    ops::Op_depend,
+    ops::Op_make_tuple,
+    ops::Op_return,
+};
+
+const std::set<ops::Op> forceResizeOpsSet = {
+    ops::Op_flash_attention_score,
+    ops::Op_paged_attention,
+};
+
 void GetNodeRealInputs(DATensor *node) {
   CHECK_IF_NULL(node);
   std::vector<DATensor *> realInputs;
@@ -28,7 +48,7 @@ void GetNodeRealInputs(DATensor *node) {
     if (node->input[i]->type == Type_Tensor) {
       auto **tensorList = static_cast<DATensor **>(node->input[i]->data);
       CHECK_IF_NULL(tensorList);
-      for (size_t j = 0; j < node->input[i]->shape[0]; j++) {
+      for (size_t j = 0; j < node->input[i]->shape[0]; ++j) {
         CHECK_IF_NULL(tensorList[j]);
         if (tensorList[j]->type == Type_Monad) {
           continue;
