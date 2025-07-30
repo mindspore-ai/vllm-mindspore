@@ -15,12 +15,16 @@
 # limitations under the License.
 
 import sys
+from typing import Union
 
+from vllm.logger import init_logger
 from vllm.model_executor.models.registry import (_LazyRegisteredModel,
                                                  _ModelRegistry, _run)
 
 from vllm_mindspore.utils import (is_mindformers_model_backend,
                                   is_mindone_model_backend)
+
+logger = init_logger(__name__)
 
 _NATIVE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
@@ -32,10 +36,9 @@ _NATIVE_MODELS = {
 
 _MINDFORMERS_MODELS = {
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
-    "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),  # MCore
-    "Qwen3MoeForCausalLM": ("qwen3_moe", "Qwen3MoeForCausalLM"),  # MCore
     "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
     "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
+    "MindFormersForCausalLM": ("mindformers", "MindFormersForCausalLM")
 }
 
 _MINDONE_MODELS = {
@@ -81,6 +84,38 @@ MindSporeModelRegistry = _ModelRegistry(_registry_dict)
 _SUBPROCESS_COMMAND = [
     sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"
 ]
+
+
+def is_mf_mcore_archs(architectures: list) -> bool:
+    if is_mindformers_model_backend():
+        legacy_archs = _MINDFORMERS_MODELS.copy()
+        legacy_archs.pop("MindFormersForCausalLM")
+        return not any(arch in legacy_archs for arch in architectures)
+    return False
+
+
+def _normalize_archs(
+    self,
+    architectures: Union[str, list[str]],
+) -> list[str]:
+    # Refer to
+    # https://github.com/vllm-project/vllm/blob/releases/v0.9.2/vllm/model_executor/models/registry.py
+    if isinstance(architectures, str):
+        architectures = [architectures]
+    if not architectures:
+        logger.warning("No model architectures are specified")
+
+    # filter out support architectures
+    normalized_arch = list(
+        filter(lambda model: model in self.models, architectures))
+
+    # make sure Transformers backend is put at the last as a fallback
+    if len(normalized_arch) != len(architectures):
+        normalized_arch.append("TransformersForCausalLM")
+        if is_mf_mcore_archs(architectures):
+            normalized_arch.append("MindFormersForCausalLM")
+    return normalized_arch
+
 
 if __name__ == "__main__":
     _run()

@@ -23,12 +23,14 @@ from vllm.config import ModelConfig
 from vllm.model_executor.models import ModelRegistry
 
 from vllm_mindspore.model_executor.models.registry import (
-    MindSporeModelRegistry)
+    MindSporeModelRegistry, is_mf_mcore_archs)
 
 
 def get_ms_model_architecture(
         model_config: ModelConfig) -> tuple[type[nn.Module], str]:
     architectures = getattr(model_config.hf_config, "architectures", [])
+    if is_mf_mcore_archs(architectures):
+        architectures.append("MindFormersForCausalLM")
 
     vllm_supported_archs = ModelRegistry.get_supported_archs()
     is_vllm_supported = any(arch in vllm_supported_archs
