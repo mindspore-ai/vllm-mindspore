@@ -152,16 +152,18 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
 vllm.model_executor.model_loader.loader.safetensors_weights_iterator = (
     safetensors_weights_iterator)
 
-from vllm_mindspore.worker.worker import _warm_up_model
+from vllm_mindspore.worker.worker import (_warm_up_model,
+                                          wrapper_worker_bind_cpu)
 from vllm_mindspore.worker.profile import (
     wrapper_worker_init,
     wrapper_worker_init_device,
 )
-from vllm.worker.worker import Worker
+from vllm.worker.worker import Worker as V0Worker
 
-Worker._warm_up_model = _warm_up_model
-Worker.__init__ = wrapper_worker_init(Worker.__init__)
-Worker.init_device = wrapper_worker_init_device(Worker.init_device)
+V0Worker._warm_up_model = _warm_up_model
+V0Worker.__init__ = (wrapper_worker_bind_cpu(
+    wrapper_worker_init(V0Worker.__init__)))
+V0Worker.init_device = wrapper_worker_init_device(V0Worker.init_device)
 
 from vllm_mindspore.worker.model_runner import (
     _get_cuda_graph_pad_size,
@@ -320,12 +322,6 @@ vllm.v1.worker.gpu_model_runner.InputBatch._make_sampling_metadata = _make_sampl
 vllm.v1.worker.gpu_input_batch.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
 vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = _make_prompt_token_ids_tensor
 
-from vllm.v1.worker.gpu_worker import Worker
-from vllm_mindspore.v1.worker.gpu_worker import init_device
-
-Worker.__init__ = wrapper_worker_init(Worker.__init__)
-Worker.init_device = wrapper_worker_init_device(init_device)
-
 import vllm.v1.utils
 from vllm_mindspore.v1.utils import copy_slice
 
@@ -363,10 +359,15 @@ from vllm.distributed.device_communicators.shm_broadcast import ShmRingBuffer
 
 ShmRingBuffer.__init__ = initialize_ShmRingBuffer
 
-from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
-from vllm.v1.worker.gpu_worker import Worker
+from vllm_mindspore.v1.worker.gpu_worker import (compile_or_warm_up_model,
+                                                 init_device)
 
-Worker.compile_or_warm_up_model = compile_or_warm_up_model
+from vllm.v1.worker.gpu_worker import Worker as V1Worker
+
+V1Worker.__init__ = (wrapper_worker_bind_cpu(
+    wrapper_worker_init(V1Worker.__init__)))
+V1Worker.init_device = wrapper_worker_init_device(init_device)
+V1Worker.compile_or_warm_up_model = compile_or_warm_up_model
 
 from vllm_mindspore.v1.core.sched.scheduler import update_from_output
 from vllm.v1.core.sched.scheduler import Scheduler
