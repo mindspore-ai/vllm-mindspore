@@ -83,6 +83,7 @@ bool PassManager::Replace(const DATensor *oldNode, const DATensor *newNode) {
   // Since we run add&delete, now we can free unused tensor safely.
   for (auto &unused : unusedList_) {
     // TODO: free all unused tensors.
+    (void)unused;
   }
   return true;
 }
