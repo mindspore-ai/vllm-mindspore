@@ -61,6 +61,8 @@ DAGraph *NewDAGraph(DAContext *context) {
   CHECK_IF_FAIL(newSize < context->memSize);
 
   DAGraph *graph = (DAGraph *)((char *)context->memPool + context->memUsed);
+  graph->nodeSize = 0;
+  graph->paramSize = 0;
   context->memUsed = newSize;
   LOG_OUT << "Create DAGraph " << graph << ", size: " << sizeof(DAGraph)
           << ", for DAContext " << context;
@@ -94,8 +96,12 @@ DATensor *NewDATensor(DAContext *context) {
   CHECK_IF_FAIL(newSize < context->memSize);
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
-  tensor->type = Type_F32;
   tensor->tensorType = UNKNOW_TENSOR;
+  tensor->type = Type_F32;
+  tensor->data = nullptr;
+  tensor->dim = 0;
+  tensor->op = ops::Op_End;
+  tensor->inputSize = 0;
   context->memUsed = newSize;
   LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
           << ", for DAContext " << context;
@@ -135,10 +141,10 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
 
   DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
   context->memUsed = newSize;
-  tensor->type = type;
   tensor->tensorType = UNKNOW_TENSOR;
+  tensor->type = type;
   tensor->op = op;
-  tensor->data = MakeTensorData(context, type, shape, data);
+  tensor->data = data;
 
   CHECK_IF_FAIL(dim <= DA_TENSOR_MAX_DIM);
   tensor->dim = dim;

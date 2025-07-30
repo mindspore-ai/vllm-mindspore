@@ -121,6 +121,7 @@ void TensorDataRecycler::DecreaseInner(DATensor *tensor) {
           << ", DATensor: " << tensor;
   refCounts_[tensor]--;
   if (refCounts_[tensor] == 0) {
+    CHECK_IF_NULL(memPool_);
     LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op)
             << ", DATensor: " << tensor
             << ", is DATensorList: " << (tensor->type == Type_Tensor);
@@ -136,13 +137,15 @@ void TensorDataRecycler::PrintRefCountInfo() const {
   }
 }
 
-void TensorDataRecycler::CheckRefCountInfo() const {
+void TensorDataRecycler::FreeOutputNodes() {
+  CHECK_IF_NULL(memPool_);
   for (auto refCount : refCounts_) {
     if (refCount.second != 0) {
-      LOG_ERROR << "ops." << ops::ToStr(refCount.first->op)
-                << ", DATensor: " << refCount.first
-                << ", refCount: " << refCount.second
-                << ", there may be memory leak";
+      CHECK_IF_NULL(refCount.first);
+      LOG_OUT << "Free graph output, ops." << ops::ToStr(refCount.first->op)
+              << ", DATensor: " << refCount.first
+              << ", is DATensorList: " << (refCount.first->type == Type_Tensor);
+      memPool_->Free(refCount.first);
     }
   }
 }
