@@ -31,15 +31,15 @@ from mindspore import Parameter
 from safetensors import safe_open
 from tqdm.auto import tqdm
 from vllm.config import LoadConfig
-from vllm.model_executor.model_loader.weight_utils import (DisabledTqdm,
+from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
+                                                           DisabledTqdm,
+                                                           enable_tqdm,
                                                            get_lock)
 
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 from vllm_mindspore.platforms.ascend import ModelConfig
 from vllm_mindspore.utils import is_310p
-from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
-                                                           enable_tqdm)
 
 
 def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
@@ -63,6 +63,11 @@ def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
         loaded_weight = loaded_weight[:, :, start_idx:end_idx]
     else:
         raise ValueError("shard_dim:{} is not supported.".format(shard_dim))
+    loaded_weight = (
+        loaded_weight.astype(np.float16) 
+        if (str(loaded_weight.dtype) == 'bfloat16' and is_310p()) 
+        else loaded_weight
+    )
     return loaded_weight
 
 
@@ -79,16 +84,22 @@ def safetensors_weights_iterator(
     ):
         with safe_open(st_file, framework="np") as f:
             for name in f.keys():  # noqa: SIM118
-                # TODO： use slice
-                x = f.get_tensor(name)
-                x = x.astype(np.float16) \
-                    if (str(x.dtype) == 'bfloat16' and is_310p()) else x
-                yield name, ms.tensor(x)
+                # Return a lightweight PySafeSlice object that uses file
+                # pointer offset internally to read Safetensor on demand,
+                # avoiding memory explosion. Actual data can be obtained
+                # through slicing operation like param[start:end]
+                param = f.get_slice(name)
+                yield name, param
 
 
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
     loaded_weight = loaded_weight[:]
+    loaded_weight = (
+        loaded_weight.astype(np.float16) 
+        if (str(loaded_weight.dtype) == 'bfloat16' and is_310p()) 
+        else loaded_weight
+    )
     param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
 
 

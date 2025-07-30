@@ -421,8 +421,6 @@ class Qwen2Model(nn.Cell):
                     weight_loader = getattr(param, "weight_loader",
                                             default_weight_loader)
                     # Norm type in weights may be f32
-                    if (loaded_weight.dtype != param.dtype):
-                        loaded_weight = loaded_weight.to(dtype=param.dtype)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
 
