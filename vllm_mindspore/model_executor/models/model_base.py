@@ -114,6 +114,7 @@ class MsModelBase:
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
+        self.vllm_config = vllm_config
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
@@ -252,7 +253,8 @@ class MsModelBase:
         key_cache = []
         value_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+        for i in range(num_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             v_cache = self.kv_caches[i].kv_cache[
@@ -399,14 +401,15 @@ class NativeModel(MsModelBase):
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
             max_model_len=self.model_config.max_model_len)
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
         self.kv_caches = [
-            AttentionWrapper() for i in range(self.config.num_hidden_layers)
+            AttentionWrapper() for _ in range(num_layers)
         ]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.config.num_hidden_layers):
+        for i in range(num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -478,6 +481,14 @@ class NativeModel(MsModelBase):
         model_inputs, is_prefill = self.prepare_base_inputs(
             input_ids, positions)
 
+        #for pp
+        if intermediate_tensors is not None:
+            model_inputs["hidden_states"] = intermediate_tensors["hidden_states"]
+            model_inputs["residual"] = intermediate_tensors["residual"]
+        else:
+            model_inputs["hidden_states"] = None
+            model_inputs["residual"] = None
+
         # for multimodal model
         model_inputs["intermediate_tensors"] = intermediate_tensors
         model_inputs["inputs_embeds"] = inputs_embeds
@@ -520,7 +531,8 @@ class NativeModel(MsModelBase):
             batch_valid_length=model_inputs["batch_valid_length"],
             q_seq_lens=model_inputs["q_seq_lens"],
             block_tables=model_inputs["block_tables"],
-            intermediate_tensors=model_inputs["intermediate_tensors"],
+            hidden_states=model_inputs["hidden_states"],
+            residual=model_inputs["residual"],
             inputs_embeds=model_inputs["inputs_embeds"],
         )  # type: ignore[misc]
 

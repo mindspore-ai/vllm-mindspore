@@ -506,3 +506,7 @@ from vllm_mindspore.entrypoints.__main__ import (
 patch_server_run_api_server_worker_proc()
 
 check_ready()
+
+from vllm_mindspore.utils import view
+from mindspore import Tensor
+Tensor.view = view

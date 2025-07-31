@@ -29,6 +29,7 @@ from mindspore import dtype
 from mindspore.communication.management import get_rank
 from tqdm import tqdm
 from vllm.logger import init_logger
+from vllm.distributed import get_pp_group, get_pp_indices
 
 from vllm_mindspore.model_executor.models.mf_models.weight_processor import (
     BaseWeightProcessor, EPMethod)
@@ -62,9 +63,14 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
     """
 
-    def __init__(self, config, network, is_quant):
-        super().__init__(config, network, is_quant)
-        self.num_layers = self.config.model.model_config.num_layers
+    def __init__(self, config, network, is_quant, vllm_config):
+        super().__init__(config, network, is_quant, vllm_config)
+        self.num_layers = self.vllm_config.model_config.get_num_layers(self.vllm_config.parallel_config)
+        self.start_layer, self.end_layer = get_pp_indices(
+            self.config.model.model_config.num_layers,
+            get_pp_group().rank_in_group,
+            get_pp_group().world_size,
+        )
         self.expert_num = self.config.moe_config.expert_num
         self.moe_split_tp = self.moe_tp_size > 1
         self.moe_split_ep = self.moe_ep_size > 1
@@ -452,20 +458,20 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                            w2_scale_hf_name, w3_scale_hf_name,
                                            src_hf_dir, hf_weight_map):
         if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
-            w1_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w1_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-            w2_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w2_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
-            w3_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w3_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
             w1_scale_ms_param, _ = (
-                self.get_safetensor_from_file_split_global_group(
+                self.get_safetensor_from_file_split_tp_dp_group(
                     w1_scale_hf_name, src_hf_dir, hf_weight_map, split_axis=0))
             w2_scale_ms_param, _ = self.get_safetensor_from_file(
                 w2_scale_hf_name, src_hf_dir, hf_weight_map)
 
             w3_scale_ms_param, _ = (
-                self.get_safetensor_from_file_split_global_group(
+                self.get_safetensor_from_file_split_tp_dp_group(
                     w3_scale_hf_name, src_hf_dir, hf_weight_map, split_axis=0))
         elif self.ep_method == EPMethod.ALLTOALL:
             w1_ms_param, _ = self.get_safetensor_from_file(
@@ -1176,7 +1182,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
     def convert_mtp_weight_name(self, weight_name: str):
         layer = 0 if 'layers.' not in weight_name else int(
             weight_name[weight_name.find('layers.'):].split('.')[1])
-        if layer < self.num_layers:
+        if self.start_layer <= layer < self.end_layer:
             return weight_name
         mtp_prefix = 'mtp_model'
         is_mtp_layer = ('tok_embeddings' not in weight_name
@@ -1294,13 +1300,13 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         base_ms_name = f"model.layers.{layer_id}.feed_forward.routed_experts"
         w1_ms_name = f"{base_ms_name}.ffn.w1.weight"
-        w1_ms_name = (w1_ms_name if layer_id < self.num_layers else
+        w1_ms_name = (w1_ms_name if self.start_layer <=layer_id < self.end_layer else
                       self.convert_mtp_weight_name(w1_ms_name))
         w2_ms_name = f"{base_ms_name}.ffn.w2.weight"
-        w2_ms_name = (w2_ms_name if layer_id < self.num_layers else
+        w2_ms_name = (w2_ms_name if self.start_layer <=layer_id < self.end_layer else
                       self.convert_mtp_weight_name(w2_ms_name))
         w3_ms_name = f"{base_ms_name}.ffn.w3.weight"
-        w3_ms_name = (w3_ms_name if layer_id < self.num_layers else
+        w3_ms_name = (w3_ms_name if self.start_layer <=layer_id < self.end_layer else
                       self.convert_mtp_weight_name(w3_ms_name))
 
         w1_ms_stack_param = np.stack(w1_list, axis=0)
@@ -1311,7 +1317,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             base_path = f"model.layers.{layer_id}.feed_forward.routed_experts"
             w_gate_hidden_name = f"{base_path}.ffn.w_gate_hidden.weight"
             w_gate_hidden_name = (
-                w_gate_hidden_name if layer_id < self.num_layers else
+                w_gate_hidden_name if self.start_layer <=layer_id < self.end_layer else
                 self.convert_mtp_weight_name(w_gate_hidden_name))
             w_gate_hidden_np = np.concatenate(
                 [w1_ms_stack_param, w3_ms_stack_param], axis=1)
@@ -1343,11 +1349,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
     def get_moe_shared_expert_weight(self, w1_hf_name, w2_hf_name, w3_hf_name,
                                      src_hf_dir, hf_weight_map):
         if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
-            w1_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w1_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-            w2_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w2_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
-            w3_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w3_ms_param, _ = self.get_safetensor_from_file_split_tp_dp_group(
                 w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
         elif self.ep_method == EPMethod.ALLTOALL:
             w1_ms_param, _ = self.get_safetensor_from_file(
@@ -1383,7 +1389,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             base_path = f"model.layers.{layer_id}.feed_forward.shared_experts"
             w_gate_hidden_name = f"{base_path}.w_gate_hidden.weight"
             w_gate_hidden_name = (
-                w_gate_hidden_name if layer_id < self.num_layers else
+                w_gate_hidden_name if self.start_layer <=layer_id < self.end_layer else
                 self.convert_mtp_weight_name(w_gate_hidden_name))
             w_gate_hidden_np = np.concatenate([w1_ms_param, w3_ms_param],
                                               axis=0)
@@ -1644,7 +1650,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
         self.infer_process_norm_weight(src_hf_dir, layer_id, hf_weight_map)
 
         # convert mtp shared weights.
-        if layer_id >= self.num_layers:
+        if layer_id >= self.end_layer:
             self.infer_process_mtp_layer_weight(src_hf_dir, layer_id,
                                                 hf_weight_map)
 
@@ -2313,10 +2319,10 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
 
         enable_tqdm = rank_id == 0
         mtp_layers = self.config.model.model_config.num_nextn_predict_layers
-        start_layer = 0 if not is_mtp_model else self.num_layers
-        end_layer = (self.num_layers if not is_mtp_model else self.num_layers +
+        self.start_layer = self.start_layer if not is_mtp_model else self.end_layer
+        self.end_layer = (self.end_layer if not is_mtp_model else self.end_layer +
                      mtp_layers)
-        for layer_id in tqdm(range(start_layer, end_layer),
+        for layer_id in tqdm(range(self.start_layer, self.end_layer),
                              desc="Weight loading",
                              disable=not enable_tqdm):
             if self.is_quant:

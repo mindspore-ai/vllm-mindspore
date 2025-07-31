@@ -40,11 +40,12 @@ from research.deepseek3.deepseek3_config import (DeepseekV3Config as
 from research.deepseek3.deepseek3_model_infer import DeepseekV3DecodeLayer
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import (
-    get_dp_group, get_tensor_model_parallel_world_size)
+    get_dp_group, get_tensor_model_parallel_world_size, get_pp_group)
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 
 from vllm_mindspore.model_executor.layers.sampler import get_sampler
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm_mindspore.model_executor.models.attention_mask import (
     MLALowerTriangularMask)
 
@@ -55,6 +56,7 @@ from vllm_mindspore.model_executor.models.mf_models \
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
     MfModelBase)
 from vllm_mindspore.model_executor.models.model_base import MLAAttentionWrapper
+from vllm_mindspore.model_executor.models.utils import make_empty_intermediate_tensors_factory
 
 with contextlib.suppress(ImportError):
     # DLLM
@@ -123,7 +125,7 @@ def _get_padding_index(q_seq_len):
            ms.from_numpy(ffn_padding_idx), ms.from_numpy(ffn_unpadding_idx)
 
 
-class DeepseekV3ForCausalLM(MfModelBase):
+class DeepseekV3ForCausalLM(MfModelBase, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -135,15 +137,16 @@ class DeepseekV3ForCausalLM(MfModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
+        self.num_layers = self.model_config.get_num_layers(self.parallel_config)
         self.kv_caches = [
             MLAAttentionWrapper()
-            for i in range(self.mf_model_config.num_layers)
+            for _ in range(self.num_layers)
         ]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -152,6 +155,8 @@ class DeepseekV3ForCausalLM(MfModelBase):
         self.casual_mask = MLALowerTriangularMask(
             dtype=self.mf_model_config.compute_dtype,
             max_model_len=self.model_config.max_model_len)
+        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(keys=["hidden_states"],
+                                                                                       hidden_size=self.model_config.hf_config.hidden_size)
 
     def _generate_model_config(self):
         self.mf_config.load_checkpoint = self.get_model_path()
@@ -182,12 +187,14 @@ class DeepseekV3ForCausalLM(MfModelBase):
             if ptq is not None:
                 ptq.apply(network)
                 ptq.convert(network)
-        return network, network.lm_head
+        if get_pp_group().is_last_rank:
+            return network, network.lm_head
+        return network, None
 
     def get_kvcache(self):
         key_cache = []
         forward_context = get_forward_context()
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             key_cache.append(k_cache)
@@ -198,7 +205,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
         logger.debug("reached deepseek_v3 connector_send_kvcache")
         _pynative_executor.sync()
         forward_context = get_forward_context()
-        for i in range(self.mf_model_config.num_layers):
+        for i in range(self.num_layers):
             kv_cache_module = self.kv_caches[i]
             kv_cache = kv_cache_module.kv_cache[
                 forward_context.virtual_engine][0]
@@ -219,7 +226,7 @@ class DeepseekV3ForCausalLM(MfModelBase):
                                           do_predict=True)
         else:
             weight_processor = DeepseekV3WeightProcessor(
-                self.mf_config, self.network, self.is_quant)
+                self.mf_config, self.network, self.is_quant, self.vllm_config)
             weight_processor.load_safetensors_shard(
                 self.mf_config.load_checkpoint)
         return None  # type: ignore[return-value]

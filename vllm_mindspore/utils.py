@@ -36,6 +36,7 @@ else:
 import mindspore as ms
 from mindspore import dtype as mstype
 from mindspore.common.initializer import Zero
+from mindspore._c_expression import typing
 from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
                         MemorySnapshot, T, make_ndarray_with_pad)
@@ -342,6 +343,33 @@ def ms_memory_profiling(
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp
     result.non_kv_cache_memory = result.non_torch_increase + result.torch_peak_increase + result.weights_memory  # noqa
+
+
+def view(self, *shape_or_dtype):
+    if len(shape_or_dtype) == 1 and isinstance(shape_or_dtype[0], typing.Type):
+        target_dtype = shape_or_dtype[0]
+        ori_shape = self.shape
+        target_shape = (-1,)
+        if len(ori_shape) > 1:
+            target_shape = ori_shape[:-1] + target_shape
+        out = np.frombuffer(self.numpy(), torch.ops.creation._TypeDict.get(target_dtype, np.float32))
+        if not out.flags.aligned:
+            out = np.require(out, requirements=["ALIGNED"])
+        if target_dtype == ms.bfloat16:
+            return ms.Tensor.from_numpy(out.astype(np.float32)).astype(target_dtype).reshape(target_shape)
+        return ms.Tensor.from_numpy(out).reshape(target_shape)
+    result = []
+    if type(shape_or_dtype) is tuple:
+        for items in shape_or_dtype:
+            if not isinstance(items, int):
+                for item in items:
+                    if not isinstance(item, int):
+                        result.append(item.item())
+                    else:
+                        result.append(item)
+            else:
+                result.append(items)
+    return ms.ops.reshape(self, result)
 
 
 def is_version_ge(current_version, base_version):
