@@ -81,7 +81,7 @@ echo "========= Installing mindformers"
 mf_dir=mindformers-br_infer_boom
 if [ ! -d "$mf_dir" ]; then
     git clone https://gitee.com/mindspore/mindformers.git -b br_infer_boom "$mf_dir"
-    git checkout a96a0cf9a0b1e3efee819c17dcf050604caa3512
+    git checkout c167e09fed6fba6b1e9fce0603e532b8e1252717
 else
     echo "The $mf_dir folder already exists and will not be re-downloaded."
 fi
@@ -94,7 +94,7 @@ fi
 echo "========= Installing mindspore golden-stick"
 gs_dir=gs-develop
 if [ ! -d "$gs_dir" ]; then
-    git clone https://gitee.com/mindspore/golden-stick.git -b develop "$gs_dir"
+    git clone https://gitee.com/mindspore/golden-stick.git -b feature-boom "$gs_dir"
 else
     echo "The $gs_dir folder already exists and will not be re-downloaded."
 fi
