@@ -50,6 +50,7 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -59,8 +60,6 @@ from vllm_mindspore.model_executor.layers.linear import (QKVParallelLinear,
                                                          RowParallelLinear)
 from vllm_mindspore.model_executor.layers.logits_processor import (
     LogitsProcessor)
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead)
 from vllm_mindspore.model_executor.models.model_base import NativeModel

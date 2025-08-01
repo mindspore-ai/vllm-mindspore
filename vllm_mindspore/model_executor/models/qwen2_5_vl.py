@@ -55,6 +55,8 @@ from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
 from vllm.model_executor import SamplingMetadata
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.layers.sampler import SamplerOutput, \
+    get_sampler
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 
 from vllm.multimodal import MULTIMODAL_REGISTRY
@@ -80,8 +82,6 @@ from vllm_mindspore.model_executor.layers.linear import ColumnParallelLinear, \
     RowParallelLinear
 from vllm_mindspore.model_executor.layers.logits_processor import \
     LogitsProcessor
-from vllm_mindspore.model_executor.layers.sampler import SamplerOutput, \
-    get_sampler
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import \
     ParallelLMHead
 from vllm_mindspore.model_executor.model_loader.weight_utils import \

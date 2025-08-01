@@ -38,12 +38,11 @@ from mindspore import Tensor, jit, mutable, nn, ops
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionMetadata, AttentionType
 from vllm.config import VllmConfig
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.rotary_embedding import get_rope
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.mindone_models.base import (

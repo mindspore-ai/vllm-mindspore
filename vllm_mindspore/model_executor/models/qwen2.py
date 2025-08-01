@@ -42,6 +42,7 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
@@ -53,8 +54,6 @@ from vllm_mindspore.model_executor.layers.linear import (
 from vllm_mindspore.model_executor.layers.logits_processor import \
     LogitsProcessor
 from vllm_mindspore.model_executor.layers.rotary_embedding import get_rope
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
