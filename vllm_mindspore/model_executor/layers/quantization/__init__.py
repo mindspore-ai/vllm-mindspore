@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
+
 # Copyright 2025 Huawei Technologies Co., Ltd
 # Copyright 2024 The vLLM team.
 #
@@ -21,10 +21,7 @@ from typing import Literal, get_args
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
-QuantizationMethods = Literal[
-    "smoothquant",
-    "sparsequant"
-]
+QuantizationMethods = Literal["smoothquant", "sparsequant"]
 QUANTIZATION_METHODS: list[str] = list(get_args(QuantizationMethods))
 
 # The customized quantization methods which will be added to this dict.

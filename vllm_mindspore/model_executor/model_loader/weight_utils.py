@@ -17,6 +17,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import glob
 import json
 import os
@@ -63,11 +64,9 @@ def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
         loaded_weight = loaded_weight[:, :, start_idx:end_idx]
     else:
         raise ValueError("shard_dim:{} is not supported.".format(shard_dim))
-    loaded_weight = (
-        loaded_weight.astype(np.float16) 
-        if (str(loaded_weight.dtype) == 'bfloat16' and is_310p()) 
-        else loaded_weight
-    )
+    loaded_weight = (loaded_weight.astype(np.float16) if
+                     (str(loaded_weight.dtype) == 'bfloat16'
+                      and is_310p()) else loaded_weight)
     return loaded_weight
 
 
@@ -95,11 +94,9 @@ def safetensors_weights_iterator(
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
     loaded_weight = loaded_weight[:]
-    loaded_weight = (
-        loaded_weight.astype(np.float16) 
-        if (str(loaded_weight.dtype) == 'bfloat16' and is_310p()) 
-        else loaded_weight
-    )
+    loaded_weight = (loaded_weight.astype(np.float16) if
+                     (str(loaded_weight.dtype) == 'bfloat16'
+                      and is_310p()) else loaded_weight)
     param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
 
 
