@@ -18,7 +18,6 @@ transform huggingface safetensor.
 """
 
 import os
-import numpy as np
 from enum import Enum
 
 import mindspore as ms
@@ -28,10 +27,10 @@ from mindformers.parallel_core.inference.parallel_state import (
     get_moe_tensor_parallel_rank, get_pipeline_model_parallel_world_size,
     get_tensor_and_data_parallel_rank, get_tensor_and_data_parallel_world_size,
     get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size)
-import mindspore as ms
 from mindspore.communication.management import get_group_size, get_rank
 from safetensors import safe_open
-from vllm_mindspore.utils import is_310p, convert_np_to_ms_dtype
+
+from vllm_mindspore.utils import convert_np_to_ms_dtype, is_310p
 
 
 class EPMethod(Enum):
@@ -41,6 +40,7 @@ class EPMethod(Enum):
     DEFAULT = 'default'
     ALLTOALL = 'alltoall'
     ALLGATHER = 'allgather'
+
 
 class BaseWeightProcessor:
     r"""

@@ -401,12 +401,14 @@ class Qwen2Model(nn.Cell):
             rank_id = get_rank()
             for name, param in params_dict.items():
                 if any(name.endswith(keyword) for keyword in target_keywords):
-                    weight_type = self.quant_config.full_config[f"rank_{rank_id}"][name]
+                    weight_type = self.quant_config.full_config[
+                        f"rank_{rank_id}"][name]
                     if weight_type.lower() == "w8a8s":
                         # 压缩后权重不需要转Nz
                         continue
 
-                    cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+                    cast_weight = ops.auto_generate.format_cast(
+                        param, FORMAT_TYPE['nz'])
                     ms.runtime.synchronize()
                     param.set_data(cast_weight)
 
