@@ -16,6 +16,7 @@
 """Adapted functions for mindspore in Worker."""
 
 import math
+import os
 import subprocess
 
 import psutil
@@ -133,9 +134,14 @@ def get_numa_map():
 
 def bind_cpu(rank):
     rank_cpu_maps = get_numa_map()
-
     local_rank = rank % len(rank_cpu_maps)
-    cpu_range = rank_cpu_maps[local_rank]
+    device_id = local_rank
+
+    if "ASCEND_RT_VISIBLE_DEVICES" in os.environ:
+        device_control_env_var = os.environ["ASCEND_RT_VISIBLE_DEVICES"]
+        device_id = int(device_control_env_var.split(",")[local_rank])
+
+    cpu_range = rank_cpu_maps[device_id]
     cpu_list = list(range(cpu_range[0], cpu_range[1]))
     current_process = psutil.Process()
     current_process.cpu_affinity(cpu_list)
