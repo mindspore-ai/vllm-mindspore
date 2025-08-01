@@ -44,7 +44,7 @@ COPY .jenkins/test/config/dependent_packages.yaml /workspace/.jenkins/test/confi
 ARG MINDFORMERS_COMMIT=$mindformers_commit
 RUN chmod +x /workspace/install_depend_pkgs.sh && \\
     cd /workspace && \\
-    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT ./install_depend_pkgs.sh
+    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT AUTO_BUILD=1 ./install_depend_pkgs.sh
 
 ENV PYTHONPATH="/workspace/mindformers/:\$PYTHONPATH"
 ENV vLLM_MODEL_BACKEND=MindFormers

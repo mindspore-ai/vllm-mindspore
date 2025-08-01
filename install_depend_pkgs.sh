@@ -110,11 +110,12 @@ usage() {
     echo "Install vLLM-MindSpore dependencies"
     echo ""
     echo "OPTIONS:"
-    echo "  -F, --force-reinstall    Force reinstall all packages (with --force-reinstall)"
-    echo "  -h, --help              Show this help message and exit"
+    echo "  -f, -F, --force-reinstall    Force reinstall all packages (with --force-reinstall)"
+    echo "  -h, --help                  Show this help message and exit"
     echo ""
     echo "Examples:"
     echo "  $0                      Normal installation"
+    echo "  $0 -f                   Force reinstall all packages"
     echo "  $0 -F                   Force reinstall all packages"
     echo "  $0 --force-reinstall    Force reinstall all packages"
 }
@@ -122,7 +123,7 @@ usage() {
 main() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -F|--force-reinstall)
+            -f|-F|--force-reinstall)
                 export FORCE_REINSTALL=true
                 shift
                 ;;
@@ -174,16 +175,27 @@ main() {
     log "- export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
     log "- export vLLM_MODEL_BACKEND=MindFormers"
     log ""
-    echo -n "Add these to ~/.bashrc automatically? (y/N): "
-    read -r response
     
-    if [[ "$response" == "y" || "$response" == "Y" ]]; then
+    if [ "${AUTO_BUILD:-}" = "1" ]; then
         echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
         echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
-        log "Environment variables added to ~/.bashrc"
-        log "Run: source ~/.bashrc"
+        log "Environment variables added to ~/.bashrc (automated build)"
     else
-        log "Please add the environment variables manually and run 'source ~/.bashrc'"
+        echo -n "Add these to ~/.bashrc automatically? (y/N): "
+        read -r response
+        
+        if [[ "$response" == "y" || "$response" == "Y" ]]; then
+            if grep -q "export PYTHONPATH.*mindformers" ~/.bashrc 2>/dev/null && grep -q "export vLLM_MODEL_BACKEND=MindFormers" ~/.bashrc 2>/dev/null; then
+                log "Environment variables already exist in ~/.bashrc, skipping"
+            else
+                echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
+                echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
+                log "Environment variables added to ~/.bashrc"
+                log "Run: source ~/.bashrc"
+            fi
+        else
+            log "Please add the environment variables manually and run 'source ~/.bashrc'"
+        fi
     fi
 }
 
