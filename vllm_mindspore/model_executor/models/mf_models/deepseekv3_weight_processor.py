@@ -41,6 +41,20 @@ from vllm_mindspore.utils import convert_np_to_ms_dtype
 logger = init_logger(__name__)
 
 
+def np_int8data_unpack_to_int4_3d(np_data):
+    """unpack int8 data to int4 in 3dim"""
+    np_data = np_data.astype(np.uint8)
+    np_data_low = ((np_data & 0x0F) << 4).astype(np.int8) >> 4
+    np_data_high = ((np_data >> 4) << 4).astype(np.int8) >> 4
+
+    np_int4_data = np.zeros(
+        (np_data.shape[0], np_data.shape[1], np_data.shape[2] * 2),
+        dtype=np.int8)
+    np_int4_data[:, :, ::2] = np_data_low
+    np_int4_data[:, :, 1::2] = np_data_high
+    return np_int4_data
+
+
 class DeepseekV3WeightProcessor(BaseWeightProcessor):
     r"""
     Provide DeepseekV3/R1 Model weight load and shards.
@@ -2446,7 +2460,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                     w1_weight_param.shape[1] //
                                     w1_scale_param.shape[1],
                                     axis=1).astype(np.uint32).view(np.float32)
-        w1_weight_unpack = unpack_int8_to_int4_3d(w1_weight_param)
+        w1_weight_unpack = np_int8data_unpack_to_int4_3d(w1_weight_param)
         w1_bias_param = 8 * np.sum(
             w1_weight_unpack.astype(np.float32) * w1_scale_repeat, axis=1)
 
@@ -2467,7 +2481,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                     w3_weight_param.shape[1] //
                                     w3_scale_param.shape[1],
                                     axis=1).astype(np.uint32).view(np.float32)
-        w3_weight_unpack = unpack_int8_to_int4_3d(w3_weight_param)
+        w3_weight_unpack = np_int8data_unpack_to_int4_3d(w3_weight_param)
         w3_bias_param = 8 * np.sum(
             w3_weight_unpack.astype(np.float32) * w3_scale_repeat, axis=1)
 
@@ -2488,7 +2502,7 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                     w2_weight_param.shape[1] //
                                     w2_scale_param.shape[1],
                                     axis=1).astype(np.uint32).view(np.float32)
-        w2_weight_unpack = unpack_int8_to_int4_3d(w2_weight_param)
+        w2_weight_unpack = np_int8data_unpack_to_int4_3d(w2_weight_param)
         w2_bias_param = 8 * np.sum(
             w2_weight_unpack.astype(np.float32) * w2_scale_repeat, axis=1)
 
