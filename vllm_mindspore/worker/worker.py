@@ -21,6 +21,7 @@ import subprocess
 
 import psutil
 import torch
+from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 from vllm.model_executor import set_random_seed
 from vllm.sampling_params import SamplingParams
@@ -75,14 +76,17 @@ def get_numa_map():
                                       "topo"]).strip().split("\n")
     numa_to_npu_map = {}
     max_affinity_cpu = 0
-    if "Affinity" not in numa_topo_info[0]:
+    if "Affinity" not in numa_topo_info[0] or is_310p():
         # If the device does not provide affinity,
         # the CPUs will be evenly distributed.
         cpu_num_per_npu = total_cpu_count // (npu_count * chip_count)
         for i in range(npu_count * chip_count):
             cpu_start = i * cpu_num_per_npu
-            # 4 CPUs are reserved for CANN
-            npu_to_core_map[i] = [cpu_start, cpu_start + cpu_num_per_npu - 4]
+            # 4 CPUs are reserved for CANN(not for 310p)
+            npu_to_core_map[i] = [
+                cpu_start,
+                cpu_start + cpu_num_per_npu - (0 if is_310p() else 4)
+            ]
         return npu_to_core_map
     else:
         npu_num = 0
@@ -153,13 +157,12 @@ def wrapper_worker_bind_cpu(fun):
 
     def new_fun(*arg, **kwargs):
         # Bind CPU with wrapper when workers are initializing.
-        # Support 910B and 910C.
-        if not is_310p():
-            local_rank = kwargs.get("local_rank")
-            parallel_config = kwargs.get("vllm_config").parallel_config
-            local_rank = (parallel_config.data_parallel_rank_local *
-                          parallel_config.world_size + local_rank)
-            bind_cpu(local_rank)
+        # Support 910B, 910C and 310P.
+        local_rank = kwargs.get("local_rank")
+        parallel_config = kwargs.get("vllm_config").parallel_config
+        local_rank = (parallel_config.data_parallel_rank_local *
+                      parallel_config.world_size + local_rank)
+        bind_cpu(local_rank)
         fun(*arg, **kwargs)
 
     return new_fun
@@ -210,6 +213,19 @@ def _warm_up_model(self) -> None:
     kv_cache = self.cache_engine[0].gpu_cache
     is_mtp_model = self.speculative_config is not None and \
         self.model_config.hf_config.model_type == "deepseek_mtp"
+    intermediate_tensors = None
+    if self.vllm_config.scheduler_config.is_multi_step:
+        make_empty_intermediate_tensors = \
+            self.model_runner._base_model_runner.model.make_empty_intermediate_tensors
+    else:
+        make_empty_intermediate_tensors = \
+            self.model_runner.model.make_empty_intermediate_tensors
+    if not get_pp_group().is_first_rank:
+        intermediate_tensors = make_empty_intermediate_tensors(
+            batch_size=1,
+            dtype=self.model_config.dtype,
+            device=self.devices,
+        )
     if is_mtp_model:
         # prefill mtp model
         model_input, previous_hidden_states = _prepare_input_for_warmup(
@@ -218,7 +234,7 @@ def _warm_up_model(self) -> None:
         self.model_runner.execute_model(
             model_input,
             kv_cache,
-            None,
+            intermediate_tensors,
             previous_hidden_states=previous_hidden_states)
 
     # warmup for decode
@@ -227,7 +243,7 @@ def _warm_up_model(self) -> None:
             self.model_config, self.model_runner._base_model_runner,
             self.cache_engine[0], False)
         self.model_runner._base_model_runner.execute_model(
-            model_input, kv_cache, None)
+            model_input, kv_cache, intermediate_tensors)
     else:
         model_input, previous_hidden_states = _prepare_input_for_warmup(
             self.model_config, self.model_runner, self.cache_engine[0], False,
@@ -235,7 +251,7 @@ def _warm_up_model(self) -> None:
         self.model_runner.execute_model(
             model_input,
             kv_cache,
-            None,
+            intermediate_tensors,
             previous_hidden_states=previous_hidden_states)
 
     torch.cuda.synchronize()

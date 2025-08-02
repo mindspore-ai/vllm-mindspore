@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 import mindspore as ms
+import numpy as np
+import vllm.envs as envs
 from mindspore import mint, ops
 from vllm.sequence import IntermediateTensors
 
@@ -264,3 +266,32 @@ def merge_multimodal_embeddings(
         (input_ids == placeholder_token_id),
         multimodal_embeddings,
     )
+
+
+def get_mf_offset(model_config):
+    """ get mindformers offset from vllm style"""
+    partition_list_str = envs.VLLM_PP_LAYER_PARTITION
+    num_layers = model_config.num_layers
+    pp_size = model_config.parallel_config.pipeline_stage
+    if partition_list_str is not None:
+        try:
+            partitions = [
+                int(layer) for layer in partition_list_str.split(",")
+            ]
+        except ValueError as err:
+            raise ValueError("Invalid partition string: {}".format(
+                partition_list_str)) from err
+        if len(partitions) != pp_size:
+            raise ValueError(f"{len(partitions)=} does not match {pp_size=}.")
+        if sum(partitions) != num_layers:
+            raise ValueError(
+                f"{sum(partitions)=} does not match {num_layers=}.")
+        partitions = np.array(partitions, dtype=np.int32)
+        avg_layers = num_layers // pp_size
+        avg_layers_list = np.ones((pp_size, ), dtype=np.int32) * avg_layers
+        if (partitions == avg_layers_list).all():
+            return 0
+        else:
+            return (partitions - avg_layers_list).tolist()
+    else:
+        return 0

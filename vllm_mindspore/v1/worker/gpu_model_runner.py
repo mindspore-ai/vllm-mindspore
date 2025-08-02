@@ -23,7 +23,7 @@ from typing import Any, Optional
 import mindspore as ms
 import numpy as np
 from mindspore import Generator as msGenerator
-from mindspore import Tensor, mint, mutable
+from mindspore import Tensor, mint, mutable, ops
 from vllm.attention import AttentionType
 from vllm.logger import init_logger
 from vllm.sampling_params import SamplingType
@@ -35,7 +35,8 @@ from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
-from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
+from vllm_mindspore.utils import (FORMAT_TYPE, get_dtype_size, get_valid_dtype,
+                                  is_310p)
 
 logger = init_logger(__name__)
 
@@ -285,6 +286,9 @@ def _reshape_kv_cache_tensors(
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
                     kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
+                if is_310p():
+                    *dims, second_last, last = kv_cache_shape
+                    kv_cache_shape = (*dims, second_last * last)
                 try:
                     kv_cache_stride_order = self.attn_backends[
                         i].get_kv_cache_stride_order()
@@ -307,7 +311,17 @@ def _reshape_kv_cache_tensors(
                 for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
                     cache_block = kv_cache_raw_tensor.view(
                         kv_cache_shape[1:]).permute(*inv_order[1:])
-                    kv_cache_layer.append(cache_block)
+                    if is_310p():
+                        from mindspore.common.api import _pynative_executor
+                        cache_block_nz = ops.auto_generate.format_cast(
+                            cache_block, FORMAT_TYPE['nz'])
+                        _pynative_executor.sync()
+                        import gc
+                        del cache_block
+                        gc.collect()
+                        kv_cache_layer.append(cache_block_nz)
+                    else:
+                        kv_cache_layer.append(cache_block)
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
                 raise NotImplementedError

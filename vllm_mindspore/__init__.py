@@ -299,6 +299,21 @@ RejectionSampler._smallest_positive_value.__set_name__(
     RejectionSampler, "_smallest_positive_value")
 vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
+import vllm.distributed.communication_op
+import vllm.worker.worker_base
+from vllm_mindspore.distributed.communication_op import (
+    cpu_broadcast_tensor_dict, )
+
+vllm.distributed.communication_op.broadcast_tensor_dict = (
+    cpu_broadcast_tensor_dict)
+vllm.worker.worker_base.broadcast_tensor_dict = cpu_broadcast_tensor_dict
+
+import vllm.distributed.parallel_state
+from vllm_mindspore.distributed.parallel_state import gc_broadcast_tensor_dict
+
+vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = (
+    gc_broadcast_tensor_dict)
+
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor
 from vllm.inputs.registry import InputProcessingContext
@@ -493,6 +508,51 @@ sys.modules["vllm.entrypoints.openai.tool_parsers.deepseekv3_tool_parser"] = (
 from vllm_mindspore.entrypoints.__main__ import (
     patch_server_run_api_server_worker_proc, )
 
+from vllm_mindspore.model_executor.model_loader.utils import (
+    process_weights_after_loading)
+
+vllm.model_executor.model_loader.utils.process_weights_after_loading = (
+    process_weights_after_loading)
+vllm.model_executor.model_loader.base_loader.process_weights_after_loading = (
+    process_weights_after_loading)
+
+from vllm_mindspore.model_executor.layers.quantization import (
+    get_quantization_config)
+
+vllm.model_executor.layers.quantization.get_quantization_config = (
+    get_quantization_config)
+vllm.config.get_quantization_config = get_quantization_config
+vllm.model_executor.model_loader.weight_utils.get_quantization_config = (
+    get_quantization_config)
+
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    get_quant_config)
+
+vllm.model_executor.model_loader.weight_utils.get_quant_config = (
+    get_quant_config)
+vllm.config.get_quant_config = get_quant_config
+
+from vllm_mindspore.model_executor.layers.quantization import (
+    QuantizationMethods)
+
+vllm.model_executor.layers.quantization.QuantizationMethods = (
+    QuantizationMethods)
+
+from vllm_mindspore.engine.arg_utils import get_kwargs
+
+vllm.engine.arg_utils.get_kwargs = get_kwargs
+
+from vllm_mindspore.model_executor.model_loader.default_loader import (
+    _prepare_weights)
+from vllm.model_executor.model_loader.default_loader import DefaultModelLoader
+
+DefaultModelLoader._prepare_weights = _prepare_weights
+
 patch_server_run_api_server_worker_proc()
 
 check_ready()
+
+from vllm_mindspore.utils import view
+from mindspore import Tensor
+
+Tensor.view = view

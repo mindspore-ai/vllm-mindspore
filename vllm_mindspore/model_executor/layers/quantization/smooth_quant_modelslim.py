@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
 from typing import Any, Optional
 
 import mindspore
 import numpy as np
+import regex as re
 from mindspore import Parameter, Tensor, ops
 from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
@@ -107,7 +107,7 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
             return BaseKVCacheMethod(self)
 
         if isinstance(layer, LinearBase):
-            if quant_config and quant_config.lower() == 'w8a8':
+            if quant_config and quant_config.lower() == 'w8a8s':
                 return A8W8LinearMethod(self)
             if quant_config and quant_config.lower() == 'w8a8_dyn':
                 self.dynamic_quant = True
@@ -225,12 +225,12 @@ class A8W8LinearMethod(LinearMethodBase):
                                              self.params_dtype),
                                  name="input_offset")
         if self.is_310p:
-            quant_bias_ = Parameter(initializer(
+            quant_bias = Parameter(initializer(
                 'zeros', (self.output_size_per_partition //
                           self.quant_config.pack_factor, ), mindspore.int32),
-                                    name="quant_bias_")
+                                   name="quant_bias")
         else:
-            quant_bias_ = None
+            quant_bias = None
 
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
         set_weight_attrs(weight_scale, {"output_dim": 0})
@@ -241,11 +241,12 @@ class A8W8LinearMethod(LinearMethodBase):
         set_weight_attrs(deq_scale, extra_weight_attrs)
         set_weight_attrs(input_scale, extra_weight_attrs)
         set_weight_attrs(input_offset, extra_weight_attrs)
-        if quant_bias_ is not None:
-            set_weight_attrs(quant_bias_, extra_weight_attrs)
-            layer.insert_param_to_cell("quant_bias_", quant_bias_)
+        if quant_bias is not None:
+            set_weight_attrs(quant_bias, extra_weight_attrs)
+            set_weight_attrs(quant_bias, {"output_dim": 0})
+            layer.insert_param_to_cell("quant_bias", quant_bias)
         else:
-            layer.quant_bias_ = None
+            layer.quant_bias = None
 
         layer.insert_param_to_cell("weight", weight)
         layer.insert_param_to_cell("weight_scale", weight_scale)
@@ -286,7 +287,7 @@ class A8W8LinearMethod(LinearMethodBase):
         input_offset = Parameter(initializer('zeros', input_scale_shape,
                                              self.params_dtype),
                                  name="input_offset")
-        quant_bias_ = None
+        quant_bias = None
         set_weight_attrs(weight, {
             "ep_dim": 0,
             "input_dim": 1,
@@ -301,11 +302,11 @@ class A8W8LinearMethod(LinearMethodBase):
         set_weight_attrs(deq_scale, extra_weight_attrs)
         set_weight_attrs(input_scale, extra_weight_attrs)
         set_weight_attrs(input_offset, extra_weight_attrs)
-        if quant_bias_ is not None:
-            set_weight_attrs(quant_bias_, extra_weight_attrs)
-            layer.insert_param_to_cell("quant_bias_", quant_bias_)
+        if quant_bias is not None:
+            set_weight_attrs(quant_bias, extra_weight_attrs)
+            layer.insert_param_to_cell("quant_bias", quant_bias)
         else:
-            layer.quant_bias_ = None
+            layer.quant_bias = None
 
         layer.insert_param_to_cell("weight", weight)
         layer.insert_param_to_cell("weight_scale", weight_scale)
@@ -314,8 +315,7 @@ class A8W8LinearMethod(LinearMethodBase):
         layer.insert_param_to_cell("input_offset", input_offset)
 
     def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
-        input_offset = np.array([0])
-        params_dtype = layer.params_dtype
+        input_offset = layer.input_offset.asnumpy()
         layer.input_offset = Parameter(Tensor(input_offset,
                                               dtype=mindspore.int8),
                                        name=layer.input_offset.name)
@@ -336,7 +336,7 @@ class A8W8LinearMethod(LinearMethodBase):
                 layer.weight_scale = Parameter(Tensor(
                     weight_scale, dtype=layer.weight_scale.dtype),
                                                name=layer.weight_scale.name)
-        if not self.is_310p and params_dtype is mindspore.bfloat16:
+        if not self.is_310p and self.params_dtype is mindspore.bfloat16:
             deq_scale = layer.deq_scale.asnumpy().astype(np.int32).view(
                 np.float32)
             layer.deq_scale = Parameter(Tensor(deq_scale,
@@ -374,10 +374,8 @@ class A8W8LinearMethod(LinearMethodBase):
                                  group_type=0,
                                  group_list_type=0 if cumsum_flag else 1)[0]
         else:
-            qx = self.matmul(qx, weight, deq_scale, None, layer.quant_bias_,
+            qx = self.matmul(qx, weight, deq_scale, None, layer.quant_bias,
                              None)
-        if bias is not None:
-            qx = self.bias_add(qx, bias)
         qx = qx.reshape(output_shape)
         return qx
 

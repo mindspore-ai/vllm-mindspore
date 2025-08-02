@@ -18,7 +18,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Linear methods for quantized linear layers. """
-
 from abc import abstractmethod
 from typing import Optional, Union
 
@@ -347,10 +346,10 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         start_idx = tp_rank * shard_size
         loaded_weight = split_loaded_weight(loaded_weight, output_dim,
                                             start_idx, shard_size)
-
-        assert loaded_weight.shape == (shard_size, param.shape[1])
+        if param.name.endswith("weight"):
+            assert loaded_weight.shape == (shard_size, param.shape[1])
         param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+              shard_size] = ms.from_numpy(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):

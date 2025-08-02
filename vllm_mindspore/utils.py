@@ -35,6 +35,7 @@ else:
 
 import mindspore as ms
 from mindspore import dtype as mstype
+from mindspore._c_expression import typing
 from mindspore.common.initializer import Zero
 from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
@@ -54,6 +55,10 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8": ms.uint8,
     "fp8_e4m3": ms.uint8,
     "fp8_e5m2": ms.uint8,
+}
+
+FORMAT_TYPE = {
+    "nz": 29,
 }
 
 
@@ -246,6 +251,8 @@ def check_ready():
         "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
         "FlashAttentionScore,PagedAttention",
     }
+    if is_310p():
+        default_env["MS_ENABLE_INTERNAL_BOOST"] = "off"
     env_setup(default_env)
 
     if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
@@ -269,10 +276,14 @@ def convert_np_to_ms_dtype(value):
         value_dtype = ms.int32
     elif value.dtype == np.int64:
         value_dtype = ms.int64
+    elif value.dtype == np.uint64:
+        value_dtype = ms.uint64
     elif value.dtype == np.float64:
         value_dtype = ms.float64
     elif value.dtype == np.float32:
         value_dtype = ms.float32
+    elif value.dtype == np.float16:
+        value_dtype = ms.float16
     else:
         value_dtype = ms.bfloat16
     return value_dtype
@@ -363,3 +374,55 @@ def ms_memory_profiling(
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp
     result.non_kv_cache_memory = result.non_torch_increase + result.torch_peak_increase + result.weights_memory  # noqa
+
+
+def view(self, *shape_or_dtype):
+    if len(shape_or_dtype) == 1 and isinstance(shape_or_dtype[0], typing.Type):
+        target_dtype = shape_or_dtype[0]
+        ori_shape = self.shape
+        target_shape = (-1, )
+        if len(ori_shape) > 1:
+            target_shape = ori_shape[:-1] + target_shape
+        out = np.frombuffer(
+            self.numpy(),
+            torch.ops.creation._TypeDict.get(target_dtype, np.float32))
+        if not out.flags.aligned:
+            out = np.require(out, requirements=["ALIGNED"])
+        if target_dtype == ms.bfloat16:
+            return ms.Tensor.from_numpy(out.astype(
+                np.float32)).astype(target_dtype).reshape(target_shape)
+        return ms.Tensor.from_numpy(out).reshape(target_shape)
+    result = []
+    if type(shape_or_dtype) is tuple:
+        for items in shape_or_dtype:
+            if not isinstance(items, int):
+                for item in items:
+                    if not isinstance(item, int):
+                        result.append(item.item())
+                    else:
+                        result.append(item)
+            else:
+                result.append(items)
+    return ms.ops.reshape(self, result)
+
+
+def is_version_ge(current_version, base_version):
+    """
+        return current_version >= base_version.
+        Check whether the current version is higher than 
+        or equal to the base version.
+        for current_version: 1.8.1, base_version: 1.11.0, it return False.
+    """
+    version_split_char = '.'
+    if version_split_char not in base_version or version_split_char \
+        not in current_version:
+        raise ValueError(
+            "The version string will contain the `.`."
+            "For example, current_version 1.8.1， base_version: 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char),
+                    base_version.split(version_split_char)):
+        if not x.isdigit() or not y.isdigit():
+            continue
+        if int(x) != int(y):
+            return int(x) >= int(y)
+    return True

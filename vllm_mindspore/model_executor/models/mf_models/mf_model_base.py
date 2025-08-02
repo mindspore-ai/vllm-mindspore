@@ -29,7 +29,7 @@ from mindspore.common.api import _pynative_executor
 from mindspore.communication import get_rank
 from vllm.config import VllmConfig
 from vllm.distributed import get_tensor_model_parallel_world_size
-from vllm.distributed.parallel_state import get_dp_group
+from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -39,6 +39,7 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
+from vllm_mindspore.model_executor.models.utils import get_mf_offset
 
 try:
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
@@ -73,7 +74,10 @@ class MfModelBase(MsModelBase):
             self.mf_config.parallel_config)
         self.mf_config.model.model_config.parallel_config.model_parallel = (
             get_tensor_model_parallel_world_size())
-        self.mf_config.model.model_config.parallel_config.pipeline_stage = 1
+        self.mf_config.model.model_config.parallel_config.pipeline_stage = (
+            get_pp_group().world_size)
+        self.mf_config.model.model_config.offset = get_mf_offset(
+            self.mf_config.model.model_config)
         self._generate_model_config()
         if not hasattr(self, 'mf_model_config'):
             raise RuntimeError('mf_model_config not initialized')
@@ -125,7 +129,8 @@ class MfModelBase(MsModelBase):
             raise RuntimeError('mf_model_config not initialized')
         dynamic_hidden_states = Tensor(
             shape=[None, None], dtype=self.mf_model_config.compute_dtype)
-        self.ready_lm_head.set_inputs(dynamic_hidden_states)
+        if get_pp_group().is_last_rank:
+            self.ready_lm_head.set_inputs(dynamic_hidden_states)
 
     def prepare_inputs(self, input_ids, positions):
         return self.prepare_base_inputs(input_ids, positions)
@@ -162,6 +167,10 @@ class MfModelBase(MsModelBase):
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
+        model_inputs["hidden_states"] = None
+        if intermediate_tensors is not None:
+            model_inputs["hidden_states"] = \
+                intermediate_tensors["hidden_states"]
 
         if is_prefill:
             self.network.phase = "prefill"
@@ -184,6 +193,11 @@ class MfModelBase(MsModelBase):
                     self.connector_wait_for_kv_layer()
                     logger.debug("connector_wait_for_kv_layer success")
             hidden_states = self.network(**model_inputs)
+
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+            })
 
         return hidden_states
 

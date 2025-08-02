@@ -22,7 +22,7 @@ from typing import Any, Optional, Union, cast
 import mindspore as ms
 import numpy as np
 import vllm.envs as envs
-from mindspore import Tensor, mutable, nn
+from mindspore import Tensor, mutable, nn, ops
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
@@ -33,7 +33,7 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.utils import FORMAT_TYPE, STR_DTYPE_TO_MS_DTYPE, is_310p
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
@@ -46,11 +46,31 @@ class AttentionWrapper:
             vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
-        self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [(
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
+        if is_310p():
+            self.kv_shape = [num_block, block_size, num_kv_heads * head_size]
+            self.kv_cache = [(
+                ops.auto_generate.format_cast(
+                    ms.mint.zeros(self.kv_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                    FORMAT_TYPE['nz'],
+                ),
+                ops.auto_generate.format_cast(
+                    ms.mint.zeros(self.kv_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                    FORMAT_TYPE['nz'],
+                ),
+            ) for _ in range(
+                vllm_config.parallel_config.pipeline_parallel_size)]
+        else:
+            self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
+            self.kv_cache = [(
+                ms.mint.zeros(self.kv_shape,
+                              dtype=vllm_config.model_config.dtype),
+                ms.mint.zeros(self.kv_shape,
+                              dtype=vllm_config.model_config.dtype),
+            ) for _ in range(
+                vllm_config.parallel_config.pipeline_parallel_size)]
+
         self.attn_type = AttentionType.DECODER
 
         # add for v1
@@ -67,19 +87,32 @@ class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        self.kv_cache = [
-            (
-                ms.mint.zeros(
-                    self.kv_shape,  # type: ignore[misc]
-                    dtype=vllm_config.model_config.dtype), )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        if is_310p():
+            self.kv_cache = [
+                (
+                    ops.auto_generate.format_cast(
+                        ms.mint.zeros(
+                            self.kv_shape,  # type: ignore[misc]
+                            dtype=vllm_config.model_config.dtype),
+                        FORMAT_TYPE['nz'],
+                    ), ) for _ in range(
+                        vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            self.kv_cache = [
+                (
+                    ms.mint.zeros(
+                        self.kv_shape,  # type: ignore[misc]
+                        dtype=vllm_config.model_config.dtype), ) for _ in
+                range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
 
 
 class MsModelBase:
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
+        self.vllm_config = vllm_config
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
@@ -218,7 +251,8 @@ class MsModelBase:
         key_cache = []
         value_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+        for i in range(num_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             v_cache = self.kv_caches[i].kv_cache[
@@ -406,7 +440,9 @@ class NativeModel(MsModelBase):
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+        kv_cache_shape = (None, block_size, num_kv_heads * head_size) \
+            if is_310p() else (None, block_size, num_kv_heads,
+                                       head_size)
 
         kv_cache_dtype = (self.model_config.dtype
                           if self.cache_config.cache_dtype == "auto" else
@@ -428,6 +464,8 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+        dyn_intermediate_tensors = None
+        dyn_inputs_embeds = None
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
             is_prefill, dyn_slot_mapping, dynamic_attention_mask,
