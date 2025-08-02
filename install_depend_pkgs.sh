@@ -164,8 +164,10 @@ main() {
     
     pip_install "$vllm_url"
     cleanup_torch
-    pip_install "$mindspore_url" "$msadapter_url" "$mindspore_gs_url"
+    pip_install "$mindspore_url"
     install_mindformers
+    pip_install "$mindspore_gs_url"
+    pip_install "$msadapter_url"
 
     cleanup_cache
     
