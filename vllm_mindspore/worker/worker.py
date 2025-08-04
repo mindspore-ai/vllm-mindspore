@@ -213,15 +213,16 @@ def _warm_up_model(self) -> None:
     kv_cache = self.cache_engine[0].gpu_cache
     is_mtp_model = self.speculative_config is not None and \
         self.model_config.hf_config.model_type == "deepseek_mtp"
+
+    def get_model(cls):
+        if cls.vllm_config.scheduler_config.is_multi_step:
+            return cls.model_runner._base_model_runner.model
+        return cls.model_runner.model
+
     intermediate_tensors = None
-    if self.vllm_config.scheduler_config.is_multi_step:
-        make_empty_intermediate_tensors = \
-            self.model_runner._base_model_runner.model.make_empty_intermediate_tensors
-    else:
-        make_empty_intermediate_tensors = \
-            self.model_runner.model.make_empty_intermediate_tensors
+    model = get_model(self)
     if not get_pp_group().is_first_rank:
-        intermediate_tensors = make_empty_intermediate_tensors(
+        intermediate_tensors = model.make_empty_intermediate_tensors(
             batch_size=1,
             dtype=self.model_config.dtype,
             device=self.devices,
