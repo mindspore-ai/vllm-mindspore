@@ -225,3 +225,18 @@ class MsAttentionMetadataBuilder:
 
 
 FlashAttentionMetadata = MsAttentionMetadata
+
+
+# only for 0.9.1 vllm/v1/spec_decode/eagle.py
+@dataclass
+class CommonAttentionMetadata:
+    """
+    Attention metadata attributes that can be shared by layers in different KV
+    cache groups and thus having different block table.
+    """
+
+    query_start_loc: ms.Tensor
+    """(batch_size + 1,), the start location of each request in query Tensor"""
+    seq_lens: ms.Tensor
+    """(batch_size,), the length of each request including both computed tokens
+    and newly scheduled tokens"""
