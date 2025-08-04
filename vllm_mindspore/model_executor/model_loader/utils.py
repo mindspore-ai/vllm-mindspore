@@ -18,7 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ utils for load model """
-from torch import nn
+from mindspore import nn
 from vllm.config import ModelConfig
 from vllm.model_executor.models import ModelRegistry
 
@@ -27,7 +27,7 @@ from vllm_mindspore.model_executor.models.registry import (
 
 
 def get_ms_model_architecture(
-        model_config: ModelConfig) -> tuple[type[nn.Module], str]:
+        model_config: ModelConfig) -> tuple[type[nn.Cell], str]:
     architectures = getattr(model_config.hf_config, "architectures", [])
 
     vllm_supported_archs = ModelRegistry.get_supported_archs()

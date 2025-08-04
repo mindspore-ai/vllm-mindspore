@@ -289,15 +289,12 @@ from vllm.spec_decode.top1_proposer import Top1Proposer
 Top1Proposer._merge_outputs = _merge_outputs
 
 from vllm_mindspore.model_executor.layers.rejection_sampler import (
-    _smallest_positive_value,
-    _multinomial,
-)
+    _smallest_positive_value, )
 from vllm.model_executor.layers.rejection_sampler import RejectionSampler
 
 RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(
     RejectionSampler, "_smallest_positive_value")
-vllm.model_executor.layers.rejection_sampler._multinomial = _multinomial
 
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor
@@ -331,14 +328,6 @@ vllm.model_executor.layers.rotary_embedding.MRotaryEmbedding = (
     InferMRotaryEmbedding)
 
 # patch for V1
-from vllm_mindspore.v1.sample import rejection_sampler
-
-update_modules("vllm.v1.sample.rejection_sampler", rejection_sampler)
-
-from vllm_mindspore.v1.spec_decode import eagle
-
-update_modules("vllm.v1.spec_decode.eagle", eagle)
-
 from vllm_mindspore.v1.attention.backends import ms_attn
 
 update_modules("vllm.v1.attention.backends.flash_attn", ms_attn)
