@@ -17,6 +17,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import socket
 import threading
 import time
@@ -363,12 +364,12 @@ def has_unfinished_dp(dp_group: SocketProcessGroup,
         # Broadcast the result back to workers
         for conn in dp_group.sockets:
             conn.send(msgspec.msgpack.encode(aggregated_result))
-        
+
         return aggregated_result
     else:
         # Worker node: send result to master
         dp_group.client_socket.send(msgspec.msgpack.encode(has_unfinished))
-        
+
         # Receive aggregated result from master
         data = dp_group.client_socket.recv(1024)
         aggregated_result = msgspec.msgpack.decode(data)

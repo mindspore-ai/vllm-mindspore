@@ -244,7 +244,7 @@ def convert_np_to_ms_dtype(value):
 
 # Replace the directly loaded module in vllm, such as 'from module import xxx'
 def update_modules(name: str, module):
-    valid_modules = ("vllm", "torch")
+    valid_modules = ("vllm", )
     if name.split(".")[0] not in valid_modules:
         raise KeyError(
             "The target module should be one of {}, but got {}!".format(
