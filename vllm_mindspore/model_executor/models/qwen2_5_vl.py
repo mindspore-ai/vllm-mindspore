@@ -79,7 +79,7 @@ from vllm_mindspore.distributed.communication_op import \
     AllGatherFromModelParallelRegion
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import ColumnParallelLinear, \
-    RowParallelLinear
+    RowParallelLinear, QKVParallelLinear
 from vllm_mindspore.model_executor.layers.logits_processor import \
     LogitsProcessor
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import \
@@ -695,12 +695,12 @@ class Qwen2_5_VisionAttention(nn.Cell):
             num_heads, self.tp_size)
         self.num_heads = num_heads
         self.head_dim = self.hidden_size_per_attention_head
-
-        self.qkv = ColumnParallelLinear(input_size=embed_dim,
-                                        output_size=3 * projection_size,
-                                        quant_config=quant_config,
-                                        prefix=f"{prefix}.qkv",
-                                        params_dtype=ms.bfloat16)
+        self.qkv = QKVParallelLinear(embed_dim,
+                                     self.head_dim,
+                                     self.num_heads,
+                                     quant_config=quant_config,
+                                     prefix=f"{prefix}.qkv",
+                                     params_dtype=ms.bfloat16)
         self.proj = RowParallelLinear(input_size=projection_size,
                                       output_size=embed_dim,
                                       quant_config=quant_config,
@@ -739,19 +739,9 @@ class Qwen2_5_VisionAttention(nn.Cell):
     def split_qkv(self, qkv: ms.Tensor) -> tuple[ms.Tensor, ...]:
         # [s, 3 * head * head_dim]
         seq_len, _ = qkv.shape
-        if self.tp_size > 1:
-            qkv = self.tensor_model_parallel_all_gather(qkv)
 
         # [s, 3 * head * head_dim] -> 3 * [s, head * head_dim]
         q, k, v = mint.chunk(qkv, 3, dim=-1)
-
-        # 3 * [s, head * head_dim]
-        if self.tp_size > 1:
-            splitter = partial(self.split_tensor_along_last_dim,
-                               num_partitions=self.tp_size)
-            q = splitter(q)[self.tp_rank]
-            k = splitter(k)[self.tp_rank]
-            v = splitter(v)[self.tp_rank]
 
         # 3 * [s, head * head_dim] -> 3 * [s, head, head_dim]
         new_shape = (seq_len, self.num_attention_heads_per_partition,
@@ -766,8 +756,18 @@ class Qwen2_5_VisionAttention(nn.Cell):
         position_embeddings: tuple[ms.Tensor, ms.Tensor],
     ) -> ms.Tensor:
         seq_length = x.shape[0]
-        x, _ = self.qkv(x)
-        q, k, v = self.split_qkv(x)
+        qkv, _ = self.qkv(x)
+        q, k, v = mint.split(
+            qkv, (self.num_attention_heads_per_partition * self.head_dim,
+                  self.num_attention_heads_per_partition * self.head_dim,
+                  self.num_attention_heads_per_partition * self.head_dim), -1)
+
+        q = q.reshape(seq_length, self.num_attention_heads_per_partition,
+                      self.hidden_size_per_attention_head)
+        k = k.reshape(seq_length, self.num_attention_heads_per_partition,
+                      self.hidden_size_per_attention_head)
+        v = v.reshape(seq_length, self.num_attention_heads_per_partition,
+                      self.hidden_size_per_attention_head)
 
         cos, sin = position_embeddings
         q, k = apply_rotary_pos_emb_flashatt(mint.unsqueeze(q, 0),
@@ -1059,35 +1059,19 @@ class Qwen2_5_VisionTransformer(nn.Cell):
     def load_weights(self, weights: Iterable[tuple[str, ms.Tensor]],
                      params_dict: dict[str, ms.Parameter]) -> set[str]:
         loaded_params: set[str] = set()
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-        ]
 
         for name, loaded_weight in weights:
-            for (param_name, weight_name, shard_id) in stacked_params_mapping:
-                if weight_name not in name:
-                    continue
-                name = name.replace(weight_name, param_name)
-
-                param = params_dict[name]
-                weight_loader = param.weight_loader
-                weight_loader(param, loaded_weight, shard_id)
-                break
+            param = params_dict[name]
+            if name == "visual.patch_embed.proj.weight":
+                loaded_weight = loaded_weight[:]
+                loaded_weight = loaded_weight.reshape(loaded_weight.shape[0],
+                                                      -1)
+                param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
             else:
-                param = params_dict[name]
-                if name == "visual.patch_embed.proj.weight":
-                    loaded_weight = loaded_weight[:]
-                    loaded_weight = loaded_weight.reshape(
-                        loaded_weight.shape[0], -1)
-                    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
-                else:
-                    weight_loader = getattr(param, "weight_loader",
-                                            default_weight_loader)
-                    weight_loader(param, loaded_weight)
-            loaded_params.add(name)
+                weight_loader = getattr(param, "weight_loader",
+                                        default_weight_loader)
+                weight_loader(param, loaded_weight)
+        loaded_params.add(name)
         return loaded_params
 
 
@@ -1204,10 +1188,17 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             quant_config=self._maybe_ignore_quant_config(quant_config),
             prefix=maybe_prefix(prefix, "visual"),
         )
-        if not self.is_eager_mode:
-            self.visual.construct = ms.jit(function=self.visual,
-                                           jit_level='O0')
-            self.visual.set_model_inputs()
+
+        # Now, in order to meet the requirements of vit ->aclnn fa and
+        # llm ->atb fa, the only way is to block atb's fa before entering
+        # vit and let it go through aclnn's fa, and after exiting vit,
+        # in the unset environment variable. If vit also follows pynative mode,
+        # the environment variables will not take effect. The solution is
+        # to use different primitives for different kernels in the backend.
+        self.visual.construct = ms.jit(function=self.visual, jit_level='O0')
+        self.visual.set_model_inputs()
+        logger.info(
+            "PyNative is not available for vit, vit is always graph mode.")
 
         self.model = Qwen2Model(vllm_config=vllm_config,
                                 prefix=maybe_prefix(prefix, "model"))
