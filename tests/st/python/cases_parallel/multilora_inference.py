@@ -21,7 +21,7 @@ for offline inference.
 import pytest
 import os
 
-from .utils import EnvVarManager, cleanup_subprocesses
+from tests.st.python.utils import EnvVarManager, cleanup_subprocesses
 
 import vllm_mindspore  # noqa: F401
 from typing import Optional
@@ -40,7 +40,6 @@ env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
@@ -109,9 +108,6 @@ def initialize_engine() -> LLMEngine:
     return LLMEngine.from_engine_args(engine_args)
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
 def test_multilora_inference():
     """test function that sets up and runs the prompt processing."""
     engine = initialize_engine()
