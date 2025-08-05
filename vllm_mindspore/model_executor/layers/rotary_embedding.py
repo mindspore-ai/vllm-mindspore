@@ -603,6 +603,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             freqs_cos = self.freqs_cos.index_select(0, positions)
             freqs_sin = self.freqs_sin.index_select(0, positions)
 
+        query = query.contiguous()
+        key = key.contiguous()
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
                                         batch_valid_length)
 

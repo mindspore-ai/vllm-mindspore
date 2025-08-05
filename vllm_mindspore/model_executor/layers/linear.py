@@ -23,6 +23,7 @@ from abc import abstractmethod
 from typing import Optional, Union
 
 import mindspore as ms
+import numpy as np
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
 from vllm.config import get_current_vllm_config
@@ -434,6 +435,33 @@ class QKVParallelLinear(ColumnParallelLinear):
                       loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
         tp_rank = get_tensor_model_parallel_rank()
+
+        # QKV loaded weight is already fused on disk (qkv safetensors).
+        # According to the Safetensor of qkv, after partitioning,
+        # load it into the corresponding qkv fusion weights
+        if loaded_shard_id is None:
+            shard_offsets = [
+                # (shard_id, shard_offset, shard_size)
+                ("q", 0, self.num_heads * self.head_size),
+                ("k", self.total_num_heads * self.head_size,
+                 self.num_kv_heads * self.head_size),
+                ("v", (self.total_num_heads + self.total_num_kv_heads) *
+                 self.head_size, self.num_kv_heads * self.head_size),
+            ]
+
+            loaded_weight_list = []
+            for _, shard_offset, shard_size in shard_offsets:
+                start_idx = shard_offset + tp_rank * shard_size
+                loaded_weight_shard = split_loaded_weight(
+                    loaded_weight, output_dim, start_idx, shard_size)
+                loaded_weight_list.append(loaded_weight_shard)
+
+            loaded_weight = ms.from_numpy(np.concatenate(loaded_weight_list))
+
+            assert loaded_weight.shape == param.shape
+            param.set_data(loaded_weight)
+            return
+
         assert loaded_shard_id in ["q", "k", "v"]
         if loaded_shard_id == "q":
             shard_offset = 0
