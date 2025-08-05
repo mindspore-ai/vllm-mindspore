@@ -238,3 +238,18 @@ def test_cases_parallel_level1_part0():
               "::test_mf_qwen_7b_cp_pc_mss",
               "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
     run_tasks(cases)
+
+
+@pytest.mark.level0
+@pytest.mark.env_single
+def test_cases_parallel_310p_part0():
+    """
+    Feature: test cases parallel in 310p.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
+         "vllm_mf_qwen3_8b_v1_310p_test_mf_qwen3.log"),
+    ]
+    run_tasks(cases)
