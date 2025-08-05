@@ -75,7 +75,7 @@ class LogitsProcessor(nn.Cell):
         self.soft_cap = soft_cap
         # Whether to use gather or all-gather to gather the logits.
         self.use_all_gather = current_platform.use_all_gather()
-
+        
         if self.use_all_gather:
             self.tensor_model_parallel_all_gather = AllGatherFromModelParallelRegion()
         else:
@@ -85,36 +85,28 @@ class LogitsProcessor(nn.Cell):
         self.cached_input_info = {}
 
     def set_dynamic_inputs(self):
-        dyn_hidden_states = Tensor(shape=[None, None],
-                                   dtype=self.vllm_config.model_config.dtype)
+        dyn_hidden_states = Tensor(
+            shape=[None, None], dtype=self.vllm_config.model_config.dtype)
+        
+        dyn_indices_shape = [None for _ in range(
+                    self.cached_input_info["indices"]["ndim"])]
+        dyn_indices_dtype = self.cached_input_info["indices"]["dtype"]
+        dyn_indices = None if self.cached_input_info["indices"] is None else \
+            Tensor(shape=dyn_indices_shape, dtype=dyn_indices_dtype)
 
-        if self.cached_input_info["indices"] is None:
-            dyn_indices = None
-        else:
-            dyn_indices_shape = [
-                None for _ in range(self.cached_input_info["indices"]["ndim"])
-            ]
-            dyn_indices_dtype = self.cached_input_info["indices"]["dtype"]
-            dyn_indices = Tensor(shape=dyn_indices_shape,
-                                 dtype=dyn_indices_dtype)
-
-        if self.cached_input_info["bias"] is None:
-            dyn_bias = None
-        else:
-            dyn_bias_shape = [
-                None for _ in range(self.cached_input_info["bias"]["ndim"])
-            ]
-            dyn_bias_dtype = self.cached_input_info["bias"]["dtype"]
-            dyn_bias = Tensor(shape=dyn_bias_shape, dtype=dyn_bias_dtype)
+        dyn_bias_shape = [None for _ in range(
+                    self.cached_input_info["bias"]["ndim"])]
+        dyn_bias_dtype = self.cached_input_info["bias"]["dtype"]
+        dyn_bias = None if self.cached_input_info["bias"] is None else \
+            Tensor(shape=dyn_bias_shape, dtype=dyn_bias_dtype)
 
         self.set_inputs(dyn_hidden_states, dyn_indices, dyn_bias)
 
     def __call__(
-            self,
-            lm_head: VocabParallelEmbedding,
-            hidden_states: Tensor,
-            sampling_metadata: Optional[SamplingMetadata] = None,
-            embedding_bias: Optional[Tensor] = None,
+        self,
+        hidden_states: Tensor,
+        selected_token_indices: Optional[Tensor] = None,
+        embedding_bias: Optional[Tensor] = None,
     ) -> Optional[Tensor]:
         if self.lm_head is None:
             self.lm_head = lm_head
@@ -181,7 +173,6 @@ class LogitsProcessor(nn.Cell):
                 logits *= self.scale
 
             # Apply logits processors (if any).
-
         return logits
 
     def _get_logits(
