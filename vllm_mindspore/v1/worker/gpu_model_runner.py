@@ -22,20 +22,24 @@ from typing import Any, Optional
 
 import mindspore as ms
 import numpy as np
+import torch
 from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
 from vllm.logger import init_logger
 from vllm.sampling_params import SamplingType
-from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
-                                        SlidingWindowSpec)
+from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
+                                        KVCacheSpec, SlidingWindowSpec)
 from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
+from vllm.v1.utils import bind_kv_cache
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
+from vllm.v1.worker.utils import initialize_kv_cache_for_kv_sharing
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
-from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
+from vllm_mindspore.utils import (create_kv_cache, get_dtype_size,
+                                  get_valid_dtype, is_310p)
 
 logger = init_logger(__name__)
 
@@ -62,9 +66,10 @@ def _prepare_inputs(
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
     req_indices = np.repeat(self.arange_np[:num_reqs], num_scheduled_tokens)
-
-    # cu_num_tokens: [2, 5, 3] -> [2, 7, 10]
-    # arange: [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+    """
+    cu_num_tokens: [2, 5, 3] -> [2, 7, 10]
+    arange: [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+    """
     cu_num_tokens, arange = self._get_cumsum_and_arange(num_scheduled_tokens)
 
     # Get positions.
@@ -208,6 +213,66 @@ def create_block(shape, dtype, name=None, device=None):
     return blocks
 
 
+def _allocate_nz_kv_cache_tensors(self, kv_cache_config):
+    """
+    Initializes and reshape the KV cache buffer with the correct size. 
+    The buffer needs to be convert to nz format for 310p.
+
+    Args:
+        kv_cache_config: The KV cache config 
+    Returns:
+        dict[str, Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+    """
+    kv_caches: dict[str, tuple] = {}
+
+    layer_to_group_info = {
+        layer_name: (i, group.kv_cache_spec)
+        for i, group in enumerate(kv_cache_config.kv_cache_groups)
+        for layer_name in group.layer_names
+    }
+
+    use_mla_op = bool(
+        self.vllm_config.additional_config
+        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    if use_mla_op:
+        logger.error("For 310p, mla kv cache not supported")
+        raise NotImplementedError
+
+    for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
+        if not kv_cache_tensor.shared_by:
+            continue
+
+        rep_layer_name = kv_cache_tensor.shared_by[0]
+        group_idx, kv_cache_spec = layer_to_group_info[rep_layer_name]
+        if not isinstance(kv_cache_spec, FullAttentionSpec):
+            raise NotImplementedError
+
+        attn_backend = self.attn_backends[group_idx]
+        target_dtype = get_valid_dtype(kv_cache_spec.dtype)
+
+        num_blocks = kv_cache_tensor.size // kv_cache_spec.page_size_bytes
+        kv_cache_shape = attn_backend.get_kv_cache_shape(
+            num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
+            kv_cache_spec.head_size)
+
+        reshaped_layer_tensors = []
+        coef = 1 if kv_cache_spec.use_mla else 2
+        for _ in range(coef):
+            reshaped_layer_tensors.append(
+                create_kv_cache(kv_cache_shape[1:], target_dtype))
+
+        final_kv_tuple = mutable(tuple(reshaped_layer_tensors))
+        for layer_name in kv_cache_tensor.shared_by:
+            kv_caches[layer_name] = final_kv_tuple
+
+    all_layers = set(layer_to_group_info.keys())
+    if all_layers != set(kv_caches.keys()):
+        raise RuntimeError("Some layers were not initialized")
+
+    return kv_caches
+
+
 def _allocate_kv_cache_tensors(self, kv_cache_config):
     """
     Initializes the KV cache buffer with the correct size. The buffer needs
@@ -218,7 +283,7 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
     Returns:
         dict[str, Tensor]: A map between layer names to their 
         corresponding memory buffer for KV cache.
-        """
+    """
     kv_cache_spec = kv_cache_config.kv_cache_groups[0].kv_cache_spec
     use_mla = kv_cache_spec.use_mla
     dtype = kv_cache_spec.dtype
@@ -239,14 +304,16 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
         raw_tensors = []
         raw_tensor_shape = kv_cache_tensor.size // dtype_size // coef
         for i in range(coef):
-            # Formulas for calculating each parameter:
-            # 1. page_size = coef * self.block_size * self.num_kv_heads *
-            #    self.head_size * get_dtype_size(self.dtype)
-            # 2. num_blocks = kv_cache_tensors.size / page_size
-            # 3. kv_cache_tensors.size = num_blocks * (coef *
-            #    self.block_size * self.num_kv_heads * self.head_size *
-            #    get_dtype_size(self.dtype))
-            # 4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
+            """
+            Formulas for calculating each parameter:
+            1. page_size = coef * self.block_size * self.num_kv_heads *
+               self.head_size * get_dtype_size(self.dtype)
+            2. num_blocks = kv_cache_tensors.size / page_size
+            3. kv_cache_tensors.size = num_blocks * (coef *
+               self.block_size * self.num_kv_heads * self.head_size *
+               get_dtype_size(self.dtype))
+            4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
+            """
             raw_tensors.extend(
                 [mint.zeros(raw_tensor_shape, dtype=target_dtype)]
                 if not use_mla_op else [
@@ -347,6 +414,41 @@ def _reshape_kv_cache_tensors(
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
                 raise NotImplementedError
+    return kv_caches
+
+
+def initialize_kv_cache_tensors(
+        self, kv_cache_config: KVCacheConfig) -> dict[str, torch.Tensor]:
+    """
+    Initialize the memory buffer for KV cache.
+
+    Args:
+        kv_cache_config: The KV cache config
+    Returns:
+        Dict[str, torch.Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+    """
+    if is_310p():
+        kv_caches = _allocate_nz_kv_cache_tensors(self, kv_cache_config)
+    else:
+        # Initialize the memory buffer for KV cache
+        kv_cache_raw_tensors = self._allocate_kv_cache_tensors(kv_cache_config)
+        # Change the memory buffer to the desired shape
+        kv_caches = self._reshape_kv_cache_tensors(kv_cache_config,
+                                                   kv_cache_raw_tensors)
+
+    # Setup `kv_cache_config` and `kv_caches` for models
+    # with cross-layer KV sharing
+    if self.shared_kv_cache_layers:
+        initialize_kv_cache_for_kv_sharing(
+            self.shared_kv_cache_layers,
+            kv_cache_config.kv_cache_groups,
+            kv_caches,
+        )
+
+    bind_kv_cache(kv_caches,
+                  self.vllm_config.compilation_config.static_forward_context,
+                  self.kv_caches)
     return kv_caches
 
 
@@ -562,8 +664,10 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     use_mla = self.vllm_config.model_config.use_mla
     kv_cache_spec: dict[str, KVCacheSpec] = {}
     for layer_name, attn_module in forward_ctx.items():
-        # vllm-mindspore AttentionWrapper is not an Attention isinstance
-        # assert isinstance(attn_module, Attention)
+        """
+        vllm-mindspore AttentionWrapper is not an Attention isinstance
+        assert isinstance(attn_module, Attention)
+        """
         if attn_module.attn_type == AttentionType.DECODER:
             if attn_module.sliding_window is not None:
                 kv_cache_spec[layer_name] = SlidingWindowSpec(

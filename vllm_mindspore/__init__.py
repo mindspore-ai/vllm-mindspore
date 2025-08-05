@@ -376,14 +376,14 @@ from vllm_mindspore.v1.worker.gpu_model_runner import _update_states
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states = _update_states
 
 from vllm_mindspore.v1.worker.gpu_model_runner import (
-    _allocate_kv_cache_tensors,
-    get_kv_cache_spec,
-)
+    _allocate_kv_cache_tensors, get_kv_cache_spec, initialize_kv_cache_tensors)
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._allocate_kv_cache_tensors = (
     _allocate_kv_cache_tensors)
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.get_kv_cache_spec = (
     get_kv_cache_spec)
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.initialize_kv_cache_tensors = (
+    initialize_kv_cache_tensors)
 from vllm_mindspore.v1.worker.gpu_model_runner import _reshape_kv_cache_tensors
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._reshape_kv_cache_tensors = (

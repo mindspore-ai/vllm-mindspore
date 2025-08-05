@@ -19,6 +19,8 @@ from mindformers.tools.register.config import MindFormerConfig
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
 
+from vllm_mindspore.utils import is_310p
+
 logger = init_logger(__name__)
 
 
@@ -70,7 +72,7 @@ source_path: Specifies the path to a configuration parameter in VllmConfig,
 value_or_function: Specifies the default value for the configuration parameter
                    or a partial function for computing configuration values.
 """
-# yapf: disable
+# yapf: disable # noqa:ERA001
 # flake8: noqa: E501
 MF_CTX_MAPPING = {
     'run_mode': (None, "predict"),
@@ -94,7 +96,15 @@ MF_MODEL_COMMON_MAPPING = {
     'model.model_config.params_dtype': (None, 'bfloat16'),
     'model.model_config.router_dense_type': (None, 'bfloat16'),
 }
-# yapf: enable
+
+MF_MODEL_COMMON_MAPPING_310p = {
+    'model.model_config.compute_dtype': ('model_config.hf_config.torch_dtype', 'float16'),
+    'model.model_config.layernorm_compute_dtype': (None, 'float16'),
+    'model.model_config.rotary_dtype': (None, 'float16'),
+    'model.model_config.params_dtype': (None, 'float16'),
+    'model.model_config.router_dense_type': (None, 'float16'),
+}
+# yapf: enable # noqa:ERA001
 
 # model default config
 MODEL_RELATED_MAPPING = {
@@ -211,7 +221,11 @@ def gen_mf_config(vllm_config: VllmConfig):
     target_config.set_value(
         'model.model_config',
         MindFormerConfig(**gen_model_config_dict(vllm_config)))
-    transform_config(MF_MODEL_COMMON_MAPPING, vllm_config, target_config)
+    if is_310p():
+        transform_config(MF_MODEL_COMMON_MAPPING_310p, vllm_config,
+                         target_config)
+    else:
+        transform_config(MF_MODEL_COMMON_MAPPING, vllm_config, target_config)
     # Update target config with additional config.
     # The configuration hierarchy in the additional config must match the
     # hierarchy structure of the MindFormers YAML configuration file.

@@ -34,7 +34,7 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.utils import set_model_context
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
@@ -48,10 +48,12 @@ class AttentionWrapper:
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
         self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
-        self.kv_cache = [(
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-            ms.mint.zeros(self.kv_shape, dtype=vllm_config.model_config.dtype),
-        ) for _ in range(vllm_config.parallel_config.pipeline_parallel_size)]
+        self.kv_cache = [
+            (create_kv_cache(self.kv_shape, vllm_config.model_config.dtype),
+             create_kv_cache(self.kv_shape, vllm_config.model_config.dtype))
+            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
+        ]
+
         self.attn_type = AttentionType.DECODER
 
         # add for v1
