@@ -196,7 +196,9 @@ def test_cases_parallel_part6():
     """
     cases = [
         (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
-         "vllm_qwen2_5_vl_7b_v1.log")
+         "vllm_qwen2_5_vl_7b_v1.log"),
+        (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
+         "multilora_inference_test_multilora_inference.log")
     ]
     run_tasks(cases)
 
