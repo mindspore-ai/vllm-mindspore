@@ -54,6 +54,6 @@ class SwiGLU(nn.Cell):
         hidden_size = x.shape[-1] // 2
         size = [hidden_size, hidden_size]
         gate, hidden = self.split(x, size, dim=-1)
-        gate = self.silu(gate)
+        gate = self.silu(gate.contiguous())
         hidden = self.mul(hidden, gate)
         return hidden
