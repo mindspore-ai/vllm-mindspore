@@ -316,13 +316,11 @@ class A8W8LinearMethod(LinearMethodBase):
 
     def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
         input_offset = layer.input_offset.asnumpy()
-        layer.input_offset = Parameter(Tensor(input_offset,
-                                              dtype=mindspore.int8),
-                                       name=layer.input_offset.name)
         if self.is_group_mm:
             input_scale = layer.input_scale.asnumpy()
             weight_scale = layer.weight_scale.asnumpy()
             input_scale = np.array([np.max(input_scale)])
+            input_offset = np.array([np.max(input_offset)])
             weight_scale = weight_scale * input_scale[0]
             layer.input_scale = Parameter(Tensor(
                 input_scale, dtype=layer.input_scale.dtype),
@@ -342,6 +340,9 @@ class A8W8LinearMethod(LinearMethodBase):
             layer.deq_scale = Parameter(Tensor(deq_scale,
                                                dtype=mindspore.float32),
                                         name=layer.deq_scale.name)
+        layer.input_offset = Parameter(Tensor(input_offset,
+                                              dtype=mindspore.int8),
+                                       name=layer.input_offset.name)
 
     def apply(self,
               layer: mindspore.nn.Cell,
