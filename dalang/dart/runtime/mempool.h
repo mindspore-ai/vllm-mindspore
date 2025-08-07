@@ -70,8 +70,8 @@ public:
 
   void ForwardRecordInputsRefCounts(DATensor *node);
   void FreeUnusedNodes(DATensor *node);
+  void FreeOutputNodes();
   void PrintRefCountInfo() const;
-  void CheckRefCountInfo() const;
 
   void SetFreeFunc(memoryFreeFunc &&func) {
     CHECK_IF_NULL(memPool_);

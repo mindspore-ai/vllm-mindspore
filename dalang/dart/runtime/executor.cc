@@ -138,7 +138,7 @@ GraphExecutor::~GraphExecutor() {
   CHECK_IF_NULL(recycler_);
   delete recycler_;
   recycler_ = nullptr;
-  for (auto kernelPair : kernels_) {
+  for (auto &kernelPair : kernels_) {
     CHECK_IF_NULL(kernelPair.second);
     delete kernelPair.second;
   }
@@ -355,7 +355,6 @@ void GraphExecutor::RunGraph(bool isDynamic) {
 #ifndef SKIP_RUN_TENSOR
     recycler_->FreeUnusedNodes(graph_->node[i]);
   }
-  recycler_->CheckRefCountInfo();
 #else
   }
 #endif

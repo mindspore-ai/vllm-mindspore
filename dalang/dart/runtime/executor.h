@@ -74,6 +74,11 @@ public:
     CHECK_IF_NULL(recycler_);
     recycler_->SetFreeFunc(std::move(func));
   }
+  // Free the memory of graph outputs
+  void FreeGraphOutputs() {
+    CHECK_IF_NULL(recycler_);
+    recycler_->FreeOutputNodes();
+  }
   // Record tensor refCount
   void RecordTensorRefCount();
 #ifdef DUMP
