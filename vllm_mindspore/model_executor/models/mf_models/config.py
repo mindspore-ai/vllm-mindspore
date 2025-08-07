@@ -15,7 +15,6 @@
 # limitations under the License.
 import types
 
-from mindformers.models.configuration_utils import PretrainedConfig
 from mindformers.tools.register.config import MindFormerConfig
 from vllm.config import VllmConfig
 
@@ -26,59 +25,14 @@ MF_CTX_MAPPING = {
     'auto_trans_ckpt': (None, True),
 }
 
+# yapf: disable
 MF_PARALLEL_MAPPING = {
     'parallel_mode': (None, 'STAND_ALONE'),
-    'parallel_config.model_parallel':
-    ('parallel_config.tensor_parallel_size', None),
-    'parallel_config.pipeline_stage':
-    ('parallel_config.pipeline_parallel_size', None),
+    'parallel_config.model_parallel': ('parallel_config.tensor_parallel_size', None),  # noqa: E501
+    'parallel_config.pipeline_stage': ('parallel_config.pipeline_parallel_size', None),  # noqa: E501
     'parallel_config.vocab_emb_dp': (None, False)
 }
-
-# Common model config
-MODEL_COMMON_MAPPING = {
-    'seq_length': ('model_config.max_model_len', None),
-    'use_flash_attention': (None, True),
-    "compute_dtype": ('model_config.hf_config.torch_dtype', 'bfloat16'),
-    'architectures': ('model_config.hf_config.architectures', None),
-    'bos_token_id': ('model_config.hf_config.bos_token_id', None),
-    'eos_token_id': ('model_config.hf_config.eos_token_id', None),
-    'model_type': ('model_config.hf_config.model_type', None),
-    # transformer_config
-    'attention_dropout': ('model_config.hf_config.attention_dropout', None),
-    'hidden_act': ('model_config.hf_config.hidden_act', None),
-    'hidden_size': ('model_config.hf_config.hidden_size', None),
-    'intermediate_size': ('model_config.hf_config.intermediate_size', None),
-    'max_position_embeddings':
-    ('model_config.hf_config.max_position_embeddings', None),
-    'num_attention_heads':
-    ('model_config.hf_config.num_attention_heads', None),
-    'rms_norm_eps': ('model_config.hf_config.rms_norm_eps', None),
-    'num_hidden_layers': ('model_config.hf_config.num_hidden_layers', None),
-    'num_layers': ('model_config.hf_config.num_layers', None),
-    'num_key_value_heads':
-    ('model_config.hf_config.num_key_value_heads', None),
-    'n_kv_heads': ('model_config.hf_config.n_kv_heads', None),
-    'head_dim': ('model_config.hf_config.head_dim', None),
-    'rope_theta': ('model_config.hf_config.rope_theta', None),
-    'tie_word_embeddings':
-    ('model_config.hf_config.tie_word_embeddings', None),
-    'vocab_size': ('model_config.hf_config.vocab_size', None),
-    'attention_bias': ('model_config.hf_config.attention_bias', None),
-    'decoder_sparse_step': ('model_config.hf_config.decoder_sparse_step',
-                            None),
-    'moe_intermediate_size': ('model_config.hf_config.moe_intermediate_size',
-                              None),
-    'num_experts_per_tok': ('model_config.hf_config.num_experts_per_tok',
-                            None),
-    'num_experts': ('model_config.hf_config.num_experts', None),
-    'norm_topk_prob': ('model_config.hf_config.norm_topk_prob', None),
-    'output_router_logits': ('model_config.hf_config.output_router_logits',
-                             None),
-    'router_aux_loss_coef': ('model_config.hf_config.router_aux_loss_coef',
-                             None),
-    'mlp_only_layers': ('model_config.hf_config.mlp_only_layers', None),
-}
+# yapf: enable
 
 # model default config
 MODEL_RELATED_MAPPING = {
@@ -145,11 +99,10 @@ def gen_model_relatived_config(model_type):
 def gen_model_config_dict(vllm_config: VllmConfig):
     target_config = MindFormerConfig()
 
-    transform_config(MODEL_COMMON_MAPPING, vllm_config, target_config)
-
     model_type = vllm_config.model_config.hf_config.model_type
     model_related_config = gen_model_relatived_config(model_type)
     target_config.update(model_related_config)
+    target_config.post_process = False
 
     return target_config
 
@@ -162,11 +115,3 @@ def gen_mf_config(vllm_config: VllmConfig):
         'model.model_config',
         MindFormerConfig(**gen_model_config_dict(vllm_config)))
     return target_config
-
-
-def gen_model_config(mf_config: MindFormerConfig,
-                     model_config_type: PretrainedConfig):
-    model_config = model_config_type(**mf_config.model.model_config,
-                                     parallel_config=mf_config.parallel_config)
-    model_config.post_process = False
-    return model_config

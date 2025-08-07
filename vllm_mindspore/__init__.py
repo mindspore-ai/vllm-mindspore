@@ -506,4 +506,9 @@ from vllm_mindspore.entrypoints.__main__ import (
 
 patch_server_run_api_server_worker_proc()
 
+from vllm_mindspore.model_executor.models.registry import _normalize_archs
+from vllm.model_executor.models.registry import _ModelRegistry
+
+_ModelRegistry._normalize_archs = _normalize_archs
+
 check_ready()
