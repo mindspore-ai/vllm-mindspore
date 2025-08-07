@@ -26,7 +26,6 @@ from setuptools import find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools import Extension
 import subprocess
-import warnings
 
 
 def load_module_from_path(module_name, path):
@@ -111,18 +110,20 @@ class CustomBuildExt(build_ext):
     ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 
     def build_extension(self, ext):
-        if ext.name == "vllm_mindspore.npu_ops":
-            self.build_npu_ops(ext)
+        if ext.name == "vllm_mindspore._C_ops":
+            self.build_c_ops(ext)
         else:
             raise ValueError(f"Unknown extension name: {ext.name}")
 
-    def build_npu_ops(self, ext):
-        # "vllm_mindspore.npu_ops" --> "npu_ops"
+    def build_c_ops(self, ext):
+        # "vllm_mindspore._C_ops" --> "_C_ops"
         ext_name = ext.name.split('.')[-1]
         so_name = ext_name + ".so"
         logger.info(f"Building {so_name} ...")
-        OPS_DIR = os.path.join(ROOT_DIR, "vllm_mindspore", "ops")
-        BUILD_OPS_DIR = os.path.join(ROOT_DIR, "build", "ops")
+        OPS_DIR = os.path.join(ROOT_DIR, "csrc")
+        BUILD_OPS_DIR = os.path.join(ROOT_DIR, "build", "csrc_ops")
+        if os.path.exists(BUILD_OPS_DIR):
+            shutil.rmtree(BUILD_OPS_DIR)
         os.makedirs(BUILD_OPS_DIR, exist_ok=True)
 
         ascend_home_path = _get_ascend_home_path()
@@ -140,17 +141,20 @@ class CustomBuildExt(build_ext):
             f"cmake --build {BUILD_OPS_DIR} -j --verbose"
         )
 
-        try:
-            # Run the combined cmake command
-            logger.info(f"Running combined CMake commands:\n{cmake_cmd}")
-            result = subprocess.run(cmake_cmd, cwd=self.ROOT_DIR, text=True, shell=True, capture_output=True)
-            if result.returncode != 0:
-                logger.info("CMake commands failed:")
-                logger.info(result.stdout)  # Print standard output
-                logger.info(result.stderr)  # Print error output
-                raise RuntimeError(f"Combined CMake commands failed with exit code {result.returncode}")
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to build {so_name}: {e}")
+        # Run the combined cmake command
+        logger.info(f"Running commands:\n{cmake_cmd}")
+        build_log_file = os.path.join(BUILD_OPS_DIR, "build_log.txt")
+        with open(build_log_file, "w") as log_file:
+            result = subprocess.run(
+                ["bash", "-c", cmake_cmd],
+                cwd=self.ROOT_DIR,
+                text=True,
+                stdout=log_file,
+                stderr=log_file
+            )
+        if result.returncode != 0:
+            logger.error(f"Command failed: '{cmake_cmd}' exited with code {result.returncode}")
+            raise RuntimeError(f"Failed to build {ext_name}, check the build log for details: {build_log_file}")
 
         # Copy the generated .so file to the target directory
         src_so_path = os.path.join(build_extension_dir, so_name)
@@ -159,7 +163,7 @@ class CustomBuildExt(build_ext):
         if os.path.exists(dst_so_path):
             os.remove(dst_so_path)
         shutil.copy(src_so_path, dst_so_path)
-        logger.info(f"Copied {so_name} to {dst_so_path}")
+        logger.info(f"Build {dst_so_path} succeeded.")
 
 
 write_commit_id()
@@ -176,7 +180,7 @@ def _get_ext_modules():
     ext_modules = []
     if os.path.exists(_get_ascend_home_path()):
         # sources are specified in CMakeLists.txt
-        ext_modules.append(Extension("vllm_mindspore.npu_ops", sources=[]))
+        ext_modules.append(Extension("vllm_mindspore._C_ops", sources=[]))
     return ext_modules
 
 setup(

@@ -13,20 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef VLLM_MINDSPORE_OPS_MODULE_MODULE_H
-#define VLLM_MINDSPORE_OPS_MODULE_MODULE_H
+#ifndef VLLM_MINDSPORE_CSRC_MODULE_MODULE_H
+#define VLLM_MINDSPORE_CSRC_MODULE_MODULE_H
 
-#include <pybind11/pybind11.h>
 #include <functional>
-#include <vector>
+#include <pybind11/pybind11.h>
 #include <string>
+#include <vector>
 
 // Define the type of module registration functions
 using ModuleRegisterFunction = std::function<void(pybind11::module_ &)>;
 
 // Module registry class
 class ModuleRegistry {
- public:
+public:
   // Get the singleton instance
   static ModuleRegistry &Instance() {
     static ModuleRegistry instance;
@@ -34,7 +34,9 @@ class ModuleRegistry {
   }
 
   // Register a module function
-  void Register(const ModuleRegisterFunction &func) { functions_.push_back(func); }
+  void Register(const ModuleRegisterFunction &func) {
+    functions_.push_back(func);
+  }
 
   // Call all registered module functions
   void RegisterAll(pybind11::module_ &m) {
@@ -43,7 +45,7 @@ class ModuleRegistry {
     }
   }
 
- private:
+private:
   ModuleRegistry() = default;
   ~ModuleRegistry() = default;
 
@@ -55,15 +57,21 @@ class ModuleRegistry {
   std::vector<ModuleRegisterFunction> functions_;
 };
 
-// Define a macro to register module functions
-#define MS_EXTENSION_MODULE(func)                                                \
-  static void func##_register(pybind11::module_ &);                              \
-  namespace {                                                                    \
-  struct func##_registrar {                                                      \
-    func##_registrar() { ModuleRegistry::Instance().Register(func##_register); } \
-  };                                                                             \
-  static func##_registrar registrar_instance;                                    \
-  }                                                                              \
-  static void func##_register(pybind11::module_ &m)
+#define CONCATENATE_DETAIL(x, y) x##y
+#define CONCATENATE(x, y) CONCATENATE_DETAIL(x, y)
 
-#endif  // VLLM_MINDSPORE_OPS_MODULE_MODULE_H
+#define VLLM_MS_EXTENSION_MODULE(m)                                            \
+  static void CONCATENATE(func_register_, __LINE__)(pybind11::module_ &);      \
+  namespace {                                                                  \
+  struct CONCATENATE(func_registrar_, __LINE__) {                              \
+    CONCATENATE(func_registrar_, __LINE__)() {                                 \
+      ModuleRegistry::Instance().Register(                                     \
+          CONCATENATE(func_register_, __LINE__));                              \
+    }                                                                          \
+  };                                                                           \
+  static CONCATENATE(func_registrar_, __LINE__)                                \
+      CONCATENATE(registrar_instance_, __LINE__);                              \
+  }                                                                            \
+  static void CONCATENATE(func_register_, __LINE__)(pybind11::module_ & m)
+
+#endif // VLLM_MINDSPORE_CSRC_MODULE_MODULE_H
