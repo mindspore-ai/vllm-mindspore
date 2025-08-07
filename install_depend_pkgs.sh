@@ -21,15 +21,43 @@ readonly SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
 readonly CONFIG_FILE="$SCRIPT_DIR/.jenkins/test/config/dependent_packages.yaml"
 readonly MF_DIR="$SCRIPT_DIR/mindformers"
 
+readonly PIP_TRUSTED_HOSTS="--trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com"
+readonly PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple"
+
 FORCE_REINSTALL=false
 
-log() { echo "========= $*"; }
+log() {
+    local width=80
+    local text="$*"
+    
+    if [ -z "$text" ]; then
+        printf "\033[92m"
+        printf "%0.s=" $(seq 1 $width)
+        printf "\033[0m"
+        echo
+    else
+        local padding=$(( (width - ${#text} - 2) / 2 ))
+        printf "\033[92m"
+        printf "%0.s=" $(seq 1 $padding)
+        printf " %s " "$text"
+        printf "%0.s=" $(seq 1 $((width - padding - ${#text} - 2)))
+        printf "\033[0m"
+        echo
+    fi
+}
+
+log_package_url() {
+    local package_name="$1"
+    local url="$2"
+    echo -e "\033[38;5;214m${package_name}:\033[0m"
+    echo -e "  \033[38;5;214m${url}\033[0m"
+}
 
 pip_install() {
     if [ "$FORCE_REINSTALL" = true ]; then
-        uv pip install --system --no-cache-dir --force-reinstall --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+        uv pip install --system --no-cache-dir --force-reinstall $PIP_TRUSTED_HOSTS $PIP_INDEX "$@"
     else
-        uv pip install --system --no-cache-dir --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+        uv pip install --system --no-cache-dir $PIP_TRUSTED_HOSTS $PIP_INDEX "$@"
     fi
 }
 
@@ -91,9 +119,9 @@ install_mindformers() {
     log "Using mindformers commit: $commit_id"
 }
 
-cleanup_torch() {
-    log "Cleaning torch packages"
-    pip uninstall torch torch-npu torchvision torchaudio -y || true
+cleanup_package() {
+    log "Cleaning $*"
+    pip uninstall "$@" -y || true
 }
 
 cleanup_cache() {
@@ -145,7 +173,7 @@ main() {
         log "This will remove existing mindformers directory and reinstall all dependencies"
     fi
 
-    pip install --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple uv
+    pip install $PIP_TRUSTED_HOSTS $PIP_INDEX uv
 
     [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
     
@@ -157,13 +185,16 @@ main() {
     local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
     
     log "Package URLs:"
-    log "vLLM: $vllm_url"
-    log "MindSpore: $mindspore_url"
-    log "msadapter: $msadapter_url"
-    log "mindspore-gs: $mindspore_gs_url"
-    
+    log_package_url "vLLM" "$vllm_url"
+    log_package_url "MindSpore" "$mindspore_url"
+    log_package_url "msadapter" "$msadapter_url"
+    log_package_url "mindspore-gs" "$mindspore_gs_url"
+
+    # WARNING: do not adjust sequence of installation steps
+    cleanup_package msadapter
+    cleanup_package vllm
     pip_install "$vllm_url"
-    cleanup_torch
+    cleanup_package torch torch-npu torchvision torchaudio
     pip_install "$mindspore_url"
     install_mindformers
     pip_install "$mindspore_gs_url"
@@ -174,8 +205,8 @@ main() {
     log "All dependencies installed successfully!"
     log ""
     log "To use vLLM-MindSpore, environment variables need to be configured:"
-    log "- export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
-    log "- export vLLM_MODEL_BACKEND=MindFormers"
+    echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
+    echo "  export vLLM_MODEL_BACKEND=MindFormers"
     log ""
     
     if [ "${AUTO_BUILD:-}" = "1" ]; then
@@ -183,7 +214,7 @@ main() {
         echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
         log "Environment variables added to ~/.bashrc (automated build)"
     else
-        echo -n "Add these to ~/.bashrc automatically? (y/N): "
+        echo -n -e "\033[93mAdd these to ~/.bashrc automatically? (y/N): \033[0m"
         read -r response
         
         if [[ "$response" == "y" || "$response" == "Y" ]]; then
@@ -193,7 +224,8 @@ main() {
                 echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
                 echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
                 log "Environment variables added to ~/.bashrc"
-                log "Run: source ~/.bashrc"
+                log "Run:"
+                echo "  source ~/.bashrc"
             fi
         else
             log "Please add the environment variables manually and run 'source ~/.bashrc'"
