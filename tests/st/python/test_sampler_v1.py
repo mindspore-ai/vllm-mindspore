@@ -26,9 +26,9 @@ from typing import Optional
 
 import numpy as np
 import pytest
-import torch
 
 import vllm_mindspore
+import torch
 from vllm.utils import make_tensor_with_pad
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.sample.sampler import Sampler
