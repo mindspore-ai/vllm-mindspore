@@ -340,7 +340,8 @@ class MsModelBase:
         q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
         position_ids = ms.Tensor(positions, dtype=ms.int32)
         attention_mask = self.casual_mask.gen_attention_mask(
-            is_prefill, positions, query_lens_np, attn_metadata)
+            is_prefill, position_ids, query_lens_np, seq_lens_np,
+            attn_metadata)
 
         model_inputs = {}
         model_inputs["input_ids"] = input_ids

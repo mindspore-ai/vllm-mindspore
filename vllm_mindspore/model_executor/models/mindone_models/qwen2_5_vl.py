@@ -410,7 +410,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
 
         slot_mapping = attn_metadata.slot_mapping
         attn_mask = self.casual_mask.gen_attention_mask(
-            is_prefill, positions, query_lens)
+            is_prefill, positions, query_lens_np, seq_lens_np)
         seq_lens_np = np.array(attn_metadata.seq_lens, dtype=np.int32)
         batch_valid_length = Tensor.from_numpy(seq_lens_np)
         q_seq_lens = Tensor.from_numpy(
