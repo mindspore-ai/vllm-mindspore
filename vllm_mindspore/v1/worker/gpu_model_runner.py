@@ -223,6 +223,14 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
     use_mla = kv_cache_spec.use_mla
     dtype = kv_cache_spec.dtype
     coef = 1 if use_mla else 2
+    # Determine whether deepseek use mla op
+    use_mla_op = bool(
+        self.vllm_config.additional_config
+        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
+                           'kv_lora_rank', 0)
+    qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
+                               'qk_rope_head_dim', 0)
 
     kv_cache_raw_tensors: dict[str, Tensor] = {}
     target_dtype = get_valid_dtype(dtype)
@@ -239,11 +247,17 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
             #    self.block_size * self.num_kv_heads * self.head_size *
             #    get_dtype_size(self.dtype))
             # 4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
-            raw_tensor_split = mint.zeros(
-                raw_tensor_shape,
-                dtype=target_dtype,
-            )
-            raw_tensors.append(raw_tensor_split)
+            raw_tensors.extend(
+                [mint.zeros(raw_tensor_shape, dtype=target_dtype)]
+                if not use_mla_op else [
+                    mint.zeros(int(raw_tensor_shape * kv_lora_rank /
+                                   (kv_lora_rank + qk_rope_head_dim)),
+                               dtype=target_dtype),
+                    # deepseek mla op need key cache and rope cache
+                    mint.zeros(int(raw_tensor_shape * qk_rope_head_dim /
+                                   (kv_lora_rank + qk_rope_head_dim)),
+                               dtype=target_dtype)
+                ])
         for layer_name in kv_cache_tensor.shared_by:
             kv_cache_raw_tensors[layer_name] = tuple(raw_tensors)
 
@@ -271,6 +285,14 @@ def _reshape_kv_cache_tensors(
         Dict[str, Tensor]: A map between layer names to their 
         corresponding memory buffer for KV cache.
     """
+    # Determine whether deepseek use mla op
+    use_mla_op = bool(
+        self.vllm_config.additional_config
+        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
+                           'kv_lora_rank', 0)
+    qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
+                               'qk_rope_head_dim', 0)
     kv_caches: dict[str, tuple] = {}
     for i, kv_cache_group_spec in enumerate(kv_cache_config.kv_cache_groups):
         kv_cache_spec = kv_cache_group_spec.kv_cache_spec
@@ -279,8 +301,12 @@ def _reshape_kv_cache_tensors(
             raw_tensor = kv_cache_raw_tensors[layer_name]
             target_dtype = get_valid_dtype(kv_cache_spec.dtype)
             dtype_size = get_dtype_size(target_dtype)
-            num_blocks = (raw_tensor[0].numel() * coef * dtype_size //
-                          kv_cache_spec.page_size_bytes)
+            num_blocks = \
+                (raw_tensor[0].numel()
+                if not use_mla_op else
+                # deepseek mla op need key cache and rope cache
+                (raw_tensor[0].numel() + raw_tensor[1].numel())) * \
+                coef * dtype_size // kv_cache_spec.page_size_bytes
             if isinstance(kv_cache_spec, FullAttentionSpec):
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
@@ -304,9 +330,19 @@ def _reshape_kv_cache_tensors(
                     for i in range(len(kv_cache_stride_order))
                 ]
                 kv_cache_layer = []
-                for kv_cache_raw_tensor in kv_cache_raw_tensors[layer_name]:
-                    cache_block = kv_cache_raw_tensor.view(
-                        kv_cache_shape[1:]).permute(*inv_order[1:])
+                for idx, kv_cache_raw_tensor in enumerate(
+                        kv_cache_raw_tensors[layer_name]):
+                    if use_mla_op:
+                        # deepseek mla op need key cache and rope cache
+                        cache_shape = [
+                            *(kv_cache_shape[1:-1]),
+                            kv_lora_rank if idx == 0 else qk_rope_head_dim
+                        ]
+                        cache_block = kv_cache_raw_tensor.view(
+                            cache_shape).permute(*inv_order[1:])
+                    else:
+                        cache_block = kv_cache_raw_tensor.view(
+                            kv_cache_shape[1:]).permute(*inv_order[1:])
                     kv_cache_layer.append(cache_block)
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
