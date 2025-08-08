@@ -75,10 +75,7 @@ public:
     recycler_->SetFreeFunc(std::move(func));
   }
   // Free the memory of graph outputs
-  void FreeGraphOutputs() {
-    CHECK_IF_NULL(recycler_);
-    recycler_->FreeOutputNodes();
-  }
+  void FreeGraphOutputs();
   // Record tensor refCount
   void RecordTensorRefCount();
 #ifdef DUMP
@@ -96,7 +93,6 @@ private:
   bool isDynamic_{false};
   std::unordered_map<tensor::DATensor *, DAKernel *> kernels_;
   TensorDataRecycler *recycler_{nullptr};
-  std::mutex outputsMutex_;
 #ifdef DUMP
   std::unordered_map<const DATensor *, ssize_t> paraNumMap_;
   std::unordered_map<const DATensor *, ssize_t> nodeNumMap_;

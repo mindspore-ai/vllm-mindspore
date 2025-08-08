@@ -82,72 +82,41 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
 
 void TensorDataRecycler::FreeUnusedNodes(DATensor *node) {
   CHECK_IF_NULL(node);
-  if (node->op == ops::Op_return || IsSkipRecordRefCount(node) ||
-      IsDummyDATensorNode(node)) {
-    return;
-  }
-  if (nodeReleaseList_.find(node) != nodeReleaseList_.end()) {
-    CHECK_IF_NULL(memPool_);
-    for (auto releasedNode : nodeReleaseList_[node]) {
-      memPool_->Free(releasedNode);
-    }
+  if (IsSkipRecordRefCount(node) || IsDummyDATensorNode(node)) {
     return;
   }
   for (auto related : refRelations_[node]) {
     DecreaseInner(related);
-    if (refCounts_[related] == 0) {
-      nodeReleaseList_[node].emplace_back(related);
-    }
   }
-  (void)nodeReleaseList_[node];
 }
 
 void TensorDataRecycler::IncreaseInner(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
-  LOG_OUT << "Increase refCount for ops." << ops::ToStr(tensor->op)
-          << ", DATensor: " << tensor;
-  if (auto iter = refCounts_.find(tensor); iter != refCounts_.end()) {
-    iter->second++;
-  } else {
-    refCounts_[tensor] = 1;
-  }
+  LOG_OUT << "Increase refCount for ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor;
+  ++refCounts_[tensor];
 }
 
 void TensorDataRecycler::DecreaseInner(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
-  CHECK_IF_FAIL(refCounts_.count(tensor) != 0);
-  CHECK_IF_FAIL(refCounts_[tensor] > 0);
-  LOG_OUT << "Decrease refCount for ops." << ops::ToStr(tensor->op)
-          << ", DATensor: " << tensor;
-  refCounts_[tensor]--;
-  if (refCounts_[tensor] == 0) {
+  std::lock_guard<std::mutex> lock(runningRefCountsMutex_);
+  CHECK_IF_FAIL(runningRefCounts_.count(tensor) != 0);
+  CHECK_IF_FAIL(runningRefCounts_[tensor] > 0);
+  LOG_OUT << "Decrease refCount for ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor;
+  --runningRefCounts_[tensor];
+  if (runningRefCounts_[tensor] == 0) {
     CHECK_IF_NULL(memPool_);
-    LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op)
-            << ", DATensor: " << tensor
+    LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor
             << ", is DATensorList: " << (tensor->type == Type_Tensor);
     memPool_->Free(tensor);
   }
 }
 
-void TensorDataRecycler::PrintRefCountInfo() const {
-  for (auto refCount : refCounts_) {
-    LOG_OUT << "ops." << ops::ToStr(refCount.first->op)
-            << ", DATensor: " << refCount.first
+void TensorDataRecycler::PrintRunningRefCounts() const {
+  for (auto refCount : runningRefCounts_) {
+    LOG_OUT << "ops." << ops::ToStr(refCount.first->op) << ", DATensor: " << refCount.first
             << ", refCount: " << refCount.second;
   }
 }
 
-void TensorDataRecycler::FreeOutputNodes() {
-  CHECK_IF_NULL(memPool_);
-  for (auto refCount : refCounts_) {
-    if (refCount.second != 0) {
-      CHECK_IF_NULL(refCount.first);
-      LOG_OUT << "Free graph output, ops." << ops::ToStr(refCount.first->op)
-              << ", DATensor: " << refCount.first
-              << ", is DATensorList: " << (refCount.first->type == Type_Tensor);
-      memPool_->Free(refCount.first);
-    }
-  }
-}
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da
