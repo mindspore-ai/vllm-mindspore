@@ -19,6 +19,7 @@
 
 import sys
 import warnings
+import msadapter
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.

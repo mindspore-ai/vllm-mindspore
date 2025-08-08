@@ -18,9 +18,9 @@ import time
 import mindspore as ms
 import numpy as np
 import pytest
-import torch
 
 from vllm_mindspore import _custom_ops as custom_ops
+import torch
 
 from .utils import cleanup_subprocesses
 
