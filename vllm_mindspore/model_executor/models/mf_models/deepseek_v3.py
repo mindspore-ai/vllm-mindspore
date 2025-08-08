@@ -37,6 +37,7 @@ from research.deepseek3.deepseek3 import (DeepseekV3ForCausalLM as
 from research.deepseek3.deepseek3_config import (DeepseekV3Config as
                                                  DeepseekV3Config_MF)
 # isort: on
+import vllm.envs as envs
 from research.deepseek3.deepseek3_model_infer import DeepseekV3DecodeLayer
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import (
@@ -130,6 +131,13 @@ class DeepseekV3ForCausalLM(MfModelBase):
         self.is_quant = bool(
             hasattr(self.mf_model_config, "quantization_config")
             and self.mf_model_config.quantization_config)
+        # Determine whether deepseek use mla op
+        self.use_mla_op = \
+            bool(vllm_config.additional_config
+                 and vllm_config.additional_config.get('use_mla_op') == 1)
+        self.mf_model_config.use_mla_op = self.use_mla_op
+        if self.use_mla_op:
+            assert envs.VLLM_USE_V1
 
         self.mf_kvcaches_init = False
 
@@ -187,11 +195,19 @@ class DeepseekV3ForCausalLM(MfModelBase):
     def get_kvcache(self):
         key_cache = []
         forward_context = get_forward_context()
-        for i in range(self.mf_model_config.num_layers):
-            k_cache = self.kv_caches[i].kv_cache[
-                forward_context.virtual_engine][0]
-            key_cache.append(k_cache)
-        return mutable(key_cache), None
+        key_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            for i in range(self.mf_model_config.num_layers)
+        ]
+        if not self.use_mla_op:
+            return mutable(key_cache), None
+        else:
+            # deepseek mla op need key cache and rope cache
+            rope_cache = [
+                self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+                for i in range(self.mf_model_config.num_layers)
+            ]
+            return mutable(key_cache), mutable(rope_cache)
 
     # DLLM
     def connector_send_kvcache(self):

@@ -67,13 +67,33 @@ class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        self.kv_cache = [
-            (
-                ms.mint.zeros(
-                    self.kv_shape,  # type: ignore[misc]
-                    dtype=vllm_config.model_config.dtype), )
-            for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
-        ]
+        self.use_mla_op = bool(
+            vllm_config.additional_config
+            and vllm_config.additional_config.get('use_mla_op') == 1)
+        if not self.use_mla_op:
+            self.kv_cache = [
+                (
+                    ms.mint.zeros(
+                        self.kv_shape,  # type: ignore[misc]
+                        dtype=vllm_config.model_config.dtype), ) for _ in
+                range(vllm_config.parallel_config.pipeline_parallel_size)
+            ]
+        else:
+            kv_lora_rank = getattr(vllm_config.model_config.hf_text_config,
+                                   'kv_lora_rank', 0)
+            qk_rope_head_dim = getattr(vllm_config.model_config.hf_text_config,
+                                       'qk_rope_head_dim', 0)
+            # k_shape, r_shape used for mla_op
+            k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank
+                       ] if self.use_mla_op else None
+            r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim
+                       ] if self.use_mla_op else None
+            self.kv_cache = [
+                (ms.mint.zeros(k_shape, dtype=vllm_config.model_config.dtype),
+                 ms.mint.zeros(r_shape, dtype=vllm_config.model_config.dtype))
+                for _ in range(
+                    vllm_config.parallel_config.pipeline_parallel_size)
+            ]
 
 
 class MsModelBase:

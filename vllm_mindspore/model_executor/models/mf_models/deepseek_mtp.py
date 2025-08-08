@@ -16,6 +16,7 @@
 
 from collections.abc import Iterable
 
+import vllm.envs as envs
 from mindspore import Tensor, mutable
 from mindspore.nn.utils import no_init_parameters
 from research.deepseek3.deepseek3 import (  # noqa: E501
@@ -43,6 +44,13 @@ class DeepseekV3MTPForCausalLM(MfModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.mf_kvcaches_init = False
+        # Determine whether deepseek use mla op
+        self.use_mla_op = \
+            bool(vllm_config.additional_config
+                 and vllm_config.additional_config.get('use_mla_op') == 1)
+        self.mf_model_config.use_mla_op = self.use_mla_op
+        if self.use_mla_op:
+            assert envs.VLLM_USE_V1
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
@@ -91,12 +99,18 @@ class DeepseekV3MTPForCausalLM(MfModelBase):
 
     def get_kvcache(self):
         key_cache = []
+        rope_cache = []
         forward_context = get_forward_context()
         for i in range(self.mf_model_config.num_nextn_predict_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             key_cache.append(k_cache)
-        return mutable(key_cache), None
+            if self.use_mla_op:
+                # deepseek mla op need key cache and rope cache
+                r_cache = self.kv_caches[i].kv_cache[
+                    forward_context.virtual_engine][1]
+                rope_cache.append(r_cache)
+        return mutable(key_cache), None if not self.use_mla_op else rope_cache
 
     def update_model_inputs(self, model_inputs, **kwargs):
         # 'spec_step_idx' specifying the layer index.
