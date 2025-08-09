@@ -61,6 +61,14 @@ import vllm.attention.selector
 
 vllm.attention.selector.current_platform = ascend_platform
 
+import vllm.spec_decode.spec_decode_worker
+
+vllm.spec_decode.spec_decode_worker.current_platform = ascend_platform
+
+import vllm.spec_decode.metrics
+
+vllm.spec_decode.metrics.current_platform = ascend_platform
+
 import vllm.engine.arg_utils
 from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
 
