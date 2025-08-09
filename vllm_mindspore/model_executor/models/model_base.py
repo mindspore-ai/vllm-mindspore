@@ -464,8 +464,6 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_intermediate_tensors = None
-        dyn_inputs_embeds = None
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
             is_prefill, dyn_slot_mapping, dynamic_attention_mask,

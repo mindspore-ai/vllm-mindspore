@@ -384,6 +384,7 @@ class Qwen2Model(nn.Cell):
                 continue
 
             param = params_dict[name]
+            loaded_weight = ms.Tensor(loaded_weight[:], dtype=param.dtype)
             param.set_data(loaded_weight.contiguous())
 
         def adjust_weight(params_dict):

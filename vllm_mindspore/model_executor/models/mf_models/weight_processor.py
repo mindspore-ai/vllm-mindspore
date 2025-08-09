@@ -51,7 +51,7 @@ class BaseWeightProcessor:
 
     """
 
-    def __init__(self, config, network, is_quant, vllm_config):
+    def __init__(self, config, network, is_quant, vllm_config=None):
         self.vllm_config = vllm_config
         self.is_310p = is_310p()
         self.config = config
