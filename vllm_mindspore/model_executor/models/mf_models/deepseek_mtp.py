@@ -83,6 +83,8 @@ class DeepseekV3MTPForCausalLM(MfModelBase):
         self.mf_model_config.npu_mem_size = -1
 
         self.mf_model_config.is_mtp_model = True
+        # mla_pre only used in quant model, while mtp is not quant.
+        self.mf_model_config.use_mla_pre = False
         self.mf_model_config.num_nextn_predict_layers = \
             self.model_config.hf_config.num_nextn_predict_layers
         if self.mf_model_config.num_nextn_predict_layers != 1:
