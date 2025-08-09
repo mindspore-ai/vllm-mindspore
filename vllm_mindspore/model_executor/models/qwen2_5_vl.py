@@ -117,9 +117,9 @@ class Qwen2_5_VLImageEmbeddingInputs(TypedDict):
     type: Literal["image_embeds"]
     image_embeds: ms.Tensor
     """Supported types:
-    - list[`torch.Tensor`]: A list of tensors holding all images' features.
+    - list[`ms.Tensor`]: A list of tensors holding all images' features.
         Each tensor holds an image's features.
-    - `torch.Tensor`: A tensor holding all images' features
+    - `ms.Tensor`: A tensor holding all images' features
         (concatenation of all images' feature tensors).
 
     Tensor shape: `(num_image_features, hidden_size)`
@@ -159,9 +159,9 @@ class Qwen2_5_VLVideoEmbeddingInputs(TypedDict):
     type: Literal["video_embeds"]
     video_embeds: ms.Tensor
     """Supported types:
-    - list[`torch.Tensor`]: A list of tensors holding all videos' features.
+    - list[`ms.Tensor`]: A list of tensors holding all videos' features.
         Each tensor holds an video's features.
-    - `torch.Tensor`: A tensor holding all videos' features
+    - `ms.Tensor`: A tensor holding all videos' features
       (concatenation of all videos' feature tensors).
 
     Tensor shape: `(num_image_features, hidden_size)`
