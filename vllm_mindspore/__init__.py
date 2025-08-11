@@ -17,6 +17,8 @@
 
 # isort:skip_file
 
+import os
+
 import sys
 import warnings
 
@@ -210,6 +212,14 @@ import vllm.worker.multi_step_model_runner
 vllm.worker.multi_step_model_runner._get_supported_attention_backends = (
     _get_supported_attention_backends)
 
+enabled_collocation = os.environ.get("ENABLE_COLLOCATION", False)
+if (enabled_collocation in ["True", "true", True]):
+    from vllm_mindspore.distributed.collocation_parallel_state import (
+        wrapper_group_coordinator_init, )
+    from vllm.distributed.parallel_state import GroupCoordinator
+    GroupCoordinator.__init__ = wrapper_group_coordinator_init(
+        GroupCoordinator.__init__)
+
 from vllm_mindspore.executor.multiproc_worker_utils import (
     get_mp_context as ms_get_mp_context,
     terminate_worker as ms_terminate_worker,
@@ -244,6 +254,16 @@ RayDistributedExecutor._init_workers_ray = ms_init_workers_ray
 vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
     initialize_ray_cluster)
 vllm.executor.ray_utils.initialize_ray_cluster = initialize_ray_cluster
+
+if (enabled_collocation in ["True", "true", True]):
+    from vllm_mindspore.executor.collocation_executor_base import (
+        wrapper_distributed_executor_base_init,
+        distributed_execute_model,
+    )
+    from vllm.executor.executor_base import DistributedExecutorBase
+    DistributedExecutorBase.__init__ = wrapper_distributed_executor_base_init(
+        DistributedExecutorBase.__init__)
+    DistributedExecutorBase.execute_model = distributed_execute_model
 
 import vllm.engine.llm_engine
 import vllm.engine.async_llm_engine
