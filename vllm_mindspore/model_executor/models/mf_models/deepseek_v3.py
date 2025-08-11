@@ -260,130 +260,217 @@ class DeepseekV3ForCausalLM(MfModelBase):
             raise ValueError("The 'model' in LLM should be the local path "
                              "of the MindSpore checkpoint file.")
 
+    def _gen_ptq_cfg(self, quant_mode: PTQMode):
+        """_gen_ptq_config"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=msdtype.int8,
+                        outliers_suppression=OutliersSuppressionType.
+                        OUTLIER_SUPPRESSION_PLUS,
+                        opname_blacklist=['lkv2kv', 'lm_head'],
+                        precision_recovery=PrecisionRecovery.NONE,
+                        act_quant_granularity=QuantGranularity.PER_TENSOR,
+                        weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+        ffn_config = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.int8,
+            act_quant_dtype=msdtype.int8,
+            outliers_suppression=OutliersSuppressionType.NONE,
+            precision_recovery=PrecisionRecovery.NONE,
+            act_quant_granularity=QuantGranularity.PER_TOKEN,
+            weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+        layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
+        return cfg, layer_policies
+
+    def _gen_awq_a16w4_cfg(self, quant_mode: PTQMode):
+        """_gen_awq_a16w4_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.qint4x2,
+                        act_quant_dtype=None,
+                        outliers_suppression=OutliersSuppressionType.AWQ,
+                        opname_blacklist=['lm_head', 'lkv2kv'],
+                        weight_quant_granularity=QuantGranularity.PER_GROUP,
+                        group_size=128)
+        layer_policies = OrderedDict()
+        return cfg, layer_policies
+
+    def _gen_awq_a16w8_cfg(self, quant_mode: PTQMode):
+        """_gen_awq_a16w8_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=None,
+                        outliers_suppression=OutliersSuppressionType.AWQ,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        layer_policies = OrderedDict()
+        return cfg, layer_policies
+
+    def _gen_gptq_perchannel_cfg(self, quant_mode: PTQMode):
+        """gen_gptq_perchannel_cfg"""
+        gptq_config = GPTQQuantConfig()
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.qint4x2,
+                        act_quant_dtype=None,
+                        precision_recovery=PrecisionRecovery.GPTQ,
+                        algo_args=gptq_config,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        layer_policies = OrderedDict()
+        return cfg, layer_policies
+
+    def _gen_gptq_pergroup_cfg(self, quant_mode: PTQMode):
+        """_gen_gptq_pergroup_cfg"""
+        gptq_config = GPTQQuantConfig()
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.qint4x2,
+                        algo_args=gptq_config,
+                        act_quant_dtype=None,
+                        precision_recovery=PrecisionRecovery.GPTQ,
+                        weight_quant_granularity=QuantGranularity.PER_GROUP,
+                        opname_blacklist=['lm_head', 'lkv2kv'],
+                        group_size=64)
+        w2_config = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.int8,
+            act_quant_dtype=msdtype.int8,
+            outliers_suppression=OutliersSuppressionType.SMOOTH)
+        layer_policies = OrderedDict({
+            r'.*\.feed_forward\.w2.*': w2_config,
+            r'.*\.shared_experts.w2.*': w2_config
+        })
+        return cfg, layer_policies
+
+    def _gen_smoothquant_cfg(self, quant_mode: PTQMode):
+        """_gen_smoothquant_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=msdtype.int8,
+                        outliers_suppression=OutliersSuppressionType.SMOOTH,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        ffn_config = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.int8,
+            act_quant_dtype=msdtype.int8,
+            outliers_suppression=OutliersSuppressionType.NONE,
+            precision_recovery=PrecisionRecovery.NONE,
+            act_quant_granularity=QuantGranularity.PER_TOKEN,
+            weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+        layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
+        return cfg, layer_policies
+
+    def _gen_osl_cfg(self, quant_mode: _gen_ptq_cfg):
+        """_gen_osl_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=msdtype.int8,
+                        outliers_suppression=OutliersSuppressionType.
+                        OUTLIER_SUPPRESSION_LITE,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        ffn_config = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.int8,
+            act_quant_dtype=msdtype.int8,
+            outliers_suppression=OutliersSuppressionType.NONE,
+            precision_recovery=PrecisionRecovery.NONE,
+            act_quant_granularity=QuantGranularity.PER_TOKEN,
+            weight_quant_granularity=QuantGranularity.PER_CHANNEL)
+        layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
+        return cfg, layer_policies
+
+    def _gen_a16w8_cfg(self, quant_mode: PTQMode):
+        """_gen_a16w8_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        layer_policies = OrderedDict()
+        return cfg, layer_policies
+
+    def _gen_a8dynw8_cfg(self, quant_mode: PTQMode):
+        """_gen_a8dynw8_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=msdtype.int8,
+                        act_quant_granularity=QuantGranularity.PER_TOKEN,
+                        opname_blacklist=['lm_head', 'lkv2kv'])
+        layer_policies = OrderedDict()
+        return cfg, layer_policies
+
+    def _gen_a8w4_cfg(self, quant_mode: PTQMode):
+        """_gen_a8w4_cfg"""
+        cfg = PTQConfig(mode=quant_mode,
+                        backend=BackendTarget.ASCEND,
+                        weight_quant_dtype=msdtype.int8,
+                        act_quant_dtype=msdtype.int8,
+                        outliers_suppression=OutliersSuppressionType.
+                        OUTLIER_SUPPRESSION_LITE,
+                        opname_blacklist=['lm_head', 'lkv2kv'],
+                        weight_clip=True)
+        mlp_config = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.int8,
+            act_quant_dtype=msdtype.int8,
+            outliers_suppression=OutliersSuppressionType.NONE,
+            precision_recovery=PrecisionRecovery.NONE,
+            act_quant_granularity=QuantGranularity.PER_TOKEN,
+            weight_quant_granularity=QuantGranularity.PER_CHANNEL,
+            weight_clip=True)
+        gptq_config = GPTQQuantConfig(static_groups=True, desc_act=True)
+        moe_cfg = PTQConfig(
+            mode=quant_mode,
+            backend=BackendTarget.ASCEND,
+            weight_quant_dtype=msdtype.qint4x2,
+            act_quant_dtype=msdtype.int8,
+            act_quant_granularity=QuantGranularity.PER_TOKEN,
+            weight_quant_granularity=QuantGranularity.PER_GROUP,
+            group_size=256,
+            algo_args=gptq_config,
+            precision_recovery=PrecisionRecovery.GPTQ,
+            weight_clip=True)
+        layer_policies = OrderedDict({
+            r'.*\.feed_forward\.w2.*':
+            mlp_config,
+            r'.*\.feed_forward\.w_gate_hidden.*':
+            mlp_config,
+            r'.*\.shared_experts\.w2.*':
+            mlp_config,
+            r'.*\.shared_experts\.w_gate_hidden.*':
+            mlp_config,
+            r'.*\.routed_experts\.ffn\.w_gate_hidden.*':
+            moe_cfg,
+            r'.*\.routed_experts\.ffn\.w2.*':
+            moe_cfg
+        })
+        return cfg, layer_policies
+
     def create_ptq(self, quant_type: str, quant_mode: PTQMode):
         """create_ptq"""
-        if quant_type.lower() == 'ptq':
-            cfg = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.
-                OUTLIER_SUPPRESSION_PLUS,
-                opname_blacklist=['lkv2kv', 'lm_head'],
-                precision_recovery=PrecisionRecovery.NONE,
-                act_quant_granularity=QuantGranularity.PER_TENSOR,
-                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            ffn_config = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.NONE,
-                precision_recovery=PrecisionRecovery.NONE,
-                act_quant_granularity=QuantGranularity.PER_TOKEN,
-                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
-        elif quant_type.lower() == 'awq-a16w4':
-            cfg = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.qint4x2,
-                act_quant_dtype=None,
-                outliers_suppression=OutliersSuppressionType.AWQ,
-                opname_blacklist=['lm_head', 'lkv2kv'],
-                weight_quant_granularity=QuantGranularity.PER_GROUP,
-                group_size=128)
-            layer_policies = OrderedDict()
-        elif quant_type.lower() == 'awq-a16w8':
-            cfg = PTQConfig(mode=quant_mode,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.int8,
-                            act_quant_dtype=None,
-                            outliers_suppression=OutliersSuppressionType.AWQ,
-                            opname_blacklist=['lm_head', 'lkv2kv'])
-        elif quant_type.lower() == 'gptq-perchannel':
-            gptq_config = GPTQQuantConfig()
-            cfg = PTQConfig(mode=quant_mode,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.qint4x2,
-                            act_quant_dtype=None,
-                            precision_recovery=PrecisionRecovery.GPTQ,
-                            algo_args=gptq_config,
-                            opname_blacklist=['lm_head', 'lkv2kv'])
-            layer_policies = OrderedDict()
-        elif quant_type.lower() == 'gptq-pergroup':
-            gptq_config = GPTQQuantConfig()
-            cfg = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.qint4x2,
-                algo_args=gptq_config,
-                act_quant_dtype=None,
-                precision_recovery=PrecisionRecovery.GPTQ,
-                weight_quant_granularity=QuantGranularity.PER_GROUP,
-                opname_blacklist=['lm_head', 'lkv2kv'],
-                group_size=64)
-            w2_config = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.SMOOTH)
-            layer_policies = OrderedDict({
-                r'.*\.feed_forward\.w2.*': w2_config,
-                r'.*\.shared_experts.w2.*': w2_config
-            })
-        elif quant_type.lower() == 'smoothquant':
-            cfg = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.SMOOTH,
-                opname_blacklist=['lm_head', 'lkv2kv'])
-            ffn_config = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.NONE,
-                precision_recovery=PrecisionRecovery.NONE,
-                act_quant_granularity=QuantGranularity.PER_TOKEN,
-                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
-        elif quant_type.lower() == 'osl':
-            cfg = PTQConfig(mode=quant_mode,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.int8,
-                            act_quant_dtype=msdtype.int8,
-                            outliers_suppression=OutliersSuppressionType.
-                            OUTLIER_SUPPRESSION_LITE,
-                            opname_blacklist=['lm_head', 'lkv2kv'])
-            ffn_config = PTQConfig(
-                mode=quant_mode,
-                backend=BackendTarget.ASCEND,
-                weight_quant_dtype=msdtype.int8,
-                act_quant_dtype=msdtype.int8,
-                outliers_suppression=OutliersSuppressionType.NONE,
-                precision_recovery=PrecisionRecovery.NONE,
-                act_quant_granularity=QuantGranularity.PER_TOKEN,
-                weight_quant_granularity=QuantGranularity.PER_CHANNEL)
-            layer_policies = OrderedDict({r'.*\.feed_forward\..*': ffn_config})
-        elif quant_type.lower() == 'a16w8':
-            cfg = PTQConfig(mode=quant_mode,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.int8,
-                            opname_blacklist=['lm_head', 'lkv2kv'])
-            layer_policies = OrderedDict()
-        elif quant_type.lower() == 'a8dynw8':
-            cfg = PTQConfig(mode=quant_mode,
-                            backend=BackendTarget.ASCEND,
-                            weight_quant_dtype=msdtype.int8,
-                            act_quant_dtype=msdtype.int8,
-                            act_quant_granularity=QuantGranularity.PER_TOKEN,
-                            opname_blacklist=['lm_head', 'lkv2kv'])
-            layer_policies = OrderedDict()
+        gen_cfg_method = {
+            "ptq": self._gen_ptq_cfg,
+            "awq-a16w4": self._gen_awq_a16w4_cfg,
+            "awq-a16w8": self._gen_awq_a16w8_cfg,
+            "gptq-perchannel": self._gen_gptq_perchannel_cfg,
+            "gptq-pergroup": self._gen_gptq_pergroup_cfg,
+            "smoothquant": self._gen_smoothquant_cfg,
+            "osl": self._gen_osl_cfg,
+            "a16w8": self._gen_a16w8_cfg,
+            "a8dynw8": self._gen_a8dynw8_cfg,
+            "a8w4": self._gen_a8w4_cfg
+        }
+        if gen_cfg_method.get(quant_type.lower()):
+            cfg, layer_policies = gen_cfg_method.get(
+                quant_type.lower())(quant_mode)
         else:
             logger.warning("Input unsupported quant type: %s.", quant_type)
             return None
