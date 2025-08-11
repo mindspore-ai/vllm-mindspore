@@ -427,9 +427,11 @@ from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
 import vllm.v1.sample.ops.penalties
 
 vllm.v1.sample.ops.penalties._convert_to_tensors = _convert_to_tensors
-import vllm.model_executor.layers.utils
-from vllm_mindspore.model_executor.layers.utils import apply_penalties
 
+from vllm_mindspore.model_executor.layers.utils import apply_penalties
+import vllm.model_executor.layers.utils
+
+vllm.model_executor.layers.sampler.apply_penalties = apply_penalties
 vllm.model_executor.layers.utils.apply_penalties = apply_penalties
 vllm.v1.sample.ops.penalties.apply_penalties = apply_penalties
 
