@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Adapted from
-# https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/engine/arg_utils.py
+# https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/engine/arg_utils.py
 #
 # Copyright 2025 Huawei Technologies Co., Ltd.
 # Copyright 2025 The vLLM team.
@@ -28,6 +28,10 @@ from vllm.config import (GuidedDecodingBackendV1, LoadFormat, ModelConfig,
                          ParallelConfig, SchedulerConfig)
 from vllm.engine.arg_utils import (EngineArgs, _raise_or_fallback,
                                    _warn_or_fallback)
+from vllm.logger import init_logger
+from vllm.usage.usage_lib import UsageContext
+
+logger = init_logger(__name__)
 
 
 def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
@@ -224,3 +228,45 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
     #############################################################
 
     return True
+
+
+def _set_default_args_v1(self, usage_context: UsageContext) -> None:
+    """Set Default Arguments for V1 Engine."""
+
+    # V1 always uses chunked prefills.
+    self.enable_chunked_prefill = True
+
+    # V1 enables prefix caching by default.
+    if self.enable_prefix_caching is None:
+        self.enable_prefix_caching = True
+
+    # V1 should use the new scheduler by default.
+    # Swap it only if this arg is set to the original V0 default
+    if self.scheduler_cls == EngineArgs.scheduler_cls:
+        self.scheduler_cls = "vllm.v1.core.sched.scheduler.Scheduler"
+
+    # vllm-mindspore: Get device memory will initialize device runtime, which
+    # will be inherited by the child process in fork mode, resulting in
+    # setting device failure for latter ASCEND_RT_VISIBLE_DEVICES modification.
+    # So skip it.
+
+    default_max_num_batched_tokens = {
+        UsageContext.LLM_CLASS: 8192,
+        UsageContext.OPENAI_API_SERVER: 2048,
+    }
+    default_max_num_seqs = 256
+
+    use_context_value = usage_context.value if usage_context else None
+    if (self.max_num_batched_tokens is None
+            and usage_context in default_max_num_batched_tokens):
+        self.max_num_batched_tokens = default_max_num_batched_tokens[
+            usage_context]
+        logger.debug(
+            "Setting max_num_batched_tokens to %d for %s usage context.",
+            self.max_num_batched_tokens, use_context_value)
+
+    if self.max_num_seqs is None:
+        self.max_num_seqs = default_max_num_seqs
+
+        logger.debug("Setting max_num_seqs to %d for %s usage context.",
+                     self.max_num_seqs, use_context_value)

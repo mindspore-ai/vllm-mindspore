@@ -156,9 +156,6 @@ def wrapper_worker_bind_cpu(fun):
         # Support 910B and 910C.
         if not is_310p():
             local_rank = kwargs.get("local_rank")
-            parallel_config = kwargs.get("vllm_config").parallel_config
-            local_rank = (parallel_config.data_parallel_rank_local *
-                          parallel_config.world_size + local_rank)
             bind_cpu(local_rank)
         fun(*arg, **kwargs)
 

@@ -72,18 +72,16 @@ import vllm.spec_decode.metrics
 vllm.spec_decode.metrics.current_platform = ascend_platform
 
 import vllm.engine.arg_utils
-from vllm_mindspore.engine.arg_utils import _is_v1_supported_oracle
+from vllm_mindspore.engine.arg_utils import (_is_v1_supported_oracle,
+                                             _set_default_args_v1)
 
 vllm.engine.arg_utils.EngineArgs._is_v1_supported_oracle = (
     _is_v1_supported_oracle)
+vllm.engine.arg_utils.EngineArgs._set_default_args_v1 = _set_default_args_v1
 
 import vllm.v1.engine.core
-from vllm_mindspore.v1.engine.core import (
-    _init_data_parallel,
-    shutdown,
-)
+from vllm_mindspore.v1.engine.core import shutdown
 
-vllm.v1.engine.core.DPEngineCoreProc._init_data_parallel = _init_data_parallel
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
 from vllm_mindspore.utils import (
@@ -243,34 +241,27 @@ import vllm.v1.utils
 
 vllm.v1.utils.get_mp_context = ms_get_mp_context
 
-from vllm_mindspore.executor.ray_gpu_executor import (
-    ms_init_workers_ray,
-    initialize_ray_cluster,
-)
+from vllm_mindspore.executor.ray_utils import (WORKER_SPECIFIC_ENV_VARS,
+                                               MsRayWorkerWrapper,
+                                               initialize_ray_cluster,
+                                               core_engine_actor_manager_init)
 
 from vllm.executor.ray_distributed_executor import RayDistributedExecutor
 
-RayDistributedExecutor._init_workers_ray = ms_init_workers_ray
-
+RayDistributedExecutor.WORKER_SPECIFIC_ENV_VARS = WORKER_SPECIFIC_ENV_VARS
+vllm.executor.ray_distributed_executor.RayWorkerWrapper = MsRayWorkerWrapper
+vllm.executor.ray_utils.initialize_ray_cluster = initialize_ray_cluster
 vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
     initialize_ray_cluster)
-vllm.executor.ray_utils.initialize_ray_cluster = initialize_ray_cluster
+vllm.v1.utils.CoreEngineActorManager.__init__ = core_engine_actor_manager_init
 
 if (enabled_collocation in ["True", "true", True]):
     from vllm_mindspore.executor.collocation_executor_base import (
-        wrapper_distributed_executor_base_init,
-        distributed_execute_model,
-    )
+        wrapper_distributed_executor_base_init, distributed_execute_model)
     from vllm.executor.executor_base import DistributedExecutorBase
     DistributedExecutorBase.__init__ = wrapper_distributed_executor_base_init(
         DistributedExecutorBase.__init__)
     DistributedExecutorBase.execute_model = distributed_execute_model
-
-import vllm.engine.llm_engine
-import vllm.engine.async_llm_engine
-
-vllm.engine.llm_engine.initialize_ray_cluster = initialize_ray_cluster
-vllm.engine.async_llm_engine.initialize_ray_cluster = initialize_ray_cluster
 
 from .config import (
     _verify_quantization,
@@ -431,10 +422,12 @@ vllm.v1.worker.gpu_model_runner.InputBatch._make_prompt_token_ids_tensor = (
     _make_prompt_token_ids_tensor)
 
 import vllm.v1.utils
-from vllm_mindspore.v1.utils import copy_slice
+from vllm_mindspore.v1.utils import copy_slice, create_dp_placement_groups
 
 vllm.v1.utils.copy_slice = copy_slice
 vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
+vllm.v1.utils.CoreEngineActorManager.create_dp_placement_groups = staticmethod(
+    create_dp_placement_groups)
 
 from vllm_mindspore.model_executor.layers.sampler import (
     _apply_top_k_top_p,
@@ -489,14 +482,13 @@ vllm.distributed.device_communicators.base_device_communicator.\
     DeviceCommunicatorBase.prepare_communication_buffer_for_model = \
         lambda self, model : None
 
-from vllm_mindspore.v1.worker.gpu_worker import (compile_or_warm_up_model,
-                                                 init_device)
+from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 
 from vllm.v1.worker.gpu_worker import Worker as V1Worker
 
 V1Worker.__init__ = (wrapper_worker_bind_cpu(
     wrapper_worker_init(V1Worker.__init__)))
-V1Worker.init_device = wrapper_worker_init_device(init_device)
+V1Worker.init_device = wrapper_worker_init_device(V1Worker.init_device)
 V1Worker.compile_or_warm_up_model = compile_or_warm_up_model
 
 from vllm_mindspore.v1.core.sched.scheduler import update_from_output
