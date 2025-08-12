@@ -17,20 +17,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ utils for load model """
 from mindspore import nn
 from vllm.config import ModelConfig
 from vllm.model_executor.models import ModelRegistry
 
 from vllm_mindspore.model_executor.models.registry import (
-    MindSporeModelRegistry, is_mf_mcore_archs)
+    is_mf_mcore_archs, _MINDFORMERS_MODELS)
+from vllm_mindspore.utils import (is_mindformers_model_backend,
+                                  is_mindone_model_backend)
 
 
 def get_ms_model_architecture(
         model_config: ModelConfig) -> tuple[type[nn.Cell], str]:
     architectures = getattr(model_config.hf_config, "architectures", [])
-    if is_mf_mcore_archs(architectures):
-        architectures.append("MindFormersForCausalLM")
+
+    if is_mindformers_model_backend():
+        is_mf_norm_model = any(arch in _MINDFORMERS_MODELS for arch in architectures)
+        if not is_mf_norm_model:
+            architectures.clear()
+            architectures.append("MindFormersForCausalLM")
+    elif is_mindone_model_backend():
+        raise RuntimeError("MindOne Models to be supported.")
 
     vllm_supported_archs = ModelRegistry.get_supported_archs()
     is_vllm_supported = any(arch in vllm_supported_archs
@@ -38,7 +47,8 @@ def get_ms_model_architecture(
     if not is_vllm_supported:
         raise RuntimeError("vLLM-Mindspore does not support "
                            f"{str(architectures)} for now.")
-    model_cls, arch = MindSporeModelRegistry.resolve_model_cls(architectures)
+    # model_cls, arch = MindSporeModelRegistry.resolve_model_cls(architectures)
+    model_cls, arch = ModelRegistry.resolve_model_cls(architectures)
     if model_config.task == "embed":
         raise RecursionError("MindSpore unsupported embed model task now!")
     elif model_config.task == "classify":

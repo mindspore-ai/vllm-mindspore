@@ -134,32 +134,11 @@ vllm.lora.layers.MergedQKVParallelLinearWithLoRA = (
 vllm.lora.layers.QKVParallelLinearWithLoRA = QKVParallelLinearWithLoRA
 vllm.lora.layers.RowParallelLinearWithLoRA = RowParallelLinearWithLoRA
 
-import vllm.executor
-
+vllm.model_executor.models.registry.ModelRegistry.models.clear()
 from vllm_mindspore.model_executor.models.registry import (
-    MindSporeModelRegistry,
     _SUBPROCESS_COMMAND,
 )
-
-vllm.config.ModelRegistry = MindSporeModelRegistry
-
-import vllm.model_executor
-
-vllm.model_executor.models.ModelRegistry = MindSporeModelRegistry
 vllm.model_executor.models.registry._SUBPROCESS_COMMAND = _SUBPROCESS_COMMAND
-
-from vllm_mindspore.model_executor.model_loader.utils import (
-    get_ms_model_architecture, )
-
-# To patching the get_model_architecture, should import it first.
-from vllm.model_executor.model_loader import get_model_architecture  # noqa F401
-
-vllm.model_executor.model_loader.get_model_architecture = (
-    get_ms_model_architecture)
-vllm.model_executor.model_loader.utils.get_model_architecture = (
-    get_ms_model_architecture)
-vllm.model_executor.model_loader.default_loader.get_model_architecture = (
-    get_ms_model_architecture)
 
 from vllm_mindspore.model_executor.sampling_metadata import SamplingTensors
 
@@ -225,6 +204,7 @@ from vllm_mindspore.executor.multiproc_worker_utils import (
     terminate_worker as ms_terminate_worker,
 )
 
+import vllm.executor
 # To patching the get_mp_context, should import it first.
 from vllm.executor.multiproc_worker_utils import get_mp_context  # noqa F401
 
@@ -524,10 +504,5 @@ from vllm_mindspore.entrypoints.__main__ import (
     patch_server_run_api_server_worker_proc, )
 
 patch_server_run_api_server_worker_proc()
-
-from vllm_mindspore.model_executor.models.registry import _normalize_archs
-from vllm.model_executor.models.registry import _ModelRegistry
-
-_ModelRegistry._normalize_archs = _normalize_archs
 
 check_ready()
