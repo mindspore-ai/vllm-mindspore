@@ -67,7 +67,9 @@ def test_cases_parallel_part0():
          "vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log"),
         (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py"
          "::test_mf_qwen_7b_chunk_prefill",
-         "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log")
+         "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log"),
+        (2, "cases_parallel/vllm_sampling.py::test_vllm_sampling_n_logprobs",
+         "vllm_sampling_n_logprobs_v1.log")
     ]
     run_tasks(cases)
 
