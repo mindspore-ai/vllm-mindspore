@@ -30,7 +30,7 @@ from typing import Any, Optional, Union
 
 import msgspec
 import torch
-from vllm.inputs import SingletonInputs, SingletonInputsAdapter
+from vllm.inputs import SingletonInputs
 from vllm.lora.request import LoRARequest
 from vllm.multimodal import MultiModalDataDict, MultiModalPlaceholderDict
 from vllm.pooling_params import PoolingParams
@@ -427,7 +427,7 @@ class Sequence:
         prompt_adapter_request: Optional[PromptAdapterRequest] = None,
     ) -> None:
         self.seq_id = seq_id
-        self.inputs = SingletonInputsAdapter(inputs)
+        self.inputs = inputs
         self.block_size = block_size
         self.eos_token_id = eos_token_id
         self.lora_request = lora_request

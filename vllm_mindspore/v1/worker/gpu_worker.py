@@ -24,6 +24,7 @@ import gc
 import torch
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.logger import init_logger
+from vllm.utils import MemorySnapshot
 
 logger = init_logger(__name__)
 
@@ -37,11 +38,13 @@ def init_device(self):
 
     config = get_current_vllm_config()
     if config is not None and config.parallel_config.data_parallel_size > 1:
-        device_id = self.parallel_config.data_parallel_rank_local *\
-            self.parallel_config.world_size + self.local_rank
-        self.device = torch.device(f"cuda:{device_id}")
+        self.local_rank = (self.parallel_config.data_parallel_rank_local *
+                           self.parallel_config.world_size + self.local_rank)
+        self.device = torch.device(f"cuda:{self.local_rank}")
     else:
         self.device = torch.device(f"cuda:{self.local_rank}")
+    logger.debug("self.local_rank: %s, self.device: %s", self.local_rank,
+                 self.device)
     torch.cuda.set_device(self.device)
 
     _check_if_gpu_supports_dtype(self.model_config.dtype)
@@ -50,7 +53,7 @@ def init_device(self):
     self.init_gpu_memory = torch.cuda.mem_get_info()[0]
 
     # Initialize the distributed environment.
-    init_worker_distributed_environment(self.parallel_config, self.rank,
+    init_worker_distributed_environment(config, self.rank,
                                         self.distributed_init_method,
                                         self.local_rank)
 
@@ -59,6 +62,9 @@ def init_device(self):
 
     # Construct the model runner
     self.model_runner = GPUModelRunner(self.vllm_config, self.device)
+    self.init_snapshot = MemorySnapshot()
+    self.requested_memory = (self.init_snapshot.total_memory *
+                             self.cache_config.gpu_memory_utilization)
 
 
 def compile_or_warm_up_model(self) -> None:

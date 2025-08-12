@@ -63,6 +63,13 @@ def get_valid_dtype(dtype):
     return dtype
 
 
+def get_dtype_size(dtype: torch.dtype) -> int:
+    """Get the size of the data type in bytes."""
+    if isinstance(dtype, str):
+        dtype = STR_DTYPE_TO_TENSOR_DTYPE[dtype]
+    return torch.tensor([], dtype=dtype).element_size()
+
+
 def _create_empty_tensor(ms_type):
     init_func = Zero()
     init_func.__enable_zero_dim__ = True
@@ -176,6 +183,18 @@ def is_mindone_model_backend():
             == vllmModelBackendEnum.MIND_ONE)
 
 
+def register_connector():
+    try:
+        from vllm.distributed.kv_transfer.kv_connector.factory import (
+            KVConnectorFactory)
+
+        KVConnectorFactory.register_connector(
+            "DLLMDsConnector", "dllm.dkvc.v1.dllm_ds_connector",
+            "DLLMDsConnector")
+    except:  # noqa: E722
+        pass
+
+
 def check_ready():
     from mindspore import set_context
 
@@ -197,6 +216,7 @@ def check_ready():
         logger.info("Run with MindONE backend!")
     else:
         logger.info("Run with native model backend!")
+    register_connector()
 
 
 def convert_np_to_ms_dtype(value):
