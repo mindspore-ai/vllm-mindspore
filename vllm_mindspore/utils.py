@@ -143,11 +143,6 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e5m2": mstype.uint8,
 }
 
-class vllmModelBackendEnum(str, Enum):
-    """Define the variable Enum of vLLM_MODEL_BACKEND"""
-    MF = 'MindFormers'
-    MIND_ONE = 'MindONE'
-
 
 class vllmModelBackendEnum(str, Enum):
     """Define the variable Enum of vLLM_MODEL_BACKEND"""
@@ -281,7 +276,7 @@ def ms_memory_profiling(
     The increase of `torch.cuda.memory_stats()["allocated_bytes.all.peak"]` during profiling gives (b.).
 
     The increase of `non_torch_memory` from creating the current vLLM instance until after profiling to get (c.).
-    """ # noqa
+    """  # noqa
     gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
@@ -305,7 +300,8 @@ def ms_memory_profiling(
     diff_profile = result.after_profile - result.before_profile
     diff_from_create = result.after_profile - result.before_create
 
-    # use reserved memory instead of allocated memory to describe increase of torch memory
+    # use reserved memory instead of allocated memory to describe increase of
+    # torch memory
     result.torch_peak_increase = diff_profile.torch_memory
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp
