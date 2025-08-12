@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, Optional, Tuple, Union
+from collections.abc import Iterable
+from typing import Optional, Union
 
 import mindspore as ms
 import numpy as np
@@ -61,8 +62,9 @@ class Qwen3ForCausalLM(MsModelBase):
 
         self._generate_model_config()
         self.network, self.lm_head = self._create_network()
-        self.casual_mask = LowerTriangularMask(dtype=self.network.compute_dtype,
-                                               max_model_len=self.model_config.max_model_len)
+        self.casual_mask = LowerTriangularMask(
+            dtype=self.network.compute_dtype,
+            max_model_len=self.model_config.max_model_len)
 
         affinity_config = self.mf_config.get('context',
                                              {}).get('affinity_cpu_list', {})
@@ -89,8 +91,8 @@ class Qwen3ForCausalLM(MsModelBase):
 
     def _set_dynamic_inputs(self):
         self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(
-            shape=[None, None], dtype=self.network.compute_dtype)
+        dynamic_hidden_states = Tensor(shape=[None, None],
+                                       dtype=self.network.compute_dtype)
         self.lm_head.set_inputs(dynamic_hidden_states)
 
     def prepare_inputs(self, input_ids, positions):
@@ -190,8 +192,8 @@ class Qwen3ForCausalLM(MsModelBase):
     ) -> Optional[Tensor]:
         if sampling_metadata is not None:
             selected_token_indices = sampling_metadata.selected_token_indices
-            if selected_token_indices is not None and selected_token_indices.numel(
-            ) <= 0:
+            if selected_token_indices is not None \
+                and selected_token_indices.numel() <= 0:
                 logits = ms.mint.zeros(
                     (0, self.mf_model_config.vocab_size),
                     dtype=self.mf_model_config.compute_dtype)
@@ -216,6 +218,6 @@ class Qwen3ForCausalLM(MsModelBase):
         _pynative_executor.sync()
         return next_tokens
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]):
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None
