@@ -45,15 +45,18 @@ _MINDONE_MODELS = {
 _registry_dict = {}
 if is_mindformers_model_backend():
     _registry_dict = {
-        model_arch: _LazyRegisteredModel(
-            module_name=f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
+        model_arch:
+        _LazyRegisteredModel(
+            module_name=
+            f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
             class_name=cls_name,
         )
         for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()
     }
 elif is_mindone_model_backend():
     _registry_dict = {
-        model_arch: _LazyRegisteredModel(
+        model_arch:
+        _LazyRegisteredModel(
             module_name=
             f"vllm_mindspore.model_executor.models.mindone_models.{mod_relname}",
             class_name=cls_name,
@@ -62,7 +65,8 @@ elif is_mindone_model_backend():
     }
 else:
     _registry_dict = {
-        model_arch: _LazyRegisteredModel(
+        model_arch:
+        _LazyRegisteredModel(
             module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
             class_name=cls_name,
         )
