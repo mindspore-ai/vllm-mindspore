@@ -18,4 +18,4 @@
 
 namespace da {
 namespace intrinsic {}
-} // namespace da
+}  // namespace da

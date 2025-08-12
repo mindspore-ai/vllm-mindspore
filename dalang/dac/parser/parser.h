@@ -26,7 +26,7 @@ namespace da {
 namespace parser {
 using namespace lexer;
 class Parser {
-public:
+ public:
   explicit Parser(const std::string &filename);
   explicit Parser(Lexer *lexer);
   ~Parser();
@@ -38,7 +38,7 @@ public:
 
   void DumpAst();
 
-private:
+ private:
   // Parse expression.
   ExprPtr ParseExpr();
   ExprPtr ParseLogicalOr();
@@ -99,7 +99,7 @@ private:
   StmtPtr module_{nullptr};
   size_t tokenPos_{0};
 };
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da
 
-#endif // __PARSER_PARSER_H__
+#endif  // __PARSER_PARSER_H__

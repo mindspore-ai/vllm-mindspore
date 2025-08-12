@@ -17,23 +17,27 @@
 #ifndef __PASS_PASS_H__
 #define __PASS_PASS_H__
 
+#include <utility>
 #include <functional>
 #include <iterator>
 #include <list>
-#include <string.h>
+#include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "tensor/tensor.h"
 #include "tensor/ud.h"
 
 namespace da {
 namespace pass {
-using namespace tensor;
+using tensor::DAGraph;
+using tensor::DATensor;
+using tensor::UserDef;
 
 using TensorCreator = std::function<DATensor *(ops::Op, DATensor **, size_t)>;
 
 class NodePass {
-public:
+ public:
   // If node is matched.
   virtual bool Match(const DATensor *node) = 0;
 
@@ -45,7 +49,7 @@ public:
 };
 
 class PassManager {
-public:
+ public:
   PassManager() = default;
 
   static PassManager &Instance() {
@@ -54,12 +58,11 @@ public:
     return instance;
   }
 
-  void Run(DAGraph *graph, TensorCreator &creator);
+  void Run(DAGraph *graph, const TensorCreator &creator);
 
   void AddPass(const std::string &name, const NodePass &pass) {
     LOG_OUT << "Add pass '" << name << "'";
-    (void)passes_.emplace_back(
-        std::make_pair(name, const_cast<NodePass *>(&pass)));
+    (void)passes_.emplace_back(std::make_pair(name, const_cast<NodePass *>(&pass)));
   }
 
   DATensor *NewTensor(ops::Op op, DATensor **start, size_t size) {
@@ -69,23 +72,20 @@ public:
 
   DATensor *NewTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
     CHECK_IF_FAIL(tensorCreator_);
-    return tensorCreator_(op, const_cast<DATensor **>(inputs.data()),
-                          inputs.size());
+    return tensorCreator_(op, const_cast<DATensor **>(inputs.data()), inputs.size());
   }
 
-private:
+ private:
   using TensorList = std::list<const DATensor *>;
 
   bool Replace(const DATensor *oldNode, const DATensor *newNode);
-  void RemoveOrderedNodes(const DATensor *owner, size_t index,
-                          const DATensor *node);
-  void InsertOrderedNodes(const DATensor *owner, size_t index,
-                          const DATensor *anchor, const DATensor *node);
+  void RemoveOrderedNodes(const DATensor *owner, size_t index, const DATensor *node);
+  void InsertOrderedNodes(const DATensor *owner, size_t index, const DATensor *anchor, const DATensor *node);
 
   class OrderedNodes {
-  public:
+   public:
     OrderedNodes() = default;
-    OrderedNodes(DAGraph *graph) { Init(graph); }
+    explicit OrderedNodes(DAGraph *graph) { Init(graph); }
 
     // Return true if inserted, or false otherwise.
     bool Insert(const DATensor *anchor, const DATensor *node);
@@ -100,7 +100,7 @@ private:
 
     const TensorList &tensorList() const { return tensorList_; }
 
-  private:
+   private:
     TensorList tensorList_;
     std::unordered_map<const DATensor *, TensorList::iterator> tensorMap_;
   } orderedNodes_;
@@ -112,18 +112,17 @@ private:
 };
 
 class PassRegister {
-public:
-  PassRegister(const std::string &name, NodePass &pass) {
+ public:
+  PassRegister(const std::string &name, const NodePass &pass) {
     LOG_OUT << "Register pass '" << name;
     PassManager::Instance().AddPass(name, pass);
   }
 };
 
-#define DA_REGISTER_PASS(PASS_NAME, PASS)                                      \
-  static PASS __pass_##PASS##__;                                               \
-  static const PassRegister __passRegister_##PASS##__(PASS_NAME,               \
-                                                      __pass_##PASS##__);
-} // namespace pass
-} // namespace da
+#define DA_REGISTER_PASS(PASS_NAME, PASS) \
+  static const PASS __pass_##PASS##__;    \
+  static const PassRegister __passRegister_##PASS##__(PASS_NAME, __pass_##PASS##__);
+}  // namespace pass
+}  // namespace da
 
-#endif // __PASS_PASS_H__
+#endif  // __PASS_PASS_H__

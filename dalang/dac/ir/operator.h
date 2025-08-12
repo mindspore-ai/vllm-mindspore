@@ -28,7 +28,7 @@ typedef enum Operator {
 } Op;
 #undef OPERATOR
 
-} // namespace ir
-} // namespace da
+}  // namespace ir
+}  // namespace da
 
-#endif // __PARSER_IR_OPERATOR_H__
+#endif  // __PARSER_IR_OPERATOR_H__

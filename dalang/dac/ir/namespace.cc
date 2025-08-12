@@ -56,5 +56,5 @@ void ClearFuncPool() {
   }
   gFuncPool.clear();
 }
-} // namespace ir
-} // namespace da
+}  // namespace ir
+}  // namespace da

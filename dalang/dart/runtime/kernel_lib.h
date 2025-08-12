@@ -17,6 +17,7 @@
 #ifndef __RUNTIME_KERNEL_LIB_H__
 #define __RUNTIME_KERNEL_LIB_H__
 
+#include <utility>
 #include <string>
 #include <memory>
 #include <functional>
@@ -45,10 +46,10 @@ using KernelLibCreator = std::function<KernelLib *()>;
 
 class KernelLib {
  public:
-  KernelLib(std::string &&name) : name_(std::move(name)) {}
+  explicit KernelLib(std::string &&name) : name_(std::move(name)) {}
   virtual ~KernelLib() = default;
 
-  virtual DAKernel* CreateKernel(tensor::DATensor *tensorNode) const = 0;
+  virtual DAKernel *CreateKernel(tensor::DATensor *tensorNode) const = 0;
   std::string Name() const { return name_; }
 
  protected:

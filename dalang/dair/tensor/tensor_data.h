@@ -47,7 +47,7 @@ enum Type {
 
 enum TensorType { HOST_TENSOR, DEVICE_TENSOR, UNKNOW_TENSOR };
 
-// Shape vaule type of tensor
+// Shape value type of tensor
 using ShapeValueType = size_t;
 using ShapeArray = ShapeValueType[DA_TENSOR_MAX_DIM];
 
@@ -56,7 +56,7 @@ inline ssize_t ShapeSize(const ShapeArray &shape) {
   ssize_t size = 1;
   for (auto dim : shape) {
     if (dim < 0) {
-      return 0; // dynamic shape scenario
+      return 0;  // dynamic shape scenario
     }
 
     if (dim == 0) {
@@ -81,21 +81,21 @@ inline size_t ShapeDims(const ShapeArray &shape) {
 
 inline size_t DataTypeSize(da::tensor::Type dtype) {
   switch (dtype) {
-  case da::tensor::Type_Bool:
-    return sizeof(bool);
-  case da::tensor::Type_F32:
-    return sizeof(float);
-  case da::tensor::Type_F64:
-    return sizeof(double);
-  case da::tensor::Type_I16:
-    return sizeof(int16_t);
-  case da::tensor::Type_I32:
-    return sizeof(int32_t);
-  case da::tensor::Type_I64:
-    return sizeof(int64_t);
-  default:
-    LOG_ERROR << "Unknown data type: " << dtype;
-    exit(EXIT_FAILURE);
+    case da::tensor::Type_Bool:
+      return sizeof(bool);
+    case da::tensor::Type_F32:
+      return sizeof(float);
+    case da::tensor::Type_F64:
+      return sizeof(double);
+    case da::tensor::Type_I16:
+      return sizeof(int16_t);
+    case da::tensor::Type_I32:
+      return sizeof(int32_t);
+    case da::tensor::Type_I64:
+      return sizeof(int64_t);
+    default:
+      LOG_ERROR << "Unknown data type: " << dtype;
+      exit(EXIT_FAILURE);
   }
 }
 
@@ -103,13 +103,14 @@ struct TensorData {
   Type dtype{Type_End};
 };
 
-template <typename T> struct TensorDataImpl : public TensorData {
+template <typename T>
+struct TensorDataImpl : public TensorData {
   size_t ndim{0};
   ssize_t nbytes{0};
   ssize_t size{0};
   bool fromMemPool{false};
   T *data{nullptr};
 };
-} // namespace tensor
-} // namespace da
-#endif // __TENSOR_TENSOR_DATA_H__
+}  // namespace tensor
+}  // namespace da
+#endif  // __TENSOR_TENSOR_DATA_H__

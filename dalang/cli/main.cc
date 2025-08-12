@@ -38,9 +38,8 @@ using namespace da;
 int main(int argc, char **argv) {
   struct arguments args = GetOptions(argc, argv);
 
-  LOG_OUT << "args: " << args.args[0] << ", " << args.lex << ", " << args.parse
-          << ", " << args.compile << ", " << args.silent << ", "
-          << args.interpret << ", " << args.output;
+  LOG_OUT << "args: " << args.args[0] << ", " << args.lex << ", " << args.parse << ", " << args.compile << ", "
+          << args.silent << ", " << args.interpret << ", " << args.output;
 
   // Handle the source file path.
   const std::string filenameArg = args.args[0];

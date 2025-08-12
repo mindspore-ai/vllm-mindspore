@@ -30,6 +30,6 @@ namespace da {
 namespace lexer {
 const char *ToStr(LtId lid);
 }
-} // namespace da
+}  // namespace da
 
-#endif // __LEXER_LITERAL_H__
+#endif  // __LEXER_LITERAL_H__

@@ -29,7 +29,7 @@ using namespace lexer;
 namespace StmtPattern {
 namespace ExpressionPattern {
 static inline bool Match(TokenConstPtr token) { return true; }
-} // namespace ExpressionPattern
+}  // namespace ExpressionPattern
 
 namespace AssignPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -41,7 +41,7 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace AssignPattern
+}  // namespace AssignPattern
 
 namespace AugAssignPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -49,14 +49,13 @@ static inline bool Match(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_AddAssign || token->data.op == OpId_SubAssign ||
-       token->data.op == OpId_MulAssign || token->data.op == OpId_DivAssign ||
-       token->data.op == OpId_ModAssign)) {
+      (token->data.op == OpId_AddAssign || token->data.op == OpId_SubAssign || token->data.op == OpId_MulAssign ||
+       token->data.op == OpId_DivAssign || token->data.op == OpId_ModAssign)) {
     return true;
   }
   return false;
 }
-} // namespace AugAssignPattern
+}  // namespace AugAssignPattern
 
 namespace ReturnPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -68,7 +67,7 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace ReturnPattern
+}  // namespace ReturnPattern
 
 namespace GraphPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -85,8 +84,7 @@ static inline bool MatchArgsStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_LeftParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftParenthesis) {
     return true;
   }
   return false;
@@ -106,8 +104,7 @@ static inline bool MatchArgsEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_RightParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightParenthesis) {
     return true;
   }
   return false;
@@ -143,7 +140,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace GraphPattern
+}  // namespace GraphPattern
 
 namespace FunctionPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -160,8 +157,7 @@ static inline bool MatchArgsStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_LeftParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftParenthesis) {
     return true;
   }
   return false;
@@ -181,8 +177,7 @@ static inline bool MatchArgsEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_RightParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightParenthesis) {
     return true;
   }
   return false;
@@ -218,7 +213,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace FunctionPattern
+}  // namespace FunctionPattern
 
 namespace ClassPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -250,7 +245,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace ClassPattern
+}  // namespace ClassPattern
 
 namespace BlockPattern {
 static inline bool MatchBodyStart(TokenConstPtr token) {
@@ -272,7 +267,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace BlockPattern
+}  // namespace BlockPattern
 
 namespace IfPattern {
 static inline bool MatchIf(TokenConstPtr token) {
@@ -314,7 +309,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace IfPattern
+}  // namespace IfPattern
 
 namespace ForPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -356,7 +351,7 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace ForPattern
+}  // namespace ForPattern
 
 namespace WhilePattern {
 static inline bool Match(TokenConstPtr token) {
@@ -388,15 +383,14 @@ static inline bool MatchBodyEnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace WhilePattern
+}  // namespace WhilePattern
 
 namespace StdCinCoutPattern {
 static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_StdCin || token->data.op == OpId_StdCout)) {
+  if (token->type == TokenType_Operator && (token->data.op == OpId_StdCin || token->data.op == OpId_StdCout)) {
     return true;
   }
   return false;
@@ -421,14 +415,13 @@ static inline bool MatchStdCout(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace StdCinCoutPattern
-} // namespace StmtPattern
+}  // namespace StdCinCoutPattern
+}  // namespace StmtPattern
 
 #ifdef DEBUG
-#define RETURN_AND_TRACE_STMT_NODE(stmt)                                       \
-  LOG_OUT << "TRACE STMT: " << ToString(stmt) << ", lineno: [("                \
-          << stmt->lineStart << ',' << stmt->columnStart << ")~("              \
-          << stmt->lineEnd << ',' << stmt->columnEnd << "))";                  \
+#define RETURN_AND_TRACE_STMT_NODE(stmt)                                                                       \
+  LOG_OUT << "TRACE STMT: " << ToString(stmt) << ", lineno: [(" << stmt->lineStart << ',' << stmt->columnStart \
+          << ")~(" << stmt->lineEnd << ',' << stmt->columnEnd << "))";                                         \
   return stmt
 #else
 #define RETURN_AND_TRACE_STMT_NODE(stmt) return stmt
@@ -457,35 +450,34 @@ static inline StmtPtr MakeAssignStmt(ExprConstPtr target, ExprConstPtr value) {
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeAugAssignStmt(ExprConstPtr target, OpId op,
-                                        ExprConstPtr value) {
+static inline StmtPtr MakeAugAssignStmt(ExprConstPtr target, OpId op, ExprConstPtr value) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_AugAssign;
   stmt->stmt.AugAssign.target = target;
   switch (op) {
-  case OpId_AddAssign: {
-    stmt->stmt.AugAssign.op = OpId_Add;
-    break;
-  }
-  case OpId_SubAssign: {
-    stmt->stmt.AugAssign.op = OpId_Sub;
-    break;
-  }
-  case OpId_MulAssign: {
-    stmt->stmt.AugAssign.op = OpId_Mul;
-    break;
-  }
-  case OpId_DivAssign: {
-    stmt->stmt.AugAssign.op = OpId_Div;
-    break;
-  }
-  case OpId_ModAssign: {
-    stmt->stmt.AugAssign.op = OpId_Mod;
-    break;
-  }
-  default: {
-    return nullptr;
-  }
+    case OpId_AddAssign: {
+      stmt->stmt.AugAssign.op = OpId_Add;
+      break;
+    }
+    case OpId_SubAssign: {
+      stmt->stmt.AugAssign.op = OpId_Sub;
+      break;
+    }
+    case OpId_MulAssign: {
+      stmt->stmt.AugAssign.op = OpId_Mul;
+      break;
+    }
+    case OpId_DivAssign: {
+      stmt->stmt.AugAssign.op = OpId_Div;
+      break;
+    }
+    case OpId_ModAssign: {
+      stmt->stmt.AugAssign.op = OpId_Mod;
+      break;
+    }
+    default: {
+      return nullptr;
+    }
   }
   stmt->stmt.AugAssign.value = value;
   stmt->lineStart = target->lineStart;
@@ -508,20 +500,17 @@ static inline StmtPtr MakeReturnStmt(ExprConstPtr value) {
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeGraphStmt(ExprConstPtr id, const Stmts &args,
-                                    const Stmts &body) {
+static inline StmtPtr MakeGraphStmt(ExprConstPtr id, const Stmts &args, const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Graph;
   stmt->stmt.Graph.name = id;
   stmt->stmt.Graph.argsLen = args.size();
-  stmt->stmt.Graph.args =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
+  stmt->stmt.Graph.args = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
   for (size_t i = 0; i < args.size(); ++i) {
     stmt->stmt.Graph.args[i] = args[i];
   }
   stmt->stmt.Graph.len = body.size();
-  stmt->stmt.Graph.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.Graph.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Graph.body[i] = body[i];
   }
@@ -536,20 +525,17 @@ static inline StmtPtr MakeGraphStmt(ExprConstPtr id, const Stmts &args,
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, const Stmts &args,
-                                       const Stmts &body) {
+static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, const Stmts &args, const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Function;
   stmt->stmt.Function.name = id;
   stmt->stmt.Function.argsLen = args.size();
-  stmt->stmt.Function.args =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
+  stmt->stmt.Function.args = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * args.size());
   for (size_t i = 0; i < args.size(); ++i) {
     stmt->stmt.Function.args[i] = args[i];
   }
   stmt->stmt.Function.len = body.size();
-  stmt->stmt.Function.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.Function.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Function.body[i] = body[i];
   }
@@ -564,15 +550,13 @@ static inline StmtPtr MakeFunctionStmt(ExprConstPtr id, const Stmts &args,
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases,
-                                    const Stmts &body) {
+static inline StmtPtr MakeClassStmt(ExprConstPtr id, ExprConstPtr bases, const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Class;
   stmt->stmt.Class.name = id;
   stmt->stmt.Class.bases = bases;
   stmt->stmt.Class.len = body.size();
-  stmt->stmt.Class.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.Class.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Class.body[i] = body[i];
   }
@@ -599,8 +583,7 @@ static inline StmtPtr MakeBlockStmt(const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Block;
   stmt->stmt.Block.len = body.size();
-  stmt->stmt.Block.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.Block.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Block.body[i] = body[i];
   }
@@ -640,20 +623,17 @@ static inline StmtPtr MakeStdCoutStmt(ExprConstPtr value) {
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeIfStmt(ExprConstPtr cond, const Stmts &ifBody,
-                                 const Stmts &elseBody) {
+static inline StmtPtr MakeIfStmt(ExprConstPtr cond, const Stmts &ifBody, const Stmts &elseBody) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_If;
   stmt->stmt.If.condition = cond;
   stmt->stmt.If.ifLen = ifBody.size();
-  stmt->stmt.If.ifBody =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * ifBody.size());
+  stmt->stmt.If.ifBody = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * ifBody.size());
   for (size_t i = 0; i < ifBody.size(); ++i) {
     stmt->stmt.If.ifBody[i] = ifBody[i];
   }
   stmt->stmt.If.elseLen = elseBody.size();
-  stmt->stmt.If.elseBody =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * elseBody.size());
+  stmt->stmt.If.elseBody = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * elseBody.size());
   for (size_t i = 0; i < elseBody.size(); ++i) {
     stmt->stmt.If.elseBody[i] = elseBody[i];
   }
@@ -680,15 +660,13 @@ static inline StmtPtr MakeIfStmt(ExprConstPtr cond, const Stmts &ifBody,
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
 
-static inline StmtPtr MakeForStmt(ExprConstPtr elem, ExprConstPtr iter,
-                                  const Stmts &body) {
+static inline StmtPtr MakeForStmt(ExprConstPtr elem, ExprConstPtr iter, const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_For;
   stmt->stmt.For.element = elem;
   stmt->stmt.For.iterator = iter;
   stmt->stmt.For.len = body.size();
-  stmt->stmt.For.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.For.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.For.body[i] = body[i];
   }
@@ -716,8 +694,7 @@ static inline StmtPtr MakeWhileStmt(ExprConstPtr cond, const Stmts &body) {
   stmt->type = StmtType_While;
   stmt->stmt.While.condition = cond;
   stmt->stmt.While.len = body.size();
-  stmt->stmt.While.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.While.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.While.body[i] = body[i];
   }
@@ -744,8 +721,7 @@ static inline StmtPtr MakeModuleStmt(const Stmts &body) {
   StmtPtr stmt = NewStmt();
   stmt->type = StmtType_Module;
   stmt->stmt.Module.len = body.size();
-  stmt->stmt.Module.body =
-      (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
+  stmt->stmt.Module.body = (StmtConstPtr *)malloc(sizeof(StmtConstPtr) * body.size());
   for (size_t i = 0; i < body.size(); ++i) {
     stmt->stmt.Module.body[i] = body[i];
   }
@@ -757,7 +733,7 @@ static inline StmtPtr MakeModuleStmt(const Stmts &body) {
   }
   RETURN_AND_TRACE_STMT_NODE(stmt);
 }
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da
 
-#endif // __PARSER_STMT_H__
+#endif  // __PARSER_STMT_H__

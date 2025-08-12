@@ -32,5 +32,5 @@ Token FindIdentifier(const char *start) {
   token.name.assign(start, pos);
   return token;
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

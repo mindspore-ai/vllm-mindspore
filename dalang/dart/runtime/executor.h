@@ -17,6 +17,8 @@
 #ifndef __RUNTIME_EXECUTOR_H__
 #define __RUNTIME_EXECUTOR_H__
 
+#include <utility>
+#include <string>
 #include <functional>
 #include <unordered_map>
 #include <vector>
@@ -33,9 +35,11 @@
 
 namespace da {
 namespace runtime {
-using namespace tensor;
+using tensor::DAContext;
+using tensor::DAGraph;
+using tensor::DATensor;
 class DA_API GraphExecutor {
-public:
+ public:
   GraphExecutor();
   ~GraphExecutor();
 
@@ -53,8 +57,8 @@ public:
   void AddParameters(const std::vector<DATensor *> &params);
 
   // Add a const tensor.
-  DATensor *AddTensor(Type type = Type_F32, size_t dim = 0,
-                      const ShapeArray &shape = {0}, void *data = nullptr);
+  DATensor *AddTensor(tensor::Type type = tensor::Type_F32, size_t dim = 0, const tensor::ShapeArray &shape = {0},
+                      void *data = nullptr);
   // Add tensor for graph.
   void AddTensor(DATensor *tensor);
   // Add tensor list to tensor.
@@ -83,7 +87,7 @@ public:
   void DumpGraph();
 #endif
 
-private:
+ private:
   void RunTensor(DATensor *tensor);
 
   std::string name_;
@@ -98,7 +102,7 @@ private:
   std::unordered_map<const DATensor *, ssize_t> nodeNumMap_;
 #endif
 };
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da
 
-#endif // __RUNTIME_EXECUTOR_H__
+#endif  // __RUNTIME_EXECUTOR_H__

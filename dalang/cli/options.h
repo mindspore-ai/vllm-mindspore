@@ -32,4 +32,4 @@ struct arguments {
 
 struct arguments GetOptions(int argc, char **argv);
 
-#endif // __CLI_OPTIONS_H__
+#endif  // __CLI_OPTIONS_H__

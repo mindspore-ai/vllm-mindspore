@@ -35,25 +35,21 @@ using StmtHandlerFunction = NsPtr (Compiler::*)(NsConstPtr, StmtConstPtr);
 using ExprHandlerFunction = NodePtr (Compiler::*)(NsConstPtr, ExprConstPtr);
 
 class Compiler {
-public:
+ public:
   explicit Compiler(const std::string &filename);
   ~Compiler();
 
   void Compile();
 
   // Return true if stmt was handled, otherwise return false.
-  NsPtr CallStmtHandler(NsConstPtr ns, StmtConstPtr stmt) {
-    return (this->*stmtHandlers_[stmt->type])(ns, stmt);
-  }
+  NsPtr CallStmtHandler(NsConstPtr ns, StmtConstPtr stmt) { return (this->*stmtHandlers_[stmt->type])(ns, stmt); }
 
   // Return true if expr was handled, otherwise return false.
-  NodePtr CallExprHandler(NsConstPtr ns, ExprConstPtr expr) {
-    return (this->*exprHandlers_[expr->type])(ns, expr);
-  }
+  NodePtr CallExprHandler(NsConstPtr ns, ExprConstPtr expr) { return (this->*exprHandlers_[expr->type])(ns, expr); }
 
   NsConstPtr ns() const { return ns_; }
 
-private:
+ private:
   void InitCompileHandlers();
 
   // Compile statement.
@@ -86,7 +82,7 @@ private:
   NodePtr CompileName(NsConstPtr ns, ExprConstPtr expr);
   NodePtr CompileLiteral(NsConstPtr ns, ExprConstPtr expr);
 
-private:
+ private:
   Parser parser_;
   NsPtr ns_;
   std::unordered_map<StmtType, StmtHandlerFunction> stmtHandlers_;
@@ -96,7 +92,7 @@ private:
 };
 
 class CompilerNodeVisitor : public NodeVisitor {
-public:
+ public:
   CompilerNodeVisitor(Compiler *compiler) : compiler_{compiler} {}
   virtual void Visit(StmtConstPtr stmt) override {
     if (stmt == nullptr) {
@@ -116,18 +112,14 @@ public:
     }
   }
 
-  virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) override {
-    NodeVisitor::VisitList(len, stmtPtr);
-  }
+  virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) override { NodeVisitor::VisitList(len, stmtPtr); }
 
-  virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override {
-    NodeVisitor::VisitList(len, exprPtr);
-  }
+  virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override { NodeVisitor::VisitList(len, exprPtr); }
 
-private:
+ private:
   Compiler *compiler_;
 };
-} // namespace ir
-} // namespace da
+}  // namespace ir
+}  // namespace da
 
-#endif // __PARSER_IR_COMPILER_H__
+#endif  // __PARSER_IR_COMPILER_H__

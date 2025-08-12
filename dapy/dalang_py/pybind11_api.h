@@ -24,7 +24,7 @@
 namespace py = pybind11;
 
 class DALangPy {
-public:
+ public:
   DALangPy() = default;
   ~DALangPy();
   DALangPy(const DALangPy &) = delete;
@@ -37,11 +37,11 @@ public:
   void Compile(const py::object &source, bool graph, bool dump);
   py::object Run(const py::tuple &args);
 
-private:
+ private:
   std::vector<Argument> ConvertPyArgs(const py::tuple &args);
   py::object ConvertPyResult(const Result &res);
 
   Callable *callable_{nullptr};
 };
 
-#endif // __DALANG_PY_PYBIND11_API_H__
+#endif  // __DALANG_PY_PYBIND11_API_H__

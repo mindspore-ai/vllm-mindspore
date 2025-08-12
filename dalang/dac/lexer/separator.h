@@ -20,20 +20,20 @@
 namespace da {
 namespace lexer {
 typedef enum SeparatorId {
-  SpId_Space,            // sp
-  SpId_Tab,              // tab
-  SpId_LeftParenthesis,  // (
-  SpId_RightParenthesis, // )
-  SpId_LeftBracket,      // [
-  SpId_RightBracket,     // ]
-  SpId_LeftBrace,        // {
-  SpId_RightBrace,       // }
-  SpId_Semicolon,        // ;
-  SpId_Comma,            // ,
-  SpId_Dot,              // .
-  SpId_Colon,            // :
-  SpId_Question,         // ?
-  SpId_Pound,            // #
+  SpId_Space,             // sp
+  SpId_Tab,               // tab
+  SpId_LeftParenthesis,   // (
+  SpId_RightParenthesis,  // )
+  SpId_LeftBracket,       // [
+  SpId_RightBracket,      // ]
+  SpId_LeftBrace,         // {
+  SpId_RightBrace,        // }
+  SpId_Semicolon,         // ;
+  SpId_Comma,             // ,
+  SpId_Dot,               // .
+  SpId_Colon,             // :
+  SpId_Question,          // ?
+  SpId_Pound,             // #
   SpId_End,
 } SpId;
 
@@ -43,7 +43,7 @@ typedef struct NameToSeparatorId {
 } NameToSpId;
 
 const char *ToStr(SpId spid);
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da
 
-#endif // __LEXER_SEPARATOR_H__
+#endif  // __LEXER_SEPARATOR_H__

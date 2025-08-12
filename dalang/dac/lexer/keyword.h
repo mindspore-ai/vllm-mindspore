@@ -36,6 +36,6 @@ typedef struct NameToKeywordId {
 } NameToKwId;
 
 const char *ToStr(KwId kwid);
-} // namespace lexer
-} // namespace da
-#endif // __LEXER_KEYWORD_H__
+}  // namespace lexer
+}  // namespace da
+#endif  // __LEXER_KEYWORD_H__

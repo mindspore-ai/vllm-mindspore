@@ -22,21 +22,21 @@
 namespace da {
 namespace runtime {
 const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex = {
-    {ops::Op_return, kFirstInput},
-    {ops::Op_depend, kFirstInput},
-    {ops::Op_load, kFirstInput},
-    {ops::Op_update_state, kFirstInput},
+  {ops::Op_return, kFirstInput},
+  {ops::Op_depend, kFirstInput},
+  {ops::Op_load, kFirstInput},
+  {ops::Op_update_state, kFirstInput},
 };
 
 const std::set<ops::Op> dummyOpsSet = {
-    ops::Op_tuple_getitem,
-    ops::Op_depend,
-    ops::Op_make_tuple,
+  ops::Op_tuple_getitem,
+  ops::Op_depend,
+  ops::Op_make_tuple,
 };
 
 const std::set<ops::Op> forceResizeOpsSet = {
-    ops::Op_flash_attention_score,
-    ops::Op_paged_attention,
+  ops::Op_flash_attention_score,
+  ops::Op_paged_attention,
 };
 
 void GetNodeRealInputs(DATensor *node) {
@@ -44,19 +44,19 @@ void GetNodeRealInputs(DATensor *node) {
   std::vector<DATensor *> realInputs;
   for (size_t i = 0; i < node->inputSize; ++i) {
     CHECK_IF_NULL(node->input[i]);
-    if (node->input[i]->type == Type_Tensor) {
+    if (node->input[i]->type == tensor::Type_Tensor) {
       auto **tensorList = static_cast<DATensor **>(node->input[i]->data);
       CHECK_IF_NULL(tensorList);
       for (size_t j = 0; j < node->input[i]->shape[0]; ++j) {
         CHECK_IF_NULL(tensorList[j]);
-        if (tensorList[j]->type == Type_Monad) {
+        if (tensorList[j]->type == tensor::Type_Monad) {
           continue;
         }
         (void)realInputs.emplace_back(tensorList[j]);
       }
       continue;
     }
-    if (node->input[i]->type == Type_Monad) {
+    if (node->input[i]->type == tensor::Type_Monad) {
       continue;
     }
     (void)realInputs.emplace_back(node->input[i]);
@@ -66,5 +66,5 @@ void GetNodeRealInputs(DATensor *node) {
     node->input[i] = realInputs[i];
   }
 }
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da

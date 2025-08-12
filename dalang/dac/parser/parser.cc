@@ -25,9 +25,7 @@
 
 namespace da {
 namespace parser {
-Parser::Parser(const std::string &filename) : selfManagedLexer_{true} {
-  lexer_ = new Lexer(filename);
-}
+Parser::Parser(const std::string &filename) : selfManagedLexer_{true} { lexer_ = new Lexer(filename); }
 
 Parser::Parser(Lexer *lexer) : lexer_{lexer}, selfManagedLexer_{false} {}
 
@@ -171,7 +169,7 @@ ExprPtr Parser::ParseAttribute(ExprPtr entity) {
   }
   ExprPtr attr = entity;
   while (ExprPattern::AttributePattern::Match(CurrentToken())) {
-    RemoveToken(); // .
+    RemoveToken();  // .
     ExprPtr id = ParseIdentifier();
     attr = MakeAttributeExpr(attr, id);
   }
@@ -197,32 +195,31 @@ ExprPtr Parser::ParseList() {
   if (ExprPattern::ListPattern::Match(CurrentToken())) {
     Exprs elements;
     if (ExprPattern::ListPattern::MatchStart(CurrentToken())) {
-      TokenConstPtr start = GetToken(); // (
+      TokenConstPtr start = GetToken();  // (
       ExprPtr expr = ParseExpr();
-      if (expr != nullptr) { // Not empty list.
+      if (expr != nullptr) {  // Not empty list.
         // The first element.
         (void)elements.emplace_back(expr);
 
         while (ExprPattern::ListPattern::MatchSplit(CurrentToken())) {
-          RemoveToken(); // ,
+          RemoveToken();  // ,
           // The middle and last elements.
           expr = ParseExpr();
           if (expr != nullptr) {
             (void)elements.emplace_back(expr);
-          } else { // Abnormal group expression.
+          } else {  // Abnormal group expression.
             std::stringstream ss;
             ss << "warning: invalid list. unexcepted token: ";
-            ss << (Finish() ? ToString(PreviousToken())
-                            : ToString(CurrentToken()));
+            ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
             CompileMessage(LineString(), ss.str());
             exit(EXIT_FAILURE);
           }
         }
       }
       if (ExprPattern::ListPattern::MatchEnd(CurrentToken())) {
-        TokenConstPtr end = GetToken(); // )
+        TokenConstPtr end = GetToken();  // )
         return MakeListExpr(start, end, elements);
-      } else { // Abnormal group expression.
+      } else {  // Abnormal group expression.
         std::stringstream ss;
         ss << "warning: invalid list ending. unrecognized token: ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
@@ -238,32 +235,31 @@ ExprPtr Parser::ParseTensor() {
   if (ExprPattern::TensorPattern::Match(CurrentToken())) {
     Exprs elements;
     if (ExprPattern::TensorPattern::MatchStart(CurrentToken())) {
-      TokenConstPtr start = GetToken(); // [
+      TokenConstPtr start = GetToken();  // [
       ExprPtr expr = ParseExpr();
-      if (expr != nullptr) { // Not empty list.
+      if (expr != nullptr) {  // Not empty list.
         // The first element.
         (void)elements.emplace_back(expr);
 
         while (ExprPattern::TensorPattern::MatchSplit(CurrentToken())) {
-          RemoveToken(); // ,
+          RemoveToken();  // ,
           // The middle and last elements.
           expr = ParseExpr();
           if (expr != nullptr) {
             (void)elements.emplace_back(expr);
-          } else { // Abnormal group expression.
+          } else {  // Abnormal group expression.
             std::stringstream ss;
             ss << "warning: invalid list. unexcepted token: ";
-            ss << (Finish() ? ToString(PreviousToken())
-                            : ToString(CurrentToken()));
+            ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
             CompileMessage(LineString(), ss.str());
             exit(EXIT_FAILURE);
           }
         }
       }
       if (ExprPattern::TensorPattern::MatchEnd(CurrentToken())) {
-        RemoveToken();                // ]
-        return MakeTensorExpr(start); // TODO: parse const tensor later.
-      } else {                        // Abnormal group expression.
+        RemoveToken();                 // ]
+        return MakeTensorExpr(start);  // TODO: parse const tensor later.
+      } else {                         // Abnormal group expression.
         std::stringstream ss;
         ss << "warning: invalid list ending. unrecognized token: ";
         ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
@@ -289,8 +285,7 @@ ExprPtr Parser::ParsePrimary() {
       return nullptr;
     }
   }
-  LOG_OUT << LineString()
-          << ", not match nothing, token: " << ToString(CurrentToken());
+  LOG_OUT << LineString() << ", not match nothing, token: " << ToString(CurrentToken());
   return nullptr;
 }
 
@@ -330,7 +325,7 @@ StmtPtr Parser::ParseAssign() {
   }
   if (StmtPattern::AssignPattern::Match(CurrentToken())) {
     ExprConstPtr target = stmt->stmt.Expr.value;
-    RemoveToken(); // =
+    RemoveToken();  // =
     ExprConstPtr value = ParseExpr();
     if (value == nullptr) {
       return nullptr;
@@ -350,7 +345,7 @@ StmtPtr Parser::ParseAugAssign() {
     return nullptr;
   }
   if (StmtPattern::AugAssignPattern::Match(CurrentToken())) {
-    OpId op = GetToken()->data.op; // .=
+    OpId op = GetToken()->data.op;  // .=
     ExprConstPtr value = ParseExpr();
     if (value == nullptr) {
       return nullptr;
@@ -364,7 +359,7 @@ StmtPtr Parser::ParseAugAssign() {
 
 StmtPtr Parser::ParseReturn() {
   if (StmtPattern::ReturnPattern::Match(CurrentToken())) {
-    RemoveToken(); // return
+    RemoveToken();  // return
     ExprConstPtr value = ParseExpr();
     return MakeReturnStmt(value);
   }
@@ -375,7 +370,7 @@ Stmts Parser::ParseGraphArgs() {
   Stmts args;
   // (
   if (StmtPattern::GraphPattern::MatchArgsStart(CurrentToken())) {
-    RemoveToken(); // (
+    RemoveToken();  // (
     for (EVER) {
       StmtPtr arg = ParseAssign();
       if (arg == nullptr) {
@@ -386,7 +381,7 @@ Stmts Parser::ParseGraphArgs() {
       }
       // )
       if (StmtPattern::GraphPattern::MatchArgsEnd(CurrentToken())) {
-        RemoveToken(); // )
+        RemoveToken();  // )
         break;
       }
       // ,
@@ -397,7 +392,7 @@ Stmts Parser::ParseGraphArgs() {
         CompileMessage(LineString(), ss.str());
         exit(EXIT_FAILURE);
       }
-      RemoveToken(); // ,
+      RemoveToken();  // ,
     }
   }
   return args;
@@ -406,22 +401,21 @@ Stmts Parser::ParseGraphArgs() {
 StmtPtr Parser::ParseGraphDef() {
   // function
   if (StmtPattern::GraphPattern::Match(CurrentToken())) {
-    RemoveToken(); // function
+    RemoveToken();  // function
     ExprConstPtr id = ParseIdentifier();
     Stmts args = ParseGraphArgs();
     // {
     if (!StmtPattern::GraphPattern::MatchBodyStart(CurrentToken()) &&
-        !(lexer_->supportIndent() &&
-          StmtPattern::GraphPattern::MatchIndentBodyStart(CurrentToken()))) {
+        !(lexer_->supportIndent() && StmtPattern::GraphPattern::MatchIndentBodyStart(CurrentToken()))) {
       std::stringstream ss;
       ss << "warning: invalid graph definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {, or : if support indent.
+    RemoveToken();  // {, or : if support indent.
     Stmts stmts;
-    (void)ParseStmts(&stmts); // Not check result.
+    (void)ParseStmts(&stmts);  // Not check result.
     // }
     if (!StmtPattern::GraphPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -430,7 +424,7 @@ StmtPtr Parser::ParseGraphDef() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
     return MakeGraphStmt(id, args, stmts);
   }
   return nullptr;
@@ -440,7 +434,7 @@ Stmts Parser::ParseFunctionArgs() {
   Stmts args;
   // (
   if (StmtPattern::FunctionPattern::MatchArgsStart(CurrentToken())) {
-    RemoveToken(); // (
+    RemoveToken();  // (
     for (EVER) {
       StmtPtr arg = ParseAssign();
       if (arg == nullptr) {
@@ -451,7 +445,7 @@ Stmts Parser::ParseFunctionArgs() {
       }
       // )
       if (StmtPattern::FunctionPattern::MatchArgsEnd(CurrentToken())) {
-        RemoveToken(); // )
+        RemoveToken();  // )
         break;
       }
       // ,
@@ -462,7 +456,7 @@ Stmts Parser::ParseFunctionArgs() {
         CompileMessage(LineString(), ss.str());
         exit(EXIT_FAILURE);
       }
-      RemoveToken(); // ,
+      RemoveToken();  // ,
     }
   }
   return args;
@@ -471,22 +465,21 @@ Stmts Parser::ParseFunctionArgs() {
 StmtPtr Parser::ParseFunctionDef() {
   // function
   if (StmtPattern::FunctionPattern::Match(CurrentToken())) {
-    RemoveToken(); // function
+    RemoveToken();  // function
     ExprConstPtr id = ParseIdentifier();
     Stmts args = ParseFunctionArgs();
     // {
     if (!StmtPattern::FunctionPattern::MatchBodyStart(CurrentToken()) &&
-        !(lexer_->supportIndent() &&
-          StmtPattern::FunctionPattern::MatchIndentBodyStart(CurrentToken()))) {
+        !(lexer_->supportIndent() && StmtPattern::FunctionPattern::MatchIndentBodyStart(CurrentToken()))) {
       std::stringstream ss;
       ss << "warning: invalid function definition, expected '{': ";
       ss << (Finish() ? ToString(PreviousToken()) : ToString(CurrentToken()));
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {, or : if support indent.
+    RemoveToken();  // {, or : if support indent.
     Stmts stmts;
-    (void)ParseStmts(&stmts); // Not check result.
+    (void)ParseStmts(&stmts);  // Not check result.
     // }
     if (!StmtPattern::FunctionPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -495,7 +488,7 @@ StmtPtr Parser::ParseFunctionDef() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
     return MakeFunctionStmt(id, args, stmts);
   }
   return nullptr;
@@ -504,7 +497,7 @@ StmtPtr Parser::ParseFunctionDef() {
 StmtPtr Parser::ParseClassDef() {
   // class
   if (StmtPattern::ClassPattern::Match(CurrentToken())) {
-    RemoveToken(); // class
+    RemoveToken();  // class
     ExprConstPtr id = ParseIdentifier();
     ExprConstPtr bases = ParseExpr();
     // {
@@ -515,9 +508,9 @@ StmtPtr Parser::ParseClassDef() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken();  // {
     Stmts stmts;
-    (void)ParseStmts(&stmts); // Not check result.
+    (void)ParseStmts(&stmts);  // Not check result.
     // }
     if (!StmtPattern::ClassPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -526,7 +519,7 @@ StmtPtr Parser::ParseClassDef() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
     return MakeClassStmt(id, bases, stmts);
   }
   return nullptr;
@@ -538,9 +531,9 @@ StmtPtr Parser::ParseBlock() {
   if (!StmtPattern::BlockPattern::MatchBodyStart(CurrentToken())) {
     return nullptr;
   }
-  RemoveToken(); // {
+  RemoveToken();  // {
   Stmts stmts;
-  (void)ParseStmts(&stmts); // Not check result.
+  (void)ParseStmts(&stmts);  // Not check result.
   // }
   if (!StmtPattern::BlockPattern::MatchBodyEnd(CurrentToken())) {
     std::stringstream ss;
@@ -549,15 +542,15 @@ StmtPtr Parser::ParseBlock() {
     CompileMessage(LineString(), ss.str());
     exit(EXIT_FAILURE);
   }
-  RemoveToken(); // }
+  RemoveToken();  // }
   return MakeBlockStmt(stmts);
 }
 
 StmtPtr Parser::ParseIf() {
   // if
   if (StmtPattern::IfPattern::MatchIf(CurrentToken())) {
-    RemoveToken();                        // if
-    ExprConstPtr condition = ParseExpr(); // condition
+    RemoveToken();                         // if
+    ExprConstPtr condition = ParseExpr();  // condition
     if (condition == nullptr) {
       std::stringstream ss;
       ss << "warning: invalid if statement, expected a condition "
@@ -574,9 +567,9 @@ StmtPtr Parser::ParseIf() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken();  // {
     Stmts ifBodyStmts;
-    (void)ParseStmts(&ifBodyStmts); // Not check result.
+    (void)ParseStmts(&ifBodyStmts);  // Not check result.
     // }
     if (!StmtPattern::IfPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -585,12 +578,12 @@ StmtPtr Parser::ParseIf() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
 
     // else
     Stmts elseBodyStmts;
     if (StmtPattern::IfPattern::MatchElse(CurrentToken())) {
-      RemoveToken(); // else
+      RemoveToken();  // else
 
       // else if
       if (StmtPattern::IfPattern::MatchIf(CurrentToken())) {
@@ -607,8 +600,8 @@ StmtPtr Parser::ParseIf() {
         CompileMessage(LineString(), ss.str());
         exit(EXIT_FAILURE);
       }
-      RemoveToken();                    // {
-      (void)ParseStmts(&elseBodyStmts); // Not check result.
+      RemoveToken();                     // {
+      (void)ParseStmts(&elseBodyStmts);  // Not check result.
       // }
       if (!StmtPattern::IfPattern::MatchBodyEnd(CurrentToken())) {
         std::stringstream ss;
@@ -617,7 +610,7 @@ StmtPtr Parser::ParseIf() {
         CompileMessage(LineString(), ss.str());
         exit(EXIT_FAILURE);
       }
-      RemoveToken(); // }
+      RemoveToken();  // }
     }
     return MakeIfStmt(condition, ifBodyStmts, elseBodyStmts);
   }
@@ -627,8 +620,8 @@ StmtPtr Parser::ParseIf() {
 StmtPtr Parser::ParseFor() {
   // for
   if (StmtPattern::ForPattern::Match(CurrentToken())) {
-    RemoveToken();                      // for
-    ExprConstPtr element = ParseExpr(); // element
+    RemoveToken();                       // for
+    ExprConstPtr element = ParseExpr();  // element
     if (element == nullptr) {
       std::stringstream ss;
       ss << "warning: invalid for statement, expected an element "
@@ -645,8 +638,8 @@ StmtPtr Parser::ParseFor() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken();                       // :
-    ExprConstPtr iterator = ParseExpr(); // iterator
+    RemoveToken();                        // :
+    ExprConstPtr iterator = ParseExpr();  // iterator
     if (iterator == nullptr) {
       std::stringstream ss;
       ss << "warning: invalid for statement, expected an iterator "
@@ -663,9 +656,9 @@ StmtPtr Parser::ParseFor() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken();  // {
     Stmts stmts;
-    (void)ParseStmts(&stmts); // Not check result.
+    (void)ParseStmts(&stmts);  // Not check result.
     // }
     if (!StmtPattern::ForPattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -674,7 +667,7 @@ StmtPtr Parser::ParseFor() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
     return MakeForStmt(element, iterator, stmts);
   }
   return nullptr;
@@ -683,8 +676,8 @@ StmtPtr Parser::ParseFor() {
 StmtPtr Parser::ParseWhile() {
   // while
   if (StmtPattern::WhilePattern::Match(CurrentToken())) {
-    RemoveToken();                   // while
-    ExprConstPtr cond = ParseExpr(); // condition
+    RemoveToken();                    // while
+    ExprConstPtr cond = ParseExpr();  // condition
     if (cond == nullptr) {
       std::stringstream ss;
       ss << "warning: invalid while statement, expected a condition "
@@ -701,9 +694,9 @@ StmtPtr Parser::ParseWhile() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // {
+    RemoveToken();  // {
     Stmts stmts;
-    (void)ParseStmts(&stmts); // Not check result.
+    (void)ParseStmts(&stmts);  // Not check result.
     // }
     if (!StmtPattern::WhilePattern::MatchBodyEnd(CurrentToken())) {
       std::stringstream ss;
@@ -712,7 +705,7 @@ StmtPtr Parser::ParseWhile() {
       CompileMessage(LineString(), ss.str());
       exit(EXIT_FAILURE);
     }
-    RemoveToken(); // }
+    RemoveToken();  // }
     return MakeWhileStmt(cond, stmts);
   }
   return nullptr;
@@ -721,9 +714,8 @@ StmtPtr Parser::ParseWhile() {
 StmtPtr Parser::ParseStdCinCout() {
   // >: or <:
   if (StmtPattern::StdCinCoutPattern::Match(CurrentToken())) {
-    const bool isStdCin =
-        StmtPattern::StdCinCoutPattern::MatchStdCin(CurrentToken());
-    RemoveToken(); // >: or <:
+    const bool isStdCin = StmtPattern::StdCinCoutPattern::MatchStdCin(CurrentToken());
+    RemoveToken();  // >: or <:
     ExprConstPtr value = ParseExpr();
     if (isStdCin) {
       return MakeStdCinStmt(value);
@@ -800,14 +792,12 @@ bool Parser::ParseStmts(StmtsPtr stmts) {
     if (stmt != nullptr) {
       LOG_OUT << "stmt: " << ToString(stmt);
       (void)stmts->emplace_back(std::move(stmt));
-    } else if (lastToken == CurrentToken()) { // Infinite loop, break.
+    } else if (lastToken == CurrentToken()) {  // Infinite loop, break.
       return false;
     } else {
       if (CurrentToken() != nullptr) {
-        LOG_OUT << "notice: handle partial tokens. last token: "
-                << LineString(lastToken) << ": " << ToString(lastToken)
-                << ", current token: " << LineString(CurrentToken()) << ": "
-                << ToString(CurrentToken());
+        LOG_OUT << "notice: handle partial tokens. last token: " << LineString(lastToken) << ": " << ToString(lastToken)
+                << ", current token: " << LineString(CurrentToken()) << ": " << ToString(CurrentToken());
       }
     }
   }
@@ -856,8 +846,7 @@ TokenConstPtr Parser::CurrentToken() {
 
 TokenConstPtr Parser::GetToken() {
   if (tokenPos_ >= lexer_->Tokens().size()) {
-    CompileMessage(LineString(&lexer_->Tokens().back()),
-                   "warning: tokens were exhaused");
+    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhaused");
     exit(EXIT_FAILURE);
   }
   const auto *token = &lexer_->Tokens()[tokenPos_];
@@ -867,8 +856,7 @@ TokenConstPtr Parser::GetToken() {
 
 void Parser::RemoveToken() {
   if (tokenPos_ >= lexer_->Tokens().size()) {
-    CompileMessage(LineString(&lexer_->Tokens().back()),
-                   "warning: tokens were exhaused");
+    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhaused");
     exit(EXIT_FAILURE);
   }
   ++tokenPos_;
@@ -881,8 +869,7 @@ void Parser::SetTokenPos(size_t pos) { tokenPos_ = pos; }
 bool Parser::Finish() { return tokenPos_ == lexer_->Tokens().size(); }
 
 const std::string Parser::LineString(TokenConstPtr token) {
-  return filename() + ':' + std::to_string(token->lineStart) + ':' +
-         std::to_string(token->columnStart + 1);
+  return filename() + ':' + std::to_string(token->lineStart) + ':' + std::to_string(token->columnStart + 1);
 }
 
 const std::string Parser::LineString() {
@@ -896,29 +883,26 @@ const std::string Parser::LineString() {
 }
 
 const std::string Parser::LineString(ExprConstPtr expr) {
-  return filename() + ':' + std::to_string(expr->lineStart) + ':' +
-         std::to_string(expr->columnStart + 1);
+  return filename() + ':' + std::to_string(expr->lineStart) + ':' + std::to_string(expr->columnStart + 1);
 }
 
 const std::string Parser::LineString(StmtConstPtr stmt) {
-  return filename() + ':' + std::to_string(stmt->lineStart) + ':' +
-         std::to_string(stmt->columnStart + 1);
+  return filename() + ':' + std::to_string(stmt->lineStart) + ':' + std::to_string(stmt->columnStart + 1);
 }
 
 constexpr int indentLen = 2;
 void Parser::DumpAst() {
   class DumpNodeVisitor : public NodeVisitor {
-  public:
+   public:
     void Visit(StmtConstPtr stmt) override {
       ++step_;
       const size_t indent = (step_ - 1) * indentLen;
       constexpr char indent_char = ' ';
-      ss_ << std::string(indent, indent_char) << "$"
-          << (stmt != nullptr ? ToString(stmt) : "null") << '(' << ENDL;
+      ss_ << std::string(indent, indent_char) << "$" << (stmt != nullptr ? ToString(stmt) : "null") << '(' << ENDL;
 
-      NodeVisitor::Visit(stmt); // Call parent Visit here.
+      NodeVisitor::Visit(stmt);  // Call parent Visit here.
 
-      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_.seekp(-1, ss_.cur);  // Remove a '\n'
       ss_ << ')' << ENDL;
       --step_;
     }
@@ -927,18 +911,15 @@ void Parser::DumpAst() {
       ++step_;
       const size_t indent = (step_ - 1) * indentLen;
       constexpr char indent_char = ' ';
-      ss_ << std::string(indent, indent_char) << "!"
-          << (expr != nullptr ? ToString(expr) : "null");
-      if (expr != nullptr && expr->type != ExprType_Name &&
-          expr->type != ExprType_Literal) {
+      ss_ << std::string(indent, indent_char) << "!" << (expr != nullptr ? ToString(expr) : "null");
+      if (expr != nullptr && expr->type != ExprType_Name && expr->type != ExprType_Literal) {
         ss_ << '(' << ENDL;
       }
 
-      NodeVisitor::Visit(expr); // Call parent Visit here.
+      NodeVisitor::Visit(expr);  // Call parent Visit here.
 
-      if (expr != nullptr && expr->type != ExprType_Name &&
-          expr->type != ExprType_Literal) {
-        ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      if (expr != nullptr && expr->type != ExprType_Name && expr->type != ExprType_Literal) {
+        ss_.seekp(-1, ss_.cur);  // Remove a '\n'
         ss_ << ')';
       }
       ss_ << ENDL;
@@ -951,26 +932,26 @@ void Parser::DumpAst() {
       constexpr char indent_char = ' ';
       ss_ << std::string(indent, indent_char) << "Body[" << ENDL;
 
-      NodeVisitor::VisitList(len, stmtPtr); // Call parent Visit here.
+      NodeVisitor::VisitList(len, stmtPtr);  // Call parent Visit here.
 
-      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_.seekp(-1, ss_.cur);  // Remove a '\n'
       ss_ << ']' << ENDL;
       --step_;
     }
 
     virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override {
-      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_.seekp(-1, ss_.cur);  // Remove a '\n'
       ss_ << "[" << ENDL;
 
-      NodeVisitor::VisitList(len, exprPtr); // Call parent Visit here.
+      NodeVisitor::VisitList(len, exprPtr);  // Call parent Visit here.
 
-      ss_.seekp(-1, ss_.cur); // Remove a '\n'
+      ss_.seekp(-1, ss_.cur);  // Remove a '\n'
       ss_ << ']' << ENDL;
     }
 
     const std::string dump() { return ss_.str(); }
 
-  private:
+   private:
     size_t step_{0};
     std::stringstream ss_;
   };
@@ -980,5 +961,5 @@ void Parser::DumpAst() {
   std::cout << "------- AST --------" << std::endl;
   std::cout << visitor.dump();
 }
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da

@@ -31,8 +31,7 @@ ExprPtr NewExpr() {
 }
 
 void ClearExprListMemory(ExprPtr expr) {
-  if (expr->type == ExprType_List && expr->expr.List.len != 0 &&
-      expr->expr.List.values != nullptr) {
+  if (expr->type == ExprType_List && expr->expr.List.len != 0 && expr->expr.List.values != nullptr) {
     free(expr->expr.List.values);
     expr->expr.List.values = nullptr;
     expr->expr.List.len = 0;
@@ -58,8 +57,7 @@ StmtPtr NewStmt() {
 }
 
 void ClearStmtGraphArgsMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.argsLen != 0 &&
-      stmt->stmt.Graph.args != nullptr) {
+  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.argsLen != 0 && stmt->stmt.Graph.args != nullptr) {
     free(stmt->stmt.Graph.args);
     stmt->stmt.Graph.args = nullptr;
     stmt->stmt.Graph.argsLen = 0;
@@ -67,8 +65,7 @@ void ClearStmtGraphArgsMemory(StmtPtr stmt) {
 }
 
 void ClearStmtGraphBodyMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.len != 0 &&
-      stmt->stmt.Graph.body != nullptr) {
+  if (stmt->type == StmtType_Graph && stmt->stmt.Graph.len != 0 && stmt->stmt.Graph.body != nullptr) {
     free(stmt->stmt.Graph.body);
     stmt->stmt.Graph.body = nullptr;
     stmt->stmt.Graph.len = 0;
@@ -76,8 +73,7 @@ void ClearStmtGraphBodyMemory(StmtPtr stmt) {
 }
 
 void ClearStmtFunctionArgsMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Function && stmt->stmt.Function.argsLen != 0 &&
-      stmt->stmt.Function.args != nullptr) {
+  if (stmt->type == StmtType_Function && stmt->stmt.Function.argsLen != 0 && stmt->stmt.Function.args != nullptr) {
     free(stmt->stmt.Function.args);
     stmt->stmt.Function.args = nullptr;
     stmt->stmt.Function.argsLen = 0;
@@ -85,8 +81,7 @@ void ClearStmtFunctionArgsMemory(StmtPtr stmt) {
 }
 
 void ClearStmtFunctionBodyMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Function && stmt->stmt.Function.len != 0 &&
-      stmt->stmt.Function.body != nullptr) {
+  if (stmt->type == StmtType_Function && stmt->stmt.Function.len != 0 && stmt->stmt.Function.body != nullptr) {
     free(stmt->stmt.Function.body);
     stmt->stmt.Function.body = nullptr;
     stmt->stmt.Function.len = 0;
@@ -94,8 +89,7 @@ void ClearStmtFunctionBodyMemory(StmtPtr stmt) {
 }
 
 void ClearStmtClassBodyMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Class && stmt->stmt.Class.len != 0 &&
-      stmt->stmt.Class.body != nullptr) {
+  if (stmt->type == StmtType_Class && stmt->stmt.Class.len != 0 && stmt->stmt.Class.body != nullptr) {
     free(stmt->stmt.Class.body);
     stmt->stmt.Class.body = nullptr;
     stmt->stmt.Class.len = 0;
@@ -103,8 +97,7 @@ void ClearStmtClassBodyMemory(StmtPtr stmt) {
 }
 
 void ClearStmtBlockBodyMemory(StmtPtr stmt) {
-  if (stmt->type == StmtType_Block && stmt->stmt.Block.len != 0 &&
-      stmt->stmt.Block.body != nullptr) {
+  if (stmt->type == StmtType_Block && stmt->stmt.Block.len != 0 && stmt->stmt.Block.body != nullptr) {
     free(stmt->stmt.Block.body);
     stmt->stmt.Block.body = nullptr;
     stmt->stmt.Block.len = 0;
@@ -180,50 +173,50 @@ StmtsConstPtr StmtList() { return &gStmtPool; }
 
 const std::string ToString(StmtConstPtr stmt) {
   switch (stmt->type) {
-  case StmtType_Return: {
-    return "Return";
-  }
-  case StmtType_Assign: {
-    return "Assign";
-  }
-  case StmtType_AugAssign: {
-    return "AugAssign{" + std::string(ToStr(stmt->stmt.AugAssign.op)) + '}';
-  }
-  case StmtType_Graph: {
-    return "Graph";
-  }
-  case StmtType_Function: {
-    return "Function";
-  }
-  case StmtType_Class: {
-    return "Class";
-  }
-  case StmtType_Block: {
-    return "Block";
-  }
-  case StmtType_StdCin: {
-    return "StdCin";
-  }
-  case StmtType_StdCout: {
-    return "StdCout";
-  }
-  case StmtType_If: {
-    return "If";
-  }
-  case StmtType_For: {
-    return "For";
-  }
-  case StmtType_While: {
-    return "While";
-  }
-  case StmtType_Expr: {
-    return "Expr";
-  }
-  case StmtType_Module: {
-    return "Module";
-  }
-  default:
-    return "...";
+    case StmtType_Return: {
+      return "Return";
+    }
+    case StmtType_Assign: {
+      return "Assign";
+    }
+    case StmtType_AugAssign: {
+      return "AugAssign{" + std::string(ToStr(stmt->stmt.AugAssign.op)) + '}';
+    }
+    case StmtType_Graph: {
+      return "Graph";
+    }
+    case StmtType_Function: {
+      return "Function";
+    }
+    case StmtType_Class: {
+      return "Class";
+    }
+    case StmtType_Block: {
+      return "Block";
+    }
+    case StmtType_StdCin: {
+      return "StdCin";
+    }
+    case StmtType_StdCout: {
+      return "StdCout";
+    }
+    case StmtType_If: {
+      return "If";
+    }
+    case StmtType_For: {
+      return "For";
+    }
+    case StmtType_While: {
+      return "While";
+    }
+    case StmtType_Expr: {
+      return "Expr";
+    }
+    case StmtType_Module: {
+      return "Module";
+    }
+    default:
+      return "...";
   }
 }
 
@@ -233,31 +226,31 @@ const std::string ToString(ExprConstPtr expr) {
   }
 
   switch (expr->type) {
-  case ExprType_Binary: {
-    return std::string(ToStr(expr->expr.Binary.op));
-  }
-  case ExprType_Unary: {
-    return std::string(ToStr(expr->expr.Unary.op));
-  }
-  case ExprType_Name: {
-    return "Name{" + *expr->expr.Name.identifier + "}";
-  }
-  case ExprType_Literal: {
-    return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + ':' +
-           ConvertEscapeString(*expr->expr.Literal.value) + '}';
-  }
-  case ExprType_List: {
-    return "List{len:" + std::to_string(expr->expr.List.len) + "}";
-  }
-  case ExprType_Call: {
-    return "Call";
-  }
-  case ExprType_Attribute: {
-    return "Attribute";
-  }
-  default:
-    return "?";
+    case ExprType_Binary: {
+      return std::string(ToStr(expr->expr.Binary.op));
+    }
+    case ExprType_Unary: {
+      return std::string(ToStr(expr->expr.Unary.op));
+    }
+    case ExprType_Name: {
+      return "Name{" + *expr->expr.Name.identifier + "}";
+    }
+    case ExprType_Literal: {
+      return "Literal{" + std::string(ToStr(expr->expr.Literal.kind)) + ':' +
+             ConvertEscapeString(*expr->expr.Literal.value) + '}';
+    }
+    case ExprType_List: {
+      return "List{len:" + std::to_string(expr->expr.List.len) + "}";
+    }
+    case ExprType_Call: {
+      return "Call";
+    }
+    case ExprType_Attribute: {
+      return "Attribute";
+    }
+    default:
+      return "?";
   }
 }
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da

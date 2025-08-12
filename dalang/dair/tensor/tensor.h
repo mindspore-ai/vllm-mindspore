@@ -17,7 +17,8 @@
 #ifndef __TENSOR_TENSOR_H__
 #define __TENSOR_TENSOR_H__
 
-#include <stdlib.h>
+#include <utility>
+#include <string>
 
 #include "common/visible.h"
 #include "ops/ops_name.h"
@@ -126,25 +127,22 @@ void AddTensor(DAGraph *graph, DATensor *tensor);
 // Create a new DATensor.
 DATensor *NewDATensor(DAContext *context);
 // Create a new DATensor.
-DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0,
-                      const ShapeArray &shape = {0}, void *data = nullptr,
-                      ops::Op op = ops::Op_End, size_t inputSize = 0,
+DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0, const ShapeArray &shape = {0},
+                      void *data = nullptr, ops::Op op = ops::Op_End, size_t inputSize = 0,
                       const TensorArrayPtr &input = {nullptr});
 // Create a new DATensorList with given length
 DATensor **NewDATensorList(DAContext *context, size_t len);
 
 // directly use the original data address, no copy
 template <typename T>
-TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape,
-                          void *data) {
+TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape, void *data) {
   CHECK_IF_NULL(ctx);
   CHECK_IF_NULL(ctx->memPool);
 
   size_t tensorDataSize = sizeof(TensorDataImpl<T>);
   auto newSize = ctx->memUsed + tensorDataSize;
   CHECK_IF_FAIL(newSize < ctx->memSize);
-  TensorDataImpl<T> *tensorData =
-      (TensorDataImpl<T> *)((char *)ctx->memPool + ctx->memUsed);
+  TensorDataImpl<T> *tensorData = (TensorDataImpl<T> *)(reinterpret_cast<char *>(ctx->memPool) + ctx->memUsed);
   ctx->memUsed = newSize;
   tensorData->ndim = ShapeDims(shape);
   tensorData->size = ShapeSize(shape);
@@ -154,28 +152,28 @@ TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape,
 }
 
 template <typename... Args>
-TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&...args) {
+TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&... args) {
   switch (dtype) {
-  case Type_Bool:
-    return NewTensorData<bool>(ctx, dtype, std::forward<Args>(args)...);
-  case Type_I16:
-    return NewTensorData<int16_t>(ctx, dtype, std::forward<Args>(args)...);
-  case Type_I32:
-    return NewTensorData<int32_t>(ctx, dtype, std::forward<Args>(args)...);
-  case Type_I64:
-    return NewTensorData<int64_t>(ctx, dtype, std::forward<Args>(args)...);
-  case Type_F32:
-    return NewTensorData<float>(ctx, dtype, std::forward<Args>(args)...);
-  case Type_F64:
-    return NewTensorData<double>(ctx, dtype, std::forward<Args>(args)...);
-  // todo support bf16 and fp16
-  default:
-    break;
+    case Type_Bool:
+      return NewTensorData<bool>(ctx, dtype, std::forward<Args>(args)...);
+    case Type_I16:
+      return NewTensorData<int16_t>(ctx, dtype, std::forward<Args>(args)...);
+    case Type_I32:
+      return NewTensorData<int32_t>(ctx, dtype, std::forward<Args>(args)...);
+    case Type_I64:
+      return NewTensorData<int64_t>(ctx, dtype, std::forward<Args>(args)...);
+    case Type_F32:
+      return NewTensorData<float>(ctx, dtype, std::forward<Args>(args)...);
+    case Type_F64:
+      return NewTensorData<double>(ctx, dtype, std::forward<Args>(args)...);
+    // todo support bf16 and fp16
+    default:
+      break;
   }
   LOG_OUT << "can not construct tensor data from unsupported dtype.";
   return nullptr;
 }
-} // namespace tensor
-} // namespace da
+}  // namespace tensor
+}  // namespace da
 
-#endif // __TENSOR_TENSOR_H__
+#endif  // __TENSOR_TENSOR_H__

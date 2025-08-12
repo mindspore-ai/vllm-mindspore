@@ -34,7 +34,7 @@ bool VM::ReplaceEscapeStr(std::string &dst) {
     if (pos == std::string::npos) {
       return true;
     }
-    if (pos + 1 == dst.size()) { // Meet a last '\'
+    if (pos + 1 == dst.size()) {  // Meet a last '\'
       return false;
     }
     std::string::size_type oldPos = pos;
@@ -47,7 +47,7 @@ bool VM::ReplaceEscapeStr(std::string &dst) {
         break;
       }
     }
-    if (oldPos == pos) { // Not match any escape.
+    if (oldPos == pos) {  // Not match any escape.
       return false;
     }
   }
@@ -57,35 +57,34 @@ bool VM::ReplaceEscapeStr(std::string &dst) {
 Slot VM::ConvertConstType(ConstType type, const std::string &value) {
   Slot slot;
   switch (type) {
-  case ConstType_bool: {
-    slot.type = SlotBool;
-    slot.value.bool_ = value == "true" ? true : false;
-    return slot;
-  }
-  case ConstType_int: {
-    slot.type = SlotInt;
-    slot.value.int_ = std::stoi(value);
-    return slot;
-  }
-  case ConstType_float: {
-    slot.type = SlotFloat;
-    slot.value.float_ = std::stof(value);
-    return slot;
-  }
-  case ConstType_str: {
-    slot.type = SlotString;
-    const char *strPtr = stringPool().Intern(value);
-    slot.value.str_ = strPtr;
-    return slot;
-  }
-  case ConstType_tensor: {
-    slot.type = SlotTensor;
-    slot.value.tensor_ =
-        nullptr; // TODO: convert string value to tensor value later.
-    return slot;
-  }
-  default:
-    throw std::runtime_error("Unexcepted constant");
+    case ConstType_bool: {
+      slot.type = SlotBool;
+      slot.value.bool_ = value == "true" ? true : false;
+      return slot;
+    }
+    case ConstType_int: {
+      slot.type = SlotInt;
+      slot.value.int_ = std::stoi(value);
+      return slot;
+    }
+    case ConstType_float: {
+      slot.type = SlotFloat;
+      slot.value.float_ = std::stof(value);
+      return slot;
+    }
+    case ConstType_str: {
+      slot.type = SlotString;
+      const char *strPtr = stringPool().Intern(value);
+      slot.value.str_ = strPtr;
+      return slot;
+    }
+    case ConstType_tensor: {
+      slot.type = SlotTensor;
+      slot.value.tensor_ = nullptr;  // TODO: convert string value to tensor value later.
+      return slot;
+    }
+    default:
+      throw std::runtime_error("Unexcepted constant");
   }
 }
 
@@ -98,8 +97,7 @@ Slot VM::ConvertConstType(const Constant &cons) {
 void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
   CHECK_IF_NULL(cons.value.str);
-  LOG_OUT << "offset: " << offset << ", value: " << *cons.value.str << " ("
-          << cons.type << ")";
+  LOG_OUT << "offset: " << offset << ", value: " << *cons.value.str << " (" << cons.type << ")";
   CurrentStack().emplace_back(std::move(ConvertConstType(cons)));
 }
 
@@ -157,8 +155,7 @@ void VM::InstLoadLocal(ssize_t offset) {
 // Store a slot by offset for latish load.
 void VM::InstStoreLocal(ssize_t offset) {
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(),
-                   "error: stack is empty.\nfail to store local.");
+    CompileMessage(LineString(), "error: stack is empty.\nfail to store local.");
     exit(EXIT_FAILURE);
   }
   auto &slot = CurrentStack().back();
@@ -170,8 +167,7 @@ void VM::InstStoreLocal(ssize_t offset) {
 // Load a value by offset which stored before.
 void VM::InstLoadGlobal(ssize_t offset) {
   const auto &name = GlobalSyms()[offset];
-  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size()
-          << ", name: " << name;
+  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size() << ", name: " << name;
   auto *slot = &GlobalVars()[offset];
   LOG_OUT << "load: " << ToString(*slot);
   if (slot->type == SlotInvalid || slot->type == SlotEnd) {
@@ -186,8 +182,7 @@ void VM::InstStoreGlobal(ssize_t offset) {
   const auto &name = GlobalSyms()[offset];
   LOG_OUT << "offset: " << offset << ", name: " << name;
   if (CurrentStack().empty()) {
-    CompileMessage(LineString(),
-                   "error: stack is empty.\nfail to store global.");
+    CompileMessage(LineString(), "error: stack is empty.\nfail to store global.");
     exit(EXIT_FAILURE);
   }
   GlobalVars()[offset] = std::move(CurrentStack().back());
@@ -197,41 +192,40 @@ void VM::InstStoreGlobal(ssize_t offset) {
 // Load an intrinsic by offset.
 void VM::InstLoadIntrin(ssize_t offset) {
   const auto &name = GlobalSyms()[offset];
-  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size()
-          << ", name: " << name;
+  LOG_OUT << "offset: " << offset << "/" << GlobalVars().size() << ", name: " << name;
   Slot intrinSlot{.type = SlotIntrinsic};
   switch (offset) {
-  case intrinsic::IntrinsicType_bool: {
-    break;
-  }
-  case intrinsic::IntrinsicType_int: {
-    break;
-  }
-  case intrinsic::IntrinsicType_float: {
-    break;
-  }
-  case intrinsic::IntrinsicType_str: {
-    break;
-  }
-  case intrinsic::IntrinsicType_list: {
-    break;
-  }
-  case intrinsic::IntrinsicType_set: {
-    break;
-  }
-  case intrinsic::IntrinsicType_dict: {
-    break;
-  }
-  case intrinsic::IntrinsicType_tensor: {
-    intrinSlot.value.intr = intrinsic::IntrinsicType_tensor;
-    break;
-  }
-  case intrinsic::IntrinsicType_print: {
-    intrinSlot.value.intr = intrinsic::IntrinsicType_print;
-    break;
-  }
-  default:
-    break;
+    case intrinsic::IntrinsicType_bool: {
+      break;
+    }
+    case intrinsic::IntrinsicType_int: {
+      break;
+    }
+    case intrinsic::IntrinsicType_float: {
+      break;
+    }
+    case intrinsic::IntrinsicType_str: {
+      break;
+    }
+    case intrinsic::IntrinsicType_list: {
+      break;
+    }
+    case intrinsic::IntrinsicType_set: {
+      break;
+    }
+    case intrinsic::IntrinsicType_dict: {
+      break;
+    }
+    case intrinsic::IntrinsicType_tensor: {
+      intrinSlot.value.intr = intrinsic::IntrinsicType_tensor;
+      break;
+    }
+    case intrinsic::IntrinsicType_print: {
+      intrinSlot.value.intr = intrinsic::IntrinsicType_print;
+      break;
+    }
+    default:
+      break;
   }
 
   CurrentStack().emplace_back(std::move(intrinSlot));
@@ -248,9 +242,8 @@ void VM::InstLoadOps(ssize_t offset) {
 
 // Just pop up the top slot.
 void VM::InstPopTop(ssize_t offset) {
-  LOG_OUT << "offset: " << offset << ", return value: "
-          << (CurrentStack().empty() ? "<null>"
-                                     : ToString(CurrentStack().back()))
+  LOG_OUT << "offset: " << offset
+          << ", return value: " << (CurrentStack().empty() ? "<null>" : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
   if (CurrentStack().empty()) {
     CompileMessage(LineString(), "error: stack is empty.\nfail to pop top.");
@@ -259,19 +252,17 @@ void VM::InstPopTop(ssize_t offset) {
   CurrentStack().pop_back();
 }
 
-BINARY_OP(Add, +) // VM::InstBinaryAdd
-BINARY_OP(Sub, -) // VM::InstBinarySub
-BINARY_OP(Mul, *) // VM::InstBinaryMul
-BINARY_OP(Div, /) // VM::InstBinaryDiv
+BINARY_OP(Add, +)  // VM::InstBinaryAdd
+BINARY_OP(Sub, -)  // VM::InstBinarySub
+BINARY_OP(Mul, *)  // VM::InstBinaryMul
+BINARY_OP(Div, /)  // VM::InstBinaryDiv
 
 // Call a function or graph by function/graph slot and argument slots, and
 // create a new frame. The first(reverse stack) slot is function/graph object
 // created by DefineFunc/DefineGraph instruction. The left slot is arguments.
 void VM::InstDoCall(ssize_t offset) {
   if (CurrentStack().size() < 1) {
-    CompileMessage(filename(), 0, 0,
-                   "error: invalid function. stack size: " +
-                       std::to_string(CurrentStack().size()));
+    CompileMessage(filename(), 0, 0, "error: invalid function. stack size: " + std::to_string(CurrentStack().size()));
     exit(EXIT_FAILURE);
   }
 #if 0
@@ -296,9 +287,8 @@ void VM::InstDoCall(ssize_t offset) {
   // Get callee function/graph information.
   const auto codeIndex = funcNameSlot.value.offset;
   const auto &callCode = codes()[codeIndex];
-  LOG_OUT << "offset: " << offset << ", type: " << callCode.type
-          << ", name: " << callCode.name << ", id: " << frames_.size()
-          << ", arg size: " << argsSize;
+  LOG_OUT << "offset: " << offset << ", type: " << callCode.type << ", name: " << callCode.name
+          << ", id: " << frames_.size() << ", arg size: " << argsSize;
 
   // If call a graph.
   if (StartGraph(callCode)) {
@@ -312,15 +302,14 @@ void VM::InstDoCall(ssize_t offset) {
                             .slots = std::vector<Slot>(),
                             .vars = std::vector<Slot>{callCode.symbols.size()}};
 
-  if (argsSize > 0) { // Has arguments.
+  if (argsSize > 0) {  // Has arguments.
     // To bind the arguments and parameters.
     auto paramsSize = callCode.argNames.size();
     if (argsSize > paramsSize) {
       std::stringstream ss;
       ss << "error: ";
       ss << (callCode.type == CodeGraph ? "graph" : "function");
-      ss << " arguments size(" << argsSize
-         << ") should not exceed parameters size(" << paramsSize << ").";
+      ss << " arguments size(" << argsSize << ") should not exceed parameters size(" << paramsSize << ").";
       CompileMessage(filename(), 0, 0, ss.str());
       exit(EXIT_FAILURE);
     }
@@ -336,15 +325,13 @@ void VM::InstDoCall(ssize_t offset) {
 #if 0
       newFuncFrame.names[callCode.argNames[i]] = std::move(arg);
 #else
-      LOG_OUT << "vars offset: " << i << ", name: " << code().symbols[i]
-              << ", arg: " << ToString(arg) << ", the same as StoreLocal.";
-      newFuncFrame.vars[i] =
-          std::move(arg); // The argument name must be at the front.
+      LOG_OUT << "vars offset: " << i << ", name: " << code().symbols[i] << ", arg: " << ToString(arg)
+              << ", the same as StoreLocal.";
+      newFuncFrame.vars[i] = std::move(arg);  // The argument name must be at the front.
 #endif
     }
     // Erase all arguments.
-    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
-                         CurrentStack().end());
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex, CurrentStack().end());
 
     // Append default parameters in callee names map.
     if (argsSize < paramsSize) {
@@ -367,8 +354,7 @@ void VM::InstDoCall(ssize_t offset) {
 void VM::InstCallIntrin(ssize_t offset) {
   if (CurrentStack().size() < 1) {
     CompileMessage(filename(), 0, 0,
-                   "error: invalid intrinsic call. stack size: " +
-                       std::to_string(CurrentStack().size()));
+                   "error: invalid intrinsic call. stack size: " + std::to_string(CurrentStack().size()));
     exit(EXIT_FAILURE);
   }
   const auto argsSize = static_cast<size_t>(offset);
@@ -376,50 +362,49 @@ void VM::InstCallIntrin(ssize_t offset) {
 
   Slot resultSlot{.type = SlotInvalid};
   switch (intrinsicSlot.value.intr) {
-  case intrinsic::IntrinsicType_bool: {
-    break;
-  }
-  case intrinsic::IntrinsicType_int: {
-    break;
-  }
-  case intrinsic::IntrinsicType_float: {
-    break;
-  }
-  case intrinsic::IntrinsicType_str: {
-    break;
-  }
-  case intrinsic::IntrinsicType_list: {
-    break;
-  }
-  case intrinsic::IntrinsicType_set: {
-    break;
-  }
-  case intrinsic::IntrinsicType_dict: {
-    break;
-  }
-  case intrinsic::IntrinsicType_tensor: {
-    auto tensor = graphExecutor_.AddTensor();
-    resultSlot.type = SlotTensor;
-    resultSlot.value.addr = tensor;
-    break;
-  }
-  case intrinsic::IntrinsicType_print: {
-    // Print the value.
-    const auto &slot = CurrentStack().back();
-    std::cout << ToString(slot);
-    break;
-  }
-  default:
-    LOG_ERROR << "invalid intrinsic.";
-    exit(EXIT_FAILURE);
+    case intrinsic::IntrinsicType_bool: {
+      break;
+    }
+    case intrinsic::IntrinsicType_int: {
+      break;
+    }
+    case intrinsic::IntrinsicType_float: {
+      break;
+    }
+    case intrinsic::IntrinsicType_str: {
+      break;
+    }
+    case intrinsic::IntrinsicType_list: {
+      break;
+    }
+    case intrinsic::IntrinsicType_set: {
+      break;
+    }
+    case intrinsic::IntrinsicType_dict: {
+      break;
+    }
+    case intrinsic::IntrinsicType_tensor: {
+      auto tensor = graphExecutor_.AddTensor();
+      resultSlot.type = SlotTensor;
+      resultSlot.value.addr = tensor;
+      break;
+    }
+    case intrinsic::IntrinsicType_print: {
+      // Print the value.
+      const auto &slot = CurrentStack().back();
+      std::cout << ToString(slot);
+      break;
+    }
+    default:
+      LOG_ERROR << "invalid intrinsic.";
+      exit(EXIT_FAILURE);
   }
   LOG_OUT << "Call intrisic. argsSize: " << argsSize;
 
-  if (argsSize > 0) { // Has arguments.
+  if (argsSize > 0) {  // Has arguments.
     // Erase all arguments.
     auto argStartIndex = CurrentStack().size() - argsSize;
-    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
-                         CurrentStack().end());
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex, CurrentStack().end());
   }
   // Erase the intrinsic self.
   CurrentStack().pop_back();
@@ -431,9 +416,7 @@ void VM::InstCallIntrin(ssize_t offset) {
 // Call an ops.xxx.
 void VM::InstCallOps(ssize_t offset) {
   if (CurrentStack().size() < 1) {
-    CompileMessage(filename(), 0, 0,
-                   "error: invalid ops call. stack size: " +
-                       std::to_string(CurrentStack().size()));
+    CompileMessage(filename(), 0, 0, "error: invalid ops call. stack size: " + std::to_string(CurrentStack().size()));
     exit(EXIT_FAILURE);
   }
 
@@ -441,7 +424,7 @@ void VM::InstCallOps(ssize_t offset) {
   const auto &opsNameSlot = *(CurrentStack().crbegin() + argsSize);
 
   std::vector<tensor::DATensor *> inputs;
-  if (argsSize > 0) { // Has arguments.
+  if (argsSize > 0) {  // Has arguments.
     // Move all arguments from caller stack into tensor inputs.
     auto argStartIndex = CurrentStack().size() - argsSize;
     for (size_t i = 0; i < argsSize; ++i) {
@@ -451,8 +434,7 @@ void VM::InstCallOps(ssize_t offset) {
     }
 
     // Erase all arguments.
-    CurrentStack().erase(CurrentStack().begin() + argStartIndex,
-                         CurrentStack().end());
+    CurrentStack().erase(CurrentStack().begin() + argStartIndex, CurrentStack().end());
   }
   // Erase the op self.
   CurrentStack().pop_back();
@@ -471,15 +453,11 @@ void VM::InstCallOps(ssize_t offset) {
 //   no return set by user.
 void VM::InstReturnVal(ssize_t offset) {
   if (frames_.size() < 1) {
-    CompileMessage(filename(), 0, 0,
-                   "error: no frame left, can not return anymore.");
+    CompileMessage(filename(), 0, 0, "error: no frame left, can not return anymore.");
     exit(EXIT_FAILURE);
   }
-  LOG_OUT << "offset: " << offset
-          << ", return from function, name: " << code().name
-          << ", id: " << (frames_.size() - 1) << ", value: "
-          << (CurrentStack().empty() ? "<null>"
-                                     : ToString(CurrentStack().back()))
+  LOG_OUT << "offset: " << offset << ", return from function, name: " << code().name << ", id: " << (frames_.size() - 1)
+          << ", value: " << (CurrentStack().empty() ? "<null>" : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
 
   if (offset == 0) {
@@ -556,7 +534,7 @@ COMPARE_OP(>)
 COMPARE_OP(<)
 COMPARE_OP(>=)
 COMPARE_OP(<=)
-} // namespace
+}  // namespace
 
 void VM::InstCompare(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
@@ -568,45 +546,41 @@ void VM::InstCompare(ssize_t offset) {
   bool res;
   try {
     switch (offset) {
-    case OpId_Equal: {
-      res = lhs == rhs;
-      break;
-    }
-    case OpId_NotEqual: {
-      res = lhs != rhs;
-      break;
-    }
-    case OpId_GreaterThan: {
-      res = lhs > rhs;
-      break;
-    }
-    case OpId_LessThan: {
-      res = lhs < rhs;
-      break;
-    }
-    case OpId_GreaterEqual: {
-      res = lhs >= rhs;
-      break;
-    }
-    case OpId_LessEqual: {
-      res = lhs <= rhs;
-      break;
-    }
-    default: {
-      CompileMessage(LineString(),
-                     std::string("error: not support to do [") +
-                         lexer::ToStr((OpId)offset) + "] compare between '" +
-                         GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
-                         "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
-      exit(EXIT_FAILURE);
-    }
+      case OpId_Equal: {
+        res = lhs == rhs;
+        break;
+      }
+      case OpId_NotEqual: {
+        res = lhs != rhs;
+        break;
+      }
+      case OpId_GreaterThan: {
+        res = lhs > rhs;
+        break;
+      }
+      case OpId_LessThan: {
+        res = lhs < rhs;
+        break;
+      }
+      case OpId_GreaterEqual: {
+        res = lhs >= rhs;
+        break;
+      }
+      case OpId_LessEqual: {
+        res = lhs <= rhs;
+        break;
+      }
+      default: {
+        CompileMessage(LineString(), std::string("error: not support to do [") + lexer::ToStr((OpId)offset) +
+                                       "] compare between '" + GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
+                                       "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
+        exit(EXIT_FAILURE);
+      }
     }
   } catch (std::runtime_error &ex) {
-    CompileMessage(LineString(),
-                   std::string("error: not support to do [") +
-                       lexer::ToStr((OpId)offset) + "] compare between '" +
-                       GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
-                       "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
+    CompileMessage(LineString(), std::string("error: not support to do [") + lexer::ToStr((OpId)offset) +
+                                   "] compare between '" + GetSlotTypeStr(lhs) + "' and '" + GetSlotTypeStr(rhs) +
+                                   "'. {" + ToString(lhs) + ", " + ToString(rhs) + "}.");
     exit(EXIT_FAILURE);
   }
 
@@ -621,8 +595,7 @@ void VM::InstJumpTrue(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
   const auto &slot = CurrentStack().back();
   if (slot.type != SlotBool) {
-    CompileMessage(LineString(), "error: the condition type is not bool: '" +
-                                     ToString(slot) + "'.");
+    CompileMessage(LineString(), "error: the condition type is not bool: '" + ToString(slot) + "'.");
     exit(EXIT_FAILURE);
   }
   if (slot.value.bool_) {
@@ -637,8 +610,7 @@ void VM::InstJumpFalse(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
   const auto &slot = CurrentStack().back();
   if (slot.type != SlotBool) {
-    CompileMessage(LineString(), "error: the condition type is not bool: '" +
-                                     ToString(slot) + "'.");
+    CompileMessage(LineString(), "error: the condition type is not bool: '" + ToString(slot) + "'.");
     exit(EXIT_FAILURE);
   }
   LOG_OUT << "condition: " << slot.value.bool_;
@@ -684,8 +656,7 @@ void VM::InstStdCin(ssize_t offset) {
   std::string str;
   getline(std::cin, str);
   CHECK_IF_NULL(slot);
-  if ((str.front() == '\'' && str.back() == '\'') ||
-      (str.front() == '\"' && str.back() == '\"')) {
+  if ((str.front() == '\'' && str.back() == '\'') || (str.front() == '\"' && str.back() == '\"')) {
     slot->type = SlotString;
     const char *strPtr = stringPool().Intern(str.substr(1, str.size() - 2));
     slot->value.str_ = strPtr;
@@ -694,8 +665,7 @@ void VM::InstStdCin(ssize_t offset) {
     try {
       slot->value.float_ = std::stod(str);
     } catch (std::invalid_argument &ex) {
-      CompileMessage(LineString(),
-                     "error: invalid input for float type: " + str);
+      CompileMessage(LineString(), "error: invalid input for float type: " + str);
       exit(EXIT_FAILURE);
     } catch (std::out_of_range &ex) {
       CompileMessage(LineString(), "error: out of range as float type: " + str);
@@ -717,13 +687,11 @@ void VM::InstStdCin(ssize_t offset) {
 
 // Output to standard output stream.
 void VM::InstStdCout(ssize_t offset) {
-  LOG_OUT << "offset: " << offset << ", std out value: "
-          << (CurrentStack().empty() ? "<null>"
-                                     : ToString(CurrentStack().back()))
+  LOG_OUT << "offset: " << offset
+          << ", std out value: " << (CurrentStack().empty() ? "<null>" : ToString(CurrentStack().back()))
           << ", stack size: " << CurrentStack().size();
   if (CurrentStack().size() < 1) {
-    CompileMessage(filename(), 0, 0,
-                   "error: no slot left, can not output by stdout.");
+    CompileMessage(filename(), 0, 0, "error: no slot left, can not output by stdout.");
     exit(EXIT_FAILURE);
   }
   // Print the value.
@@ -756,29 +724,19 @@ const std::vector<Code> &VM::codes() const { return codes_; }
 
 const Code &VM::code() const { return codes()[frame_->code]; }
 
-const std::vector<std::string> &VM::LocalSyms() const {
-  return codes()[frame_->code].symbols;
-}
+const std::vector<std::string> &VM::LocalSyms() const { return codes()[frame_->code].symbols; }
 
-const std::vector<std::string> &VM::GlobalSyms() const {
-  return codes()[frames_.front().code].symbols;
-}
+const std::vector<std::string> &VM::GlobalSyms() const { return codes()[frames_.front().code].symbols; }
 
-const std::vector<Constant> &VM::consts() const {
-  return codes()[frame_->code].constants;
-}
+const std::vector<Constant> &VM::consts() const { return codes()[frame_->code].constants; }
 
-const std::vector<InstCall> &VM::insts() const {
-  return codes()[frame_->code].insts;
-}
+const std::vector<InstCall> &VM::insts() const { return codes()[frame_->code].insts; }
 
 const std::string &VM::filename() const { return filename_; }
 
-std::string VM::LineString() {
-  return filename() + ':' + std::to_string(insts()[frame_->pc - 1].lineno);
-}
+std::string VM::LineString() { return filename() + ':' + std::to_string(insts()[frame_->pc - 1].lineno); }
 
-bool VM::StartGraph(const Code &code) { // If call a graph.
+bool VM::StartGraph(const Code &code) {  // If call a graph.
   if (code.type == CodeGraph) {
     LOG_OUT << "Call DAGraph: " << code.name;
     if (graphExecutor_.HasGraph()) {
@@ -863,8 +821,7 @@ Result VM::Run(const std::vector<Argument> &args) {
       }
       ++frame_->pc;
 
-      if (frames_.size() == 1 && CurrentStack().size() == 1 &&
-          inst.inst == Inst_ReturnVal && inst.offset == 0) {
+      if (frames_.size() == 1 && CurrentStack().size() == 1 && inst.inst == Inst_ReturnVal && inst.offset == 0) {
         if (singleFunctionMode_) {
           FinishGraph(frames_.back());
           return CurrentStack().back();
@@ -878,8 +835,7 @@ Result VM::Run(const std::vector<Argument> &args) {
         LOG_OUT << "Run finish";
         return Result({.type = SlotVoid});
       }
-      LOG_OUT << "frame size: " << frames_.size()
-              << ", stack size: " << CurrentStack().size()
+      LOG_OUT << "frame size: " << frames_.size() << ", stack size: " << CurrentStack().size()
               << ", inst size: " << insts().size() << ", pc: " << frame_->pc;
 #ifdef DEBUG
       DumpStack();
@@ -895,8 +851,7 @@ void VM::DumpStack() {
   std::cout << "----------" << std::endl;
   std::cout << "frame:" << std::endl;
   for (size_t i = 0; i < frames_.size(); ++i) {
-    std::cout << "\t#" << i << ": " << codes()[frames_[i].code].name
-              << std::endl;
+    std::cout << "\t#" << i << ": " << codes()[frames_[i].code].name << std::endl;
   }
   std::cout << "stack:" << std::endl;
   for (size_t i = 0; i < CurrentStack().size(); ++i) {
@@ -911,5 +866,5 @@ void VM::InitInstructionHandlers() {
 #include "compiler/instruction.list"
 }
 #undef INSTRUCTION
-} // namespace vm
-} // namespace da
+}  // namespace vm
+}  // namespace da

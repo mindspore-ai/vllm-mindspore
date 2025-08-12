@@ -183,7 +183,7 @@ typedef struct ExprNode {
 
 const std::string ToString(StmtConstPtr stmt);
 const std::string ToString(ExprConstPtr expr);
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da
 
-#endif // __PARSER_AST_NODE_H__
+#endif  // __PARSER_AST_NODE_H__

@@ -41,10 +41,10 @@ Op MatchOp(const char *op) {
 #define OP(O) #O,
 const char *_opStr[] = {
 #include "ops/ops.list"
-    "End",
+  "End",
 };
 #undef OP
 
 const char *ToStr(const Op op) { return _opStr[op]; }
-} // namespace ops
-} // namespace da
+}  // namespace ops
+}  // namespace da

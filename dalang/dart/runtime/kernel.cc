@@ -29,5 +29,5 @@ void DAKernel::RunKernel(bool isDynamic) {
   }
   Launch();
 }
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da

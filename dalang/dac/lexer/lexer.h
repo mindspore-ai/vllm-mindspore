@@ -29,7 +29,7 @@ namespace lexer {
 #define MAX_LINE_SIZE 4096
 
 class Lexer {
-public:
+ public:
   explicit Lexer(const std::string &filename);
   explicit Lexer(const char *sourceLines);
   ~Lexer();
@@ -43,7 +43,7 @@ public:
 
   bool supportIndent() const { return supportIndent_; }
 
-private:
+ private:
   void OpenFile(const std::string &filename);
   void ReadLine();
   const Token TokenInLine();
@@ -79,6 +79,6 @@ private:
   std::vector<std::string> indents_;
   std::vector<Token> tokens_;
 };
-} // namespace lexer
-} // namespace da
-#endif // __LEXER_LEXER_H__
+}  // namespace lexer
+}  // namespace da
+#endif  // __LEXER_LEXER_H__

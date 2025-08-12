@@ -28,7 +28,7 @@ enum Op {
 
 Op MatchOp(const char *op);
 const char *ToStr(Op op);
-} // namespace ops
-} // namespace da
+}  // namespace ops
+}  // namespace da
 
-#endif // __OPS_OPS_NAME_H__
+#endif  // __OPS_OPS_NAME_H__

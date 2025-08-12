@@ -52,23 +52,23 @@ using StmtHandlerFunctions = std::unordered_map<StmtType, StmtHandlerFunction>;
 using ExprHandlerFunctions = std::unordered_map<ExprType, ExprHandlerFunction>;
 
 struct InstCall {
-  Inst inst;      // Instruction type.
-  ssize_t offset; // Extra information. Such as contant pool index, jump offset,
-                  // and so on.
-  ssize_t lineno; // Instruction lineno in the code.
+  Inst inst;       // Instruction type.
+  ssize_t offset;  // Extra information. Such as contant pool index, jump offset,
+                   // and so on.
+  ssize_t lineno;  // Instruction lineno in the code.
 };
 typedef InstCall *InstCallPtr;
 typedef const InstCall *InstCallConstPtr;
 
 struct Constant {
-  ConstType type; // Constant type.
+  ConstType type;  // Constant type.
   union {
     void *addr{nullptr};
     int int_;
     double float_;
     bool bool_;
     const std::string *str;
-  } value; // Constant value.
+  } value;  // Constant value.
 };
 typedef Constant *ConstantPtr;
 
@@ -76,25 +76,22 @@ enum CodeType { CodeBlock, CodeFunction, CodeGraph, CodeModule, CodeEnd };
 const char *ToStr(CodeType type);
 
 struct Code {
-  CodeType type;                     // Type of block/function/graph/module.
-  std::string name;                  // Function, graph or module name.
-  std::vector<std::string> symbols;  // Symbol pool in the namespace.
-  std::vector<Constant> constants;   // Constant pool in the namespace.
-  std::vector<InstCall> insts;       // Instructions in the namespace.
-  std::vector<std::string> argNames; // Parameter names.
-  std::vector<ssize_t> argIndexes;   // Parameter name index in symbol pool.
-  std::vector<ConstType> argTypes;   // Parameter types.
-  std::vector<Constant> argDefaults; // Parameter default values.
+  CodeType type;                      // Type of block/function/graph/module.
+  std::string name;                   // Function, graph or module name.
+  std::vector<std::string> symbols;   // Symbol pool in the namespace.
+  std::vector<Constant> constants;    // Constant pool in the namespace.
+  std::vector<InstCall> insts;        // Instructions in the namespace.
+  std::vector<std::string> argNames;  // Parameter names.
+  std::vector<ssize_t> argIndexes;    // Parameter name index in symbol pool.
+  std::vector<ConstType> argTypes;    // Parameter types.
+  std::vector<Constant> argDefaults;  // Parameter default values.
 };
 typedef Code *CodePtr;
 
 class Compiler {
-public:
-  explicit Compiler(const std::string &filename,
-                    bool singleFunctionMode = false,
-                    bool forceGraphMode = false);
-  explicit Compiler(Parser *parser, bool singleFunctionMode = false,
-                    bool forceGraphMode = false);
+ public:
+  explicit Compiler(const std::string &filename, bool singleFunctionMode = false, bool forceGraphMode = false);
+  explicit Compiler(Parser *parser, bool singleFunctionMode = false, bool forceGraphMode = false);
   ~Compiler();
 
   void Compile();
@@ -103,18 +100,14 @@ public:
   const std::vector<Code> &codes() const { return codes_; }
 
   // Return true if stmt was handled, otherwise return false.
-  bool CallStmtHandler(StmtConstPtr stmt) {
-    return (this->*stmtHandlers_[stmt->type])(stmt);
-  }
+  bool CallStmtHandler(StmtConstPtr stmt) { return (this->*stmtHandlers_[stmt->type])(stmt); }
 
   // Return true if expr was handled, otherwise return false.
-  bool CallExprHandler(ExprConstPtr expr) {
-    return (this->*exprHandlers_[expr->type])(expr);
-  }
+  bool CallExprHandler(ExprConstPtr expr) { return (this->*exprHandlers_[expr->type])(expr); }
 
   void Dump();
 
-private:
+ private:
   void Init();
   void InitCompileHandlers();
   void InitIntrinsicSymbols();
@@ -150,22 +143,15 @@ private:
   bool CompileLiteral(ExprConstPtr expr);
 
   // Bind arguments with function for JIT.
-  void CompileJitCallFunction(const std::string &funcName, ssize_t funcSymIndex,
-                              int lineno);
+  void CompileJitCallFunction(const std::string &funcName, ssize_t funcSymIndex, int lineno);
 
   size_t CurrentCodeIndex() { return codeStack_.top(); }
   Code &CurrentCode() { return codes_[codeStack_.top()]; }
   Code &code(size_t index) { return codes_[index]; }
 
-  std::vector<std::string> &symbolPool(size_t index) {
-    return code(index).symbols;
-  }
-  std::vector<Constant> &constantPool(size_t index) {
-    return code(index).constants;
-  }
-  std::vector<InstCall> &instructions(size_t index) {
-    return code(index).insts;
-  }
+  std::vector<std::string> &symbolPool(size_t index) { return code(index).symbols; }
+  std::vector<Constant> &constantPool(size_t index) { return code(index).constants; }
+  std::vector<InstCall> &instructions(size_t index) { return code(index).insts; }
   void AddInstruction(const InstCall &inst) {
     CurrentCode().insts.emplace_back(inst);
     lastInst_ = inst;
@@ -175,7 +161,7 @@ private:
   ssize_t FindGlobalSymbolIndex(const std::string &name);
   ssize_t FindConstantIndex(const std::string &str);
 
-private:
+ private:
   Parser *parser_;
   std::string filename_;
   bool selfManagedParser_{false};
@@ -191,12 +177,12 @@ private:
   std::vector<Code> codes_;
   // Compile result records end.
 
-  StmtHandlerFunctions stmtHandlers_; // Notice: Do not change.
-  ExprHandlerFunctions exprHandlers_; // Notice: Do not change.
+  StmtHandlerFunctions stmtHandlers_;  // Notice: Do not change.
+  ExprHandlerFunctions exprHandlers_;  // Notice: Do not change.
 };
 
 class CompilerNodeVisitor : public NodeVisitor {
-public:
+ public:
   CompilerNodeVisitor(Compiler *compiler) : compiler_{compiler} {}
   virtual void Visit(StmtConstPtr stmt) override {
     if (stmt == nullptr) {
@@ -216,36 +202,30 @@ public:
     }
   }
 
-  virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) override {
-    NodeVisitor::VisitList(len, stmtPtr);
-  }
+  virtual void VisitList(size_t len, StmtConstPtr *stmtPtr) override { NodeVisitor::VisitList(len, stmtPtr); }
 
-  virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override {
-    NodeVisitor::VisitList(len, exprPtr);
-  }
+  virtual void VisitList(size_t len, ExprConstPtr *exprPtr) override { NodeVisitor::VisitList(len, exprPtr); }
 
-private:
+ private:
   Compiler *compiler_;
 };
 
 const char *GetInstStr(Inst inst);
 
 // Return -1 if not found.
-inline ssize_t FindStringPoolIndex(std::vector<std::string> &stringPool,
-                                   const std::string &name) {
+inline ssize_t FindStringPoolIndex(std::vector<std::string> &stringPool, const std::string &name) {
   auto iter = std::find(stringPool.cbegin(), stringPool.cend(), name);
   if (iter == stringPool.cend()) {
     return -1;
   }
   auto index = std::distance(stringPool.cbegin(), iter);
   if (index < 0) {
-    LOG_ERROR << "Not found symbol, index should not be negative " << index
-              << ", name: " << name;
+    LOG_ERROR << "Not found symbol, index should not be negative " << index << ", name: " << name;
     exit(EXIT_FAILURE);
   }
   return index;
 }
-} // namespace compiler
-} // namespace da
+}  // namespace compiler
+}  // namespace da
 
-#endif // __PARSER_COMPILER_COMPILER_H__
+#endif  // __PARSER_COMPILER_COMPILER_H__

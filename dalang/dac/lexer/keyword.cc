@@ -21,10 +21,8 @@ namespace da {
 namespace lexer {
 #define TO_STR(s) #s
 #define KEYWORD(K) {TO_STR(K), KwId_##K},
-#define KEYWORD_ALIAS(K, ALIAS)                                                \
-  {TO_STR(K), KwId_##K}, {TO_STR(ALIAS), KwId_##K},
-#define KEYWORD_ALIAS2(K, ALIAS1, ALIAS2)                                      \
-  {TO_STR(K), KwId_##K}, {TO_STR(ALIAS1), KwId_##K}, {TO_STR(ALIAS2), KwId_##K},
+#define KEYWORD_ALIAS(K, ALIAS) {TO_STR(K), KwId_##K}, {TO_STR(ALIAS), KwId_##K},
+#define KEYWORD_ALIAS2(K, ALIAS1, ALIAS2) {TO_STR(K), KwId_##K}, {TO_STR(ALIAS1), KwId_##K}, {TO_STR(ALIAS2), KwId_##K},
 NameToKwId _keywords[]{
 #include "keyword.list"
 };
@@ -33,8 +31,7 @@ NameToKwId _keywords[]{
 #undef KEYWORD_ALIAS2
 
 Token TraverseKwTable(const char *start) {
-  auto pos = FindNameIndex<NameToKwId>(start, _keywords,
-                                       sizeof(_keywords) / sizeof(NameToKwId));
+  auto pos = FindNameIndex<NameToKwId>(start, _keywords, sizeof(_keywords) / sizeof(NameToKwId));
   if (pos != -1) {
     const auto &kw = _keywords[pos];
     auto t = Token{.type = TokenType_Keyword};
@@ -49,16 +46,15 @@ Token TraverseKwTable(const char *start) {
 
 #define KEYWORD(K) #K,
 #define KEYWORD_ALIAS(K, ALIAS) #K "/" #ALIAS "[alias]",
-#define KEYWORD_ALIAS2(K, ALIAS1, ALIAS2)                                      \
-  #K "/" #ALIAS1 "[alias]/" #ALIAS2 "[alias]",
+#define KEYWORD_ALIAS2(K, ALIAS1, ALIAS2) #K "/" #ALIAS1 "[alias]/" #ALIAS2 "[alias]",
 const char *_keywordsStr[] = {
 #include "keyword.list"
-    "End",
+  "End",
 };
 #undef KEYWORD
 #undef KEYWORD_ALIAS
 #undef KEYWORD_ALIAS2
 
 const char *ToStr(KwId kwid) { return _keywordsStr[kwid]; }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

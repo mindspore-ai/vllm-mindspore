@@ -82,21 +82,19 @@ static char args_doc[] = "*.da"; /* "*.da *.da ..." */
 
 /* The options we provide. */
 static struct argp_option options[] = {
-    {"verbose", 'v', 0, 0,
-     "Print verbose output, include tokens, AST and bytecode\nOption combined "
-     "-l -p -c"},
-    {"silent", 's', 0, 0,
-     "Don't print any compile output\nOption opposite to -v"},
-    {"lex", 'l', 0, 0, "Print the tokens output"},
-    {"parse", 'p', 0, 0, "Print the AST output"},
-    {"compile", 'c', 0, 0, "Print the bytecode output"},
-    {"run", 'r', "<ENABLED>", 0,
-     "Interpret the code if ENABLED is not 0 or \"disable\"\nEnabled by "
-     "default"},
-    {"interpret", 0, 0, OPTION_ALIAS},
-    {"output", 'o', "<FILE>", 0,
-     "Output the bytecode as FILE for later execution\n[to-be-supported]"},
-    {0}};
+  {"verbose", 'v', 0, 0,
+   "Print verbose output, include tokens, AST and bytecode\nOption combined "
+   "-l -p -c"},
+  {"silent", 's', 0, 0, "Don't print any compile output\nOption opposite to -v"},
+  {"lex", 'l', 0, 0, "Print the tokens output"},
+  {"parse", 'p', 0, 0, "Print the AST output"},
+  {"compile", 'c', 0, 0, "Print the bytecode output"},
+  {"run", 'r', "<ENABLED>", 0,
+   "Interpret the code if ENABLED is not 0 or \"disable\"\nEnabled by "
+   "default"},
+  {"interpret", 0, 0, OPTION_ALIAS},
+  {"output", 'o', "<FILE>", 0, "Output the bytecode as FILE for later execution\n[to-be-supported]"},
+  {0}};
 
 /* Parse a single option. */
 static error_t ParseOption(int key, char *arg, struct argp_state *state) {
@@ -105,61 +103,59 @@ static error_t ParseOption(int key, char *arg, struct argp_state *state) {
   struct arguments *arguments = (struct arguments *)state->input;
   LOG_OUT << "key: " << std::hex << key;
   switch (key) {
-  case 'v':
-    arguments->lex = true;
-    arguments->parse = true;
-    arguments->compile = true;
-    break;
+    case 'v':
+      arguments->lex = true;
+      arguments->parse = true;
+      arguments->compile = true;
+      break;
 
-  case 's':
-    arguments->silent = true;
-    break;
+    case 's':
+      arguments->silent = true;
+      break;
 
-  case 'l':
-    arguments->lex = true;
-    break;
-  case 'p':
-    arguments->parse = true;
-    break;
-  case 'c':
-    arguments->compile = true;
-    break;
-  case 'r':
-    arguments->interpret =
-        strcmp(arg, "disable") == 0 || strcmp(arg, "0") == 0 ? false : true;
-    break;
-  case 'o':
-    arguments->output = arg;
-    break;
+    case 'l':
+      arguments->lex = true;
+      break;
+    case 'p':
+      arguments->parse = true;
+      break;
+    case 'c':
+      arguments->compile = true;
+      break;
+    case 'r':
+      arguments->interpret = strcmp(arg, "disable") == 0 || strcmp(arg, "0") == 0 ? false : true;
+      break;
+    case 'o':
+      arguments->output = arg;
+      break;
 
-  case ARGP_KEY_INIT:
-    break;
+    case ARGP_KEY_INIT:
+      break;
 
-  case ARGP_KEY_FINI:
-    break;
+    case ARGP_KEY_FINI:
+      break;
 
-  case ARGP_KEY_ARG:
-    LOG_OUT << "state->arg_num: " << state->arg_num;
-    if (state->arg_num >= 1) {
-      /* Too many arguments. */
-      argp_usage(state);
-    }
-    arguments->args[state->arg_num] = arg;
-    break;
+    case ARGP_KEY_ARG:
+      LOG_OUT << "state->arg_num: " << state->arg_num;
+      if (state->arg_num >= 1) {
+        /* Too many arguments. */
+        argp_usage(state);
+      }
+      arguments->args[state->arg_num] = arg;
+      break;
 
-  case ARGP_KEY_END:
-    if (state->arg_num < 1) {
-      /* Not enough arguments. */
-      argp_usage(state);
-    }
-    break;
+    case ARGP_KEY_END:
+      if (state->arg_num < 1) {
+        /* Not enough arguments. */
+        argp_usage(state);
+      }
+      break;
 
-  default:
-    return ARGP_ERR_UNKNOWN;
+    default:
+      return ARGP_ERR_UNKNOWN;
   }
-  LOG_OUT << "args: " << arguments->args[0] << ", " << arguments->lex << ", "
-          << arguments->parse << ", " << arguments->compile << ", "
-          << arguments->interpret << ", " << arguments->output;
+  LOG_OUT << "args: " << arguments->args[0] << ", " << arguments->lex << ", " << arguments->parse << ", "
+          << arguments->compile << ", " << arguments->interpret << ", " << arguments->output;
   return 0;
 }
 

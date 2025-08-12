@@ -32,7 +32,7 @@ typedef struct NameToOperatorId {
 } NameToOpId;
 
 const char *ToStr(OpId opid);
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da
 
-#endif // __LEXER_OPERATOR_H__
+#endif  // __LEXER_OPERATOR_H__

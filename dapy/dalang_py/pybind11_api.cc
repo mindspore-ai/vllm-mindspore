@@ -51,8 +51,7 @@ std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
       Argument argument = Argument({.type = da::vm::SlotTensor});
       // get tensor data from ms tensor
       void *data = (void *)arg.ptr();
-      auto tensor = callable_->graphExecutor().AddTensor(da::tensor::Type_F32,
-                                                         0, {0}, data);
+      auto tensor = callable_->graphExecutor().AddTensor(da::tensor::Type_F32, 0, {0}, data);
       argument.value.tensor_ = (void *)tensor;
       arguments.emplace_back(std::move(argument));
     }
@@ -95,20 +94,15 @@ py::object DALangPy::Run(const py::tuple &args) {
   if (pyres.ptr() == nullptr) {
     return py::none();
   }
-  LOG_OUT << "res: " << da::vm::ToString(res)
-          << ", pyres: " << py::str(pyres).cast<std::string>();
+  LOG_OUT << "res: " << da::vm::ToString(res) << ", pyres: " << py::str(pyres).cast<std::string>();
   return pyres;
 }
 
 // Interface with python
 PYBIND11_MODULE(_dapy, mod) {
   (void)py::class_<DALangPy, std::shared_ptr<DALangPy>>(mod, "DALangPy_")
-      .def_static("get_instance", &DALangPy::GetInstance,
-                  "DALangPy single instance.")
-      .def("__call__", &DALangPy::Run, py::arg("args") = py::list(),
-           "Run with arguments.")
-      .def("compile", &DALangPy::Compile, py::arg("source"),
-           py::arg("graph") = py::bool_(false),
-           py::arg("dump") = py::bool_(false),
-           "Compile the source with arguments.");
+    .def_static("get_instance", &DALangPy::GetInstance, "DALangPy single instance.")
+    .def("__call__", &DALangPy::Run, py::arg("args") = py::list(), "Run with arguments.")
+    .def("compile", &DALangPy::Compile, py::arg("source"), py::arg("graph") = py::bool_(false),
+         py::arg("dump") = py::bool_(false), "Compile the source with arguments.");
 }

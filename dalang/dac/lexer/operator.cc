@@ -20,19 +20,16 @@
 namespace da {
 namespace lexer {
 NameToOpId _operators[] = {
-    {"==", OpId_Equal},        {"!=", OpId_NotEqual},  {"<=", OpId_LessEqual},
-    {">=", OpId_GreaterEqual}, {"||", OpId_LogicalOr}, {"&&", OpId_LogicalAnd},
-    {">>", OpId_ShiftRight},   {"<<", OpId_ShiftLeft}, {">:", OpId_StdCin},
-    {"<:", OpId_StdCout},      {"<", OpId_LessThan},   {">", OpId_GreaterThan},
-    {"+=", OpId_AddAssign},    {"-=", OpId_SubAssign}, {"*=", OpId_MulAssign},
-    {"/=", OpId_DivAssign},    {"%=", OpId_ModAssign}, {"=", OpId_Assign},
-    {"+", OpId_Add},           {"-", OpId_Sub},        {"*", OpId_Mul},
-    {"/", OpId_Div},           {"%", OpId_Mod},
+  {"==", OpId_Equal},     {"!=", OpId_NotEqual},   {"<=", OpId_LessEqual},  {">=", OpId_GreaterEqual},
+  {"||", OpId_LogicalOr}, {"&&", OpId_LogicalAnd}, {">>", OpId_ShiftRight}, {"<<", OpId_ShiftLeft},
+  {">:", OpId_StdCin},    {"<:", OpId_StdCout},    {"<", OpId_LessThan},    {">", OpId_GreaterThan},
+  {"+=", OpId_AddAssign}, {"-=", OpId_SubAssign},  {"*=", OpId_MulAssign},  {"/=", OpId_DivAssign},
+  {"%=", OpId_ModAssign}, {"=", OpId_Assign},      {"+", OpId_Add},         {"-", OpId_Sub},
+  {"*", OpId_Mul},        {"/", OpId_Div},         {"%", OpId_Mod},
 };
 
 Token TraverseOpTable(const char *start) {
-  auto pos = FindNameIndex<NameToOpId>(start, _operators,
-                                       sizeof(_operators) / sizeof(NameToOpId));
+  auto pos = FindNameIndex<NameToOpId>(start, _operators, sizeof(_operators) / sizeof(NameToOpId));
   if (pos != -1) {
     const auto &op = _operators[pos];
     auto t = Token{.type = TokenType_Operator};
@@ -48,10 +45,10 @@ Token TraverseOpTable(const char *start) {
 #define OPERATOR(T) #T,
 const char *_operatorsStr[] = {
 #include "operator.list"
-    "End",
+  "End",
 };
 #undef OPERATOR
 
 const char *ToStr(OpId opid) { return _operatorsStr[opid]; }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

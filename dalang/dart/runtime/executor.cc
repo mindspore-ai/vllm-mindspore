@@ -29,7 +29,6 @@
 
 namespace da {
 namespace runtime {
-using namespace tensor;
 namespace {
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
@@ -77,7 +76,7 @@ size_t GetEnvThreadPoolSize() {
 
 void ProcessMakeTuple(DATensor *makeTupleNode) {
   CHECK_IF_NULL(makeTupleNode);
-  CHECK_IF_FAIL(makeTupleNode->type == Type_Tensor);
+  CHECK_IF_FAIL(makeTupleNode->type == tensor::Type_Tensor);
   CHECK_IF_FAIL(makeTupleNode->shape[0] == makeTupleNode->inputSize);
   auto **tensorList = static_cast<DATensor **>(makeTupleNode->data);
   CHECK_IF_NULL(tensorList);
@@ -89,16 +88,13 @@ void ProcessMakeTuple(DATensor *makeTupleNode) {
 
 void ProcessTupleGetItem(DATensor *tupleGetItemNode) {
   CHECK_IF_NULL(tupleGetItemNode)
-  CHECK_IF_FAIL(tupleGetItemNode->input[kFirstInput]->type == Type_Tensor);
-  auto index = static_cast<size_t>(
-      GetValue<int64_t>(tupleGetItemNode->input[kSecondInput]));
+  CHECK_IF_FAIL(tupleGetItemNode->input[kFirstInput]->type == tensor::Type_Tensor);
+  auto index = static_cast<size_t>(GetValue<int64_t>(tupleGetItemNode->input[kSecondInput]));
   LOG_OUT << "Run Op_tuple_getitem, tensor: " << tupleGetItemNode
           << ", input_tensor: " << tupleGetItemNode->input[kFirstInput]
-          << ", index_tensor: " << tupleGetItemNode->input[kSecondInput]
-          << ", index: " << index;
+          << ", index_tensor: " << tupleGetItemNode->input[kSecondInput] << ", index: " << index;
   CHECK_IF_FAIL(index < tupleGetItemNode->input[kFirstInput]->shape[0]);
-  auto **inputTensorList =
-      static_cast<DATensor **>(tupleGetItemNode->input[kFirstInput]->data);
+  auto **inputTensorList = static_cast<DATensor **>(tupleGetItemNode->input[kFirstInput]->data);
   CHECK_IF_NULL(inputTensorList);
   tupleGetItemNode->data = inputTensorList[index]->data;
   CloneDATensorShape(tupleGetItemNode, inputTensorList[index]);
@@ -108,10 +104,9 @@ void ProcessOutputFromInput(DATensor *outputFromInputNode) {
   CHECK_IF_NULL(outputFromInputNode);
   auto inputIndex = GetDATensorOuputFromInputIndex(outputFromInputNode);
   outputFromInputNode->data = outputFromInputNode->input[inputIndex]->data;
-  CloneDATensorShape(outputFromInputNode,
-                     outputFromInputNode->input[inputIndex]);
+  CloneDATensorShape(outputFromInputNode, outputFromInputNode->input[inputIndex]);
 }
-} // namespace
+}  // namespace
 
 GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(context_);
@@ -158,10 +153,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-      std::bind((DATensor * (GraphExecutor::*)(ops::Op, DATensor **, size_t)) &
-                    GraphExecutor::AddTensor,
-                this, std::placeholders::_1, std::placeholders::_2,
-                std::placeholders::_3);
+    std::bind((DATensor * (GraphExecutor::*)(ops::Op, DATensor **, size_t)) & GraphExecutor::AddTensor, this,
+              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
 
@@ -202,8 +195,7 @@ void GraphExecutor::AddParameters(const std::vector<DATensor *> &params) {
 }
 
 // Add a const tensor.
-DATensor *GraphExecutor::AddTensor(Type type, size_t dim,
-                                   const ShapeArray &shape, void *data) {
+DATensor *GraphExecutor::AddTensor(tensor::Type type, size_t dim, const tensor::ShapeArray &shape, void *data) {
   LOG_OUT << "Add const tensor";
   CHECK_IF_NULL(context_);
   auto *tensor = tensor::NewDATensor(context_, type, dim, shape, data);
@@ -243,8 +235,7 @@ DATensor *GraphExecutor::AddTensor(ops::Op op, DATensor **start, size_t size) {
 }
 
 // Add operation result tensor.
-DATensor *GraphExecutor::AddTensor(ops::Op op,
-                                   const std::vector<DATensor *> &inputs) {
+DATensor *GraphExecutor::AddTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
   LOG_OUT << "Add tensor";
   LOG_OUT << "tensor input size: " << inputs.size();
   CHECK_IF_FAIL(inputs.size() <= DA_TENSOR_MAX_INPUT);
@@ -323,7 +314,7 @@ void GraphExecutor::RunTensor(DATensor *node) {
 void GraphExecutor::FreeGraphOutputs() {
   CHECK_IF_NULL(graph_);
   CHECK_IF_NULL(recycler_);
-  auto returnNode = graph_->node[graph_->nodeSize-1];
+  auto returnNode = graph_->node[graph_->nodeSize - 1];
   CHECK_IF_FAIL(returnNode->op == ops::Op_return);
   recycler_->FreeUnusedNodes(returnNode);
   recycler_->PrintRunningRefCounts();
@@ -352,13 +343,13 @@ void GraphExecutor::RunGraph(bool isDynamic) {
 
 #ifdef SERIAL
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    LOG_OUT << "Run tensor, ops." << ops::ToStr(graph_->node[i]->op)
-            << ", DATensor: " << graph_->node[i] << ", index: " << i;
+    LOG_OUT << "Run tensor, ops." << ops::ToStr(graph_->node[i]->op) << ", DATensor: " << graph_->node[i]
+            << ", index: " << i;
     RunTensor(graph_->node[i]);
   }
 #else
   std::unordered_map<DATensor *, size_t> waitingCount;
-  std::unordered_map<DATensor *, std::vector<DATensor *>> nextNodes;
+  std::unordered_map<DATensor *, std::vector<DATensor *> > nextNodes;
   std::queue<DATensor *> readyQueue;
 
   // Initialize execution DAG.
@@ -389,8 +380,7 @@ void GraphExecutor::RunGraph(bool isDynamic) {
       DATensor *node = nullptr;
       {
         std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock,
-                [&]() { return runningCount == 0 || !readyQueue.empty(); });
+        cv.wait(lock, [&]() { return runningCount == 0 || !readyQueue.empty(); });
         if (runningCount == 0 && readyQueue.empty()) {
           return;
         }
@@ -457,8 +447,8 @@ void GraphExecutor::DumpGraph() {
     tensorNode = graph_->node[i];
     size_t inputSize = tensorNode->inputSize;
     std::stringstream ss;
-    for (size_t i = 0; i < inputSize; ++i) {
-      auto input = tensorNode->input[i];
+    for (size_t j = 0; j < inputSize; ++j) {
+      auto input = tensorNode->input[j];
       // Find node number firstly.
       auto nodeIt = nodeNumMap_.find(input);
       if (nodeIt != nodeNumMap_.cend()) {
@@ -475,7 +465,7 @@ void GraphExecutor::DumpGraph() {
 #ifdef DEBUG_DUMP
       ss << "(" << input << ")";
 #endif
-      if (i != inputSize - 1) {
+      if (j != inputSize - 1) {
         ss << ", ";
       }
     }
@@ -488,13 +478,12 @@ void GraphExecutor::DumpGraph() {
 #ifdef DEBUG_DUMP
     std::cout << "(" << tensorNode << ")";
 #endif
-    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str()
-              << ")" << std::endl;
+    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str() << ")" << std::endl;
   }
 
   std::cout << "  return %" << nodeNumMap_[tensorNode] << std::endl;
   std::cout << "}" << std::endl;
 }
 #endif
-} // namespace runtime
-} // namespace da
+}  // namespace runtime
+}  // namespace da

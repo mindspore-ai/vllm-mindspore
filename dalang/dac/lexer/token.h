@@ -46,8 +46,8 @@ typedef struct Token {
     SpId sp;
     OpId op;
     LtId lt;
-    const char *str; // For identifier, and comment.
-  } data;            // Token detail in specific type.
+    const char *str;  // For identifier, and comment.
+  } data;             // Token detail in specific type.
   int lineStart;
   int lineEnd;
   int columnStart;
@@ -55,12 +55,9 @@ typedef struct Token {
   std::string name;
 
   bool IsSeparatorSpace() const {
-    return type == TokenType_Separator &&
-           (data.sp == SpId_Space || data.sp == SpId_Tab);
+    return type == TokenType_Separator && (data.sp == SpId_Space || data.sp == SpId_Tab);
   }
-  bool IsIndentBlockStart() const {
-    return type == TokenType_Separator && data.sp == SpId_Colon;
-  }
+  bool IsIndentBlockStart() const { return type == TokenType_Separator && data.sp == SpId_Colon; }
 } Token;
 typedef Token *TokenPtr;
 typedef const Token *TokenConstPtr;
@@ -74,7 +71,7 @@ Token FindComment(const char *start, size_t len);
 
 const char *ToStr(TokenConstPtr token);
 std::string ToString(TokenConstPtr token);
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da
 
-#endif // __LEXER_TOKEN_H__
+#endif  // __LEXER_TOKEN_H__

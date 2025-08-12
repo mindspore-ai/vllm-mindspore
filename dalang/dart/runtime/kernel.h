@@ -27,7 +27,7 @@ namespace da {
 namespace runtime {
 // Interface for runtime kernel
 class DAKernel {
-public:
+ public:
   explicit DAKernel(tensor::DATensor *node) : tensorNode_(node) {}
   virtual ~DAKernel() = default;
 
@@ -37,9 +37,9 @@ public:
   virtual void Resize() = 0;
   virtual void Launch() = 0;
 
-protected:
+ protected:
   tensor::DATensor *tensorNode_;
 };
-} // namespace runtime
-} // namespace da
-#endif // __RUNTIME_KERNEL_H__
+}  // namespace runtime
+}  // namespace da
+#endif  // __RUNTIME_KERNEL_H__

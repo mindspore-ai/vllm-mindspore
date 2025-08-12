@@ -29,7 +29,7 @@ enum IntrinsicType {
 };
 #undef TYPE
 
-} // namespace intrinsic
-} // namespace da
+}  // namespace intrinsic
+}  // namespace da
 
-#endif // __VM_INTRINSIC_H__
+#endif  // __VM_INTRINSIC_H__

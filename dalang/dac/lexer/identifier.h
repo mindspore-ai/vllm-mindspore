@@ -32,8 +32,7 @@ static inline int MatchName(const char *start) {
     // Follow with [a-z][A-Z][0-9]_
     while (start[pos] != '\0') {
       c = start[pos];
-      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-          (c >= '0' && c <= '9') || c == '_') {
+      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
         ++pos;
       } else {
         return pos;
@@ -42,7 +41,7 @@ static inline int MatchName(const char *start) {
   }
   return pos;
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da
 
-#endif // __LEXER_IDENTIFIER_H__
+#endif  // __LEXER_IDENTIFIER_H__

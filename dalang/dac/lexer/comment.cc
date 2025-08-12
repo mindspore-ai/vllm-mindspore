@@ -31,5 +31,5 @@ Token FindComment(const char *start, size_t len) {
   token.name.assign(start, len);
   return token;
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

@@ -30,8 +30,7 @@ DAContext *NewDAContext(size_t deviceId, size_t memSize) {
       context.deviceId = deviceId;
       context.memSize = memSize;
       context.memPool = malloc(memSize);
-      LOG_OUT << "Create a new DAContext " << &context
-              << ", pool size: " << memSize;
+      LOG_OUT << "Create a new DAContext " << &context << ", pool size: " << memSize;
       return &context;
     }
   }
@@ -60,12 +59,11 @@ DAGraph *NewDAGraph(DAContext *context) {
   auto newSize = context->memUsed + graphSize;
   CHECK_IF_FAIL(newSize < context->memSize);
 
-  DAGraph *graph = (DAGraph *)((char *)context->memPool + context->memUsed);
+  DAGraph *graph = reinterpret_cast<DAGraph *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
   graph->nodeSize = 0;
   graph->paramSize = 0;
   context->memUsed = newSize;
-  LOG_OUT << "Create DAGraph " << graph << ", size: " << sizeof(DAGraph)
-          << ", for DAContext " << context;
+  LOG_OUT << "Create DAGraph " << graph << ", size: " << sizeof(DAGraph) << ", for DAContext " << context;
 
   return graph;
 }
@@ -95,7 +93,7 @@ DATensor *NewDATensor(DAContext *context) {
   auto newSize = context->memUsed + tensorSize;
   CHECK_IF_FAIL(newSize < context->memSize);
 
-  DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
+  DATensor *tensor = reinterpret_cast<DATensor *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
   tensor->tensorType = UNKNOW_TENSOR;
   tensor->type = Type_F32;
   tensor->data = nullptr;
@@ -103,8 +101,7 @@ DATensor *NewDATensor(DAContext *context) {
   tensor->op = ops::Op_End;
   tensor->inputSize = 0;
   context->memUsed = newSize;
-  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
-          << ", for DAContext " << context;
+  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor) << ", for DAContext " << context;
   return tensor;
 }
 
@@ -117,20 +114,17 @@ DATensor **NewDATensorList(DAContext *context, size_t len) {
   auto newSize = context->memUsed + tensorListSize;
   CHECK_IF_FAIL(newSize < context->memSize);
 
-  DATensor **tensorList =
-      (DATensor **)((char *)context->memPool + context->memUsed);
+  DATensor **tensorList = reinterpret_cast<DATensor **>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
   context->memUsed = newSize;
   for (size_t i = 0; i < len; ++i) {
     tensorList[i] = NewDATensor(context);
   }
-  LOG_OUT << "Create DATensorList " << tensorList
-          << ", size: " << sizeof(DATensor *[len]) << ", for DAContext "
+  LOG_OUT << "Create DATensorList " << tensorList << ", size: " << sizeof(DATensor *[len]) << ", for DAContext "
           << context;
   return tensorList;
 }
 
-DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
-                      const ShapeArray &shape, void *data, ops::Op op,
+DATensor *NewDATensor(DAContext *context, Type type, size_t dim, const ShapeArray &shape, void *data, ops::Op op,
                       size_t inputSize, const TensorArrayPtr &input) {
   CHECK_IF_NULL(context);
   CHECK_IF_NULL(context->memPool);
@@ -139,7 +133,7 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
   auto newSize = context->memUsed + tensorSize;
   CHECK_IF_FAIL(newSize < context->memSize);
 
-  DATensor *tensor = (DATensor *)((char *)context->memPool + context->memUsed);
+  DATensor *tensor = reinterpret_cast<DATensor *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
   context->memUsed = newSize;
   tensor->tensorType = UNKNOW_TENSOR;
   tensor->type = type;
@@ -158,9 +152,8 @@ DATensor *NewDATensor(DAContext *context, Type type, size_t dim,
     tensor->input[i] = input[i];
   }
 
-  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor)
-          << ", for DAContext " << context;
+  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor) << ", for DAContext " << context;
   return tensor;
 }
-} // namespace tensor
-} // namespace da
+}  // namespace tensor
+}  // namespace da

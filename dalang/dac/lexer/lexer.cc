@@ -25,14 +25,12 @@
 
 namespace da {
 namespace lexer {
-Lexer::Lexer(const std::string &filename)
-    : filename_{filename}, sourceFileStream_{std::ifstream()} {
+Lexer::Lexer(const std::string &filename) : filename_{filename}, sourceFileStream_{std::ifstream()} {
   LOG_OUT << "filename: " << filename;
   OpenFile(filename);
 }
 
-Lexer::Lexer(const char *sourceLines)
-    : sources_{sourceLines}, sourceStringStream_{sourceLines} {
+Lexer::Lexer(const char *sourceLines) : sources_{sourceLines}, sourceStringStream_{sourceLines} {
   LOG_OUT << "sourceLines: " << sourceLines;
 }
 
@@ -52,7 +50,7 @@ const Token MakeIndentFinishToken() {
   LOG_OUT << "Insert a phony } separator for indent decreasing";
   return tok;
 }
-} // namespace
+}  // namespace
 
 const Token Lexer::NextToken() {
   // Skip blank line.
@@ -100,48 +98,43 @@ const std::vector<Token> &Lexer::Tokens() {
 // If block end, return true.
 bool Lexer::HandleNewLineIndent() {
   column_ += SkipWhiteSpace(line_.c_str() + column_);
-  if (column_ == 0 && indents_.empty()) { // No indent at all.
+  if (column_ == 0 && indents_.empty()) {  // No indent at all.
     // Ignore.
     LOG_OUT << "No indent at all, column_: " << column_;
-  } else if (column_ == 0 && !indents_.empty()) { // No indent, but
-                                                  // there're previous indents.
+  } else if (column_ == 0 && !indents_.empty()) {  // No indent, but
+                                                   // there're previous indents.
     indents_.clear();
     LOG_OUT << "Block end, column_: " << column_;
     return true;
-  } else if (column_ != 0 && indents_.empty()) { // New indent, and no previous
-                                                 // indent. Just record indent.
+  } else if (column_ != 0 && indents_.empty()) {  // New indent, and no previous
+                                                  // indent. Just record indent.
     const auto &currentTok = tokens_.back();
     if (currentTok.IsIndentBlockStart()) {
       std::string indent = std::string(line_, 0, column_);
-      LOG_OUT << "New block start, " << indent.size()
-              << ", column_: " << column_;
+      LOG_OUT << "New block start, " << indent.size() << ", column_: " << column_;
       indents_.emplace_back(std::move(indent));
     }
-  } else if (column_ != 0 &&
-             !indents_.empty()) { // New indent, and there's previous indents.
+  } else if (column_ != 0 && !indents_.empty()) {  // New indent, and there's previous indents.
     // Compare the indent and previous indent firstly.
     std::string indent = std::string(line_, 0, column_);
     auto lastIndentLen = indents_.back().size();
     auto currentIndentLen = indent.size();
-    LOG_OUT << "lastIndentLen: " << lastIndentLen
-            << ", currentIndentLen: " << currentIndentLen
+    LOG_OUT << "lastIndentLen: " << lastIndentLen << ", currentIndentLen: " << currentIndentLen
             << ", column_: " << column_;
-    if (lastIndentLen > currentIndentLen) { // Block end.
+    if (lastIndentLen > currentIndentLen) {  // Block end.
       indents_.pop_back();
-      LOG_OUT << "Block end, " << lastIndentLen << ", " << currentIndentLen
-              << ", column_: " << column_;
+      LOG_OUT << "Block end, " << lastIndentLen << ", " << currentIndentLen << ", column_: " << column_;
       return true;
-    } else if (lastIndentLen < currentIndentLen) { // New block.
-                                                   // Record the indent.
+    } else if (lastIndentLen < currentIndentLen) {  // New block.
+                                                    // Record the indent.
       const auto &currentTok = tokens_.back();
       if (currentTok.IsIndentBlockStart()) {
-        LOG_OUT << "New block start, " << lastIndentLen << ", "
-                << currentIndentLen << ", column_: " << column_;
+        LOG_OUT << "New block start, " << lastIndentLen << ", " << currentIndentLen << ", column_: " << column_;
         indents_.emplace_back(std::move(indent));
       }
-    } else { // Same indent, ignore.
-      LOG_OUT << "Same indent: '" << indent << "', " << lastIndentLen << ", "
-              << currentIndentLen << ", column_: " << column_;
+    } else {  // Same indent, ignore.
+      LOG_OUT << "Same indent: '" << indent << "', " << lastIndentLen << ", " << currentIndentLen
+              << ", column_: " << column_;
     }
   }
   return false;
@@ -181,11 +174,11 @@ const Token Lexer::TokenInLine() {
   }
   token = GetLiteral();
   if (token.type != TokenType_End) {
-    if (token.lineStart == token.lineEnd) { // Not multiple lines.
+    if (token.lineStart == token.lineEnd) {  // Not multiple lines.
       assert(token.len >= token.name.size());
       column_ += token.len;
       if (token.data.lt == LiteralId_str) {
-        column_ += 2; // Swallow two ' or " for string literal.
+        column_ += 2;  // Swallow two ' or " for string literal.
       }
     }
     if (token.data.lt == LiteralId_str) {
@@ -201,8 +194,7 @@ const Token Lexer::TokenInLine() {
   }
 
   // Not match any excepted token, return a invalid token and move on.
-  LOG_OUT << "Not match any excepted token, line: " << line_
-          << ", column: " << column_;
+  LOG_OUT << "Not match any excepted token, line: " << line_ << ", column: " << column_;
   Token invalidToken = Token{.type = TokenType_End};
   if (!IsLineEnd()) {
     invalidToken.name = line_.at(column_);
@@ -246,9 +238,7 @@ void Lexer::ReadLine() {
   ++lineno_;
 }
 
-bool Lexer::IsLineEnd() const {
-  return line_.empty() || column_ == line_.length();
-}
+bool Lexer::IsLineEnd() const { return line_.empty() || column_ == line_.length(); }
 
 void Lexer::SetLineInfo(TokenPtr token) {
   token->lineStart = token->lineEnd = lineno_;
@@ -279,8 +269,7 @@ Token Lexer::GetLiteral() {
   SetLineInfo(&tok);
   if (tok.type == TokenType_InvalidString) {
     // Exception here.
-    CompileMessage(filename_, lineno_, column_,
-                   "warning: unexcepted literal string format.");
+    CompileMessage(filename_, lineno_, column_, "warning: unexcepted literal string format.");
     exit(EXIT_FAILURE);
   }
   if (tok.type != TokenType_ContinuousString) {
@@ -299,15 +288,15 @@ Token Lexer::GetLiteral() {
     }
     ReadLine();
     const char *column = strchr(line_.c_str(), *tok.data.str);
-    if (column != nullptr) { // Found the end of string.
+    if (column != nullptr) {  // Found the end of string.
       tok.name.append(1, '\n');
-      auto len = column - line_.c_str(); // No ' or ".
+      auto len = column - line_.c_str();  // No ' or ".
       tok.name.append(line_.c_str(), len);
       tok.type = TokenType_Literal;
       tok.data.lt = LiteralId_str;
       tok.lineEnd = lineno_;
       tok.columnEnd = column - line_.c_str();
-      column_ += len + 1; // With ' or ".
+      column_ += len + 1;  // With ' or ".
       return tok;
     } else {
       tok.name.append(1, '\n');
@@ -340,62 +329,58 @@ std::string Lexer::UnescapeString(const std::string &str) {
     if (c == '\\') {
       if (it == str.cend()) {
         // Invalid or unsupported escape sequence.
-        auto invalidPos =
-            std::distance(str.cbegin(), it - 1); // The position of /
+        auto invalidPos = std::distance(str.cbegin(), it - 1);  // The position of /
         constexpr auto quotSize = 1;
         auto colPos = column_ - (str.size() - invalidPos) - quotSize;
         std::stringstream ss;
-        ss << "error: unexpected string literal: '" << str
-           << "', position: " << invalidPos << ", col: " << colPos;
+        ss << "error: unexpected string literal: '" << str << "', position: " << invalidPos << ", col: " << colPos;
         CompileMessage(filename_, lineno_, colPos, ss.str());
         exit(EXIT_FAILURE);
       }
       // https://en.cppreference.com/w/cpp/language/escape
       switch (*it++) {
-      case '\'':
-        c = '\'';
-        break;
-      case '"':
-        c = '\"';
-        break;
-      case '?':
-        c = '\?';
-        break;
-      case '\\':
-        c = '\\';
-        break;
-      case 'a':
-        c = '\a';
-        break;
-      case 'b':
-        c = '\b';
-        break;
-      case 'f':
-        c = '\f';
-        break;
-      case 'n':
-        c = '\n';
-        break;
-      case 'r':
-        c = '\r';
-        break;
-      case 't':
-        c = '\t';
-        break;
-      case 'v':
-        c = '\v';
-        break;
-      default:
-        // Invalid or unsupported escape sequence.
-        auto invalidPos =
-            std::distance(str.cbegin(), it - 2); // The position of /
-        constexpr auto quotSize = 1;
-        auto colPos = column_ - (str.size() - invalidPos) - quotSize;
-        std::stringstream ss;
-        ss << "error: unexpected string literal: '" << str
-           << "', position: " << invalidPos << ", col: " << colPos;
-        CompileMessage(filename_, lineno_, colPos, ss.str());
-        exit(EXIT_FAILURE);
+        case '\'':
+          c = '\'';
+          break;
+        case '"':
+          c = '\"';
+          break;
+        case '?':
+          c = '\?';
+          break;
+        case '\\':
+          c = '\\';
+          break;
+        case 'a':
+          c = '\a';
+          break;
+        case 'b':
+          c = '\b';
+          break;
+        case 'f':
+          c = '\f';
+          break;
+        case 'n':
+          c = '\n';
+          break;
+        case 'r':
+          c = '\r';
+          break;
+        case 't':
+          c = '\t';
+          break;
+        case 'v':
+          c = '\v';
+          break;
+        default:
+          // Invalid or unsupported escape sequence.
+          auto invalidPos = std::distance(str.cbegin(), it - 2);  // The position of /
+          constexpr auto quotSize = 1;
+          auto colPos = column_ - (str.size() - invalidPos) - quotSize;
+          std::stringstream ss;
+          ss << "error: unexpected string literal: '" << str << "', position: " << invalidPos << ", col: " << colPos;
+          CompileMessage(filename_, lineno_, colPos, ss.str());
+          exit(EXIT_FAILURE);
       }
     }
     ss << c;
@@ -403,9 +388,7 @@ std::string Lexer::UnescapeString(const std::string &str) {
   return ss.str();
 }
 
-std::string Lexer::EscapeString(const std::string &str) {
-  return ConvertEscapeString(str);
-}
+std::string Lexer::EscapeString(const std::string &str) { return ConvertEscapeString(str); }
 
 void Lexer::Dump() {
   std::cout << "--------------------" << std::endl;
@@ -419,9 +402,9 @@ void Lexer::Dump() {
       continue;
     }
     std::string escapeName = EscapeString(token.name);
-    std::cout << std::setfill(' ') << std::setw(30) << std::left << escapeName
-              << "[" << ToStr(&token) << "]" << std::endl;
+    std::cout << std::setfill(' ') << std::setw(30) << std::left << escapeName << "[" << ToStr(&token) << "]"
+              << std::endl;
   }
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

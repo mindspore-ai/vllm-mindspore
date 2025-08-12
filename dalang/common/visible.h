@@ -17,10 +17,9 @@
 #ifndef __COMMON_VISIBLE_H__
 #define __COMMON_VISIBLE_H__
 
-#if (defined(_WIN32) || defined(__WIN32__) || defined(WIN32) ||                \
-     defined(__CYGWIN__))
+#if (defined(_WIN32) || defined(__WIN32__) || defined(WIN32) || defined(__CYGWIN__))
 #define DA_API __declspec(dllexport)
 #else
 #define DA_API __attribute__((visibility("default")))
 #endif
-#endif // __COMMON_VISIBLE_H__
+#endif  // __COMMON_VISIBLE_H__

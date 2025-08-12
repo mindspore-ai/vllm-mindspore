@@ -20,8 +20,7 @@
 
 namespace da {
 namespace ir {
-Compiler::Compiler(const std::string &filename)
-    : parser_{Parser(filename)}, walker_{new CompilerNodeVisitor(this)} {
+Compiler::Compiler(const std::string &filename) : parser_{Parser(filename)}, walker_{new CompilerNodeVisitor(this)} {
   InitCompileHandlers();
 }
 
@@ -89,12 +88,10 @@ NsPtr Compiler::CompileFunction(NsConstPtr ns, StmtConstPtr stmt) {
   for (size_t i = 0; i < funcStmt.argsLen; ++i) {
     const auto &argStmt = funcStmt.args[i];
     LOG_OUT << "func args[" << i << "]: " << ToString(argStmt);
-    if (argStmt->type == StmtType_Expr &&
-        argStmt->stmt.Expr.value->type == ExprType_Name) {
+    if (argStmt->type == StmtType_Expr && argStmt->stmt.Expr.value->type == ExprType_Name) {
       const auto &argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       func->AddParameter(argName);
-    } else if (argStmt->type == StmtType_Assign &&
-               argStmt->stmt.Assign.target->type == ExprType_Name &&
+    } else if (argStmt->type == StmtType_Assign && argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
       const auto &argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
@@ -108,8 +105,7 @@ NsPtr Compiler::CompileFunction(NsConstPtr ns, StmtConstPtr stmt) {
     const auto &stmt = funcStmt.body[i];
     NsConstPtr subNs = CallStmtHandler(ns, stmt);
     // func->AddNs(subNs);
-    LOG_OUT << "func body[" << i << "]: " << ToString(stmt)
-            << ", ns: " << subNs;
+    LOG_OUT << "func body[" << i << "]: " << ToString(stmt) << ", ns: " << subNs;
   }
   LOG_OUT << "func: " << func->ToString();
   return func;
@@ -218,5 +214,5 @@ void Compiler::InitCompileHandlers() {
 }
 #undef STMT
 #undef EXPR
-} // namespace ir
-} // namespace da
+}  // namespace ir
+}  // namespace da

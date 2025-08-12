@@ -32,8 +32,7 @@ static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_LogicalOr || token->data.op == OpId_LogicalAnd)) {
+  if (token->type == TokenType_Operator && (token->data.op == OpId_LogicalOr || token->data.op == OpId_LogicalAnd)) {
     return true;
   }
   return false;
@@ -58,7 +57,7 @@ static inline bool MatchAnd(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace LogicalPattern
+}  // namespace LogicalPattern
 
 namespace ComparisonPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -66,27 +65,25 @@ static inline bool Match(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_Equal || token->data.op == OpId_GreaterEqual ||
-       token->data.op == OpId_LessEqual || token->data.op == OpId_GreaterThan ||
-       token->data.op == OpId_LessThan || token->data.op == OpId_NotEqual)) {
+      (token->data.op == OpId_Equal || token->data.op == OpId_GreaterEqual || token->data.op == OpId_LessEqual ||
+       token->data.op == OpId_GreaterThan || token->data.op == OpId_LessThan || token->data.op == OpId_NotEqual)) {
     return true;
   }
   return false;
 }
-} // namespace ComparisonPattern
+}  // namespace ComparisonPattern
 
 namespace AdditivePattern {
 static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_Add || token->data.op == OpId_Sub)) {
+  if (token->type == TokenType_Operator && (token->data.op == OpId_Add || token->data.op == OpId_Sub)) {
     return true;
   }
   return false;
 }
-} // namespace AdditivePattern
+}  // namespace AdditivePattern
 
 namespace MultiplicativePattern {
 static inline bool Match(TokenConstPtr token) {
@@ -94,13 +91,12 @@ static inline bool Match(TokenConstPtr token) {
     return false;
   }
   if (token->type == TokenType_Operator &&
-      (token->data.op == OpId_Mul || token->data.op == OpId_Div ||
-       token->data.op == OpId_Mod)) {
+      (token->data.op == OpId_Mul || token->data.op == OpId_Div || token->data.op == OpId_Mod)) {
     return true;
   }
   return false;
 }
-} // namespace MultiplicativePattern
+}  // namespace MultiplicativePattern
 
 namespace UnaryPattern {
 static inline bool Match(TokenConstPtr token) {
@@ -112,11 +108,11 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace UnaryPattern
+}  // namespace UnaryPattern
 
 namespace CallPattern {
 static inline bool Match(TokenConstPtr token) { return false; }
-} // namespace CallPattern
+}  // namespace CallPattern
 
 namespace AttributePattern {
 static inline bool Match(TokenConstPtr token) {
@@ -128,15 +124,14 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace AttributePattern
+}  // namespace AttributePattern
 
 namespace ListPattern {
 static inline bool MatchStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_LeftParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftParenthesis) {
     return true;
   }
   return false;
@@ -156,8 +151,7 @@ static inline bool MatchEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_RightParenthesis) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightParenthesis) {
     return true;
   }
   return false;
@@ -172,15 +166,14 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace ListPattern
+}  // namespace ListPattern
 
 namespace TensorPattern {
 static inline bool MatchStart(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_LeftBracket) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_LeftBracket) {
     return true;
   }
   return false;
@@ -200,8 +193,7 @@ static inline bool MatchEnd(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Separator &&
-      token->data.sp == SpId_RightBracket) {
+  if (token->type == TokenType_Separator && token->data.sp == SpId_RightBracket) {
     return true;
   }
   return false;
@@ -216,15 +208,15 @@ static inline bool Match(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace TensorPattern
+}  // namespace TensorPattern
 
 namespace PrimaryPattern {
 static inline bool Match(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Keyword || token->type == TokenType_Identifier ||
-      token->type == TokenType_Literal || token->type == TokenType_Comment) {
+  if (token->type == TokenType_Keyword || token->type == TokenType_Identifier || token->type == TokenType_Literal ||
+      token->type == TokenType_Comment) {
     return true;
   }
   return false;
@@ -254,8 +246,7 @@ static inline bool MatchKeywordThis(TokenConstPtr token) {
   if (token == nullptr) {
     return false;
   }
-  if (token->type == TokenType_Keyword &&
-      (token->data.kw == KwId_this || token->data.kw == KwId_self)) {
+  if (token->type == TokenType_Keyword && (token->data.kw == KwId_this || token->data.kw == KwId_self)) {
     return true;
   }
   return false;
@@ -290,21 +281,19 @@ static inline bool MatchComment(TokenConstPtr token) {
   }
   return false;
 }
-} // namespace PrimaryPattern
-} // namespace ExprPattern
+}  // namespace PrimaryPattern
+}  // namespace ExprPattern
 
 #ifdef DEBUG
-#define RETURN_AND_TRACE_EXPR_NODE(expr)                                       \
-  LOG_OUT << "TRACE EXPR: " << ToString(expr) << ", lineno: [("                \
-          << expr->lineStart << ',' << expr->columnStart << ")~("              \
-          << expr->lineEnd << ',' << expr->columnEnd << "))";                  \
+#define RETURN_AND_TRACE_EXPR_NODE(expr)                                                                       \
+  LOG_OUT << "TRACE EXPR: " << ToString(expr) << ", lineno: [(" << expr->lineStart << ',' << expr->columnStart \
+          << ")~(" << expr->lineEnd << ',' << expr->columnEnd << "))";                                         \
   return expr
 #else
 #define RETURN_AND_TRACE_EXPR_NODE(expr) return expr
 #endif
 
-static inline ExprPtr MakeBinaryExpr(TokenConstPtr op, ExprConstPtr left,
-                                     ExprConstPtr right) {
+static inline ExprPtr MakeBinaryExpr(TokenConstPtr op, ExprConstPtr left, ExprConstPtr right) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_Binary;
   expr->expr.Binary.op = op->data.op;
@@ -364,13 +353,11 @@ static inline ExprPtr MakeTensorExpr(TokenConstPtr literal) {
   RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
-static inline ExprPtr MakeListExpr(TokenConstPtr start, TokenConstPtr end,
-                                   Exprs &elements) {
+static inline ExprPtr MakeListExpr(TokenConstPtr start, TokenConstPtr end, Exprs &elements) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_List;
   expr->expr.List.len = elements.size();
-  expr->expr.List.values =
-      (ExprConstPtr *)malloc(sizeof(ExprConstPtr) * elements.size());
+  expr->expr.List.values = (ExprConstPtr *)malloc(sizeof(ExprConstPtr) * elements.size());
   for (size_t i = 0; i < elements.size(); ++i) {
     expr->expr.List.values[i] = elements[i];
   }
@@ -393,8 +380,7 @@ static inline ExprPtr MakeCallExpr(ExprConstPtr func, ExprConstPtr group) {
   RETURN_AND_TRACE_EXPR_NODE(expr);
 }
 
-static inline ExprPtr MakeAttributeExpr(ExprConstPtr entity,
-                                        ExprConstPtr attribute) {
+static inline ExprPtr MakeAttributeExpr(ExprConstPtr entity, ExprConstPtr attribute) {
   ExprPtr expr = NewExpr();
   expr->type = ExprType_Attribute;
   expr->expr.Attribute.entity = entity;
@@ -405,7 +391,7 @@ static inline ExprPtr MakeAttributeExpr(ExprConstPtr entity,
   expr->columnEnd = attribute->columnEnd;
   RETURN_AND_TRACE_EXPR_NODE(expr);
 }
-} // namespace parser
-} // namespace da
+}  // namespace parser
+}  // namespace da
 
-#endif // __PARSER_EXPR_H__
+#endif  // __PARSER_EXPR_H__

@@ -24,7 +24,7 @@
 
 namespace da {
 namespace runtime {
-using namespace tensor;
+using tensor::DATensor;
 constexpr size_t kFirstInput = 0;
 constexpr size_t kSecondInput = 1;
 extern const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex;
@@ -33,7 +33,7 @@ extern const std::set<ops::Op> forceResizeOpsSet;
 
 template <typename T>
 const T GetValue(const DATensor *tensor) {
-  if (tensor->tensorType != HOST_TENSOR || tensor->dim != 0) {
+  if (tensor->tensorType != tensor::HOST_TENSOR || tensor->dim != 0) {
     LOG_ERROR << "Input DATensor is not HOST_TENSOR or is not a scalar";
     exit(EXIT_FAILURE);
   }
@@ -57,22 +57,19 @@ inline void CloneDATensorShape(DATensor *dstNode, DATensor *sourceNode) {
 
 inline bool IsSkipRecordRefCount(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
-  return (tensor->op == ops::Op_End || tensor->op == ops::Op_load ||
-          tensor->op == ops::Op_update_state);
+  return (tensor->op == ops::Op_End || tensor->op == ops::Op_load || tensor->op == ops::Op_update_state);
 }
 
 inline bool IsDATensorOutputFromInput(DATensor *tensor) {
   CHECK_IF_NULL(tensor);
-  return opsOutputFromInputIndex.find(tensor->op) !=
-         opsOutputFromInputIndex.end();
+  return opsOutputFromInputIndex.find(tensor->op) != opsOutputFromInputIndex.end();
 }
 
 inline size_t GetDATensorOuputFromInputIndex(DATensor *node) {
   CHECK_IF_NULL(node);
   auto iter = opsOutputFromInputIndex.find(node->op);
   if (iter == opsOutputFromInputIndex.end()) {
-    LOG_ERROR << "Can not find ops." << ops::ToStr(node->op)
-              << " in opsOutputFromInputIndex";
+    LOG_ERROR << "Can not find ops." << ops::ToStr(node->op) << " in opsOutputFromInputIndex";
   }
   return iter->second;
 }
@@ -84,14 +81,14 @@ inline bool IsDummyDATensorNode(DATensor *node) {
 
 inline bool IsSkipBuildDAKernel(DATensor *node) {
   CHECK_IF_NULL(node);
-  return (IsDATensorOutputFromInput(node) || node->op == ops::Op_End ||
-          node->op == ops::Op_make_tuple || node->op == ops::Op_tuple_getitem);
+  return (IsDATensorOutputFromInput(node) || node->op == ops::Op_End || node->op == ops::Op_make_tuple ||
+          node->op == ops::Op_tuple_getitem);
 }
 
 inline bool IsDAKernelNeedForceResize(DATensor *node) {
   CHECK_IF_NULL(node);
   return forceResizeOpsSet.find(node->op) != forceResizeOpsSet.end();
 }
-} // namespace runtime
-} // namespace da
-#endif // __RUNTIME_UTILS_H__
+}  // namespace runtime
+}  // namespace da
+#endif  // __RUNTIME_UTILS_H__

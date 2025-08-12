@@ -17,6 +17,7 @@
 #ifndef __TENSOR_UD_H__
 #define __TENSOR_UD_H__
 
+#include <utility>
 #include <list>
 #include <unordered_map>
 
@@ -25,11 +26,11 @@
 namespace da {
 namespace tensor {
 class UserDef {
-public:
+ public:
   using UserList = std::list<std::pair<const DATensor *, size_t>>;
 
   UserDef() = default;
-  UserDef(const DAGraph *graph) : graph_{graph} { BuildUD(); }
+  explicit UserDef(const DAGraph *graph) : graph_{graph} { BuildUD(); }
 
   void BuildUD() {
     root_ = graph_->node[graph_->nodeSize - 1];
@@ -41,12 +42,10 @@ public:
         // CHECK_IF_NULL(input);
         auto iter = users_.find(input);
         if (iter == users_.cend()) {
-          LOG_OUT << "Find " << ToString(input) << " first user "
-                  << ToString(tensor) << " at index " << j;
+          LOG_OUT << "Find " << ToString(input) << " first user " << ToString(tensor) << " at index " << j;
           (void)users_.emplace(input, UserList({std::make_pair(tensor, j)}));
         } else {
-          LOG_OUT << "Find " << ToString(input) << " user " << ToString(tensor)
-                  << " at index " << j;
+          LOG_OUT << "Find " << ToString(input) << " user " << ToString(tensor) << " at index " << j;
           (void)iter->second.emplace_back(std::make_pair(tensor, j));
         }
       }
@@ -69,7 +68,7 @@ public:
 
   void AddNodes(const DATensor *owner, size_t index, const DATensor *tensor) {
     if (!AddNode(owner, index, tensor)) {
-      return; // Maybe an old tensor, no need to traverse its inputs.
+      return;  // Maybe an old tensor, no need to traverse its inputs.
     }
     // Add users for 'tensor'.
     for (size_t i = 0; i < tensor->inputSize; ++i) {
@@ -136,12 +135,12 @@ public:
   const DATensor *Root() const { return root_; }
   bool IsRoot(const DATensor *node) const { return root_ == node; }
 
-private:
+ private:
   const DAGraph *graph_;
   const DATensor *root_;
   std::unordered_map<const DATensor *, UserList> users_;
 };
-} // namespace tensor
-} // namespace da
+}  // namespace tensor
+}  // namespace da
 
-#endif // __TENSOR_UD_H__
+#endif  // __TENSOR_UD_H__

@@ -25,9 +25,9 @@ namespace lexer {
 #define TOKEN(T) #T,
 const char *_tokensStr[] = {
 #include "token_type.list"
-    "ContStr",
-    "InvalidStr"
-    "End",
+  "ContStr",
+  "InvalidStr"
+  "End",
 };
 #undef TOKEN
 
@@ -45,41 +45,41 @@ std::string ToString(TokenConstPtr token) {
   std::stringstream ss;
   ss << '[' << ToStr(token) << ": ";
   switch (token->type) {
-  case TokenType_Operator: {
-    ss << ToStr(token->data.op);
-    break;
-  }
-  case TokenType_Keyword: {
-    ss << ToStr(token->data.kw);
-    break;
-  }
-  case TokenType_Separator: {
-    ss << ToStr(token->data.sp);
-    break;
-  }
-  case TokenType_Literal: {
-    ss << ToStr(token->data.lt);
-    break;
-  }
-  case TokenType_Identifier: {
-    ss << token->data.str;
-    break;
-  }
-  case TokenType_Comment: {
-    ss << token->data.str;
-    break;
-  }
-  case TokenType_End: {
-    ss << '\'' << token->name << '\'';
-    break;
-  }
-  default: {
-    ss << "?";
-    break;
-  }
+    case TokenType_Operator: {
+      ss << ToStr(token->data.op);
+      break;
+    }
+    case TokenType_Keyword: {
+      ss << ToStr(token->data.kw);
+      break;
+    }
+    case TokenType_Separator: {
+      ss << ToStr(token->data.sp);
+      break;
+    }
+    case TokenType_Literal: {
+      ss << ToStr(token->data.lt);
+      break;
+    }
+    case TokenType_Identifier: {
+      ss << token->data.str;
+      break;
+    }
+    case TokenType_Comment: {
+      ss << token->data.str;
+      break;
+    }
+    case TokenType_End: {
+      ss << '\'' << token->name << '\'';
+      break;
+    }
+    default: {
+      ss << "?";
+      break;
+    }
   }
   ss << ']';
   return ss.str();
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

@@ -31,31 +31,28 @@
 #define TO_STR(s) #s
 
 #ifndef CHECK_IF_NULL
-#define CHECK_IF_NULL(a)                                                       \
-  if (a == nullptr) {                                                          \
-    LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null.";                \
-    exit(EXIT_FAILURE);                                                        \
+#define CHECK_IF_NULL(a)                                        \
+  if (a == nullptr) {                                           \
+    LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null."; \
+    exit(EXIT_FAILURE);                                         \
   }
 #endif
 
-#define CHECK_IF_FAIL(a)                                                       \
-  if (!(a)) {                                                                  \
-    LOG_ERROR << '\'' << TO_STR(a) << "\' is not true. check fail.";           \
-    exit(EXIT_FAILURE);                                                        \
+#define CHECK_IF_FAIL(a)                                             \
+  if (!(a)) {                                                        \
+    LOG_ERROR << '\'' << TO_STR(a) << "\' is not true. check fail."; \
+    exit(EXIT_FAILURE);                                              \
   }
 
-#define EVER                                                                   \
-  ;                                                                            \
+#define EVER \
+  ;          \
   ;
 
-static inline void CompileMessage(const std::string &filename, const int line,
-                                  const int col, const std::string &msg) {
-  std::cout << filename << ':' << line << ':' << (col + 1) << ": " << msg
-            << '\n';
+static inline void CompileMessage(const std::string &filename, const int line, const int col, const std::string &msg) {
+  std::cout << filename << ':' << line << ':' << (col + 1) << ": " << msg << '\n';
 }
 
-static inline void CompileMessage(const std::string &line_info,
-                                  const std::string &msg) {
+static inline void CompileMessage(const std::string &line_info, const std::string &msg) {
   std::cout << line_info << ": " << msg << '\n';
 }
 
@@ -65,12 +62,12 @@ static inline size_t SkipWhiteSpace(const char *str) {
   while (str[pos] != '\0') {
     char c = str[pos];
     switch (c) {
-    case ' ':
-    case '\t':
-      ++pos;
-      break;
-    default:
-      return pos;
+      case ' ':
+      case '\t':
+        ++pos;
+        break;
+      default:
+        return pos;
     }
   }
   return pos;
@@ -82,8 +79,7 @@ int FindNameIndex(const char *str, T *table, size_t tableSize) {
   for (size_t i = 0; i < tableSize; ++i) {
     T &element = table[i];
     const auto elementNameLen = strlen(element.name);
-    if (elementNameLen <= strLen &&
-        strncmp(str, element.name, elementNameLen) == 0) {
+    if (elementNameLen <= strLen && strncmp(str, element.name, elementNameLen) == 0) {
       return i;
     }
   }
@@ -107,62 +103,44 @@ inline std::string ConvertEscapeString(const std::string &str) {
     char c = *it++;
     // https://en.cppreference.com/w/cpp/language/escape
     switch (c) {
-    case '\'':
-      ss << "\'";
-      break;
-    case '\"':
-      ss << "\\\"";
-      break;
-    case '\?':
-      ss << "\\?";
-      break;
-    case '\\':
-      ss << "\\\\";
-      break;
-    case '\a':
-      ss << "\\a";
-      break;
-    case '\b':
-      ss << "\\b";
-      break;
-    case '\f':
-      ss << "\\f";
-      break;
-    case '\n':
-      ss << "\\n";
-      break;
-    case '\r':
-      ss << "\\r";
-      break;
-    case '\t':
-      ss << "\\t";
-      break;
-    case '\v':
-      ss << "\\v";
-      break;
-    default:
-      ss << c;
-      break;
+      case '\'':
+        ss << "\'";
+        break;
+      case '\"':
+        ss << "\\\"";
+        break;
+      case '\?':
+        ss << "\\?";
+        break;
+      case '\\':
+        ss << "\\\\";
+        break;
+      case '\a':
+        ss << "\\a";
+        break;
+      case '\b':
+        ss << "\\b";
+        break;
+      case '\f':
+        ss << "\\f";
+        break;
+      case '\n':
+        ss << "\\n";
+        break;
+      case '\r':
+        ss << "\\r";
+        break;
+      case '\t':
+        ss << "\\t";
+        break;
+      case '\v':
+        ss << "\\v";
+        break;
+      default:
+        ss << c;
+        break;
     }
   }
   return ss.str();
 }
-
-// Replace 'oldStr[len:oldStrLen]' with a string 'newStr'
-inline void ReplaceStrStr(std::string &dst, const char *oldStr,
-                          size_t oldStrLen, const char *newStr) {
-  std::string::size_type pos = 0;
-  while ((pos = dst.find(oldStr)) != std::string::npos) {
-    dst.replace(pos, oldStrLen, newStr);
-  }
-}
-
-// Replace 'oldStr[len:oldStrLen]' with a charactor 'newChar'
-inline void ReplaceStrChr(std::string &dst, const char *oldStr,
-                          size_t oldStrLen, const char newChar) {
-  std::string::size_type pos = 0;
-  while ((pos = dst.find(oldStr)) != std::string::npos) {
-    dst.replace(pos, oldStrLen, 1, newChar);
-  }
-}
-#endif // __COMMON_COMMON_H__
+#endif  // __COMMON_COMMON_H__

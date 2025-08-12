@@ -20,26 +20,25 @@
 namespace da {
 namespace lexer {
 NameToSpId _separators[] = {
-    {" ", SpId_Space},
-    {"\t", SpId_Tab},
-    {"(", SpId_LeftParenthesis},
-    {")", SpId_RightParenthesis},
-    {"[", SpId_LeftBracket},
-    {"]", SpId_RightBracket},
-    {"{", SpId_LeftBrace},
-    {"}", SpId_RightBrace},
-    {";", SpId_Semicolon},
-    {",", SpId_Comma},
-    {".", SpId_Dot},
-    {":", SpId_Colon},
-    {"?", SpId_Question},
-    {"#", SpId_Pound},
-    {"End", SpId_End},
+  {" ", SpId_Space},
+  {"\t", SpId_Tab},
+  {"(", SpId_LeftParenthesis},
+  {")", SpId_RightParenthesis},
+  {"[", SpId_LeftBracket},
+  {"]", SpId_RightBracket},
+  {"{", SpId_LeftBrace},
+  {"}", SpId_RightBrace},
+  {";", SpId_Semicolon},
+  {",", SpId_Comma},
+  {".", SpId_Dot},
+  {":", SpId_Colon},
+  {"?", SpId_Question},
+  {"#", SpId_Pound},
+  {"End", SpId_End},
 };
 
 Token TraverseSpTable(const char *start) {
-  auto pos = FindNameIndex<NameToSpId>(
-      start, _separators, sizeof(_separators) / sizeof(NameToSpId));
+  auto pos = FindNameIndex<NameToSpId>(start, _separators, sizeof(_separators) / sizeof(NameToSpId));
   if (pos != -1) {
     const auto &sp = _separators[pos];
     auto t = Token{.type = TokenType_Separator};
@@ -53,5 +52,5 @@ Token TraverseSpTable(const char *start) {
 }
 
 const char *ToStr(SpId spid) { return _separators[spid].name; }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da

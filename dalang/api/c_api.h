@@ -47,4 +47,4 @@ DA_API Result DA_API_Run(Callable *callable, const std::vector<Argument> &args);
 #ifdef __cplusplus
 }
 #endif
-#endif // __API_C_API_H__
+#endif  // __API_C_API_H__

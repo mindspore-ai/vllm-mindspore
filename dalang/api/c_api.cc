@@ -45,8 +45,7 @@ Callable *DA_API_Compile(const char *source, bool graph, bool dump) {
     parser.DumpAst();
   }
 
-  auto compiler =
-      da::compiler::Compiler(&parser, true, graph); // delete by user.
+  auto compiler = da::compiler::Compiler(&parser, true, graph);  // delete by user.
   compiler.Compile();
   if (dump) {
     compiler.Dump();

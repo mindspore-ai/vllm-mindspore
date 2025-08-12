@@ -23,13 +23,14 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <utility>
 
 #include "common/common.h"
 #include "tensor/tensor.h"
 
 namespace da {
 namespace runtime {
-using namespace da::tensor;
+using tensor::DATensor;
 constexpr size_t MAX_MEM_SIZE = 1024 * 1024 * 1024 * 4UL;
 using memoryFreeFunc = std::function<void(void *)>;
 

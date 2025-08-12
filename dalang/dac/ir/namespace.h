@@ -26,7 +26,7 @@
 namespace da {
 namespace ir {
 class Namespace {
-public:
+ public:
   Namespace() = default;
   virtual ~Namespace() = default;
 
@@ -35,13 +35,11 @@ public:
 
   const std::vector<ComplexNode> &nodes() const { return nodes_; };
   void AddNode(const ComplexNode &node) { nodes_.emplace_back(node); };
-  void AddNode(const ComplexNode &&node) {
-    nodes_.emplace_back(std::move(node));
-  };
+  void AddNode(const ComplexNode &&node) { nodes_.emplace_back(std::move(node)); };
 
   virtual const std::string ToString() const { return ""; }
 
-protected:
+ protected:
   std::string name_;
   std::vector<ComplexNode> nodes_;
   // Namespaces namespaces_;
@@ -51,26 +49,23 @@ using NsConstPtr = const Namespace *;
 using Namespaces = std::vector<NamespacePtr>;
 
 class Block : public Namespace {
-public:
+ public:
   Block() = default;
   virtual ~Block() = default;
 
-protected:
+ protected:
   std::vector<Node> freeVariables_;
 };
 using BlockPtr = Block *;
 using Blocks = std::vector<BlockPtr>;
 
 class Func : public Namespace {
-public:
+ public:
   Func() = default;
   virtual ~Func() = default;
 
-  void AddParameter(const std::string &paramName) {
-    parameters_.emplace_back(Param(paramName));
-  }
-  void AddParameter(const std::string &paramName,
-                    const std::string &defaultParam) {
+  void AddParameter(const std::string &paramName) { parameters_.emplace_back(Param(paramName)); }
+  void AddParameter(const std::string &paramName, const std::string &defaultParam) {
     parameters_.emplace_back(Param(paramName, defaultParam));
   }
   const Params &parameters() { return parameters_; }
@@ -90,7 +85,7 @@ public:
     return ss.str();
   }
 
-protected:
+ protected:
   Params parameters_;
 };
 using FuncPtr = Func *;
@@ -104,7 +99,7 @@ void ClearBlockPool();
 
 FuncPtr NewFunc();
 void ClearFuncPool();
-} // namespace ir
-} // namespace da
+}  // namespace ir
+}  // namespace da
 
-#endif // __PARSER_IR_NAMESPACE_H__
+#endif  // __PARSER_IR_NAMESPACE_H__

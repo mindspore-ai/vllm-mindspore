@@ -24,7 +24,7 @@ namespace runtime {
 void MemoryPool::Free(DATensor *tensor) const {
   CHECK_IF_NULL(tensor);
   CHECK_IF_NULL(tensor->data);
-  if (tensor->type == Type_Tensor) {
+  if (tensor->type == tensor::Type_Tensor) {
     auto **tensorList = reinterpret_cast<DATensor **>(tensor->data);
     CHECK_IF_NULL(tensorList);
     for (size_t i = 0; i < tensor->shape[0]; ++i) {
@@ -106,7 +106,7 @@ void TensorDataRecycler::DecreaseInner(DATensor *tensor) {
   if (runningRefCounts_[tensor] == 0) {
     CHECK_IF_NULL(memPool_);
     LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor
-            << ", is DATensorList: " << (tensor->type == Type_Tensor);
+            << ", is DATensorList: " << (tensor->type == tensor::Type_Tensor);
     memPool_->Free(tensor);
   }
 }

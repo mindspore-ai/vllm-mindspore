@@ -36,7 +36,7 @@ static inline bool MatchComment(const char *start) {
   }
   return false;
 }
-} // namespace lexer
-} // namespace da
+}  // namespace lexer
+}  // namespace da
 
-#endif // __LEXER_COMMENT_H__
+#endif  // __LEXER_COMMENT_H__

@@ -18,17 +18,15 @@
 
 namespace da {
 namespace pass {
-inline DATensor *NodePass::NewTensor(ops::Op op, DATensor **start,
-                                     size_t size) {
+inline DATensor *NodePass::NewTensor(ops::Op op, DATensor **start, size_t size) {
   return PassManager::Instance().NewTensor(op, start, size);
 }
 
-inline DATensor *NodePass::NewTensor(ops::Op op,
-                                     const std::vector<DATensor *> &inputs) {
+inline DATensor *NodePass::NewTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
   return PassManager::Instance().NewTensor(op, inputs);
 }
 
-void PassManager::Run(DAGraph *graph, TensorCreator &creator) {
+void PassManager::Run(DAGraph *graph, const TensorCreator &creator) {
   if (passes_.empty() || graph->nodeSize == 0) {
     LOG_OUT << "No pass or no node in graph. instance: " << this;
     return;
@@ -77,20 +75,18 @@ bool PassManager::Replace(const DATensor *oldNode, const DATensor *newNode) {
     RemoveOrderedNodes(owner, user.second, oldNode);
     owner->input[user.second] = const_cast<DATensor *>(newNode);
   }
-  LOG_OUT << "Finish replace, nodes size: "
-          << orderedNodes_.tensorList().size();
+  LOG_OUT << "Finish replace, nodes size: " << orderedNodes_.tensorList().size();
 
   // Since we run add&delete, now we can free unused tensor safely.
   for (auto &unused : unusedList_) {
-    // TODO: free all unused tensors.
+    // Fix later: free all unused tensors.
     (void)unused;
   }
   return true;
 }
 
-void PassManager::RemoveOrderedNodes(const DATensor *owner, size_t index,
-                                     const DATensor *node) {
-  if (!ud_.DropNode(owner, index, node)) { // 'node' has other users.
+void PassManager::RemoveOrderedNodes(const DATensor *owner, size_t index, const DATensor *node) {
+  if (!ud_.DropNode(owner, index, node)) {  // 'node' has other users.
     LOG_OUT << "Has other users, " << ToString(node);
     return;
   }
@@ -105,10 +101,9 @@ void PassManager::RemoveOrderedNodes(const DATensor *owner, size_t index,
   }
 }
 
-void PassManager::InsertOrderedNodes(const DATensor *owner, size_t index,
-                                     const DATensor *anchor,
+void PassManager::InsertOrderedNodes(const DATensor *owner, size_t index, const DATensor *anchor,
                                      const DATensor *node) {
-  if (!ud_.AddNode(owner, index, node)) { // 'node' is not first insertion.
+  if (!ud_.AddNode(owner, index, node)) {  // 'node' is not first insertion.
     LOG_OUT << "Has other users, " << ToString(node);
     return;
   }
@@ -122,14 +117,13 @@ void PassManager::InsertOrderedNodes(const DATensor *owner, size_t index,
   }
 }
 
-bool PassManager::OrderedNodes::Insert(const DATensor *anchor,
-                                       const DATensor *node) {
+bool PassManager::OrderedNodes::Insert(const DATensor *anchor, const DATensor *node) {
   if (tensorMap_.count(node) != 0) {
-    return false; // Already exists.
+    return false;  // Already exists.
   }
   auto iter = tensorMap_.find(anchor);
   if (iter == tensorMap_.cend()) {
-    return false; // Not found anchor.
+    return false;  // Not found anchor.
   }
   auto listIter = tensorList_.emplace(iter->second, node);
   (void)tensorMap_.emplace(node, listIter);
@@ -172,7 +166,10 @@ void PassManager::OrderedNodes::Flush(DAGraph *graph) {
 }
 
 class ManualSamplePass : public NodePass {
-public:
+ public:
+  ManualSamplePass() {}
+  ~ManualSamplePass() = default;
+
   // If node is matched.
   bool Match(const DATensor *node) override {
     node_ = node;
@@ -182,14 +179,13 @@ public:
 
   // Replacement node for the matched node.
   DATensor *Replacement() override {
-    return NewTensor(ops::Op_mul, const_cast<DATensor **>(node_->input),
-                     node_->inputSize);
+    return NewTensor(ops::Op_mul, const_cast<DATensor **>(node_->input), node_->inputSize);
   };
 
-private:
-  const DATensor *node_;
+ private:
+  const DATensor *node_{nullptr};
 };
 
 DA_REGISTER_PASS("ManualSamplePass", ManualSamplePass);
-} // namespace pass
-} // namespace da
+}  // namespace pass
+}  // namespace da

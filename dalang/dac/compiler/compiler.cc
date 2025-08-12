@@ -30,20 +30,20 @@ namespace da {
 namespace compiler {
 const char *ToStr(CodeType type) {
   switch (type) {
-  case CodeBlock: {
-    return "block";
-  }
-  case CodeFunction: {
-    return "function";
-  }
-  case CodeGraph: {
-    return "graph";
-  }
-  case CodeModule: {
-    return "module";
-  }
-  default:
-    return "<unknown>";
+    case CodeBlock: {
+      return "block";
+    }
+    case CodeFunction: {
+      return "function";
+    }
+    case CodeGraph: {
+      return "graph";
+    }
+    case CodeModule: {
+      return "module";
+    }
+    default:
+      return "<unknown>";
   }
 }
 
@@ -54,19 +54,23 @@ const char *GetInstStr(Inst inst) {
   return _insts[inst];
 }
 
-Compiler::Compiler(const std::string &filename, bool singleFunctionMode,
-                   bool forceGraphMode)
-    : filename_{filename}, selfManagedParser_{true},
-      singleFunctionMode_{singleFunctionMode}, forceGraphMode_{forceGraphMode},
+Compiler::Compiler(const std::string &filename, bool singleFunctionMode, bool forceGraphMode)
+    : filename_{filename},
+      selfManagedParser_{true},
+      singleFunctionMode_{singleFunctionMode},
+      forceGraphMode_{forceGraphMode},
       walker_{new CompilerNodeVisitor(this)} {
   parser_ = new Parser(filename);
   Init();
 }
 
 Compiler::Compiler(Parser *parser, bool singleFunctionMode, bool forceGraphMode)
-    : parser_{parser}, filename_{parser_->filename()},
-      selfManagedParser_{false}, singleFunctionMode_{singleFunctionMode},
-      forceGraphMode_{forceGraphMode}, walker_{new CompilerNodeVisitor(this)} {
+    : parser_{parser},
+      filename_{parser_->filename()},
+      selfManagedParser_{false},
+      singleFunctionMode_{singleFunctionMode},
+      forceGraphMode_{forceGraphMode},
+      walker_{new CompilerNodeVisitor(this)} {
   Init();
 }
 
@@ -122,12 +126,9 @@ bool Compiler::CompileAssign(StmtConstPtr stmt) {
   const auto lineno = target->lineStart;
   const auto index = FindSymbolIndex(targetName);
   InstCall call = {.inst = Inst_StoreLocal,
-                   .offset =
-                       (index == -1 ? static_cast<ssize_t>(
-                                          symbolPool(CurrentCodeIndex()).size())
-                                    : index),
+                   .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(CurrentCodeIndex()).size()) : index),
                    .lineno = lineno};
-  if (index == -1) { // Not used before.
+  if (index == -1) {  // Not used before.
     symbolPool(CurrentCodeIndex()).emplace_back(targetName);
   }
   LOG_OUT << "name: " << targetName << ", index: " << call.offset;
@@ -154,10 +155,8 @@ bool Compiler::CompileReturn(StmtConstPtr stmt) {
   // Make return.
   const auto lineno = stmt->lineStart;
   InstCall ret = {.inst = Inst_ReturnVal,
-                  .offset = (returnVal != nullptr
-                                 ? 0
-                                 : -1), // offset is 0, means return value.
-                                        // offset is not 0, means return void.
+                  .offset = (returnVal != nullptr ? 0 : -1),  // offset is 0, means return value.
+                                                              // offset is not 0, means return void.
                   .lineno = lineno};
   AddInstruction(ret);
   return true;
@@ -178,15 +177,13 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
   const auto lineno = name->lineStart;
   // Insert graph name into the symbol table.
   auto graphSymIndex = FindGlobalSymbolIndex(graphName);
-  if (graphSymIndex == -1) { // Not used before.
+  if (graphSymIndex == -1) {  // Not used before.
     graphSymIndex = symbolPool(0).size();
     symbolPool(0).emplace_back(graphName);
   }
   LOG_OUT << "graph name: " << graphName << ", index: " << graphSymIndex;
 
-  InstCall defineGraph = {.inst = Inst_DefineGraph,
-                          .offset = static_cast<ssize_t>(codes().size()),
-                          .lineno = lineno};
+  InstCall defineGraph = {.inst = Inst_DefineGraph, .offset = static_cast<ssize_t>(codes().size()), .lineno = lineno};
   AddInstruction(defineGraph);
   Code code{.type = CodeGraph, .name = graphName};
   // Push the graph.
@@ -199,14 +196,12 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
     const auto &argStmt = graphStmt.args[i];
     LOG_OUT << "graph args[" << i << "]: " << ToString(argStmt);
     std::string argName;
-    if (argStmt->type == StmtType_Expr &&
-        argStmt->stmt.Expr.value->type == ExprType_Name) {
+    if (argStmt->type == StmtType_Expr && argStmt->stmt.Expr.value->type == ExprType_Name) {
       argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       LOG_OUT << "param: " << argName;
       graphCode->argNames.emplace_back(argName);
       graphCode->argDefaults.emplace_back(Constant());
-    } else if (argStmt->type == StmtType_Assign &&
-               argStmt->stmt.Assign.target->type == ExprType_Name &&
+    } else if (argStmt->type == StmtType_Assign && argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
       argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
@@ -215,21 +210,19 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
       graphCode->argNames.emplace_back(argName);
       graphCode->argDefaults.emplace_back(Constant());
     } else {
-      CompileMessage(parser_->filename(), lineno, name->columnStart,
-                     "error: invalid graph parameters.");
+      CompileMessage(parser_->filename(), lineno, name->columnStart, "error: invalid graph parameters.");
       exit(EXIT_FAILURE);
     }
     // Add graph arguments name at the front of symbol pool.
     auto index = FindSymbolIndex(argName);
-    if (index == -1) { // Not used before.
-      LOG_OUT << "arg name: " << argName
-              << ", offset: " << graphCode->symbols.size();
+    if (index == -1) {  // Not used before.
+      LOG_OUT << "arg name: " << argName << ", offset: " << graphCode->symbols.size();
       index = symbolPool(CurrentCodeIndex()).size();
       symbolPool(CurrentCodeIndex()).emplace_back(argName);
     } else {
-      CompileMessage(parser_->filename(), lineno, name->columnStart,
-                     "error: invalid graph parameter[" + std::to_string(i) +
-                         "]: " + argName + ", already defined before.");
+      CompileMessage(
+        parser_->filename(), lineno, name->columnStart,
+        "error: invalid graph parameter[" + std::to_string(i) + "]: " + argName + ", already defined before.");
       exit(EXIT_FAILURE);
     }
     graphCode->argIndexes.emplace_back(index);
@@ -245,32 +238,28 @@ bool Compiler::CompileGraph(StmtConstPtr stmt) {
   // Make extra return if no explicit return.
   if (lastInst_.inst != Inst_ReturnVal) {
     InstCall ret = {.inst = Inst_ReturnVal,
-                    .offset = -1, // offset is not 0, means return void.
+                    .offset = -1,  // offset is not 0, means return void.
                     .lineno = lineno};
     AddInstruction(ret);
   }
   codeStack_.pop();
 
   // Store the graph with name.
-  InstCall storeGraph = {
-      .inst = Inst_StoreGlobal, .offset = graphSymIndex, .lineno = lineno};
+  InstCall storeGraph = {.inst = Inst_StoreGlobal, .offset = graphSymIndex, .lineno = lineno};
   AddInstruction(storeGraph);
   return true;
 }
 
-void Compiler::CompileJitCallFunction(const std::string &funcName,
-                                      ssize_t funcSymIndex, int lineno) {
-  InstCall loadFunc = {
-      .inst = Inst_LoadGlobal, .offset = funcSymIndex, .lineno = lineno};
+void Compiler::CompileJitCallFunction(const std::string &funcName, ssize_t funcSymIndex, int lineno) {
+  InstCall loadFunc = {.inst = Inst_LoadGlobal, .offset = funcSymIndex, .lineno = lineno};
   LOG_OUT << "function name: " << funcName << ", index: " << loadFunc.offset;
   AddInstruction(loadFunc);
 
   // Add JIT arguments here.
   const auto argsLen = 0;
-  InstCall call = {
-      .inst = Inst_DoCall,
-      .offset = static_cast<ssize_t>(argsLen), // Set arguments size as offset.
-      .lineno = lineno};
+  InstCall call = {.inst = Inst_DoCall,
+                   .offset = static_cast<ssize_t>(argsLen),  // Set arguments size as offset.
+                   .lineno = lineno};
   AddInstruction(call);
 }
 
@@ -291,15 +280,13 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   if (!singleFunctionMode_) {
     // Insert function name into the symbol table.
     funcSymIndex = FindGlobalSymbolIndex(funcName);
-    if (funcSymIndex == -1) { // Not used before.
+    if (funcSymIndex == -1) {  // Not used before.
       funcSymIndex = symbolPool(0).size();
       symbolPool(0).emplace_back(funcName);
     }
     LOG_OUT << "funcName: " << funcName << ", index: " << funcSymIndex;
 
-    InstCall defineFunc = {.inst = Inst_DefineFunc,
-                           .offset = static_cast<ssize_t>(codes().size()),
-                           .lineno = lineno};
+    InstCall defineFunc = {.inst = Inst_DefineFunc, .offset = static_cast<ssize_t>(codes().size()), .lineno = lineno};
     AddInstruction(defineFunc);
 
     Code code{.type = CodeFunction, .name = funcName};
@@ -318,14 +305,12 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
     const auto &argStmt = funcStmt.args[i];
     LOG_OUT << "func args[" << i << "]: " << ToString(argStmt);
     std::string argName;
-    if (argStmt->type == StmtType_Expr &&
-        argStmt->stmt.Expr.value->type == ExprType_Name) {
+    if (argStmt->type == StmtType_Expr && argStmt->stmt.Expr.value->type == ExprType_Name) {
       argName = *argStmt->stmt.Expr.value->expr.Name.identifier;
       LOG_OUT << "param: " << argName;
       funcCode->argNames.emplace_back(argName);
       funcCode->argDefaults.emplace_back(Constant());
-    } else if (argStmt->type == StmtType_Assign &&
-               argStmt->stmt.Assign.target->type == ExprType_Name &&
+    } else if (argStmt->type == StmtType_Assign && argStmt->stmt.Assign.target->type == ExprType_Name &&
                argStmt->stmt.Assign.value->type == ExprType_Literal) {
       argName = *argStmt->stmt.Assign.target->expr.Name.identifier;
       const auto &literal = argStmt->stmt.Assign.value->expr.Literal;
@@ -334,21 +319,19 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
       funcCode->argNames.emplace_back(argName);
       funcCode->argDefaults.emplace_back(Constant());
     } else {
-      CompileMessage(parser_->filename(), lineno, name->columnStart,
-                     "error: invalid function parameters.");
+      CompileMessage(parser_->filename(), lineno, name->columnStart, "error: invalid function parameters.");
       exit(EXIT_FAILURE);
     }
     // Add function arguments name at the front of symbol pool.
     auto index = FindSymbolIndex(argName);
-    if (index == -1) { // Not used before.
-      LOG_OUT << "arg name: " << argName
-              << ", offset: " << funcCode->symbols.size();
+    if (index == -1) {  // Not used before.
+      LOG_OUT << "arg name: " << argName << ", offset: " << funcCode->symbols.size();
       index = symbolPool(CurrentCodeIndex()).size();
       symbolPool(CurrentCodeIndex()).emplace_back(argName);
     } else {
-      CompileMessage(parser_->filename(), lineno, name->columnStart,
-                     "error: invalid function parameter[" + std::to_string(i) +
-                         "]: " + argName + ", already defined before.");
+      CompileMessage(
+        parser_->filename(), lineno, name->columnStart,
+        "error: invalid function parameter[" + std::to_string(i) + "]: " + argName + ", already defined before.");
       exit(EXIT_FAILURE);
     }
     funcCode->argIndexes.emplace_back(index);
@@ -364,7 +347,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   // Make extra return if no explicit return.
   if (lastInst_.inst != Inst_ReturnVal) {
     InstCall ret = {.inst = Inst_ReturnVal,
-                    .offset = -1, // offset is not 0, means return void.
+                    .offset = -1,  // offset is not 0, means return void.
                     .lineno = lineno};
     AddInstruction(ret);
   }
@@ -372,8 +355,7 @@ bool Compiler::CompileFunction(StmtConstPtr stmt) {
   if (!singleFunctionMode_) {
     codeStack_.pop();
     // Store the function with name.
-    InstCall storeFunc = {
-        .inst = Inst_StoreGlobal, .offset = funcSymIndex, .lineno = lineno};
+    InstCall storeFunc = {.inst = Inst_StoreGlobal, .offset = funcSymIndex, .lineno = lineno};
     AddInstruction(storeFunc);
   }
   return true;
@@ -439,7 +421,7 @@ bool Compiler::CompileIf(StmtConstPtr stmt) {
 
   // Create a jump-false branch instruction.
   InstCall jumpFalseInst = {.inst = Inst_JumpFalse,
-                            .offset = 0, // Set as else branch offset later.
+                            .offset = 0,  // Set as else branch offset later.
                             .lineno = cond->lineStart};
   AddInstruction(jumpFalseInst);
   const auto pendingJumpFalseIndex = CurrentCode().insts.size() - 1;
@@ -452,19 +434,17 @@ bool Compiler::CompileIf(StmtConstPtr stmt) {
   }
   // Add jump instruction for true branch, skip false branch instructions.
   const auto elseLen = stmt->stmt.If.elseLen;
-  bool hasLastStmtRetInIfBody =
-      (ifLen != 0 && ifBody[ifLen - 1]->type == StmtType_Return);
+  bool hasLastStmtRetInIfBody = (ifLen != 0 && ifBody[ifLen - 1]->type == StmtType_Return);
   size_t pendingJumpIndex;
   if (elseLen != 0 && !hasLastStmtRetInIfBody) {
     InstCall jumpInst = {.inst = Inst_Jump,
-                         .offset = 0, // Set as if ending offset later.
+                         .offset = 0,  // Set as if ending offset later.
                          .lineno = cond->lineStart};
     AddInstruction(jumpInst);
     pendingJumpIndex = CurrentCode().insts.size() - 1;
   }
   // Set else offset to jump-false instruction offset.
-  CurrentCode().insts[pendingJumpFalseIndex].offset =
-      CurrentCode().insts.size();
+  CurrentCode().insts[pendingJumpFalseIndex].offset = CurrentCode().insts.size();
 
   // Handle else body.
   const auto &elseBody = stmt->stmt.If.elseBody;
@@ -491,10 +471,9 @@ bool Compiler::CompileWhile(StmtConstPtr stmt) {
   CallExprHandler(cond);
 
   // Create a jump-false branch instruction.
-  InstCall jumpFalseInst = {
-      .inst = Inst_JumpFalse,
-      .offset = 0, // Set as the offset after jump-back instruction later.
-      .lineno = cond->lineStart};
+  InstCall jumpFalseInst = {.inst = Inst_JumpFalse,
+                            .offset = 0,  // Set as the offset after jump-back instruction later.
+                            .lineno = cond->lineStart};
   AddInstruction(jumpFalseInst);
   const auto pendingJumpFalseIndex = CurrentCode().insts.size() - 1;
 
@@ -507,14 +486,12 @@ bool Compiler::CompileWhile(StmtConstPtr stmt) {
 
   // Just jump back to while start position.
   InstCall jumpInst = {.inst = Inst_Jump,
-                       .offset = static_cast<ssize_t>(
-                           condIndex), // Set offset as while beginning.
+                       .offset = static_cast<ssize_t>(condIndex),  // Set offset as while beginning.
                        .lineno = cond->lineStart};
   AddInstruction(jumpInst);
 
   // Set jump-false offset just after jump-back instruction.
-  CurrentCode().insts[pendingJumpFalseIndex].offset =
-      CurrentCode().insts.size();
+  CurrentCode().insts[pendingJumpFalseIndex].offset = CurrentCode().insts.size();
 
   return true;
 }
@@ -559,12 +536,9 @@ bool Compiler::CompileStdCin(StmtConstPtr stmt) {
   const auto lineno = in->lineStart;
   const auto index = FindSymbolIndex(name);
   InstCall stdcin = {.inst = Inst_StdCin,
-                     .offset = (index == -1
-                                    ? static_cast<ssize_t>(
-                                          symbolPool(CurrentCodeIndex()).size())
-                                    : index),
+                     .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(CurrentCodeIndex()).size()) : index),
                      .lineno = lineno};
-  if (index == -1) { // Not used before.
+  if (index == -1) {  // Not used before.
     symbolPool(CurrentCodeIndex()).emplace_back(name);
   }
   AddInstruction(stdcin);
@@ -597,39 +571,38 @@ bool Compiler::CompileBinary(ExprConstPtr expr) {
   CallExprHandler(expr->expr.Binary.right);
   const auto lineno = expr->expr.Binary.left->lineStart;
   switch (expr->expr.Binary.op) {
-  case OpId_Add: {
-    InstCall call = {.inst = Inst_BinaryAdd, .offset = 0, .lineno = lineno};
-    AddInstruction(call);
-    return true;
-  }
-  case OpId_Sub: {
-    InstCall call = {.inst = Inst_BinarySub, .offset = 0, .lineno = lineno};
-    AddInstruction(call);
-    return true;
-  }
-  case OpId_Mul: {
-    InstCall call = {.inst = Inst_BinaryMul, .offset = 0, .lineno = lineno};
-    AddInstruction(call);
-    return true;
-  }
-  case OpId_Div: {
-    InstCall call = {.inst = Inst_BinaryDiv, .offset = 0, .lineno = lineno};
-    AddInstruction(call);
-    return true;
-  }
-  case OpId_Equal:
-  case OpId_NotEqual:
-  case OpId_GreaterThan:
-  case OpId_LessThan:
-  case OpId_GreaterEqual:
-  case OpId_LessEqual: {
-    InstCall compare = {
-        .inst = Inst_Compare, .offset = expr->expr.Binary.op, .lineno = lineno};
-    AddInstruction(compare);
-    return true;
-  }
-  default:
-    break;
+    case OpId_Add: {
+      InstCall call = {.inst = Inst_BinaryAdd, .offset = 0, .lineno = lineno};
+      AddInstruction(call);
+      return true;
+    }
+    case OpId_Sub: {
+      InstCall call = {.inst = Inst_BinarySub, .offset = 0, .lineno = lineno};
+      AddInstruction(call);
+      return true;
+    }
+    case OpId_Mul: {
+      InstCall call = {.inst = Inst_BinaryMul, .offset = 0, .lineno = lineno};
+      AddInstruction(call);
+      return true;
+    }
+    case OpId_Div: {
+      InstCall call = {.inst = Inst_BinaryDiv, .offset = 0, .lineno = lineno};
+      AddInstruction(call);
+      return true;
+    }
+    case OpId_Equal:
+    case OpId_NotEqual:
+    case OpId_GreaterThan:
+    case OpId_LessThan:
+    case OpId_GreaterEqual:
+    case OpId_LessEqual: {
+      InstCall compare = {.inst = Inst_Compare, .offset = expr->expr.Binary.op, .lineno = lineno};
+      AddInstruction(compare);
+      return true;
+    }
+    default:
+      break;
   }
   return false;
 }
@@ -676,40 +649,32 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
     const auto &funcName = *funcNameExpr->expr.Name.identifier;
     const auto lineno = funcNameExpr->lineStart;
     const auto index = FindGlobalSymbolIndex(funcName);
-    if (index != -1 && index < intrinsicSize_) { // Call intrinsic.
-      InstCall loadIntrinsic = {
-          .inst = Inst_LoadIntrin, .offset = index, .lineno = lineno};
-      LOG_OUT << "intrinsic name: " << funcName
-              << ", index: " << loadIntrinsic.offset
-              << ", size: " << intrinsicSize_;
+    if (index != -1 && index < intrinsicSize_) {  // Call intrinsic.
+      InstCall loadIntrinsic = {.inst = Inst_LoadIntrin, .offset = index, .lineno = lineno};
+      LOG_OUT << "intrinsic name: " << funcName << ", index: " << loadIntrinsic.offset << ", size: " << intrinsicSize_;
       AddInstruction(loadIntrinsic);
 
       CallExprHandler(expr->expr.Call.list);
       const auto argsLen = expr->expr.Call.list->expr.List.len;
       InstCall call = {.inst = Inst_CallIntrin,
-                       .offset = static_cast<ssize_t>(
-                           argsLen), // Set arguments size as offset.
+                       .offset = static_cast<ssize_t>(argsLen),  // Set arguments size as offset.
                        .lineno = expr->lineStart};
       AddInstruction(call);
       return true;
-    } else { // Call function or graph.
-      InstCall loadFunc = {
-          .inst = Inst_LoadGlobal,
-          .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(0).size())
-                                 : index),
-          .lineno = lineno};
-      if (index == -1) { // Not used before.
+    } else {  // Call function or graph.
+      InstCall loadFunc = {.inst = Inst_LoadGlobal,
+                           .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(0).size()) : index),
+                           .lineno = lineno};
+      if (index == -1) {  // Not used before.
         symbolPool(0).emplace_back(funcName);
       }
-      LOG_OUT << "function name: " << funcName
-              << ", index: " << loadFunc.offset;
+      LOG_OUT << "function name: " << funcName << ", index: " << loadFunc.offset;
       AddInstruction(loadFunc);
 
       CallExprHandler(expr->expr.Call.list);
       const auto argsLen = expr->expr.Call.list->expr.List.len;
       InstCall call = {.inst = Inst_DoCall,
-                       .offset = static_cast<ssize_t>(
-                           argsLen), // Set arguments size as offset.
+                       .offset = static_cast<ssize_t>(argsLen),  // Set arguments size as offset.
                        .lineno = expr->lineStart};
       AddInstruction(call);
       return true;
@@ -728,16 +693,14 @@ bool Compiler::CompileCall(ExprConstPtr expr) {
         // const auto opSym = opsName + '.' + opName;
         const auto lineno = funcNameExpr->lineStart;
         const auto index = ops::MatchOp(opName.c_str());
-        InstCall loadOps = {
-            .inst = Inst_LoadOps, .offset = index, .lineno = lineno};
+        InstCall loadOps = {.inst = Inst_LoadOps, .offset = index, .lineno = lineno};
         LOG_OUT << "Op: " << opName << ", index: " << loadOps.offset;
         AddInstruction(loadOps);
 
         CallExprHandler(expr->expr.Call.list);
         const auto argsLen = expr->expr.Call.list->expr.List.len;
         InstCall call = {.inst = Inst_CallOps,
-                         .offset = static_cast<ssize_t>(
-                             argsLen), // Set arguments size as offset.
+                         .offset = static_cast<ssize_t>(argsLen),  // Set arguments size as offset.
                          .lineno = expr->lineStart};
         AddInstruction(call);
         return true;
@@ -756,16 +719,12 @@ bool Compiler::CompileName(ExprConstPtr expr) {
   const auto &name = *expr->expr.Name.identifier;
   const auto lineno = expr->lineStart;
   const auto index = FindSymbolIndex(name);
-  if (index == -1) { // Not defined before.
-    CompileMessage(parser_->filename(), lineno, expr->columnStart,
-                   "error: not defined name: '" + name + "'");
+  if (index == -1) {  // Not defined before.
+    CompileMessage(parser_->filename(), lineno, expr->columnStart, "error: not defined name: '" + name + "'");
     exit(EXIT_FAILURE);
   }
   InstCall load = {.inst = Inst_LoadLocal,
-                   .offset =
-                       (index == -1 ? static_cast<ssize_t>(
-                                          symbolPool(CurrentCodeIndex()).size())
-                                    : index),
+                   .offset = (index == -1 ? static_cast<ssize_t>(symbolPool(CurrentCodeIndex()).size()) : index),
                    .lineno = lineno};
   LOG_OUT << "name: " << name << ", index: " << load.offset;
   AddInstruction(load);
@@ -784,12 +743,9 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
   const auto lineno = expr->lineStart;
   const auto index = FindConstantIndex(value);
   InstCall load = {.inst = Inst_LoadConst,
-                   .offset = index != -1
-                                 ? index
-                                 : static_cast<ssize_t>(
-                                       constantPool(CurrentCodeIndex()).size()),
+                   .offset = index != -1 ? index : static_cast<ssize_t>(constantPool(CurrentCodeIndex()).size()),
                    .lineno = lineno};
-  if (index == -1) { // Not used before.
+  if (index == -1) {  // Not used before.
     Constant cons = {.type = static_cast<ConstType>(kind)};
     cons.value.str = &value;
     constantPool(CurrentCodeIndex()).emplace_back(cons);
@@ -806,15 +762,13 @@ ssize_t Compiler::FindSymbolIndex(const std::string &name) {
 
 ssize_t Compiler::FindGlobalSymbolIndex(const std::string &name) {
   auto &globalSymbolPool = symbolPool(0);
-  auto iter =
-      std::find(globalSymbolPool.cbegin(), globalSymbolPool.cend(), name);
+  auto iter = std::find(globalSymbolPool.cbegin(), globalSymbolPool.cend(), name);
   if (iter == globalSymbolPool.cend()) {
     return -1;
   }
   auto index = std::distance(globalSymbolPool.cbegin(), iter);
   if (index < 0) {
-    LOG_ERROR << "Not found symbol, index should not be negative " << index
-              << ", name: " << name;
+    LOG_ERROR << "Not found symbol, index should not be negative " << index << ", name: " << name;
     exit(EXIT_FAILURE);
   }
   return index;
@@ -823,21 +777,18 @@ ssize_t Compiler::FindGlobalSymbolIndex(const std::string &name) {
 // Return -1 if not found.
 ssize_t Compiler::FindConstantIndex(const std::string &str) {
   auto &currentConstantPool = constantPool(CurrentCodeIndex());
-  auto iter =
-      std::find_if(currentConstantPool.cbegin(), currentConstantPool.cend(),
-                   [&str](const Constant &cons) {
-                     if (cons.value.str != nullptr && *cons.value.str == str) {
-                       return true;
-                     }
-                     return false;
-                   });
+  auto iter = std::find_if(currentConstantPool.cbegin(), currentConstantPool.cend(), [&str](const Constant &cons) {
+    if (cons.value.str != nullptr && *cons.value.str == str) {
+      return true;
+    }
+    return false;
+  });
   if (iter == currentConstantPool.cend()) {
     return -1;
   }
   auto index = std::distance(currentConstantPool.cbegin(), iter);
   if (index < 0) {
-    LOG_ERROR << "Not found constant, index should not be negative " << index
-              << ", str: " << str;
+    LOG_ERROR << "Not found constant, index should not be negative " << index << ", str: " << str;
     exit(EXIT_FAILURE);
   }
   return index;
@@ -848,16 +799,12 @@ void Compiler::Init() {
   codeStack_.emplace(codes_.size());
   if (singleFunctionMode_) {
     if (forceGraphMode_) {
-      codes_.emplace_back(
-          Code{.type = CodeGraph, .name = "@single/"}); // Preset module code.
+      codes_.emplace_back(Code{.type = CodeGraph, .name = "@single/"});  // Preset module code.
     } else {
-      codes_.emplace_back(Code{.type = CodeFunction,
-                               .name = "@single/"}); // Preset module code.
+      codes_.emplace_back(Code{.type = CodeFunction, .name = "@single/"});  // Preset module code.
     }
   } else {
-    codes_.emplace_back(
-        Code{.type = CodeModule,
-             .name = parser_->filename()}); // Preset module code.
+    codes_.emplace_back(Code{.type = CodeModule, .name = parser_->filename()});  // Preset module code.
   }
   InitIntrinsicSymbols();
 }
@@ -894,8 +841,7 @@ void Compiler::Dump() {
         const auto &def = code.argDefaults[i];
         std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
         if (def.value.str != nullptr && !def.value.str->empty()) {
-          std::cout << std::setfill(' ') << std::setw(8) << std::left << arg
-                    << ' ' << idx << ' ';
+          std::cout << std::setfill(' ') << std::setw(8) << std::left << arg << ' ' << idx << ' ';
           std::cout << *def.value.str;
         } else {
           std::cout << arg << ' ' << idx;
@@ -911,7 +857,7 @@ void Compiler::Dump() {
       // Print lineno.
       std::cout << std::setfill(' ') << std::setw(8) << std::left;
       if (lastLineno != inst.lineno) {
-        if (lastLineno != -1) { // Print blank line between lines.
+        if (lastLineno != -1) {  // Print blank line between lines.
           std::cout << std::endl;
         }
         lastLineno = inst.lineno;
@@ -922,99 +868,94 @@ void Compiler::Dump() {
       // Print instruction number.
       std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
       // Print instruction.
-      std::cout << std::setfill(' ') << std::setw(16) << std::left
-                << GetInstStr(inst.inst);
+      std::cout << std::setfill(' ') << std::setw(16) << std::left << GetInstStr(inst.inst);
       // Print variable names or constants.
       switch (inst.inst) {
-      case Inst_LoadName:
-      case Inst_StoreName:
-      case Inst_LoadLocal:
-      case Inst_StoreLocal: {
-        std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset]
-                  << ')';
-        break;
-      }
-      case Inst_LoadGlobal:
-      case Inst_StoreGlobal:
-      case Inst_LoadIntrin: {
-        LOG_OUT << "size: " << symbolPool(0).size()
-                << ", index: " << inst.offset;
-        std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
-        break;
-      }
-      case Inst_LoadOps: {
-        std::cout << inst.offset << " (" << ops::ToStr((ops::Op)inst.offset)
-                  << ')';
-        break;
-      }
-      case Inst_StdCin: {
-        std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset]
-                  << ')';
-        break;
-      }
-      case Inst_JumpTrue:
-      case Inst_JumpFalse: {
-        std::cout << inst.offset;
-        break;
-      }
-      case Inst_Jump: {
-        std::cout << inst.offset;
-        break;
-      }
-      case Inst_Compare: {
-        std::cout << inst.offset << " (";
-        switch (inst.offset) {
-        case OpId_Equal: {
-          std::cout << "==" << ')';
+        case Inst_LoadName:
+        case Inst_StoreName:
+        case Inst_LoadLocal:
+        case Inst_StoreLocal: {
+          std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset] << ')';
           break;
         }
-        case OpId_NotEqual: {
-          std::cout << "!=" << ')';
+        case Inst_LoadGlobal:
+        case Inst_StoreGlobal:
+        case Inst_LoadIntrin: {
+          LOG_OUT << "size: " << symbolPool(0).size() << ", index: " << inst.offset;
+          std::cout << inst.offset << " (" << symbolPool(0)[inst.offset] << ')';
           break;
         }
-        case OpId_GreaterThan: {
-          std::cout << ">" << ')';
+        case Inst_LoadOps: {
+          std::cout << inst.offset << " (" << ops::ToStr((ops::Op)inst.offset) << ')';
           break;
         }
-        case OpId_LessThan: {
-          std::cout << "<" << ')';
+        case Inst_StdCin: {
+          std::cout << inst.offset << " (" << symbolPool(codeIndex)[inst.offset] << ')';
           break;
         }
-        case OpId_GreaterEqual: {
-          std::cout << ">=" << ')';
+        case Inst_JumpTrue:
+        case Inst_JumpFalse: {
+          std::cout << inst.offset;
           break;
         }
-        case OpId_LessEqual: {
-          std::cout << "<=" << ')';
+        case Inst_Jump: {
+          std::cout << inst.offset;
           break;
         }
-        default: {
-          std::cout << "error" << ')';
+        case Inst_Compare: {
+          std::cout << inst.offset << " (";
+          switch (inst.offset) {
+            case OpId_Equal: {
+              std::cout << "==" << ')';
+              break;
+            }
+            case OpId_NotEqual: {
+              std::cout << "!=" << ')';
+              break;
+            }
+            case OpId_GreaterThan: {
+              std::cout << ">" << ')';
+              break;
+            }
+            case OpId_LessThan: {
+              std::cout << "<" << ')';
+              break;
+            }
+            case OpId_GreaterEqual: {
+              std::cout << ">=" << ')';
+              break;
+            }
+            case OpId_LessEqual: {
+              std::cout << "<=" << ')';
+              break;
+            }
+            default: {
+              std::cout << "error" << ')';
+              break;
+            }
+          }
           break;
         }
+        case Inst_LoadConst: {
+          std::cout << inst.offset << " (";
+          const auto &cons = constantPool(codeIndex)[inst.offset];
+          if (cons.type == ConstType_str) {
+            std::cout << "'";
+          }
+          CHECK_IF_NULL(cons.value.str);
+          std::cout << ConvertEscapeString(*cons.value.str);
+          if (cons.type == ConstType_str) {
+            std::cout << "'";
+          }
+          std::cout << ')';
+          break;
         }
-        break;
-      }
-      case Inst_LoadConst: {
-        std::cout << inst.offset << " (";
-        const auto &cons = constantPool(codeIndex)[inst.offset];
-        if (cons.type == ConstType_str) {
-          std::cout << "'";
+        case Inst_EnterBlock: {
+          std::cout << inst.offset;
+          break;
         }
-        CHECK_IF_NULL(cons.value.str);
-        std::cout << ConvertEscapeString(*cons.value.str);
-        if (cons.type == ConstType_str) {
-          std::cout << "'";
-        }
-        std::cout << ')';
-        break;
-      }
-      case Inst_EnterBlock: {
-        std::cout << inst.offset;
-        break;
-      }
-      default:
-        break;
+        default:
+          break;
       }
       std::cout << std::endl;
     }
@@ -1030,8 +971,7 @@ void Compiler::Dump() {
     for (size_t i = 0; i < code.constants.size(); ++i) {
       const auto &cons = code.constants[i];
       std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
-      std::cout << std::setfill(' ') << std::setw(8) << std::left
-                << lexer::ToStr(static_cast<LtId>(cons.type));
+      std::cout << std::setfill(' ') << std::setw(8) << std::left << lexer::ToStr(static_cast<LtId>(cons.type));
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
@@ -1053,5 +993,5 @@ void Compiler::InitCompileHandlers() {
 }
 #undef STMT
 #undef EXPR
-} // namespace compiler
-} // namespace da
+}  // namespace compiler
+}  // namespace da
