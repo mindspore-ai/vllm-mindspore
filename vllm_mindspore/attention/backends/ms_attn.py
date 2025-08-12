@@ -19,49 +19,45 @@
 # limitations under the License.
 """Attention layer with MsAttention."""
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import accumulate
+<<<<<<< HEAD
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
-
-from vllm.attention.backends.abstract import (
-    AttentionBackend,
-    AttentionImpl,
-    AttentionMetadata,
-    AttentionMetadataBuilder,
-    AttentionType,
-    AttentionState,
-    AttentionLayer,
-)
-
-if TYPE_CHECKING:
-    from vllm.worker.model_runner import ModelInputForGPUBuilder
-
-from vllm.utils import make_tensor_with_pad
-from vllm.attention.backends.utils import (
-    compute_slot_mapping,
-    compute_slot_mapping_start_idx,
-    is_block_tables_empty,
-)
-from vllm.multimodal import MultiModalPlaceholderMap
-
-from vllm_mindspore.attention.backends.utils import MsAttentionState
-from vllm_mindspore.attention.ops.paged_attn import PagedAttentionMetadata
-
-from vllm_mindspore.utils import MsKVCache
+=======
+from typing import (TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type,
+                    no_type_check)
+>>>>>>> 52e097f... !639 [develop][codecheck] Cleanup codecheck errors.
 
 import mindspore as ms
-from mindspore import mutable
 from mindspore._c_expression import swap_cache
+from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
+                                              AttentionLayer,
+                                              AttentionMetadata,
+                                              AttentionMetadataBuilder,
+                                              AttentionState, AttentionType)
+from vllm.attention.backends.utils import (compute_slot_mapping,
+                                           compute_slot_mapping_start_idx,
+                                           is_block_tables_empty)
+from vllm.multimodal import MultiModalPlaceholderMap
+from vllm.utils import make_tensor_with_pad
+
+from vllm_mindspore.attention.backends.utils import MsAttentionState
+from vllm_mindspore.utils import MsKVCache
+
+if TYPE_CHECKING:
+    from vllm.worker.model_runner import (ModelInputForGPUBuilder,
+                                          ModelInputForGPUWithSamplingMetadata)
 
 
-def advance_step_op(sampled_token_ids,
-                    model_input,
-                    seq_lens_tensor,
-                    num_queries,
-                    block_size,
-                    block_tables,
-                    slot_mapping):
+def advance_step_op(sampled_token_ids, model_input, seq_lens_tensor,
+                    num_queries, block_size, block_tables, slot_mapping):
+    """
+    Update metadata in-place to advance one decode step.
+    Ref to `AscendMetadata.advance_step` in
+    https://github.com/vllm-project/vllm-ascend/blob/v0.7.3-dev/vllm_ascend/attention/attention.py#L407
+    """
     # update input_tokens
     sampled_token_ids_list = sampled_token_ids[:
                                                num_queries].squeeze(  # type: ignore
@@ -76,8 +72,7 @@ def advance_step_op(sampled_token_ids,
 
     # update seq_lens and input_positions
     seq_lens_tensor[:num_queries] = next_seq_lens
-    model_input.input_positions[:
-                                num_queries] = next_input_pos  # type: ignore
+    model_input.input_positions[:num_queries] = next_input_pos  # type: ignore
 
     # 计算 block index 和 offset
     block_idx = next_input_pos // block_size
@@ -93,8 +88,7 @@ def advance_step_op(sampled_token_ids,
 
 @dataclass
 class MsAttentionMetadata(AttentionMetadata):
-    """Metadata for MsAttentionBackend.
-    """
+    """Metadata for MsAttentionBackend."""
     # (batch_size,). The sequence length per sequence. Sequence length means
     # the computed tokens + new tokens None if it is a decoding.
     seq_lens: Optional[List[int]]
@@ -174,7 +168,8 @@ class MsAttentionMetadata(AttentionMetadata):
     query_lens: Optional[List[int]] = None
 
     @property
-    def prefill_metadata(self):
+    @no_type_check
+    def prefill_metadata(self) -> Optional["MsAttentionMetadata"]:
         if self.num_prefills == 0:
             return None
 
@@ -209,7 +204,8 @@ class MsAttentionMetadata(AttentionMetadata):
             slot_mapping=slot_mapping,
             multi_modal_placeholder_index_maps=self.
             multi_modal_placeholder_index_maps,
-            enable_kv_scales_calculation=False,
+            enable_kv_scales_calculation=
+            False,  # vllm-mindspore do not support kv_scales now.
             seq_lens=seq_lens,
             seq_lens_tensor=seq_lens_tensor,
             max_query_len=self.max_query_len,
@@ -231,6 +227,7 @@ class MsAttentionMetadata(AttentionMetadata):
         return self._cached_prefill_metadata
 
     @property
+    @no_type_check
     def decode_metadata(self):
         if self.num_decode_tokens == 0:
             return None
@@ -254,7 +251,8 @@ class MsAttentionMetadata(AttentionMetadata):
             num_decode_tokens=self.num_decode_tokens,
             slot_mapping=slot_mapping,
             multi_modal_placeholder_index_maps=None,
-            enable_kv_scales_calculation=False,
+            enable_kv_scales_calculation=
+            False,  # vllm-mindspore do not support kv_scales now.
             seq_lens=None,
             seq_lens_tensor=seq_lens_tensor,
             max_decode_query_len=self.max_decode_query_len,
@@ -281,8 +279,9 @@ class MsAttentionMetadata(AttentionMetadata):
             cross_block_tables=self.cross_block_tables)
         return self._cached_decode_metadata
 
+    @no_type_check
     def advance_step(self,
-                     model_input: "ModelInputForNPUWithSamplingMetadata",
+                     model_input: "ModelInputForGPUWithSamplingMetadata",
                      sampled_token_ids: Optional[ms.Tensor],
                      block_size: int,
                      num_seqs: int,
@@ -343,6 +342,7 @@ class MsAttentionMetadata(AttentionMetadata):
             self.seq_lens[i] += 1
         self.max_decode_seq_len = max(self.seq_lens)
 
+<<<<<<< HEAD
         advance_step_op(sampled_token_ids,
                         model_input,
                         self.seq_lens_tensor,
@@ -358,61 +358,31 @@ class MsAttentionMetadata(AttentionMetadata):
         """
         Extract appropriate sequence lengths from attention metadata
         according to attention type.
-
-        Arguments:
-
-        * attn_metadata: Attention metadata structure associated with attention
-        * attn_type: encoder attention, decoder self-attention,
-                    encoder/decoder cross-attention
-
-        Returns:
-        * Appropriate sequence lengths tensor for query
-        * Appropriate sequence lengths tensor for key & value
-        """
-
-        if (
-            attn_type == AttentionType.DECODER
-            or attn_type == AttentionType.ENCODER_ONLY
-        ):
-            seq_lens_q = self.seq_lens
-            seq_lens_kv = self.seq_lens
-        elif attn_type == AttentionType.ENCODER:
-            seq_lens_q = self.encoder_seq_lens
-            seq_lens_kv = self.encoder_seq_lens
-        elif attn_type == AttentionType.ENCODER_DECODER:
-            seq_lens_q = self.seq_lens
-            seq_lens_kv = self.encoder_seq_lens
+=======
+        # default use ascendc op
+        if os.getenv(
+                "vLLM_USE_NPU_ADV_STEP_FLASH_OP",  # noqa: SIM112
+                "on") != "off":
+            from vllm_mindspore import npu_ops
+            npu_ops.adv_step_flash(num_seqs=num_seqs,
+                                   num_queries=num_queries,
+                                   block_size=block_size,
+                                   input_tokens=model_input.input_tokens,
+                                   sampled_token_ids=sampled_token_ids,
+                                   input_positions=model_input.input_positions,
+                                   seq_lens=self.seq_lens_tensor,
+                                   slot_mapping=self.slot_mapping,
+                                   block_tables=self.block_tables)
         else:
-            raise AttributeError(f"Invalid attention type {str(attn_type)}")
-        return seq_lens_q, seq_lens_kv
-
-    def get_seq_len_block_table_args(
-        self,
-        attn_type: str,
-    ) -> tuple:
-        if (
-            attn_type == AttentionType.DECODER
-            or attn_type == AttentionType.ENCODER_ONLY
-        ):
-            # Decoder self-attention
-            # Choose max_seq_len based on whether we are in prompt_run
-            return (self.seq_lens_tensor, self.max_decode_seq_len, self.block_tables)
-        elif attn_type == AttentionType.ENCODER_DECODER:
-            # Enc/dec cross-attention KVs match encoder sequence length;
-            # cross-attention utilizes special "cross" block tables
-            return (
-                self.encoder_seq_lens_tensor,
-                self.max_encoder_seq_len,
-                self.cross_block_tables,
-            )
-        elif attn_type == AttentionType.ENCODER:
-            # No block tables associated with encoder attention
-            return (self.encoder_seq_lens_tensor, self.max_encoder_seq_len, None)
-        else:
-            raise AttributeError(f"Invalid attention type {str(attn_type)}")
+            advance_step_op(sampled_token_ids, model_input,
+                            self.seq_lens_tensor, num_queries, block_size,
+                            self.block_tables, self.slot_mapping)
+>>>>>>> 52e097f... !639 [develop][codecheck] Cleanup codecheck errors.
 
 
-class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
+class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]
+                                 ):
+    """Builder for MsAttentionMetadata."""
 
     def __init__(self, input_builder: "ModelInputForGPUBuilder"):
         self.input_builder = input_builder
@@ -426,21 +396,17 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
         self.context_lens: List[int] = []
         self.block_tables: List[List[int]] = []
         self.curr_seq_lens: List[int] = []
-        self.multimodal_placeholder_maps: Dict[str, MultiModalPlaceholderMap] = (
-            defaultdict(MultiModalPlaceholderMap)
-        )
+        self.multimodal_placeholder_maps: Dict[
+            str,
+            MultiModalPlaceholderMap] = (defaultdict(MultiModalPlaceholderMap))
         self.num_prefills = 0
         self.num_prefill_tokens = 0
         self.num_decode_tokens = 0
         self.has_prefix_cache_hit = False
 
-
     def _add_seq_group(
-        self,
-        inter_data: "ModelInputForGPUBuilder.InterDataForSeqGroup",
-        chunked_prefill_enabled: bool,
-        prefix_cache_hit: bool,
-    ):
+            self, inter_data: "ModelInputForGPUBuilder.InterDataForSeqGroup",
+            chunked_prefill_enabled: bool, prefix_cache_hit: bool):
         """Add a sequence group to the metadata. Specifically update/append
         1. context length.
         2. block table.
@@ -449,30 +415,20 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
         is_prompt = inter_data.is_prompt
         block_tables = inter_data.block_tables
 
-        for (
-            seq_id,
-            token_len,
-            seq_len,
-            curr_seq_len,
-            query_len,
-            context_len,
-            curr_sliding_window_block,
-        ) in zip(
-            inter_data.seq_ids,
-            [len(t) for t in inter_data.input_tokens],
-            inter_data.orig_seq_lens,
-            inter_data.seq_lens,
-            inter_data.query_lens,
-            inter_data.context_lens,
-            inter_data.curr_sliding_window_blocks,
-        ):
+        for (seq_id, token_len, seq_len, curr_seq_len, query_len, context_len,
+             curr_sliding_window_block) in zip(
+                 inter_data.seq_ids, [len(t) for t in inter_data.input_tokens],
+                 inter_data.orig_seq_lens, inter_data.seq_lens,
+                 inter_data.query_lens, inter_data.context_lens,
+                 inter_data.curr_sliding_window_blocks):
             self.context_lens.append(context_len)
 
             if is_prompt:
                 mm_maps = inter_data.multi_modal_placeholder_maps
                 if mm_maps:
                     for modality, placeholders in mm_maps.items():
-                        self.multimodal_placeholder_maps[modality].extend(placeholders)
+                        self.multimodal_placeholder_maps[modality].extend(
+                            placeholders)
 
                 self.num_prefills += 1
                 self.num_prefill_tokens += token_len
@@ -490,38 +446,26 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
                 # NOTE(woosuk): For flash-attn, the block table should
                 # include the entries for the incoming prefill tokens.
                 block_table = block_tables[seq_id]
-            elif (
-                chunked_prefill_enabled or not is_prompt
-            ) and block_tables is not None:
+            elif ((chunked_prefill_enabled or not is_prompt)
+                  and block_tables is not None):
                 if curr_sliding_window_block == 0:
                     block_table = block_tables[seq_id]
                 else:
-                    block_table = block_tables[seq_id][-curr_sliding_window_block:]
+                    block_table = block_tables[seq_id][
+                        -curr_sliding_window_block:]
             self.block_tables.append(block_table)
 
             # Compute slot mapping.
             is_profile_run = is_block_tables_empty(block_tables)
-            start_idx = compute_slot_mapping_start_idx(
-                is_prompt, query_len, context_len, self.sliding_window
-            )
-            compute_slot_mapping(
-                is_profile_run,
-                self.slot_mapping,
-                seq_id,
-                seq_len,
-                context_len,
-                start_idx,
-                self.block_size,
-                inter_data.block_tables,
-            )
+            start_idx = compute_slot_mapping_start_idx(is_prompt, query_len,
+                                                       context_len,
+                                                       self.sliding_window)
+            compute_slot_mapping(is_profile_run, self.slot_mapping, seq_id,
+                                 seq_len, context_len, start_idx,
+                                 self.block_size, inter_data.block_tables)
 
-    def build(
-        self,
-        seq_lens: List[int],
-        query_lens: List[int],
-        cuda_graph_pad_size: int,
-        batch_size: int,
-    ):
+    def build(self, seq_lens: List[int], query_lens: List[int],
+              cuda_graph_pad_size: int, batch_size: int):
         """Build attention metadata with on-device tensors.
 
         Args:
@@ -531,16 +475,14 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
                                  -1 if cuda graph is not used.
             batch_size: The maybe padded batch size.
         """
-        prefix_cache_hit = any(
-            [
-                inter_data.prefix_cache_hit
-                for inter_data in self.input_builder.inter_data_list
-            ]
-        )
+        prefix_cache_hit = any([
+            inter_data.prefix_cache_hit
+            for inter_data in self.input_builder.inter_data_list
+        ])
         for inter_data in self.input_builder.inter_data_list:
-            self._add_seq_group(
-                inter_data, self.input_builder.chunked_prefill_enabled, prefix_cache_hit
-            )
+            self._add_seq_group(inter_data,
+                                self.input_builder.chunked_prefill_enabled,
+                                prefix_cache_hit)
 
         device = self.runner.device
         use_captured_graph = cuda_graph_pad_size != -1
@@ -558,7 +500,7 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
         seq_start_loc = list(accumulate(seq_lens, initial=0))
 
         if use_captured_graph:
-            raise RuntimeError("Doesnot support captured graph now!")
+            raise RuntimeError("Doesn't support captured graph now!")
         else:
             block_tables = make_tensor_with_pad(
                 self.block_tables,
@@ -581,6 +523,7 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
             seq_lens_tensor=seq_lens_tensor,
             seq_lens=seq_lens,
             max_prefill_seq_len=max_prefill_seq_len,
+            max_decode_query_len=max_decode_query_len,
             max_decode_seq_len=max_decode_seq_len,
             num_prefills=self.num_prefills,
             num_prefill_tokens=self.num_prefill_tokens,
@@ -596,6 +539,36 @@ class MsAttentionMetadataBuilder(AttentionMetadataBuilder[MsAttentionMetadata]):
         )
 
 
+class MsAttentionImpl(AttentionImpl):
+    """
+    Attention is called  as operation by MindSpore models, just keep pass here.
+    """
+
+    def __init__(self,
+                 num_heads: int,
+                 head_size: int,
+                 scale: float,
+                 num_kv_heads: int,
+                 alibi_slopes: Optional[List[float]],
+                 sliding_window: Optional[int],
+                 kv_cache_dtype: str,
+                 blocksparse_params: Optional[Dict[str, Any]] = None,
+                 logits_soft_cap: Optional[float] = None,
+                 attn_type: str = AttentionType.DECODER) -> None:
+        pass
+
+    def forward(self,
+                layer: AttentionLayer,
+                query: ms.Tensor,
+                key: ms.Tensor,
+                value: ms.Tensor,
+                kv_cache: ms.Tensor,
+                attn_metadata: MsAttentionMetadata,
+                attn_type: str = AttentionType.DECODER,
+                output: Optional[ms.Tensor] = None) -> ms.Tensor:
+        pass
+
+
 class MsAttentionBackend(AttentionBackend):
     """MindSpore attention backend."""
 
@@ -604,11 +577,11 @@ class MsAttentionBackend(AttentionBackend):
         return "MS_ATTN"
 
     @staticmethod
-    def get_impl_cls() -> Type["AttentionImpl"]:
+    def get_impl_cls() -> Type["MsAttentionImpl"]:
         return MsAttentionImpl
 
     @staticmethod
-    def get_metadata_cls() -> Type["AttentionMetadata"]:
+    def get_metadata_cls() -> Type["MsAttentionMetadata"]:
         return MsAttentionMetadata
 
     @staticmethod
@@ -638,17 +611,21 @@ class MsAttentionBackend(AttentionBackend):
         swap_type: bool,
     ) -> None:
         """
-        Swap key/value cache between host and device, to support multi-batch and long-sequence inference.
+        Swap key/value cache between host and device, to support multi-batch
+        and long-sequence inference.
 
         Args:
             src_kv_cache: Source KV cache block.
             dst_kv_cache: Destination KV cache block.
             src_to_dst: A 2-D array contains src and dst blocks to swap.
-            swap_type: A bool value indicating the data direction: "True" for device-to-host, and "False" for host-to-device.
+            swap_type: A bool value indicating the data direction:
+                "True" for device-to-host, and "False" for host-to-device.
         """
+        # K cache
         src_key_cache = src_kv_cache[0]
         dst_key_cache = dst_kv_cache[0]
         swap_cache(src_key_cache, dst_key_cache, src_to_dst, swap_type)
+        # V cache
         src_value_cache = src_kv_cache[1]
         dst_value_cache = dst_kv_cache[1]
         swap_cache(src_value_cache, dst_value_cache, src_to_dst, swap_type)
@@ -666,85 +643,19 @@ class MsAttentionBackend(AttentionBackend):
                 npu_value_block[dst, :] = npu_value_block[src, :]
 
 
-class MsAttentionImpl(AttentionImpl):
-    """
-    If the input tensors contain prompt tokens, the layout is as follows:
-    |<--------------- num_prefill_tokens ----------------->|
-    |<--prefill_0-->|<--prefill_1-->|...|<--prefill_N-1--->|
-
-    Otherwise, the layout is as follows:
-    |<----------------- num_decode_tokens ------------------>|
-    |<--decode_0-->|..........|<--decode_M-1-->|<--padding-->|
-
-    Generation tokens can contain padding when cuda-graph is used.
-    Currently, prompt tokens don't contain any padding.
-
-    The prompts might have different lengths, while the generation tokens
-    always have length 1.
-
-    If chunked prefill is enabled, prefill tokens and decode tokens can be
-    batched together in a flattened 1D query.
-
-    |<----- num_prefill_tokens ---->|<------- num_decode_tokens --------->|
-    |<-prefill_0->|...|<-prefill_N-1->|<--decode_0-->|...|<--decode_M-1-->|
-
-    Currently, cuda graph is disabled for chunked prefill, meaning there's no
-    padding between prefill and decode tokens.
-    """
-
-    def __init__(
-        self,
-        num_heads: int,
-        head_size: int,
-        scale: float,
-        num_kv_heads: int,
-        alibi_slopes: Optional[List[float]],
-        sliding_window: Optional[int],
-        kv_cache_dtype: str,
-        blocksparse_params: Optional[Dict[str, Any]] = None,
-        logits_soft_cap: Optional[float] = None,
-        attn_type: str = AttentionType.DECODER,
-    ) -> None:
-        pass
-
-    def forward(
-        self,
-        layer: AttentionLayer,
-        query: ms.Tensor,
-        key: ms.Tensor,
-        value: ms.Tensor,
-        kv_cache: ms.Tensor,
-        attn_metadata: MsAttentionMetadata,
-        attn_type: str = AttentionType.DECODER,
-        output: Optional[ms.Tensor] = None,
-    ) -> ms.Tensor:
-        """Forward pass with FlashAttention.
-
-        Args:
-            query: shape = [num_tokens, num_heads, head_size]
-            key: shape = [num_tokens, num_kv_heads, head_size]
-            value: shape = [num_tokens, num_kv_heads, head_size]
-            output: shape = [num_tokens, num_heads, head_size]
-            kv_cache = [2, num_blocks, block_size, num_kv_heads, head_size]
-                NOTE: kv_cache will be an empty tensor with shape [0]
-                for profiling run.
-            attn_metadata: Metadata for attention.
-        NOTE: It in-place updates the output tensor.
-        """
-        pass
-
-
 class MLABackend(AttentionBackend):
+    """MindSpore Multi-Head Latent Attention backend."""
+
     @staticmethod
     def get_name() -> str:
         return "MS_MLA"
 
     @staticmethod
-    def get_impl_cls() -> Type["AttentionImpl"]:
+    def get_impl_cls() -> Type["MsAttentionImpl"]:
         return MsAttentionImpl
 
     @staticmethod
-    def get_metadata_cls() -> Type["AttentionMetadata"]:
+    def get_metadata_cls() -> Type["MsAttentionMetadata"]:
         return MsAttentionMetadata
 
     @staticmethod
@@ -772,18 +683,19 @@ class MLABackend(AttentionBackend):
         swap_type: bool,
     ) -> None:
         """
-        Swap key/value cache for mla between host and device, to support multi-batch and long-sequence inference.
+        Swap key cache for mla between host and device, to support
+        multi-batch and long-sequence inference.
 
         Args:
             src_kv_cache: Source KV cache block.
             dst_kv_cache: Destination KV cache block.
             src_to_dst: A 2-D array contains src and dst blocks to swap.
-            swap_type: A bool value indicating the data direction: "True" for device-to-host, and "False" for host-to-device.
+            swap_type: A bool value indicating the data direction:
+                "True" for device-to-host, and "False" for host-to-device.
         """
         src_key_cache = src_kv_cache[0]
         dst_key_cache = dst_kv_cache[0]
         swap_cache(src_key_cache, dst_key_cache, src_to_dst, swap_type)
-
 
     @staticmethod
     def copy_blocks(
@@ -798,6 +710,8 @@ class MLABackend(AttentionBackend):
 
     @staticmethod
     def get_supported_head_sizes() -> List[int]:
+        """Only head size 576 is supported by MLA now."""
         return [576]
+
 
 FlashAttentionMetadata = MsAttentionMetadata

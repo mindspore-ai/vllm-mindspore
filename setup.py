@@ -18,28 +18,30 @@
 import importlib.util
 import logging
 import os
-import sys
 import shutil
-from typing import List
+import subprocess
+import sys
 from pathlib import Path
-from setuptools import find_packages, setup
+
+from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools import Extension
 import subprocess
 
 
 def load_module_from_path(module_name, path):
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    module = importlib.util.module_from_spec(spec)
+    spec = importlib.util.spec_from_file_location(
+        module_name, path)  # type: ignore[union-attr]
+    module = importlib.util.module_from_spec(
+        spec)  # type: ignore[union-attr, arg-type]
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
 
 
 ROOT_DIR = os.path.dirname(__file__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 if not sys.platform.startswith("linux"):
     logger.warning(
@@ -64,19 +66,17 @@ def read_readme() -> str:
         return ""
 
 
-def get_requirements() -> List[str]:
+def get_requirements() -> list[str]:
     """Get Python package dependencies from requirements.txt."""
 
-    def _read_requirements(filename: str) -> List[str]:
+    def _read_requirements(filename: str) -> list[str]:
         with open(get_path(filename)) as f:
             requirements = f.read().strip().split("\n")
         resolved_requirements = []
         for line in requirements:
             if line.startswith("-r "):
                 resolved_requirements += _read_requirements(line.split()[1])
-            elif line.startswith("--"):
-                continue
-            elif "http" in line:
+            elif line.startswith("--") or "http" in line:
                 continue
             else:
                 resolved_requirements.append(line)
@@ -87,24 +87,39 @@ def get_requirements() -> List[str]:
 
 
 def write_commit_id():
-    ret_code = os.system("git rev-parse --abbrev-ref HEAD > ./vllm_mindspore/.commit_id "
-                         "&& git log --abbrev-commit -1 >> ./vllm_mindspore/.commit_id")
-    if ret_code != 0:
-        sys.stdout.write("Warning: Can not get commit id information. Please make sure git is available.")
-        os.system("echo 'git is not available while building.' > ./vllm_mindspore/.commit_id")
+    commit_info = ""
+    try:
+        commit_info += subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode("utf-8")
+        commit_info += subprocess.check_output(
+            ["git", "log", "--abbrev-commit", "-1"]).decode("utf-8")
+    except subprocess.CalledProcessError:
+        logger.warning("Can't get commit id information. "
+                       "Please make sure git is available.")
+        commit_info = "git is not available while building."
+
+    with open("./vllm_mindspore/.commit_id", "w") as f:
+        f.write(commit_info)
 
 
 version = (Path("vllm_mindspore") / "version.txt").read_text()
 
+
 def _get_ascend_home_path():
-    return os.environ.get("ASCEND_HOME_PATH", "/usr/local/Ascend/ascend-toolkit/latest")
+    return os.environ.get("ASCEND_HOME_PATH",
+                          "/usr/local/Ascend/ascend-toolkit/latest")
+
 
 def _get_ascend_env_path():
-    env_script_path = os.path.realpath(os.path.join(_get_ascend_home_path(), "..", "set_env.sh"))
+    env_script_path = os.path.realpath(
+        os.path.join(_get_ascend_home_path(), "..", "set_env.sh"))
     if not os.path.exists(env_script_path):
-        raise ValueError(f"The file '{env_script_path}' is not found, "
-                            "please make sure environment variable 'ASCEND_HOME_PATH' is set correctly.")
+        raise ValueError(
+            "The file '{}' is not found, please make sure environment "
+            "variable 'ASCEND_HOME_PATH' is set correctly.".format(
+                env_script_path))
     return env_script_path
+
 
 class CustomBuildExt(build_ext):
     ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -119,7 +134,7 @@ class CustomBuildExt(build_ext):
         # "vllm_mindspore._C_ops" --> "_C_ops"
         ext_name = ext.name.split('.')[-1]
         so_name = ext_name + ".so"
-        logger.info(f"Building {so_name} ...")
+        logger.info("Building %s ...", so_name)
         OPS_DIR = os.path.join(ROOT_DIR, "csrc")
         BUILD_OPS_DIR = os.path.join(ROOT_DIR, "build", "csrc_ops")
         if os.path.exists(BUILD_OPS_DIR):
@@ -128,7 +143,8 @@ class CustomBuildExt(build_ext):
 
         ascend_home_path = _get_ascend_home_path()
         env_script_path = _get_ascend_env_path()
-        build_extension_dir = os.path.join(BUILD_OPS_DIR, "kernel_meta", ext_name)
+        build_extension_dir = os.path.join(BUILD_OPS_DIR, "kernel_meta",
+                                           ext_name)
         # Combine all cmake commands into one string
         cmake_cmd = (
             f"source {env_script_path} && "
@@ -138,11 +154,10 @@ class CustomBuildExt(build_ext):
             f"  -DBUILD_EXTENSION_DIR={build_extension_dir}"
             f"  -DMS_EXTENSION_NAME={ext_name}"
             f"  -DASCEND_CANN_PACKAGE_PATH={ascend_home_path} && "
-            f"cmake --build {BUILD_OPS_DIR} -j --verbose"
-        )
+            f"cmake --build {BUILD_OPS_DIR} -j --verbose")
 
         # Run the combined cmake command
-        logger.info(f"Running commands:\n{cmake_cmd}")
+        logger.info("Running commands:\n%s", cmake_cmd)
         build_log_file = os.path.join(BUILD_OPS_DIR, "build_log.txt")
         with open(build_log_file, "w") as log_file:
             result = subprocess.run(
@@ -153,8 +168,8 @@ class CustomBuildExt(build_ext):
                 stderr=log_file
             )
         if result.returncode != 0:
-            logger.error(f"Command failed: '{cmake_cmd}' exited with code {result.returncode}")
-            raise RuntimeError(f"Failed to build {ext_name}, check the build log for details: {build_log_file}")
+            logger.error("Command failed: '{}' exited with code {}".format(cmake_cmd, result.returncode))
+            raise RuntimeError("Failed to build {}, check the build log for details: {}".format(ext_name, build_log_file))
 
         # Copy the generated .so file to the target directory
         src_so_path = os.path.join(build_extension_dir, so_name)
@@ -163,18 +178,13 @@ class CustomBuildExt(build_ext):
         if os.path.exists(dst_so_path):
             os.remove(dst_so_path)
         shutil.copy(src_so_path, dst_so_path)
-        logger.info(f"Build {dst_so_path} succeeded.")
+        logger.info("Build %s succeeded.", dst_so_path)
 
 
 write_commit_id()
 
-package_data = {
-    "": [
-        "*.so",
-        "lib/*.so",
-        ".commit_id"
-    ]
-}
+package_data = {"": ["*.so", "lib/*.so", ".commit_id"]}
+
 
 def _get_ext_modules():
     ext_modules = []
@@ -183,15 +193,14 @@ def _get_ext_modules():
         ext_modules.append(Extension("vllm_mindspore._C_ops", sources=[]))
     return ext_modules
 
+
 setup(
     name="vllm-mindspore",
     version=version,
     author="MindSpore Team",
     license="Apache 2.0",
-    description=(
-        "A high-throughput and memory-efficient inference and "
-        "serving engine for LLMs"
-    ),
+    description=("A high-throughput and memory-efficient inference and "
+                 "serving engine for LLMs"),
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="https://gitee.com/mindspore/vllm-mindspore",
