@@ -22,8 +22,9 @@
 import os
 from typing import Optional, Union
 
+import mindspore as ms
 import safetensors.torch
-import torch
+from mindspore import mint
 from vllm.lora.lora import LoRALayerWeights
 from vllm.lora.peft_helper import PEFTHelper
 from vllm.lora.utils import is_regex_target_modules, parse_fine_tuned_lora_name
@@ -51,11 +52,11 @@ def register_module(self, module_name: str, module: "BaseLayerWithLoRA"):
 def from_lora_tensors(
     cls,
     lora_model_id: int,
-    tensors: dict[str, torch.Tensor],
+    tensors: dict[str, ms.Tensor],
     peft_helper: PEFTHelper,
     device: str = "cuda",
-    dtype: Optional[torch.dtype] = None,
-    embeddings: Optional[dict[str, torch.Tensor]] = None,
+    dtype=None,
+    embeddings: Optional[dict[str, ms.Tensor]] = None,
     target_embedding_padding: Optional[int] = None,
     embedding_modules: Optional[dict[str, str]] = None,
     embedding_padding_modules: Optional[list[str]] = None,
@@ -102,7 +103,7 @@ def from_lora_tensors(
                 lora_b = loras[module_name].lora_b
                 assert target_embedding_padding >= lora_b.shape[1]
                 addition = target_embedding_padding - lora_b.shape[1]
-                loras[module_name].lora_b = torch.nn.functional.pad(
+                loras[module_name].lora_b = mint.nn.functional.pad(
                     lora_b, (0, addition))
             if pin_memory:
                 loras[module_name].lora_b = loras[
@@ -126,7 +127,7 @@ def from_local_checkpoint(
         *,
         lora_model_id: Optional[int] = None,
         device: str = "cuda",
-        dtype: Optional[torch.dtype] = None,
+        dtype=None,
         target_embedding_padding: Optional[int] = None,
         embedding_modules: Optional[dict[str, str]] = None,
         embedding_padding_modules: Optional[list[str]] = None,
@@ -152,7 +153,7 @@ def from_local_checkpoint(
     new_embeddings_tensor_path = os.path.join(lora_dir,
                                               "new_embeddings.safetensors")
     new_embeddings_bin_file_path = os.path.join(lora_dir, "new_embeddings.bin")
-    tensors: dict[str, torch.Tensor] = {}
+    tensors: dict[str, mint.Tensor] = {}
     unexpected_modules: list[Union[list[str], str]] = []
 
     def check_unexpected_modules(modules: dict):
@@ -196,7 +197,7 @@ def from_local_checkpoint(
             check_unexpected_modules(f)
             for module in f.keys():  # noqa
                 # vllm-mindspore add numpy to tensor
-                tensors[module] = torch.Tensor(f.get_tensor(module))
+                tensors[module] = mint.Tensor(f.get_tensor(module))
     elif os.path.isfile(lora_bin_file_path):
         # When a bin file is provided, we rely on config to find unexpected
         # modules.
@@ -221,9 +222,9 @@ def from_local_checkpoint(
                 f" target modules in {expected_lora_modules}"
                 f" but received {unexpected_modules}."
                 f" Please verify that the loaded LoRA module is correct")
-        tensors = torch.load(lora_bin_file_path,
-                             map_location=device,
-                             weights_only=True)
+        tensors = mint.load(lora_bin_file_path,
+                            map_location=device,
+                            weights_only=True)
     else:
         raise ValueError(f"{lora_dir} doesn't contain tensors")
 
@@ -231,9 +232,9 @@ def from_local_checkpoint(
     if os.path.isfile(new_embeddings_tensor_path):
         embeddings = safetensors.torch.load_file(new_embeddings_tensor_path)
     elif os.path.isfile(new_embeddings_bin_file_path):
-        embeddings = torch.load(new_embeddings_bin_file_path,
-                                map_location=device,
-                                weights_only=True)
+        embeddings = mint.load(new_embeddings_bin_file_path,
+                               map_location=device,
+                               weights_only=True)
 
     return cls.from_lora_tensors(
         lora_model_id=get_lora_id()
