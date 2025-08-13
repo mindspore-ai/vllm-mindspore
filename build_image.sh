@@ -18,6 +18,7 @@
 set -euo pipefail
 
 readonly IMAGE_TAG="vllm_ms_$(date +%Y%m%d)"
+ARCH=$([ "$(uname -m)" = "x86_64" ] && echo "x86_64" || echo "aarch64")
 
 log() {
     echo "========= $*"
@@ -26,8 +27,8 @@ log() {
 main() {
     log "Starting Docker image build process"
     
-    log "Step 1: Building base environment"
-    docker image inspect base_env >/dev/null 2>&1 || docker build -t base_env -f Dockerfile .
+    log "Step 1: Building base environment for $ARCH"
+    docker image inspect base_env >/dev/null 2>&1 || docker build --build-arg TARGETARCH=$ARCH -t base_env -f Dockerfile .
     
     log "Step 2: Building final image with install script"
     
@@ -44,7 +45,7 @@ COPY .jenkins/test/config/dependent_packages.yaml /workspace/.jenkins/test/confi
 ARG MINDFORMERS_COMMIT=$mindformers_commit
 RUN chmod +x /workspace/install_depend_pkgs.sh && \\
     cd /workspace && \\
-    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT AUTO_BUILD=1 ./install_depend_pkgs.sh
+    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT ./install_depend_pkgs.sh
 
 ENV PYTHONPATH="/workspace/mindformers/:\$PYTHONPATH"
 ENV vLLM_MODEL_BACKEND=MindFormers

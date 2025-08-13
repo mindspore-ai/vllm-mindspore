@@ -16,6 +16,8 @@
 
 FROM hub.oepkgs.net/openeuler/openeuler:22.03-lts-sp4
 
+ARG ARCH=aarch64
+
 RUN set -ex && \
     echo "[OS]" > /etc/yum.repos.d/openEuler.repo && \
     echo "name=OS" >> /etc/yum.repos.d/openEuler.repo && \
@@ -76,9 +78,9 @@ RUN set -ex && \
 WORKDIR /root
 
 RUN set -ex && \
-    wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh && \
-    bash /root/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh -b && \
-    rm /root/Miniconda3-py311_25.1.1-2-Linux-aarch64.sh
+    wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.1.1-2-Linux-${ARCH}.sh && \
+    bash /root/Miniconda3-py311_25.1.1-2-Linux-${ARCH}.sh -b && \
+    rm /root/Miniconda3-py311_25.1.1-2-Linux-${ARCH}.sh
 
 ENV PATH="/root/miniconda3/bin:$PATH"
 ENV PYTHONPATH="/root/miniconda3/lib/python3.11/site-packages"
@@ -99,9 +101,9 @@ RUN set -ex && \
     echo "Driver_Install_Status=complete" >> /etc/ascend_install.info
 
 RUN set -ex && \
-    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-toolkit_8.1.RC1_linux-aarch64.run" -o Ascend-cann-toolkit.run && \
-    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-kernels-910b_8.1.RC1_linux-aarch64.run" -o Ascend-cann-kernels-910b.run && \
-    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-nnrt_8.1.RC1_linux-aarch64.run" -o Ascend-cann-nnrt.run && \
+    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-toolkit_8.1.RC1_linux-${ARCH}.run" -o Ascend-cann-toolkit.run && \
+    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-kernels-910b_8.1.RC1_linux-${ARCH}.run" -o Ascend-cann-kernels-910b.run && \
+    curl -s -k "https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-nnrt_8.1.RC1_linux-${ARCH}.run" -o Ascend-cann-nnrt.run && \
     chmod a+x *.run && \
     bash /root/Ascend-cann-toolkit.run --install -q && \
     bash /root/Ascend-cann-kernels-910b.run --install -q && \
