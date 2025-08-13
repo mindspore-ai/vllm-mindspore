@@ -13,6 +13,7 @@ vLLM MindSpore
 ---
 *最新消息* 🔥
 
+- [2025/08] 适配vLLM [v0.9.1](https://github.com/vllm-project/vllm/releases/tag/v0.9.1)，新增支持LogProbs参数、Qwen2.5-VL模型。
 - [2025/06] 适配vLLM [v0.8.3](https://github.com/vllm-project/vllm/releases/tag/v0.8.3)，新增支持vLLM V1架构、Qwen3大模型。
 - [2025/04] 完成vLLM [v0.7.3](https://github.com/vllm-project/vllm/releases/tag/v0.7.3)适配，新增支持Automatic Prefix Caching、Chunked Prefill、Multi-step Scheduling、MTP等特性。联合openEuler社区和上海交通大学，实现DeepSeek全栈开源单机推理部署，你可以在[这里](https://www.openeuler.org/zh/news/openEuler/20240421-jd/20240421-jd.html)阅读详细报道。
 - [2025/03] 完成vLLM [v0.6.6.post1](https://github.com/vllm-project/vllm/releases/tag/v0.6.6.post1)适配，支持采用`vllm.entrypoints`部署基于MindSpore的DeepSeek-V3/R1、Qwen2.5等大模型推理服务。联合openEuler社区和北京大学，发布全栈开源DeepSeek推理方案，你可以在[这里](https://news.pku.edu.cn/xwzh/e13046c47d03471c8cebb950bd1f4598.htm)阅读详细报道。
