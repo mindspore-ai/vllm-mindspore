@@ -15,8 +15,8 @@
 # limitations under the License.
 """Adapted functions for mindspore in Worker."""
 
-import os
 import math
+import os
 import subprocess
 
 import psutil
@@ -29,6 +29,7 @@ from vllm.sequence import SequenceGroupMetadata
 from vllm_mindspore.utils import get_valid_dtype
 
 logger = init_logger(__name__)
+
 
 def execute_command(cmd_list):
     try:
@@ -155,7 +156,7 @@ def wrapper_worker_bind_cpu(fun):
         local_rank = kwargs.get("local_rank")
         parallel_config = kwargs.get("vllm_config").parallel_config
         local_rank = (parallel_config.data_parallel_rank_local *
-                        parallel_config.world_size + local_rank)
+                      parallel_config.world_size + local_rank)
         bind_cpu(local_rank)
         fun(*arg, **kwargs)
 

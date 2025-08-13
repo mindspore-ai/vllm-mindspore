@@ -75,7 +75,8 @@ class BaseWeightProcessor:
         self.parameter_dict = {}
         self.file_handles = {}
 
-        # Trigger the time initial of vllm native loading weights, make sure correct of Loading weights time costs.
+        # Trigger the time initial of vllm native loading weights,
+        # make sure correct of Loading weights time costs.
         for _, _ in weights_iter:
             break
 

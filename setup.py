@@ -25,8 +25,6 @@ from pathlib import Path
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
-from setuptools import Extension
-import subprocess
 
 
 def load_module_from_path(module_name, path):
@@ -160,16 +158,17 @@ class CustomBuildExt(build_ext):
         logger.info("Running commands:\n%s", cmake_cmd)
         build_log_file = os.path.join(BUILD_OPS_DIR, "build_log.txt")
         with open(build_log_file, "w") as log_file:
-            result = subprocess.run(
-                ["bash", "-c", cmake_cmd],
-                cwd=self.ROOT_DIR,
-                text=True,
-                stdout=log_file,
-                stderr=log_file
-            )
+            result = subprocess.run(["bash", "-c", cmake_cmd],
+                                    cwd=self.ROOT_DIR,
+                                    text=True,
+                                    stdout=log_file,
+                                    stderr=log_file)
         if result.returncode != 0:
-            logger.error("Command failed: '{}' exited with code {}".format(cmake_cmd, result.returncode))
-            raise RuntimeError("Failed to build {}, check the build log for details: {}".format(ext_name, build_log_file))
+            logger.error("Command failed: '%s' exited with code %s", cmake_cmd,
+                         result.returncode)
+            raise RuntimeError(
+                "Failed to build {}, check the build log for details: {}".
+                format(ext_name, build_log_file))
 
         # Copy the generated .so file to the target directory
         src_so_path = os.path.join(build_extension_dir, so_name)
