@@ -24,7 +24,7 @@
 
 from functools import cached_property
 
-import mindtorch
+import msadapter
 
 
 # Override _smallest_positive_value in RejectionSampler to resolve
@@ -42,4 +42,4 @@ def _smallest_positive_value(self) -> float:
     See https://en.wikipedia.org/wiki/Subnormal_number for more information.
     """
     # the value type of tiny is numpy in msadapter.
-    return float(mindtorch.torch.finfo(self.probs_dtype).tiny)
+    return float(msadapter.finfo(self.probs_dtype).tiny)

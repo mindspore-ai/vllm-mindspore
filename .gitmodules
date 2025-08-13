@@ -1,4 +1,4 @@
 [submodule "tests/mindformers"]
 	path = tests/mindformers
 	url = https://gitee.com/mindspore/mindformers.git
-	branch = br_feature_infer
+	branch = master

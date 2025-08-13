@@ -23,12 +23,12 @@ from mindspore import Parameter, Tensor, context, mint
 from mindspore import dtype as mstype
 from mindspore import nn
 
-from vllm.config import CacheConfig
-from vllm.attention.backends.abstract import AttentionType
 from vllm_mindspore.model_executor.layers.quantization.smooth_quant_modelslim \
     import SmoothQuantModelSlimConfig
 from vllm_mindspore.model_executor.layers.quantization.attention import (
     BaseKVCacheMethod, KVCacheInt8Method)
+from vllm.config import CacheConfig
+from vllm.attention.backends.abstract import AttentionType
 
 
 @pytest.fixture(params=[mstype.float16, mstype.bfloat16],
