@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "runtime/kernel.h"
+#include "rt/runtime/kernel.h"
 #include "runtime/utils.h"
 
 namespace da {
