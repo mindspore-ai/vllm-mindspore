@@ -991,7 +991,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         dyn_rotary_pos_emb = ms.Tensor(shape=[None, None],
                                        dtype=mstype.float32)
         dyn_window_index = ms.Tensor(shape=[None], dtype=mstype.int64)
-        dyn_cu_window_seqlens = ms.Tensor(shape=[None], dtype=mstype.int64)
+        dyn_cu_window_seqlens = ms.Tensor(shape=[None], dtype=mstype.int32)
         dyn_grid_thw = ms.Tensor(shape=[None, None], dtype=mstype.int64)
 
         self.set_inputs(
@@ -1017,8 +1017,6 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         hidden_states = x.to(dtype=self.dtype)
         hidden_states = self.patch_embed(hidden_states)
 
-        cu_window_seqlens = cu_window_seqlens.astype(ms.int32)
-        cu_window_seqlens = mint.unique_consecutive(cu_window_seqlens)
         seq_len, _ = hidden_states.shape
         hidden_states = hidden_states.reshape(
             seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
@@ -1432,6 +1430,8 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             rotary_pos_emb = self.rot_pos_emb(grid_thw)
             # windows attention
             window_index, cu_window_seqlens = self.get_window_index(grid_thw)
+            cu_window_seqlens = cu_window_seqlens.astype(ms.int32)
+            cu_window_seqlens = mint.unique_consecutive(cu_window_seqlens)
             image_embeds = self.visual(pixel_values, rotary_pos_emb,
                                        window_index, cu_window_seqlens,
                                        grid_thw)
@@ -1459,6 +1459,8 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             rotary_pos_emb = self.rot_pos_emb(grid_thw)
             # windows attention
             window_index, cu_window_seqlens = self.get_window_index(grid_thw)
+            cu_window_seqlens = cu_window_seqlens.astype(ms.int32)
+            cu_window_seqlens = mint.unique_consecutive(cu_window_seqlens)
             video_embeds = self.visual(pixel_values_videos, rotary_pos_emb,
                                        window_index, cu_window_seqlens,
                                        grid_thw)

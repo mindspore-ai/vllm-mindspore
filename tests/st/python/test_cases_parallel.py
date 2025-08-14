@@ -201,7 +201,6 @@ def test_cases_parallel_part6():
     run_tasks(cases)
 
 
-@pytest.mark.skip(reason="need adapt for mindspore master")
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single

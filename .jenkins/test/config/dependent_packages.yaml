@@ -5,7 +5,7 @@ mindspore_gs:
   'https://repo.mindspore.cn/mindspore/golden-stick/version/202508/20250814/master_20250814010017_2713821db982330b3bcd6d84d85a3b337d555f27_newest/'
 
 msadapter:
-  'https://repo.mindspore.cn/mindspore/msadapter/version/202508/20250814/master_20250814010018_4615051c43eef898b6bbdc69768656493b5932f8_newest/'
+  'https://repo.mindspore.cn/mindspore/msadapter/version/202508/20250815/master_20250815010020_d9fb038f26287bd42f3f6b1bf2b479c87e932970_newest/'
 
 vllm:
   'https://repo.mindspore.cn/mirrors/vllm/version/202507/20250715/v0.9.1/'

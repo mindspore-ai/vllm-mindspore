@@ -108,12 +108,8 @@ class LowerTriangularMask:
 
         return attention_mask
 
-    def gen_attention_mask(self,
-                           is_prefill: bool,
-                           position_ids: Tensor,
-                           query_lens_np: np.ndarray,
-                           seq_lens_np: np.ndarray,
-                           attn_metadata=None):
+    def gen_attention_mask(self, is_prefill: bool, position_ids: Tensor,
+                           query_lens_np: np.ndarray, seq_lens_np: np.ndarray):
         max_query_len = query_lens_np.max()
         max_seq_len = seq_lens_np.max()
         if is_prefill:
@@ -150,12 +146,8 @@ class MultiModalLowerTriangularMask(LowerTriangularMask):
         max_model_len (int): The max model length of Infer model.
     """
 
-    def gen_attention_mask(self,
-                           is_prefill,
-                           position_ids,
-                           query_lens_np,
-                           seq_lens_np,
-                           attn_metadata=None):
+    def gen_attention_mask(self, is_prefill, position_ids, query_lens_np,
+                           seq_lens_np):
         max_query_len = query_lens_np.max()
         max_seq_len = seq_lens_np.max()
         if is_prefill:
@@ -165,7 +157,7 @@ class MultiModalLowerTriangularMask(LowerTriangularMask):
                 mm_position_ids_list = []
                 for i in range(len(seq_lens_np)):
                     mm_position_ids_list.append(
-                        np.arange(seq_lens_np[i] - query_lens_np,
+                        np.arange(seq_lens_np[i] - query_lens_np[i],
                                   seq_lens_np[i]))
                 mm_position_ids = np.concatenate(mm_position_ids_list)
                 mm_position_ids = Tensor(mm_position_ids,
