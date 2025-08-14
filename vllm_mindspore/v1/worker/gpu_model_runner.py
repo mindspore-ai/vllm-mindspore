@@ -18,6 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import traceback
 from typing import Any, Optional
 
 import mindspore as ms
@@ -407,7 +408,7 @@ def _update_states(self, scheduler_output) -> None:
         req_id = new_req_data.req_id
         sampling_params = new_req_data.sampling_params
         if sampling_params.sampling_type == SamplingType.RANDOM_SEED:
-            generator = msGenerator(device=self.device)
+            generator = msGenerator()
             generator.manual_seed(sampling_params.seed)
         else:
             generator = None
@@ -541,9 +542,10 @@ def wrapper_gpu_model_runner_execute_model(func):
         try:
             output = func(*args, **kwargs)
             return output
-        except Exception as e:
-            logger.warning("Caught exception %s when processing req_ids %s",
-                           str(e), self.input_batch.req_ids)
+        except Exception:
+            exc_info = traceback.format_exc()
+            logger.warning("Caught exception when processing req_ids %s:\n%s",
+                           self.input_batch.req_ids, exc_info)
             return ModelRunnerOutput(
                 req_ids=self.input_batch.req_ids,
                 req_id_to_index=self.input_batch.req_id_to_index,
