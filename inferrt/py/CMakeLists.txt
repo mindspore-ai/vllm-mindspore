@@ -23,11 +23,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 check_debug_log_out()
 
 # Include DALang headers
-include_directories(${PROJECT_SOURCE_DIR}/../dalang)
-include_directories(${PROJECT_SOURCE_DIR}/../dalang/dac)
-include_directories(${PROJECT_SOURCE_DIR}/../dalang/dair)
-include_directories(${PROJECT_SOURCE_DIR}/../dalang/dart)
-include_directories(${PROJECT_SOURCE_DIR}/../dalang/api)
+include_directories(${PROJECT_SOURCE_DIR}/../cc)
+include_directories(${PROJECT_SOURCE_DIR}/../cc/c)
+include_directories(${PROJECT_SOURCE_DIR}/../cc/ir)
+include_directories(${PROJECT_SOURCE_DIR}/../cc/rt)
+include_directories(${PROJECT_SOURCE_DIR}/../cc/api)
 
 # Include DaPy directories
 include_directories(${PROJECT_SOURCE_DIR}/dalang_py)
@@ -67,4 +67,4 @@ endif()
 
 # Add pybind11 sub module
 pybind11_add_module(_dapy NO_EXTRAS dalang_py/pybind11_api.cc)
-target_link_libraries(_dapy PUBLIC dalang)
+target_link_libraries(_dapy PUBLIC inferrt)

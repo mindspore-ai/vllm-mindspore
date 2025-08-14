@@ -3,7 +3,7 @@
 # git rm --cached -r build/
 # Build files
 build/
-dapy/pybind11-src/
+py/pybind11-src/
 
 # Cmake files
 CMakeFiles/

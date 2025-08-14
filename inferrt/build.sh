@@ -8,7 +8,7 @@ set -e
 usage()
 {
   echo "Usage:"
-  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,tensor,ops,runtime,dapy]] [-i] [-h]"
+  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,tensor,ops,pass,runtime,py]] [-i] [-h]"
   echo ""
   echo "Options:"
   echo "    -d Enable log print of modules, separated by comma(eg. -d parser,compiler),"
@@ -57,7 +57,7 @@ process_options()
 
 default_options
 process_options $@
-DALANG_CMAKE_ARGS="${DALANG_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
+INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
 DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
 
 
@@ -67,7 +67,7 @@ DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
 CURRENT_PATH=$(pwd)
 SCRIPT_PATH=$(dirname "$0")
 
-DART_PATH=$CURRENT_PATH
+INFERRT_PATH=$CURRENT_PATH
 BUILD_DIR=$CURRENT_PATH/build
 
 # Make sure the build directory exists
@@ -93,7 +93,7 @@ make_sure_build_dir $BUILD_DIR
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
     rm $BUILD_DIR/* -rf
-    cmake $DART_PATH $DALANG_CMAKE_ARGS $DAPY_CMAKE_ARGS
+    cmake $INFERRT_PATH $INFERRT_CMAKE_ARGS $DAPY_CMAKE_ARGS
 fi
 make
 
@@ -101,20 +101,20 @@ make
 ##################################################
 # Run essential test
 ##################################################
-# Run dalang test
+# Run inferrt test
 echo "=============================="
 echo "Run da execution test cases:"
 echo "# 1/2: ./da sample/fibonacci_20.da"
-$BUILD_DIR/dalang/da $DART_PATH/dalang/sample/fibonacci_20.da
+$BUILD_DIR/cc/da $INFERRT_PATH/cc/sample/fibonacci_20.da
 echo "# 2/2: ./da sample/da_llm_sample.da"
-$BUILD_DIR/dalang/da $DART_PATH/dalang/sample/da_llm_sample.da
+$BUILD_DIR/cc/da $INFERRT_PATH/cc/sample/da_llm_sample.da
 echo "=============================="
 
-# Run dapy test
+# Run python test
 echo "=============================="
-echo "Run dapy test case:"
+echo "Run python test case:"
 echo "python check_api.py"
 echo "=============================="
-export PYTHONPATH=$BUILD_DIR/dapy:$DART_PATH/dapy/python
+export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
 echo "PYTHONPATH=$PYTHONPATH"
-python $DART_PATH/dapy/python/check_api.py
+python $INFERRT_PATH/py/python/check_api.py

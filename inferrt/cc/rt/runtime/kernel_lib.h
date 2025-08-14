@@ -29,7 +29,7 @@
 #include <windows.h>
 #endif
 
-#include "dart/runtime/kernel.h"
+#include "runtime/kernel.h"
 #include "runtime/mempool.h"
 #include "common/common.h"
 #include "tensor/tensor.h"

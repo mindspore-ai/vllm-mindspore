@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.11)
-project(dart VERSION 1.0)
+project(inferrt VERSION 1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,5 +17,5 @@ function(check_debug_log_out)
 endfunction()
 
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/dalang)
-add_subdirectory(${PROJECT_SOURCE_DIR}/dapy)
+add_subdirectory(${PROJECT_SOURCE_DIR}/cc)
+add_subdirectory(${PROJECT_SOURCE_DIR}/py)

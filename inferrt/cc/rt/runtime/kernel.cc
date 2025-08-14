@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dart/runtime/kernel.h"
+#include "runtime/kernel.h"
 #include "runtime/utils.h"
 
 namespace da {
