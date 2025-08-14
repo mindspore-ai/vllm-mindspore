@@ -18,14 +18,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Adaption for input processor."""
-from vllm.inputs.registry import ProcessorMixin, Mapping, BatchFeature, resolve_mm_processor_kwargs
+
+from vllm.inputs.registry import (BatchFeature, Mapping, ProcessorMixin,
+                                  resolve_mm_processor_kwargs)
 
 
 def call_hf_processor(
-    self,
-    hf_processor: ProcessorMixin,
-    data: Mapping[str, object],
-    kwargs: Mapping[str, object] = {},
+        self,
+        hf_processor: ProcessorMixin,
+        data: Mapping[str, object],
+        kwargs: Mapping[str, object] = {},  # noqa: B006
 ) -> BatchFeature:
     """
     Call :code:`hf_processor` on the prompt :code:`data`
@@ -44,11 +46,12 @@ def call_hf_processor(
         requires_kw_only=False,
         allow_var_kwargs=True,
     )
+
     # replace call_hf_processor of vLLM for multi-model
     try:
         return hf_processor(**data, **merged_kwargs, return_tensors="np")
     except Exception as exc:
         msg = (f"Failed to apply {type(hf_processor).__name__} "
-                f"on data={data} with kwargs={merged_kwargs}")
+               f"on data={data} with kwargs={merged_kwargs}")
 
         raise RuntimeError(msg) from exc

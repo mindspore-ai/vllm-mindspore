@@ -1,18 +1,75 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+
+[project]
+name = "vllm"
+authors = [{name = "vLLM Team"}]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+readme = "README.md"
+description = "A high-throughput and memory-efficient inference and serving engine for LLMs"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+requires-python = ">=3.9,<3.13"
+dynamic = [ "version", "dependencies", "optional-dependencies"]
+
+[project.urls]
+Homepage="https://github.com/vllm-project/vllm"
+Documentation="https://docs.vllm.ai/en/latest/"
+Slack="https://slack.vllm.ai/"
+
+[project.scripts]
+vllm = "vllm.entrypoints.cli.main:main"
+
+[project.entry-points."vllm.general_plugins"]
+lora_filesystem_resolver = "vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver"
+
+[tool.setuptools_scm]
+# no extra settings needed, presence enables setuptools-scm
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vllm*"]
+
+[tool.yapfignore]
+ignore_patterns = [
+    ".buildkite/**",
+    "benchmarks/**",
+    "build/**",
+    "examples/**",
+]
+
 [tool.ruff]
 # Allow lines to be as long as 80.
 line-length = 80
 
-exclude = [
-    # External file, leaving license intact
-    "vllm_mindspore/__init__.py",
-    "tests/*",
-    "setup.py"
-]
-
 [tool.ruff.lint.per-file-ignores]
-"vllm_mindspore/version.txt" = ["F401"]
-"vllm_mindspore/_version.txt" = ["ALL"]
-"setup.py" = ["ALL"]
+"vllm_mindspore/third_party/**" = ["ALL"]
+"vllm_mindspore/version.py" = ["F401"]
+"vllm_mindspore/_version.py" = ["ALL"]
+# Python 3.8 typing - skip V0 code
+"vllm_mindspore/attention/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/core/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/engine/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/executor/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/prompt_adapter/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/spec_decode/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/worker/**/*.py" = ["UP006", "UP035"]
+# Python 3.8 typing - skip utils for ROCm
+"vllm_mindspore/utils.py" = ["UP006", "UP035"]
+"vllm_mindspore/__init__.py" = ["E402"]
+"vllm_mindspore/entrypoints/__main__.py" = ["F401", "E402"]
+"tests/**/*.py" = ["F401", "E402"]
+"tests/st/python/cases_parallel/*.py" = ["F401", "E402"]
 
 [tool.ruff.lint]
 select = [
@@ -28,6 +85,7 @@ select = [
     "SIM",
     # isort
     # "I",
+    # flake8-logging-format
     "G",
 ]
 ignore = [
@@ -39,49 +97,76 @@ ignore = [
     "B007",
     # f-string format
     "UP032",
-    # long line
-    "E501"
+    # Can remove once 3.10+ is the minimum Python version
+    "UP007",
 ]
 
 [tool.mypy]
+plugins = ['pydantic.mypy']
 ignore_missing_imports = true
 check_untyped_defs = true
 follow_imports = "silent"
 
 # After fixing type errors resulting from follow_imports: "skip" -> "silent",
 # move the directory here and remove it from tools/mypy.sh
-files= ["vllm_mindspore/"]
+files = [
+    "vllm_mindspore/*.py",
+    "vllm_mindspore/adapter_commons",
+    "vllm_mindspore/assets",
+    "vllm_mindspore/entrypoints",
+    "vllm_mindspore/core",
+    "vllm_mindspore/inputs",
+    "vllm_mindspore/logging_utils",
+    "vllm_mindspore/multimodal",
+    "vllm_mindspore/platforms",
+    "vllm_mindspore/transformers_utils",
+    "vllm_mindspore/triton_utils",
+    "vllm_mindspore/usage",
+]
+# TODO(woosuk): Include the code from Megatron and HuggingFace.
 exclude = [
     "vllm_mindspore/model_executor/parallel_utils/|vllm_mindspore/model_executor/models/",
     # Ignore triton kernels in ops.
-    'vllm_mindspore/attention/ops/.*\.py$',
-    'setup.py',
-    'tests/'
+    'vllm_mindspore/attention/ops/.*\.py$'
 ]
-
-[[tool.mypy.overrides]]
-module = "setup"
-ignore_errors = true
 
 [tool.codespell]
 ignore-words-list = "dout, te, indicies, subtile, ElementE, CANN"
-skip = "./tests/models/fixtures,./tests/prompts,./benchmarks/sonnet.txt,./tests/lora/data,./build"
+skip = "tests/models/fixtures/*,tests/prompts/*,benchmarks/sonnet.txt,tests/lora/data/*,build/*,vllm_mindspore/third_party/*"
 
 [tool.isort]
+skip_glob = [
+    ".buildkite/*",
+    "benchmarks/*",
+    "examples/*",
+]
 use_parentheses = true
 skip_gitignore = true
-
-skip_glob = ["tests/*", "vllm_mindspore/ops/*", "setup.py"]
-skip = ["vllm_mindspore/__init__.py"]
 
 [tool.pytest.ini_options]
 markers = [
     "skip_global_cleanup",
     "core_model: enable this model test in each PR instead of only nightly",
     "cpu_model: enable this model test in CPU tests",
-    "quant_model: run this model test under Quantized category",
     "split: run this test as part of a split",
     "distributed: run this test only in distributed GPU tests",
     "skip_v1: do not run this test with v1",
     "optional: optional tests that are automatically skipped, include --optional to run them",
 ]
+
+[tool.pymarkdown]
+plugins.md004.style = "sublist" # ul-style
+plugins.md007.indent = 4 # ul-indent
+plugins.md007.start_indented = true # ul-indent
+plugins.md013.enabled = false # line-length
+plugins.md041.enabled = false # first-line-h1
+plugins.md033.enabled = false # inline-html
+plugins.md046.enabled = false # code-block-style
+plugins.md024.allow_different_nesting = true # no-duplicate-headers
+
+[tool.ty.src]
+root = "./vllm_mindspore"
+respect-ignore-files = true
+
+[tool.ty.environment]
+python = "./.venv"

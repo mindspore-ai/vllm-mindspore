@@ -63,6 +63,13 @@ def get_valid_dtype(dtype):
     return dtype
 
 
+def get_dtype_size(dtype: torch.dtype) -> int:
+    """Get the size of the data type in bytes."""
+    if isinstance(dtype, str):
+        dtype = STR_DTYPE_TO_TENSOR_DTYPE[dtype]
+    return torch.tensor([], dtype=dtype).element_size()
+
+
 def _create_empty_tensor(ms_type):
     init_func = Zero()
     init_func.__enable_zero_dim__ = True
@@ -143,11 +150,6 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e5m2": mstype.uint8,
 }
 
-class vllmModelBackendEnum(str, Enum):
-    """Define the variable Enum of vLLM_MODEL_BACKEND"""
-    MF = 'MindFormers'
-    MIND_ONE = 'MindONE'
-
 
 class vllmModelBackendEnum(str, Enum):
     """Define the variable Enum of vLLM_MODEL_BACKEND"""
@@ -181,6 +183,60 @@ def is_mindone_model_backend():
             == vllmModelBackendEnum.MIND_ONE)
 
 
+# DLLM
+def register_connector():
+    try:
+        from vllm.distributed.kv_transfer.kv_connector.factory import (
+            KVConnectorFactory)
+
+        # use D2H for KVtransfer
+        KVConnectorFactory.register_connector(
+            "DLLMDsConnector", "dllm.dkvc.v1.dllm_ds_connector",
+            "DLLMDsConnector")
+        # use D2D for KVtransfer
+        KVConnectorFactory.register_connector(
+            "DLLMDsD2DConnector", "dllm.dkvc.v1.dllm_ds_d2d_connector",
+            "DLLMDsD2DConnector")
+    except:  # noqa: E722
+        pass
+
+
+def is_version_at_least(current_version, base_version):
+    """
+        return current_version >= base_version.
+        Check whether the current version is higher than or equal to the
+        base version.
+        for current_version: 1.8.1, base_version: 1.11.0, it return False.
+    """
+    version_split_char = '.'
+    if version_split_char not in base_version or version_split_char \
+        not in current_version:
+        raise ValueError(
+            "The version string will contain the `.`."
+            "For example, current_version 1.8.1， base_version: 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char),
+                    base_version.split(version_split_char)):
+        if not x.isdigit() or not y.isdigit():
+            continue
+        if int(x) != int(y):
+            return int(x) >= int(y)
+    return True
+
+
+def get_ascend_soc_version():
+    """Get ascend soc version."""
+    if is_version_at_least(ms.__version__, "2.2.0"):
+        from mindspore._c_expression import MSContext
+        return MSContext.get_instance().get_ascend_soc_version()
+    raise ValueError("The get_ascend_soc_version function is only "
+                     "supported on MindSpore 2.6 and above.")
+
+
+def is_310p():
+    device = get_ascend_soc_version()
+    return device in ['310p', 'ascend310p']
+
+
 def check_ready():
     from mindspore import set_context
 
@@ -202,6 +258,7 @@ def check_ready():
         logger.info("Run with MindONE backend!")
     else:
         logger.info("Run with native model backend!")
+    register_connector()
 
 
 def convert_np_to_ms_dtype(value):
@@ -223,7 +280,7 @@ def convert_np_to_ms_dtype(value):
 
 # Replace the directly loaded module in vllm, such as 'from module import xxx'
 def update_modules(name: str, module):
-    valid_modules = ("vllm", "torch")
+    valid_modules = ("vllm", )
     if name.split(".")[0] not in valid_modules:
         raise KeyError(
             "The target module should be one of {}, but got {}!".format(
@@ -281,7 +338,7 @@ def ms_memory_profiling(
     The increase of `torch.cuda.memory_stats()["allocated_bytes.all.peak"]` during profiling gives (b.).
 
     The increase of `non_torch_memory` from creating the current vLLM instance until after profiling to get (c.).
-    """ # noqa
+    """  # noqa
     gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
@@ -305,7 +362,8 @@ def ms_memory_profiling(
     diff_profile = result.after_profile - result.before_profile
     diff_from_create = result.after_profile - result.before_create
 
-    # use reserved memory instead of allocated memory to describe increase of torch memory
+    # use reserved memory instead of allocated memory to describe increase of
+    # torch memory
     result.torch_peak_increase = diff_profile.torch_memory
     result.non_torch_increase = diff_from_create.non_torch_memory
     result.profile_time = diff_profile.timestamp

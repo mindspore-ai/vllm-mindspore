@@ -18,8 +18,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import (TYPE_CHECKING, ClassVar, Dict, List, Literal, Optional,
-                    Protocol, Type, Union, overload, runtime_checkable)
+from typing import (TYPE_CHECKING, ClassVar, Literal, Optional, Protocol,
+                    Union, overload, runtime_checkable)
 
 from mindspore import Tensor
 
@@ -45,14 +45,14 @@ class SupportsMultiModal(Protocol):
     def get_multimodal_embeddings(
             self, **kwargs: object) -> Optional[MultiModalEmbeddings]:
         """
-        Returns multimodal embeddings generated from multimodal kwargs 
-        to be merged with text embeddings.
+            Returns multimodal embeddings generated from multimodal kwargs 
+            to be merged with text embeddings.
 
-        Note:
-            The returned multimodal embeddings must be in the same order as
-            the appearances of their corresponding multimodal data item in the
-            input prompt.
-        """
+            Note:
+                The returned multimodal embeddings must be in the same order as
+                the appearances of their corresponding multimodal data item in
+                the input prompt.
+            """
         ...
 
     # Only for models that support v0 chunked prefill
@@ -67,16 +67,17 @@ class SupportsMultiModal(Protocol):
         ...
 
     @overload
+    # type: ignore[misc]
     def get_input_embeddings(
         self,
         input_ids: Tensor,
         multimodal_embeddings: Optional[MultiModalEmbeddings] = None,
     ) -> Tensor:
         """
-        Returns the input embeddings merged from the text embeddings from 
-        input_ids and the multimodal embeddings generated from multimodal 
-        kwargs.
-        """
+            Returns the input embeddings merged from the text embeddings from 
+            input_ids and the multimodal embeddings generated from multimodal 
+            kwargs.
+            """
         ...
 
 
@@ -93,16 +94,17 @@ class SupportsLoRA(Protocol):
         MRO of your model class.
     """
 
-    packed_modules_mapping: ClassVar[Dict[str, List[str]]]
-    supported_lora_modules: ClassVar[List[str]]
-    embedding_modules: ClassVar[Dict[str, str]]
-    embedding_padding_modules: ClassVar[List[str]]
+    packed_modules_mapping: ClassVar[dict[str, list[str]]]
+    supported_lora_modules: ClassVar[list[str]]
+    embedding_modules: ClassVar[dict[str, str]]
+    embedding_padding_modules: ClassVar[list[str]]
+
 
 @runtime_checkable
 class _SupportsLoRAType(Protocol):
     supports_lora: Literal[True]
 
-    packed_modules_mapping: Dict[str, List[str]]
-    supported_lora_modules: List[str]
-    embedding_modules: Dict[str, str]
-    embedding_padding_modules: List[str]
+    packed_modules_mapping: dict[str, list[str]]
+    supported_lora_modules: list[str]
+    embedding_modules: dict[str, str]
+    embedding_padding_modules: list[str]

@@ -23,14 +23,13 @@
 # which is not supported to be a tensor index
 
 from functools import cached_property
-from typing import Dict
 
-import torch
-import mindspore as ms
+import msadapter
 
-from vllm.platforms import current_platform
 
-@cached_property
+# Override _smallest_positive_value in RejectionSampler to resolve
+# the return type mismatch between our implementation and the PyTorch library.
+@cached_property  # type: ignore[misc]
 def _smallest_positive_value(self) -> float:
     """Return the smallest positive value representable by the probs dtype.
     This value is used when constructing a distribution from which to sample
@@ -43,38 +42,4 @@ def _smallest_positive_value(self) -> float:
     See https://en.wikipedia.org/wiki/Subnormal_number for more information.
     """
     # the value type of tiny is numpy in msadapter.
-    return float(torch.finfo(self.probs_dtype).tiny)
-
-
-# msadapter does not support 'exponential_'
-@torch.compile(dynamic=True, backend=current_platform.simple_compile_backend)
-def _multinomial(
-        probs: torch.Tensor,
-        num_samples: int,
-        k: int,
-        seeded_seqs: Dict[int, torch.Generator],
-) -> torch.Tensor:
-    # msadapter donot support tensor.exponential_
-    def exponential_(x: torch.Tensor, lambda_, generator=None):
-        random_x = ms.mint.rand(x.shape, generator=generator)  # 生成均匀分布随机数
-        return -torch.log(random_x) / lambda_  # 逆变换法
-
-    if num_samples > 1:
-        # This is equivalent to torch.repeat_interleaved (which also
-        # forces a GPU<->CPU sync).
-        probs = probs[:, None, :].expand(probs.shape[0], num_samples,
-                                         probs.shape[1]).contiguous().view(
-            -1, probs.shape[1])
-    q = torch.empty_like(probs)
-    if not seeded_seqs:
-        q = exponential_(q, 1.0)
-    else:
-        start = 0
-        for idx in range(len(q) // k):
-            end = start + k
-            generator = seeded_seqs.get(idx)
-            # Note: generator might be None for non seeded
-            q[start:end] = exponential_(q[start:end], 1.0, generator=generator)
-            start = end
-
-    return probs.div_(q).argmax(dim=1).view(-1, num_samples)
+    return float(msadapter.finfo(self.probs_dtype).tiny)

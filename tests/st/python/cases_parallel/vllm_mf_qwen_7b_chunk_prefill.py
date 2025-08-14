@@ -15,9 +15,6 @@
 # limitations under the License.
 """test mf qwen chunk prefill."""
 
-# type: ignore
-# isort: skip_file
-
 import os
 from tests.st.python import utils
 
@@ -56,20 +53,26 @@ def test_mf_qwen_7b_chunk_prefill():
     batch_datas = [
         {
             "prompt":
-            "I love Beijing, because it is a city with a long history and profound cultural heritage. Walking through "
-            "its ancient hutongs, one can almost feel the whispers of the past. The Forbidden City, an architectural "
-            "marvel that once housed emperors, stands as a testament to the city's imperial past. Meanwhile, the Great "
-            "Wall, though not within the city limits, is easily accessible from Beijing and offers a glimpse into the "
+            "I love Beijing, because it is a city with a long history and "
+            "profound cultural heritage. Walking through its ancient "
+            "hutongs, one can almost feel the whispers of the past. The "
+            "Forbidden City, an architectural marvel that once housed "
+            "emperors, stands as a testament to the city's imperial past. "
+            "Meanwhile, the Great Wall, though not within the city limits, "
+            "is easily accessible from Beijing and offers a glimpse into the "
             "strategic genius and resilience of ancient China.",
             "answer":
-            " The city's blend of traditional and modern architecture, bustling markets, and vibrant street life make it "
-            "a unique and fascinating destination. In short, Beijing is a city"
+            " The city's blend of traditional and modern architecture, "
+            "bustling markets, and vibrant street life make it a unique "
+            "and fascinating destination. In short, Beijing is a city"
         },
         {
             "prompt":
             "I love Beijing, because",
             "answer":
-            " it is a city with a long history. Which of the following options correctly expresses this sentence?\nA. I love Beijing, because it is a city with a"
+            " it is a city with a long history. Which of the following "
+            "options correctly expresses this sentence?\nA. I love "
+            "Beijing, because it is a city with a"
         },
     ]
 
@@ -86,8 +89,8 @@ def test_mf_qwen_7b_chunk_prefill():
         gpu_memory_utilization=0.9,
         tensor_parallel_size=2,
         enable_chunked_prefill=True)
-    # Generate texts from the prompts. The output is a list of RequestOutput objects
-    # that contain the prompt, generated text, and other information.
+    # Generate texts from the prompts. The output is a list of RequestOutput
+    # objects that contain the prompt, generated text, and other information.
     for batch_data in batch_datas:
         prompt = batch_data["prompt"]
         answer = batch_data["answer"]

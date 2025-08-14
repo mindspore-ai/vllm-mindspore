@@ -18,26 +18,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Adaption for shm broadcast."""
-import numpy as np
-from typing import Optional
 from multiprocessing import shared_memory
+from typing import Optional
 from unittest.mock import patch
+
+import numpy as np
 from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 
+
 def initialize_ShmRingBuffer(self,
-                            n_reader: int,
-                            max_chunk_bytes: int,
-                            max_chunks: int,
-                            name: Optional[str] = None):
+                             n_reader: int,
+                             max_chunk_bytes: int,
+                             max_chunks: int,
+                             name: Optional[str] = None):
     logger.info("Entering mindspore shm_broadcast")
     self.n_reader = n_reader
     self.metadata_size = 1 + n_reader
     self.max_chunk_bytes = max_chunk_bytes
     self.max_chunks = max_chunks
     self.total_bytes_of_buffer = (self.max_chunk_bytes +
-                                    self.metadata_size) * self.max_chunks
+                                  self.metadata_size) * self.max_chunks
     self.data_offset = 0
     self.metadata_offset = self.max_chunk_bytes * self.max_chunks
 
@@ -57,7 +59,7 @@ def initialize_ShmRingBuffer(self,
         # Python incorrectly tracks shared memory even if it is not
         # created by the process. The following patch is a workaround.
         with patch("multiprocessing.resource_tracker.register",
-                    lambda *args, **kwargs: None):
+                   lambda *args, **kwargs: None):
             try:
                 self.shared_memory = shared_memory.SharedMemory(name=name)
                 # See https://docs.python.org/3/library/multiprocessing.shared_memory.html # noqa
@@ -65,8 +67,7 @@ def initialize_ShmRingBuffer(self,
                 # so the shared memory block size may be larger or equal
                 # to the requested size. The size parameter is ignored
                 # when attaching to an existing block.
-                assert (self.shared_memory.size
-                        >= self.total_bytes_of_buffer)
+                assert (self.shared_memory.size >= self.total_bytes_of_buffer)
             except FileNotFoundError:
                 # we might deserialize the object in a different node
                 # in this case, this object is not used,

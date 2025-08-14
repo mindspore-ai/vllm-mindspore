@@ -20,13 +20,14 @@
 import os
 import signal
 import time
+from multiprocessing.process import BaseProcess
 
 from vllm.logger import init_logger
 
 logger = init_logger(__name__)
 
 
-def executor_ensure_worker_termination(self):
+def executor_ensure_worker_termination(worker_procs: list[BaseProcess]):
     """Ensure that all worker processes are terminated. Assumes workers have
     received termination requests. Waits for processing, then sends
     termination and kill signals if needed."""
@@ -44,7 +45,7 @@ def executor_ensure_worker_termination(self):
         return False
 
     # Send SIGTERM if still running
-    active_procs = [w.proc for w in self.workers if w.proc.is_alive()]
+    active_procs = [proc for proc in worker_procs if proc.is_alive()]
     for p in active_procs:
         p.terminate()
     if not wait_for_termination(active_procs, 4):
@@ -56,9 +57,8 @@ def executor_ensure_worker_termination(self):
             # calling p.kill.
             pid = p.pid
             try:
-                os.killpg(pid, signal.SIGKILL)
+                if pid is not None:
+                    os.killpg(pid, signal.SIGKILL)
             except Exception as e:
                 logger.debug("Kill process %d error: %s!", pid, str(e))
             # vllm-mindspore end.
-
-    self._cleanup_sockets()

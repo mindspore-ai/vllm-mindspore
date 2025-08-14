@@ -18,22 +18,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional
 
+import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn, ops
-from mindspore.common import dtype as mstype
 from mindspore.common.dtype import typing
+from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
-from vllm.model_executor.layers.quantization.base_config import \
-    QuantizationConfig
-from vllm.config import get_current_vllm_config
+from vllm.model_executor.layers.quantization.base_config import (
+    QuantizationConfig)
 
-from vllm_mindspore.distributed.communication_op import \
-    ReduceFromModelParallelRegion
+from vllm_mindspore.distributed.communication_op import (
+    ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
@@ -43,7 +46,7 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
     """Unquantized method for embeddings."""
 
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
-                       output_partition_sizes: List[int], input_size: int,
+                       output_partition_sizes: list[int], input_size: int,
                        output_size: int, params_dtype, **extra_weight_attrs):
         """Create weights for embedding layer."""
         weight = Parameter(mint.zeros(
@@ -83,7 +86,7 @@ def get_masked_input_and_mask(
     num_org_vocab_padding: int,
     added_vocab_start_index: int,
     added_vocab_end_index: int,
-) -> Tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor]:
     displaced_x = mint.sub(input_, org_vocab_start_index)
     down_truncated_x = mint.nn.functional.relu(displaced_x)
     truncated_x = mint.minimum(
@@ -154,11 +157,13 @@ class VocabParallelEmbeddingShardIndices:
 
     @property
     def num_org_elements_padded(self) -> int:
-        return self.padded_org_vocab_end_index - self.padded_org_vocab_start_index
+        return self.padded_org_vocab_end_index - \
+            self.padded_org_vocab_start_index
 
     @property
     def num_added_elements_padded(self) -> int:
-        return self.padded_added_vocab_end_index - self.padded_added_vocab_start_index
+        return self.padded_added_vocab_end_index - \
+            self.padded_added_vocab_start_index
 
     @property
     def num_org_vocab_padding(self) -> int:
@@ -174,14 +179,17 @@ class VocabParallelEmbeddingShardIndices:
 
     def __post_init__(self):
         # sanity checks
-        assert self.padded_org_vocab_start_index <= self.padded_org_vocab_end_index
-        assert self.padded_added_vocab_start_index <= self.padded_added_vocab_end_index
+        assert self.padded_org_vocab_start_index <= \
+            self.padded_org_vocab_end_index
+        assert self.padded_added_vocab_start_index <= \
+            self.padded_added_vocab_end_index
 
         assert self.org_vocab_start_index <= self.org_vocab_end_index
         assert self.added_vocab_start_index <= self.added_vocab_end_index
 
         assert self.org_vocab_start_index <= self.padded_org_vocab_start_index
-        assert self.added_vocab_start_index <= self.padded_added_vocab_start_index
+        assert self.added_vocab_start_index <= \
+            self.padded_added_vocab_start_index
         assert self.org_vocab_end_index <= self.padded_org_vocab_end_index
         assert self.added_vocab_end_index <= self.padded_added_vocab_end_index
 
@@ -334,31 +342,33 @@ class VocabParallelEmbedding(nn.Cell):
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor):
         output_dim = getattr(param, "output_dim", None)
-
+        get_tensor_model_parallel_rank()
         # If parameter does not have output dim, then it should
         # be copied onto all gpus (e.g. g_idx for act_order gptq).
         if output_dim is None:
+            loaded_weight = loaded_weight[:]
             assert param.data.shape == loaded_weight.shape
             if param.data.shape != loaded_weight.shape:
                 raise ValueError(
-                    f"'param.data.shape' should be equal to 'loaded_weight.shape',"
-                    f" but got {param.data.shape} and {loaded_weight.shape}")
-            param.set_data(loaded_weight)
+                    f"'param.data.shape' should be equal to "
+                    f"'loaded_weight.shape', but got {param.data.shape} "
+                    f"and {loaded_weight.shape}")
+            param.set_data(ms.from_numpy(loaded_weight))
             return
 
         # Shard indexes for loading the weight
         start_idx = self.shard_indices.org_vocab_start_index
         shard_size = self.shard_indices.org_vocab_end_index - start_idx
-        if loaded_weight.shape[output_dim] != self.org_vocab_size:
+        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                            start_idx, shard_size)
+        org_vocab_size_per_rank = self.org_vocab_size // self.tp_size
+        if loaded_weight.shape[output_dim] != org_vocab_size_per_rank:
             raise ValueError(
-                f"'loaded_weight.shape[output_dim]' should be equal to 'org_vocab_size',"
-                f" but got {loaded_weight.shape[output_dim]} and {self.org_vocab_size}"
-            )
+                f"'loaded_weight.shape[output_dim]' should be equal to "
+                f"'org_vocab_size', but got {loaded_weight.shape[output_dim]} "
+                f"and {self.org_vocab_size}")
 
-        # Copy the data.
-        loaded_weight = loaded_weight.narrow(output_dim, start_idx,
-                                             shard_size).contiguous()
-        param[:loaded_weight.shape[0]] = loaded_weight
+        param[:loaded_weight.shape[0]] = ms.from_numpy(loaded_weight)
         param[loaded_weight.shape[0]:] = 0
 
 
@@ -411,7 +421,6 @@ class ParallelLMHead(VocabParallelEmbedding):
                 },
             )
         else:
-            # self.register_parameter("bias", None)
             self.bias = None
 
     def tie_weights(self, embed_tokens: VocabParallelEmbedding):
@@ -420,8 +429,7 @@ class ParallelLMHead(VocabParallelEmbedding):
         if self.quant_config and self.quant_config.get_name() == "gguf":
             return embed_tokens
         else:
-            # self.weight = embed_tokens.weight
-            self.weight.set_data(embed_tokens.weight)
+            self.weight = embed_tokens.weight
             return self
 
     def forward(self, input_):

@@ -18,15 +18,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
+
 from mindspore import Tensor
 
 
 def set_weight_attrs(
     weight: Tensor,
-    weight_attrs: Optional[Dict[str, Any]],
+    weight_attrs: Optional[dict[str, Any]],
 ):
     if weight_attrs is None:
         return
     for key, value in weight_attrs.items():
         setattr(weight, key, value)
+
+
+_native_model_context = {"is_prefill": True}
+
+
+def set_model_context(key, value):
+    global _native_model_context
+    _native_model_context[key] = value
+
+
+def get_model_context(key):
+    return _native_model_context[key]

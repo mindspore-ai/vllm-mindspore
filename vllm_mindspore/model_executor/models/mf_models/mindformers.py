@@ -13,16 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from typing import Iterable, Optional, Tuple, Union
+from collections.abc import Iterable
+from typing import Optional, Union
 
 import mindspore as ms
 import numpy as np
+from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
-from mindformers.models.qwen3.configuration_qwen3 import Qwen3Config
-from mindformers.models.qwen3.modeling_qwen3 import (  # noqa
-    Qwen3ForCausalLM as Qwen3ForCausalLM_MF)
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, ops
 from mindspore.common.api import _pynative_executor
@@ -31,38 +29,38 @@ from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-from vllm.model_executor.layers.sampler import SamplerOutput
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
-from vllm_mindspore.model_executor.layers.sampler import get_sampler
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.model_executor.models.mf_models.config import (
-    gen_mf_config, gen_model_config)
+from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
                                                              MsModelBase)
 
 logger = init_logger(__name__)
 
 
-class Qwen3ForCausalLM(MsModelBase):
+class MindFormersForCausalLM(MsModelBase):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.set_flags = False
+        self.max_model_len = vllm_config.model_config.max_model_len
+        self.hf_config = vllm_config.model_config.hf_config
 
         mf_config = gen_mf_config(vllm_config)
         mf_config.load_checkpoint = self.get_model_path()
+        mf_config.pretrained_model_dir = self.get_model_path()
         self.mf_config = mf_config
 
         build_mf_context(self.mf_config)
         build_parallel_config(self.mf_config)
 
-        self._generate_model_config()
         self.network, self.lm_head = self._create_network()
-        self.casual_mask = LowerTriangularMask(dtype=self.network.compute_dtype,
-                                               max_model_len=self.model_config.max_model_len)
+        self.casual_mask = LowerTriangularMask(
+            dtype=self.network.compute_dtype, max_model_len=self.max_model_len)
 
         affinity_config = self.mf_config.get('context',
                                              {}).get('affinity_cpu_list', {})
@@ -74,14 +72,13 @@ class Qwen3ForCausalLM(MsModelBase):
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
         self.kv_caches = [
-            AttentionWrapper()
-            for _ in range(self.mf_model_config.num_hidden_layers)
+            AttentionWrapper() for _ in range(self.hf_config.num_hidden_layers)
         ]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.mf_model_config.num_hidden_layers):
+        for i in range(self.hf_config.num_hidden_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -89,13 +86,17 @@ class Qwen3ForCausalLM(MsModelBase):
 
     def _set_dynamic_inputs(self):
         self.network.set_dynamic_inputs()
-        dynamic_hidden_states = Tensor(
-            shape=[None, None], dtype=self.network.compute_dtype)
+        dynamic_hidden_states = Tensor(shape=[None, None],
+                                       dtype=self.network.compute_dtype)
         self.lm_head.set_inputs(dynamic_hidden_states)
 
     def prepare_inputs(self, input_ids, positions):
 
         attn_metadata = get_forward_context().attn_metadata
+        # 0.9.1 attn_metadata[layer_name], don't have layer_name here
+        # so we just take one by default
+        if isinstance(attn_metadata, dict) and '1' in attn_metadata:
+            attn_metadata = attn_metadata['1']
         if attn_metadata is None:
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
@@ -131,7 +132,7 @@ class Qwen3ForCausalLM(MsModelBase):
         q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
         position_ids = ms.Tensor(positions, dtype=ms.int32)
         attention_mask = self.casual_mask.gen_attention_mask(
-            is_prefill, positions, query_lens_np)
+            is_prefill, position_ids, query_lens_np, seq_lens_np)
 
         model_inputs = {}
         model_inputs["input_ids"] = input_ids.astype(ms.int32) * 1
@@ -170,14 +171,10 @@ class Qwen3ForCausalLM(MsModelBase):
 
         return hidden_states
 
-    def _generate_model_config(self):
-        self.mf_model_config = gen_model_config(self.mf_config, Qwen3Config)
-        logger.debug("=====mf_model_config====\n%s", self.mf_model_config)
-
     def _create_network(self):
         # Initial network
         with no_init_parameters():  # Delay initialization
-            network = Qwen3ForCausalLM_MF(self.mf_model_config)
+            network: PreTrainedModel = AutoModel.from_config(self.mf_config)
         return network, network.model.output_layer
 
     def update_model_inputs(self, model_inputs, **kwargs):
@@ -190,11 +187,10 @@ class Qwen3ForCausalLM(MsModelBase):
     ) -> Optional[Tensor]:
         if sampling_metadata is not None:
             selected_token_indices = sampling_metadata.selected_token_indices
-            if selected_token_indices is not None and selected_token_indices.numel(
-            ) <= 0:
-                logits = ms.mint.zeros(
-                    (0, self.mf_model_config.vocab_size),
-                    dtype=self.mf_model_config.compute_dtype)
+            if selected_token_indices is not None \
+                and selected_token_indices.numel() <= 0:
+                logits = ms.mint.zeros((0, self.hf_config.vocab_size),
+                                       dtype=self.hf_config.torch_dtype)
             else:
                 hidden_states = hidden_states.reshape(
                     (-1, hidden_states.shape[-1]))
@@ -216,6 +212,6 @@ class Qwen3ForCausalLM(MsModelBase):
         _pynative_executor.sync()
         return next_tokens
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]):
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None

@@ -25,27 +25,32 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# isort: skip_file
 """Inference-only Qwen2.5-VL model compatible with HuggingFace weights."""
+
+from collections.abc import Iterable, Mapping
+
 # yapf:disable
 from functools import cached_property, partial
-from typing import Any, Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import mindspore
 import numpy as np
 from mindone.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VisionTransformerPretrainedModel)
 from mindone.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLForConditionalGeneration as MindONE_Qwen2_5_VLForConditionalGeneration)
+    Qwen2_5_VLForConditionalGeneration as MindONE_Qwen2_5_VLForConditionalGeneration)  # noqa: E501
 from mindone.transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLPreTrainedModel)
 from mindspore import Tensor, mint, mutable, nn, ops
 from mindspore.common.api import _pynative_executor
 from vllm.attention.backends.abstract import AttentionMetadata
 from vllm.config import VllmConfig
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.models.qwen2_5_vl import (
     Qwen2_5_VLConfig, Qwen2_5_VLDummyInputsBuilder)
 from vllm.model_executor.models.qwen2_5_vl import (
-    Qwen2_5_VLForConditionalGeneration as vLLM_Qwen2_5_VLForConditionalGeneration)
+    Qwen2_5_VLForConditionalGeneration as vLLM_Qwen2_5_VLForConditionalGeneration)  # noqa: E501
 from vllm.model_executor.models.qwen2_5_vl import (
     Qwen2_5_VLImageEmbeddingInputs, Qwen2_5_VLImageInputs,
     Qwen2_5_VLImagePixelInputs)
@@ -61,8 +66,6 @@ from vllm.multimodal.processing import PromptReplacement
 from vllm.sequence import IntermediateTensors
 from vllm.transformers_utils.config import uses_mrope
 
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import SupportsMultiModal
@@ -180,7 +183,8 @@ class NEW_MindONE_Qwen2_5_VLForConditionalGeneration(
 @MULTIMODAL_REGISTRY.register_processor(
     Qwen2_5_VLMultiModalProcessor,
     info=Qwen2_5_VLProcessingInfo,
-    dummy_inputs=Qwen2_5_VLDummyInputsBuilder)
+    dummy_inputs=Qwen2_5_VLDummyInputsBuilder,
+)
 class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
@@ -191,8 +195,9 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         self.config = config
         self.multimodal_config = multimodal_config
 
-        mindone_model = NEW_MindONE_Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            vllm_config.model_config.model, mindspore_dtype=mindspore.bfloat16)
+        mindone_model = NEW_MindONE_Qwen2_5_VLForConditionalGeneration.from_pretrained(  # noqa: E501
+            vllm_config.model_config.model,
+            mindspore_dtype=mindspore.bfloat16)
 
         self.visual = mindone_model.visual
         self.language_model = Qwen2ForCausalLM(
@@ -250,9 +255,11 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
                 raise ValueError("Incorrect type of image pixel values. "
                                  f"Got type: {type(pixel_values)}")
 
-            return Qwen2_5_VLImagePixelInputs(type="pixel_values",
-                                              pixel_values=pixel_values,
-                                              image_grid_thw=image_grid_thw)
+            return Qwen2_5_VLImagePixelInputs(
+                type="pixel_values",
+                pixel_values=pixel_values,
+                image_grid_thw=image_grid_thw,
+            )
 
         if image_embeds is not None:
             image_embeds = self._validate_and_reshape_mm_tensor(
@@ -266,7 +273,8 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
             return Qwen2_5_VLImageEmbeddingInputs(
                 type="image_embeds",
                 image_embeds=image_embeds,
-                image_grid_thw=image_grid_thw)
+                image_grid_thw=image_grid_thw,
+            )
 
         return None
 
@@ -305,13 +313,16 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
             return Qwen2_5_VLVideoEmbeddingInputs(
                 type="video_embeds",
                 video_embeds=video_embeds,
-                video_grid_thw=video_grid_thw)
+                video_grid_thw=video_grid_thw,
+            )
 
         return None
 
-    _process_image_input = vLLM_Qwen2_5_VLForConditionalGeneration._process_image_input
-    _process_video_input = vLLM_Qwen2_5_VLForConditionalGeneration._process_video_input
-    _parse_and_validate_multimodal_inputs = vLLM_Qwen2_5_VLForConditionalGeneration._parse_and_validate_multimodal_inputs
+    _process_image_input = vLLM_Qwen2_5_VLForConditionalGeneration._process_image_input  # noqa: E501
+    _process_video_input = vLLM_Qwen2_5_VLForConditionalGeneration._process_video_input  # noqa: E501
+    _parse_and_validate_multimodal_inputs = (
+        vLLM_Qwen2_5_VLForConditionalGeneration.
+        _parse_and_validate_multimodal_inputs)
     get_multimodal_embeddings = None
 
     def get_input_embeddings(
@@ -322,8 +333,11 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         inputs_embeds = self.language_model.model.embed_tokens(input_ids)
         if multimodal_embeddings is not None:
             inputs_embeds = merge_multimodal_embeddings(
-                input_ids, inputs_embeds, multimodal_embeddings,
-                [self.config.image_token_id, self.config.video_token_id])
+                input_ids,
+                inputs_embeds,
+                multimodal_embeddings,
+                [self.config.image_token_id, self.config.video_token_id],
+            )
         return inputs_embeds
 
     def get_input_embeddings_v0(
@@ -356,7 +370,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         self,
         input_ids: Tensor,
         positions: Tensor,
-        kv_caches: List[Tuple[Tensor, Tensor]],
+        kv_caches: list[tuple[Tensor, Tensor]],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: IntermediateTensors = None,
         inputs_embeds: Tensor = None,
@@ -396,7 +410,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
 
         slot_mapping = attn_metadata.slot_mapping
         attn_mask = self.casual_mask.gen_attention_mask(
-            is_prefill, positions, query_lens)
+            is_prefill, positions, query_lens_np, seq_lens_np)
         seq_lens_np = np.array(attn_metadata.seq_lens, dtype=np.int32)
         batch_valid_length = Tensor.from_numpy(seq_lens_np)
         q_seq_lens = Tensor.from_numpy(
@@ -407,7 +421,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         if positions.ndim == 1:
             positions = positions[None]
 
-        model_inputs = (\
+        model_inputs = (
             input_ids,
             positions,
             key_caches,
@@ -419,7 +433,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
             q_seq_lens,
             block_tables,
             intermediate_tensors,
-            inputs_embeds
+            inputs_embeds,
         )
 
         if is_prefill:
@@ -448,7 +462,7 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         self,
         input_ids: mindspore.Tensor,
         positions: mindspore.Tensor,
-        kv_caches: List[mindspore.Tensor],
+        kv_caches: list[mindspore.Tensor],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[mindspore.Tensor] = None,
@@ -500,10 +514,14 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
                     video_input=video_input)
                 input_ids = None
 
-        hidden_states = self.run_language_model(input_ids, positions,
-                                                kv_caches, attn_metadata,
-                                                intermediate_tensors,
-                                                inputs_embeds)
+        hidden_states = self.run_language_model(
+            input_ids,
+            positions,
+            kv_caches,
+            attn_metadata,
+            intermediate_tensors,
+            inputs_embeds,
+        )
 
         return hidden_states
 
@@ -524,5 +542,5 @@ class Qwen2_5_VLForConditionalGeneration(MindONEModelBase, SupportsMultiModal):
         _pynative_executor.sync()
         return next_token
 
-    def load_weights(self, weights: Iterable[Tuple[str, mindspore.Tensor]]):
+    def load_weights(self, weights: Iterable[tuple[str, mindspore.Tensor]]):
         self.language_model.load_weights()

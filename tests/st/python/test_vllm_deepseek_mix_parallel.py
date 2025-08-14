@@ -19,11 +19,8 @@
 # limitations under the License.
 """test mf deepseek r1."""
 
-# type: ignore
-# isort: skip_file
-
 import os
-import re
+import regex as re
 import tempfile
 from multiprocessing import Process, Queue
 
@@ -54,10 +51,9 @@ env_vars = {
     "LCAL_COMM_ID": "127.0.0.1:10068"
 }
 env_manager.setup_ai_environment(env_vars)
-
-import vllm_mindspore
-from vllm import LLM, SamplingParams
-from vllm.utils import get_open_port
+import vllm_mindspore  # noqa: F401, E402
+from vllm import LLM, SamplingParams  # noqa: E402
+from vllm.utils import get_open_port  # noqa: E402
 
 
 def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip,
@@ -105,9 +101,8 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, dp_master_ip,
 
 def exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
                     except_list):
-    file = open('./config/predict_deepseek_r1_671b_w8a8.yaml', 'r')
-    content = file.read()
-    file.close()
+    with open('./config/predict_deepseek_r1_671b_w8a8.yaml') as file:
+        content = file.read()
 
     replace_data_parallel = re.compile(r'data_parallel: 1')
     replace_model_parallel = re.compile(r'model_parallel: 16')
@@ -163,9 +158,8 @@ def exec_ds_with_dp(new_yaml, replaced_pattern, dp_size, tp_size, prompts,
 
 
 def exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list):
-    file = open('./config/predict_deepseek_r1_671b_w8a8.yaml', 'r')
-    content = file.read()
-    file.close()
+    with open('./config/predict_deepseek_r1_671b_w8a8.yaml') as file:
+        content = file.read()
 
     replace_data_parallel = re.compile(r'data_parallel: 1')
     replace_model_parallel = re.compile(r'model_parallel: 16')
@@ -195,8 +189,9 @@ def exec_ds_without_dp(new_yaml, replaced_pattern, prompts, except_list):
             gpu_memory_utilization=0.9,
             tensor_parallel_size=8,
             max_model_len=4096)
-        # Generate texts from the prompts. The output is a list of RequestOutput objects
-        # that contain the prompt, generated text, and other information.
+        # Generate texts from the prompts. The output is a list of
+        # RequestOutput objects that contain the prompt, generated
+        # text, and other information.
         outputs = llm.generate(prompts, sampling_params)
         # Print the outputs.
         for i, output in enumerate(outputs):
@@ -225,8 +220,8 @@ def test_deepseek_r1_dp4_tp2_ep4():
     tp_size = 2
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 "
+        "\n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 4
 
     except_list = ['ugs611ాలు'] * 4
@@ -251,8 +246,8 @@ def test_deepseek_r1_dp8_tp1_ep8():
     tp_size = 1
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
@@ -276,8 +271,8 @@ def test_deepseek_r1_dp2_tp4_ep1():
     tp_size = 4
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 2
 
     except_list = ['ugs611ాలు'] * 2
@@ -302,8 +297,8 @@ def test_deepseek_r1_dp4_tp2_ep8():
     tp_size = 2
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 4
 
     except_list = ['ugs611ాలు'] * 4
@@ -327,8 +322,8 @@ def test_deepseek_r1_dp8_tp1_ep1():
     tp_size = 1
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
@@ -352,8 +347,8 @@ def test_deepseek_r1_dp8_tp1_ep4():
     tp_size = 1
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ] * 8
 
     except_list = ['ugs611ాలు'] * 8
@@ -375,8 +370,8 @@ def test_deepseek_r1_tp8_ep8():
     ]
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
     except_list = ['ugs611ాలు']
@@ -397,8 +392,8 @@ def test_deepseek_r1_tp8_ep4():
     ]
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 \n文本：我认为这次假期还可以。 "
-        "\n情感：<｜Assistant｜>\n",
+        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
+        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
     except_list = ['ugs611ాలు']

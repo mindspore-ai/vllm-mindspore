@@ -17,33 +17,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from collections import Counter
-from typing import Union
-import sys
+
 import socket
 import threading
-import pickle
 import time
+from collections import Counter
+from typing import Optional, Union
 
 import msgspec
 import torch
-
-from transformers import PretrainedConfig
-
-
 import vllm.envs as envs
-
-from vllm.config import VllmConfig, CompilationConfig, CompilationLevel, _STR_DTYPE_TO_TORCH_DTYPE
-from vllm.utils import random_uuid
-from vllm.logger import init_logger
+from transformers import PretrainedConfig
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
-from vllm.platforms import CpuArchEnum
+from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CompilationConfig,
+                         CompilationLevel, VllmConfig, _find_dtype,
+                         _resolve_auto_dtype)
+from vllm.logger import init_logger
+from vllm.utils import random_uuid
 
 logger = init_logger(__name__)
 
 
 def _verify_quantization(self) -> None:
-    # Donnot verify now.
+    # Do not verify now.
     return
 
 
@@ -61,11 +57,9 @@ def vllm_config_post_init(self):
     if self.lora_config:
         self.lora_config.verify_with_cache_config(self.cache_config)
         self.lora_config.verify_with_model_config(self.model_config)
-        self.lora_config.verify_with_scheduler_config(
-            self.scheduler_config)
+        self.lora_config.verify_lora_support()
     if self.prompt_adapter_config:
-        self.prompt_adapter_config.verify_with_model_config(
-            self.model_config)
+        self.prompt_adapter_config.verify_with_model_config(self.model_config)
 
     if self.quant_config is None and \
         self.model_config is not None and self.load_config is not None:
@@ -97,12 +91,13 @@ def vllm_config_post_init(self):
         self.compilation_config.cudagraph_num_of_warmups = 1
         self.compilation_config.pass_config.enable_fusion = False
         self.compilation_config.pass_config.enable_noop = False
-        # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda graph,
-        # which means the model inputs will be padded to cuda graph acceptable size,
-        # but it is not for mindspore. So here set to CompilationLevel.DYNAMO_AS_IS.
+        # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda
+        # graph, which means the model inputs will be padded to cuda graph
+        # acceptable size, but it is not for mindspore.
+        # So here set to CompilationLevel.DYNAMO_AS_IS.
         self.compilation_config.level = CompilationLevel.DYNAMO_AS_IS
-        # Set a small compile_sizes for warmup. '20' is not in 'cudagraph_capture_sizes'.
-        # So the warmup can be runned.
+        # Set a small compile_sizes for warmup. '20' is not in
+        # 'cudagraph_capture_sizes'. So the warmup can be run.
         self.compilation_config.compile_sizes = [20]
 
     self._set_cudagraph_sizes()
@@ -110,22 +105,22 @@ def vllm_config_post_init(self):
     if self.cache_config is not None and \
         self.cache_config.cpu_offload_gb > 0 and \
         self.compilation_config.level != CompilationLevel.NO_COMPILATION:
-        logger.warning(
-            "CPU offload is not supported with `torch.compile` yet."
-            " Disabling `torch.compile`.")
+        logger.warning("CPU offload is not supported with `torch.compile` yet."
+                       " Disabling `torch.compile`.")
         self.compilation_config.level = CompilationLevel.NO_COMPILATION
 
     if self.lora_config is not None and self.compilation_config.level !=\
             CompilationLevel.NO_COMPILATION:
         logger.warning("LoRA is not supported with `torch.compile` yet. "
-                        "Disabling `torch.compile`.")
+                       "Disabling `torch.compile`.")
         self.compilation_config.level = CompilationLevel.NO_COMPILATION
 
     current_platform.check_and_update_config(self)
 
     if self.model_config and self.model_config.use_mla:
-        logger.info("For MindSpore, MLA supports chunked prefill and prefix cache, "
-                    "so keep them enable.")
+        logger.info(
+            "For MindSpore, MLA supports chunked prefill and prefix cache, "
+            "so keep them enable.")
 
     if not self.instance_id:
         self.instance_id = random_uuid()[:5]
@@ -135,12 +130,12 @@ def _verify_args(self) -> None:
     if (self.max_num_batched_tokens < self.max_model_len
             and not self.chunked_prefill_enabled):
         logger.warning(
-            f"max_num_batched_tokens ({self.max_num_batched_tokens}) is "
-            f"smaller than max_model_len ({self.max_model_len}). "
+            "max_num_batched_tokens (%d) is smaller than max_model_len (%d). "
             "This effectively limits the maximum sequence length to "
             "max_num_batched_tokens and makes vLLM reject longer "
             "sequences. Please increase max_num_batched_tokens or "
-            "decrease max_model_len.")
+            "decrease max_model_len.", self.max_num_batched_tokens,
+            self.max_model_len)
 
     if self.max_num_batched_tokens < self.max_num_seqs:
         raise ValueError(
@@ -217,80 +212,41 @@ def model_post_init(self, __context) -> None:
 
 
 def _get_and_verify_dtype(
+    model_id: str,
     config: PretrainedConfig,
     dtype: Union[str, torch.dtype],
+    *,
+    is_pooling_model: bool,
+    revision: Optional[str] = None,
 ) -> torch.dtype:
-    # NOTE: getattr(config, "torch_dtype", torch.float32) is not correct
-    # because config.torch_dtype can be None.
-    config_dtype = getattr(config, "torch_dtype", None)
-
-    # Fallbacks for multi-modal models if the root config
-    # does not define torch_dtype
-    if config_dtype is None and hasattr(config, "text_config"):
-        config_dtype = getattr(config.text_config, "torch_dtype", None)
-    if config_dtype is None and hasattr(config, "vision_config"):
-        config_dtype = getattr(config.vision_config, "torch_dtype", None)
-
-    if config_dtype is None:
-        config_dtype = torch.float32
+    config_dtype = _find_dtype(model_id, config, revision=revision)
+    model_type = config.model_type
 
     if isinstance(dtype, str):
         dtype = dtype.lower()
         if dtype == "auto":
-            if config_dtype == torch.float32:
-                # Following common practice, we use float16 for float32 models
-                torch_dtype = torch.float16
-            else:
-                torch_dtype = config_dtype
-
-            from vllm.platforms import current_platform
-            if (current_platform.is_cpu()
-                    and current_platform.get_cpu_architecture()
-                    == CpuArchEnum.POWERPC
-                    and (config_dtype == torch.float16
-                         or config_dtype == torch.float32)):
-                logger.info(
-                    "For POWERPC, we cast models to bfloat16 instead of "
-                    "using float16 by default. Float16 is not currently "
-                    "supported for POWERPC.")
-                torch_dtype = torch.bfloat16
-
-            # TODO: change this condition to check if the platform support bf16
-            # instead of checking the OS. For instance M2 shall supports bf16
-            # already. But we need to modify `cpu_extension.cmake` to activate
-            # the feature in the build.
-            if (current_platform.is_cpu() and sys.platform.startswith("darwin")
-                    and current_platform.get_cpu_architecture()
-                    == CpuArchEnum.ARM and config_dtype == torch.bfloat16):
-                logger.info("For macOS with Apple Silicon, currently bfloat16 "
-                            "is not supported. Setting dtype to float16.")
-                torch_dtype = torch.float16
-
-            if current_platform.is_hpu() and config_dtype == torch.float16:
-                logger.info(
-                    "For HPU, we cast models to bfloat16 instead of "
-                    "using float16 by default. Please specify `dtype` if you "
-                    "want to use float16.")
-                torch_dtype = torch.bfloat16
+            # Set default dtype from model config
+            torch_dtype = _resolve_auto_dtype(
+                model_type,
+                config_dtype,
+                is_pooling_model=is_pooling_model,
+            )
         else:
             if dtype not in _STR_DTYPE_TO_TORCH_DTYPE:
-                raise ValueError(f"Unknown dtype: {dtype}")
+                raise ValueError(f"Unknown dtype: {dtype!r}")
             torch_dtype = _STR_DTYPE_TO_TORCH_DTYPE[dtype]
     elif isinstance(dtype, torch.dtype):
         torch_dtype = dtype
     else:
         raise ValueError(f"Unknown dtype: {dtype}")
 
-    # Verify the dtype.
     if torch_dtype != config_dtype:
         if torch_dtype == torch.float32:
             # Upcasting to float32 is allowed.
             logger.info("Upcasting %s to %s.", config_dtype, torch_dtype)
-            pass
         elif config_dtype == torch.float32:
             # Downcasting from float32 to float16 or bfloat16 is allowed.
             logger.info("Downcasting %s to %s.", config_dtype, torch_dtype)
-            pass
         else:
             # Casting between float16 and bfloat16 is allowed with a warning.
             logger.warning("Casting %s to %s.", config_dtype, torch_dtype)
@@ -302,37 +258,51 @@ def _get_and_verify_dtype(
 
 
 class SocketProcessGroup:
-    def __init__(self, master_ip: str, master_port: int, rank: int, world_size: int):
+
+    def __init__(self, master_ip: str, master_port: int, rank: int,
+                 world_size: int):
         self.master_ip = master_ip
         self.master_port = master_port
         self.rank = rank
         self.world_size = world_size
-        self.sockets = []
+        self.sockets: list[socket.socket] = []
         self.max_retries = 100
         self.retry_interval = 2
+        self.conn_thread: Optional[threading.Thread] = None
 
         if self.rank == 0:
             # Master node: create a server socket
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket = socket.socket(socket.AF_INET,
+                                               socket.SOCK_STREAM)
             self.server_socket.bind((self.master_ip, self.master_port))
             self.server_socket.listen(self.world_size - 1)
-            logger.info(f"Master node listening on {self.master_ip}:{self.master_port}")
+            logger.info("Master node listening on %s:%d", self.master_ip,
+                        self.master_port)
         else:
             # Worker node: connect to the master
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket = socket.socket(socket.AF_INET,
+                                               socket.SOCK_STREAM)
             retries = 0
             while retries < self.max_retries:
                 try:
-                    self.client_socket.connect((self.master_ip, self.master_port))
-                    logger.info(f"Worker {self.rank} connected to master at {self.master_ip}:{self.master_port}")
+                    self.client_socket.connect(
+                        (self.master_ip, self.master_port))
+                    logger.info("Worker %d connected to master at %s:%d",
+                                self.rank, self.master_ip, self.master_port)
                     break
                 except ConnectionRefusedError:
                     retries += 1
-                    logger.warning(f"Worker {self.rank} failed to connect to master. Retrying in {self.retry_interval} seconds... ({retries}/{self.max_retries})")
+                    logger.warning(
+                        "Worker %d failed to connect to master. "
+                        "Retrying in %d seconds... (%d/%d)", self.rank,
+                        self.retry_interval, retries, self.max_retries)
                     time.sleep(self.retry_interval)
             else:
-                raise ConnectionError(f"Worker {self.rank} could not connect to master at {self.master_ip}:{self.master_port} after {self.max_retries} retries.")
-    
+                raise ConnectionError(
+                    f"Worker {self.rank} could not connect to master at "
+                    f"{self.master_ip}:{self.master_port} after "
+                    f"{self.max_retries} retries.")
+
     def accept_connections(self):
         for _ in range(self.world_size - 1):
             conn, addr = self.server_socket.accept()
@@ -342,7 +312,8 @@ class SocketProcessGroup:
     def initialize_group(self):
         if self.rank == 0:
             # Master node: accept connections from workers
-            self.conn_thread = threading.Thread(target=self.accept_connections, daemon=True)
+            self.conn_thread = threading.Thread(target=self.accept_connections,
+                                                daemon=True)
             self.conn_thread.start()
         else:
             # Worker node: no additional setup needed
@@ -363,16 +334,16 @@ def stateless_init_dp_group(self) -> SocketProcessGroup:
     """
     Initialize a stateless data parallel process group using sockets.
     """
-    dp_group = SocketProcessGroup(            
-            self.data_parallel_master_ip,
-            self.get_next_dp_init_port(),
-            self.data_parallel_rank,
-            self.data_parallel_size)
+    dp_group = SocketProcessGroup(self.data_parallel_master_ip,
+                                  self.get_next_dp_init_port(),
+                                  self.data_parallel_rank,
+                                  self.data_parallel_size)
     dp_group.initialize_group()
     return dp_group
 
 
-def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> bool:
+def has_unfinished_dp(dp_group: SocketProcessGroup,
+                      has_unfinished: bool) -> bool:
     """
     Check if any process in the group has unfinished tasks.
     """
@@ -386,29 +357,32 @@ def has_unfinished_dp(dp_group: SocketProcessGroup, has_unfinished: bool) -> boo
             data = conn.recv(1024)
             worker_result = msgspec.msgpack.decode(data)
             results.append(worker_result)
-        
+
         # Perform OR operation (any True means unfinished)
         aggregated_result = any(results)
-        
+
         # Broadcast the result back to workers
         for conn in dp_group.sockets:
             conn.send(msgspec.msgpack.encode(aggregated_result))
-        
+
         return aggregated_result
     else:
         # Worker node: send result to master
         dp_group.client_socket.send(msgspec.msgpack.encode(has_unfinished))
-        
+
         # Receive aggregated result from master
         data = dp_group.client_socket.recv(1024)
         aggregated_result = msgspec.msgpack.decode(data)
         return aggregated_result
 
-def stateless_destroy_socket_process_group(dp_group: "SocketProcessGroup") -> None:
+
+def stateless_destroy_socket_process_group(
+        dp_group: "SocketProcessGroup") -> None:
     """
     Destroy the socket-based data parallel process group.
     This function closes all sockets and cleans up resources.
     """
     if dp_group:
         dp_group.close()
-        logger.info(f"Socket process group for rank {dp_group.rank} destroyed.")
+        logger.info("Socket process group for rank %d destroyed.",
+                    dp_group.rank)

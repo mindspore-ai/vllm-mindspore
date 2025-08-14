@@ -21,11 +21,18 @@ for offline inference.
 import pytest
 import os
 
-from .utils import EnvVarManager, cleanup_subprocesses
+from tests.st.python.utils import EnvVarManager, cleanup_subprocesses
+
+import vllm_mindspore  # noqa: F401
+from typing import Optional
+
+from vllm import EngineArgs, LLMEngine, RequestOutput, SamplingParams
+from vllm.lora.request import LoRARequest
 
 
 def teardown_function():
     cleanup_subprocesses()
+
 
 env_manager = EnvVarManager()
 # def env
@@ -33,7 +40,6 @@ env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
@@ -43,16 +49,11 @@ env_vars = {
 }
 # set env
 env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from typing import List, Optional, Tuple
-
-from vllm import EngineArgs, LLMEngine, RequestOutput, SamplingParams
-from vllm.lora.request import LoRARequest
 
 
 def create_test_prompts(
         lora_path: str
-) -> List[Tuple[str, SamplingParams, Optional[LoRARequest]]]:
+) -> list[tuple[str, SamplingParams, Optional[LoRARequest]]]:
     """Create a list of test prompts with their sampling parameters.
     """
     return [
@@ -64,7 +65,7 @@ def create_test_prompts(
 
 
 def process_requests(engine: LLMEngine,
-                     test_prompts: List[Tuple[str, SamplingParams,
+                     test_prompts: list[tuple[str, SamplingParams,
                                               Optional[LoRARequest]]]):
     """Continuously process a list of prompts and handle the outputs."""
     request_id = 0
@@ -78,11 +79,12 @@ def process_requests(engine: LLMEngine,
                                lora_request=lora_request)
             request_id += 1
 
-        request_outputs: List[RequestOutput] = engine.step()
+        request_outputs: list[RequestOutput] = engine.step()
         for request_output in request_outputs:
             if request_output.finished:
                 print(f'text is: {request_output.outputs[0].text}', flush=True)
-                assert " 从法律上来说，违章停车和违法" in request_output.outputs[0].text
+                assert " 从法律上来说，违章停车和违法" in \
+                    request_output.outputs[0].text
 
 
 def initialize_engine() -> LLMEngine:
@@ -106,9 +108,6 @@ def initialize_engine() -> LLMEngine:
     return LLMEngine.from_engine_args(engine_args)
 
 
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
 def test_multilora_inference():
     """test function that sets up and runs the prompt processing."""
     engine = initialize_engine()

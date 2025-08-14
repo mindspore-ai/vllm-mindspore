@@ -18,94 +18,65 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Tuple, List
-import gc
-import numpy as np
-import torch
+from typing import Any, Optional
 
-from mindspore import mutable
 import mindspore as ms
-from vllm_mindspore.v1.attention.backends.ms_attn import (MsAttentionMetadata,
-                                                          MsAttentionBackend,
-                                                          MLABackend)
-from vllm_mindspore.utils import get_valid_dtype
-
-from vllm.v1.outputs import ModelRunnerOutput
+import numpy as np
+from mindspore import Generator as msGenerator
+from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
-from vllm.v1.kv_cache_interface import FullAttentionSpec, KVCacheSpec, SlidingWindowSpec
-from vllm.v1.utils import bind_kv_cache
-from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalKwargs
-from vllm.distributed.parallel_state import get_pp_group
-from vllm.utils import cdiv
 from vllm.logger import init_logger
-from vllm.v1.worker.gpu_input_batch import CachedRequestState
-from vllm.model_executor.layers.rotary_embedding import MRotaryEmbedding
 from vllm.sampling_params import SamplingType
+from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
+                                        SlidingWindowSpec)
+from vllm.v1.outputs import ModelRunnerOutput
+from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
+from vllm.v1.worker.gpu_input_batch import CachedRequestState
 
+from vllm_mindspore.model_executor.layers.rotary_embedding import (
+    InferMRotaryEmbedding as MRotaryEmbedding)
+from vllm_mindspore.utils import get_dtype_size, get_valid_dtype
 
 logger = init_logger(__name__)
+
+
 def _prepare_inputs(
     self,
-    scheduler_output: "SchedulerOutput",
-) -> Tuple[MsAttentionMetadata, torch.Tensor]:
+    scheduler_output,
+) -> tuple[dict[str, Any], Tensor, Optional[SpecDecodeMetadata]]:
     total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
     assert num_reqs > 0
-
-    modified_batch = self.attn_metadata_builder.reorder_batch(
-        self.input_batch, scheduler_output)
-    if modified_batch:
-        self.input_batch.refresh_sampling_metadata()
 
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
     self.input_batch.block_table.commit(num_reqs)
 
     # Get the number of scheduled tokens for each request.
-    # TODO: The Python loop can be slow. Optimize.
-    num_scheduled_tokens = np.empty(num_reqs, dtype=np.int32)
-    max_num_scheduled_tokens = 0
-    for i, req_id in enumerate(self.input_batch.req_ids):
-        num_tokens = scheduler_output.num_scheduled_tokens[req_id]
-        num_scheduled_tokens[i] = num_tokens
-        max_num_scheduled_tokens = max(max_num_scheduled_tokens,
-                                        num_tokens)
+    req_ids = self.input_batch.req_ids
+    tokens = [scheduler_output.num_scheduled_tokens[i] for i in req_ids]
+    num_scheduled_tokens = np.array(tokens, dtype=np.int32)
+    max_num_scheduled_tokens = max(tokens)
 
     # Get request indices.
     # E.g., [2, 5, 3] -> [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]
-    req_indices = np.repeat(self.arange_np[:num_reqs],
-                            num_scheduled_tokens)
+    req_indices = np.repeat(self.arange_np[:num_reqs], num_scheduled_tokens)
 
-    # Get batched arange.
-    # E.g., [2, 5, 3] -> [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    # Equivalent to but faster than:
-    # np.concatenate([np.arange(n) for n in num_scheduled_tokens])
-    # Step 1. [2, 5, 3] -> [2, 7, 10]
-    cu_num_tokens = np.cumsum(num_scheduled_tokens)
-    # Step 2. [2, 7, 10] -> [0, 0, 2, 2, 2, 2, 2, 7, 7, 7]
-    cumsums_offsets = np.repeat(cu_num_tokens - num_scheduled_tokens,
-                                num_scheduled_tokens)
-    # Step 3. [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    arange = self.arange_np[:total_num_scheduled_tokens] - cumsums_offsets
+    # cu_num_tokens: [2, 5, 3] -> [2, 7, 10]
+    # arange: [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+    cu_num_tokens, arange = self._get_cumsum_and_arange(num_scheduled_tokens)
 
     # Get positions.
     positions_np = self.positions_np[:total_num_scheduled_tokens]
     np.add(self.input_batch.num_computed_tokens_cpu[req_indices],
-            arange,
-            out=positions_np)
+           arange,
+           out=positions_np)
 
+    # Calculate M-RoPE positions.
+    # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
     if self.uses_mrope:
         self._calc_mrope_positions(scheduler_output)
-
-    if self.uses_mrope:
-        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
-        self.mrope_positions[:, :total_num_scheduled_tokens].copy_(
-            self.mrope_positions_cpu[:, :total_num_scheduled_tokens],
-            non_blocking=True)
-    else:
-        self.positions[:total_num_scheduled_tokens] = torch.from_numpy(positions_np)
-
 
     # Get token indices.
     # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
@@ -114,27 +85,32 @@ def _prepare_inputs(
     token_indices = (positions_np +
                      req_indices * self.input_batch.token_ids_cpu.shape[1])
 
-    self.input_ids[:total_num_scheduled_tokens] = torch.from_numpy(
-        np.take(self.input_batch.token_ids_cpu.ravel(),
-                token_indices,
-                0)
-    )
+    # vllm-mindspore begin
+    self.input_ids[:total_num_scheduled_tokens] = ms.from_numpy(
+        np.take(self.input_batch.token_ids_cpu.ravel(), token_indices, 0))
+    # vllm-mindspore end
 
-    # Calculate the slot mapping.
-    # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-    # -> [0, 0, K, K, K + 1, K + 1, K + 2, 2 * K, 2 * K, 2 * K + 1]
-    # where K is the max_num_blocks_per_req and the block size is 2.
-    # NOTE(woosuk): We can't simply use `token_indices // block_size` here
-    # because M (max_model_len) is not necessarily divisible by block_size.
-    block_table_indices = (req_indices * self.max_num_blocks_per_req +
-                           positions_np // self.block_size)
-
-
-    block_numbers = self.input_batch.block_table.block_table_np.ravel()[block_table_indices]
-    block_offsets = positions_np % self.block_size
-    np.add(block_numbers * self.block_size,
-            block_offsets,
-            out=self.slot_mapping_np[:total_num_scheduled_tokens])
+    # Calculate the slot mapping for each KV cache group.
+    for kv_cache_group_id, kv_cache_group_spec in enumerate(
+            self.kv_cache_config.kv_cache_groups):
+        block_size = kv_cache_group_spec.kv_cache_spec.block_size
+        block_table = self.input_batch.block_table[kv_cache_group_id]
+        # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
+        # -> [0, 0, K, K, K + 1, K + 1, K + 2, 2 * K, 2 * K, 2 * K + 1]
+        # where K is the max_num_blocks_per_req and the block size is 2.
+        # NOTE(woosuk): We can't simply use `token_indices // block_size`
+        # here because M (max_model_len) is not necessarily divisible by
+        # block_size.
+        block_table_indices = (
+            req_indices * block_table.max_num_blocks_per_req +
+            positions_np // block_size)
+        # vllm-mindspore begin
+        block_numbers = block_table.block_table_np.ravel()[block_table_indices]
+        # vllm-mindspore end
+        block_offsets = positions_np % block_size
+        np.add(block_numbers * block_size,
+               block_offsets,
+               out=block_table.slot_mapping_np[:total_num_scheduled_tokens])
 
     # # Prepare the attention metadata.
     self.query_start_loc_np[0] = 0
@@ -144,26 +120,67 @@ def _prepare_inputs(
         self.input_batch.num_computed_tokens_cpu[:num_reqs] +
         num_scheduled_tokens)
 
-    common_prefix_len = 0
-    # when common_prefix_len > 0 use cascade_attn,
-    # which is associated with device_properties.multi_processor_count(CUDA).
+    if self.uses_mrope:
+        # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
+        self.mrope_positions[:, :total_num_scheduled_tokens] = \
+            self.mrope_positions_cpu[:, :total_num_scheduled_tokens]
+    else:
+        # Common case (1D positions)
+        # vllm-mindspore begin
+        self.positions[:total_num_scheduled_tokens] = ms.from_numpy(
+            positions_np)
+        # vllm-mindspore end
 
-    attn_metadata = self.attn_metadata_builder.build(
-        num_reqs=num_reqs,
-        num_actual_tokens=total_num_scheduled_tokens,
-        max_query_len=max_num_scheduled_tokens,
-        common_prefix_len=common_prefix_len,
-    )
+    self.query_start_loc[:num_reqs + 1] = self.query_start_loc_cpu[:num_reqs +
+                                                                   1]
+    self.seq_lens[:num_reqs] = self.seq_lens_cpu[:num_reqs]
 
-    use_spec_decode = len(
-        scheduler_output.scheduled_spec_decode_tokens) > 0
+    # Fill unused with -1. Needed for reshape_and_cache
+    self.seq_lens[num_reqs:].fill_(0)
+    # Note: pad query_start_loc to be non-decreasing, as kernels
+    # like FlashAttention requires that
+    self.query_start_loc[num_reqs + 1:].fill_(
+        self.query_start_loc_cpu[num_reqs].item())
+
+    # vllm-mindspore begin
+    query_start_loc = ms.from_numpy(self.query_start_loc_np[:num_reqs + 1])
+
+    attn_metadata = {}
+    # vllm-mindspore end
+
+    # Prepare the attention metadata for each KV cache group and make layers
+    # in the same group share the same metadata.
+    for kv_cache_group_id, kv_cache_group_spec in enumerate(
+            self.kv_cache_config.kv_cache_groups):
+
+        # Prepare for cascade attention if enabled & beneficial.
+        common_prefix_len = 0
+        if self.cascade_attn_enabled:
+            common_prefix_len = self._compute_cascade_attn_prefix_len(
+                num_scheduled_tokens,
+                scheduler_output.num_common_prefix_blocks[kv_cache_group_id],
+                kv_cache_group_spec.kv_cache_spec,
+                self.attn_metadata_builders[kv_cache_group_id],
+            )
+
+        attn_metadata_i = (
+            self.attn_metadata_builders[kv_cache_group_id].build(
+                num_reqs=num_reqs,
+                num_actual_tokens=total_num_scheduled_tokens,
+                max_query_len=max_num_scheduled_tokens,
+                common_prefix_len=common_prefix_len,
+            ))
+        for layer_name in kv_cache_group_spec.layer_names:
+            attn_metadata[layer_name] = attn_metadata_i
+
+    use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0
     if not use_spec_decode:
         # NOTE(woosuk): Due to chunked prefills, the batch may contain
         # partial requests. While we should not sample any token
         # from these partial requests, we do so for simplicity.
         # We will ignore the sampled tokens from the partial requests.
         # TODO: Support prompt logprobs.
-        logits_indices = attn_metadata.query_start_loc[1:] - 1
+        logits_indices = query_start_loc[1:] - 1
         spec_decode_metadata = None
     else:
         # Get the number of draft tokens for each request.
@@ -187,62 +204,153 @@ def _prepare_inputs(
 
 
 def create_block(shape, dtype, name=None, device=None):
-    from mindspore import mint
     blocks = mint.empty(shape, dtype=dtype, device=device)
     return blocks
 
-def initialize_kv_cache(self, kv_cache_config) -> None:
+
+def _allocate_kv_cache_tensors(self, kv_cache_config):
     """
-    Initialize KV cache based on `kv_cache_config`.
+    Initializes the KV cache buffer with the correct size. The buffer needs
+    to be reshaped to the desired shape before being used by the models.
+
     Args:
-        kv_cache_config: Configuration for the KV cache, including the KV 
-        cache size of each layer
+        kv_cache_config: The KV cache config 
+    Returns:
+        dict[str, Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+        """
+    kv_cache_spec = kv_cache_config.kv_cache_groups[0].kv_cache_spec
+    use_mla = kv_cache_spec.use_mla
+    dtype = kv_cache_spec.dtype
+    coef = 1 if use_mla else 2
+    # Determine whether deepseek use mla op
+    use_mla_op = bool(
+        self.vllm_config.additional_config
+        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
+                           'kv_lora_rank', 0)
+    qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
+                               'qk_rope_head_dim', 0)
+
+    kv_cache_raw_tensors: dict[str, Tensor] = {}
+    target_dtype = get_valid_dtype(dtype)
+    dtype_size = get_dtype_size(target_dtype)
+    for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
+        raw_tensors = []
+        raw_tensor_shape = kv_cache_tensor.size // dtype_size // coef
+        for i in range(coef):
+            # Formulas for calculating each parameter:
+            # 1. page_size = coef * self.block_size * self.num_kv_heads *
+            #    self.head_size * get_dtype_size(self.dtype)
+            # 2. num_blocks = kv_cache_tensors.size / page_size
+            # 3. kv_cache_tensors.size = num_blocks * (coef *
+            #    self.block_size * self.num_kv_heads * self.head_size *
+            #    get_dtype_size(self.dtype))
+            # 4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
+            raw_tensors.extend(
+                [mint.zeros(raw_tensor_shape, dtype=target_dtype)]
+                if not use_mla_op else [
+                    mint.zeros(int(raw_tensor_shape * kv_lora_rank /
+                                   (kv_lora_rank + qk_rope_head_dim)),
+                               dtype=target_dtype),
+                    # deepseek mla op need key cache and rope cache
+                    mint.zeros(int(raw_tensor_shape * qk_rope_head_dim /
+                                   (kv_lora_rank + qk_rope_head_dim)),
+                               dtype=target_dtype)
+                ])
+        for layer_name in kv_cache_tensor.shared_by:
+            kv_cache_raw_tensors[layer_name] = tuple(raw_tensors)
+
+    layer_names = set()
+    for group in kv_cache_config.kv_cache_groups:
+        layer_names.update(group.layer_names)
+    assert layer_names == set(kv_cache_raw_tensors.keys()
+                              ), "Some layers are not correctly initialized"
+    return kv_cache_raw_tensors
+
+
+def _reshape_kv_cache_tensors(
+    self,
+    kv_cache_config,
+    kv_cache_raw_tensors,
+):
     """
-    if len(kv_cache_config.kv_cache_groups) > 1:
-        raise NotImplementedError(
-            "Hybrid models with more than one KV cache type are not "
-            "supported yet.")
+    Reshape the KV cache tensors to the desired shape and dtype.
 
-    kv_caches: Dict[str, torch.Tensor] = {}
-
-    for kv_cache_group in kv_cache_config.kv_cache_groups:
-        kv_cache_spec = kv_cache_group.kv_cache_spec
-        for layer_name in kv_cache_group.layer_names:
-            tensor_config = kv_cache_config.tensors[layer_name]
-            assert tensor_config.size % kv_cache_spec.page_size_bytes == 0
-            num_blocks = tensor_config.size // kv_cache_spec.page_size_bytes
-            # `num_blocks` is the number of blocks the model runner can use.
-            # `kv_cache_config.num_blocks` is the number of blocks that
-            # KVCacheManager may allocate.
-            # Since different GPUs may have different number of layers and
-            # different memory capacities, `num_blocks` can be different on
-            # different GPUs, and `kv_cache_config.num_blocks` is set to
-            # the min of all `num_blocks`. Verify it here.
-            assert num_blocks >= kv_cache_config.num_blocks
+    Args:
+        kv_cache_config: The KV cache config 
+        kv_cache_raw_tensors: The KV cache buffer of each layer, with 
+        correct size but uninitialized shape.
+    Returns:
+        Dict[str, Tensor]: A map between layer names to their 
+        corresponding memory buffer for KV cache.
+    """
+    # Determine whether deepseek use mla op
+    use_mla_op = bool(
+        self.vllm_config.additional_config
+        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
+                           'kv_lora_rank', 0)
+    qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
+                               'qk_rope_head_dim', 0)
+    kv_caches: dict[str, tuple] = {}
+    for i, kv_cache_group_spec in enumerate(kv_cache_config.kv_cache_groups):
+        kv_cache_spec = kv_cache_group_spec.kv_cache_spec
+        coef = 1 if kv_cache_spec.use_mla else 2
+        for layer_name in kv_cache_group_spec.layer_names:
+            raw_tensor = kv_cache_raw_tensors[layer_name]
+            target_dtype = get_valid_dtype(kv_cache_spec.dtype)
+            dtype_size = get_dtype_size(target_dtype)
+            num_blocks = \
+                (raw_tensor[0].numel()
+                if not use_mla_op else
+                # deepseek mla op need key cache and rope cache
+                (raw_tensor[0].numel() + raw_tensor[1].numel())) * \
+                coef * dtype_size // kv_cache_spec.page_size_bytes
             if isinstance(kv_cache_spec, FullAttentionSpec):
-                kv_cache_shape = self.attn_backend.get_kv_cache_shape(
-                    num_blocks, kv_cache_spec.block_size, kv_cache_spec.num_kv_heads,
-                    kv_cache_spec.head_size)
-                dtype = kv_cache_spec.dtype
-                dtype = get_valid_dtype(dtype)
-                current_cache = []
-                device_type = "CPU" if self.device.type == "cpu" else "Ascend"
-                for i in range(kv_cache_shape[0]):
-                    cache_blocks = create_block(
-                        kv_cache_shape[1:], dtype, device=device_type
-                    )
-                    current_cache.append(mutable(cache_blocks))
-                kv_caches[layer_name] = mutable(tuple(current_cache))
+                kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
+                    num_blocks, kv_cache_spec.block_size,
+                    kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
+                try:
+                    kv_cache_stride_order = self.attn_backends[
+                        i].get_kv_cache_stride_order()
+                    assert len(kv_cache_stride_order) == len(kv_cache_shape)
+                except (AttributeError, NotImplementedError):
+                    kv_cache_stride_order = tuple(range(len(kv_cache_shape)))
+                # The allocation respects the backend-defined stride order
+                # to ensure the semantic remains consistent for each
+                # backend. We first obtain the generic kv cache shape and
+                # then permute it according to the stride order which could
+                # result in a non-contiguous tensor.
+                kv_cache_shape = tuple(kv_cache_shape[i]
+                                       for i in kv_cache_stride_order)
+                # Maintain original KV shape view.
+                inv_order = [
+                    kv_cache_stride_order.index(i) - 1
+                    for i in range(len(kv_cache_stride_order))
+                ]
+                kv_cache_layer = []
+                for idx, kv_cache_raw_tensor in enumerate(
+                        kv_cache_raw_tensors[layer_name]):
+                    if use_mla_op:
+                        # deepseek mla op need key cache and rope cache
+                        cache_shape = [
+                            *(kv_cache_shape[1:-1]),
+                            kv_lora_rank if idx == 0 else qk_rope_head_dim
+                        ]
+                        cache_block = kv_cache_raw_tensor.view(
+                            cache_shape).permute(*inv_order[1:])
+                    else:
+                        cache_block = kv_cache_raw_tensor.view(
+                            kv_cache_shape[1:]).permute(*inv_order[1:])
+                    kv_cache_layer.append(cache_block)
+                kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
                 raise NotImplementedError
-
-    bind_kv_cache(
-        kv_caches,
-        self.vllm_config.compilation_config.static_forward_context,
-        self.kv_caches)
+    return kv_caches
 
 
-def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
+def _update_states(self, scheduler_output) -> None:
     """Update the cached states and the persistent batch with the scheduler
     output.
 
@@ -262,7 +370,7 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
     # then resubmitted with the same ID. In this case, we treat them as two
     # distinct requests - clearing the cached states for the first request
     # and handling the second as a new request.
-    removed_req_indices: List[int] = []
+    removed_req_indices: list[int] = []
     for req_id in scheduler_output.finished_req_ids:
         req_index = self.input_batch.remove_request(req_id)
         if req_index is not None:
@@ -293,13 +401,13 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         assert req_index is not None
         removed_req_indices.append(req_index)
 
-    req_ids_to_add: List[str] = []
+    req_ids_to_add: list[str] = []
     # Add new requests to the cached states.
     for new_req_data in scheduler_output.scheduled_new_reqs:
         req_id = new_req_data.req_id
         sampling_params = new_req_data.sampling_params
         if sampling_params.sampling_type == SamplingType.RANDOM_SEED:
-            generator = torch.Generator(device=self.device)
+            generator = msGenerator(device=self.device)
             generator.manual_seed(sampling_params.seed)
         else:
             generator = None
@@ -307,7 +415,6 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         self.requests[req_id] = CachedRequestState(
             req_id=req_id,
             prompt_token_ids=new_req_data.prompt_token_ids,
-            prompt=new_req_data.prompt,
             mm_inputs=new_req_data.mm_inputs,
             mm_positions=new_req_data.mm_positions,
             sampling_params=sampling_params,
@@ -325,14 +432,11 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
             second_per_grid_ts = []
             for mm_input in self.requests[req_id].mm_inputs:
                 if mm_input.get("image_grid_thw") is not None:
-                    image_grid_thw.extend(
-                        mm_input["image_grid_thw"].tolist())
+                    image_grid_thw.extend(mm_input["image_grid_thw"].tolist())
                 if mm_input.get("video_grid_thw") is not None:
-                    video_grid_thw.extend(
-                        mm_input["video_grid_thw"].tolist())
+                    video_grid_thw.extend(mm_input["video_grid_thw"].tolist())
                 if mm_input.get("second_per_grid_ts") is not None:
-                    second_per_grid_ts.extend(
-                        mm_input["second_per_grid_ts"])
+                    second_per_grid_ts.extend(mm_input["second_per_grid_ts"])
 
             hf_config = self.model_config.hf_config
 
@@ -358,9 +462,8 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         req_state.num_computed_tokens = num_computed_tokens
         # Add the sampled token(s) from the previous step (if any).
         # This doesn't include "unverified" tokens like spec decode tokens.
-        num_new_tokens = (num_computed_tokens +
-                            len(req_data.new_token_ids) -
-                            req_state.num_tokens)
+        num_new_tokens = (num_computed_tokens + len(req_data.new_token_ids) -
+                          req_state.num_tokens)
         if num_new_tokens == 1:
             # Avoid slicing list in most common case.
             req_state.output_token_ids.append(req_data.new_token_ids[-1])
@@ -370,7 +473,8 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         # Update the block IDs.
         if not req_data.resumed_from_preemption:
             # Append the new blocks to the existing block IDs.
-            req_state.block_ids.extend(req_data.new_block_ids)
+            for i in range(len(self.kv_cache_config.kv_cache_groups)):
+                req_state.block_ids[i].extend(req_data.new_block_ids[i])
         else:
             # The request is resumed from preemption.
             # Replace the existing block IDs with the new ones.
@@ -387,8 +491,6 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         # Update the persistent batch.
         self.input_batch.num_computed_tokens_cpu[req_index] = (
             num_computed_tokens)
-        start_index = (len(req_state.block_ids) -
-                        len(req_data.new_block_ids))
         self.input_batch.block_table.append_row(req_data.new_block_ids,
                                                 req_index)
         # Add new_token_ids to token_ids_cpu.
@@ -410,8 +512,6 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
         # NOTE(woosuk): `num_tokens` here may include spec decode tokens.
         self.input_batch.num_tokens[req_index] = end_token_index
 
-
-    # self.input_batch.token_ids_cpu_tensor.copy_(torch.from_numpy(self.input_batch.token_ids_cpu))
     # Check if the batch has changed. If not, we can skip copying the
     # sampling metadata from CPU to GPU.
     batch_changed = len(removed_req_indices) > 0 or len(req_ids_to_add) > 0
@@ -421,19 +521,16 @@ def _update_states(self, scheduler_output: "SchedulerOutput") -> None:
     removed_req_indices = sorted(removed_req_indices, reverse=True)
     for req_id in req_ids_to_add:
         req_state = self.requests[req_id]
-        if removed_req_indices:
-            # Fill the empty index.
-            req_index = removed_req_indices.pop()
-        else:
-            # Append to the end.
-            req_index = None
+        req_index = removed_req_indices.pop() if removed_req_indices else None
         self.input_batch.add_request(req_state, req_index)
 
     # Condense the batched states if there are empty indices.
     if removed_req_indices:
         self.input_batch.condense(removed_req_indices)
 
-    if batch_changed:
+    batch_reordered = self._may_reorder_batch(scheduler_output)
+
+    if batch_changed or batch_reordered:
         self.input_batch.refresh_sampling_metadata()
 
 
@@ -445,9 +542,8 @@ def wrapper_gpu_model_runner_execute_model(func):
             output = func(*args, **kwargs)
             return output
         except Exception as e:
-            logger.warning(
-                f"Caught exception {str(e)} when processing req_ids {self.input_batch.req_ids}"
-            )
+            logger.warning("Caught exception %s when processing req_ids %s",
+                           str(e), self.input_batch.req_ids)
             return ModelRunnerOutput(
                 req_ids=self.input_batch.req_ids,
                 req_id_to_index=self.input_batch.req_id_to_index,
@@ -485,7 +581,7 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
                     dtype=self.kv_cache_dtype,
                     use_mla=use_mla)
         elif attn_module.attn_type in (AttentionType.ENCODER,
-                                        AttentionType.ENCODER_ONLY):
+                                       AttentionType.ENCODER_ONLY):
             # encoder-only attention does not need KV cache.
             continue
         elif attn_module.attn_type == AttentionType.ENCODER_DECODER:
@@ -495,3 +591,64 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
                 f"Unknown attention type: {attn_module.attn_type}")
 
     return kv_cache_spec
+
+
+def _calc_mrope_positions(self, scheduler_output):
+    mrope_pos_ptr = 0
+    for index, req_id in enumerate(self.input_batch.req_ids):
+        req = self.requests[req_id]
+        assert req.mrope_positions is not None
+
+        num_computed_tokens = \
+            self.input_batch.num_computed_tokens_cpu[index]
+        num_scheduled_tokens = \
+            scheduler_output.num_scheduled_tokens[req_id]
+        num_prompt_tokens = len(req.prompt_token_ids)
+
+        if num_computed_tokens + num_scheduled_tokens > num_prompt_tokens:
+            prompt_part_len = max(0, num_prompt_tokens - num_computed_tokens)
+            completion_part_len = max(0,
+                                      num_scheduled_tokens - prompt_part_len)
+        else:
+            prompt_part_len = num_scheduled_tokens
+            completion_part_len = 0
+
+        assert num_scheduled_tokens == prompt_part_len + completion_part_len
+
+        if prompt_part_len > 0:
+            # prompt's mrope_positions are pre-computed
+            # gpu is number or tensor, but we are numpy, so we transform to int
+            dst_start = int(mrope_pos_ptr)
+            dst_end = int(mrope_pos_ptr + prompt_part_len)
+            src_start = int(num_computed_tokens)
+            src_end = int(num_computed_tokens + prompt_part_len)
+
+            self.mrope_positions_cpu[:, dst_start:dst_end] = \
+                req.mrope_positions[:,src_start:src_end]
+
+            mrope_pos_ptr += prompt_part_len
+
+        if completion_part_len > 0:
+            # compute completion's mrope_positions on-the-fly
+            dst_start = mrope_pos_ptr
+            dst_end = mrope_pos_ptr + completion_part_len
+
+            self.mrope_positions_cpu[:, dst_start:dst_end] = \
+                MRotaryEmbedding.get_next_input_positions_tensor(
+                    req.mrope_position_delta,
+                    context_len=num_computed_tokens +
+                    prompt_part_len,
+                    seq_len=num_computed_tokens +
+                    prompt_part_len +
+                    completion_part_len,
+                )
+
+            mrope_pos_ptr += completion_part_len
+
+
+def get_dp_padding(self, num_tokens: int):
+    # Skip unnecessary padding processes to ensure the shape consistency
+    # of model_inputs. Shape of `input_ids` and `positions` will be
+    # padded based on `num_tokens_across_dp`, while the model only accepts
+    # inputs with actual shape.
+    return 0, None

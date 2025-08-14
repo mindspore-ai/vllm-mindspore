@@ -17,87 +17,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Implement a unified communication interface for both graph and pynative mode."""
+"""
+Implement a unified communication interface for both graph and pynative mode.
+"""
 
-from typing import Any, Dict, Optional, Union
-
-import mindspore as ms
-from mindspore import Tensor, nn, ops
-from mindspore.communication.comm_func import (all_gather_into_tensor,
-                                               all_reduce, broadcast,
-                                               gather_into_tensor, recv, send)
+from mindspore import nn, ops
 from vllm.distributed.parallel_state import (
-    get_pp_group, get_tensor_model_parallel_rank,
-    get_tensor_model_parallel_world_size, get_tp_group, get_world_group)
-
-
-def tensor_model_parallel_all_reduce(input_: Tensor) -> Tensor:
-    if get_tensor_model_parallel_world_size() == 1:
-        return input_
-    """All-reduce the input tensor across model parallel group."""
-    output, _ = all_reduce(input_, group=get_tp_group())
-    return output
-
-
-def tensor_model_parallel_all_gather(input_: Tensor,
-                                     dim: int = -1) -> Tensor:
-    if get_tensor_model_parallel_world_size() == 1:
-        return input_
-    """All-gather the input tensor across model parallel group."""
-    output, _ = all_gather_into_tensor(input_, group=get_tp_group())
-    input_size = input_.shape
-    if dim < 0:
-        # Convert negative dim to positive.
-        dim += len(input_size)
-    # Reshape
-    output_tensor = output_tensor.reshape((world_size, ) + input_size)
-    output_tensor = output_tensor.movedim(0, dim)
-    output_tensor = output_tensor.reshape(input_size[:dim] +
-                                          (world_size *
-                                           input_size[dim], ) +
-                                          input_size[dim + 1:])
-    return output
-
-
-def tensor_model_parallel_gather(input_: Tensor,
-                                 dst: int = 0,
-                                 dim: int = -1) -> Optional[Tensor]:
-    if get_tensor_model_parallel_world_size() == 1:
-        return input_
-    """Gather the input tensor across model parallel group."""
-    if dim < 0:
-        # Convert negative dim to positive.
-        dim += len(input_.shape)
-    if dim != 0:
-        input_ = input_.moveaxis(dim, 0)
-    _dst = get_world_rank_from_tp_group_rank(dst)
-    output = gather_into_tensor(input_, dst=_dst, group=get_tp_group())
-    if get_tensor_model_parallel_rank() == dst:
-        if dim != 0:
-            output = output.moveaxis(0, dim)
-    else:
-        output = None
-    return output
-
-
-def broadcast_tensor(tensor, src: int = 0):
-    # broadcast tensor to the world group
-    return broadcast(tensor, src, group=get_world_group())
-
-
-def broadcast_tensor_dict(tensor_dict: Optional[Dict[Any, Union[Tensor,
-                                                                Any]]] = None,
-                          src: int = 0):
-    ...
-
-
-def send_to_next_pp_rank(tensor):
-    send(tensor, next_pp_rank(), group=get_pp_group())
-
-
-def recv_from_prev_pp_rank(tensor):
-    output = recv(tensor, prev_pp_rank(), group=get_pp_group())
-    return output
+    get_tensor_model_parallel_world_size, get_tp_group)
 
 
 class ReduceFromModelParallelRegion(nn.Cell):
@@ -117,24 +43,24 @@ class ReduceFromModelParallelRegion(nn.Cell):
         return output
 
 
-class GatherFromModelParallelRegion(nn.Cell):
-    "Gather the input from model parallel region and concatinate."
+class AllGatherFromModelParallelRegion(nn.Cell):
+    """
+    Gather the input from world parallel region and concatenate,
+    simultaneously perform transpose operation on input.
+    """
 
     def __init__(self):
         super().__init__()
         self.world_size = get_tensor_model_parallel_world_size()
-        self.tp_rank = get_tensor_model_parallel_rank()
         if self.world_size > 1:
             self.tp_group = get_tp_group().device_group._name
+            self.all_gather_into_tensor = ops.AllGather(group=self.tp_group)
 
-    def construct(self,
-                  input_: Tensor,
-                  dst: int = 0,
-                  dim: int = -1) -> Optional[Tensor]:
+    def construct(self, input_):
         # Size and dimension.
         if self.world_size == 1:
             return input_
-        output = ops.CollectiveGather(dest_rank=dst, group=self.tp_group)(input_.transpose(2, 1, 0))
-        if self.tp_rank != dst:
-            return ops.depend(ops.zeros_like(input_), output)
-        return output.transpose(2, 1, 0)
+        input_ = ops.swapaxes(input_, 0, -1)
+        output = self.all_gather_into_tensor(input_)
+        output = ops.swapaxes(output, 0, -1)
+        return output

@@ -36,7 +36,6 @@ def get_tensor_dynamic_input(tensors):
 
 
 def enable_dynamic_shape(cell: nn.Cell, *cell_inputs, **kwargs):
-
     assert isinstance(cell, nn.Cell)
 
     fn_parameters = OrderedDict([

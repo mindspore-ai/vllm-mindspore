@@ -20,13 +20,15 @@
 """Models for Multi-LoRA."""
 
 import os
-from typing import Dict, List, Optional, Union
+from typing import Optional, Union
 
+import mindspore as ms
 import safetensors.torch
-import torch
+from mindspore import mint
 from vllm.lora.lora import LoRALayerWeights
 from vllm.lora.peft_helper import PEFTHelper
 from vllm.lora.utils import is_regex_target_modules, parse_fine_tuned_lora_name
+from vllm.model_executor.model_loader.tensorizer import TensorizerConfig
 from vllm.model_executor.models.utils import WeightsMapper
 from vllm.utils import is_pin_memory_available
 
@@ -50,19 +52,19 @@ def register_module(self, module_name: str, module: "BaseLayerWithLoRA"):
 def from_lora_tensors(
     cls,
     lora_model_id: int,
-    tensors: Dict[str, torch.Tensor],
+    tensors: dict[str, ms.Tensor],
     peft_helper: PEFTHelper,
     device: str = "cuda",
-    dtype: Optional[torch.dtype] = None,
-    embeddings: Optional[Dict[str, torch.Tensor]] = None,
+    dtype=None,
+    embeddings: Optional[dict[str, ms.Tensor]] = None,
     target_embedding_padding: Optional[int] = None,
-    embedding_modules: Optional[Dict[str, str]] = None,
-    embedding_padding_modules: Optional[List[str]] = None,
+    embedding_modules: Optional[dict[str, str]] = None,
+    embedding_padding_modules: Optional[list[str]] = None,
     weights_mapper: Optional[WeightsMapper] = None,
 ):
     """Create a LoRAModel from a dictionary of tensors."""
     pin_memory = str(device) == "cpu" and is_pin_memory_available()
-    loras: Dict[str, LoRALayerWeights] = {}
+    loras: dict[str, LoRALayerWeights] = {}
     for tensor_name, tensor in tensors.items():
         module_name, is_lora_a, is_bias = parse_fine_tuned_lora_name(
             tensor_name, weights_mapper)
@@ -101,7 +103,7 @@ def from_lora_tensors(
                 lora_b = loras[module_name].lora_b
                 assert target_embedding_padding >= lora_b.shape[1]
                 addition = target_embedding_padding - lora_b.shape[1]
-                loras[module_name].lora_b = torch.nn.functional.pad(
+                loras[module_name].lora_b = mint.nn.functional.pad(
                     lora_b, (0, addition))
             if pin_memory:
                 loras[module_name].lora_b = loras[
@@ -118,43 +120,69 @@ def from_lora_tensors(
 
 @classmethod  #type:ignore
 def from_local_checkpoint(
-    cls,
-    lora_dir: str,
-    expected_lora_modules: List[str],
-    peft_helper: PEFTHelper,
-    *,
-    lora_model_id: Optional[int] = None,
-    device: str = "cuda",
-    dtype: Optional[torch.dtype] = None,
-    target_embedding_padding: Optional[int] = None,
-    embedding_modules: Optional[Dict[str, str]] = None,
-    embedding_padding_modules: Optional[List[str]] = None,
-    weights_mapper: Optional[WeightsMapper] = None,
-):
+        cls,
+        lora_dir: str,
+        expected_lora_modules: list[str],
+        peft_helper: PEFTHelper,
+        *,
+        lora_model_id: Optional[int] = None,
+        device: str = "cuda",
+        dtype=None,
+        target_embedding_padding: Optional[int] = None,
+        embedding_modules: Optional[dict[str, str]] = None,
+        embedding_padding_modules: Optional[list[str]] = None,
+        weights_mapper: Optional[WeightsMapper] = None,
+        tensorizer_config_dict: Optional[dict] = None):
     """Create a LoRAModel from a local checkpoint.
-        
-        Args:
-            lora_dir: The local path that has lora data.
-            expected_lora_modules: Name of modules that are expected to be
-                replaced by lora.
-            peft_helper: Loaded lora configuration information.
-            lora_model_id: Lora model id. If not given, automatically set by
-                a global counter.
-            device: Device where the lora model is loaded.
-            dtype: dtype of the lora model weights.
 
-        Returns:
-            Loaded LoRA Model.
-        """
+    Args:
+        lora_dir: The local path that has lora data.
+        expected_lora_modules: Name of modules that are expected to be
+            replaced by lora.
+        peft_helper: Loaded lora configuration information.
+        lora_model_id: LoRA model id. If not given, automatically set by
+            a global counter.
+        device: Device where the lora model is loaded.
+        dtype: dtype of the lora model weights.
+
+    Returns:
+        Loaded LoRA Model.
+    """
     lora_tensor_path = os.path.join(lora_dir, "adapter_model.safetensors")
     lora_bin_file_path = os.path.join(lora_dir, "adapter_model.bin")
     new_embeddings_tensor_path = os.path.join(lora_dir,
                                               "new_embeddings.safetensors")
     new_embeddings_bin_file_path = os.path.join(lora_dir, "new_embeddings.bin")
+    tensors: dict[str, mint.Tensor] = {}
+    unexpected_modules: list[Union[list[str], str]] = []
 
-    unexpected_modules: List[Union[list[str], str]]
-    if os.path.isfile(lora_tensor_path):
-        tensors: Dict[str, torch.Tensor] = {}
+    def check_unexpected_modules(modules: dict):
+        for lora_module in modules.keys():  # noqa
+            module_name, _, _ = parse_fine_tuned_lora_name(
+                lora_module, weights_mapper)
+            part_name = module_name.split(".")[-1]
+            if part_name not in expected_lora_modules:
+                unexpected_modules.append(module_name)
+        if unexpected_modules:
+            raise ValueError(
+                f"While loading {lora_dir}, expected"
+                f" target modules in {expected_lora_modules}"
+                f" but received {unexpected_modules}."
+                f" Please verify that the loaded LoRA module is correct")
+
+    if tensorizer_config_dict:
+        from tensorizer import TensorDeserializer
+
+        tensorizer_config = TensorizerConfig(**tensorizer_config_dict)
+        lora_tensor_path = os.path.join(tensorizer_config.tensorizer_dir,
+                                        "adapter_model.tensors")
+        tensorizer_args = tensorizer_config._construct_tensorizer_args()
+        tensors = TensorDeserializer(lora_tensor_path,
+                                     dtype=tensorizer_config.dtype,
+                                     **tensorizer_args.deserializer_params)
+        check_unexpected_modules(tensors)
+
+    elif os.path.isfile(lora_tensor_path):
         # Find unexpected modules.
         # Use safetensor key as a source of truth to find expected modules.
         # in peft if you have target_modules A, B, C and C does not exist
@@ -165,22 +193,11 @@ def from_local_checkpoint(
         # vllm-mindspore safetensors open with np
         with safetensors.safe_open(lora_tensor_path,
                                    framework="np") as f:  # type: ignore
-            for lora_module in f.keys():  # noqa
-                module_name, _, _ = parse_fine_tuned_lora_name(
-                    lora_module, weights_mapper)
-                part_name = module_name.split(".")[-1]
-                if part_name not in expected_lora_modules:
-                    unexpected_modules.append(module_name)
-            if unexpected_modules:
-                raise ValueError(
-                    f"While loading {lora_dir}, expected"
-                    f" target modules in {expected_lora_modules}"
-                    f" but received {unexpected_modules}."
-                    f" Please verify that the loaded LoRA module is correct")
             # Load tensors if there are only expected modules.
+            check_unexpected_modules(f)
             for module in f.keys():  # noqa
                 # vllm-mindspore add numpy to tensor
-                tensors[module] = torch.Tensor(f.get_tensor(module))
+                tensors[module] = mint.Tensor(f.get_tensor(module))
     elif os.path.isfile(lora_bin_file_path):
         # When a bin file is provided, we rely on config to find unexpected
         # modules.
@@ -205,9 +222,9 @@ def from_local_checkpoint(
                 f" target modules in {expected_lora_modules}"
                 f" but received {unexpected_modules}."
                 f" Please verify that the loaded LoRA module is correct")
-        tensors = torch.load(lora_bin_file_path,
-                             map_location=device,
-                             weights_only=True)
+        tensors = mint.load(lora_bin_file_path,
+                            map_location=device,
+                            weights_only=True)
     else:
         raise ValueError(f"{lora_dir} doesn't contain tensors")
 
@@ -215,9 +232,9 @@ def from_local_checkpoint(
     if os.path.isfile(new_embeddings_tensor_path):
         embeddings = safetensors.torch.load_file(new_embeddings_tensor_path)
     elif os.path.isfile(new_embeddings_bin_file_path):
-        embeddings = torch.load(new_embeddings_bin_file_path,
-                                map_location=device,
-                                weights_only=True)
+        embeddings = mint.load(new_embeddings_bin_file_path,
+                               map_location=device,
+                               weights_only=True)
 
     return cls.from_lora_tensors(
         lora_model_id=get_lora_id()

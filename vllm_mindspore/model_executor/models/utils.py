@@ -18,8 +18,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Iterable, List, Mapping, Optional, Tuple, Union
+from typing import Optional, Union
 
 import mindspore as ms
 from mindspore import mint, ops
@@ -65,13 +66,14 @@ class WeightsMapper:
         return key
 
     def apply(
-        self, weights: Iterable[Tuple[str, ms.Tensor]]
-    ) -> Iterable[Tuple[str, ms.Tensor]]:
+        self, weights: Iterable[tuple[str, ms.Tensor]]
+    ) -> Iterable[tuple[str, ms.Tensor]]:
         return ((out_name, data) for name, data in weights
                 if (out_name := self._map_name(name)) is not None)
 
 
 enforce_eager = False
+
 
 class PPMissingLayer(ms.nn.Cell):
     """
@@ -113,7 +115,7 @@ def extract_layer_index(layer_name: str) -> int:
     - "model.encoder.layers.0.sub.1" -> ValueError
     """
     subnames = layer_name.split(".")
-    int_vals: List[int] = []
+    int_vals: list[int] = []
     for subname in subnames:
         try:
             int_vals.append(int(subname))
@@ -128,7 +130,7 @@ def make_layers(
     num_hidden_layers: int,
     layer_fn,
     prefix: str,
-) -> Tuple[int, int, ms.nn.CellList]:
+) -> tuple[int, int, ms.nn.CellList]:
     """Make a list of layers with the given layer function, taking
     pipeline parallelism into account.
     """
@@ -145,7 +147,7 @@ def make_layers(
     return start_layer, end_layer, modules
 
 
-def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
+def make_empty_intermediate_tensors_factory(keys: list[str], hidden_size: int):
 
     def make_empty_intermediate_tensors(
         batch_size: int,
@@ -154,7 +156,8 @@ def make_empty_intermediate_tensors_factory(keys: List[str], hidden_size: int):
     ) -> IntermediateTensors:
         dtype = get_valid_dtype(dtype)
         return IntermediateTensors({
-            key: mint.zeros((batch_size, hidden_size), dtype=dtype)
+            key:
+            mint.zeros((batch_size, hidden_size), dtype=dtype)
             for key in keys
         })
 
@@ -221,7 +224,7 @@ def merge_multimodal_embeddings(
     input_ids: ms.Tensor,
     inputs_embeds: ms.Tensor,
     multimodal_embeddings: NestedTensors,
-    placeholder_token_id: Union[int, List[int]],
+    placeholder_token_id: Union[int, list[int]],
 ) -> ms.Tensor:
     """
     Merge ``multimodal_embeddings`` into ``inputs_embeds`` by overwriting the
@@ -249,8 +252,7 @@ def merge_multimodal_embeddings(
         This updates ``inputs_embeds`` in place.
     """
     if isinstance(placeholder_token_id, list):
-        placeholder_token_id = ms.Tensor(placeholder_token_id,
-                                         device=input_ids.device)
+        placeholder_token_id = ms.Tensor(placeholder_token_id)
         return _merge_multimodal_embeddings(
             inputs_embeds,
             ms.numpy.isin(input_ids, placeholder_token_id),

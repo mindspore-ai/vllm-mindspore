@@ -16,6 +16,7 @@
 # limitations under the License.
 """Adaption for multiprocessing engine."""
 
+
 def cleanup(self):
     self.ctx.destroy(linger=0)
     if model_executor := getattr(self.engine, "model_executor", None):

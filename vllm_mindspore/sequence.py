@@ -22,22 +22,20 @@ import copy
 import enum
 from abc import ABC, abstractmethod
 from array import array
-from collections import defaultdict
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from collections.abc import Sequence as GenericSequence
+from dataclasses import dataclass
 from functools import reduce
-from typing import Any, Callable, DefaultDict, Dict, List, Mapping, Optional
-from typing import Sequence as GenericSequence
-from typing import Set, Tuple, Union
+from typing import Any, Optional, Union
 
 import msgspec
 import torch
-
-from vllm.inputs import SingletonInputs, SingletonInputsAdapter
+from vllm.inputs import SingletonInputs
 from vllm.lora.request import LoRARequest
 from vllm.multimodal import MultiModalDataDict, MultiModalPlaceholderDict
 from vllm.pooling_params import PoolingParams
 from vllm.prompt_adapter.request import PromptAdapterRequest
-from vllm.sampling_params import RequestOutputKind, SamplingParams
+from vllm.sampling_params import SamplingParams
 
 VLLM_TOKEN_ID_ARRAY_TYPE = "l"
 
@@ -68,9 +66,9 @@ class Logprob:
 
 # {token_id -> logprob} per each sequence group. None if the corresponding
 # sequence group doesn't require prompt logprob.
-PromptLogprobs = List[Optional[Dict[int, Logprob]]]
+PromptLogprobs = list[Optional[dict[int, Logprob]]]
 # {token_id -> logprob} for each sequence group.
-SampleLogprobs = List[Dict[int, Logprob]]
+SampleLogprobs = list[dict[int, Logprob]]
 
 
 class SequenceStatus(enum.IntEnum):
@@ -147,7 +145,7 @@ class SequenceDataDelta(
         omit_defaults=True):  # type: ignore[call-arg]
     """Delta SequenceData to send to workers per step."""
     # A new token to be appended to existing SequenceData.
-    new_output_token_ids: List[int]
+    new_output_token_ids: list[int]
     # Overwriting existing `cumulative_logprob`
     new_cumulative_logprob: float
     # Overwriting existing `num_computed_tokens`.
@@ -178,25 +176,25 @@ class SequenceData(msgspec.Struct,
 
     ### The below fields should not be passed as an argument ###
     _cumulative_logprob: float = 0.0
-    _prompt_token_ids_tuple: Tuple[int,
+    _prompt_token_ids_tuple: tuple[int,
                                    ...] = msgspec.field(default_factory=tuple)
     # The number of tokens that are computed (that run against the model).
     _num_computed_tokens: int = 0
     # The number of tokens with prefix cache hit.
     _num_cached_tokens: int = 0
     _stage: SequenceStage = SequenceStage.PREFILL
-    _cached_all_token_ids: List[int] = msgspec.field(default_factory=list)
+    _cached_all_token_ids: list[int] = msgspec.field(default_factory=list)
 
     # It is used to get delta input. It is reset when `get_delta_and_reset`
     # is called.
-    _new_appended_tokens: List[int] = msgspec.field(default_factory=list)
+    _new_appended_tokens: list[int] = msgspec.field(default_factory=list)
 
     # It is used to compute mrope_position_ids.
     _mrope_position_delta: Optional[int] = None
 
     @staticmethod
     def from_prompt_token_counts(
-            *token_counts: Tuple[int, int]) -> "SequenceData":
+            *token_counts: tuple[int, int]) -> "SequenceData":
         """
         Construct a :class:`SequenceData` instance by concatenating
         prompt token sequences.
@@ -238,14 +236,14 @@ class SequenceData(msgspec.Struct,
     def __post_init__(self) -> None:
         assert self._prompt_token_ids.typecode == "l"
         assert self._output_token_ids.typecode == "l"
-        self._prompt_token_ids_tuple: Tuple[int, ...] = tuple(
+        self._prompt_token_ids_tuple: tuple[int, ...] = tuple(
             self._prompt_token_ids)
         self._update_cached_all_tokens()
 
     def _update_cached_all_tokens(self):
         assert isinstance(self._prompt_token_ids, array)
         assert isinstance(self._output_token_ids, array)
-        self._cached_all_token_ids: List[int] = list(self._prompt_token_ids +
+        self._cached_all_token_ids: list[int] = list(self._prompt_token_ids +
                                                      self._output_token_ids)
 
     @property
@@ -253,7 +251,7 @@ class SequenceData(msgspec.Struct,
         return self._cumulative_logprob
 
     @property
-    def prompt_token_ids(self) -> Tuple[int, ...]:
+    def prompt_token_ids(self) -> tuple[int, ...]:
         return self._prompt_token_ids_tuple
 
     @prompt_token_ids.setter
@@ -270,7 +268,7 @@ class SequenceData(msgspec.Struct,
         return self._prompt_token_ids
 
     @property
-    def output_token_ids(self) -> Tuple[int, ...]:
+    def output_token_ids(self) -> tuple[int, ...]:
         return tuple(self._output_token_ids)
 
     @output_token_ids.setter
@@ -313,12 +311,12 @@ class SequenceData(msgspec.Struct,
     def get_output_len(self) -> int:
         return len(self._output_token_ids)
 
-    def get_token_ids(self) -> List[int]:
+    def get_token_ids(self) -> list[int]:
         return self._cached_all_token_ids
 
     def get_prefix_token_ids(
             self, num_tokens: int
-    ) -> Tuple[Tuple[int, ...], Optional[Tuple[int, ...]]]:
+    ) -> tuple[tuple[int, ...], Optional[tuple[int, ...]]]:
         """Get prefix tokens, and make the return value hashable"""
         prompt_length = self.get_prompt_len()
         if num_tokens > prompt_length:
@@ -369,10 +367,10 @@ class SequenceData(msgspec.Struct,
             return self._prompt_token_ids[-1]
         return self._output_token_ids[-1]
 
-    def get_prompt_token_ids(self) -> Tuple[int, ...]:
+    def get_prompt_token_ids(self) -> tuple[int, ...]:
         return self.prompt_token_ids
 
-    def get_output_token_ids(self) -> Tuple[int, ...]:
+    def get_output_token_ids(self) -> tuple[int, ...]:
         return self.output_token_ids
 
     def get_delta_and_reset(self) -> SequenceDataDelta:
@@ -429,7 +427,7 @@ class Sequence:
         prompt_adapter_request: Optional[PromptAdapterRequest] = None,
     ) -> None:
         self.seq_id = seq_id
-        self.inputs = SingletonInputsAdapter(inputs)
+        self.inputs = inputs
         self.block_size = block_size
         self.eos_token_id = eos_token_id
         self.lora_request = lora_request
@@ -450,7 +448,7 @@ class Sequence:
         self.prefix_offset = 0
         self.read_offset = 0
         # Input + output tokens
-        self.tokens: Optional[List[str]] = None
+        self.tokens: Optional[list[str]] = None
 
     @property
     def n_blocks(self) -> int:
@@ -461,7 +459,7 @@ class Sequence:
         return self.inputs.prompt
 
     @property
-    def prompt_token_ids(self) -> List[int]:
+    def prompt_token_ids(self) -> list[int]:
         return self.inputs.prompt_token_ids
 
     @property
@@ -469,7 +467,7 @@ class Sequence:
         return self.inputs.prompt_embeds
 
     @property
-    def token_type_ids(self) -> List[int]:
+    def token_type_ids(self) -> list[int]:
         return self.inputs.token_type_ids
 
     @property
@@ -481,7 +479,7 @@ class Sequence:
         return self.inputs.multi_modal_placeholders
 
     @property
-    def mm_processor_kwargs(self) -> Dict[str, Any]:
+    def mm_processor_kwargs(self) -> dict[str, Any]:
         return self.inputs.mm_processor_kwargs
 
     @property
@@ -566,7 +564,7 @@ class Sequence:
         """Reset the sequence states for recomputation."""
         self.data.reset_state_for_recompute()
 
-    def append_token_id(self, token_id: int, logprobs: Dict[int,
+    def append_token_id(self, token_id: int, logprobs: dict[int,
                                                             Logprob]) -> None:
         assert token_id in logprobs
         self.output_logprobs.append(logprobs)
@@ -581,16 +579,16 @@ class Sequence:
     def get_output_len(self) -> int:
         return self.data.get_output_len()
 
-    def get_token_ids(self) -> List[int]:
+    def get_token_ids(self) -> list[int]:
         return self.data.get_token_ids()
 
-    def get_prompt_token_ids(self) -> Tuple[int, ...]:
+    def get_prompt_token_ids(self) -> tuple[int, ...]:
         return self.data.get_prompt_token_ids()
 
     def get_last_token_id(self) -> int:
         return self.data.get_last_token_id()
 
-    def get_output_token_ids(self) -> Tuple[int, ...]:
+    def get_output_token_ids(self) -> tuple[int, ...]:
         return self.data.get_output_token_ids()
 
     def get_cumulative_logprob(self) -> float:
@@ -662,7 +660,7 @@ class SequenceGroup:
     def __init__(
         self,
         request_id: str,
-        seqs: List[Sequence],
+        seqs: list[Sequence],
         arrival_time: float,
         sampling_params: Optional[SamplingParams] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -703,7 +701,7 @@ class SequenceGroup:
         return self.first_seq.prompt
 
     @property
-    def prompt_token_ids(self) -> List[int]:
+    def prompt_token_ids(self) -> list[int]:
         return self.first_seq.prompt_token_ids
 
     @property
@@ -715,7 +713,7 @@ class SequenceGroup:
                 if self.encoder_seq is not None else None)
 
     @property
-    def encoder_prompt_token_ids(self) -> Optional[List[int]]:
+    def encoder_prompt_token_ids(self) -> Optional[list[int]]:
         # There are either 0 or 1 encoder sequences
         # If one is present, its prompt token ids are
         # distinct from the decoder's.
@@ -723,7 +721,7 @@ class SequenceGroup:
                 if self.encoder_seq is not None else None)
 
     @property
-    def token_type_ids(self) -> Optional[List[int]]:
+    def token_type_ids(self) -> Optional[list[int]]:
         return self.first_seq.token_type_ids
 
     @property
@@ -735,7 +733,7 @@ class SequenceGroup:
         return self.first_seq.multi_modal_placeholders
 
     @property
-    def mm_processor_kwargs(self) -> Dict[str, Any]:
+    def mm_processor_kwargs(self) -> dict[str, Any]:
         return self.first_seq.mm_processor_kwargs
 
     @property
@@ -823,7 +821,7 @@ class SequenceGroup:
     def get_seqs(
         self,
         status: Optional[SequenceStatus] = None,
-    ) -> List[Sequence]:
+    ) -> list[Sequence]:
         if status is None:
             return self.seqs
 
@@ -835,7 +833,7 @@ class SequenceGroup:
     def get_encoder_seq(self) -> Optional[Sequence]:
         return self.encoder_seq
 
-    def get_finished_seqs(self) -> List[Sequence]:
+    def get_finished_seqs(self) -> list[Sequence]:
         return self.seqs if self.first_seq.is_finished() else []
 
     def update_num_computed_tokens(self, num_new_computed_tokens: int):
@@ -887,13 +885,13 @@ class SequenceGroupMetadataDelta(
     After sending the first SequenceGroupMetadata, vLLM scheduler
     only sends delta to reduce the data payload size.
     """
-    seq_data_delta: Dict[int, SequenceDataDelta]
+    seq_data_delta: dict[int, SequenceDataDelta]
     request_id: str
-    block_tables: Dict[int, List[int]]
+    block_tables: dict[int, list[int]]
     is_prompt: bool
     do_sample: bool = True
     token_chunk_size: Optional[int] = None
-    computed_block_nums: Optional[List[int]] = None
+    computed_block_nums: Optional[list[int]] = None
     state: Optional[SequenceGroupState] = msgspec.field(
         default_factory=lambda: SequenceGroupState())
 
@@ -937,23 +935,23 @@ class SequenceGroupMetadata(
 
     request_id: str
     is_prompt: bool
-    seq_data: Dict[int, SequenceData]
+    seq_data: dict[int, SequenceData]
     sampling_params: Optional[SamplingParams]
-    block_tables: Dict[int, List[int]]
+    block_tables: dict[int, list[int]]
     do_sample: bool = True
     pooling_params: Optional[PoolingParams] = None
     lora_request: Optional[LoRARequest] = None
-    computed_block_nums: Optional[List[int]] = None
+    computed_block_nums: Optional[list[int]] = None
     state: Optional[SequenceGroupState] = msgspec.field(
         default_factory=lambda: SequenceGroupState())
     # "MultiModalDataDict" types. We have to use Any due to msgspec
     # doesn't allow to have union of 2 different dicts.
-    token_type_ids: Optional[List[int]] = None
+    token_type_ids: Optional[list[int]] = None
     multi_modal_data: Optional[Any] = None
     multi_modal_placeholders: Optional[MultiModalPlaceholderDict] = None
-    mm_processor_kwargs: Optional[Dict[str, Any]] = None
+    mm_processor_kwargs: Optional[dict[str, Any]] = None
     encoder_seq_data: Optional[SequenceData] = None
-    cross_block_table: Optional[List[int]] = None
+    cross_block_table: Optional[list[int]] = None
     prompt_adapter_request: Optional[PromptAdapterRequest] = None
     token_chunk_size: Optional[int] = None
 
@@ -1032,7 +1030,7 @@ class SequenceOutput(
     """
     parent_seq_id: int
     output_token: int
-    logprobs: Dict[int, Logprob]
+    logprobs: dict[int, Logprob]
 
     def __repr__(self) -> str:
         return (f"SequenceOutput(parent_seq_id={self.parent_seq_id}, "

@@ -18,36 +18,63 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tqdm.auto import tqdm
-from typing import Generator, List, Tuple
-
-import torch
+from collections.abc import Generator
+from typing import Any
 
 import mindspore as ms
-from mindspore import Parameter, Tensor
+from mindspore import Parameter
+from safetensors import safe_open
+from tqdm.auto import tqdm
+from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
+                                                           enable_tqdm)
+
+
+def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
+    """
+    Read numpy slice data based on axis and slice range.
+    :loaded_weight: PySafeSlice object
+    :shard_dim: axis of weight slice
+    :start_idx: start slice index
+    :shard_size: end slice index
+    """
+    if shard_dim is None:
+        loaded_weight = loaded_weight[:]
+        return loaded_weight
+
+    end_idx = start_idx + shard_size
+    if shard_dim == 0:
+        loaded_weight = loaded_weight[start_idx:end_idx]
+    elif shard_dim == 1:
+        loaded_weight = loaded_weight[:, start_idx:end_idx]
+    elif shard_dim == 2:
+        loaded_weight = loaded_weight[:, :, start_idx:end_idx]
+    else:
+        raise ValueError("shard_dim:{} is not supported.".format(shard_dim))
+    return loaded_weight
 
 
 def safetensors_weights_iterator(
-    hf_weights_files: List[str],
+    hf_weights_files: list[str],
     use_tqdm_on_load: bool,
-) -> Generator[Tuple[str, torch.Tensor], None, None]:
+) -> Generator[tuple[str, Any], None, None]:
     """Iterate over the weights in the model safetensor files."""
-    from safetensors import safe_open
-    from vllm.model_executor.model_loader.weight_utils import _BAR_FORMAT, enable_tqdm
-
     for st_file in tqdm(
-        hf_weights_files,
-        desc="Loading safetensors checkpoint shards",
-        disable=not enable_tqdm(use_tqdm_on_load),
-        bar_format=_BAR_FORMAT,
+            hf_weights_files,
+            desc="Loading safetensors checkpoint shards",
+            disable=not enable_tqdm(use_tqdm_on_load),
+            bar_format=_BAR_FORMAT,
     ):
         with safe_open(st_file, framework="np") as f:
-            for name in f.keys():
-                param = f.get_tensor(name)
-                yield name, ms.tensor(param)
+            for name in f.keys():  # noqa: SIM118
+                # Return a lightweight PySafeSlice object that uses file
+                # pointer offset internally to read Safetensor on demand,
+                # avoiding memory explosion. Actual data can be obtained
+                # through slicing operation like param[start:end]
+                param = f.get_slice(name)
+                yield name, param
 
 
-def default_weight_loader(param: Parameter,
-                          loaded_weight: Tensor) -> None:
+def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
-    param.set_data(loaded_weight)
+    loaded_weight = loaded_weight[:]
+    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))

@@ -27,26 +27,22 @@
 # type: ignore
 # isort:skip_file
 
-import numpy as np
-from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple,
-                    Union)
+from typing import (TYPE_CHECKING, Optional, Union)
+from collections.abc import Iterable
 
 if TYPE_CHECKING:
     from transformers import Qwen2Config
 else:
     Qwen2Config = None
 
-import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn
-from mindspore.common import dtype as mstype
 
-import vllm.envs as envs
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.forward_context import get_forward_context
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
+from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
@@ -58,21 +54,14 @@ from vllm_mindspore.model_executor.layers.linear import (
 from vllm_mindspore.model_executor.layers.logits_processor import \
     LogitsProcessor
 from vllm_mindspore.model_executor.layers.rotary_embedding import get_rope
-from vllm_mindspore.model_executor.layers.sampler import (SamplerOutput,
-                                                          get_sampler)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
-from vllm_mindspore.model_executor.models.attention_mask import \
-    LowerTriangularMask
-from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
-                                                             NativeModel)
+from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
-from vllm.model_executor.sampling_metadata import SamplingMetadata
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 
 class Qwen2MLP(nn.Cell):
@@ -120,7 +109,7 @@ class Qwen2Attention(nn.Cell):
                  rope_theta: float = 10000,
                  cache_config: Optional[CacheConfig] = None,
                  quant_config: Optional[QuantizationConfig] = None,
-                 rope_scaling: Optional[Tuple] = None,
+                 rope_scaling: Optional[tuple] = None,
                  prefix: str = "",
                  attn_type: str = AttentionType.DECODER) -> None:
         super().__init__()
@@ -184,7 +173,6 @@ class Qwen2Attention(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -194,10 +182,10 @@ class Qwen2Attention(nn.Cell):
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
-        q, k = self.rotary_emb(positions, q, k, batch_valid_length, is_prefill)
-        attn_output = self.attn(q, k, v, key_cache, value_cache, is_prefill,
-                                slot_mapping, attn_mask, batch_valid_length,
-                                q_seq_lens, block_tables)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length)
+        attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,
+                                attn_mask, batch_valid_length, q_seq_lens,
+                                block_tables)
         output, _ = self.o_proj(attn_output)
         return output
 
@@ -260,14 +248,13 @@ class Qwen2DecoderLayer(nn.Cell):
         hidden_states: Tensor,
         key_cache: Tensor,
         value_cache: Tensor,
-        is_prefill: bool,
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
         residual: Optional[Tensor],
-    ) -> Tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor]:
         # Self Attention
         if residual is None:
             residual = hidden_states
@@ -276,9 +263,9 @@ class Qwen2DecoderLayer(nn.Cell):
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual)
         hidden_states = self.self_attn(positions, hidden_states, key_cache,
-                                       value_cache, is_prefill, slot_mapping,
-                                       attn_mask, batch_valid_length,
-                                       q_seq_lens, block_tables)
+                                       value_cache, slot_mapping, attn_mask,
+                                       batch_valid_length, q_seq_lens,
+                                       block_tables)
 
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(
@@ -289,7 +276,11 @@ class Qwen2DecoderLayer(nn.Cell):
 
 class Qwen2Model(nn.Cell):
 
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    def __init__(self,
+                 *,
+                 vllm_config: VllmConfig,
+                 prefix: str = "",
+                 decoder_layer_type: type[nn.Cell] = Qwen2DecoderLayer):
         super().__init__()
 
         config = vllm_config.model_config.hf_config
@@ -313,10 +304,10 @@ class Qwen2Model(nn.Cell):
 
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
-            lambda prefix: Qwen2DecoderLayer(config=config,
-                                             cache_config=cache_config,
-                                             quant_config=quant_config,
-                                             prefix=prefix),
+            lambda prefix: decoder_layer_type(config=config,
+                                              cache_config=cache_config,
+                                              quant_config=quant_config,
+                                              prefix=prefix),
             prefix=f"{prefix}.layers",
         )
 
@@ -335,9 +326,8 @@ class Qwen2Model(nn.Cell):
         self,
         input_ids: Optional[Tensor],
         positions: Tensor,
-        key_caches: List[Tensor],
-        value_caches: List[Tensor],
-        is_prefill: bool,
+        key_caches: list[Tensor],
+        value_caches: list[Tensor],
         slot_mapping: Tensor,
         attn_mask: Tensor,
         batch_valid_length: Tensor,
@@ -346,6 +336,7 @@ class Qwen2Model(nn.Cell):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
+
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -356,14 +347,14 @@ class Qwen2Model(nn.Cell):
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
 
-        for i in range(self.start_layer, self.end_layer):  # PP 并行对层进行切分
+        for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
                                             key_caches[i - self.start_layer],
                                             value_caches[i - self.start_layer],
-                                            is_prefill, slot_mapping,
-                                            attn_mask, batch_valid_length,
-                                            q_seq_lens, block_tables, residual)
+                                            slot_mapping, attn_mask,
+                                            batch_valid_length, q_seq_lens,
+                                            block_tables, residual)
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
                 "hidden_states": hidden_states,
@@ -372,9 +363,9 @@ class Qwen2Model(nn.Cell):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]],
-                     params_dict: Dict[str, Parameter]):
-        loaded_params: Set[str] = set()
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]],
+                     params_dict: dict[str, Parameter]):
+        loaded_params: set[str] = set()
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
             (".qkv_proj", ".q_proj", "q"),
@@ -480,19 +471,17 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
 
         self.common_preprocess(vllm_config, prefix)
 
-    def forward(
-        self,
-        input_ids: Tensor,
-        positions: Tensor,
-        intermediate_tensors: IntermediateTensors = None,
-        inputs_embeds: Tensor = None,
-        **kwargs
-    ) -> Union[Tensor, IntermediateTensors]:
+    def forward(self,
+                input_ids: Tensor,
+                positions: Tensor,
+                intermediate_tensors: IntermediateTensors = None,
+                inputs_embeds: Tensor = None,
+                **kwargs) -> Union[Tensor, IntermediateTensors]:
         hidden_states = self.exec_model(input_ids, positions,
                                         intermediate_tensors, inputs_embeds)
         return hidden_states
 
-    def load_weights(self, weights: Iterable[Tuple[str, Tensor]]) -> Set[str]:
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
         self.model.load_weights(weights, params_dict)
 

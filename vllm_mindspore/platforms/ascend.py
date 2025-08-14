@@ -19,7 +19,7 @@
 # limitations under the License.
 """Ascend platform."""
 
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import torch
 import vllm.envs as envs
@@ -46,12 +46,12 @@ class AscendPlatform(Platform):
 
     @classmethod
     def get_device_capability(cls, device_id: int = 0):
-        return True
+        return None
 
     @classmethod
     def has_device_capability(
         cls,
-        capability: Union[Tuple[int, int], int],
+        capability: Union[tuple[int, int], int],
         device_id: int = 0,
     ) -> bool:
         return True
@@ -70,7 +70,6 @@ class AscendPlatform(Platform):
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
-        compilation_config = vllm_config.compilation_config
         model_config = vllm_config.model_config
 
         if parallel_config.worker_cls == "auto":
@@ -112,20 +111,21 @@ class AscendPlatform(Platform):
         """Get the attention backend class of a device."""
         if use_v1:
             if use_mla:
-                return "vllm_mindspore.v1.attention.backends.ms_attn.MLABackend"
-            return "vllm_mindspore.v1.attention.backends.ms_attn.MsAttentionBackend"
-            raise RuntimeError("vLLM-MindSpore do not support v1 egine now!")
+                return "vllm_mindspore.v1.attention.backends.ms_attn.MLABackend"  # noqa E501
+            return "vllm_mindspore.v1.attention.backends.ms_attn.MsAttentionBackend"  # noqa E501
         if use_mla:
             logger.info("Using MindSpore MLA backend.")
             return "vllm_mindspore.attention.backends.ms_attn.MLABackend"
 
         if selected_backend == _Backend.FLASH_ATTN or selected_backend is None:
             logger.info("Using MindSpore Attention backend.")
-            return "vllm_mindspore.attention.backends.ms_attn.MsAttentionBackend"
+            return "vllm_mindspore.attention.backends.ms_attn.MsAttentionBackend"  # noqa E501
 
         raise ValueError(
-            f"Invalid attention backend {str(selected_backend)} for vLLM-MindSpore with head_size: {str(head_size)}, dtype: {str(dtype)}, kv_cache_dtype: {str(kv_cache_dtype)}, block_size: {str(block_size)}."
-        )
+            f"Invalid attention backend {str(selected_backend)} "
+            f"for vLLM-MindSpore with head_size: {str(head_size)}, "
+            f"dtype: {str(dtype)}, kv_cache_dtype: {str(kv_cache_dtype)}, "
+            "block_size: {str(block_size)}.")
 
     @classmethod
     def get_current_memory_usage(cls,
@@ -137,10 +137,12 @@ class AscendPlatform(Platform):
 
     @classmethod
     def get_device_communicator_cls(cls) -> str:
-        """Get device specific communicator class for distributed communication."""
+        """
+        Get device specific communicator class for distributed communication.
+        """
         if envs.VLLM_USE_V1:
-            return "vllm.distributed.device_communicators.cuda_communicator.CudaCommunicator"
-        return "vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase"
+            return "vllm.distributed.device_communicators.cuda_communicator.CudaCommunicator"  # noqa E501
+        return "vllm.distributed.device_communicators.base_device_communicator.DeviceCommunicatorBase"  # noqa E501
 
     @classmethod
     def get_device_total_memory(cls, device_id: int = 0) -> int:
@@ -154,3 +156,16 @@ class AscendPlatform(Platform):
 
     def get_punica_wrapper(cls) -> str:
         return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"
+
+    @classmethod
+    def use_all_gather(cls) -> bool:
+        """
+        Whether to use allgather in LogitsProcessor to gather the logits.
+        """
+        import vllm.envs as envs
+        from vllm.config import get_current_vllm_config
+
+        parallel_config = get_current_vllm_config().parallel_config
+        return (envs.VLLM_USE_V1
+                or parallel_config.distributed_executor_backend
+                == "external_launcher")

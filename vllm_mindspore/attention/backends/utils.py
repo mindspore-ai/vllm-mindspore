@@ -25,17 +25,20 @@ if TYPE_CHECKING:
 
 
 class MsAttentionState(AttentionState):
+    """
+    MindSpore compile and run graph itself, just keep empty implement here.
+    """
 
     def __init__(self, runner: "ModelRunnerBase"):
         self.runner = runner
         self._is_graph_capturing = False
 
     def begin_forward(self, model_input) -> None:
-        return
+        ...
 
-    def get_graph_input_buffers(
-        self, attn_metadata, is_encoder_decoder_model: bool = False
-    ):
+    def get_graph_input_buffers(self,
+                                attn_metadata,
+                                is_encoder_decoder_model: bool = False):
         """Get attention-specific input buffers for CUDA graph capture."""
         ...
 
@@ -45,13 +48,16 @@ class MsAttentionState(AttentionState):
         yield
 
     def graph_capture_get_metadata_for_batch(
-        self, batch_size: int, is_encoder_decoder_model: bool = False
-    ): ...
+            self, batch_size: int, is_encoder_decoder_model: bool = False):
+        ...
 
-    def graph_clone(self, batch_size: int): ...
+    def graph_clone(self, batch_size: int):
+        ...
 
     def prepare_graph_input_buffers(
-        self, input_buffers, attn_metadata, is_encoder_decoder_model: bool = False
-    ) -> None:
+            self,
+            input_buffers,
+            attn_metadata,
+            is_encoder_decoder_model: bool = False) -> None:
         """In-place modify input buffers dict for CUDA graph replay."""
         ...
