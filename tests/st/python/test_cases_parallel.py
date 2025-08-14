@@ -195,10 +195,25 @@ def test_cases_parallel_part6():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
-         "vllm_qwen2_5_vl_7b_v1.log"),
         (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
          "multilora_inference_test_multilora_inference.log"),
+    ]
+    run_tasks(cases)
+
+
+@pytest.mark.skip(reason="need adapt for mindspore master")
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+def test_cases_parallel_part7():
+    """
+    Feature: test cases parallel.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py::test_qwen2_5_vl_7b_v1",
+         "vllm_qwen2_5_vl_7b_v1.log"),
         (1, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py"
          "::test_qwen2_5_vl_7b_v1_enforce_eager",
          "vllm_qwen2_5_vl_7b_v1_enforce_eager.log"),
