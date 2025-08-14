@@ -48,38 +48,6 @@ _MINDONE_MODELS = {
     "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
 }
 
-_registry_dict = {}
-if is_mindformers_model_backend():
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=
-            f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()
-    }
-elif is_mindone_model_backend():
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=
-            f"vllm_mindspore.model_executor.models.mindone_models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDONE_MODELS.items()
-    }
-else:
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _NATIVE_MODELS.items()
-    }
-
-MindSporeModelRegistry = _ModelRegistry(_registry_dict)
 
 _SUBPROCESS_COMMAND = [
     sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"

@@ -230,5 +230,7 @@ setup(
         "console_scripts": [
             "vllm-mindspore=vllm_mindspore.scripts:main",
         ],
+        "vllm.general_plugins": [
+            "mindspore_model = vllm_mindspore.plugins:register_models"],
     },
 )
