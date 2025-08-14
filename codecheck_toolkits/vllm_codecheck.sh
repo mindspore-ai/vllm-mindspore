@@ -26,7 +26,7 @@ pip install -r codecheck_toolkits/requirements-lint.txt
 
 RUN_GATE=${1:-0}
 if [ "$RUN_GATE" -eq 0 ]; then
-  pre-commit run --from-ref origin/develop --to-ref HEAD
+  pre-commit run --from-ref origin/master --to-ref HEAD
 else
   pre-commit run --all-files
 fi
