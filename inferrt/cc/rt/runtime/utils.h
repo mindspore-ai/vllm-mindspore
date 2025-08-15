@@ -66,24 +66,6 @@ inline bool IsDATensorOutputFromInput(DATensor *tensor) {
   return opsOutputFromInputIndex.find(tensor->op) != opsOutputFromInputIndex.end();
 }
 
-inline size_t GetDATensorOuputFromInputIndex(DATensor *node) {
-  CHECK_IF_NULL(node);
-  auto iter = opsOutputFromInputIndex.find(node->op);
-  if (iter == opsOutputFromInputIndex.end()) {
-    LOG_ERROR << "Can not find ops." << ops::ToStr(node->op) << " in opsOutputFromInputIndex";
-  }
-  return iter->second;
-}
-
-inline size_t GetDATensorOutputValueFromInputIndex(DATensor *node) {
-  CHECK_IF_NULL(node);
-  auto iter = opsOutputValueFromInputIndex.find(node->op);
-  if (iter == opsOutputValueFromInputIndex.end()) {
-    LOG_ERROR << "Can not find ops." << ops::ToStr(node->op) << " in opsOutputValueFromInputIndex";
-  }
-  return iter->second;
-}
-
 inline bool IsDummyDATensorNode(DATensor *node) {
   CHECK_IF_NULL(node);
   return dummyOpsSet.find(node->op) != dummyOpsSet.end();
@@ -100,10 +82,6 @@ inline bool IsDAKernelNeedForceResize(DATensor *node) {
   return forceResizeOpsSet.find(node->op) != forceResizeOpsSet.end();
 }
 
-inline bool IsDAKernelSkipLaunch(DATensor *node) {
-  CHECK_IF_NULL(node);
-  return opsOutputValueFromInputIndex.find(node->op) != opsOutputValueFromInputIndex.end();
-}
 }  // namespace runtime
 }  // namespace da
 #endif  // __RUNTIME_UTILS_H__
