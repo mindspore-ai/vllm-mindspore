@@ -26,6 +26,9 @@ readonly PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple"
 
 FORCE_REINSTALL=false
 
+# Detect architecture
+ARCH=$([ "$(uname -m)" = "x86_64" ] && echo "x86_64" || echo "aarch64")
+
 log() {
     local width=80
     local text="$*"
@@ -173,14 +176,14 @@ main() {
         log "This will remove existing mindformers directory and reinstall all dependencies"
     fi
 
-    pip install $PIP_TRUSTED_HOSTS $PIP_INDEX uv
+    command -v uv &> /dev/null || pip install $PIP_TRUSTED_HOSTS $PIP_INDEX uv
 
     [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
     
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_package_url "mindspore" "unified/aarch64")
+    local mindspore_url=$(get_package_url "mindspore" "unified/$ARCH")
     local msadapter_url=$(get_package_url "msadapter" "any")
     local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
     
@@ -204,33 +207,9 @@ main() {
     
     log "All dependencies installed successfully!"
     log ""
-    log "To use vLLM-MindSpore, environment variables need to be configured:"
+    log "When using MindFormers backend, please configure environment variables manually:"
     echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
     echo "  export vLLM_MODEL_BACKEND=MindFormers"
-    log ""
-    
-    if [ "${AUTO_BUILD:-}" = "1" ]; then
-        echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
-        echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
-        log "Environment variables added to ~/.bashrc (automated build)"
-    else
-        echo -n -e "\033[93mAdd these to ~/.bashrc automatically? (y/N): \033[0m"
-        read -r response
-        
-        if [[ "$response" == "y" || "$response" == "Y" ]]; then
-            if grep -q "export PYTHONPATH.*mindformers" ~/.bashrc 2>/dev/null && grep -q "export vLLM_MODEL_BACKEND=MindFormers" ~/.bashrc 2>/dev/null; then
-                log "Environment variables already exist in ~/.bashrc, skipping"
-            else
-                echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
-                echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
-                log "Environment variables added to ~/.bashrc"
-                log "Run:"
-                echo "  source ~/.bashrc"
-            fi
-        else
-            log "Please add the environment variables manually and run 'source ~/.bashrc'"
-        fi
-    fi
 }
 
 main "$@"
