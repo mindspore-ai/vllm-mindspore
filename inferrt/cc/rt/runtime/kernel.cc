@@ -27,6 +27,13 @@ void DAKernel::RunKernel(bool isDynamic) {
   } else if (IsDAKernelNeedForceResize(tensorNode_)) {
     Resize();
   }
+
+  if (IsDAKernelSkipLaunch(tensorNode_)) {
+    LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(tensorNode_->op);
+    tensorNode_->data = tensorNode_->input[GetDATensorOutputValueFromInputIndex(tensorNode_)]->data;
+    return;
+  }
+
   Launch();
 }
 }  // namespace runtime

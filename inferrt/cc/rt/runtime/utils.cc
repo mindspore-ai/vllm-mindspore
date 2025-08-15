@@ -28,10 +28,15 @@ const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex = {
   {ops::Op_update_state, kFirstInput},
 };
 
+const std::unordered_map<ops::Op, size_t> opsOutputValueFromInputIndex = {
+  {ops::Op_reshape_ext, kFirstInput},
+};
+
 const std::set<ops::Op> dummyOpsSet = {
   ops::Op_tuple_getitem,
   ops::Op_depend,
   ops::Op_make_tuple,
+  ops::Op_reshape_ext,
 };
 
 const std::set<ops::Op> forceResizeOpsSet = {
