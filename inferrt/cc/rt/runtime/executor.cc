@@ -296,16 +296,16 @@ void GraphExecutor::RunTensor(DATensor *node) {
     return;
   }
 
-  auto iter = opsOutputFromInputIndex.find(node->op);
-  if (iter != opsOutputFromInputIndex.end()) {
-    ProcessOutputFromInput(node, iter->second);
+  auto iter1 = opsOutputFromInputIndex.find(node->op);
+  if (iter1 != opsOutputFromInputIndex.end()) {
+    ProcessOutputFromInput(node, iter1->second);
     return;
   }
 
 #ifndef SKIP_RUN_TENSOR
-  auto iter = kernels_.find(node);
-  CHECK_IF_FAIL(iter != kernels_.end());
-  iter->second->RunKernel(isDynamic_);
+  auto iter2 = kernels_.find(node);
+  CHECK_IF_FAIL(iter2 != kernels_.end());
+  iter2->second->RunKernel(isDynamic_);
   if (node->op != ops::Op_return) {
     // keep outputs memory until consumed.
     recycler_->FreeUnusedNodes(node);
