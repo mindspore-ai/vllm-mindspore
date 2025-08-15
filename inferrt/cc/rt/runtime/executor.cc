@@ -64,6 +64,7 @@ const std::string GetEnvKernelLibName() {
 }
 #endif
 
+#ifdef SERIAL
 size_t GetEnvThreadPoolSize() {
   const size_t kDefaultThreadPoolSize = 1;
   constexpr char kThreadPoolSizeEnvName[] = "DART_THREAD_POOL_SIZE";
@@ -73,6 +74,7 @@ size_t GetEnvThreadPoolSize() {
   }
   return std::stoul(poolSizeStr);
 }
+#endif
 
 void ProcessMakeTuple(DATensor *makeTupleNode) {
   CHECK_IF_NULL(makeTupleNode);
@@ -301,8 +303,9 @@ void GraphExecutor::RunTensor(DATensor *node) {
   }
 
 #ifndef SKIP_RUN_TENSOR
-  CHECK_IF_FAIL(kernels_.find(node) != kernels_.end());
-  kernels_[node]->RunKernel(isDynamic_);
+  auto iter = kernels_.find(node);
+  CHECK_IF_FAIL(iter != kernels_.end());
+  iter->second->RunKernel(isDynamic_);
   if (node->op != ops::Op_return) {
     // keep outputs memory until consumed.
     recycler_->FreeUnusedNodes(node);
@@ -341,7 +344,7 @@ void GraphExecutor::RunGraph(bool isDynamic) {
   isDynamic_ = isDynamic;
   recycler_->ResetRunningRefCounts();
 
-#ifdef SERIAL
+#ifndef SERIAL
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     LOG_OUT << "Run tensor, ops." << ops::ToStr(graph_->node[i]->op) << ", DATensor: " << graph_->node[i]
             << ", index: " << i;
