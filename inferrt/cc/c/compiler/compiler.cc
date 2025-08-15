@@ -766,7 +766,7 @@ ssize_t Compiler::FindGlobalSymbolIndex(const std::string &name) {
   if (iter == globalSymbolPool.cend()) {
     return -1;
   }
-  auto index = std::distance(globalSymbolPool.cbegin(), iter);
+  ssize_t index = std::distance(globalSymbolPool.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found symbol, index should not be negative " << index << ", name: " << name;
     exit(EXIT_FAILURE);
@@ -786,7 +786,7 @@ ssize_t Compiler::FindConstantIndex(const std::string &str) {
   if (iter == currentConstantPool.cend()) {
     return -1;
   }
-  auto index = std::distance(currentConstantPool.cbegin(), iter);
+  ssize_t index = std::distance(currentConstantPool.cbegin(), iter);
   if (index < 0) {
     LOG_ERROR << "Not found constant, index should not be negative " << index << ", str: " << str;
     exit(EXIT_FAILURE);

@@ -846,7 +846,7 @@ TokenConstPtr Parser::CurrentToken() {
 
 TokenConstPtr Parser::GetToken() {
   if (tokenPos_ >= lexer_->Tokens().size()) {
-    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhaused");
+    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhausted");
     exit(EXIT_FAILURE);
   }
   const auto *token = &lexer_->Tokens()[tokenPos_];
@@ -856,7 +856,7 @@ TokenConstPtr Parser::GetToken() {
 
 void Parser::RemoveToken() {
   if (tokenPos_ >= lexer_->Tokens().size()) {
-    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhaused");
+    CompileMessage(LineString(&lexer_->Tokens().back()), "warning: tokens were exhausted");
     exit(EXIT_FAILURE);
   }
   ++tokenPos_;

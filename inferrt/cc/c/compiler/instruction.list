@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-INSTRUCTION(LoadConst)   // Load a const value from contant table.
+INSTRUCTION(LoadConst)   // Load a const value from constant table.
 INSTRUCTION(LoadName)    // Load a value by name from symbol table.
 INSTRUCTION(StoreName)   // Store the value by name into symbol table.
 INSTRUCTION(LoadLocal)   // Load a value by offset in the function namespace.

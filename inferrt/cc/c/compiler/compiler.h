@@ -53,7 +53,7 @@ using ExprHandlerFunctions = std::unordered_map<ExprType, ExprHandlerFunction>;
 
 struct InstCall {
   Inst inst;       // Instruction type.
-  ssize_t offset;  // Extra information. Such as contant pool index, jump offset,
+  ssize_t offset;  // Extra information. Such as constant pool index, jump offset,
                    // and so on.
   ssize_t lineno;  // Instruction lineno in the code.
 };
