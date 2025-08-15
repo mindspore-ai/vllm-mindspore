@@ -28,6 +28,7 @@ using tensor::DATensor;
 constexpr size_t kFirstInput = 0;
 constexpr size_t kSecondInput = 1;
 extern const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex;
+extern const std::unordered_map<ops::Op, size_t> opsOutputValueFromInputIndex;
 extern const std::set<ops::Op> dummyOpsSet;
 extern const std::set<ops::Op> forceResizeOpsSet;
 
@@ -74,6 +75,15 @@ inline size_t GetDATensorOuputFromInputIndex(DATensor *node) {
   return iter->second;
 }
 
+inline size_t GetDATensorOutputValueFromInputIndex(DATensor *node) {
+  CHECK_IF_NULL(node);
+  auto iter = opsOutputValueFromInputIndex.find(node->op);
+  if (iter == opsOutputValueFromInputIndex.end()) {
+    LOG_ERROR << "Can not find ops." << ops::ToStr(node->op) << " in opsOutputValueFromInputIndex";
+  }
+  return iter->second;
+}
+
 inline bool IsDummyDATensorNode(DATensor *node) {
   CHECK_IF_NULL(node);
   return dummyOpsSet.find(node->op) != dummyOpsSet.end();
@@ -88,6 +98,11 @@ inline bool IsSkipBuildDAKernel(DATensor *node) {
 inline bool IsDAKernelNeedForceResize(DATensor *node) {
   CHECK_IF_NULL(node);
   return forceResizeOpsSet.find(node->op) != forceResizeOpsSet.end();
+}
+
+inline bool IsDAKernelSkipLaunch(DATensor *node) {
+  CHECK_IF_NULL(node);
+  return opsOutputValueFromInputIndex.find(node->op) != opsOutputValueFromInputIndex.end();
 }
 }  // namespace runtime
 }  // namespace da

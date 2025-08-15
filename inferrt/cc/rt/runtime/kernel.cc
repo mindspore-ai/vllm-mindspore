@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "runtime/kernel.h"
+#include "rt/runtime/kernel.h"
 #include "runtime/utils.h"
 
 namespace da {
@@ -27,6 +27,14 @@ void DAKernel::RunKernel(bool isDynamic) {
   } else if (IsDAKernelNeedForceResize(tensorNode_)) {
     Resize();
   }
+
+  auto iter = opsOutputValueFromInputIndex.find(tensorNode_);
+  if (iter != opsOutputValueFromInputIndex.end()) {
+    LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(tensorNode_->op);
+    tensorNode_->data = tensorNode_->input[iter->second]->data;
+    return;
+  }
+
   Launch();
 }
 }  // namespace runtime
