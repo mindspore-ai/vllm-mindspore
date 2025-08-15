@@ -28,9 +28,10 @@ void DAKernel::RunKernel(bool isDynamic) {
     Resize();
   }
 
-  if (IsDAKernelSkipLaunch(tensorNode_)) {
+  auto iter = opsOutputValueFromInputIndex.find(tensorNode_);
+  if (iter != opsOutputValueFromInputIndex.end()) {
     LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(tensorNode_->op);
-    tensorNode_->data = tensorNode_->input[GetDATensorOutputValueFromInputIndex(tensorNode_)]->data;
+    tensorNode_->data = tensorNode_->input[iter->second]->data;
     return;
   }
 

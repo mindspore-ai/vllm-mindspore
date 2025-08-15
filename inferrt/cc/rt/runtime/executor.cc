@@ -102,9 +102,8 @@ void ProcessTupleGetItem(DATensor *tupleGetItemNode) {
   CloneDATensorShape(tupleGetItemNode, inputTensorList[index]);
 }
 
-void ProcessOutputFromInput(DATensor *outputFromInputNode) {
+void ProcessOutputFromInput(DATensor *outputFromInputNode, size_t inputIndex) {
   CHECK_IF_NULL(outputFromInputNode);
-  auto inputIndex = GetDATensorOuputFromInputIndex(outputFromInputNode);
   outputFromInputNode->data = outputFromInputNode->input[inputIndex]->data;
   CloneDATensorShape(outputFromInputNode, outputFromInputNode->input[inputIndex]);
 }
@@ -297,8 +296,9 @@ void GraphExecutor::RunTensor(DATensor *node) {
     return;
   }
 
-  if (IsDATensorOutputFromInput(node)) {
-    ProcessOutputFromInput(node);
+  auto iter = opsOutputFromInputIndex.find(node->op);
+  if (iter != opsOutputFromInputIndex.end()) {
+    ProcessOutputFromInput(node, iter->second);
     return;
   }
 
