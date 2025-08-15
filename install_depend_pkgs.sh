@@ -197,7 +197,6 @@ main() {
     cleanup_package msadapter
     cleanup_package vllm
     pip_install "$vllm_url"
-    cleanup_package torch torch-npu torchvision torchaudio
     pip_install "$mindspore_url"
     install_mindformers
     pip_install "$mindspore_gs_url"
