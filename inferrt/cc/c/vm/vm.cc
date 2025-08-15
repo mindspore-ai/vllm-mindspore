@@ -759,6 +759,7 @@ void VM::FinishGraph(const Frame &frame) {
 
     graphExecutor_.DumpGraph();
     graphExecutor_.OptGraph();
+    graphExecutor_.BuildKernels();
     graphExecutor_.DumpGraph();
   } else {
     LOG_ERROR << "No graph building.";

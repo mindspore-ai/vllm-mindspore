@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "runtime/executor.h"
+#include "kernels/kernel_lib.h"
 
 namespace da {
 namespace runtime {
@@ -52,7 +53,6 @@ const std::vector<std::string> GetEnvKernelLibPaths() {
   return kernelLibPaths;
 }
 
-#ifndef SKIP_RUN_TENSOR
 const std::string GetEnvKernelLibName() {
   constexpr char kDefaultKernelLibName[] = "Mindspore";
   constexpr char kKernelLibEnvName[] = "DART_KERNEL_LIB_NAME";
@@ -62,7 +62,6 @@ const std::string GetEnvKernelLibName() {
   }
   return name;
 }
-#endif
 
 #ifdef SERIAL
 size_t GetEnvThreadPoolSize() {
@@ -84,7 +83,7 @@ void ProcessMakeTuple(DATensor *makeTupleNode) {
   CHECK_IF_NULL(tensorList);
   for (size_t i = 0; i < makeTupleNode->inputSize; ++i) {
     tensorList[i]->data = makeTupleNode->input[i]->data;
-    CloneDATensorShape(tensorList[i], makeTupleNode->input[i]);
+    CloneDATensorTypeAndShape(tensorList[i], makeTupleNode->input[i]);
   }
 }
 
@@ -99,13 +98,13 @@ void ProcessTupleGetItem(DATensor *tupleGetItemNode) {
   auto **inputTensorList = static_cast<DATensor **>(tupleGetItemNode->input[kFirstInput]->data);
   CHECK_IF_NULL(inputTensorList);
   tupleGetItemNode->data = inputTensorList[index]->data;
-  CloneDATensorShape(tupleGetItemNode, inputTensorList[index]);
+  CloneDATensorTypeAndShape(tupleGetItemNode, inputTensorList[index]);
 }
 
 void ProcessOutputFromInput(DATensor *outputFromInputNode, size_t inputIndex) {
   CHECK_IF_NULL(outputFromInputNode);
   outputFromInputNode->data = outputFromInputNode->input[inputIndex]->data;
-  CloneDATensorShape(outputFromInputNode, outputFromInputNode->input[inputIndex]);
+  CloneDATensorTypeAndShape(outputFromInputNode, outputFromInputNode->input[inputIndex]);
 }
 }  // namespace
 
@@ -116,7 +115,7 @@ GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(recycler_);
 
   for (auto &&path : GetEnvKernelLibPaths()) {
-    KernelLibRegistry::Instance().Load(path);
+    kernels::KernelLibRegistry::Instance().Load(path);
   }
 }
 
@@ -162,8 +161,7 @@ void GraphExecutor::OptGraph() {
 // Build DAKernels for graph.
 void GraphExecutor::BuildKernels() {
   CHECK_IF_NULL(graph_);
-#ifndef SKIP_RUN_TENSOR
-  auto kernelLib = KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
+  auto kernelLib = kernels::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
   CHECK_IF_NULL(kernelLib);
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     auto node = graph_->node[i];
@@ -178,7 +176,6 @@ void GraphExecutor::BuildKernels() {
     kernel->Init();
     kernels_[node] = kernel;
   }
-#endif
 }
 
 // Add a parameter for graph.
@@ -296,21 +293,36 @@ void GraphExecutor::RunTensor(DATensor *node) {
     return;
   }
 
-  auto iter1 = opsOutputFromInputIndex.find(node->op);
-  if (iter1 != opsOutputFromInputIndex.end()) {
-    ProcessOutputFromInput(node, iter1->second);
+  if (auto it = opsOutputFromInputIndex.find(node->op); it != opsOutputFromInputIndex.end()) {
+    ProcessOutputFromInput(node, it->second);
     return;
   }
 
-#ifndef SKIP_RUN_TENSOR
-  auto iter2 = kernels_.find(node);
-  CHECK_IF_FAIL(iter2 != kernels_.end());
-  iter2->second->RunKernel(isDynamic_);
+  auto iter = kernels_.find(node);
+  if (iter == kernels_.end()) {
+    LOG_ERROR << "kernel not found: " << ops::ToStr(node->op);
+    exit(EXIT_FAILURE);
+  }
+  auto kernel = iter->second;
+
+  if (isDynamic_) {
+    kernel->InferShape();
+    kernel->Resize();
+  } else if (IsDAKernelNeedForceResize(node)) {
+    kernel->Resize();
+  }
+
+  if (auto it = opsOutputValueFromInputIndex.find(node->op); it != opsOutputValueFromInputIndex.end()) {
+    LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(node->op);
+    node->data = node->input[it->second]->data;
+  } else {
+    kernel->Launch();
+  }
+
   if (node->op != ops::Op_return) {
     // keep outputs memory until consumed.
     recycler_->FreeUnusedNodes(node);
   }
-#endif
 }
 
 // Free the memory of graph outputs

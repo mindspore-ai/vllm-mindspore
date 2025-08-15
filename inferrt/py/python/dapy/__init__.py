@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from dapy.api import dag, jit
+from dapy.fx_backend import backend
 
-__all__ = ['dag', 'jit']
+__all__ = ['dag', 'jit', 'backend']

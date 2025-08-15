@@ -67,4 +67,6 @@ endif()
 
 # Add pybind11 sub module
 pybind11_add_module(_dapy NO_EXTRAS dalang_py/pybind11_api.cc)
+pybind11_add_module(_dairpy NO_EXTRAS dalang_py/pybind11_ir.cc)
 target_link_libraries(_dapy PUBLIC inferrt)
+target_link_libraries(_dairpy PUBLIC inferrt)

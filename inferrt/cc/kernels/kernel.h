@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __RUNTIME_KERNEL_H__
-#define __RUNTIME_KERNEL_H__
+#ifndef __KERNELS_KERNEL_H__
+#define __KERNELS_KERNEL_H__
 
 #include <functional>
 #include <string>
@@ -24,14 +24,13 @@
 #include "tensor/tensor.h"
 
 namespace da {
-namespace runtime {
-// Interface for runtime kernel
+namespace kernels {
+// Interface for kernel
 class DAKernel {
  public:
   explicit DAKernel(tensor::DATensor *node) : tensorNode_(node) {}
   virtual ~DAKernel() = default;
 
-  void RunKernel(bool isDynamic);
   virtual void Init() = 0;
   virtual void InferShape() = 0;
   virtual void Resize() = 0;
@@ -40,6 +39,6 @@ class DAKernel {
  protected:
   tensor::DATensor *tensorNode_;
 };
-}  // namespace runtime
+}  // namespace kernels
 }  // namespace da
-#endif  // __RUNTIME_KERNEL_H__
+#endif  // __KERNELS_KERNEL_H__

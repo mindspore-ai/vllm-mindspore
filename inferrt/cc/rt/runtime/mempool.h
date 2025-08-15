@@ -61,7 +61,7 @@ class MemoryPool {
   size_t memUsed{0};
   u_char memPool[MAX_MEM_SIZE];
   std::mutex allocMutex_;
-  memoryFreeFunc freeFunc_;
+  memoryFreeFunc freeFunc_ = free;
 };
 
 class TensorDataRecycler {
