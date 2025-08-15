@@ -39,6 +39,7 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.model_base import MsModelBase
+from vllm_mindspore.model_executor.utils import tensor_ms2torch
 
 try:
     # Need to apply dllm pd patch on vllm to use pd disagg related functions
@@ -212,6 +213,7 @@ class MfModelBase(MsModelBase):
         else:
             logits = self.ready_lm_head(hidden_states)
             logits = logits.view(-1, logits.shape[-1])
+        logits = tensor_ms2torch(logits).npu()
         return logits
 
     def sample(
@@ -222,7 +224,7 @@ class MfModelBase(MsModelBase):
         if not hasattr(self, 'sampler'):
             raise RuntimeError('sampler not initialized')
         next_tokens = self.sampler(logits, sampling_metadata)
-        _pynative_executor.sync()
+        #_pynative_executor.sync()
         return next_tokens
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

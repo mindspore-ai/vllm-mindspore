@@ -94,6 +94,7 @@ from vllm_mindspore.model_executor.models.qwen2 import Qwen2Model
 from vllm_mindspore.model_executor.models.utils import PPMissingLayer
 from .interfaces import (SupportsMultiModal)
 from .utils import (WeightsMapper, maybe_prefix, merge_multimodal_embeddings)
+from vllm_mindspore.model_executor.utils import tensor_ms2torch
 
 logger = init_logger(__name__)
 
@@ -1591,6 +1592,7 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
     ) -> Optional[ms.Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        logits = tensor_ms2torch(logits).npu()
         return logits
 
     def sample(self, logits: ms.Tensor,

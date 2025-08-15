@@ -33,7 +33,7 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.model_executor.utils import set_model_context
+from vllm_mindspore.model_executor.utils import set_model_context, tensor_torch2ms, get_ms_dtype
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
@@ -61,6 +61,15 @@ class AttentionWrapper:
         self.block_size = block_size
         self.sliding_window = None
         self.kv_sharing_target_layer_name = None
+
+        self.ms_kv_cache = None
+    
+    def kvcache_torch2ms(self):
+        new_kv_cache = []
+        for kv_pt in self.kv_cache:
+            kv_ms = tensor_torch2ms(kv_pt)
+            new_kv_cache.append(kv_ms)
+        self.ms_kv_cache = new_kv_cache
 
 
 class MLAAttentionWrapper(AttentionWrapper):
@@ -101,6 +110,8 @@ class MsModelBase:
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
+        self.model_dtype = get_ms_dtype(vllm_config.model_config.dtype)
+        set_model_context("model_dtype", self.model_dtype)
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
@@ -219,6 +230,10 @@ class MsModelBase:
         spec_step_idx: int = 0,
         **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:
+        input_ids = tensor_torch2ms(input_ids)
+        positions = tensor_torch2ms(positions)
+        inputs_embeds = tensor_torch2ms(inputs_embeds)
+        previous_hidden_states = tensor_torch2ms(previous_hidden_states)
         return self.forward(input_ids,
                             positions,
                             intermediate_tensors,
@@ -346,8 +361,8 @@ class MsModelBase:
         model_inputs = {}
         model_inputs["input_ids"] = input_ids
         model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
+        model_inputs["block_tables"] = tensor_torch2ms(attn_metadata.block_tables)
+        model_inputs["slot_mapping"] = tensor_torch2ms(attn_metadata.slot_mapping)
         model_inputs["position_ids"] = position_ids
         model_inputs["q_seq_lens"] = q_seq_lens
         model_inputs["attention_mask"] = attention_mask

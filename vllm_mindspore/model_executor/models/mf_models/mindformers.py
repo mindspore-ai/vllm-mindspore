@@ -38,6 +38,8 @@ from vllm_mindspore.model_executor.models.attention_mask import (
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
                                                              MsModelBase)
+from vllm_mindspore.model_executor.utils import tensor_ms2torch
+
 
 logger = init_logger(__name__)
 
@@ -201,6 +203,7 @@ class MindFormersForCausalLM(MsModelBase):
         else:
             logits = self.lm_head(hidden_states)
             logits = logits.view(-1, logits.shape[-1])
+        logits = tensor_ms2torch(logits).npu()
         return logits
 
     def sample(
@@ -209,7 +212,7 @@ class MindFormersForCausalLM(MsModelBase):
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
         next_tokens = self.sampler(logits, sampling_metadata)
-        _pynative_executor.sync()
+        #_pynative_executor.sync()
         return next_tokens
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):

@@ -38,7 +38,9 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
-from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.model_executor.utils import (
+    set_weight_attrs, get_model_context, tensor_torch2ms)
+
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod", "AWQMarlinLinearMethod",
@@ -149,7 +151,7 @@ class LinearBase(nn.Cell):
         self.output_size = output_size
         self.skip_bias_add = skip_bias_add
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = get_model_context("model_dtype")
         self.params_dtype = params_dtype
         if quant_config is None:
             self.quant_method: Optional[
@@ -281,7 +283,7 @@ class ColumnParallelLinear(LinearBase):
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(tensor_torch2ms(loaded_weight))
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -351,7 +353,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
 
         assert loaded_weight.shape == (shard_size, param.shape[1])
         param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+              shard_size, :] = tensor_torch2ms(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -456,7 +458,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                     loaded_weight, output_dim, start_idx, shard_size)
                 loaded_weight_list.append(loaded_weight_shard)
 
-            loaded_weight = ms.from_numpy(np.concatenate(loaded_weight_list))
+            loaded_weight = tensor_torch2ms(np.concatenate(loaded_weight_list))
 
             assert loaded_weight.shape == param.shape
             param.set_data(loaded_weight)
@@ -620,4 +622,4 @@ class RowParallelLinear(LinearBase):
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(tensor_torch2ms(loaded_weight))

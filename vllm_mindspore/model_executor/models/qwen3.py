@@ -73,6 +73,8 @@ from vllm_mindspore.model_executor.models.qwen2 import (  # type: ignore[attr-de
     Qwen2MLP as Qwen3MLP)
 from vllm_mindspore.model_executor.models.qwen2 import (  # type: ignore[attr-defined]  # isort: skip
     Qwen2Model)
+from vllm_mindspore.model_executor.utils import tensor_ms2torch
+
 
 logger = init_logger(__name__)
 
@@ -332,6 +334,7 @@ class Qwen3ForCausalLM(NativeModel):
     ) -> Optional[Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        logits = tensor_ms2torch(logits).npu()
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

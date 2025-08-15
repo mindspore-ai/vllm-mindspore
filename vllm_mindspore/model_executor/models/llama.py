@@ -69,6 +69,7 @@ from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, extract_layer_index,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+from vllm_mindspore.model_executor.utils import tensor_ms2torch
 
 
 class LlamaMLP(nn.Cell):
@@ -538,4 +539,5 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
     ) -> Optional[Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        logits = tensor_ms2torch(logits).npu()
         return logits

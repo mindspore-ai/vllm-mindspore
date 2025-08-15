@@ -28,7 +28,7 @@ from vllm.config import current_platform
 from vllm.distributed import (tensor_model_parallel_all_gather,
                               tensor_model_parallel_gather)
 from vllm.model_executor.sampling_metadata import SamplingMetadata
-
+from vllm_mindspore.model_executor.utils import tensor_torch2ms
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
 
@@ -138,7 +138,7 @@ def _prune_hidden_states(
     hidden_states: Tensor,
     sampling_metadata: SamplingMetadata,
 ) -> Tensor:
-    indices = sampling_metadata.selected_token_indices
+    indices = tensor_torch2ms(sampling_metadata.selected_token_indices)
     if indices is not None and indices.numel() > 0:
         return mint.index_select(hidden_states, 0,
                                  sampling_metadata.selected_token_indices)

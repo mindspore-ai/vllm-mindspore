@@ -40,22 +40,30 @@ from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
                         MemorySnapshot, T, make_ndarray_with_pad)
 
-from .scripts import env_setup
 
 MsKVCache = Tuple[ms.Tensor, ms.Tensor]
 
 logger = init_logger(__name__)
 
-STR_DTYPE_TO_MS_DTYPE = {
-    "half": ms.float16,
-    "float16": ms.float16,
-    "bfloat16": ms.bfloat16,
-    "float": ms.float32,
-    "fp8": ms.uint8,
-    "fp8_e4m3": ms.uint8,
-    "fp8_e5m2": ms.uint8,
+STR_DTYPE_TO_TENSOR_DTYPE = {
+    "half": torch.half,
+    "float16": torch.half,
+    "bfloat16": torch.bfloat16,
+    "float": torch.float,
+    "fp8": torch.uint8,
+    "fp8_e4m3": torch.uint8,
+    "fp8_e5m2": torch.uint8,
 }
 
+STR_DTYPE_TO_MS_DTYPE = {
+    "half": mstype.float16,
+    "float16": mstype.float16,
+    "bfloat16": mstype.bfloat16,
+    "float": mstype.float32,
+    "fp8": mstype.uint8,
+    "fp8_e4m3": mstype.uint8,
+    "fp8_e5m2": mstype.uint8,
+}
 
 def get_valid_dtype(dtype):
     if isinstance(dtype, str):
@@ -128,27 +136,6 @@ def async_tensor_h2d(
                          pin_memory=pin_memory,
                          device="CPU")
     return t
-
-
-STR_DTYPE_TO_TENSOR_DTYPE = {
-    "half": torch.half,
-    "float16": torch.half,
-    "bfloat16": torch.bfloat16,
-    "float": torch.float,
-    "fp8": torch.uint8,
-    "fp8_e4m3": torch.uint8,
-    "fp8_e5m2": torch.uint8,
-}
-
-STR_DTYPE_TO_MS_DTYPE = {
-    "half": mstype.float16,
-    "float16": mstype.float16,
-    "bfloat16": mstype.bfloat16,
-    "float": mstype.float32,
-    "fp8": mstype.uint8,
-    "fp8_e4m3": mstype.uint8,
-    "fp8_e5m2": mstype.uint8,
-}
 
 
 class vllmModelBackendEnum(str, Enum):
@@ -235,30 +222,6 @@ def get_ascend_soc_version():
 def is_310p():
     device = get_ascend_soc_version()
     return device in ['310p', 'ascend310p']
-
-
-def check_ready():
-    from mindspore import set_context
-
-    # Common environment variables of predict.
-    set_context(jit_config={"jit_level": "O0", "infer_boost": "on"})
-    default_env = {
-        "MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST":
-        "FlashAttentionScore,PagedAttention",
-    }
-    env_setup(default_env)
-
-    if os.getenv("MS_MEMPOOL_BLOCK_SIZE"):
-        set_context(
-            mempool_block_size=f"{os.environ['MS_MEMPOOL_BLOCK_SIZE']}GB")
-
-    if is_mindformers_model_backend():
-        logger.info("Run with Mindformers backend!")
-    elif is_mindone_model_backend():
-        logger.info("Run with MindONE backend!")
-    else:
-        logger.info("Run with native model backend!")
-    register_connector()
 
 
 def convert_np_to_ms_dtype(value):

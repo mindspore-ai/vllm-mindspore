@@ -102,96 +102,9 @@ def write_commit_id():
 
 version = (Path("vllm_mindspore") / "version.txt").read_text()
 
-
-def _get_ascend_home_path():
-    return os.environ.get("ASCEND_HOME_PATH",
-                          "/usr/local/Ascend/ascend-toolkit/latest")
-
-
-def _get_ascend_env_path():
-    env_script_path = os.path.realpath(
-        os.path.join(_get_ascend_home_path(), "..", "set_env.sh"))
-    if not os.path.exists(env_script_path):
-        raise ValueError(
-            "The file '{}' is not found, please make sure environment "
-            "variable 'ASCEND_HOME_PATH' is set correctly.".format(
-                env_script_path))
-    return env_script_path
-
-
-class CustomBuildExt(build_ext):
-    ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
-
-    def build_extension(self, ext):
-        if ext.name == "vllm_mindspore.npu_ops":
-            self.build_npu_ops(ext)
-        else:
-            raise ValueError(f"Unknown extension name: {ext.name}")
-
-    def build_npu_ops(self, ext):
-        # "vllm_mindspore.npu_ops" --> "npu_ops"
-        ext_name = ext.name.split('.')[-1]
-        so_name = ext_name + ".so"
-        logger.info("Building %s ...", so_name)
-        OPS_DIR = os.path.join(ROOT_DIR, "vllm_mindspore", "ops")
-        BUILD_OPS_DIR = os.path.join(ROOT_DIR, "build", "ops")
-        os.makedirs(BUILD_OPS_DIR, exist_ok=True)
-
-        ascend_home_path = _get_ascend_home_path()
-        env_script_path = _get_ascend_env_path()
-        build_extension_dir = os.path.join(BUILD_OPS_DIR, "kernel_meta",
-                                           ext_name)
-        # Combine all cmake commands into one string
-        cmake_cmd = (
-            f"source {env_script_path} && "
-            f"cmake -S {OPS_DIR} -B {BUILD_OPS_DIR}"
-            f"  -DCMAKE_BUILD_TYPE=Release"
-            f"  -DCMAKE_INSTALL_PREFIX={os.path.join(BUILD_OPS_DIR, 'install')}"
-            f"  -DBUILD_EXTENSION_DIR={build_extension_dir}"
-            f"  -DMS_EXTENSION_NAME={ext_name}"
-            f"  -DASCEND_CANN_PACKAGE_PATH={ascend_home_path} && "
-            f"cmake --build {BUILD_OPS_DIR} -j --verbose")
-
-        try:
-            # Run the combined cmake command
-            logger.info("Running combined CMake commands:\n%s", cmake_cmd)
-            result = subprocess.run(cmake_cmd,
-                                    cwd=self.ROOT_DIR,
-                                    text=True,
-                                    shell=True,
-                                    capture_output=True)
-            if result.returncode != 0:
-                logger.info("CMake commands failed:")
-                logger.info(result.stdout)  # Print standard output
-                logger.info(result.stderr)  # Print error output
-                raise RuntimeError(
-                    "Combined CMake commands failed with exit code {}".format(
-                        result.returncode))
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError("Failed to build {}: {}".format(so_name,
-                                                               e)) from e
-
-        # Copy the generated .so file to the target directory
-        src_so_path = os.path.join(build_extension_dir, so_name)
-        dst_so_path = self.get_ext_fullpath(ext.name)
-        os.makedirs(os.path.dirname(dst_so_path), exist_ok=True)
-        if os.path.exists(dst_so_path):
-            os.remove(dst_so_path)
-        shutil.copy(src_so_path, dst_so_path)
-        logger.info("Copied %s to %s", so_name, dst_so_path)
-
-
 write_commit_id()
 
 package_data = {"": ["*.so", "lib/*.so", ".commit_id"]}
-
-
-def _get_ext_modules():
-    ext_modules = []
-    if os.path.exists(_get_ascend_home_path()):
-        # sources are specified in CMakeLists.txt
-        ext_modules.append(Extension("vllm_mindspore.npu_ops", sources=[]))
-    return ext_modules
 
 
 setup(
@@ -222,13 +135,9 @@ setup(
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=get_requirements(),
-    cmdclass={"build_ext": CustomBuildExt},
-    ext_modules=_get_ext_modules(),
     include_package_data=True,
     package_data=package_data,
     entry_points={
-        "console_scripts": [
-            "vllm-mindspore=vllm_mindspore.scripts:main",
-        ],
+        "vllm.platform_plugins": ["mindspore_model = vllm_mindspore:register_model"],
     },
 )
