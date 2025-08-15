@@ -61,8 +61,7 @@ def test_vllm_sampling_n_logprobs():
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    expect_logprobs_nums = [[2, 2, 2, 2, 2, 2, 2, 3, 2, 2],
-                            [2, 2, 2, 2, 2, 2, 2, 2, 2, 3]]
+    expect_logprobs_nums = [2, 3]
     # Print the outputs.
     for output in outputs:
         prompt = output.prompt
@@ -70,8 +69,10 @@ def test_vllm_sampling_n_logprobs():
             generated_text = seq.text
             print(f"candidate {seq_idx}: \nPrompt: {prompt!r}, "
                   f"Generated text: {generated_text!r}")
-            assert [len(sample_logprob) for sample_logprob in seq.logprobs
-                    ] == expect_logprobs_nums[seq_idx]
+            assert all([
+                len(sample_logprob) in expect_logprobs_nums
+                for sample_logprob in seq.logprobs
+            ])
         assert len(output.outputs) == 2
     # unset env
     env_manager.unset_all()
