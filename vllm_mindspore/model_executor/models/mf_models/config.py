@@ -75,7 +75,7 @@ source_path: Specifies the path to a configuration parameter in VllmConfig,
 value_or_function: Specifies the default value for the configuration parameter
                    or a partial function for computing configuration values.
 """
-# yapf: disable
+# yapf: disable # noqa: ERA001
 # flake8: noqa: E501
 MF_CTX_MAPPING = {
     'run_mode': (None, "predict"),
@@ -89,6 +89,7 @@ MF_PARALLEL_MAPPING = {
     'parallel_mode': (None, 'STAND_ALONE'),
     'parallel_config.model_parallel': ('parallel_config.tensor_parallel_size', None),
     'parallel_config.pipeline_stage': ('parallel_config.pipeline_parallel_size', None),
+    'parallel_config.data_parallel': ('parallel_config.data_parallel_size', None),
     'parallel_config.vocab_emb_dp': (None, False),
     'parallel_config.expert_parallel': ('additional_config', partial(_get_addtional_conf, path='expert_parallel'))
 }
@@ -99,6 +100,14 @@ MF_MODEL_COMMON_MAPPING = {
     'model.model_config.rotary_dtype': (None, 'bfloat16'),
     'model.model_config.params_dtype': (None, 'bfloat16'),
     'model.model_config.router_dense_type': (None, 'bfloat16'),
+}
+
+MF_MODEL_COMMON_MAPPING_310p = {
+    'model.model_config.compute_dtype': ('model_config.hf_config.torch_dtype', 'float16'),
+    'model.model_config.layernorm_compute_dtype': (None, 'float16'),
+    'model.model_config.rotary_dtype': (None, 'float16'),
+    'model.model_config.params_dtype': (None, 'float16'),
+    'model.model_config.router_dense_type': (None, 'float16'),
 }
 # yapf: enable # noqa: ERA001
 

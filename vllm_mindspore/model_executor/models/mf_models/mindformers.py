@@ -21,13 +21,15 @@ import numpy as np
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
 from mindformers.core.parallel_config import build_parallel_config
+from mindformers.parallel_core.process_group_config import (
+    default_model_comm_pgs)
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, ops
 from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
-from vllm.distributed.parallel_state import get_pp_group
+from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
@@ -101,6 +103,123 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         if get_pp_group().is_last_rank:
             self.lm_head.set_inputs(dynamic_hidden_states)
 
+    def _get_padding_index(self, q_seq_len):
+        """
+        Calculate the padding index used in the mixed parallel scenario.
+        Case 1: When data_parallel_size equals 1, no padding operation
+                required, returns None.
+        Case 2: When data_parallel_size equals expert_parallel_size and
+                model_parallel equals 1, all_to_all communication is applied,
+                no padding operation required, returns None.
+        Case 3: In other DP enabled scenarios, calculate the corresponding
+                padding index based on the query sequence lengths processed
+                by each DP domain.
+
+        e.g. DP2 TP4 MoE_EP2
+        +------------------+------------------------+------------------------+
+        |    DP domain     |          DP0           |           DP1          |
+        +------------------+------------------------+------------------------+
+        |    q_seq_len     |           3            |            5           |
+        +------------------+------------------------+------------------------+
+        | attn_padding_idx |   [0,1,2,0,0,0,0,0]    |   [0,1,2,3,4,0,0,0]    |
+        +------------------+------------------------+------------------------+
+        |attn_unpadding_idx|               [0,1,2,8,9,10,11,12]              |
+        +------------------+------------------------+------------------------+
+        | ffn_padding_idx  |        [0,1,2,0,0,0,0,0,3,4,5,6,7,0,0,0]        |
+        +------------------+------------------------+------------------------+
+        |ffn_unpadding_idx |        [0,1,2]         |      [0,1,2,3,4]       |
+        +------------------+------------------------+------------------------+
+
+        Args:
+        - q_seq_len (Tensor): query sequence lengths.
+
+        Returns:
+        - attn_padding_idx (Tensor or None): Indices mapping positions in
+          attention output sequence to original token positions, used for
+          padding attention output to fixed size.
+        - attn_unpadding_idx (Tensor or None): Indices mapping valid tokens
+          in padded attention output sequence to their original positions,
+          used for removing padding in attention output.
+        - ffn_padding_idx (Tensor or None): Indices mapping positions in MoE
+          output sequence to flattened valid token positions, used for padding
+          MoE output to fixed size.
+        - ffn_unpadding_idx (Tensor or None): Indices mapping valid tokens in
+          padded MoE output sequence to their original positions, used for
+          removing padding in MoE output.
+        """
+        dp_size = self.mf_config.parallel_config.data_parallel \
+            if self.mf_config.parallel_config.data_parallel else 1
+        tp_size = self.mf_config.parallel_config.model_parallel \
+            if self.mf_config.parallel_config.model_parallel else 1
+        ep_size = self.mf_config.parallel_config.expert_parallel \
+            if self.mf_config.parallel_config.expert_parallel else 1
+        if dp_size == 1 or (dp_size == ep_size and tp_size == 1):
+            return None, None, None, None
+
+        tokens_len_per_dp = q_seq_len.sum().reshape(-1)
+        tokens_len_per_dp = get_dp_group().all_gather(tokens_len_per_dp)
+        tokens_len_per_dp = tokens_len_per_dp.asnumpy()
+
+        # Simultaneously satisfying the requirement of being divisible by
+        # tensor_parallel_size and greater than the maximum q_seq_len in all
+        # DP domains.
+        padding_size = \
+            (tokens_len_per_dp.max() + tp_size - 1) // tp_size * tp_size
+
+        dp_rank_id = get_dp_group().rank_in_group
+        attn_padding_idx = None
+        attn_unpadding_idx = None
+        ffn_padding_idx = None
+        ffn_unpadding_idx = None
+        last_arange_index = 0
+
+        for dp_rank, tokens_length in enumerate(tokens_len_per_dp):
+            arange_data = np.arange(0, int(tokens_length), dtype=np.int32)
+            if dp_rank == dp_rank_id:
+                ffn_unpadding_idx = arange_data
+                pad = np.zeros(padding_size - arange_data.shape[0],
+                               dtype=np.int32)
+                attn_padding_idx = np.concatenate((arange_data, pad), axis=0)
+            if dp_rank == 0:
+                attn_unpadding_idx = arange_data
+                last_arange_index = arange_data[-1]
+                pad = np.zeros(padding_size - attn_unpadding_idx.shape[0],
+                               dtype=np.int32)
+                ffn_padding_idx = np.concatenate((attn_unpadding_idx, pad),
+                                                 axis=0)
+            else:
+                attn_offset_idx = arange_data + padding_size * dp_rank
+                attn_unpadding_idx = np.concatenate(
+                    (attn_unpadding_idx, attn_offset_idx), axis=0)
+                ffn_offset_idx = arange_data + last_arange_index + 1
+                last_arange_index = ffn_offset_idx[-1]
+                pad = np.zeros(padding_size - ffn_offset_idx.shape[0],
+                               dtype=np.int32)
+                ffn_padding_idx = np.concatenate(
+                    (ffn_padding_idx, ffn_offset_idx, pad), axis=0)
+        return ms.from_numpy(attn_padding_idx), \
+               ms.from_numpy(attn_unpadding_idx), \
+               ms.from_numpy(ffn_padding_idx), \
+               ms.from_numpy(ffn_unpadding_idx)
+
+    def update_padding_index_to_inputs(self, model_inputs, q_seq_lens):
+        """
+        Update the model input and add the related parameters of padding_index.
+        """
+        if self.network.model_comm_pgs is not default_model_comm_pgs and \
+                getattr(self.network.model_comm_pgs, 'dp', None) and \
+                getattr(self.network.model_comm_pgs, 'moe_ep', None):
+
+            (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
+             ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
+
+            model_inputs["attn_padding_idx"] = attn_padding_idx
+            model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
+            model_inputs["ffn_padding_idx"] = ffn_padding_idx
+            model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
+
+        return model_inputs
+
     def prepare_inputs(self, input_ids, positions):
 
         attn_metadata = get_forward_context().attn_metadata
@@ -156,6 +275,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
         model_inputs["context_lens_tensor"] = context_lens_tensor
+        model_inputs = \
+            self.update_padding_index_to_inputs(model_inputs, q_seq_lens)
 
         return model_inputs, is_prefill
 
