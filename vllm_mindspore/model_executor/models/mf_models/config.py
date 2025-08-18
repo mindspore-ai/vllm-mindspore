@@ -15,8 +15,11 @@
 # limitations under the License.
 from functools import partial
 
+import numpy as np
 from mindformers.tools.register.config import MindFormerConfig
+from vllm import envs
 from vllm.config import VllmConfig
+from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 
 from vllm_mindspore.utils import is_310p
@@ -186,6 +189,35 @@ def transform_config(mapping_table: dict, vllm_config: VllmConfig,
             _set_nested_attr(target_config, target_path, transformed_value)
 
 
+def get_mf_offset(vllm_config: VllmConfig):
+    """ get pp offset from vllm style"""
+    partition_list_str = envs.VLLM_PP_LAYER_PARTITION
+    num_layers = vllm_config.model_config.hf_config.num_hidden_layers
+    pp_size = vllm_config.parallel_config.pipeline_parallel_size
+    if partition_list_str is not None:
+        try:
+            partitions = [
+                int(layer) for layer in partition_list_str.split(",")
+            ]
+        except ValueError as err:
+            raise ValueError("Invalid partition string: {}".format(
+                partition_list_str)) from err
+        if len(partitions) != pp_size:
+            raise ValueError(f"{len(partitions)=} does not match {pp_size=}.")
+        if sum(partitions) != num_layers:
+            raise ValueError(
+                f"{sum(partitions)=} does not match {num_layers=}.")
+        partitions = np.array(partitions, dtype=np.int32)
+        avg_layers = num_layers // pp_size
+        avg_layers_list = np.ones((pp_size, ), dtype=np.int32) * avg_layers
+        if (partitions == avg_layers_list).all():
+            return 0
+        else:
+            return (partitions - avg_layers_list).tolist()
+    else:
+        return 0
+
+
 def gen_model_config_dict(vllm_config: VllmConfig):
     """
     Generate model configuration dictionary based on MODEL_RELATED_MAPPING.
@@ -196,7 +228,9 @@ def gen_model_config_dict(vllm_config: VllmConfig):
     model_related_config = MODEL_RELATED_MAPPING.get(model_type)
     if model_related_config is not None:
         target_config.update(model_related_config)
-    target_config.post_process = False
+    target_config.pre_process = get_pp_group().is_first_rank
+    target_config.post_process = get_pp_group().is_last_rank
+    target_config.offset = get_mf_offset(vllm_config)
 
     return target_config
 

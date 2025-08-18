@@ -531,4 +531,9 @@ from vllm.model_executor.models.registry import _ModelRegistry
 
 _ModelRegistry._normalize_archs = _normalize_archs
 
+from vllm_mindspore.utils import view
+from mindspore import Tensor
+
+Tensor.view = view
+
 check_ready()

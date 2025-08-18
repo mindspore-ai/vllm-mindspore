@@ -29,10 +29,11 @@ from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
-from vllm.distributed.parallel_state import get_dp_group
+from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -41,12 +42,14 @@ from vllm_mindspore.model_executor.models.attention_mask import (
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
                                                              MsModelBase)
+from vllm_mindspore.model_executor.models.utils import (
+    make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
 
 
-class MindFormersForCausalLM(MsModelBase):
+class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -75,17 +78,21 @@ class MindFormersForCausalLM(MsModelBase):
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
-        self.kv_caches = [
-            AttentionWrapper()
-            for _ in range(self.model_config.hf_config.num_hidden_layers)
-        ]
+
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+        self.kv_caches = [AttentionWrapper() for _ in range(num_layers)]
         compilation_config = get_current_vllm_config().compilation_config
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.model_config.hf_config.num_hidden_layers):
+        for i in range(num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
+
+        self.make_empty_intermediate_tensors = \
+            make_empty_intermediate_tensors_factory(
+                keys=["hidden_states"],
+                hidden_size=self.model_config.hf_config.hidden_size)
 
         self.cast = ops.Cast()
 
@@ -93,7 +100,8 @@ class MindFormersForCausalLM(MsModelBase):
         self.network.set_dynamic_inputs()
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.network.compute_dtype)
-        self.lm_head.set_inputs(dynamic_hidden_states)
+        if get_pp_group().is_last_rank:
+            self.lm_head.set_inputs(dynamic_hidden_states)
 
     def _get_padding_index(self, q_seq_len):
         """
@@ -280,6 +288,9 @@ class MindFormersForCausalLM(MsModelBase):
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
         model_inputs, is_prefill = self.prepare_inputs(input_ids, positions)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
+        if intermediate_tensors is not None:
+            model_inputs["hidden_states"] = \
+                intermediate_tensors["hidden_states"]
 
         if is_prefill:
             self.network.phase = "prefill"
@@ -293,6 +304,8 @@ class MindFormersForCausalLM(MsModelBase):
         else:
             hidden_states = self.network(**model_inputs)
 
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({"hidden_states": hidden_states})
         return hidden_states
 
     def _create_network(self):
@@ -301,7 +314,10 @@ class MindFormersForCausalLM(MsModelBase):
             os.environ['ENFORCE_EAGER'] = 'True'
         with no_init_parameters():  # Delay initialization
             network: PreTrainedModel = AutoModel.from_config(self.mf_config)
-        return network, network.model.output_layer
+            network.model.return_hidden_states = True
+        if get_pp_group().is_last_rank:
+            return network, network.model.output_layer
+        return network, None
 
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
