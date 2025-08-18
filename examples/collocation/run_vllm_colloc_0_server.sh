@@ -15,7 +15,7 @@ export MS_ENABLE_LCCL=on
 export MS_DEV_RUNTIME_CONF='comm_init_lccl_only:true'
 export LCAL_COMM_ID=127.0.0.1:15072
 export MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST='MatMulAllReduce'
-export vLLM_MODEL_BACKEND="MindFormers"
+export VLLM_MS_MODEL_BACKEND="MindFormers"
 
 
 

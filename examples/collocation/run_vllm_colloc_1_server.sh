@@ -15,7 +15,7 @@ export MS_ENABLE_LCCL=on
 export MS_DEV_RUNTIME_CONF='comm_init_lccl_only:true'
 export LCAL_COMM_ID=127.0.0.1:15071
 export MS_INTERNAL_DISABLE_CUSTOM_KERNEL_LIST='MatMulAllReduce'
-export vLLM_MODEL_BACKEND="MindFormers"
+export VLLM_MS_MODEL_BACKEND="MindFormers"
 
 
 python3 -m vllm_mindspore.entrypoints vllm.entrypoints.openai.api_server --model="${MODEL_PATH}" --tensor_parallel_size=2 --max_model_len=2048 --port=24501 --gpu_memory_utilization=0.45
