@@ -208,7 +208,7 @@ main() {
     log ""
     log "When using MindFormers backend, please configure environment variables manually:"
     echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
-    echo "  export vLLM_MODEL_BACKEND=MindFormers"
+    echo "  export VLLM_MS_MODEL_BACKEND=MindFormers"
 }
 
 main "$@"

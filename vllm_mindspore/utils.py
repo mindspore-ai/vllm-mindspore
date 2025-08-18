@@ -177,9 +177,10 @@ STR_DTYPE_TO_MS_DTYPE = {
 
 
 class vllmModelBackendEnum(str, Enum):
-    """Define the variable Enum of vLLM_MODEL_BACKEND"""
+    """Define the variable Enum of VLLM_MS_MODEL_BACKEND"""
     MF = 'MindFormers'
     MIND_ONE = 'MindONE'
+    NATIVE = 'Native'
 
 
 def ascend_is_initialized():
@@ -187,25 +188,47 @@ def ascend_is_initialized():
     return True
 
 
-def is_mindformers_model_backend():
-    vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
-    if vllm_model_backend:
+old_vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
+if old_vllm_model_backend is not None:
+    logger.warning('"vLLM_MODEL_BACKEND" will be removed, '
+                   'please use "VLLM_MS_MODEL_BACKEND"')
+vllm_model_backend = os.getenv("VLLM_MS_MODEL_BACKEND")  # noqa: SIM112
+if vllm_model_backend is None:
+    vllm_model_backend = old_vllm_model_backend
+
+
+def _check_model_backend(dst_backend):
+    if vllm_model_backend is not None:
         try:
             vllmModelBackendEnum(vllm_model_backend)
-            return vllm_model_backend == vllmModelBackendEnum.MF
+            return vllm_model_backend == dst_backend
         except ValueError as exc:
             allowed_values = [member.value for member in vllmModelBackendEnum]
             raise ValueError(
-                f"Illegal value of vLLM_MODEL_BACKEND '{vllm_model_backend}',"
+                "Illegal value of VLLM_MS_MODEL_BACKEND "
+                f"'{vllm_model_backend}',"
                 f" allowed_values: {', '.join(allowed_values)}") from exc
     else:
         return False
 
 
+def is_mindformers_model_backend():
+    return _check_model_backend(vllmModelBackendEnum.MF)
+
+
 def is_mindone_model_backend():
-    return (os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
-            and os.environ["vLLM_MODEL_BACKEND"]  # noqa: SIM112
-            == vllmModelBackendEnum.MIND_ONE)
+    return _check_model_backend(vllmModelBackendEnum.MIND_ONE)
+
+
+def is_native_model_backend():
+    return _check_model_backend(vllmModelBackendEnum.NATIVE)
+
+
+def is_mix_model_backend():
+    vllm_model_backend = os.getenv("VLLM_MS_MODEL_BACKEND")
+    vllm_model_backend_old = os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
+    return vllm_model_backend is None \
+        and vllm_model_backend_old is None
 
 
 # DLLM
@@ -292,8 +315,10 @@ def check_ready():
         logger.info("Run with Mindformers backend!")
     elif is_mindone_model_backend():
         logger.info("Run with MindONE backend!")
-    else:
+    elif is_native_model_backend():
         logger.info("Run with native model backend!")
+    else:
+        logger.info("Run with auto select model backend!")
     register_connector()
 
 

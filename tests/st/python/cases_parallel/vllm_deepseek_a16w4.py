@@ -13,9 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""test vllm qwen."""
+"""test mf deepseek r1 gptq int4 quantization."""
+
+# type: ignore
+# isort: skip_file
 
 import os
+import yaml
 from tests.st.python import utils
 
 
@@ -26,8 +30,9 @@ def teardown_function():
 env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
+    "MINDFORMERS_MODEL_CONFIG": "./config/predict_deepseek_r1_671b_a16w4.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
-    "VLLM_MS_MODEL_BACKEND": "Native",
+    "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "MS_ALLOC_CONF": "enable_vmm:True",
@@ -43,35 +48,47 @@ import vllm_mindspore  # noqa: F401, E402
 from vllm import LLM, SamplingParams  # noqa: E402
 
 
-def test_vllm_qwen():
+def test_deepseek_r1_gptq_a16w4():
     """
-    test case qwen2.5 7B
+    test case deepseek r1 a16w4
     """
+    yaml_path = "./config/predict_deepseek_r1_671b.yaml"
+    a16w4_yaml = "./config/predict_deepseek_r1_671b_a16w4.yaml"
+    with open(yaml_path, encoding='utf-8') as file:
+        content = yaml.safe_load(file)
+    model_config = content["model"]["model_config"]
+    model_config["quantization_config"] = {"quant_method": "gptq-pergroup"}
+    content["model"]["model_config"] = model_config
+
+    with open(a16w4_yaml, 'w', encoding='utf-8') as file:
+        yaml.dump(content, file, allow_unicode=True, sort_keys=False)
 
     # Sample prompts.
     prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
-        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
+        "介绍下北京故宫",
     ]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=1024, top_k=1)
 
     # Create an LLM.
     llm = LLM(
-        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
+        model=
+        "/home/workspace/mindspore_dataset/weight/DeepSeekR1_gptq-pergroup_safetensors",
+        trust_remote_code=True,
         gpu_memory_utilization=0.9,
-        tensor_parallel_size=2)
-    # Generate texts from the prompts. The output is a list of RequestOutput
-    # objects that contain the prompt, generated text, and other information.
+        tensor_parallel_size=4,
+        max_model_len=4096)
+    # Generate texts from the prompts.
+    # The output is a list of RequestOutput objects
+    # that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    except_list = ['中性<｜Assistant｜> 这句话']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-        assert generated_text == except_list[i]
+        assert "博物院christianాలు sic辨" in generated_text
 
     # unset env
     env_manager.unset_all()
