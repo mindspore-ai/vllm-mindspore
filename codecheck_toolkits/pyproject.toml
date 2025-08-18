@@ -87,6 +87,8 @@ select = [
     # "I",
     # flake8-logging-format
     "G",
+    # Commented-out code
+    "ERA001",
 ]
 ignore = [
     # star imports
