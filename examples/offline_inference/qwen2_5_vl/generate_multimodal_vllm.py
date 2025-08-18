@@ -54,7 +54,7 @@ def get_llm(model_path: str, question: str, modality: str):
 def main(args):
     # Prepare args and inputs.
     img_question = "What is the content of this image?"
-    img = Image.open("./imgs/1.jpg").convert("RGB")
+    img = Image.open("imgs/1.jpg").convert("RGB")
     llm, prompt, stop_token_ids = get_llm(
         args.model_path, img_question, "image"
     )
