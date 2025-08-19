@@ -89,7 +89,6 @@ class RotaryEmbedding(nn.Cell):
         cache = self._compute_cos_sin_cache()
         cache = cache.to(dtype)
         self.cos_sin_cache = cache
-        # self.register_buffer("cos_sin_cache", cache, persistent=False)
 
     def _compute_inv_freq(self, base: Union[int, float]) -> Tensor:
         """Compute the inverse frequency."""
@@ -106,7 +105,6 @@ class RotaryEmbedding(nn.Cell):
         inv_freq = self._compute_inv_freq(self.base)
         t = mint.arange(self.max_position_embeddings, dtype=mstype.float32)
 
-        # freqs = ops.einsum("i,j -> ij", t, inv_freq)
         freqs = ops.outer(t, inv_freq)
         cos = freqs.cos()
         sin = freqs.sin()
@@ -160,7 +158,6 @@ class InferRotaryEmbedding(nn.Cell):
                                       "Neox-style rotary embeddings.")
         super().__init__()
         self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
-        self.gather = ops.Gather()
         self.head_size = head_size
         self.rotary_dim = rotary_dim
         self.max_position_embeddings = max_position_embeddings
@@ -205,8 +202,8 @@ class InferRotaryEmbedding(nn.Cell):
             return self.rotary_embedding_op(query, key, self.freqs_cos,
                                             self.freqs_sin, batch_valid_length)
 
-        freqs_cos = self.gather(self.freqs_cos, positions, 0)
-        freqs_sin = self.gather(self.freqs_sin, positions, 0)
+        freqs_cos = mint.index_select(self.freqs_cos, 0, positions)
+        freqs_sin = mint.index_select(self.freqs_sin, 0, positions)
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
                                         batch_valid_length)
 
@@ -298,37 +295,37 @@ class MRotaryEmbedding(RotaryEmbedding):
         """
         ######################################################################
         # max_pos: 128k, rotary_dim: 128
-        # cos_sin_cache: (4*max_pos, rotary_dim//2 * 2)
-        # positions: (3, 5120)
-        # cos_sin: (3, 5120, rotary_dim)
+        # cos_sin_cache: (4*max_pos, rotary_dim//2 * 2)  # noqa: ERA001
+        # positions: (3, 5120) # noqa: ERA001
+        # cos_sin: (3, 5120, rotary_dim) # noqa: ERA001
         # cos/sin: cat[(1, 5120, mrope_sec),...] -> (1, 5120, rotary_dim//2)
         ######################################################################
         num_tokens = positions.shape[-1]
         cos_sin = self.cos_sin_cache[positions]
         cos, sin = ops.chunk(cos_sin, 2, axis=-1)
         if positions.ndim == 2:
-            cos_l = ops.split(cos, self.mrope_section, axis=-1)
-            sin_l = ops.split(sin, self.mrope_section, axis=-1)
+            cos_l = mint.split(cos, self.mrope_section, dim=-1)
+            sin_l = mint.split(sin, self.mrope_section, dim=-1)
             cos, sin = (), ()
             for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
                 cos += (cos_l[i][i], )
                 sin += (sin_l[i][i], )
-            cos = ops.cat(cos, axis=-1)
-            sin = ops.cat(sin, axis=-1)
+            cos = mint.cat(cos, dim=-1)
+            sin = mint.cat(sin, dim=-1)
 
         query_shape = query.shape
         query = query.view(num_tokens, -1, self.head_size)
         query_rot = query[..., :self.rotary_dim]
         query_pass = query[..., self.rotary_dim:]
         query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
-        query = ops.cat((query_rot, query_pass), axis=-1).view(query_shape)
+        query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
 
         key_shape = key.shape
         key = key.view(num_tokens, -1, self.head_size)
         key_rot = key[..., :self.rotary_dim]
         key_pass = key[..., self.rotary_dim:]
         key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
-        key = ops.cat((key_rot, key_pass), axis=-1).view(key_shape)
+        key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
         return query, key
 
     @staticmethod
@@ -435,19 +432,20 @@ class MRotaryEmbedding(RotaryEmbedding):
             st_idx = llm_pos_ids_list[-1].max() + 1 if len(
                 llm_pos_ids_list) > 0 else 0
             llm_pos_ids_list.append(
-                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() +
+                mint.arange(0, text_len).view(1, -1).broadcast_to((3,
+                                                                   -1)).int() +
                 st_idx)
 
-            t_index = (ops.arange(llm_grid_t).view(-1, 1).broadcast_to(
+            t_index = (mint.arange(0, llm_grid_t).view(-1, 1).broadcast_to(
                 (-1, llm_grid_h * llm_grid_w)) * video_second_per_grid_t *
                        tokens_per_second).int().flatten()
-            h_index = ops.arange(llm_grid_h).view(1, -1, 1).broadcast_to(
+            h_index = mint.arange(0, llm_grid_h).view(1, -1, 1).broadcast_to(
                 (llm_grid_t, -1, llm_grid_w)).flatten().int()
-            w_index = ops.arange(llm_grid_w).view(1, 1, -1).broadcast_to(
+            w_index = mint.arange(0, llm_grid_w).view(1, 1, -1).broadcast_to(
                 (llm_grid_t, llm_grid_h, -1)).flatten().int()
 
             llm_pos_ids_list.append(
-                ops.stack([t_index, h_index, w_index]) + text_len + st_idx)
+                mint.stack([t_index, h_index, w_index]) + text_len + st_idx)
             st = ed + llm_grid_t * llm_grid_h * llm_grid_w
 
         if st < len(input_tokens):
@@ -455,10 +453,11 @@ class MRotaryEmbedding(RotaryEmbedding):
                 llm_pos_ids_list) > 0 else 0
             text_len = len(input_tokens) - st
             llm_pos_ids_list.append(
-                ops.arange(text_len).view(1, -1).broadcast_to((3, -1)).int() +
+                mint.arange(0, text_len).view(1, -1).broadcast_to((3,
+                                                                   -1)).int() +
                 st_idx)
 
-        llm_positions = ops.cat(llm_pos_ids_list, axis=1).view(3, -1)
+        llm_positions = mint.cat(llm_pos_ids_list, dim=1).view(3, -1)
         mrope_position_delta = (llm_positions.max() + 1 -
                                 len(input_tokens)).item()
         llm_positions = llm_positions[:, context_len:seq_len]
@@ -559,8 +558,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
                     sin_l_select = mint.index_select(sin_l[i], 0,
                                                      Tensor([i])).squeeze(0)
                     sin += (sin_l_select, )
-                cos = ops.cat(cos, axis=-1)
-                sin = ops.cat(sin, axis=-1)
+                cos = mint.cat(cos, dim=-1)
+                sin = mint.cat(sin, dim=-1)
 
             query_shape = query.shape
             query = query.view(num_tokens, -1, self.head_size)
@@ -569,14 +568,14 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
                                     query_shape[-1], 1)
             query_rot = _apply_rotary_emb(query_rot, cos, sin,
                                           self.is_neox_style)
-            query = ops.cat((query_rot, query_pass), axis=-1).view(query_shape)
+            query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
 
             key_shape = key.shape
             key = key.view(num_tokens, -1, self.head_size)
             key_rot = SliceExt()(key, -1, 0, self.rotary_dim, 1)
             key_pass = SliceExt()(key, -1, self.rotary_dim, key_shape[-1], 1)
             key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
-            key = ops.cat((key_rot, key_pass), axis=-1).view(key_shape)
+            key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
             return query, key
 
         # decode
@@ -594,10 +593,10 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
                 sin_l_select = mint.index_select(sin_l[i], 0,
                                                  Tensor([i])).squeeze(0)
                 sin += (sin_l_select, )
-            cos = ops.cat(cos, axis=-1)
-            sin = ops.cat(sin, axis=-1)
-            freqs_cos = ops.cat([cos, cos], axis=-1).squeeze(1)
-            freqs_sin = ops.cat([sin, sin], axis=-1).squeeze(1)
+            cos = mint.cat(cos, dim=-1)
+            sin = mint.cat(sin, dim=-1)
+            freqs_cos = mint.cat([cos, cos], dim=-1).squeeze(1)
+            freqs_sin = mint.cat([sin, sin], dim=-1).squeeze(1)
         else:
             positions = positions.flatten()
             freqs_cos = self.freqs_cos.index_select(0, positions)

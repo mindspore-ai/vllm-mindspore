@@ -60,8 +60,6 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
         self.input_size_per_partition = int(input_size_per_partition)
         self.output_size_per_partition = int(sum(output_partition_sizes))
         self.matmul = ops.MatMul(transpose_b=True)
-        self.gather = ops.Gather()
-        self.bias_add = ops.Add()
 
     def apply(self,
               layer: nn.Cell,
@@ -71,12 +69,12 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
         x = x.reshape(-1, self.input_size_per_partition)
         x = self.matmul(x, layer.weight)
         if bias is not None:
-            x = self.bias_add(x, bias)
+            x = mint.add(x, bias)
         x = x.reshape(output_shape)
         return x
 
     def embedding(self, layer: nn.Cell, input_: Tensor) -> Tensor:
-        return self.gather(layer.weight, input_, 0)
+        return mint.index_select(layer.weight, 0, input_)
 
 
 def get_masked_input_and_mask(

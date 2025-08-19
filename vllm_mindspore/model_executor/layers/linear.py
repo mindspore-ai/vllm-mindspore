@@ -88,7 +88,6 @@ class UnquantizedLinearMethod(LinearMethodBase):
 
     def __init__(self):
         self.matmul = ops.MatMul(transpose_b=True)
-        self.bias_add = ops.Add()
 
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
                        output_partition_sizes: list[int], input_size: int,
@@ -115,7 +114,7 @@ class UnquantizedLinearMethod(LinearMethodBase):
         x = x.view(-1, self.input_size_per_partition)
         x = self.matmul(x, layer.weight)
         if bias is not None:
-            x = self.bias_add(x, bias)
+            x = mint.add(x, bias)
         x = x.view(output_shape)
         return x
 
@@ -441,7 +440,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         # load it into the corresponding qkv fusion weights
         if loaded_shard_id is None:
             shard_offsets = [
-                # (shard_id, shard_offset, shard_size)
+                # (shard_id, shard_offset, shard_size) # noqa: ERA001
                 ("q", 0, self.num_heads * self.head_size),
                 ("k", self.total_num_heads * self.head_size,
                  self.num_kv_heads * self.head_size),
