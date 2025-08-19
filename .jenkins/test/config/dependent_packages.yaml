@@ -2,7 +2,7 @@ mindspore:
   'https://repo.mindspore.cn/mindspore/mindspore/version/202508/20250804/br_infer_iter_20250804031508_cad49aa94b7e5236a85ccd5130afa5bc3a56b440_newest/'
 
 mindspore_gs:
-  'https://repo.mindspore.cn/public/mindspore/golden-stick/gate/20250801/huangzhuo17_1125_4579_20250801221833_73666aeb3d2d795daafa3641247f3b672bfd5733/'
+  'https://repo.mindspore.cn/mindspore/golden-stick/version/202508/20250804/feature-boom_20250804104232_8e3c54f2933d7f71bbdd62e1b601e08f94ed2371_newest/'
 
 msadapter:
   'https://repo.mindspore.cn/mindspore/msadapter/version/202507/20250715/master_20250715160021_01925e853210c29c01c6d7602528ea1fcb85c6ad_newest/'
