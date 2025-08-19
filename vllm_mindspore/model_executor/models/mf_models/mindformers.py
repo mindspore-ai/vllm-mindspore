@@ -71,12 +71,13 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         self.set_modules({"model": self.network})
 
-        num_layers = self.model_config.get_num_layers(self.parallel_config)
-        self.kv_caches = self._create_kv_caches(num_layers)
+        self.num_layers = self.model_config.get_num_layers(
+            self.parallel_config)
+        self.kv_caches = self._create_kv_caches(self.num_layers)
         compilation_config = get_current_vllm_config().compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(num_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -115,14 +116,14 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         forward_context = get_forward_context()
         key_cache = [
             self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
-            for i in range(self.config.num_hidden_layers)
+            for i in range(self.num_layers)
         ]
         if not self.use_ringmla:
             return mutable(key_cache), None
         # deepseek mla op need key cache and rope cache
         rope_cache = [
             self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
-            for i in range(self.config.num_hidden_layers)
+            for i in range(self.num_layers)
         ]
         return mutable(key_cache), mutable(rope_cache)
 
