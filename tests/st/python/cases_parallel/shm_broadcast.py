@@ -27,10 +27,9 @@ import random
 import time
 
 import numpy as np
-import torch.distributed as dist
 
 import vllm_mindspore
-
+import torch.distributed as dist
 from vllm.distributed.device_communicators.shm_broadcast import MessageQueue
 from vllm.utils import get_ip, get_open_port, get_distributed_init_method
 from tests.st.python import utils
