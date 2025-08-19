@@ -47,7 +47,7 @@ from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.attention import Attention
-from vllm_mindspore.model_executor.layers.activation import SwiGLU
+from vllm_mindspore.model_executor.layers.activation import SiluAndMul
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import (
     MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
@@ -90,7 +90,7 @@ class Qwen2MLP(nn.Cell):
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
-        self.act_fn = SwiGLU()
+        self.act_fn = SiluAndMul()
 
     def construct(self, x):
         x, _ = self.gate_up_proj(x)
@@ -367,7 +367,7 @@ class Qwen2Model(nn.Cell):
                      params_dict: dict[str, Parameter]):
         loaded_params: set[str] = set()
         stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
+            # (param_name, shard_name, shard_id) # noqa: ERA001
             (".qkv_proj", ".q_proj", "q"),
             (".qkv_proj", ".k_proj", "k"),
             (".qkv_proj", ".v_proj", "v"),

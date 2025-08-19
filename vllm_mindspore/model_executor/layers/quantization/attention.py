@@ -88,8 +88,6 @@ class BaseKVCacheMethod(QuantizeMethodBase):
         pre_tokens = 2147483647
         next_tokens = 2147483647
 
-        self.slice = ops.StridedSlice()
-        self.sub = ops.Sub()
         self.reshape_and_cache = ReshapeAndCache()
         self.reshape = ops.auto_generate.ReshapeView()
         self.use_fused_attn = self.use_pfa and not is_310p()
