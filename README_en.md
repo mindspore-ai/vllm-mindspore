@@ -3,7 +3,7 @@ vLLM-MindSpore Plugin
 </h1>
 
 <p align="center">
-| <a href="https://www.mindspore.cn/en/"><b>About MindSpore</b></a> | <a href="https://www.mindspore.cn/community/SIG"><b>LLM Infercence Serving SIG</b></a> | <a href="https://gitee.com/mindspore/vllm-mindspore/issues"><b>Issue Feedback</b></a> |
+| <a href="https://www.mindspore.cn/en/"><b>About MindSpore</b></a> | <a href="https://www.mindspore.cn/vllm_mindspore/docs/en/master/index.html"><b>Documentation</b></a> | <a href="https://www.mindspore.cn/community/SIG"><b>LLM Infercence Serving SIG</b></a> | <a href="https://gitee.com/mindspore/vllm-mindspore/issues"><b>Issue Feedback</b></a> |
 </p>
 
 <p align="center">
@@ -52,21 +52,21 @@ vLLM-MindSpore Plugin uses the plugin mechanism recommended by the vLLM communit
   - MindSpore
   - vLLM
 
-Note: Please refer to [Version Compatibility](https://gitee.com/mindspore/docs/blob/master/docs/vllm_mindspore/docs/source_en/getting_started/installation/installation.md) for more details about version compatibility information.
+Note: Please refer to [Version Compatibility](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html) for more details about version compatibility information.
 
 ## Getting Started
 
-First, please select the installation method in accordance with the [Installation](https://gitee.com/mindspore/docs/blob/master/docs/vllm_mindspore/docs/source_en/getting_started/installation/installation.md). After the environment is successfully installed, you can run the following commands to launch the vLLM service and use the Qwen/Qwen3-8B model.
+First, please select the installation method in accordance with the [Installation](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html). After the environment is successfully installed, you can run the following commands to launch the vLLM service and use the Qwen/Qwen3-8B model.
 
 ```bash
 vllm-mindspore serve Qwen/Qwen3-8B
 ```
 
-Please refer to [Quick Start](https://gitee.com/mindspore/docs/blob/master/docs/vllm_mindspore/docs/source_en/getting_started/quick_start/quick_start.md) and [Installation](https://gitee.com/mindspore/docs/blob/master/docs/vllm_mindspore/docs/source_en/getting_started/installation/installation.md) for more details.
+Please refer to [Quick Start](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/quick_start/quick_start.html) and [Installation](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html) for more details.
 
 ## Contributing
 
-Please read [CONTRIBUTING](https://gitee.com/mindspore/docs/blob/master/docs/vllm_mindspore/docs/source_en/developer_guide/contributing.md) for details on setting up development environments, testing functions, and submitting PR.
+Please read [CONTRIBUTING](https://www.mindspore.cn/vllm_mindspore/docs/en/master/developer_guide/contributing.html) for details on setting up development environments, testing functions, and submitting PR.
 
 We welcome and value any form of contribution and cooperation. Please use [Issue](https://gitee.com/mindspore/vllm-mindspore/issues) to inform us of any bugs you encounter, or to submit your feature requests, improvement suggestions, and technical solutions.
 
