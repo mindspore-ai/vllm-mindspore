@@ -47,9 +47,10 @@ const T GetValue(const DATensor *tensor) {
 
 void GetNodeRealInputs(DATensor *node);
 
-inline void CloneDATensorShape(DATensor *dstNode, DATensor *sourceNode) {
+inline void CloneDATensorTypeAndShape(DATensor *dstNode, DATensor *sourceNode) {
   CHECK_IF_NULL(dstNode);
   CHECK_IF_NULL(sourceNode);
+  dstNode->type = sourceNode->type;
   dstNode->dim = sourceNode->dim;
   for (size_t i = 0; i < dstNode->dim; ++i) {
     dstNode->shape[i] = sourceNode->shape[i];

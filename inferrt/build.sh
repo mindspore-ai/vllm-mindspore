@@ -16,17 +16,12 @@ usage()
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
-  echo "    -r Enable run tensor, default off"
-}
-
-default_options()
-{
-    export RUN_TENSOR="-DENABLE_RUN_TENSOR=off"
+  echo "    -a Enable pytorch aten kernels, default off"
 }
 
 process_options()
 {
-    while getopts 'Dd:hir' OPT; do
+    while getopts 'Dd:hia' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -42,7 +37,10 @@ process_options()
                 done
                 ;;
             i) export INC_BUILD=1;;
-            r) export RUN_TENSOR="-DENABLE_RUN_TENSOR=on";;
+            a)
+                export ENABLE_KERNELS_ATEN="-DENABLE_KERNELS_ATEN=on"
+                export TEST_TORCH=1
+                ;;
             h)
                 usage
                 exit 0
@@ -55,10 +53,9 @@ process_options()
     done
 }
 
-default_options
 process_options $@
-INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $RUN_TENSOR"
+INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNELS_ATEN"
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNELS_ATEN"
 
 
 ##################################################
@@ -86,6 +83,14 @@ make_sure_build_dir()
 }
 make_sure_build_dir $BUILD_DIR
 
+# Try using ccache
+if type -P ccache &>/dev/null; then
+    echo "ccache found, using ccache for building."
+    export CCACHE_CMAKE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+else
+    echo "ccache not found, using default compiler."
+    export CCACHE_CMAKE_ARGS=""
+fi
 
 ##################################################
 # Make da & dapy execution and shared library
@@ -93,7 +98,7 @@ make_sure_build_dir $BUILD_DIR
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
     rm $BUILD_DIR/* -rf
-    cmake $INFERRT_PATH $INFERRT_CMAKE_ARGS $DAPY_CMAKE_ARGS
+    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $DAPY_CMAKE_ARGS
 fi
 make
 
@@ -102,6 +107,8 @@ make
 # Run essential test
 ##################################################
 # Run inferrt test
+export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernels/dummy/libkernels_dummy.so
+export DART_KERNEL_LIB_NAME=Dummy
 echo "=============================="
 echo "Run da execution test cases:"
 echo "# 1/2: ./da sample/fibonacci_20.da"
@@ -118,3 +125,14 @@ echo "=============================="
 export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
 echo "PYTHONPATH=$PYTHONPATH"
 python $INFERRT_PATH/py/python/check_api.py
+
+# Run pytorch backend test
+if [[ $TEST_TORCH == 1 ]]; then
+    echo "=============================="
+    echo "Run pytorch backend test case:"
+    echo "python check_backend.py"
+    echo "=============================="
+    export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernels/aten/libkernels_aten.so
+    export DART_KERNEL_LIB_NAME=Aten
+    python $INFERRT_PATH/py/python/check_backend.py
+fi

@@ -14,28 +14,31 @@
  * limitations under the License.
  */
 
-#include "rt/runtime/kernel.h"
-#include "runtime/utils.h"
+#include "kernels/kernel.h"
+#include "kernels/kernel_lib.h"
 
 namespace da {
-namespace runtime {
-void DAKernel::RunKernel(bool isDynamic) {
-  CHECK_IF_NULL(tensorNode_);
-  if (isDynamic) {
-    InferShape();
-    Resize();
-  } else if (IsDAKernelNeedForceResize(tensorNode_)) {
-    Resize();
-  }
+namespace kernels {
 
-  auto iter = opsOutputValueFromInputIndex.find(tensorNode_->op);
-  if (iter != opsOutputValueFromInputIndex.end()) {
-    LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(tensorNode_->op);
-    tensorNode_->data = tensorNode_->input[iter->second]->data;
-    return;
-  }
+// Dummy kernel
+class DummyKernel : public DAKernel {
+ public:
+  using DAKernel::DAKernel;
+  void Init() override {}
+  void InferShape() override {}
+  void Resize() override {}
+  void Launch() override {}
+};
 
-  Launch();
-}
-}  // namespace runtime
+// Dummy Kernel lib
+class DA_API DummyKernelLib : public KernelLib {
+ public:
+  DummyKernelLib() : KernelLib("Dummy") {}
+  ~DummyKernelLib() = default;
+  DAKernel *CreateKernel(tensor::DATensor *tensorNode) const override { return new DummyKernel(tensorNode); }
+};
+
+DART_REGISTER_KERNEL_LIB("Dummy", DummyKernelLib);
+
+}  // namespace kernels
 }  // namespace da
