@@ -126,6 +126,9 @@ MODEL_RELATED_MAPPING = {
     'qwen3_moe': {
         'layernorm_compute_dtype': 'float32',
     },
+    'deepseek_v3': {
+        'multi_latent_attention': True,
+    }
     # Add anther model type...
 }
 

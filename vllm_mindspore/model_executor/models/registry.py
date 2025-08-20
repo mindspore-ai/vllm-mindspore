@@ -36,8 +36,6 @@ _NATIVE_MODELS = {
 
 _MINDFORMERS_MODELS = {
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
-    "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
-    "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
     "MindFormersForCausalLM": ("mindformers", "MindFormersForCausalLM")
 }
 

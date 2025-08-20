@@ -24,7 +24,7 @@ from mindformers.core.context import build_mf_context
 from mindformers.parallel_core.process_group_config import (
     default_model_comm_pgs)
 from mindformers.tools.utils import is_pynative
-from mindspore import Tensor, ops
+from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
@@ -38,10 +38,10 @@ from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
-    LowerTriangularMask)
+    LowerTriangularMask, MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
-from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
-                                                             MsModelBase)
+from vllm_mindspore.model_executor.models.model_base import (
+    AttentionWrapper, MLAAttentionWrapper, MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
     make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
@@ -61,27 +61,21 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         mf_config.load_checkpoint = self.get_model_path()
         mf_config.pretrained_model_dir = self.get_model_path()
         self.mf_config = mf_config
+        self.mla_config = self.mf_config.get('model', None).get(
+            'model_config', None).get('multi_latent_attention', False)
 
         build_mf_context(self.mf_config)
 
         self.network, self.lm_head = self._create_network()
-        self.casual_mask = LowerTriangularMask(
-            dtype=self.network.compute_dtype,
-            max_model_len=self.model_config.max_model_len)
-
-        affinity_config = self.mf_config.get('context',
-                                             {}).get('affinity_cpu_list', {})
-        if isinstance(affinity_config, dict):
-            ms.runtime.set_cpu_affinity(True, affinity_config)
+        self.casual_mask = self._create_mask()
 
         self._set_dynamic_inputs()
 
         self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
-        self.kv_caches = [AttentionWrapper() for _ in range(self.num_layers)]
+        self.kv_caches = self._create_kv_caches()
         compilation_config = get_current_vllm_config().compilation_config
-
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
 
@@ -102,6 +96,31 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                                        dtype=self.network.compute_dtype)
         if get_pp_group().is_last_rank:
             self.lm_head.set_inputs(dynamic_hidden_states)
+
+    def _create_mask(self):
+        # Initial mask
+        mask_func = (MLALowerTriangularMask
+                     if self.mla_config else LowerTriangularMask)
+        return mask_func(dtype=self.network.compute_dtype,
+                         max_model_len=self.model_config.max_model_len)
+
+    def _create_kv_caches(self):
+        # Initial kv_caches
+        wrapper_func = (MLAAttentionWrapper
+                        if self.mla_config else AttentionWrapper)
+        return [wrapper_func() for _ in range(self.num_layers)]
+
+    def get_kvcache(self):
+        if not self.mla_config:
+            return super().get_kvcache()
+
+        key_cache = []
+        forward_context = get_forward_context()
+        for i in range(self.config.num_hidden_layers):
+            k_cache = self.kv_caches[i].kv_cache[
+                forward_context.virtual_engine][0]
+            key_cache.append(k_cache)
+        return mutable(key_cache), None
 
     def _get_padding_index(self, q_seq_len):
         """
@@ -147,12 +166,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
           padded MoE output sequence to their original positions, used for
           removing padding in MoE output.
         """
-        dp_size = self.mf_config.parallel_config.data_parallel \
-            if self.mf_config.parallel_config.data_parallel else 1
-        tp_size = self.mf_config.parallel_config.model_parallel \
-            if self.mf_config.parallel_config.model_parallel else 1
-        ep_size = self.mf_config.parallel_config.expert_parallel \
-            if self.mf_config.parallel_config.expert_parallel else 1
+        dp_size = self.mf_config.parallel_config.data_parallel
+        tp_size = self.mf_config.parallel_config.model_parallel
+        ep_size = self.mf_config.parallel_config.expert_parallel
         if dp_size == 1 or (dp_size == ep_size and tp_size == 1):
             return None, None, None, None
 
@@ -163,8 +179,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         # Simultaneously satisfying the requirement of being divisible by
         # tensor_parallel_size and greater than the maximum q_seq_len in all
         # DP domains.
-        padding_size = \
-            (tokens_len_per_dp.max() + tp_size - 1) // tp_size * tp_size
+        padding_size = ((tokens_len_per_dp.max() + tp_size - 1) // tp_size *
+                        tp_size)
 
         dp_rank_id = get_dp_group().rank_in_group
         attn_padding_idx = None
@@ -197,18 +213,18 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                                dtype=np.int32)
                 ffn_padding_idx = np.concatenate(
                     (ffn_padding_idx, ffn_offset_idx, pad), axis=0)
-        return ms.from_numpy(attn_padding_idx), \
-               ms.from_numpy(attn_unpadding_idx), \
-               ms.from_numpy(ffn_padding_idx), \
-               ms.from_numpy(ffn_unpadding_idx)
+        return (ms.from_numpy(attn_padding_idx),
+                ms.from_numpy(attn_unpadding_idx),
+                ms.from_numpy(ffn_padding_idx),
+                ms.from_numpy(ffn_unpadding_idx))
 
     def update_padding_index_to_inputs(self, model_inputs, q_seq_lens):
         """
         Update the model input and add the related parameters of padding_index.
         """
-        if self.network.model_comm_pgs is not default_model_comm_pgs and \
-                getattr(self.network.model_comm_pgs, 'dp', None) and \
-                getattr(self.network.model_comm_pgs, 'moe_ep', None):
+        if (self.network.model_comm_pgs is not default_model_comm_pgs
+                and getattr(self.network.model_comm_pgs, 'dp', None)
+                and getattr(self.network.model_comm_pgs, 'moe_ep', None)):
 
             (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
              ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
@@ -275,8 +291,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
         model_inputs["context_lens_tensor"] = context_lens_tensor
-        model_inputs = \
-            self.update_padding_index_to_inputs(model_inputs, q_seq_lens)
+        model_inputs = (self.update_padding_index_to_inputs(
+            model_inputs, q_seq_lens))
 
         return model_inputs, is_prefill
 
@@ -329,8 +345,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     ) -> Optional[Tensor]:
         if sampling_metadata is not None:
             selected_token_indices = sampling_metadata.selected_token_indices
-            if selected_token_indices is not None \
-                and selected_token_indices.numel() <= 0:
+            if (selected_token_indices is not None
+                    and selected_token_indices.numel() <= 0):
                 logits = ms.mint.zeros(
                     (0, self.model_config.hf_config.vocab_size),
                     dtype=self.model_config.hf_config.torch_dtype)
