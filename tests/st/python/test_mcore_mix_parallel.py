@@ -49,9 +49,22 @@ import vllm_mindspore  # noqa: F401, E402
 from vllm import LLM, SamplingParams  # noqa: E402
 from vllm.utils import get_open_port  # noqa: E402
 
+ds_model_path = "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8"
+common_ds_prompt = ("You are a helpful assistant.<｜User｜>将文本分类为中性、"
+                    "负面或正面。 \n文本：我认为这次假期还可以。 \n情感："
+                    "<｜Assistant｜>\n")
+common_ds_expect_result = 'ugs611ాలు'
+
+qwen_model_path = "/home/workspace/mindspore_dataset/weight/Qwen3-30B-A3B"
+common_qwen_prompt = common_ds_prompt
+common_qwen_expect_result = '<think>\n好的'
+
+quant_type = 'ascend'
+
 
 def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
-            dp_master_port, prompts, except_list, result_q, model_path):
+            dp_master_port, prompts, expect_list, result_q, model_path,
+            quantization):
     dp_master_ip = "127.0.0.1"
 
     os.environ["VLLM_DP_RANK"] = str(global_dp_rank)
@@ -64,7 +77,7 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
     start = global_dp_rank * promts_per_rank
     end = start + promts_per_rank
     prompts = prompts[start:end]
-    except_list = except_list[start:end]
+    expect_list = expect_list[start:end]
     if len(prompts) == 0:
         prompts = ["Placeholder"]
     print(f"DP rank {global_dp_rank} needs to process {len(prompts)} prompts")
@@ -83,6 +96,7 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
               max_num_seqs=8,
               trust_remote_code=True,
               enable_expert_parallel=True,
+              quantization=quantization,
               additional_config={"expert_parallel": ep_size})
     outputs = llm.generate(prompts, sampling_params)
     # Print the outputs.
@@ -91,11 +105,16 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
         generated_text = output.outputs[0].text
         print(f"DP rank {global_dp_rank}, Prompt: {prompt!r}, "
               f"Generated text: {generated_text!r}")
-        result_q.put(generated_text == except_list[i])
+        result_q.put(generated_text == expect_list[i])
 
 
-def exec_model_with_dp(dp_size, tp_size, ep_size, prompts, except_list,
-                       model_path):
+def exec_model_with_dp(dp_size,
+                       tp_size,
+                       ep_size,
+                       prompts,
+                       expect_list,
+                       model_path,
+                       quantization=None):
     node_size = 1
     node_rank = 0
     dp_master_port = get_open_port()
@@ -107,8 +126,8 @@ def exec_model_with_dp(dp_size, tp_size, ep_size, prompts, except_list,
             range(node_rank * dp_per_node, (node_rank + 1) * dp_per_node)):
         proc = Process(target=dp_func,
                        args=(dp_size, local_dp_rank, global_dp_rank, tp_size,
-                             ep_size, dp_master_port, prompts, except_list,
-                             result_q, model_path))
+                             ep_size, dp_master_port, prompts, expect_list,
+                             result_q, model_path, quantization))
         proc.start()
         procs.append(proc)
     exit_code = 0
@@ -133,6 +152,43 @@ def exec_model_with_dp(dp_size, tp_size, ep_size, prompts, except_list,
     env_manager.unset_all()
 
 
+def exec_model_without_dp(tp_size,
+                          ep_size,
+                          prompts,
+                          expect_list,
+                          model_path,
+                          quantization=None):
+    # Create a sampling params object.
+    sampling_params = SamplingParams(temperature=0.0,
+                                     max_tokens=3,
+                                     top_k=1,
+                                     top_p=1.0,
+                                     repetition_penalty=1.0)
+
+    # Create an LLM.
+    llm = LLM(model=model_path,
+              tensor_parallel_size=tp_size,
+              trust_remote_code=True,
+              gpu_memory_utilization=0.9,
+              max_model_len=4096,
+              enable_expert_parallel=True,
+              quantization=quantization,
+              additional_config={"expert_parallel": ep_size})
+    # Generate texts from the prompts. The output is a list of
+    # RequestOutput objects that contain the prompt, generated
+    # text, and other information.
+    outputs = llm.generate(prompts, sampling_params)
+    # Print the outputs.
+    for i, output in enumerate(outputs):
+        prompt = output.prompt
+        generated_text = output.outputs[0].text
+        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+        assert generated_text == expect_list[i]
+
+    # unset env
+    env_manager.unset_all()
+
+
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -144,12 +200,143 @@ def test_vllm_qwen3_moe_30b_dp4_tp2_ep4():
     tp_size = 2
     ep_size = 4
     # Sample prompts.
-    prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。 "
-        "\n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
-    ] * 4
-    except_list = ['<think>\n好的'] * 4
-    model_path = "/home/workspace/mindspore_dataset/weight/Qwen3-30B-A3B"
+    prompts = [common_qwen_prompt] * 4
+    expect_list = [common_qwen_expect_result] * 4
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       qwen_model_path)
 
-    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, except_list,
-                       model_path)
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_dp4_tp2_ep4():
+    """
+    test case deepseek r1 w8a8 dp4 tp2 ep4
+    """
+    dp_size = 4
+    tp_size = 2
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 4
+    expect_list = [common_ds_expect_result] * 4
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.skip(
+    reason=
+    "Currently does not support relevant communication fusion operators in 910b"
+)
+def test_deepseek_r1_dp8_tp1_ep8():
+    """
+    test case deepseek r1 w8a8 Dp8 tp1 ep8
+    """
+    dp_size = 8
+    tp_size = 1
+    ep_size = 8
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 8
+    expect_list = [common_ds_expect_result] * 8
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_dp2_tp4_ep1():
+    """
+    test case deepseek r1 w8a8 dp2 tp4 ep1
+    """
+    dp_size = 2
+    tp_size = 4
+    ep_size = 1
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 2
+    expect_list = [common_ds_expect_result] * 2
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.skip(
+    reason=
+    "Currently does not support relevant communication fusion operators in 910b"
+)
+def test_deepseek_r1_dp4_tp2_ep8():
+    """
+    test case deepseek r1 w8a8 dp4 tp2 ep8
+    """
+    dp_size = 4
+    tp_size = 2
+    ep_size = 8
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 4
+    expect_list = [common_ds_expect_result] * 4
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_dp8_tp1_ep1():
+    """
+    test case deepseek r1 w8a8 dp8 tp1 ep1
+    """
+    dp_size = 8
+    tp_size = 1
+    ep_size = 1
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 8
+    expect_list = [common_ds_expect_result] * 8
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_dp8_tp1_ep4():
+    """
+    test case deepseek r1 w8a8 dp8 tp1 ep4
+    """
+    dp_size = 8
+    tp_size = 1
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_ds_prompt] * 8
+    expect_list = [common_ds_expect_result] * 8
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       ds_model_path, quant_type)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_tp8_ep8():
+    """
+    test case deepseek r1 w8a8 tp8 ep8
+    """
+    tp_size = 8
+    ep_size = 8
+    # Sample prompts.
+    prompts = [common_ds_prompt]
+    expect_list = [common_ds_expect_result]
+    exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
+                          ds_model_path, quant_type)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_deepseek_r1_tp8_ep4():
+    """
+    test case deepseek r1 w8a8 tp8 ep4
+    """
+    tp_size = 8
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_ds_prompt]
+    expect_list = [common_ds_expect_result]
+    exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
+                          ds_model_path, quant_type)

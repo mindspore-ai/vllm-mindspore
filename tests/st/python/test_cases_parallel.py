@@ -132,10 +132,10 @@ def test_cases_parallel_part3():
         (2,
          "cases_parallel/vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16",
          "vllm_deepseek_bf16_part_v1_test_deepseek_r1_bf16.log"),
-        (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
-         "vllm_deepseek_osl_test_deepseek_r1.log"),
         (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_r1",
-         "vllm_deepseek_part_test_deepseek_r1.log")
+         "vllm_deepseek_part_test_deepseek_r1.log"),
+        (2, "cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1",
+         "vllm_deepseek_part_v1_test_deepseek_r1.log"),
     ]
     run_tasks(cases)
 
@@ -144,29 +144,6 @@ def test_cases_parallel_part3():
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
 def test_cases_parallel_part4():
-    """
-    Feature: test cases parallel.
-    Description: test cases parallel.
-    Expectation: Pass.
-    """
-    cases = [
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
-         "vllm_deepseek_part_test_deepseek_mtp.log"),
-        (2, "cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1",
-         "vllm_deepseek_part_v1_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
-         "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"
-         "::test_deepseek_r1_mss",
-         "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
-    ]
-    run_tasks(cases)
-
-
-@pytest.mark.level0
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
-def test_cases_parallel_part5():
     """
     Feature: test cases parallel.
     Description: test cases parallel.
@@ -188,7 +165,7 @@ def test_cases_parallel_part5():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
-def test_cases_parallel_part6():
+def test_cases_parallel_part5():
     """
     Feature: test cases parallel.
     Description: test cases parallel.
@@ -205,8 +182,6 @@ def test_cases_parallel_part6():
         (1, "cases_parallel/vllm_qwen2_5_vl_7b_v1.py"
          "::test_qwen2_5_vl_7b_v1_video_infer",
          "vllm_qwen2_5_vl_7b_v1_video_infer.log"),
-        (2, "cases_parallel/vllm_deepseek_a8w4.py::test_deepseek_r1_a8w4",
-         "vllm_deepseek_a8w4_test_deepseek_r1_a8w4.log")
     ]
     run_tasks(cases)
 
@@ -228,6 +203,43 @@ def test_cases_parallel_level1_part0():
              (4, "cases_parallel/vllm_deepseek_a16w4.py"
               "::test_deepseek_r1_gptq_a16w4",
               "vllm_deepseek_a16w4_test_deepseek_r1_gptq_a16w4.log")]
+    run_tasks(cases)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+def test_cases_parallel_level1_mcore1():
+    """
+    Mcore currently does not support the following test cases,
+    adjust the level to level 1 until it is re supported
+    """
+    cases = [
+        (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
+         "vllm_deepseek_osl_test_deepseek_r1.log"),
+        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
+         "vllm_deepseek_part_test_deepseek_mtp.log"),
+        (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
+         "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
+        (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"
+         "::test_deepseek_r1_mss",
+         "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
+    ]
+    run_tasks(cases)
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+def test_cases_parallel_level1_mcore2():
+    """
+    Mcore currently does not support the following test cases,
+    adjust the level to level 1 until it is re supported
+    """
+    cases = [
+        (2, "cases_parallel/vllm_deepseek_a8w4.py::test_deepseek_r1_a8w4",
+         "vllm_deepseek_a8w4_test_deepseek_r1_a8w4.log"),
+    ]
     run_tasks(cases)
 
 
