@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef __KERNELS_KERNEL_LIB_H__
-#define __KERNELS_KERNEL_LIB_H__
+#ifndef __KERNEL_KERNEL_LIB_H__
+#define __KERNEL_KERNEL_LIB_H__
 
 #include <string>
 #include <functional>
 
-#include "kernels/kernel.h"
+#include "kernel/kernel.h"
 #include "tensor/tensor.h"
 
 namespace da {
-namespace kernels {
+namespace kernel {
 
 // The register entry of new kernel lib.
 #define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                   \
-  static const da::kernels::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
+  static const da::kernel::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
     KERNEL_LIB_NAME, []() { return new (std::nothrow) KERNEL_LIB_CLASS(); });
 
 class KernelLib;
@@ -36,7 +36,7 @@ using KernelLibCreator = std::function<KernelLib *()>;
 
 class DA_API KernelLib {
  public:
-  explicit KernelLib(std::string &&name) : name_(std::move(name)) {}
+  explicit KernelLib(const std::string &&name) : name_(std::move(name)) {}
   virtual ~KernelLib() = default;
 
   virtual DAKernel *CreateKernel(tensor::DATensor *tensorNode) const = 0;
@@ -50,7 +50,7 @@ class DA_API KernelLibRegistry {
  public:
   static KernelLibRegistry &Instance();
 
-  void Register(const std::string &name, KernelLibCreator &&creator);
+  void Register(const std::string &name, const KernelLibCreator &&creator);
   void Load(const std::string &path);
   const KernelLib *Get(const std::string &name);
 
@@ -60,18 +60,18 @@ class DA_API KernelLibRegistry {
 
  private:
   std::unordered_map<std::string, const KernelLib *> kernelLibs_;
-  std::unordered_map<std::string, KernelLibCreator> kernelLibCreators_;
+  std::unordered_map<std::string, const KernelLibCreator> kernelLibCreators_;
   std::unordered_map<std::string, void *> kernelLibHandles_;
 };
 
 class DA_API KernelLibRegistrar {
  public:
-  KernelLibRegistrar(const std::string &name, KernelLibCreator &&creator) {
+  KernelLibRegistrar(const std::string &name, const KernelLibCreator &&creator) {
     KernelLibRegistry::Instance().Register(name, std::move(creator));
   }
   ~KernelLibRegistrar() = default;
 };
 
-}  // namespace kernels
+}  // namespace kernel
 }  // namespace da
-#endif  // __KERNELS_KERNEL_LIB_H__
+#endif  // __KERNEL_KERNEL_LIB_H__

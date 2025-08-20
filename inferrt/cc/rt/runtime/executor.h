@@ -26,7 +26,7 @@
 #include "common/common.h"
 #include "common/visible.h"
 #include "pass/pass.h"
-#include "kernels/kernel.h"
+#include "kernel/kernel.h"
 #include "runtime/mempool.h"
 #include "runtime/utils.h"
 #include "tensor/tensor.h"
@@ -95,7 +95,7 @@ class DA_API GraphExecutor {
   DAGraph *graph_{nullptr};
   std::vector<DATensor *> parameters_;
   bool isDynamic_{false};
-  std::unordered_map<tensor::DATensor *, kernels::DAKernel *> kernels_;
+  std::unordered_map<tensor::DATensor *, kernel::DAKernel *> kernels_;
   TensorDataRecycler *recycler_{nullptr};
 #ifdef DUMP
   std::unordered_map<const DATensor *, ssize_t> paraNumMap_;

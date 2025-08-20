@@ -14,31 +14,31 @@
  * limitations under the License.
  */
 
-#include "kernels/kernel.h"
-#include "kernels/kernel_lib.h"
+#ifndef __KERNEL_KERNEL_H__
+#define __KERNEL_KERNEL_H__
+
+#include <functional>
+#include <string>
+
+#include "common/visible.h"
+#include "tensor/tensor.h"
 
 namespace da {
-namespace kernels {
-
-// Dummy kernel
-class DummyKernel : public DAKernel {
+namespace kernel {
+// Interface for kernel
+class DAKernel {
  public:
-  using DAKernel::DAKernel;
-  void Init() override {}
-  void InferShape() override {}
-  void Resize() override {}
-  void Launch() override {}
+  explicit DAKernel(tensor::DATensor *node) : tensorNode_(node) {}
+  virtual ~DAKernel() = default;
+
+  virtual void Init() = 0;
+  virtual void InferShape() = 0;
+  virtual void Resize() = 0;
+  virtual void Launch() = 0;
+
+ protected:
+  tensor::DATensor *tensorNode_;
 };
-
-// Dummy Kernel lib
-class DA_API DummyKernelLib : public KernelLib {
- public:
-  DummyKernelLib() : KernelLib("Dummy") {}
-  ~DummyKernelLib() = default;
-  DAKernel *CreateKernel(tensor::DATensor *tensorNode) const override { return new DummyKernel(tensorNode); }
-};
-
-DART_REGISTER_KERNEL_LIB("Dummy", DummyKernelLib);
-
-}  // namespace kernels
+}  // namespace kernel
 }  // namespace da
+#endif  // __KERNEL_KERNEL_H__

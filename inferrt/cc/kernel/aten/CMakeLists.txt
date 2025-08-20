@@ -8,6 +8,6 @@ execute_process(COMMAND python -c "import os; import torch; print(os.path.join(o
 set(CMAKE_PREFIX_PATH "${PYTORCH_CMAKE_PATH}")
 find_package(Torch REQUIRED)
 
-add_library(kernels_aten SHARED ${ATEN_KERNEL_SRC_FILES})
-target_link_libraries(kernels_aten PRIVATE ${TORCH_LIBRARIES})
-target_link_libraries(kernels_aten PRIVATE kernels)
+add_library(kernel_aten SHARED ${ATEN_KERNEL_SRC_FILES})
+target_link_libraries(kernel_aten PRIVATE ${TORCH_LIBRARIES})
+target_link_libraries(kernel_aten PRIVATE kernel)

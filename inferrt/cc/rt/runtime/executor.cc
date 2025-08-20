@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "runtime/executor.h"
-#include "kernels/kernel_lib.h"
+#include "kernel/kernel_lib.h"
 
 namespace da {
 namespace runtime {
@@ -115,7 +115,7 @@ GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(recycler_);
 
   for (auto &&path : GetEnvKernelLibPaths()) {
-    kernels::KernelLibRegistry::Instance().Load(path);
+    kernel::KernelLibRegistry::Instance().Load(path);
   }
 }
 
@@ -161,7 +161,7 @@ void GraphExecutor::OptGraph() {
 // Build DAKernels for graph.
 void GraphExecutor::BuildKernels() {
   CHECK_IF_NULL(graph_);
-  auto kernelLib = kernels::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
+  auto kernelLib = kernel::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
   CHECK_IF_NULL(kernelLib);
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     auto node = graph_->node[i];
