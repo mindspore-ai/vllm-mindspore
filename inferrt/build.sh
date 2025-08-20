@@ -16,7 +16,7 @@ usage()
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
-  echo "    -a Enable pytorch aten kernels, default off"
+  echo "    -a Enable pytorch aten kernel, default off"
 }
 
 process_options()
@@ -38,7 +38,7 @@ process_options()
                 ;;
             i) export INC_BUILD=1;;
             a)
-                export ENABLE_KERNELS_ATEN="-DENABLE_KERNELS_ATEN=on"
+                export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
                 export TEST_TORCH=1
                 ;;
             h)
@@ -54,8 +54,8 @@ process_options()
 }
 
 process_options $@
-INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNELS_ATEN"
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNELS_ATEN"
+INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
+DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
 
 
 ##################################################
@@ -107,7 +107,7 @@ make
 # Run essential test
 ##################################################
 # Run inferrt test
-export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernels/dummy/libkernels_dummy.so
+export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernel/dummy/libkernel_dummy.so
 export DART_KERNEL_LIB_NAME=Dummy
 echo "=============================="
 echo "Run da execution test cases:"
@@ -132,7 +132,7 @@ if [[ $TEST_TORCH == 1 ]]; then
     echo "Run pytorch backend test case:"
     echo "python check_backend.py"
     echo "=============================="
-    export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernels/aten/libkernels_aten.so
+    export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernel/aten/libkernel_aten.so
     export DART_KERNEL_LIB_NAME=Aten
     python $INFERRT_PATH/py/python/check_backend.py
 fi

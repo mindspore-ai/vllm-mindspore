@@ -59,7 +59,7 @@ static void SetBufferInfoToDATensor(const py::buffer_info &info, DATensor *tenso
   tensor->inputSize = 0;             // No inputs for constants
 }
 
-static py::array ConvertDATensorToNumpyArray(DATensor *tensor) {
+static py::array ConvertDATensorToNumpyArray(const DATensor *tensor) {
   if (tensor->data == nullptr) {
     throw std::runtime_error("Cannot convert DATensor with null data to numpy array");
   }
@@ -97,7 +97,7 @@ static py::array ConvertDATensorToNumpyArray(DATensor *tensor) {
   return py::array(py::dtype(format), shape, strides, tensor->data);
 }
 
-static std::vector<py::array> ConvertDATensorToNumpyArrayList(DATensor *tensor) {
+static std::vector<py::array> ConvertDATensorToNumpyArrayList(const DATensor *tensor) {
   CHECK_IF_NULL(tensor);
   CHECK_IF_FAIL(tensor->type == da::tensor::Type_Tensor);
 
@@ -160,7 +160,7 @@ PYBIND11_MODULE(_dairpy, m) {
       py::arg("op"), py::arg("inputs"), py::return_value_policy::reference)
     .def(
       "add_const",
-      [](GraphExecutor &self, py::buffer b) -> DATensor * {
+      [](GraphExecutor &self, const py::buffer b) -> DATensor * {
         py::buffer_info info = b.request();
         auto tensor = self.AddTensor();
         SetBufferInfoToDATensor(info, tensor);

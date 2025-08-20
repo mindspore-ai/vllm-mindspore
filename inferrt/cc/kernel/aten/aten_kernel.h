@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef __KERNELS_ATEN_ATEN_KERNELS_H__
-#define __KERNELS_ATEN_ATEN_KERNELS_H__
+#ifndef __KERNEL_ATEN_ATEN_KERNEL_H__
+#define __KERNEL_ATEN_ATEN_KERNEL_H__
 
-#include "kernels/kernel.h"
-#include "kernels/kernel_lib.h"
+#include "kernel/kernel.h"
+#include "kernel/kernel_lib.h"
 
 namespace da {
-namespace kernels {
+namespace kernel {
 
 // Aten Kernel lib
 class DA_API AtenKernelLib : public KernelLib {
@@ -31,7 +31,7 @@ class DA_API AtenKernelLib : public KernelLib {
   DAKernel *CreateKernel(tensor::DATensor *tensorNode) const override;
 };
 
-// Base class for Aten kernels
+// Base class for Aten kernel
 class AtenKernel : public DAKernel {
  public:
   using DAKernel::DAKernel;
@@ -61,7 +61,7 @@ DEFINE_ATEN_KERNEL(Sigmoid)
 DEFINE_ATEN_KERNEL(Gelu)
 DEFINE_ATEN_KERNEL(Silu)
 
-}  // namespace kernels
+}  // namespace kernel
 }  // namespace da
 
-#endif  // __KERNELS_ATEN_ATEN_KERNELS_H__
+#endif  // __KERNEL_ATEN_ATEN_KERNEL_H__

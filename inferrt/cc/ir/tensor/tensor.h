@@ -156,7 +156,7 @@ TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape, v
 }
 
 template <typename... Args>
-TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&...args) {
+TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&... args) {
   switch (dtype) {
     case Type_Bool:
       return NewTensorData<bool>(ctx, dtype, std::forward<Args>(args)...);

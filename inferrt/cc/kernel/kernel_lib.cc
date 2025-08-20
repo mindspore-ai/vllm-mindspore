@@ -27,10 +27,10 @@
 #endif
 
 #include "common/common.h"
-#include "kernels/kernel_lib.h"
+#include "kernel/kernel_lib.h"
 
 namespace da {
-namespace kernels {
+namespace kernel {
 
 KernelLibRegistry &KernelLibRegistry::Instance() {
   static KernelLibRegistry instance{};
@@ -44,7 +44,7 @@ KernelLibRegistry::~KernelLibRegistry() {
   kernelLibs_.clear();
 }
 
-void KernelLibRegistry::Register(const std::string &name, KernelLibCreator &&creator) {
+void KernelLibRegistry::Register(const std::string &name, const KernelLibCreator &&creator) {
   if (kernelLibCreators_.find(name) == kernelLibCreators_.end()) {
     LOG_OUT << "KernelLibCreator for " << name << " registered.";
     (void)kernelLibCreators_.emplace(name, std::move(creator));
@@ -92,5 +92,5 @@ const KernelLib *KernelLibRegistry::Get(const std::string &name) {
   return nullptr;
 }
 
-}  // namespace kernels
+}  // namespace kernel
 }  // namespace da

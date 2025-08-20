@@ -20,10 +20,10 @@
 #include "common/logger.h"
 #include "runtime/utils.h"
 
-#include "kernels/aten/aten_kernels.h"
+#include "kernel/aten/aten_kernel.h"
 
 namespace da {
-namespace kernels {
+namespace kernel {
 
 // Common Aten utils
 namespace {
@@ -51,7 +51,7 @@ at::ScalarType ToAtenDType(tensor::Type type) {
   }
 }
 
-at::Tensor ToAtenTensor(tensor::DATensor *tensor) {
+at::Tensor ToAtenTensor(const tensor::DATensor *tensor) {
   CHECK_IF_NULL(tensor);
   CHECK_IF_NULL(tensor->data);
   std::vector<int64_t> shape(tensor->shape, tensor->shape + tensor->dim);
@@ -154,5 +154,5 @@ DAKernel *AtenKernelLib::CreateKernel(tensor::DATensor *tensorNode) const {
 
 DART_REGISTER_KERNEL_LIB("Aten", AtenKernelLib);
 
-}  // namespace kernels
+}  // namespace kernel
 }  // namespace da

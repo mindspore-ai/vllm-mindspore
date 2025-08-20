@@ -38,10 +38,10 @@ include_directories(${PROJECT_SOURCE_DIR}/api)
 # Add compiler, ir, runtime and kernels directories
 add_subdirectory(c)
 add_subdirectory(ir)
-add_subdirectory(kernels)
+add_subdirectory(kernel)
 add_subdirectory(rt)
 
-set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj pass_obj stdc++fs dl)
+set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj pass_obj stdc++fs)
 
 # Create da execution file
 add_executable(da cli/main.cc cli/options.cc)
