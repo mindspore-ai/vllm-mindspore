@@ -95,15 +95,21 @@ MF_PARALLEL_MAPPING = {
 }
 
 MF_MODEL_COMMON_MAPPING = {
-    'model.model_config.compute_dtype': ('model_config.hf_config.torch_dtype', 'bfloat16'),
+    'model.model_config.compute_dtype': ('model_config.dtype', None),
+    'model.model_config.max_position_embeddings': ('model_config.max_model_len', None),
+    'model.model_config.block_size': ('cache_config.block_size', None),
+}
+
+MF_MODEL_MAPPING = {
+    **MF_MODEL_COMMON_MAPPING,
     'model.model_config.layernorm_compute_dtype': (None, 'bfloat16'),
     'model.model_config.rotary_dtype': (None, 'bfloat16'),
     'model.model_config.params_dtype': (None, 'bfloat16'),
     'model.model_config.router_dense_type': (None, 'bfloat16'),
 }
 
-MF_MODEL_COMMON_MAPPING_310p = {
-    'model.model_config.compute_dtype': ('model_config.hf_config.torch_dtype', 'float16'),
+MF_MODEL_MAPPING_310P = {
+    **MF_MODEL_COMMON_MAPPING,
     'model.model_config.layernorm_compute_dtype': (None, 'float16'),
     'model.model_config.rotary_dtype': (None, 'float16'),
     'model.model_config.params_dtype': (None, 'float16'),
@@ -113,6 +119,12 @@ MF_MODEL_COMMON_MAPPING_310p = {
 
 # model default config
 MODEL_RELATED_MAPPING = {
+    'qwen3': {
+        'layernorm_compute_dtype': 'float32',
+    },
+    'qwen3_moe': {
+        'layernorm_compute_dtype': 'float32',
+    },
     # Add anther model type...
 }
 
@@ -267,14 +279,11 @@ def gen_mf_config(vllm_config: VllmConfig):
     target_config = MindFormerConfig()
     transform_config(MF_CTX_MAPPING, vllm_config, target_config)
     transform_config(MF_PARALLEL_MAPPING, vllm_config, target_config)
-    target_config.set_value(
-        'model.model_config',
-        MindFormerConfig(**gen_model_config_dict(vllm_config)))
-    transform_config(MF_MODEL_COMMON_MAPPING, vllm_config, target_config)
-    # Update target config with additional config.
-    # The configuration hierarchy in the additional config must match the
-    # hierarchy structure of the MindFormers YAML configuration file.
-    _merge_dicts(target_config,
-                 vllm_config.additional_config.get('mindformers', {}))
+    if is_310p():
+        transform_config(MF_MODEL_MAPPING_310P, vllm_config, target_config)
+    else:
+        transform_config(MF_MODEL_MAPPING, vllm_config, target_config)
+    related_model_config = gen_model_config_dict(vllm_config)
+    target_config.model.model_config.update(related_model_config)
     logger.info('The generated MindFormers config: %s', target_config)
     return target_config

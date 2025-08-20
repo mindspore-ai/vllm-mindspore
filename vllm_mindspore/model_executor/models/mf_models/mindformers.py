@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from collections.abc import Iterable
 from typing import Optional, Union
 
@@ -20,7 +21,6 @@ import mindspore as ms
 import numpy as np
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
-from mindformers.core.parallel_config import build_parallel_config
 from mindformers.parallel_core.process_group_config import (
     default_model_comm_pgs)
 from mindformers.tools.utils import is_pynative
@@ -54,8 +54,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.set_flags = False
-        self.max_model_len = vllm_config.model_config.max_model_len
-        self.hf_config = vllm_config.model_config.hf_config
+        self.model_config = vllm_config.model_config
         self.lm_head_graph = None
 
         mf_config = gen_mf_config(vllm_config)
@@ -64,11 +63,11 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.mf_config = mf_config
 
         build_mf_context(self.mf_config)
-        build_parallel_config(self.mf_config)
 
         self.network, self.lm_head = self._create_network()
         self.casual_mask = LowerTriangularMask(
-            dtype=self.network.compute_dtype, max_model_len=self.max_model_len)
+            dtype=self.network.compute_dtype,
+            max_model_len=self.model_config.max_model_len)
 
         affinity_config = self.mf_config.get('context',
                                              {}).get('affinity_cpu_list', {})
@@ -85,6 +84,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
+
         for i in range(self.num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
@@ -310,6 +310,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
     def _create_network(self):
         # Initial network
+        if self.model_config.enforce_eager:
+            os.environ['ENFORCE_EAGER'] = 'True'
         with no_init_parameters():  # Delay initialization
             network: PreTrainedModel = AutoModel.from_config(self.mf_config)
             network.model.return_hidden_states = True
@@ -329,8 +331,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             selected_token_indices = sampling_metadata.selected_token_indices
             if selected_token_indices is not None \
                 and selected_token_indices.numel() <= 0:
-                logits = ms.mint.zeros((0, self.hf_config.vocab_size),
-                                       dtype=self.hf_config.torch_dtype)
+                logits = ms.mint.zeros(
+                    (0, self.model_config.hf_config.vocab_size),
+                    dtype=self.model_config.hf_config.torch_dtype)
                 return logits
             else:
                 hidden_states = hidden_states.reshape(
