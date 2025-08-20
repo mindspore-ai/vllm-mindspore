@@ -1,5 +1,5 @@
 add_library(kernels SHARED kernel_lib.cc)
-target_link_libraries(kernels PRIVATE tensor_obj)
+target_link_libraries(kernels PRIVATE tensor_obj dl)
 
 add_subdirectory(dummy)
 
