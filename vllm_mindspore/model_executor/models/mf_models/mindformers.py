@@ -38,6 +38,7 @@ from vllm_mindspore.model_executor.models.attention_mask import (
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
                                                              MsModelBase)
+from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
 
@@ -49,6 +50,7 @@ class MindFormersForCausalLM(MsModelBase):
         self.set_flags = False
         self.max_model_len = vllm_config.model_config.max_model_len
         self.hf_config = vllm_config.model_config.hf_config
+        self.lm_head_graph = None
 
         mf_config = gen_mf_config(vllm_config)
         mf_config.load_checkpoint = self.get_model_path()
@@ -191,16 +193,22 @@ class MindFormersForCausalLM(MsModelBase):
                 and selected_token_indices.numel() <= 0:
                 logits = ms.mint.zeros((0, self.hf_config.vocab_size),
                                        dtype=self.hf_config.torch_dtype)
+                return logits
             else:
                 hidden_states = hidden_states.reshape(
                     (-1, hidden_states.shape[-1]))
                 hidden_states = hidden_states.index_select(
                     0, selected_token_indices)
-                logits = self.lm_head(hidden_states)
-                logits = logits.view(-1, logits.shape[-1])
+        if is_310p():
+            # To get better performance in 310p, the lm head should run
+            # in O0 mode to avoid transdata, 910 keep the original process.
+            if self.lm_head_graph is None:
+                self.lm_head_graph = ms.jit(function=self.lm_head,
+                                            jit_level="O0")
+            logits = self.lm_head_graph(hidden_states)
         else:
             logits = self.lm_head(hidden_states)
-            logits = logits.view(-1, logits.shape[-1])
+        logits = logits.view(-1, logits.shape[-1])
         return logits
 
     def sample(

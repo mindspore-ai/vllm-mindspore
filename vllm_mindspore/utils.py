@@ -56,6 +56,26 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e5m2": ms.uint8,
 }
 
+FORMAT_TYPE = {
+    "nz": 29,
+}
+
+
+def create_kv_cache(kv_shape, dtype):
+    if is_310p():
+        if len(kv_shape) != 4:
+            raise ValueError(f"Format_cast op need kv_cache shape be"
+                             f"(batch_size, num_heads, seq_len, head_dim), "
+                             f"but got {len(kv_shape)} dimensions: {kv_shape}")
+
+        batch_size, num_heads, seq_len, head_dim = kv_shape
+        reshaped_for_nz = (batch_size, num_heads, seq_len * head_dim)
+        zeros_tensor = ms.mint.zeros(reshaped_for_nz, dtype=dtype)
+
+        return ms.ops.auto_generate.format_cast(zeros_tensor,
+                                                FORMAT_TYPE['nz'])
+    return ms.mint.zeros(kv_shape, dtype=dtype)
+
 
 def get_valid_dtype(dtype):
     if isinstance(dtype, str):

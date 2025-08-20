@@ -35,6 +35,8 @@ from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CompilationConfig,
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
+from vllm_mindspore.utils import is_310p
+
 logger = init_logger(__name__)
 
 
@@ -239,6 +241,9 @@ def _get_and_verify_dtype(
         torch_dtype = dtype
     else:
         raise ValueError(f"Unknown dtype: {dtype}")
+
+    if torch_dtype == torch.bfloat16 and is_310p():
+        torch_dtype = torch.float16
 
     if torch_dtype != config_dtype:
         if torch_dtype == torch.float32:
