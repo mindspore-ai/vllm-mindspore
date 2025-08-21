@@ -27,7 +27,7 @@ function(check_debug_log_out)
 endfunction()
 
 if(ENABLE_KERNEL_ATEN)
-  execute_process(COMMAND python -c "import torch; print(torch.__version__ >= (2, 7))" OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND python -c "import torch; print(torch.compiled_with_cxx11_abi())" OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 
   if("${PYTORCH_CXX11_ABI_VERSION}" STREQUAL "True")
     message("-- Enable _GLIBCXX_USE_CXX11_ABI")
