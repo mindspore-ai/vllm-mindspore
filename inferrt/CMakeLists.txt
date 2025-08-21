@@ -26,6 +26,17 @@ function(check_debug_log_out)
   endif()
 endfunction()
 
+if(ENABLE_KERNEL_ATEN)
+  execute_process(COMMAND python -c "import torch; print(torch.__version__ >= (2, 7))" OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  if("${PYTORCH_CXX11_ABI_VERSION}" STREQUAL "True")
+    message("-- Enable _GLIBCXX_USE_CXX11_ABI")
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=1)
+  else()
+    message("-- Disable _GLIBCXX_USE_CXX11_ABI")
+    add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+  endif()
+endif()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/cc)
 add_subdirectory(${PROJECT_SOURCE_DIR}/py)

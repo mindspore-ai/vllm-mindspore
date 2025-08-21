@@ -118,13 +118,15 @@ $BUILD_DIR/cc/da $INFERRT_PATH/cc/sample/da_llm_sample.da
 echo "=============================="
 
 # Run python test
-echo "=============================="
-echo "Run python test case:"
-echo "python check_api.py"
-echo "=============================="
-export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
-echo "PYTHONPATH=$PYTHONPATH"
-python $INFERRT_PATH/py/python/check_api.py
+if [[ $TEST_TORCH != 1 ]]; then
+    echo "=============================="
+    echo "Run python test case:"
+    echo "python check_api.py"
+    echo "=============================="
+    export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
+    echo "PYTHONPATH=$PYTHONPATH"
+    python $INFERRT_PATH/py/python/check_api.py
+fi
 
 # Run pytorch backend test
 if [[ $TEST_TORCH == 1 ]]; then
@@ -132,6 +134,7 @@ if [[ $TEST_TORCH == 1 ]]; then
     echo "Run pytorch backend test case:"
     echo "python check_backend.py"
     echo "=============================="
+    export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
     export DART_KERNEL_LIB_PATH=$BUILD_DIR/cc/kernel/aten/libkernel_aten.so
     export DART_KERNEL_LIB_NAME=Aten
     python $INFERRT_PATH/py/python/check_backend.py
