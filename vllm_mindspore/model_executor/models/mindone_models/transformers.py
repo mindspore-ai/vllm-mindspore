@@ -42,7 +42,6 @@ from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
-# from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.mindone_models.base import (
@@ -165,7 +164,6 @@ class Attention(nn.Cell):
             attn_mask,
             None,
         )
-        # output = output.view(1, -1, self.hidden_size_per_partition)
 
         return output
 
@@ -407,7 +405,8 @@ class TransformersForCausalLM(MindONEModelBase):
         attention_mask: mindspore.Tensor,
         positions: mindspore.Tensor,
         query_lens: mindspore.Tensor,
-        is_prefill: bool = True,
+        is_prefill: bool,
+        seq_lens_np: mindspore.Tensor,
     ):
         dtype = self.model_config.dtype
 
@@ -459,7 +458,7 @@ class TransformersForCausalLM(MindONEModelBase):
                     causal_mask = causal_mask.to(dtype)
         else:
             causal_mask = self.casual_mask.gen_attention_mask(
-                is_prefill, positions.squeeze(-1), query_lens)
+                is_prefill, positions.squeeze(-1), query_lens, seq_lens_np)
 
         return causal_mask
 
@@ -525,7 +524,6 @@ class TransformersForCausalLM(MindONEModelBase):
                          ops.ones(seq_lens[i]))) for i in range(bs)
             ])
         else:
-            # bs = len(seq_lens)
             bs = input_ids.shape[0]
             input_ids = input_ids.reshape(bs, 1)
             positions = positions.reshape(bs, 1)
@@ -535,7 +533,7 @@ class TransformersForCausalLM(MindONEModelBase):
         q_seq_lens = mindspore.Tensor(query_lens_np, dtype=mindspore.int32)
         position_ids = mindspore.Tensor(positions, dtype=mindspore.int32)
         attn_mask = self.get_causal_mask(attn_mask, positions, query_lens_np,
-                                         is_prefill)
+                                         is_prefill, seq_lens_np)
         input_ids = input_ids.astype(mindspore.int32)
         slot_mapping = attn_metadata.slot_mapping
         batch_valid_length = mindspore.from_numpy(seq_lens_np)
