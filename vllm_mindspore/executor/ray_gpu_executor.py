@@ -275,8 +275,10 @@ def ms_init_workers_ray(self, placement_group, **ray_remote_kwargs):
         for pp_rank in range(self.parallel_config.pipeline_parallel_size):
             self.pp_tp_workers.append([])
             for tp_rank in range(self.parallel_config.tensor_parallel_size):
-                # PP=2, TP=4
-                # pp_tp_workers = [[0, 1, 2, 3], [4, 5, 6, 7]]
+                """
+                PP=2, TP=4
+                pp_tp_workers = [[0, 1, 2, 3], [4, 5, 6, 7]]
+                """
                 rank = (pp_rank *
                         self.parallel_config.tensor_parallel_size) + tp_rank
                 assert len(self.pp_tp_workers[pp_rank]) == tp_rank
