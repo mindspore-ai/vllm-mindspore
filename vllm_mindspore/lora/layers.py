@@ -34,7 +34,6 @@ from vllm.distributed import (get_tensor_model_parallel_rank,
                               tensor_model_parallel_all_gather,
                               tensor_model_parallel_all_reduce)
 from vllm.distributed.utils import divide
-# yapf: enable
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.rotary_embedding import (
     LinearScalingRotaryEmbedding, RotaryEmbedding)
@@ -1013,22 +1012,24 @@ class LogitsProcessorWithLoRA(BaseLayerWithLoRA):
             return None
 
         if self.sharded_to_full_mapping_gpu is not None:
-            # Reindex full logits tensor to ensure 1:1 mapping between
-            # index and token_id
-            # Example for:
-            #   org_vocab_size = 4
-            #   added_vocab_size = 2
-            #   pad_to_size = 8
-            #   tp_size = 2
+            """
+            Reindex full logits tensor to ensure 1:1 mapping between
+            index and token_id
+            Example for:
+              org_vocab_size = 4
+              added_vocab_size = 2
+              pad_to_size = 8
+              tp_size = 2
 
-            # indices:  [0, 1, 2,  3, 4, 5, 6,  7]
-            # token_id: [0, 1, 4, -1, 2, 3, 5, -1]
+            indices:  [0, 1, 2,  3, 4, 5, 6,  7]
+            token_id: [0, 1, 4, -1, 2, 3, 5, -1]
 
-            # Therefore, the mapping is expected to be:
-            # [0, 1, 4, 6, 2, 3, 5, 7] so that when we reindex,
-            # we get:
-            # indices:  [0, 1, 2, 3, 4, 5,  6,  7]
-            # token_id: [0, 1, 2, 3, 4, 5, -1, -1]
+            Therefore, the mapping is expected to be:
+            [0, 1, 4, 6, 2, 3, 5, 7] so that when we reindex,
+            we get:
+            indices:  [0, 1, 2, 3, 4, 5,  6,  7]
+            token_id: [0, 1, 2, 3, 4, 5, -1, -1]
+            """
             logits = logits[:, self.sharded_to_full_mapping_gpu]
 
         lora_logits = mint.empty(

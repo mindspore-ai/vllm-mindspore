@@ -20,10 +20,10 @@ from mindformers.models.llama import LlamaConfig as LlamaConfig_MF
 from mindspore import Tensor
 from mindspore.nn.utils import no_init_parameters
 # yapf conflict with isort
-# yapf: disable
+# yapf: disable  # noqa: ERA001
 from research.qwen2_5.infer.qwen2_5 import (
     ParallelQwenForCausalLM as ParallelQwenForCausalLM_MF)
-# yapf: enable
+# yapf: enable  # noqa: ERA001
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.logger import init_logger
 from vllm.model_executor.layers.sampler import get_sampler
