@@ -229,3 +229,18 @@ def test_cases_parallel_level1_part0():
               "::test_deepseek_r1_gptq_a16w4",
               "vllm_deepseek_a16w4_test_deepseek_r1_gptq_a16w4.log")]
     run_tasks(cases)
+
+
+@pytest.mark.level0
+@pytest.mark.env_single
+def test_cases_parallel_310p_part0():
+    """
+    Feature: test cases parallel in 310p.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
+         "vllm_mf_qwen3_8b_v1_310p_test_mf_qwen3.log"),
+    ]
+    run_tasks(cases)
