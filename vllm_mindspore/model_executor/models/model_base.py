@@ -241,7 +241,8 @@ class MsModelBase:
         key_cache = []
         value_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+        for i in range(num_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             v_cache = self.kv_caches[i].kv_cache[
