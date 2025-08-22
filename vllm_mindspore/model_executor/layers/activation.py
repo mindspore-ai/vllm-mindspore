@@ -18,7 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mindspore import Tensor, mint, nn, ops
+from mindspore import mint, nn
 
 
 class SiluAndMul(nn.Cell):
@@ -31,29 +31,10 @@ class SiluAndMul(nn.Cell):
         return: (num_tokens, d) or (batch_size, seq_len, d)
     """
 
-    def construct(self, x):
-        d = x.shape[-1] // 2
-        return mint.nn.functional.silu(x[..., :d]) * x[..., d:]
-
-
-class SwiGLU(nn.Cell):
-    """An activation function for SwiGLU.
-
-    Shapes:
-        x: (num_tokens, 2 * d) or (batch_size, seq_len, 2 * d)
-        return: (num_tokens, d) or (batch_size, seq_len, d)
-    """
-
     def __init__(self) -> None:
         super().__init__()
-        self.silu = nn.SiLU()
-        self.split = ops.auto_generate.SplitWithSize()
-        self.mul = ops.Mul()
 
-    def construct(self, x: Tensor) -> Tensor:
-        hidden_size = x.shape[-1] // 2
-        size = [hidden_size, hidden_size]
-        gate, hidden = self.split(x, size, dim=-1)
-        gate = self.silu(gate)
-        hidden = self.mul(hidden, gate)
-        return hidden
+    def construct(self, x):
+        d = x.shape[-1] // 2
+        gate, hidden = mint.split(x, [d, d], dim=-1)
+        return mint.mul(hidden, mint.nn.functional.silu(gate.contiguous()))

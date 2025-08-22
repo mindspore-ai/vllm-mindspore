@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 import mindspore
 import numpy as np
-from mindspore import Parameter, Tensor, ops
+from mindspore import Parameter, Tensor, mint
 from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
                                          GroupedMatmulV4, QuantBatchMatmul)
@@ -158,7 +158,6 @@ class A8W8LinearMethod(LinearMethodBase):
     def __init__(self, quant_config: SmoothQuantModelSlimConfig):
         self.quant_config = quant_config
         self.quant = QuantV2()
-        self.bias_add = ops.Add()
 
     def create_weights(self,
                        layer: mindspore.nn.Cell,
@@ -377,7 +376,7 @@ class A8W8LinearMethod(LinearMethodBase):
             qx = self.matmul(qx, weight, deq_scale, None, layer.quant_bias_,
                              None)
         if bias is not None:
-            qx = self.bias_add(qx, bias)
+            qx = mint.add(qx, bias)
         qx = qx.reshape(output_shape)
         return qx
 
@@ -388,7 +387,6 @@ class A8W8DYNLinearMethod(LinearMethodBase):
     def __init__(self, quant_config: SmoothQuantModelSlimConfig):
         self.quant_config = quant_config
         self.quant = DynamicQuantExt()
-        self.bias_add = ops.Add()
 
     def create_weights(self,
                        layer: mindspore.nn.Cell,
@@ -511,6 +509,6 @@ class A8W8DYNLinearMethod(LinearMethodBase):
         else:
             qx = self.matmul(qx, weight, weight_scale, None, None, qx_scale)
         if bias is not None:
-            qx = self.bias_add(qx, bias)
+            qx = mint.add(qx, bias)
         qx = qx.reshape(output_shape)
         return qx
