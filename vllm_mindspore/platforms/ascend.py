@@ -169,3 +169,14 @@ class AscendPlatform(Platform):
         return (envs.VLLM_USE_V1
                 or parallel_config.distributed_executor_backend
                 == "external_launcher")
+
+    @classmethod
+    def pre_register_and_update(cls, parser=None):
+        if parser is not None:
+            quant_action = parser._option_string_actions.get('--quantization')
+            if quant_action and hasattr(quant_action,
+                                        'choices') and quant_action.choices:
+                ASCEND_QUANTIZATION_METHOD = ['ascend', 'golden-stick']
+                if ASCEND_QUANTIZATION_METHOD not in quant_action.choices:
+                    quant_action.choices.extend(ASCEND_QUANTIZATION_METHOD)
+                    logger.debug("--quantization support ascend/golden-stick.")
