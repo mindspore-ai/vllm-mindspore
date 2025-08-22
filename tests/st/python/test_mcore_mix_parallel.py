@@ -206,7 +206,7 @@ def test_vllm_qwen3_moe_30b_dp4_tp2_ep4():
                        qwen_model_path)
 
 
-@pytest.mark.level1
+@pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp4_tp2_ep4():
