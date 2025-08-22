@@ -38,7 +38,7 @@ def resolve_transformers_arch(model_config: ModelConfig,
         auto_map: dict[str, str] = getattr(model_config.hf_config, "auto_map",
                                            None) or dict()
         if auto_map:
-            logger(
+            logger.warning(
                 f"WARNING: loading model from remote_code is not support now,"
                 f"but got {auto_map=}")
 
