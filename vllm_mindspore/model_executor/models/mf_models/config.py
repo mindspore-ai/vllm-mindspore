@@ -94,6 +94,7 @@ MF_MODEL_COMMON_MAPPING = {
     'model.model_config.compute_dtype': ('model_config.dtype', None),
     'model.model_config.max_position_embeddings': ('model_config.max_model_len', None),
     'model.model_config.block_size': ('cache_config.block_size', None),
+    'model.model_config.quantization': ('model_config.quantization', None),
 }
 
 MF_MODEL_MAPPING = {

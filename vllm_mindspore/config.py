@@ -45,6 +45,10 @@ def _verify_quantization(self) -> None:
     return
 
 
+def vllm_config_get_quantization_config(model_config, load_config):
+    return None
+
+
 def vllm_config_post_init(self):
     """Verify configs are valid & consistent with each other."""
     if self.model_config is not None:
