@@ -118,15 +118,13 @@ $BUILD_DIR/cc/da $INFERRT_PATH/cc/sample/da_llm_sample.da
 echo "=============================="
 
 # Run python test
-if [[ $TEST_TORCH != 1 ]]; then
-    echo "=============================="
-    echo "Run python test case:"
-    echo "python check_api.py"
-    echo "=============================="
-    export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
-    echo "PYTHONPATH=$PYTHONPATH"
-    python $INFERRT_PATH/py/python/check_api.py
-fi
+echo "=============================="
+echo "Run python test case:"
+echo "python check_api.py"
+echo "=============================="
+export PYTHONPATH=$BUILD_DIR/py:$INFERRT_PATH/py/python
+echo "PYTHONPATH=$PYTHONPATH"
+python $INFERRT_PATH/py/python/check_api.py
 
 # Run pytorch backend test
 if [[ $TEST_TORCH == 1 ]]; then

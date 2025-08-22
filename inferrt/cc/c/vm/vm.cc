@@ -90,14 +90,14 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
 
 Slot VM::ConvertConstType(const Constant &cons) {
   CHECK_IF_NULL(cons.value.str);
-  return ConvertConstType(cons.type, *cons.value.str);
+  return ConvertConstType(cons.type, std::string(cons.value.str));
 }
 
 // Load the constants by index from const pool.
 void VM::InstLoadConst(ssize_t offset) {
   const auto &cons = consts()[offset];
   CHECK_IF_NULL(cons.value.str);
-  LOG_OUT << "offset: " << offset << ", value: " << *cons.value.str << " (" << cons.type << ")";
+  LOG_OUT << "offset: " << offset << ", value: " << cons.value.str << " (" << cons.type << ")";
   CurrentStack().emplace_back(std::move(ConvertConstType(cons)));
 }
 

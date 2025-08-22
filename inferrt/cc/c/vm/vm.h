@@ -215,6 +215,14 @@ class VM {
   VM() = delete;
   VM(Compiler *compiler, bool singleFunctionMode = false)
       : codes_{compiler->codes()}, filename_{compiler->filename()}, singleFunctionMode_{singleFunctionMode} {
+    // Intern all constant string from Lexer.
+    for (auto &code : codes()) {
+      for (auto &cons : code.constants) {
+        if (cons.type == ConstType_str) {
+          const_cast<Constant &>(cons).value.str = stringPool().Intern(cons.value.str);
+        }
+      }
+    }
     InitInstructionHandlers();
   }
   virtual ~VM() = default;

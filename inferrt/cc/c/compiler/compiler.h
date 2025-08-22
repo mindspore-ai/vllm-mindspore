@@ -67,7 +67,7 @@ struct Constant {
     int int_;
     double float_;
     bool bool_;
-    const std::string *str;
+    const char *str;
   } value;  // Constant value.
 };
 typedef Constant *ConstantPtr;

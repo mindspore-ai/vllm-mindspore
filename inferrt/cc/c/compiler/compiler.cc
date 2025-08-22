@@ -747,7 +747,7 @@ bool Compiler::CompileLiteral(ExprConstPtr expr) {
                    .lineno = lineno};
   if (index == -1) {  // Not used before.
     Constant cons = {.type = static_cast<ConstType>(kind)};
-    cons.value.str = &value;
+    cons.value.str = value.c_str();  // Use lexer constant string temporarily, intern it in VM later.
     constantPool(CurrentCodeIndex()).emplace_back(cons);
   }
   AddInstruction(load);
@@ -778,7 +778,7 @@ ssize_t Compiler::FindGlobalSymbolIndex(const std::string &name) {
 ssize_t Compiler::FindConstantIndex(const std::string &str) {
   auto &currentConstantPool = constantPool(CurrentCodeIndex());
   auto iter = std::find_if(currentConstantPool.cbegin(), currentConstantPool.cend(), [&str](const Constant &cons) {
-    if (cons.value.str != nullptr && *cons.value.str == str) {
+    if (cons.value.str != nullptr && cons.value.str == str.c_str()) {
       return true;
     }
     return false;
@@ -840,9 +840,9 @@ void Compiler::Dump() {
         const auto idx = code.argIndexes[i];
         const auto &def = code.argDefaults[i];
         std::cout << std::setfill(' ') << std::setw(8) << std::left << i;
-        if (def.value.str != nullptr && !def.value.str->empty()) {
+        if (def.value.str != nullptr && strlen(def.value.str) != 0) {
           std::cout << std::setfill(' ') << std::setw(8) << std::left << arg << ' ' << idx << ' ';
-          std::cout << *def.value.str;
+          std::cout << def.value.str;
         } else {
           std::cout << arg << ' ' << idx;
         }
@@ -943,7 +943,7 @@ void Compiler::Dump() {
             std::cout << "'";
           }
           CHECK_IF_NULL(cons.value.str);
-          std::cout << ConvertEscapeString(*cons.value.str);
+          std::cout << ConvertEscapeString(std::string(cons.value.str));
           if (cons.type == ConstType_str) {
             std::cout << "'";
           }
@@ -976,7 +976,7 @@ void Compiler::Dump() {
         std::cout << "'";
       }
       CHECK_IF_NULL(cons.value.str);
-      std::cout << ConvertEscapeString(*cons.value.str);
+      std::cout << ConvertEscapeString(std::string(cons.value.str));
       if (cons.type == ConstType_str) {
         std::cout << "'";
       }
