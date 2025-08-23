@@ -26,7 +26,6 @@ from research.qwen2_5.infer.qwen2_5 import (
 # yapf: enable  # noqa: ERA001
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.logger import init_logger
-from vllm.model_executor.layers.sampler import get_sampler
 
 from vllm_mindspore.model_executor.models.mf_models.mf_model_base import (
     MfModelBase)
@@ -43,7 +42,6 @@ class Qwen2ForCausalLM(MfModelBase):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.mf_kvcaches_init = False
 
-        self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
         self.kv_caches = [

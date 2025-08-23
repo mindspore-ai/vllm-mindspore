@@ -27,7 +27,6 @@ from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
-from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -260,14 +259,6 @@ class MsModelBase:
     ) -> Optional[Tensor]:
         raise NotImplementedError(
             "Function compute_logits should be Implemented!")
-
-    @abstractmethod
-    def sample(
-        self,
-        logits: Tensor,
-        sampling_metadata: SamplingMetadata,
-    ) -> Optional[SamplerOutput]:
-        raise NotImplementedError("Function sample should be Implemented!")
 
     @abstractmethod
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

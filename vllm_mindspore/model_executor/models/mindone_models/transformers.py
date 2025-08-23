@@ -38,7 +38,6 @@ from vllm.config import CacheConfig, ModelConfig, ParallelConfig, VllmConfig
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -381,7 +380,6 @@ class TransformersForCausalLM(MindONEModelBase):
         if has_bias:
             self.lm_head.bias.set_dtype(self.model_config.dtype)
 
-        self.sampler = get_sampler()
         self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
         self.logit_scale = getattr(config, "logit_scale", 1.0)
@@ -567,14 +565,6 @@ class TransformersForCausalLM(MindONEModelBase):
         _pynative_executor.sync()
 
         return logits
-
-    def sample(self, logits: mindspore.Tensor,
-               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-
-        _pynative_executor.sync()
-
-        return next_tokens
 
     def load_weights(self, weights: Iterable[tuple[str, mindspore.Tensor]]):
 
