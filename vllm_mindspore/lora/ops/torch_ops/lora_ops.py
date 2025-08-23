@@ -25,23 +25,9 @@ from mindspore.ops.auto_generate import grouped_matmul_v4
 
 
 def einsum_ms(inputs, selected_loras):
-    # mint.einsum("bi, boi -> bo", inputs, selected_loras)
     selected_loras = mint.transpose(selected_loras, 1, 2)
     outputs = mint.matmul(inputs.unsqueeze(1), selected_loras).squeeze(1)
     return outputs
-
-
-def sort_lora_by_token_count(lora_indices_tensor, seq_len_tensor):
-    unique_ids = mint.unique(lora_indices_tensor)
-    token_sums = []
-    for uid in unique_ids:
-        mask = (lora_indices_tensor == uid)
-        total_tokens = mint.sum(seq_len_tensor[mask])
-        token_sums.append(total_tokens)
-    token_sums_tensor = mint.stack(token_sums)
-    sorted_counts, sort_indices = mint.sort(token_sums_tensor, descending=True)
-    sorted_ids = unique_ids[sort_indices]
-    return sorted_ids, sorted_counts
 
 
 def sgmv_expand(inputs,
@@ -54,11 +40,25 @@ def sgmv_expand(inputs,
                 max_seq_length,
                 token_nums,
                 add_inputs=False):
-    exploded_indices = mint.repeat_interleave(lora_indices_tensor,
-                                              seq_len_tensor)
-
-    return bgmv_expand(inputs, lora_b_weights, output_tensor, exploded_indices,
-                       add_inputs)
+    group_list = seq_len_tensor
+    if len(lora_b_weights.shape) == 4:
+        lora_b_weights = lora_b_weights.squeeze(1)
+        lora_b_weights = mint.transpose(lora_b_weights, 1, 2)
+    weight = lora_b_weights[lora_indices_tensor]
+    outputs = grouped_matmul_v4([inputs], [weight],
+                                group_list=group_list,
+                                split_item=3,
+                                group_type=0,
+                                group_list_type=1)
+    outputs = outputs[0]
+    limit = output_tensor.shape[0]
+    if outputs.shape[0] == 1 and output_tensor.shape[0] != 1:
+        limit = 1
+    if add_inputs:
+        output_tensor[:, :outputs.shape[1]] += outputs[:limit, :]
+    else:
+        output_tensor[:, :outputs.shape[1]] = outputs[:limit, :]
+    return output_tensor
 
 
 def bgmv_expand(inputs,
@@ -95,19 +95,11 @@ def sgmv_shrink(
     scaling,
 ):
     group_list = seq_len_tensor
-    if (lora_indices_tensor.unique().shape[0] != lora_indices_tensor.shape[0]):
-        sorted_ids, sorted_counts = sort_lora_by_token_count(
-            lora_indices_tensor, seq_len_tensor)
-        group_list = sorted_counts
-    if lora_a_weights.shape[0] != group_list.shape[0]:
-        new_tensor = mint.zeros(lora_a_weights.shape[0],
-                                dtype=group_list.dtype)
-        new_tensor[:group_list.size(0)] = group_list
-        group_list = new_tensor
     if len(lora_a_weights.shape) == 4:
         lora_a_weights = lora_a_weights.squeeze(1)
         lora_a_weights = mint.transpose(lora_a_weights, 1, 2)
-    outputs = grouped_matmul_v4([inputs], [lora_a_weights],
+    weight = lora_a_weights[lora_indices_tensor]
+    outputs = grouped_matmul_v4([inputs], [weight],
                                 group_list=group_list,
                                 split_item=3,
                                 group_type=0,
@@ -145,20 +137,12 @@ def sgmv_expand_slice(inputs,
                       slice_size,
                       add_inputs=False):
     group_list = seq_len_tensor
-    if (lora_indices_tensor.unique().shape[0] != lora_indices_tensor.shape[0]):
-        sorted_ids, sorted_counts = sort_lora_by_token_count(
-            lora_indices_tensor, seq_len_tensor)
-        group_list = sorted_counts
-    if lora_b_weights.shape[0] != group_list.shape[0]:
-        new_tensor = mint.zeros(lora_b_weights.shape[0],
-                                dtype=group_list.dtype)
-        new_tensor[:group_list.size(0)] = group_list
-        group_list = new_tensor
     if len(lora_b_weights.shape) == 4:
         lora_b_weights = lora_b_weights.squeeze(1)
         lora_b_weights = mint.transpose(lora_b_weights, 1, 2)
     inputs = inputs.astype(output_tensor.dtype)
-    outputs = grouped_matmul_v4([inputs], [lora_b_weights],
+    weight = lora_b_weights[lora_indices_tensor]
+    outputs = grouped_matmul_v4([inputs], [weight],
                                 group_list=group_list,
                                 split_item=3,
                                 group_type=0,
