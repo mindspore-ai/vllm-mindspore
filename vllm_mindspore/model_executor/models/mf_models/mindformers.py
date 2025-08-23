@@ -23,14 +23,12 @@ from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, mutable, ops
-from mindspore.common.api import _pynative_executor
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
@@ -69,7 +67,6 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         self._set_dynamic_inputs()
 
-        self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
         num_layers = self.model_config.get_num_layers(self.parallel_config)
@@ -362,15 +359,6 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             logits = self.lm_head(hidden_states)
         logits = logits.view(-1, logits.shape[-1])
         return logits
-
-    def sample(
-        self,
-        logits: Tensor,
-        sampling_metadata: SamplingMetadata,
-    ) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        _pynative_executor.sync()
-        return next_tokens
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         self.network.load_weights(self.mf_config.load_checkpoint)

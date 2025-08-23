@@ -50,7 +50,6 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -296,7 +295,6 @@ class Qwen3ForCausalLM(NativeModel):
                                               quant_config=quant_config,
                                               prefix=maybe_prefix(
                                                   prefix, "lm_head"))
-            self.sampler = get_sampler()
         else:
             self.lm_head = PPMissingLayer()
 
@@ -319,11 +317,6 @@ class Qwen3ForCausalLM(NativeModel):
         hidden_states = self.exec_model(input_ids, positions,
                                         intermediate_tensors, inputs_embeds)
         return hidden_states
-
-    def sample(self, logits: Tensor,
-               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        return next_tokens
 
     def compute_logits(
         self,
