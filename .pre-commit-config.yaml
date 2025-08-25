@@ -136,6 +136,14 @@ repos:
     types: [python]
     pass_filenames: false
     additional_dependencies: [regex]
+  # remove cache files
+  - id: remove cache
+    name: "remove ruff, mypy, shellcheck cache"
+    entry: rm -rf .ruff_cache/ .mypy_cache/ shellcheck-stable/
+    language: system
+    stages: [ pre-commit ]
+    always_run: true
+    pass_filenames: false
   # Keep `suggestion` last
   - id: suggestion
     name: Suggestion
