@@ -42,15 +42,11 @@ def _get_addtional_conf(src_value, path, default=None):
     Example:
         Example of vLLM MindSpore startup command:
         vllm-mindspore serve --model=/path/to/model --additional-config 
-        '{"expert_parallel": 1, "mindformers": {"rotary_dtype": "float32"}}'
+        '{"expert_parallel": 1}'
 
         >>> additional_config = vllm_config.additional_config
         >>> _get_addtional_conf(additional_config, 'expert_parallel')
         >>> 1
-        >>> _get_addtional_conf(additional_config, 'mindformers.rotary_dtype')
-        >>> float32
-        >>> _get_addtional_conf(additional_config, 'mindformers.params_dtype', 'bfloat16')
-        >>> bfloat16
     """
     if not isinstance(src_value, dict) or not path:
         return default
@@ -89,8 +85,7 @@ MF_PARALLEL_MAPPING = {
     'parallel_config.model_parallel': ('parallel_config.tensor_parallel_size', None),
     'parallel_config.pipeline_stage': ('parallel_config.pipeline_parallel_size', None),
     'parallel_config.data_parallel': ('parallel_config.data_parallel_size', None),
-    'parallel_config.vocab_emb_dp': (None, False),
-    'parallel_config.expert_parallel': ('additional_config', partial(_get_addtional_conf, path='expert_parallel'))
+    'parallel_config.vocab_emb_dp': (None, False)
 }
 
 MF_MODEL_COMMON_MAPPING = {
@@ -193,6 +188,79 @@ def transform_config(mapping_table: dict, vllm_config: VllmConfig,
             _set_nested_attr(target_config, target_path, transformed_value)
 
 
+def _get_attr_from_vllm_config(vllm_config: VllmConfig,
+                               src_path: str,
+                               default=None):
+    """
+    Retrieve specific configuration from vllm-config arguments.
+
+    Args:
+        vllm_config (VllmConfig): Source configuration object.
+        source_path (str): Specifies the path to a configuration parameter
+                           in VllmConfig, with hierarchical levels delimited
+                           by periods (".").
+        default: Default value to return if key is not found.
+
+    Returns:
+        The value corresponding to the specified key, or default if not found.
+    """
+    src_value = _get_nested_attr(vllm_config,
+                                 src_path) if src_path is not None else default
+    return src_value
+
+
+def transform_ep_config(vllm_config: VllmConfig, target_config):
+    """
+    Transform expert parallel related configuration to target configuration
+    format.
+
+    Case1: If '--enable-expert-parallel' is not seted or turned off, expert
+           parallel will not take effect.
+
+    Case2: If 'enable-expert-parallel' is seted, but do not set
+           '--additional-config '{"expert_parallel": $ep_size}'',
+           ep_size will be configured as the product of dp size and tp size.
+
+    Case2: If 'enable-expert-parallel' is seted, and
+           '--additional-config '{"expert_parallel": $ep_size}'' is given,
+           ep_size will be configured as '$ep_size'.
+
+    Args:
+        vllm_config (VllmConfig): Source configuration object.
+        target_config: Target configuration object.
+
+    Returns:
+        None, modifies target_config object directly.
+    """
+    enable_ep = _get_attr_from_vllm_config(
+        vllm_config, 'parallel_config.enable_expert_parallel', False)
+
+    additional_config = _get_attr_from_vllm_config(vllm_config,
+                                                   'additional_config', None)
+
+    target_path = 'parallel_config.expert_parallel'
+    transform = partial(_get_addtional_conf, path='expert_parallel')
+    transformed_value = transform(additional_config)
+
+    if not enable_ep and not transformed_value:
+        return
+    elif not enable_ep:
+        logger.warning("If you want the 'expert_parallel' to take effect, "
+                       "please enable '--enable-expert-parallel' first")
+        return
+
+    if transformed_value is not None:
+        _set_nested_attr(target_config, target_path, transformed_value)
+    else:
+        tp_size = _get_attr_from_vllm_config(
+            vllm_config, 'parallel_config.tensor_parallel_size', 1)
+
+        dp_size = _get_attr_from_vllm_config(
+            vllm_config, 'parallel_config.data_parallel_size', 1)
+        transformed_value = tp_size * dp_size
+        _set_nested_attr(target_config, target_path, transformed_value)
+
+
 def get_mf_offset(vllm_config: VllmConfig):
     """ get pp offset from vllm style"""
     partition_list_str = envs.VLLM_PP_LAYER_PARTITION
@@ -269,6 +337,7 @@ def gen_mf_config(vllm_config: VllmConfig):
     target_config = MindFormerConfig()
     transform_config(MF_CTX_MAPPING, vllm_config, target_config)
     transform_config(MF_PARALLEL_MAPPING, vllm_config, target_config)
+    transform_ep_config(vllm_config, target_config)
     if is_310p():
         transform_config(MF_MODEL_MAPPING_310P, vllm_config, target_config)
     else:
