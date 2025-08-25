@@ -20,10 +20,10 @@
 #include "common/logger.h"
 #include "runtime/utils/utils.h"
 
-#include "ops/kernel/cpu/aten/aten_kernel.h"
+#include "ops/cpu/aten/aten_kernel.h"
 
 namespace da {
-namespace kernel {
+namespace ops {
 
 // Common Aten utils
 namespace {
@@ -154,5 +154,5 @@ DAKernel *AtenKernelLib::CreateKernel(tensor::DATensor *tensorNode) const {
 
 DART_REGISTER_KERNEL_LIB("Aten", AtenKernelLib);
 
-}  // namespace kernel
+}  // namespace ops
 }  // namespace da

@@ -20,15 +20,15 @@
 #include <string>
 #include <functional>
 
-#include "ops/kernel/kernel.h"
+#include "ops/operator.h"
 #include "ir/tensor/tensor.h"
 
 namespace da {
-namespace kernel {
+namespace ops {
 
 // The register entry of new kernel lib.
-#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                   \
-  static const da::kernel::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
+#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)               \
+  static const da::ops::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
     KERNEL_LIB_NAME, []() { return new (std::nothrow) KERNEL_LIB_CLASS(); });
 
 class KernelLib;
@@ -72,6 +72,6 @@ class DA_API KernelLibRegistrar {
   ~KernelLibRegistrar() = default;
 };
 
-}  // namespace kernel
+}  // namespace ops
 }  // namespace da
 #endif  // __KERNEL_KERNEL_LIB_H__

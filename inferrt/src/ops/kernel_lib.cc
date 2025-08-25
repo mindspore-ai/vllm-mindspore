@@ -27,10 +27,10 @@
 #endif
 
 #include "common/common.h"
-#include "ops/kernel/kernel_lib.h"
+#include "ops/kernel_lib.h"
 
 namespace da {
-namespace kernel {
+namespace ops {
 
 KernelLibRegistry &KernelLibRegistry::Instance() {
   static KernelLibRegistry instance{};
@@ -92,5 +92,5 @@ const KernelLib *KernelLibRegistry::Get(const std::string &name) {
   return nullptr;
 }
 
-}  // namespace kernel
+}  // namespace ops
 }  // namespace da
