@@ -29,6 +29,7 @@ env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
+    "VLLM_MS_MODEL_BACKEND": "Native",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "MS_ALLOC_CONF": "enable_vmm:True",
     "LCCL_DETERMINISTIC": "1",
