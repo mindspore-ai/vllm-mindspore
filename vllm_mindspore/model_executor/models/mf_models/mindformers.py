@@ -21,8 +21,6 @@ import mindspore as ms
 import numpy as np
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
-from mindformers.parallel_core.process_group_config import (
-    default_model_comm_pgs)
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _pynative_executor
@@ -222,17 +220,14 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         """
         Update the model input and add the related parameters of padding_index.
         """
-        if (self.network.model_comm_pgs is not default_model_comm_pgs
-                and getattr(self.network.model_comm_pgs, 'dp', None)
-                and getattr(self.network.model_comm_pgs, 'moe_ep', None)):
 
-            (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
-             ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
+        (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
+         ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
 
-            model_inputs["attn_padding_idx"] = attn_padding_idx
-            model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
-            model_inputs["ffn_padding_idx"] = ffn_padding_idx
-            model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
+        model_inputs["attn_padding_idx"] = attn_padding_idx
+        model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
+        model_inputs["ffn_padding_idx"] = ffn_padding_idx
+        model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
 
         return model_inputs
 
