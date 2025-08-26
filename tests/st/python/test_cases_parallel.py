@@ -149,16 +149,20 @@ def test_cases_parallel_part4():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    cases = [(2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v0",
-              "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
-             (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
-              "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
-             (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_8b",
-              "vllm_qwen3_test_vllm_qwen3_8b.log"),
-             (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_0_6b",
-              "vllm_qwen3_test_vllm_qwen3_0_6b.log"),
-             (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_8b",
-              "vllm_llama3_8b_test_vllm_llama3.log")]
+    cases = [
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v0",
+         "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
+         "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
+        (1, "cases_parallel/vllm_mf_telechat2_7b.py::test_mf_telechat2_7b",
+         "vllm_mf_telechat2_7b_test_mf_telechat2_7b.log"),
+        (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_8b",
+         "vllm_qwen3_test_vllm_qwen3_8b.log"),
+        (1, "cases_parallel/vllm_qwen3.py::test_vllm_qwen3_0_6b",
+         "vllm_qwen3_test_vllm_qwen3_0_6b.log"),
+        (1, "cases_parallel/vllm_llama3.py::test_vllm_llama3_8b",
+         "vllm_llama3_8b_test_vllm_llama3.log")
+    ]
     run_tasks(cases)
 
 
