@@ -1,3 +1,4 @@
-add_subdirectory(tensor)
-add_subdirectory(node)
-add_subdirectory(pass)
+check_debug_log_out()
+
+file(GLOB_RECURSE IR_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+add_library(mrt_ir_obj STATIC ${IR_SRC_FILES})

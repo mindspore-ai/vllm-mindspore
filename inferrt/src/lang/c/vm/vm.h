@@ -29,6 +29,7 @@
 namespace da {
 namespace vm {
 using namespace compiler;
+using namespace mrt;
 
 class VM;
 using InstHandlerFunction = void (VM::*)(ssize_t);
@@ -69,10 +70,10 @@ struct Slot {
     ssize_t int_;
     double float_;
     const char *str_;
-    void *tensor_;
     ops::Op op;
     intrinsic::IntrinsicType intr;
   } value;
+  ir::NodePtr tensor_;
 };
 using Argument = Slot;  // Argument is also a Slot.
 using Result = Slot;    // Result is also a Slot.
@@ -172,7 +173,7 @@ inline void GetSlotStr(const Slot &slot, std::stringstream &ss) {
       break;
     }
     case SlotTensor: {
-      ss << "tensor:" << slot.value.tensor_;
+      ss << "tensor:" << slot.tensor_;
       break;
     }
     case SlotOps: {

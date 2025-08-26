@@ -14,146 +14,155 @@
  * limitations under the License.
  */
 
-#include <set>
+#include <stdexcept>
+#include <numeric>
+#include <sstream>
 
-#include "common/common.h"
 #include "ir/tensor/tensor.h"
 
-namespace da {
-namespace tensor {
-DAContext *NewDAContext(size_t deviceId, size_t memSize) {
-  static DAContextManager _manager;
-  for (size_t i = 0; i < DA_CONTEXT_MAX_NUM; ++i) {
-    if (!_manager.used[i]) {
-      _manager.used[i] = true;
-      auto &context = _manager.context[i];
-      context.deviceId = deviceId;
-      context.memSize = memSize;
-      context.memPool = malloc(memSize);
-      LOG_OUT << "Create a new DAContext " << &context << ", pool size: " << memSize;
-      return &context;
+namespace mrt {
+namespace ir {
+
+/**
+ * @brief Constructs a TensorImpl.
+ * @param storage The underlying storage for the tensor data.
+ * @param dtype The data type of the tensor elements.
+ * @param shape The dimensions of the tensor.
+ * @throws std::runtime_error if the storage size is insufficient for the given dimensions and data type.
+ */
+TensorImpl::TensorImpl(Storage storage, DataType dtype, const std::vector<int64_t> &shape)
+    : storage_(std::move(storage)), dtype_(dtype), shape_(shape) {
+  bool isDynamic = false;
+  numel_ = 1;
+  for (const auto &dim : shape) {
+    if (dim < 0) {
+      isDynamic = true;
+      break;
+    }
+    numel_ *= dim;
+  }
+
+  if (isDynamic) {
+    numel_ = -1;
+  }
+
+  if (!isDynamic) {
+    if (storage_.SizeBytes() < numel_ * dtype_.GetSize()) {
+      throw std::runtime_error("Storage size is smaller than required by tensor dimensions and data type.");
     }
   }
-  LOG_ERROR << "Failed to create new DAContext";
-  return nullptr;
+  ComputeStrides();
 }
 
-void FreeDAContext(DAContext *context) {
-  if (context != nullptr && context->memPool != nullptr) {
-    context->deviceId = -1;
-    context->memSize = 0;
-    free(context->memPool);
-    context->memPool = nullptr;
-    LOG_OUT << "Free DAContext " << context;
+/**
+ * @brief Computes the strides of the tensor based on its dimensions.
+ * The strides are computed for a contiguous tensor in row-major order.
+ * If the shape is dynamic, strides after the dynamic dimension will be -1.
+ */
+void TensorImpl::ComputeStrides() {
+  if (shape_.empty()) {
+    return;
+  }
+  strides_.resize(shape_.size());
+  int64_t stride = 1;
+  for (int i = shape_.size() - 1; i >= 0; --i) {
+    strides_[i] = stride;
+    if (stride != -1) {
+      if (shape_[i] < 0) {
+        stride = -1;
+      } else {
+        stride *= shape_[i];
+      }
+    }
+  }
+}
+
+/**
+ * @brief Creates an empty tensor with uninitialized data.
+ * A new storage is allocated for the tensor.
+ * @param shape The dimensions of the tensor.
+ * @param dtype The data type of the tensor.
+ * @param device The device to allocate the tensor on.
+ * @return The newly created tensor.
+ */
+Tensor Empty(const std::vector<int64_t> &shape, DataType dtype, hardware::Device device) {
+  int64_t numel = 1;
+  bool isDynamic = false;
+  for (const auto &dim : shape) {
+    if (dim < 0) {
+      isDynamic = true;
+      break;
+    }
+    numel *= dim;
+  }
+
+  size_t sizeBytes = 0;
+  if (!isDynamic) {
+    sizeBytes = numel * dtype.GetSize();
+  }
+
+  Storage storage(sizeBytes, device);
+  return Tensor(storage, dtype, shape);
+}
+
+/**
+ * @brief Creates a tensor from an existing data blob.
+ * The tensor does not own the memory.
+ * @param data Pointer to the data.
+ * @param shape The dimensions of the tensor.
+ * @param dtype The data type of the tensor.
+ * @param device The device where the data is located.
+ * @return The newly created tensor.
+ */
+Tensor FromBlob(void *data, const std::vector<int64_t> &shape, DataType dtype, hardware::Device device) {
+  int64_t numel = 1;
+  for (const auto &dim : shape) {
+    if (dim < 0) {
+      throw std::runtime_error("FromBlob does not support dynamic shapes.");
+    }
+    numel *= dim;
+  }
+
+  size_t sizeBytes = numel * dtype.GetSize();
+
+  Storage storage(data, sizeBytes, device);
+  return Tensor(storage, dtype, shape);
+}
+
+std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
+  if (!tensor.Defined()) {
+    os << "Tensor(undefined)";
+    return os;
+  }
+  os << "Tensor(shape=[";
+  const auto &shape = tensor.Shape();
+  for (size_t i = 0; i < shape.size(); ++i) {
+    os << shape[i];
+    if (i < shape.size() - 1) {
+      os << ", ";
+    }
+  }
+  os << "], dtype=" << tensor.Dtype().ToString();
+  os << ", data=[";
+  if (tensor.DataPtr()) {
+    if (tensor.Dtype() == DataType::Float32) {  // TODO: support other dtypes
+      const auto data = static_cast<const float *>(tensor.DataPtr());
+      const size_t numel = tensor.Numel();
+      for (size_t i = 0; i < numel; ++i) {
+        os << data[i];
+        if (i < numel - 1) {
+          os << ", ";
+        }
+      }
+    } else {
+      os << "...";
+    }
   } else {
-    LOG_ERROR << "context is null or context.memPool is null";
-    exit(EXIT_FAILURE);
+    os << "null";
   }
+  os << "])";
+  return os;
 }
 
-DAGraph *NewDAGraph(DAContext *context) {
-  CHECK_IF_NULL(context);
-  CHECK_IF_NULL(context->memPool);
-
-  constexpr size_t graphSize = sizeof(DAGraph);
-  auto newSize = context->memUsed + graphSize;
-  CHECK_IF_FAIL(newSize < context->memSize);
-
-  DAGraph *graph = reinterpret_cast<DAGraph *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
-  graph->nodeSize = 0;
-  graph->paramSize = 0;
-  context->memUsed = newSize;
-  LOG_OUT << "Create DAGraph " << graph << ", size: " << sizeof(DAGraph) << ", for DAContext " << context;
-
-  return graph;
-}
-
-void AddParameter(DAGraph *graph, DATensor *param) {
-  CHECK_IF_NULL(graph);
-  CHECK_IF_FAIL(graph->paramSize < DA_GRAPH_MAX_PARAM);
-  graph->param[graph->paramSize] = param;
-  ++graph->paramSize;
-  LOG_OUT << "Add Parameter " << param << " for DAGraph " << graph;
-}
-
-void AddTensor(DAGraph *graph, DATensor *tensor) {
-  CHECK_IF_NULL(graph);
-  CHECK_IF_NULL(tensor);
-  CHECK_IF_FAIL(graph->nodeSize < DA_GRAPH_MAX_NODE);
-  graph->node[graph->nodeSize] = tensor;
-  ++graph->nodeSize;
-  LOG_OUT << "Add Tensor " << tensor << " for DAGraph " << graph;
-}
-
-DATensor *NewDATensor(DAContext *context) {
-  CHECK_IF_NULL(context);
-  CHECK_IF_NULL(context->memPool);
-
-  constexpr size_t tensorSize = sizeof(DATensor);
-  auto newSize = context->memUsed + tensorSize;
-  CHECK_IF_FAIL(newSize < context->memSize);
-
-  DATensor *tensor = reinterpret_cast<DATensor *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
-  tensor->tensorType = UNKNOW_TENSOR;
-  tensor->type = Type_F32;
-  tensor->data = nullptr;
-  tensor->dim = 0;
-  tensor->op = ops::Op_End;
-  tensor->inputSize = 0;
-  context->memUsed = newSize;
-  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor) << ", for DAContext " << context;
-  return tensor;
-}
-
-DATensor **NewDATensorList(DAContext *context, size_t len) {
-  CHECK_IF_NULL(context);
-  CHECK_IF_NULL(context->memPool);
-  CHECK_IF_FAIL(len > 0);
-
-  size_t tensorListSize = sizeof(DATensor *[len]);
-  auto newSize = context->memUsed + tensorListSize;
-  CHECK_IF_FAIL(newSize < context->memSize);
-
-  DATensor **tensorList = reinterpret_cast<DATensor **>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
-  context->memUsed = newSize;
-  for (size_t i = 0; i < len; ++i) {
-    tensorList[i] = NewDATensor(context);
-  }
-  LOG_OUT << "Create DATensorList " << tensorList << ", size: " << sizeof(DATensor *[len]) << ", for DAContext "
-          << context;
-  return tensorList;
-}
-
-DATensor *NewDATensor(DAContext *context, Type type, size_t dim, const ShapeArray &shape, void *data, ops::Op op,
-                      size_t inputSize, const TensorArrayPtr &input) {
-  CHECK_IF_NULL(context);
-  CHECK_IF_NULL(context->memPool);
-
-  constexpr size_t tensorSize = sizeof(DATensor);
-  auto newSize = context->memUsed + tensorSize;
-  CHECK_IF_FAIL(newSize < context->memSize);
-
-  DATensor *tensor = reinterpret_cast<DATensor *>(reinterpret_cast<char *>(context->memPool) + context->memUsed);
-  context->memUsed = newSize;
-  tensor->tensorType = UNKNOW_TENSOR;
-  tensor->type = type;
-  tensor->op = op;
-  tensor->data = data;
-
-  CHECK_IF_FAIL(dim <= DA_TENSOR_MAX_DIM);
-  tensor->dim = dim;
-  for (size_t i = 0; i < dim; ++i) {
-    tensor->shape[i] = shape[i];
-  }
-
-  CHECK_IF_FAIL(inputSize <= DA_TENSOR_MAX_INPUT);
-  tensor->inputSize = inputSize;
-  for (size_t i = 0; i < inputSize; ++i) {
-    tensor->input[i] = input[i];
-  }
-
-  LOG_OUT << "Create DATensor " << tensor << ", size: " << sizeof(DATensor) << ", for DAContext " << context;
-  return tensor;
-}
-}  // namespace tensor
-}  // namespace da
+}  // namespace ir
+}  // namespace mrt

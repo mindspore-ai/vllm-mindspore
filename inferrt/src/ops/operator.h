@@ -23,16 +23,15 @@
 
 #include "ops/op_def/ops_name.h"
 #include "common/visible.h"
-#include "ir/tensor/tensor.h"
+#include "ir/graph.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
-using tensor::DATensor;
 
 // Deprecated Interface for kernel
 class DAKernel {
  public:
-  explicit DAKernel(tensor::DATensor *node) : tensorNode_(node) {}
+  explicit DAKernel(ir::NodePtr node) : node_(node) {}
   virtual ~DAKernel() = default;
 
   virtual void Init() = 0;
@@ -41,7 +40,7 @@ class DAKernel {
   virtual void Launch() = 0;
 
  protected:
-  tensor::DATensor *tensorNode_;
+  ir::NodePtr node_;
 };
 
 // Operator-related error codes. The error types within them will be further expanded in the future.
@@ -56,8 +55,6 @@ enum OpsErrorCode {
 
 // Need to be deleted in the future.
 using OpName = Op;
-// Need to be deleted in the future.
-using Value = DATensor;
 
 // @brief Abstract base class representing a computational kernel. A Operator encapsulates the core computation logic
 // for a specific operator. Derived classes must implement shape inference and launch operations. Kernels of different
@@ -74,7 +71,7 @@ class Operator {
    *  output may be one of types such as Tensor, Tuple, etc.
    *  @return OpsErrorCode Error code indicating success or failure of shape inference.
    */
-  virtual OpsErrorCode InferShape(const std::vector<Value *> &input, Value *output) = 0;
+  virtual OpsErrorCode InferShape(const std::vector<ir::Value> &input, ir::Value output) = 0;
 
   /**
    * @brief Calculate total workspace memory size requirements for the kernel computation.
@@ -84,7 +81,8 @@ class Operator {
    * to the variable pointed by `workspace_size`.
    * @return OpsErrorCode Error code indicating success or failure of workspace calculation.
    */
-  virtual OpsErrorCode CalcWorkspace(const std::vector<Value *> &input, const Value *output, size_t *workspace_size) {
+  virtual OpsErrorCode CalcWorkspace(const std::vector<ir::Value> &input, const ir::Value output,
+                                     size_t *workspace_size) {
     return SUCCESS;
   }
 
@@ -105,8 +103,8 @@ class Operator {
    * @return OpsErrorCode Return SUCCESS if execution completed successfully, or an appropriate
    *         error code if the operation failed.
    */
-  virtual OpsErrorCode Launch(const std::vector<Value *> &input, const std::vector<Value *> &workspace, Value *output,
-                              void *stream) = 0;
+  virtual OpsErrorCode Launch(const std::vector<ir::Value> &input, const std::vector<ir::Value> &workspace,
+                              ir::Value output, void *stream) = 0;
 
   /**
    * @brief This method indicates if the operator requires output shape updates after the Launch
@@ -124,5 +122,5 @@ class Operator {
   OpName op_{Op_End};
 };
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt
 #endif  // __KERNEL_KERNEL_H__

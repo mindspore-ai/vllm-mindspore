@@ -9,4 +9,4 @@ find_package(Torch REQUIRED)
 
 add_library(kernel_aten SHARED ${ATEN_KERNEL_SRC_FILES})
 target_link_libraries(kernel_aten PRIVATE ${TORCH_LIBRARIES})
-target_link_libraries(kernel_aten PRIVATE kernel)
+target_link_libraries(kernel_aten PRIVATE kernel ops_obj mrt_ir_obj)

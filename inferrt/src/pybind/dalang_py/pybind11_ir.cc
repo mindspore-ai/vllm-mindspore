@@ -20,93 +20,73 @@
 #include <sstream>
 
 #include "runtime/executor/executor.h"
-#include "ir/tensor/tensor.h"
+#include "ir/graph.h"
 #include "ops/op_def/ops_name.h"
 
 namespace py = pybind11;
-using namespace da;
-using namespace da::tensor;
-using namespace da::ops;
-using namespace da::runtime;
+using namespace mrt;
+using namespace mrt::runtime;
 
-static void SetBufferInfoToDATensor(const py::buffer_info &info, DATensor *tensor) {
-  Type type;
+static ir::Value ConvertBufferInfoToValue(const py::buffer_info &info) {
+  ir::DataType type;
   if (info.format == py::format_descriptor<float>::format())
-    type = Type_F32;
+    type = ir::DataType::Float32;
   else if (info.format == py::format_descriptor<double>::format())
-    type = Type_F64;
+    type = ir::DataType::Float64;
   else if (info.format == py::format_descriptor<int32_t>::format())
-    type = Type_I32;
+    type = ir::DataType::Int32;
   else if (info.format == py::format_descriptor<int64_t>::format())
-    type = Type_I64;
+    type = ir::DataType::Int64;
   else if (info.format == py::format_descriptor<int16_t>::format())
-    type = Type_I16;
+    type = ir::DataType::Int16;
   else if (info.format == py::format_descriptor<bool>::format())
-    type = Type_Bool;
+    type = ir::DataType::Bool;
   else
     throw std::runtime_error("Unsupported numpy dtype for buffer conversion");
-  tensor->type = type;
-
-  if (info.ndim > DA_TENSOR_MAX_DIM) {
-    throw std::runtime_error("Unsupported tensor dimension > " + std::to_string(DA_TENSOR_MAX_DIM));
-  }
-  tensor->dim = static_cast<size_t>(info.ndim);
-  for (ssize_t i = 0; i < info.ndim; ++i) tensor->shape[i] = info.shape[i];
-
-  tensor->data = info.ptr;
-  tensor->tensorType = HOST_TENSOR;  // Assuming host tensor for now, can be extended for device tensors
-  tensor->op = Op_End;               // Default operation is no-op
-  tensor->inputSize = 0;             // No inputs for constants
+  std::vector<int64_t> dims(info.shape.begin(), info.shape.end());
+  auto tensor = ir::FromBlob(info.ptr, dims, type, hardware::Device(hardware::DeviceType::CPU, 0));
+  return ir::Value(tensor);
 }
 
-static py::array ConvertDATensorToNumpyArray(const DATensor *tensor) {
-  if (tensor->data == nullptr) {
-    throw std::runtime_error("Cannot convert DATensor with null data to numpy array");
+static py::array ConvertValueToNumpyArray(ir::Value value) {
+  auto tensor = value.ToTensor();
+  if (!tensor.Defined()) {
+    throw std::runtime_error("Cannot convert Value with null data to numpy array");
   }
   std::string format;
-  switch (tensor->type) {
-    case Type_F32:
+  switch (tensor.Dtype()) {
+    case ir::DataType::Float32:
       format = py::format_descriptor<float>::format();
       break;
-    case Type_I32:
+    case ir::DataType::Int32:
       format = py::format_descriptor<int32_t>::format();
       break;
-    case Type_I64:
+    case ir::DataType::Int64:
       format = py::format_descriptor<int64_t>::format();
       break;
-    case Type_F64:
+    case ir::DataType::Float64:
       format = py::format_descriptor<double>::format();
       break;
-    case Type_Bool:
+    case ir::DataType::Bool:
       format = py::format_descriptor<bool>::format();
       break;
-    case Type_I16:
+    case ir::DataType::Int16:
       format = py::format_descriptor<int16_t>::format();
       break;
     default:
       throw std::runtime_error("Unsupported dtype for numpy conversion");
   }
-  std::vector<size_t> shape(tensor->shape, tensor->shape + tensor->dim);
-  std::vector<size_t> strides(tensor->dim);
-  if (tensor->dim > 0) {
-    strides[tensor->dim - 1] = DataTypeSize(tensor->type);
-    for (int i = tensor->dim - 2; i >= 0; --i) {
-      strides[i] = strides[i + 1] * tensor->shape[i + 1];
-    }
-  }
-  return py::array(py::dtype(format), shape, strides, tensor->data);
+  std::vector<size_t> shape(tensor.Shape().begin(), tensor.Shape().end());
+  auto result = py::array(py::dtype(format), shape, tensor.DataPtr());
+  return result;
 }
 
-static std::vector<py::array> ConvertDATensorToNumpyArrayList(const DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  CHECK_IF_FAIL(tensor->type == da::tensor::Type_Tensor);
-
-  auto **tensorList = reinterpret_cast<da::tensor::DATensor **>(tensor->data);
-  CHECK_IF_NULL(tensorList);
+static std::vector<py::array> ConvertValueToNumpyArrayList(ir::Value value) {
+  auto tuple = value.ToTuple();
 
   std::vector<py::array> result;
-  for (size_t i = 0; i < tensor->shape[0]; ++i) {
-    (void)result.emplace_back(ConvertDATensorToNumpyArray(tensorList[i]));
+  for (auto &item : tuple.GetElements()) {
+    (void)result.emplace_back(ConvertValueToNumpyArray(item));
   }
   return result;
 }
@@ -114,30 +94,20 @@ static std::vector<py::array> ConvertDATensorToNumpyArrayList(const DATensor *te
 PYBIND11_MODULE(_dairpy, m) {
   m.doc() = "Python binding for DA IR";
 
-  py::enum_<Op>(m, "Op")
-#define OP(O) .value(#O, Op_##O)
+  py::enum_<ops::Op>(m, "Op")
+#define OP(O) .value(#O, ops::Op_##O)
 #include "ops/op_def/ops.list"
 #undef OP
     .export_values();
 
-  py::class_<DATensor>(m, "DATensor")
-    .def("__repr__",
-         [](const DATensor &t) {
-           std::stringstream ss;
-           ss << "DATensor(op=" << ToStr(t.op) << ", shape=[";
-           for (size_t i = 0; i < t.dim; ++i) {
-             ss << t.shape[i] << (i == t.dim - 1 ? "" : ", ");
-           }
-           ss << "])";
-           return ss.str();
-         })
+  py::class_<ir::Node, ir::NodePtr>(m, "Node")
     .def("update_data",
-         [](DATensor &self, py::buffer b) {
+         [](ir::Node &self, py::buffer b) {
            py::buffer_info info = b.request();
-           self.data = info.ptr;
+           self.output = ConvertBufferInfoToValue(b.request());
          })
-    .def("numpy", ConvertDATensorToNumpyArray)
-    .def("list", ConvertDATensorToNumpyArrayList);
+    .def("numpy", [](ir::Node &self) -> py::array { return ConvertValueToNumpyArray(self.output); })
+    .def("list", [](ir::Node &self) -> std::vector<py::array> { return ConvertValueToNumpyArrayList(self.output); });
 
   py::class_<GraphExecutor>(m, "GraphExecutor")
     .def(py::init<>())
@@ -150,20 +120,18 @@ PYBIND11_MODULE(_dairpy, m) {
     .def("free_graph_outputs", &GraphExecutor::FreeGraphOutputs)
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)
     .def("add_return", &GraphExecutor::AddReturn, py::return_value_policy::reference)
-    .def("cast_to_tensor_list", &GraphExecutor::CastToTensorList, py::arg("tensor"), py::arg("len"))
     .def("add_parameter", &GraphExecutor::AddParameter, py::arg("tensor"))
     .def(
       "add_op",
-      [](GraphExecutor &self, Op op, const std::vector<DATensor *> &inputs) -> DATensor * {
+      [](GraphExecutor &self, ops::Op op, const std::vector<ir::NodePtr> &inputs) -> ir::NodePtr {
         return self.AddTensor(op, inputs);
       },
       py::arg("op"), py::arg("inputs"), py::return_value_policy::reference)
     .def(
       "add_const",
-      [](GraphExecutor &self, const py::buffer b) -> DATensor * {
-        py::buffer_info info = b.request();
+      [](GraphExecutor &self, const py::buffer b) -> ir::NodePtr {
         auto tensor = self.AddTensor();
-        SetBufferInfoToDATensor(info, tensor);
+        tensor->output = ConvertBufferInfoToValue(b.request());
         return tensor;
       },
       py::arg("tensor"), py::return_value_policy::reference);

@@ -14,20 +14,16 @@
  * limitations under the License.
  */
 
-#include "ir/pass/pass.h"
+#include "optimize/pass/pass.h"
 
-namespace da {
+namespace mrt {
 namespace pass {
-inline DATensor *NodePass::NewTensor(ops::Op op, DATensor **start, size_t size) {
-  return PassManager::Instance().NewTensor(op, start, size);
-}
-
-inline DATensor *NodePass::NewTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
+inline ir::NodePtr NodePass::NewTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
   return PassManager::Instance().NewTensor(op, inputs);
 }
 
-void PassManager::Run(DAGraph *graph, const TensorCreator &creator) {
-  if (passes_.empty() || graph->nodeSize == 0) {
+void PassManager::Run(ir::GraphPtr graph, const TensorCreator &creator) {
+  if (passes_.empty() || graph->nodes.size() == 0) {
     LOG_OUT << "No pass or no node in graph. instance: " << this;
     return;
   }
@@ -39,8 +35,8 @@ void PassManager::Run(DAGraph *graph, const TensorCreator &creator) {
 
   // Do transform for each node.
   auto tensors = orderedNodes_.tensorList();
-  for (const DATensor *node : tensors) {
-    LOG_OUT << "Handle node: " << ToString(node);
+  for (const ir::NodePtr node : tensors) {
+    LOG_OUT << "Handle node: " << node;
     for (auto &pass : passes_) {
       LOG_OUT << "Handle pass '" << pass.first << "'";
       if (!pass.second->Match(node)) {
@@ -57,12 +53,12 @@ void PassManager::Run(DAGraph *graph, const TensorCreator &creator) {
   orderedNodes_.Flush(graph);
 }
 
-bool PassManager::Replace(const DATensor *oldNode, const DATensor *newNode) {
-  LOG_OUT << "To replace " << ToString(oldNode) << " to " << ToString(newNode)
+bool PassManager::Replace(const ir::NodePtr oldNode, const ir::NodePtr newNode) {
+  LOG_OUT << "To replace " << oldNode << " to " << newNode
           << ", nodes size: " << orderedNodes_.tensorList().size();
   auto users = ud_.FindUsers(oldNode);
   if (users.empty()) {
-    LOG_ERROR << "No user for node: " << ToString(oldNode);
+    LOG_ERROR << "No user for node: " << oldNode;
     return false;
   }
   LOG_OUT << "users size: " << users.size();
@@ -70,10 +66,10 @@ bool PassManager::Replace(const DATensor *oldNode, const DATensor *newNode) {
   // Replace old node with new node.
   // We add node firstly, then remove old node.
   for (auto &user : users) {
-    DATensor *owner = const_cast<DATensor *>(user.first);
+    ir::NodePtr owner = user.first;
     InsertOrderedNodes(owner, user.second, oldNode, newNode);
     RemoveOrderedNodes(owner, user.second, oldNode);
-    owner->input[user.second] = const_cast<DATensor *>(newNode);
+    owner->inputs[user.second] = newNode;
   }
   LOG_OUT << "Finish replace, nodes size: " << orderedNodes_.tensorList().size();
 
@@ -85,39 +81,39 @@ bool PassManager::Replace(const DATensor *oldNode, const DATensor *newNode) {
   return true;
 }
 
-void PassManager::RemoveOrderedNodes(const DATensor *owner, size_t index, const DATensor *node) {
+void PassManager::RemoveOrderedNodes(const ir::NodePtr owner, size_t index, const ir::NodePtr node) {
   if (!ud_.DropNode(owner, index, node)) {  // 'node' has other users.
-    LOG_OUT << "Has other users, " << ToString(node);
+    LOG_OUT << "Has other users, " << node;
     return;
   }
   // 'node' has no user anymore.
-  LOG_OUT << "Run real remove, " << ToString(node);
+  LOG_OUT << "Run real remove, " << node;
   (void)unusedList_.emplace_back(node);
   if (!orderedNodes_.Remove(node)) {
     return;
   }
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    RemoveOrderedNodes(node, i, node->input[i]);
+  for (size_t i = 0; i < node->inputs.size(); ++i) {
+    RemoveOrderedNodes(node, i, node->inputs[i]);
   }
 }
 
-void PassManager::InsertOrderedNodes(const DATensor *owner, size_t index, const DATensor *anchor,
-                                     const DATensor *node) {
+void PassManager::InsertOrderedNodes(const ir::NodePtr owner, size_t index, const ir::NodePtr anchor,
+                                     const ir::NodePtr node) {
   if (!ud_.AddNode(owner, index, node)) {  // 'node' is not first insertion.
-    LOG_OUT << "Has other users, " << ToString(node);
+    LOG_OUT << "Has other users, " << node;
     return;
   }
   if (!orderedNodes_.Insert(anchor, node)) {
-    LOG_OUT << "Insert failed, " << ToString(node);
+    LOG_OUT << "Insert failed, " << node;
     return;
   }
-  LOG_OUT << "Insert for inputs, " << ToString(node);
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    InsertOrderedNodes(node, i, anchor, node->input[i]);
+  LOG_OUT << "Insert for inputs, " << node;
+  for (size_t i = 0; i < node->inputs.size(); ++i) {
+    InsertOrderedNodes(node, i, anchor, node->inputs[i]);
   }
 }
 
-bool PassManager::OrderedNodes::Insert(const DATensor *anchor, const DATensor *node) {
+bool PassManager::OrderedNodes::Insert(const ir::NodePtr anchor, const ir::NodePtr node) {
   if (tensorMap_.count(node) != 0) {
     return false;  // Already exists.
   }
@@ -130,7 +126,7 @@ bool PassManager::OrderedNodes::Insert(const DATensor *anchor, const DATensor *n
   return true;
 }
 
-bool PassManager::OrderedNodes::Append(const DATensor *node) {
+bool PassManager::OrderedNodes::Append(const ir::NodePtr node) {
   if (tensorMap_.find(node) != tensorMap_.cend()) {
     return false;
   }
@@ -139,7 +135,7 @@ bool PassManager::OrderedNodes::Append(const DATensor *node) {
   return true;
 }
 
-bool PassManager::OrderedNodes::Remove(const DATensor *node) {
+bool PassManager::OrderedNodes::Remove(const ir::NodePtr node) {
   auto iter = tensorMap_.find(node);
   if (iter == tensorMap_.cend()) {
     return false;
@@ -149,19 +145,18 @@ bool PassManager::OrderedNodes::Remove(const DATensor *node) {
   return true;
 }
 
-void PassManager::OrderedNodes::Init(DAGraph *graph) {
-  for (ssize_t i = graph->nodeSize - 1; i >= 0; --i) {
-    auto tensor = graph->node[i];
+void PassManager::OrderedNodes::Init(ir::GraphPtr graph) {
+  for (ssize_t i = graph->nodes.size() - 1; i >= 0; --i) {
+    auto tensor = graph->nodes[i];
     auto iter = tensorList_.emplace(tensorList_.end(), tensor);
     (void)tensorMap_.emplace(tensor, iter);
   }
 }
 
-void PassManager::OrderedNodes::Flush(DAGraph *graph) {
-  graph->nodeSize = 0;
+void PassManager::OrderedNodes::Flush(ir::GraphPtr graph) {
+  graph->nodes.clear();
   for (auto iter = tensorList_.crbegin(); iter != tensorList_.crend(); ++iter) {
-    graph->node[graph->nodeSize] = const_cast<DATensor *>(*iter);
-    ++graph->nodeSize;
+    (void)graph->nodes.emplace_back(*iter);
   }
 }
 
@@ -171,21 +166,21 @@ class ManualSamplePass : public NodePass {
   ~ManualSamplePass() = default;
 
   // If node is matched.
-  bool Match(const DATensor *node) override {
+  bool Match(const ir::NodePtr node) override {
     node_ = node;
-    LOG_OUT << "To match " << ToString(node);
+    LOG_OUT << "To match " << node;
     return node->op == ops::Op_add;
   };
 
   // Replacement node for the matched node.
-  DATensor *Replacement() override {
-    return NewTensor(ops::Op_mul, const_cast<DATensor **>(node_->input), node_->inputSize);
+  ir::NodePtr Replacement() override {
+    return NewTensor(ops::Op_mul, node_->inputs);
   };
 
  private:
-  const DATensor *node_{nullptr};
+  ir::NodePtr node_{nullptr};
 };
 
 DA_REGISTER_PASS("ManualSamplePass", ManualSamplePass);
 }  // namespace pass
-}  // namespace da
+}  // namespace mrt

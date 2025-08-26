@@ -21,14 +21,14 @@
 #include <functional>
 
 #include "ops/operator.h"
-#include "ir/tensor/tensor.h"
+#include "ir/graph.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 
 // The register entry of new kernel lib.
-#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)               \
-  static const da::ops::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
+#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                   \
+  static const mrt::ops::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
     KERNEL_LIB_NAME, []() { return new (std::nothrow) KERNEL_LIB_CLASS(); });
 
 class KernelLib;
@@ -39,7 +39,7 @@ class DA_API KernelLib {
   explicit KernelLib(const std::string &&name) : name_(std::move(name)) {}
   virtual ~KernelLib() = default;
 
-  virtual DAKernel *CreateKernel(tensor::DATensor *tensorNode) const = 0;
+  virtual DAKernel *CreateKernel(ir::NodePtr node) const = 0;
   std::string Name() const { return name_; }
 
  protected:
@@ -73,5 +73,5 @@ class DA_API KernelLibRegistrar {
 };
 
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt
 #endif  // __KERNEL_KERNEL_LIB_H__

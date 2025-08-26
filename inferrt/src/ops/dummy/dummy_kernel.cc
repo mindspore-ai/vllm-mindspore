@@ -17,7 +17,7 @@
 #include "ops/operator.h"
 #include "ops/kernel_lib.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 
 // Dummy kernel
@@ -35,10 +35,10 @@ class DA_API DummyKernelLib : public KernelLib {
  public:
   DummyKernelLib() : KernelLib("Dummy") {}
   ~DummyKernelLib() = default;
-  DAKernel *CreateKernel(tensor::DATensor *tensorNode) const override { return new DummyKernel(tensorNode); }
+  DAKernel *CreateKernel(ir::NodePtr node) const override { return new DummyKernel(node); }
 };
 
 DART_REGISTER_KERNEL_LIB("Dummy", DummyKernelLib);
 
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt

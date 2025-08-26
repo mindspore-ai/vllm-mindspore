@@ -1,4 +1,0 @@
-check_debug_log_out()
-
-file(GLOB_RECURSE TENSOR_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
-add_library(tensor_obj STATIC ${TENSOR_SRC_FILES})
