@@ -32,6 +32,7 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
+from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
@@ -69,10 +70,8 @@ class MLAAttentionWrapper(AttentionWrapper):
     def __init__(self):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        self.use_mla_op = bool(
-            vllm_config.additional_config
-            and vllm_config.additional_config.get('use_mla_op') == 1)
-        if not self.use_mla_op:
+        self.use_ringmla = is_use_ringmla(vllm_config)
+        if not self.use_ringmla:
             self.kv_cache = [
                 (
                     ms.mint.zeros(
@@ -87,9 +86,9 @@ class MLAAttentionWrapper(AttentionWrapper):
                                        'qk_rope_head_dim', 0)
             # k_shape, r_shape used for mla_op
             k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank
-                       ] if self.use_mla_op else None
+                       ] if self.use_ringmla else None
             r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim
-                       ] if self.use_mla_op else None
+                       ] if self.use_ringmla else None
             self.kv_cache = [
                 (ms.mint.zeros(k_shape, dtype=vllm_config.model_config.dtype),
                  ms.mint.zeros(r_shape, dtype=vllm_config.model_config.dtype))
@@ -292,7 +291,8 @@ class MsModelBase:
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.set_flags else 1,
-            query_start_loc=None)
+            query_start_loc=None,
+            num_prompt_tokens=seq_lengths)
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata

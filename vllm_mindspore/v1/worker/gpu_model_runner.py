@@ -39,6 +39,7 @@ from vllm.v1.worker.utils import initialize_kv_cache_for_kv_sharing
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
+from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.utils import (create_kv_cache, get_dtype_size,
                                   get_valid_dtype, is_310p)
 
@@ -232,11 +233,9 @@ def _allocate_nz_kv_cache_tensors(self, kv_cache_config):
         for i, group in enumerate(kv_cache_config.kv_cache_groups)
         for layer_name in group.layer_names
     }
-
-    use_mla_op = bool(
-        self.vllm_config.additional_config
-        and self.vllm_config.additional_config.get('use_mla_op') == 1)
-    if use_mla_op:
+    # Determine whether deepseek use mla op
+    use_ringmla = is_use_ringmla(self.vllm_config)
+    if use_ringmla:
         logger.error("For 310p, mla kv cache not supported")
         raise NotImplementedError
 
@@ -290,9 +289,7 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
     dtype = kv_cache_spec.dtype
     coef = 1 if use_mla else 2
     # Determine whether deepseek use mla op
-    use_mla_op = bool(
-        self.vllm_config.additional_config
-        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    use_ringmla = is_use_ringmla(self.vllm_config)
     kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
@@ -317,7 +314,7 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
             """
             raw_tensors.extend(
                 [mint.zeros(raw_tensor_shape, dtype=target_dtype)]
-                if not use_mla_op else [
+                if not use_ringmla else [
                     mint.zeros(int(raw_tensor_shape * kv_lora_rank /
                                    (kv_lora_rank + qk_rope_head_dim)),
                                dtype=target_dtype),
@@ -354,9 +351,7 @@ def _reshape_kv_cache_tensors(
         corresponding memory buffer for KV cache.
     """
     # Determine whether deepseek use mla op
-    use_mla_op = bool(
-        self.vllm_config.additional_config
-        and self.vllm_config.additional_config.get('use_mla_op') == 1)
+    use_ringmla = is_use_ringmla(self.vllm_config)
     kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
@@ -371,7 +366,7 @@ def _reshape_kv_cache_tensors(
             dtype_size = get_dtype_size(target_dtype)
             num_blocks = \
                 (raw_tensor[0].numel()
-                if not use_mla_op else
+                if not use_ringmla else
                 # deepseek mla op need key cache and rope cache
                 (raw_tensor[0].numel() + raw_tensor[1].numel())) * \
                 coef * dtype_size // kv_cache_spec.page_size_bytes
@@ -400,7 +395,7 @@ def _reshape_kv_cache_tensors(
                 kv_cache_layer = []
                 for idx, kv_cache_raw_tensor in enumerate(
                         kv_cache_raw_tensors[layer_name]):
-                    if use_mla_op:
+                    if use_ringmla:
                         # deepseek mla op need key cache and rope cache
                         cache_shape = [
                             *(kv_cache_shape[1:-1]),
