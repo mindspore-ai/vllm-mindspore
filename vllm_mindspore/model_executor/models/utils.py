@@ -27,7 +27,7 @@ from mindspore import mint, ops
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
-from vllm_mindspore.utils import get_valid_dtype
+from vllm_mindspore.utils import get_valid_dtype, is_310p
 
 WeightsMapping = Mapping[str, Optional[str]]
 """If a key maps to a value of `None`, the corresponding weight is ignored."""
@@ -264,3 +264,20 @@ def merge_multimodal_embeddings(
         (input_ids == placeholder_token_id),
         multimodal_embeddings,
     )
+
+
+def is_use_ringmla(vllm_config, mf_config=None):
+    """
+    Determine whether MLA model uses RingMLA
+    """
+    try:
+        import ms_custom_ops  # noqa: F401
+    except ModuleNotFoundError:
+        # environment need install ms_custom_ops package
+        return False
+    if is_310p():
+        return False
+    use_ringmla = (vllm_config.model_config.use_mla
+                   and vllm_config.model_config.quantization is not None
+                   and vllm_config.parallel_config.tensor_parallel_size < 16)
+    return use_ringmla
