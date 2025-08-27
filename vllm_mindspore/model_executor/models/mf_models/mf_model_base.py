@@ -32,7 +32,6 @@ from vllm.distributed import get_tensor_model_parallel_world_size
 from vllm.distributed.parallel_state import get_dp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -213,17 +212,6 @@ class MfModelBase(MsModelBase):
             logits = self.ready_lm_head(hidden_states)
             logits = logits.view(-1, logits.shape[-1])
         return logits
-
-    def sample(
-        self,
-        logits: Tensor,
-        sampling_metadata: SamplingMetadata,
-    ) -> Optional[SamplerOutput]:
-        if not hasattr(self, 'sampler'):
-            raise RuntimeError('sampler not initialized')
-        next_tokens = self.sampler(logits, sampling_metadata)
-        _pynative_executor.sync()
-        return next_tokens
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         raise NotImplementedError("load_weight not implemented.")
