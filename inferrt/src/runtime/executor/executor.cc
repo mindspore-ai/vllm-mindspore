@@ -27,7 +27,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ops/kernel/kernel_lib.h"
+#include "ops/kernel_lib.h"
 
 namespace da {
 namespace runtime {
@@ -116,7 +116,7 @@ GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
   CHECK_IF_NULL(recycler_);
 
   for (auto &&path : GetEnvKernelLibPaths()) {
-    kernel::KernelLibRegistry::Instance().Load(path);
+    ops::KernelLibRegistry::Instance().Load(path);
   }
 }
 
@@ -162,7 +162,7 @@ void GraphExecutor::OptGraph() {
 // Build DAKernels for graph.
 void GraphExecutor::BuildKernels() {
   CHECK_IF_NULL(graph_);
-  auto kernelLib = kernel::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
+  auto kernelLib = ops::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
   CHECK_IF_NULL(kernelLib);
   for (size_t i = 0; i < graph_->nodeSize; ++i) {
     auto node = graph_->node[i];

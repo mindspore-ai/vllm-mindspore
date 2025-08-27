@@ -17,11 +17,11 @@
 #ifndef __KERNEL_ATEN_ATEN_KERNEL_H__
 #define __KERNEL_ATEN_ATEN_KERNEL_H__
 
-#include "ops/kernel/kernel.h"
-#include "ops/kernel/kernel_lib.h"
+#include "ops/operator.h"
+#include "ops/kernel_lib.h"
 
 namespace da {
-namespace kernel {
+namespace ops {
 
 // Aten Kernel lib
 class DA_API AtenKernelLib : public KernelLib {
@@ -61,7 +61,7 @@ DEFINE_ATEN_KERNEL(Sigmoid)
 DEFINE_ATEN_KERNEL(Gelu)
 DEFINE_ATEN_KERNEL(Silu)
 
-}  // namespace kernel
+}  // namespace ops
 }  // namespace da
 
 #endif  // __KERNEL_ATEN_ATEN_KERNEL_H__

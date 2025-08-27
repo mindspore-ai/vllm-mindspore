@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "ops/kernel/kernel.h"
-#include "ops/kernel/kernel_lib.h"
+#include "ops/operator.h"
+#include "ops/kernel_lib.h"
 
 namespace da {
-namespace kernel {
+namespace ops {
 
 // Dummy kernel
 class DummyKernel : public DAKernel {
@@ -40,5 +40,5 @@ class DA_API DummyKernelLib : public KernelLib {
 
 DART_REGISTER_KERNEL_LIB("Dummy", DummyKernelLib);
 
-}  // namespace kernel
+}  // namespace ops
 }  // namespace da

@@ -107,7 +107,7 @@ make
 # Run essential test
 ##################################################
 # Run inferrt test
-export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/kernel/dummy/libkernel_dummy.so
+export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/dummy/libkernel_dummy.so
 export DART_KERNEL_LIB_NAME=Dummy
 echo "=============================="
 echo "Run da execution test cases:"
@@ -133,7 +133,7 @@ if [[ $TEST_TORCH == 1 ]]; then
     echo "python check_backend.py"
     echo "=============================="
     export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind:$INFERRT_PATH/inferrt/python
-    export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/kernel/cpu/aten/libkernel_aten.so
+    export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/cpu/aten/libkernel_aten.so
     export DART_KERNEL_LIB_NAME=Aten
     python $INFERRT_PATH/inferrt/python/check_backend.py
 fi
