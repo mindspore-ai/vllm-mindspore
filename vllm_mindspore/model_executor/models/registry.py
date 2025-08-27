@@ -51,6 +51,8 @@ _NATIVE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
     "Qwen3ForCausalLM": ("qwen3", "Qwen3ForCausalLM"),
+    "InternLM2ForCausalLM": ("internlm2", "InternLM2ForCausalLM"),
+    "InternLM3ForCausalLM": ("internlm3", "LlamaForCausalLM"),
     "Qwen2_5_VLForConditionalGeneration":
     ("qwen2_5_vl", "Qwen2_5_VLForConditionalGeneration"),
 }
