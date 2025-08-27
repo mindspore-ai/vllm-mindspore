@@ -218,7 +218,6 @@ class InferRotaryEmbedding(nn.Cell):
         if get_model_context("is_prefill"):
             return self.rotary_embedding_op(query, key, self.freqs_cos,
                                             self.freqs_sin, batch_valid_length)
-
         freqs_cos = mint.index_select(self.freqs_cos, 0, positions)
         freqs_sin = mint.index_select(self.freqs_sin, 0, positions)
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
@@ -1558,6 +1557,51 @@ class InferPhi3LongRoPEScaledRotaryEmbedding(nn.Cell):
         return query_flat, key_flat
 
 
+class DynamicNTKScalingRotaryEmbedding(InferRotaryEmbedding):
+    """RotaryEmbedding extended with Dynamic NTK scaling.
+
+    Credits to the Reddit users /u/bloc97 and /u/emozilla
+    """
+
+    def __init__(
+        self,
+        head_size: int,
+        rotary_dim: int,
+        max_position_embeddings: int,
+        base: float,
+        is_neox_style: bool,
+        scaling_factor: float,
+        dtype,
+    ) -> None:
+        self.scaling_factor = scaling_factor
+        super().__init__(head_size, rotary_dim, max_position_embeddings, base,
+                         is_neox_style, dtype)
+
+    def _compute_cos_sin_cache(self) -> tuple[Tensor, Tensor]:
+        # NOTE(woosuk): self.max_position_embeddings is the original
+        # maximum length before applying the rope scaling.
+        # Thus, the maximum length after applying the rope scaling is
+        # self.max_position_embeddings * self.scaling_factor.
+        max_len = self.max_position_embeddings * self.scaling_factor
+        base = self.base * (
+            (self.scaling_factor * max_len / self.max_position_embeddings) -
+            (self.scaling_factor - 1))**(self.rotary_dim /
+                                         (self.rotary_dim - 2))
+        inv_freq = self._compute_inv_freq(base)
+        t = np.arange(max_len).astype(np.float32)
+        freqs = np.einsum("i,j -> ij", t, inv_freq)
+        freqs_cos = np.cos(freqs)
+        freqs_sin = np.sin(freqs)
+
+        # Refer to ApplyRotaryPosEmb: repeat cos/sin hidden dimension to meet
+        # ApplyRotaryPosEmb op requirements.
+        freqs_cos = np.tile(freqs_cos, (1, 2))
+        freqs_sin = np.tile(freqs_sin, (1, 2))
+        cos = Tensor(freqs_cos, dtype=self.dtype)
+        sin = Tensor(freqs_sin, dtype=self.dtype)
+        return cos, sin
+
+
 def get_rope(
     head_size: int,
     rotary_dim: int,
@@ -1625,6 +1669,11 @@ def get_rope(
                 )
             else:
                 raise NotImplementedError
+        elif scaling_type == "dynamic":
+            scaling_factor = rope_scaling["factor"]
+            rotary_emb = DynamicNTKScalingRotaryEmbedding(
+                head_size, rotary_dim, max_position, base, is_neox_style,
+                scaling_factor, dtype)
         elif scaling_type == "yarn":
             scaling_factor = rope_scaling["factor"]
             original_max_position = rope_scaling[
