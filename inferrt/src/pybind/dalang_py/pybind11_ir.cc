@@ -27,7 +27,7 @@ namespace py = pybind11;
 using namespace mrt;
 using namespace mrt::runtime;
 
-static ir::Value ConvertBufferInfoToValue(const py::buffer_info &info) {
+static ir::ValuePtr ConvertBufferInfoToValue(const py::buffer_info &info) {
   ir::DataType type;
   if (info.format == py::format_descriptor<float>::format())
     type = ir::DataType::Float32;
@@ -44,17 +44,14 @@ static ir::Value ConvertBufferInfoToValue(const py::buffer_info &info) {
   else
     throw std::runtime_error("Unsupported numpy dtype for buffer conversion");
   std::vector<int64_t> dims(info.shape.begin(), info.shape.end());
-  auto tensor = ir::FromBlob(info.ptr, dims, type, hardware::Device(hardware::DeviceType::CPU, 0));
-  return ir::Value(tensor);
+  auto tensor = ir::Tensor(info.ptr, dims, type, hardware::Device(hardware::DeviceType::CPU, 0));
+  return ir::MakeIntrusive<ir::Value>(std::move(tensor));
 }
 
-static py::array ConvertValueToNumpyArray(ir::Value value) {
-  auto tensor = value.ToTensor();
-  if (!tensor.Defined()) {
-    throw std::runtime_error("Cannot convert Value with null data to numpy array");
-  }
+static py::array ConvertValueToNumpyArray(ir::ValuePtr value) {
+  auto tensor = value->ToTensor();
   std::string format;
-  switch (tensor.Dtype()) {
+  switch (tensor->Dtype()) {
     case ir::DataType::Float32:
       format = py::format_descriptor<float>::format();
       break;
@@ -76,16 +73,14 @@ static py::array ConvertValueToNumpyArray(ir::Value value) {
     default:
       throw std::runtime_error("Unsupported dtype for numpy conversion");
   }
-  std::vector<size_t> shape(tensor.Shape().begin(), tensor.Shape().end());
-  auto result = py::array(py::dtype(format), shape, tensor.DataPtr());
+  std::vector<size_t> shape(tensor->Shape().begin(), tensor->Shape().end());
+  auto result = py::array(py::dtype(format), shape, tensor->DataPtr());
   return result;
 }
 
-static std::vector<py::array> ConvertValueToNumpyArrayList(ir::Value value) {
-  auto tuple = value.ToTuple();
-
+static std::vector<py::array> ConvertValueToNumpyArrayList(ir::ValuePtr value) {
   std::vector<py::array> result;
-  for (auto &item : tuple.GetElements()) {
+  for (auto &item : *(value->ToTuple())) {
     (void)result.emplace_back(ConvertValueToNumpyArray(item));
   }
   return result;

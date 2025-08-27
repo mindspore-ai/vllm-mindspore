@@ -20,20 +20,14 @@
 namespace mrt {
 namespace ir {
 
-Value::Value(Tensor v) : tag_(Tag::Tensor), tensor_(std::move(v)) {}
+Value::Value(Tensor &&v) : tag_(Tag::Tensor) { new (&tensor_) Tensor(std::move(v)); }
 Value::Value(double v) : tag_(Tag::Double), double_(v) {}
 Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
-Value::Value(std::string v) : tag_(Tag::String), string_(std::move(v)) {}
-Value::Value(Tuple v) : tag_(Tag::Tuple), tuple_(std::move(v)) {}
+Value::Value(std::string &&v) : tag_(Tag::String) { new (&string_) std::string(std::move(v)); }
+Value::Value(Tuple &&v) : tag_(Tag::Tuple) { new (&tuple_) Tuple(std::move(v)); }
 
-Value::~Value() { Destroy(); }
-
-/**
- * @brief Destroys the currently held value by explicitly calling its destructor.
- * This is necessary because the value is stored in a union.
- */
-void Value::Destroy() {
+Value::~Value() {
   switch (tag_) {
     case Tag::Tensor:
       tensor_.~Tensor();
@@ -49,111 +43,18 @@ void Value::Destroy() {
   }
 }
 
-/**
- * @brief Copies the value from another Value object using placement new.
- * @param other The Value to copy from.
- */
-void Value::CopyFrom(const Value &other) {
-  tag_ = other.tag_;
-  switch (tag_) {
-    case Tag::Tensor:
-      new (&tensor_) Tensor(other.tensor_);
-      break;
-    case Tag::Double:
-      double_ = other.double_;
-      break;
-    case Tag::Int:
-      int_ = other.int_;
-      break;
-    case Tag::Bool:
-      bool_ = other.bool_;
-      break;
-    case Tag::String:
-      new (&string_) std::string(other.string_);
-      break;
-    case Tag::Tuple:
-      new (&tuple_) Tuple(other.tuple_);
-      break;
-    case Tag::None:
-      break;
-  }
-}
-
-Value::Value(const Value &other) { CopyFrom(other); }
-
-Value &Value::operator=(const Value &other) {
-  if (this != &other) {
-    Destroy();
-    CopyFrom(other);
-  }
-  return *this;
-}
-
-Value::Value(Value &&other) noexcept : tag_(other.tag_) {
-  switch (tag_) {
-    case Tag::Tensor:
-      new (&tensor_) Tensor(std::move(other.tensor_));
-      break;
-    case Tag::Double:
-      double_ = other.double_;
-      break;
-    case Tag::Int:
-      int_ = other.int_;
-      break;
-    case Tag::Bool:
-      bool_ = other.bool_;
-      break;
-    case Tag::String:
-      new (&string_) std::string(std::move(other.string_));
-      break;
-    case Tag::Tuple:
-      new (&tuple_) Tuple(std::move(other.tuple_));
-      break;
-    case Tag::None:
-      break;
-  }
-  other.tag_ = Tag::None;
-}
-
-Value &Value::operator=(Value &&other) noexcept {
-  if (this != &other) {
-    Destroy();
-    tag_ = other.tag_;
-    switch (tag_) {
-      case Tag::Tensor:
-        new (&tensor_) Tensor(std::move(other.tensor_));
-        break;
-      case Tag::Double:
-        double_ = other.double_;
-        break;
-      case Tag::Int:
-        int_ = other.int_;
-        break;
-      case Tag::Bool:
-        bool_ = other.bool_;
-        break;
-      case Tag::String:
-        new (&string_) std::string(std::move(other.string_));
-        break;
-      case Tag::Tuple:
-        new (&tuple_) Tuple(std::move(other.tuple_));
-        break;
-      case Tag::None:
-        break;
-    }
-    other.tag_ = Tag::None;
-  }
-  return *this;
-}
-
 #define CHECK_TAG(expected)                       \
   if (tag_ != expected) {                         \
     throw std::runtime_error("Bad Value access"); \
   }
 
-Tensor Value::ToTensor() const {
+const Tensor *Value::ToTensor() const {
   CHECK_TAG(Tag::Tensor);
-  return tensor_;
+  return &tensor_;
+}
+Tensor *Value::ToTensor() {
+  CHECK_TAG(Tag::Tensor);
+  return &tensor_;
 }
 double Value::ToDouble() const {
   CHECK_TAG(Tag::Double);
@@ -167,53 +68,67 @@ bool Value::ToBool() const {
   CHECK_TAG(Tag::Bool);
   return bool_;
 }
-const std::string &Value::ToString() const {
+const std::string *Value::ToString() const {
   CHECK_TAG(Tag::String);
-  return string_;
+  return &string_;
 }
-Tuple Value::ToTuple() const {
+std::string *Value::ToString() {
+  CHECK_TAG(Tag::String);
+  return &string_;
+}
+const Tuple *Value::ToTuple() const {
   CHECK_TAG(Tag::Tuple);
-  return tuple_;
+  return &tuple_;
+}
+Tuple *Value::ToTuple() {
+  CHECK_TAG(Tag::Tuple);
+  return &tuple_;
 }
 
-std::ostream &operator<<(std::ostream &os, const Value &value) {
-  switch (value.GetTag()) {
+std::ostream &operator<<(std::ostream &os, const Tuple *tuple) {
+  os << "Tuple(";
+  const auto tupleSize = tuple->Size();
+  for (size_t i = 0; i < tupleSize; ++i) {
+    os << (*tuple)[i];
+    if (i < tupleSize - 1) {
+      os << ", ";
+    }
+  }
+  os << ")";
+  return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const ValuePtr &value) {
+  return operator<<(os, value.get());
+}
+
+std::ostream &operator<<(std::ostream &os, const Value *value) {
+  switch (value->tag_) {
     case Value::Tag::None:
       os << "None";
       break;
     case Value::Tag::Tensor:
-      os << value.ToTensor();
+      os << value->ToTensor();
       break;
     case Value::Tag::Double:
-      os << value.ToDouble();
+      os << value->ToDouble();
       break;
     case Value::Tag::Int:
-      os << value.ToInt();
+      os << value->ToInt();
       break;
     case Value::Tag::Bool:
-      os << (value.ToBool() ? "true" : "false");
+      os << (value->ToBool() ? "true" : "false");
       break;
     case Value::Tag::String:
-      os << "\"" << value.ToString() << "\"";
+      os << "\"" << value->ToString() << "\"";
       break;
-    case Value::Tag::Tuple: {
-      os << "Tuple(";
-      auto tuple = value.ToTuple();
-      if (tuple.Defined() && !tuple.GetElements().empty()) {
-        const auto &elements = tuple.GetElements();
-        for (size_t i = 0; i < elements.size(); ++i) {
-          os << elements[i];
-          if (i < elements.size() - 1) {
-            os << ", ";
-          }
-        }
-      }
-      os << ")";
+    case Value::Tag::Tuple:
+      os << value->ToTuple();
       break;
-    }
   }
   return os;
 }
 
 }  // namespace ir
 }  // namespace mrt
+

@@ -47,25 +47,25 @@ at::ScalarType ToAtenDType(ir::DataType type) {
   }
 }
 
-at::Tensor ToAtenTensor(ir::Value value) {
-  auto tensor = value.ToTensor();
-  auto options = at::TensorOptions().dtype(ToAtenDType(tensor.Dtype()));
-  return at::from_blob(tensor.DataPtr(), tensor.Shape(), options);
+at::Tensor ToAtenTensor(ir::ValuePtr value) {
+  auto tensor = value->ToTensor();
+  auto options = at::TensorOptions().dtype(ToAtenDType(tensor->Dtype()));
+  return at::from_blob(tensor->DataPtr(), tensor->Shape(), options);
 }
 }  // namespace
 
 // AtenKernel
 void AtenKernel::InferShape() {
   std::vector<int64_t> dims;
-  auto dtype = node_->inputs[0]->output.ToTensor().Dtype();
+  auto dtype = node_->inputs[0]->output->ToTensor()->Dtype();
   if (node_->inputs.size() == 1) {
-    dims = node_->inputs[0]->output.ToTensor().Shape();
+    dims = node_->inputs[0]->output->ToTensor()->Shape();
   } else if (node_->inputs.size() == 2) {
-    auto in0Dims = node_->inputs[0]->output.ToTensor().Shape();
-    auto in1Dims = node_->inputs[1]->output.ToTensor().Shape();
+    auto in0Dims = node_->inputs[0]->output->ToTensor()->Shape();
+    auto in1Dims = node_->inputs[1]->output->ToTensor()->Shape();
     dims = at::infer_size(in0Dims, in1Dims);
   }
-  node_->output = ir::Value(ir::Empty(dims, dtype, hardware::Device(hardware::DeviceType::CPU, 0)));
+  node_->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(dims, dtype, hardware::Device(hardware::DeviceType::CPU, 0)));
 }
 
 void AtenKernel::Resize() {}

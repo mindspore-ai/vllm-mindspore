@@ -32,8 +32,6 @@ extern const std::unordered_map<ops::Op, size_t> opsOutputValueFromInputIndex;
 extern const std::set<ops::Op> dummyOpsSet;
 extern const std::set<ops::Op> forceResizeOpsSet;
 
-void GetNodeRealInputs(ir::NodePtr node);
-
 inline bool IsSkipRecordRefCount(ir::NodePtr tensor) {
   CHECK_IF_NULL(tensor);
   return (tensor->op == ops::Op_End || tensor->op == ops::Op_load || tensor->op == ops::Op_update_state);

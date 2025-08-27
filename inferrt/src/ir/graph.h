@@ -22,7 +22,6 @@
 #include <memory>
 #include <sstream>
 
-#include "ir/common/intrusive_ptr.h"
 #include "ir/value/value.h"
 #include "ops/op_def/ops_name.h"
 
@@ -37,7 +36,7 @@ namespace ir {
 struct Node {
   ops::Op op;                                 ///< The operation performed by this node.
   std::vector<std::shared_ptr<Node>> inputs;  ///< The input nodes to the operation.
-  Value output;                               ///< The output value from the operation.
+  ValuePtr output{nullptr};                   ///< The output value from the operation.
 };
 
 /**

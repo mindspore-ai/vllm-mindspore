@@ -23,14 +23,13 @@ namespace mrt {
 namespace ir {
 
 /**
- * @brief Constructs a StorageImpl, allocating memory on the specified device.
+ * @brief Constructs a Storage, allocating memory on the specified device.
  * @param sizeBytes The size of the storage in bytes.
  * @param device The device to allocate memory on.
  * @throws std::bad_alloc if memory allocation fails.
  * @throws std::runtime_error if the device type is not supported.
  */
-StorageImpl::StorageImpl(size_t sizeBytes, hardware::Device device)
-    : sizeBytes_(sizeBytes), device_(device), ownsData_(true) {
+Storage::Storage(size_t sizeBytes, hardware::Device device) : sizeBytes_(sizeBytes), device_(device), ownsData_(true) {
   if (device.type == hardware::DeviceType::CPU) {
     data_ = malloc(sizeBytes);
     if (!data_) {
@@ -42,13 +41,13 @@ StorageImpl::StorageImpl(size_t sizeBytes, hardware::Device device)
   }
 }
 
-StorageImpl::StorageImpl(void *data, size_t sizeBytes, hardware::Device device)
+Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
     : data_(data), sizeBytes_(sizeBytes), device_(device), ownsData_(false) {}
 
 /**
- * @brief Destroys the StorageImpl, freeing the allocated memory if it owns it.
+ * @brief Destroys the Storage, freeing the allocated memory if it owns it.
  */
-StorageImpl::~StorageImpl() {
+Storage::~Storage() {
   if (data_ && ownsData_) {
     if (device_.type == hardware::DeviceType::CPU) {
       free(data_);

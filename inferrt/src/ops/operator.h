@@ -71,7 +71,7 @@ class Operator {
    *  output may be one of types such as Tensor, Tuple, etc.
    *  @return OpsErrorCode Error code indicating success or failure of shape inference.
    */
-  virtual OpsErrorCode InferShape(const std::vector<ir::Value> &input, ir::Value output) = 0;
+  virtual OpsErrorCode InferShape(const std::vector<ir::Value *> &input, ir::Value *output) = 0;
 
   /**
    * @brief Calculate total workspace memory size requirements for the kernel computation.
@@ -81,7 +81,7 @@ class Operator {
    * to the variable pointed by `workspace_size`.
    * @return OpsErrorCode Error code indicating success or failure of workspace calculation.
    */
-  virtual OpsErrorCode CalcWorkspace(const std::vector<ir::Value> &input, const ir::Value output,
+  virtual OpsErrorCode CalcWorkspace(const std::vector<ir::Value *> &input, const ir::Value *output,
                                      size_t *workspace_size) {
     return SUCCESS;
   }
@@ -103,8 +103,8 @@ class Operator {
    * @return OpsErrorCode Return SUCCESS if execution completed successfully, or an appropriate
    *         error code if the operation failed.
    */
-  virtual OpsErrorCode Launch(const std::vector<ir::Value> &input, const std::vector<ir::Value> &workspace,
-                              ir::Value output, void *stream) = 0;
+  virtual OpsErrorCode Launch(const std::vector<ir::Value *> &input, const std::vector<ir::Value *> &workspace,
+                              ir::Value *output, void *stream) = 0;
 
   /**
    * @brief This method indicates if the operator requires output shape updates after the Launch
