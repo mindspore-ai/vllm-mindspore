@@ -20,11 +20,11 @@
 #include <set>
 #include <unordered_map>
 
-#include "ir/tensor/tensor.h"
+#include "common/common.h"
+#include "ir/graph.h"
 
-namespace da {
+namespace mrt {
 namespace runtime {
-using tensor::DATensor;
 constexpr size_t kFirstInput = 0;
 constexpr size_t kSecondInput = 1;
 extern const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex;
@@ -32,57 +32,34 @@ extern const std::unordered_map<ops::Op, size_t> opsOutputValueFromInputIndex;
 extern const std::set<ops::Op> dummyOpsSet;
 extern const std::set<ops::Op> forceResizeOpsSet;
 
-template <typename T>
-const T GetValue(const DATensor *tensor) {
-  if (tensor->tensorType != tensor::HOST_TENSOR || tensor->dim != 0) {
-    LOG_ERROR << "Input DATensor is not HOST_TENSOR or is not a scalar";
-    exit(EXIT_FAILURE);
-  }
+void GetNodeRealInputs(ir::NodePtr node);
 
-  const T *dataPtr = reinterpret_cast<const T *>(tensor->data);
-  LOG_OUT << "GetValue for DATensor: " << tensor << ", dataPtr: " << dataPtr;
-  CHECK_IF_NULL(dataPtr);
-  return *dataPtr;
-}
-
-void GetNodeRealInputs(DATensor *node);
-
-inline void CloneDATensorTypeAndShape(DATensor *dstNode, DATensor *sourceNode) {
-  CHECK_IF_NULL(dstNode);
-  CHECK_IF_NULL(sourceNode);
-  dstNode->type = sourceNode->type;
-  dstNode->dim = sourceNode->dim;
-  for (size_t i = 0; i < dstNode->dim; ++i) {
-    dstNode->shape[i] = sourceNode->shape[i];
-  }
-}
-
-inline bool IsSkipRecordRefCount(DATensor *tensor) {
+inline bool IsSkipRecordRefCount(ir::NodePtr tensor) {
   CHECK_IF_NULL(tensor);
   return (tensor->op == ops::Op_End || tensor->op == ops::Op_load || tensor->op == ops::Op_update_state);
 }
 
-inline bool IsDATensorOutputFromInput(DATensor *tensor) {
+inline bool IsNodeOutputFromInput(ir::NodePtr tensor) {
   CHECK_IF_NULL(tensor);
   return opsOutputFromInputIndex.find(tensor->op) != opsOutputFromInputIndex.end();
 }
 
-inline bool IsDummyDATensorNode(DATensor *node) {
+inline bool IsDummyNode(ir::NodePtr node) {
   CHECK_IF_NULL(node);
   return dummyOpsSet.find(node->op) != dummyOpsSet.end();
 }
 
-inline bool IsSkipBuildDAKernel(DATensor *node) {
+inline bool IsSkipBuildDAKernel(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  return (IsDATensorOutputFromInput(node) || node->op == ops::Op_End || node->op == ops::Op_make_tuple ||
+  return (IsNodeOutputFromInput(node) || node->op == ops::Op_End || node->op == ops::Op_make_tuple ||
           node->op == ops::Op_tuple_getitem);
 }
 
-inline bool IsDAKernelNeedForceResize(DATensor *node) {
+inline bool IsDAKernelNeedForceResize(ir::NodePtr node) {
   CHECK_IF_NULL(node);
   return forceResizeOpsSet.find(node->op) != forceResizeOpsSet.end();
 }
 
 }  // namespace runtime
-}  // namespace da
+}  // namespace mrt
 #endif  // __RUNTIME_UTILS_H__

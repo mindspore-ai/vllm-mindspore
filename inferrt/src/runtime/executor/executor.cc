@@ -29,7 +29,7 @@
 
 #include "ops/kernel_lib.h"
 
-namespace da {
+namespace mrt {
 namespace runtime {
 namespace {
 const std::vector<std::string> GetEnvKernelLibPaths() {
@@ -64,54 +64,25 @@ const std::string GetEnvKernelLibName() {
   return name;
 }
 
-#ifdef SERIAL
-size_t GetEnvThreadPoolSize() {
-  const size_t kDefaultThreadPoolSize = 1;
-  constexpr char kThreadPoolSizeEnvName[] = "DART_THREAD_POOL_SIZE";
-  const char *poolSizeStr = std::getenv(kThreadPoolSizeEnvName);
-  if (poolSizeStr == nullptr) {
-    return kDefaultThreadPoolSize;
+void ProcessMakeTuple(ir::NodePtr node) {
+  CHECK_IF_NULL(node);
+  std::vector<ir::Value> elements;
+  for (auto &input : node->inputs) {
+    elements.emplace_back(input->output);
   }
-  return std::stoul(poolSizeStr);
-}
-#endif
-
-void ProcessMakeTuple(DATensor *makeTupleNode) {
-  CHECK_IF_NULL(makeTupleNode);
-  CHECK_IF_FAIL(makeTupleNode->type == tensor::Type_Tensor);
-  CHECK_IF_FAIL(makeTupleNode->shape[0] == makeTupleNode->inputSize);
-  auto **tensorList = static_cast<DATensor **>(makeTupleNode->data);
-  CHECK_IF_NULL(tensorList);
-  for (size_t i = 0; i < makeTupleNode->inputSize; ++i) {
-    tensorList[i]->data = makeTupleNode->input[i]->data;
-    CloneDATensorTypeAndShape(tensorList[i], makeTupleNode->input[i]);
-  }
+  node->output = ir::Value(ir::Tuple(std::move(elements)));
 }
 
-void ProcessTupleGetItem(DATensor *tupleGetItemNode) {
-  CHECK_IF_NULL(tupleGetItemNode)
-  CHECK_IF_FAIL(tupleGetItemNode->input[kFirstInput]->type == tensor::Type_Tensor);
-  auto index = static_cast<size_t>(GetValue<int64_t>(tupleGetItemNode->input[kSecondInput]));
-  LOG_OUT << "Run Op_tuple_getitem, tensor: " << tupleGetItemNode
-          << ", input_tensor: " << tupleGetItemNode->input[kFirstInput]
-          << ", index_tensor: " << tupleGetItemNode->input[kSecondInput] << ", index: " << index;
-  CHECK_IF_FAIL(index < tupleGetItemNode->input[kFirstInput]->shape[0]);
-  auto **inputTensorList = static_cast<DATensor **>(tupleGetItemNode->input[kFirstInput]->data);
-  CHECK_IF_NULL(inputTensorList);
-  tupleGetItemNode->data = inputTensorList[index]->data;
-  CloneDATensorTypeAndShape(tupleGetItemNode, inputTensorList[index]);
-}
-
-void ProcessOutputFromInput(DATensor *outputFromInputNode, size_t inputIndex) {
-  CHECK_IF_NULL(outputFromInputNode);
-  outputFromInputNode->data = outputFromInputNode->input[inputIndex]->data;
-  CloneDATensorTypeAndShape(outputFromInputNode, outputFromInputNode->input[inputIndex]);
+void ProcessTupleGetItem(ir::NodePtr node) {
+  CHECK_IF_NULL(node);
+  auto index = node->inputs[kSecondInput]->output.ToInt();
+  auto &elements = node->inputs[kFirstInput]->output.ToTuple().GetElements();
+  CHECK_IF_FAIL(static_cast<size_t>(index) < elements.size());
+  node->output = elements[index];
 }
 }  // namespace
 
-GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
-  CHECK_IF_NULL(context_);
-
+GraphExecutor::GraphExecutor() {
   recycler_ = new TensorDataRecycler();
   CHECK_IF_NULL(recycler_);
 
@@ -121,10 +92,6 @@ GraphExecutor::GraphExecutor() : context_{tensor::NewDAContext()} {
 }
 
 GraphExecutor::~GraphExecutor() {
-  CHECK_IF_NULL(context_);
-  FreeDAContext(context_);
-  context_ = nullptr;
-
   CHECK_IF_NULL(recycler_);
   delete recycler_;
   recycler_ = nullptr;
@@ -138,8 +105,7 @@ GraphExecutor::~GraphExecutor() {
 void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
   CHECK_IF_FAIL(graph_ == nullptr);
-  CHECK_IF_NULL(context_);
-  graph_ = tensor::NewDAGraph(context_);
+  graph_ = std::make_shared<ir::Graph>();
   name_ = name;
 }
 
@@ -154,8 +120,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((DATensor * (GraphExecutor::*)(ops::Op, DATensor **, size_t)) & GraphExecutor::AddTensor, this,
-              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &)) & GraphExecutor::AddTensor, this,
+              std::placeholders::_1, std::placeholders::_2);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
 
@@ -164,8 +130,7 @@ void GraphExecutor::BuildKernels() {
   CHECK_IF_NULL(graph_);
   auto kernelLib = ops::KernelLibRegistry::Instance().Get(GetEnvKernelLibName());
   CHECK_IF_NULL(kernelLib);
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    auto node = graph_->node[i];
+  for (auto &node : graph_->nodes) {
     CHECK_IF_NULL(node);
     if (IsSkipBuildDAKernel(node)) {
       continue;
@@ -179,107 +144,49 @@ void GraphExecutor::BuildKernels() {
   }
 }
 
-// Add a parameter for graph.
-void GraphExecutor::AddParameter(DATensor *param) {
+// Add a node as parameter for graph.
+void GraphExecutor::AddParameter(ir::NodePtr param) {
   LOG_OUT << "Add parameter: " << param << " for graph: " << graph_;
-  tensor::AddParameter(graph_, param);
-}
-
-// Add parameters for graph.
-void GraphExecutor::AddParameters(const std::vector<DATensor *> &params) {
-  LOG_OUT << "Add parameters[" << params.size() << "] for graph: " << graph_;
-  for (const auto &param : params) {
-    tensor::AddParameter(graph_, param);
-  }
+  CHECK_IF_NULL(param);
+  CHECK_IF_FAIL(param->op == ops::Op_End);
+  (void)parameters_.emplace_back(param);
 }
 
 // Add a const tensor.
-DATensor *GraphExecutor::AddTensor(tensor::Type type, size_t dim, const tensor::ShapeArray &shape, void *data) {
+ir::NodePtr GraphExecutor::AddTensor() {
   LOG_OUT << "Add const tensor";
-  CHECK_IF_NULL(context_);
-  auto *tensor = tensor::NewDATensor(context_, type, dim, shape, data);
-  CHECK_IF_NULL(tensor);
-  if (graph_ != nullptr) {
-    tensor::AddTensor(graph_, tensor);
-  }
-  return tensor;
-}
-
-// Add tensor for graph
-void GraphExecutor::AddTensor(DATensor *tensor) {
-  LOG_OUT << "Add const tensor";
-  CHECK_IF_NULL(context_);
-  CHECK_IF_NULL(tensor);
-  CHECK_IF_NULL(graph_);
-  tensor::AddTensor(graph_, tensor);
+  auto node = std::make_shared<ir::Node>();
+  node->op = ops::Op_End;
+  return node;
 }
 
 // Add operation result tensor.
-DATensor *GraphExecutor::AddTensor(ops::Op op, DATensor **start, size_t size) {
-  LOG_OUT << "Add tensor";
-  const auto tensorListSize = size;
-  LOG_OUT << "tensor input size: " << tensorListSize;
-  CHECK_IF_FAIL(tensorListSize <= DA_TENSOR_MAX_INPUT);
-  CHECK_IF_NULL(context_);
-  auto *tensor = tensor::NewDATensor(context_);
-  CHECK_IF_NULL(tensor);
-  tensor->op = op;
-  for (size_t i = 0; i < tensorListSize; ++i) {
-    tensor->input[i] = start[i];
-    ++tensor->inputSize;
-  }
-  CHECK_IF_NULL(graph_);
-  tensor::AddTensor(graph_, tensor);
-  return tensor;
-}
-
-// Add operation result tensor.
-DATensor *GraphExecutor::AddTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
+ir::NodePtr GraphExecutor::AddTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
   LOG_OUT << "Add tensor";
   LOG_OUT << "tensor input size: " << inputs.size();
-  CHECK_IF_FAIL(inputs.size() <= DA_TENSOR_MAX_INPUT);
-  CHECK_IF_NULL(context_);
-  auto *tensor = tensor::NewDATensor(context_);
-  CHECK_IF_NULL(tensor);
-  tensor->op = op;
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    tensor->input[i] = inputs[i];
-    ++tensor->inputSize;
-  }
+  auto node = std::make_shared<ir::Node>();
+  CHECK_IF_NULL(node);
+  node->op = op;
+  node->inputs = inputs;
   CHECK_IF_NULL(graph_);
-  tensor::AddTensor(graph_, tensor);
-  return tensor;
+  (void)graph_->nodes.emplace_back(node);
+  return node;
 }
 
 // Add return node.
-DATensor *GraphExecutor::AddReturn() {
+ir::NodePtr GraphExecutor::AddReturn() {
   LOG_OUT << "Add return";
-  CHECK_IF_NULL(context_);
-  auto *tensor = tensor::NewDATensor(context_);
-  CHECK_IF_NULL(tensor);
-  tensor->op = ops::Op_return;
-  tensor->inputSize = 1;
+  auto node = std::make_shared<ir::Node>();
+  CHECK_IF_NULL(node);
+  node->op = ops::Op_return;
+  node->inputs.emplace_back(graph_->nodes[graph_->nodes.size() - 1]);
   CHECK_IF_NULL(graph_);
-  CHECK_IF_FAIL(graph_->nodeSize > 0);
-  tensor->input[0] = graph_->node[graph_->nodeSize - 1];
-  tensor::AddTensor(graph_, tensor);
-  return tensor;
+  (void)graph_->nodes.emplace_back(node);
+  return node;
 }
 
-// Add tensor list to tensor.
-void GraphExecutor::CastToTensorList(DATensor *tensor, size_t len) {
-  LOG_OUT << "Add tensor list";
-  CHECK_IF_NULL(context_);
-  CHECK_IF_NULL(tensor);
-  tensor->type = tensor::Type_Tensor;
-  tensor->dim = 1;
-  tensor->shape[0] = len;
-  auto **tensorList = tensor::NewDATensorList(context_, len);
-  tensor->data = static_cast<void *>(tensorList);
-}
-
-// Run DATensor node
-void GraphExecutor::RunTensor(DATensor *node) {
+// Run a single node
+void GraphExecutor::RunNode(ir::NodePtr node) {
   if (node->op == ops::Op_End) {
     return;
   }
@@ -295,13 +202,13 @@ void GraphExecutor::RunTensor(DATensor *node) {
   }
 
   if (auto it = opsOutputFromInputIndex.find(node->op); it != opsOutputFromInputIndex.end()) {
-    ProcessOutputFromInput(node, it->second);
+    node->output = node->inputs[it->second]->output;
     return;
   }
 
   auto iter = kernels_.find(node);
   if (iter == kernels_.end()) {
-    LOG_ERROR << "kernel not found: " << ops::ToStr(node->op);
+    LOG_ERROR << "kernel not found: " << node;
     exit(EXIT_FAILURE);
   }
   auto kernel = iter->second;
@@ -314,8 +221,10 @@ void GraphExecutor::RunTensor(DATensor *node) {
   }
 
   if (auto it = opsOutputValueFromInputIndex.find(node->op); it != opsOutputValueFromInputIndex.end()) {
-    LOG_OUT << "Skip launch kernel for ops." << ops::ToStr(node->op);
-    node->data = node->input[it->second]->data;
+    LOG_OUT << "Skip launch kernel for node" << node;
+    auto outputTensor = node->output.ToTensor();
+    auto inputStorage = node->inputs[it->second]->output.ToTensor().GetStorage();
+    node->output = ir::Value(ir::Tensor(inputStorage, outputTensor.Dtype(), outputTensor.Shape()));
   } else {
     kernel->Launch();
   }
@@ -330,7 +239,7 @@ void GraphExecutor::RunTensor(DATensor *node) {
 void GraphExecutor::FreeGraphOutputs() {
   CHECK_IF_NULL(graph_);
   CHECK_IF_NULL(recycler_);
-  auto returnNode = graph_->node[graph_->nodeSize - 1];
+  auto returnNode = graph_->nodes[graph_->nodes.size() - 1];
   CHECK_IF_FAIL(returnNode->op == ops::Op_return);
   recycler_->FreeUnusedNodes(returnNode);
   recycler_->PrintRunningRefCounts();
@@ -340,94 +249,25 @@ void GraphExecutor::FreeGraphOutputs() {
 void GraphExecutor::RecordTensorRefCount() {
   CHECK_IF_NULL(recycler_);
   CHECK_IF_NULL(graph_);
-  CHECK_IF_NULL(context_);
 
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    recycler_->ForwardRecordInputsRefCounts(graph_->node[i]);
+  for (auto &node : graph_->nodes) {
+    recycler_->ForwardRecordInputsRefCounts(node);
   }
 }
 
 // Run the built graph.
 void GraphExecutor::RunGraph(bool isDynamic) {
   LOG_OUT << "Run graph, isDynamic: " << isDynamic;
-  CHECK_IF_NULL(context_);
   CHECK_IF_NULL(graph_);
   CHECK_IF_NULL(recycler_);
 
   isDynamic_ = isDynamic;
   recycler_->ResetRunningRefCounts();
 
-#ifndef SERIAL
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    LOG_OUT << "Run tensor, ops." << ops::ToStr(graph_->node[i]->op) << ", DATensor: " << graph_->node[i]
-            << ", index: " << i;
-    RunTensor(graph_->node[i]);
+  for (auto &node : graph_->nodes) {
+    LOG_OUT << "Run node: " << node;
+    RunNode(node);
   }
-#else
-  std::unordered_map<DATensor *, size_t> waitingCount;
-  std::unordered_map<DATensor *, std::vector<DATensor *> > nextNodes;
-  std::queue<DATensor *> readyQueue;
-
-  // Initialize execution DAG.
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    auto node = graph_->node[i];
-    for (size_t j = 0; j < node->inputSize; ++j) {
-      (void)nextNodes[node->input[j]].emplace_back(node);
-    }
-  }
-  // Initialize ready queue with parameters nodes and nodes with no
-  // dependencies.
-  for (size_t i = 0; i < graph_->paramSize; ++i) {
-    (void)readyQueue.emplace(graph_->param[i]);
-  }
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    auto node = graph_->node[i];
-    waitingCount[node] = node->inputSize;
-    if (waitingCount[node] == 0) {
-      (void)readyQueue.emplace(node);
-    }
-  }
-
-  size_t runningCount = 0;
-  std::mutex mutex;
-  std::condition_variable cv;
-  auto worker = [&]() {
-    while (true) {
-      DATensor *node = nullptr;
-      {
-        std::unique_lock<std::mutex> lock(mutex);
-        cv.wait(lock, [&]() { return runningCount == 0 || !readyQueue.empty(); });
-        if (runningCount == 0 && readyQueue.empty()) {
-          return;
-        }
-        node = readyQueue.front();
-        readyQueue.pop();
-        runningCount++;
-      }
-
-      RunTensor(node);
-
-      {
-        std::lock_guard<std::mutex> lock(mutex);
-        for (auto next : nextNodes[node]) {
-          if (--waitingCount[next] == 0) {
-            (void)readyQueue.emplace(next);
-          }
-        }
-        runningCount--;
-        cv.notify_all();
-      }
-    }
-  };
-
-  std::vector<std::thread> thread_pool;
-  for (size_t i = 0; i < GetEnvThreadPoolSize(); ++i) {
-    (void)thread_pool.emplace_back(worker);
-  }
-  for (auto &thread : thread_pool) {
-    thread.join();
-  }
-#endif
 }
 
 #undef DEBUG_DUMP
@@ -435,36 +275,35 @@ void GraphExecutor::RunGraph(bool isDynamic) {
 // Run the built graph.
 void GraphExecutor::DumpGraph() {
   LOG_OUT << "Run graph";
-  CHECK_IF_NULL(context_);
   CHECK_IF_NULL(graph_);
 
   constexpr auto paramPrefix = "param_";
   std::cout << "graph{" << name_ << "}(";
-  for (size_t i = 0; i < graph_->paramSize; ++i) {
-    auto para = graph_->param[i];
+  for (size_t i = 0; i < parameters_.size(); ++i) {
+    auto para = parameters_[i];
     paraNumMap_.emplace(para, i);
     std::cout << paramPrefix << i;
 #ifdef DEBUG_DUMP
     std::cout << "(" << para << ")";
 #endif
-    if (i < graph_->paramSize - 1) {
+    if (i < parameters_.size() - 1) {
       std::cout << ", ";
     }
   }
   std::cout << ") {" << std::endl;
 
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    nodeNumMap_.emplace(graph_->node[i], i);
+  for (size_t i = 0; i < graph_->nodes.size(); ++i) {
+    nodeNumMap_.emplace(graph_->nodes[i], i);
   }
 
   // Run all tensor nodes.
-  DATensor *tensorNode{nullptr};
-  for (size_t i = 0; i < graph_->nodeSize; ++i) {
-    tensorNode = graph_->node[i];
-    size_t inputSize = tensorNode->inputSize;
+  ir::NodePtr tensorNode{nullptr};
+  for (size_t i = 0; i < graph_->nodes.size(); ++i) {
+    tensorNode = graph_->nodes[i];
+    size_t inputSize = tensorNode->inputs.size();
     std::stringstream ss;
     for (size_t j = 0; j < inputSize; ++j) {
-      auto input = tensorNode->input[j];
+      auto input = tensorNode->inputs[j];
       // Find node number firstly.
       auto nodeIt = nodeNumMap_.find(input);
       if (nodeIt != nodeNumMap_.cend()) {
@@ -502,4 +341,4 @@ void GraphExecutor::DumpGraph() {
 }
 #endif
 }  // namespace runtime
-}  // namespace da
+}  // namespace mrt

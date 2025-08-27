@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace da {
+namespace mrt {
 namespace runtime {
 const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex = {
   {ops::Op_return, kFirstInput},
@@ -44,32 +44,23 @@ const std::set<ops::Op> forceResizeOpsSet = {
   ops::Op_paged_attention,
 };
 
-void GetNodeRealInputs(DATensor *node) {
+void GetNodeRealInputs(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  std::vector<DATensor *> realInputs;
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    CHECK_IF_NULL(node->input[i]);
-    if (node->input[i]->type == tensor::Type_Tensor) {
-      auto **tensorList = static_cast<DATensor **>(node->input[i]->data);
-      CHECK_IF_NULL(tensorList);
-      for (size_t j = 0; j < node->input[i]->shape[0]; ++j) {
-        CHECK_IF_NULL(tensorList[j]);
-        if (tensorList[j]->type == tensor::Type_Monad) {
-          continue;
-        }
-        (void)realInputs.emplace_back(tensorList[j]);
+  std::vector<ir::NodePtr > realInputs;
+  for (auto input : node->inputs) {
+    CHECK_IF_NULL(input);
+    if (input->output.IsTuple()) {
+      auto elements = input->output.ToTuple().GetElements();
+      for (const auto &element : elements) {
+        auto fakeNode = std::make_shared<ir::Node>(); // TODO: 
+        fakeNode->output = element;
+        (void)realInputs.emplace_back(fakeNode);
       }
-      continue;
+    } else {
+      (void)realInputs.emplace_back(input);
     }
-    if (node->input[i]->type == tensor::Type_Monad) {
-      continue;
-    }
-    (void)realInputs.emplace_back(node->input[i]);
   }
-  node->inputSize = realInputs.size();
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    node->input[i] = realInputs[i];
-  }
+  node->inputs = realInputs;
 }
 }  // namespace runtime
-}  // namespace da
+}  // namespace mrt

@@ -19,6 +19,8 @@
 #include "common/common.h"
 #include "ops/op_def/ops_name.h"
 
+using namespace mrt;
+
 #define TO_STR(s) #s
 #define INSTRUCTION(I) TO_STR(I),
 const char *_insts[]{// Inst strings.

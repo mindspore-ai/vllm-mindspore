@@ -29,7 +29,7 @@
 #include "common/common.h"
 #include "ops/kernel_lib.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 
 KernelLibRegistry &KernelLibRegistry::Instance() {
@@ -93,4 +93,4 @@ const KernelLib *KernelLibRegistry::Get(const std::string &name) {
 }
 
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt

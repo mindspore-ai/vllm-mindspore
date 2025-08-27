@@ -14,170 +14,210 @@
  * limitations under the License.
  */
 
-#ifndef __TENSOR_TENSOR_H__
-#define __TENSOR_TENSOR_H__
+#ifndef __IR_TENSOR_TENSOR_H__
+#define __IR_TENSOR_TENSOR_H__
 
-#include <utility>
-#include <string>
+#include <vector>
+#include <numeric>
 
-#include "common/visible.h"
-#include "ops/op_def/ops_name.h"
-#include "ir/tensor/tensor_data.h"
+#include "hardware/device.h"
+#include "ir/common/intrusive_ptr.h"
+#include "ir/common/dtype.h"
+#include "ir/tensor/storage.h"
 
-#ifndef DA_TENSOR_MAX_INPUT
-#define DA_TENSOR_MAX_INPUT 512
-#endif
+namespace mrt {
+namespace ir {
 
-#ifndef DA_GRAPH_MAX_PARAM
-#define DA_GRAPH_MAX_PARAM 1024
-#endif
+/**
+ * @brief Implementation of a multi-dimensional array (tensor).
+ *
+ * This class holds the metadata of a tensor, such as its dimensions, data type,
+ * and a reference to the underlying storage. It is reference-counted and managed
+ * by the Tensor class.
+ */
+class TensorImpl : public RefCounted {
+ public:
+  /**
+   * @brief Constructs a TensorImpl.
+   * @param storage The underlying storage for the tensor data.
+   * @param dtype The data type of the tensor elements.
+   * @param shape The dimensions of the tensor.
+   */
+  TensorImpl(Storage storage, DataType dtype, const std::vector<int64_t> &shape);
 
-#ifndef DA_GRAPH_MAX_NODE
-#define DA_GRAPH_MAX_NODE 4096
-#endif
+  /**
+   * @brief Gets the dimensions of the tensor.
+   * @return A const reference to the vector of dimensions.
+   */
+  const std::vector<int64_t> &Shape() const { return shape_; }
+  /**
+   * @brief Gets the strides of the tensor.
+   * @return A const reference to the vector of strides.
+   */
+  const std::vector<int64_t> &Strides() const { return strides_; }
+  /**
+   * @brief Gets the number of dimensions of the tensor.
+   * @return The number of dimensions.
+   */
+  int64_t Dim() const { return shape_.size(); }
+  /**
+   * @brief Gets the total number of elements in the tensor.
+   * @return The number of elements, or -1 for dynamic shapes.
+   */
+  int64_t Numel() const { return numel_; }
+  /**
+   * @brief Checks if the tensor has a dynamic shape.
+   * @return true if the shape is dynamic, false otherwise.
+   */
+  DataType Dtype() const { return dtype_; }
+  /**
+   * @brief Gets the device where the tensor data is stored.
+   * @return The device.
+   */
+  bool HasDynamicShape() const { return numel_ < 0; }
+  /**
+   * @brief Gets the data type of the tensor.
+   * @return The data type.
+   */
+  hardware::Device GetDevice() const { return storage_.GetDevice(); }
+  /**
+   * @brief Gets the underlying storage of the tensor.
+   * @return The storage.
+   */
+  Storage GetStorage() const { return storage_; }
+  /**
+   * @brief Gets a raw pointer to the tensor's data.
+   * This pointer takes into account the storage offset.
+   * @return A void pointer to the data.
+   */
+  void *DataPtr() const { return static_cast<char *>(storage_.Data()) + storageOffset_ * dtype_.GetSize(); }
 
-#ifndef DA_CONTEXT_MAX_NUM
-#define DA_CONTEXT_MAX_NUM 5
-#endif
+ private:
+  /**
+   * @brief Computes the strides from the dimensions.
+   */
+  void ComputeStrides();
 
-namespace da {
-namespace tensor {
-struct DATensor;
-using TensorArrayPtr = DATensor *[DA_TENSOR_MAX_INPUT];
-
-struct DAContext {
-  // Device Id
-  int deviceId{-1};
-
-  // Memory pool size
-  size_t memSize{0};
-  // Used size of memory pool
-  size_t memUsed{0};
-  // Memory pool
-  void *memPool{nullptr};
+  Storage storage_;  ///< The underlying storage.
+  DataType dtype_;   ///< The data type of the elements.
+  std::vector<int64_t> shape_;
+  std::vector<int64_t> strides_;
+  int64_t storageOffset_ = 0;  ///< The offset in the storage, in number of elements.
+  int64_t numel_ = 0;          ///< The total number of elements.
 };
 
-struct DAContextManager {
-  // Context used state
-  bool used[DA_CONTEXT_MAX_NUM];
+/**
+ * @brief A handle to a TensorImpl.
+ *
+ * This class provides a user-friendly interface to the tensor implementation.
+ * It uses an IntrusivePtr to manage the lifetime of the TensorImpl.
+ */
+class Tensor {
+ public:
+  /**
+   * @brief Default constructor. Creates an uninitialized Tensor.
+   */
+  Tensor() = default;
 
-  // Contexts
-  DAContext context[DA_CONTEXT_MAX_NUM];
-};
+  /**
+   * @brief Constructs a Tensor.
+   * @param storage The underlying storage for the tensor data.
+   * @param dtype The data type of the tensor elements.
+   * @param shape The dimensions of the tensor.
+   */
+  Tensor(Storage storage, DataType dtype, const std::vector<int64_t> &shape)
+      : impl_(MakeIntrusive<TensorImpl>(std::move(storage), dtype, shape)) {}
 
-constexpr auto kMemPoolSize = 1024 * 1024 * 256;
+  /**
+   * @brief Gets the dimensions of the tensor.
+   * @return A const reference to the vector of dimensions.
+   */
+  const std::vector<int64_t> &Shape() const { return impl_->Shape(); }
+  /**
+   * @brief Gets the strides of the tensor.
+   * @return A const reference to the vector of strides.
+   */
+  const std::vector<int64_t> &Strides() const { return impl_->Strides(); }
+  /**
+   * @brief Gets the number of dimensions of the tensor.
+   * @return The number of dimensions.
+   */
+  int64_t Dim() const { return impl_->Dim(); }
+  /**
+   * @brief Gets the total number of elements in the tensor.
+   * @return The number of elements, or -1 for dynamic shapes.
+   */
+  int64_t Numel() const { return impl_->Numel(); }
+  /**
+   * @brief Checks if the tensor has a dynamic shape.
+   * @return true if the shape is dynamic, false otherwise.
+   */
+  bool HasDynamicShape() const { return impl_->HasDynamicShape(); }
+  /**
+   * @brief Gets the data type of the tensor.
+   * @return The data type.
+   */
+  DataType Dtype() const { return impl_->Dtype(); }
+  /**
+   * @brief Gets the device where the tensor data is stored.
+   * @return The device.
+   */
+  hardware::Device GetDevice() const { return impl_->GetDevice(); }
+  /**
+   * @brief Gets a raw pointer to the tensor's data.
+   * @return A void pointer to the data.
+   */
+  void *DataPtr() const { return impl_->DataPtr(); }
 
-struct DAGraph {
-  // Size of parameters
-  size_t paramSize{0};
-  // Tensor parameters
-  DATensor *param[DA_GRAPH_MAX_PARAM] = {nullptr};
-
-  // Size of nodes
-  size_t nodeSize{0};
-  // Tensor nodes
-  DATensor *node[DA_GRAPH_MAX_NODE] = {nullptr};
-};
-
-struct DATensor {
-  // Device type of tensor
-  TensorType tensorType{UNKNOW_TENSOR};
-
-  // Data type of tensor
-  Type type{Type_End};
-
-  // Tensor data
-  void *data{nullptr};
-
-  // Number of dimensions
-  size_t dim{0};
-  // Shape of dimensions
-  size_t shape[DA_TENSOR_MAX_DIM] = {0};
-
-  // Operation of this tensor
-  ops::Op op{ops::Op_End};
-  // Inputs size
-  size_t inputSize{0};
-  // Input tensors
-  TensorArrayPtr input{nullptr};
-};
-
-inline std::string ToString(const DATensor *tensor) {
-  // CHECK_IF_NULL(tensor);
-  std::stringstream ss;
-  ss << "tensor{";
-  ss << ops::ToStr(tensor->op);
-  ss << ", shape: [";
-  for (size_t i = 0; i < tensor->dim; ++i) {
-    ss << tensor->shape[i] << (i == tensor->dim - 1 ? "" : ", ");
+  /**
+   * @brief Gets a typed pointer to the tensor's data.
+   * @tparam T The desired data type.
+   * @return A typed pointer to the data.
+   */
+  template <typename T>
+  T *Data() const {
+    return static_cast<T *>(DataPtr());
   }
-  ss << "], ptr: " << tensor;
-  ss << "}";
-  return ss.str();
-}
 
-// Create a new DAContext.
-DAContext *NewDAContext(size_t deviceId = 0, size_t memSize = kMemPoolSize);
-// Free the DAContext.
-void FreeDAContext(DAContext *context);
+  /**
+   * @brief Checks if the tensor is defined (not null).
+   * @return true if the tensor is defined, false otherwise.
+   */
+  bool Defined() const { return bool(impl_); }
 
-// Create a new DAGraph.
-DAGraph *NewDAGraph(DAContext *context);
-// Add a parameter for DAGraph.
-void AddParameter(DAGraph *graph, DATensor *param);
-// Add a tensor for DAGraph.
-void AddTensor(DAGraph *graph, DATensor *tensor);
+  /**
+   * @brief Gets the underlying storage of the tensor.
+   * @return The storage.
+   */
+  Storage GetStorage() const { return impl_->GetStorage(); }
 
-// Create a new DATensor.
-DATensor *NewDATensor(DAContext *context);
-// Create a new DATensor.
-DATensor *NewDATensor(DAContext *context, Type type, size_t dim = 0, const ShapeArray &shape = {0},
-                      void *data = nullptr, ops::Op op = ops::Op_End, size_t inputSize = 0,
-                      const TensorArrayPtr &input = {nullptr});
-// Create a new DATensorList with given length
-DATensor **NewDATensorList(DAContext *context, size_t len);
+ private:
+  IntrusivePtr<TensorImpl> impl_;
+};
 
-// directly use the original data address, no copy
-template <typename T>
-TensorData *NewTensorData(DAContext *ctx, Type dtype, const ShapeArray &shape, void *data) {
-  CHECK_IF_NULL(ctx);
-  CHECK_IF_NULL(ctx->memPool);
+/**
+ * @brief Creates an empty tensor with uninitialized data.
+ * @param shape The dimensions of the tensor.
+ * @param dtype The data type of the tensor.
+ * @param device The device to allocate the tensor on.
+ * @return The newly created tensor.
+ */
+Tensor Empty(const std::vector<int64_t> &shape, DataType dtype, hardware::Device device);
 
-  size_t tensorDataSize = sizeof(TensorDataImpl<T>);
-  auto newSize = ctx->memUsed + tensorDataSize;
-  CHECK_IF_FAIL(newSize < ctx->memSize);
-  TensorDataImpl<T> *tensorData = (TensorDataImpl<T> *)(reinterpret_cast<char *>(ctx->memPool) + ctx->memUsed);
-  ctx->memUsed = newSize;
-  tensorData->ndim = ShapeDims(shape);
-  tensorData->size = ShapeSize(shape);
-  tensorData->nbytes = tensorData->size * sizeof(T);
-  tensorData->data = static_cast<T *>(data);
-  return tensorData;
-}
+/**
+ * @brief Creates a tensor from an existing data blob.
+ * The tensor does not own the memory.
+ * @param data Pointer to the data.
+ * @param shape The dimensions of the tensor.
+ * @param dtype The data type of the tensor.
+ * @param device The device where the data is located.
+ * @return The newly created tensor.
+ */
+Tensor FromBlob(void *data, const std::vector<int64_t> &shape, DataType dtype, hardware::Device device);
 
-template <typename... Args>
-TensorData *MakeTensorData(DAContext *ctx, Type dtype, Args &&... args) {
-  switch (dtype) {
-    case Type_Bool:
-      return NewTensorData<bool>(ctx, dtype, std::forward<Args>(args)...);
-    case Type_I16:
-      return NewTensorData<int16_t>(ctx, dtype, std::forward<Args>(args)...);
-    case Type_I32:
-      return NewTensorData<int32_t>(ctx, dtype, std::forward<Args>(args)...);
-    case Type_I64:
-      return NewTensorData<int64_t>(ctx, dtype, std::forward<Args>(args)...);
-    case Type_F32:
-      return NewTensorData<float>(ctx, dtype, std::forward<Args>(args)...);
-    case Type_F64:
-      return NewTensorData<double>(ctx, dtype, std::forward<Args>(args)...);
-    // todo support bf16 and fp16
-    default:
-      break;
-  }
-  LOG_OUT << "can not construct tensor data from unsupported dtype.";
-  return nullptr;
-}
-}  // namespace tensor
-}  // namespace da
+std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
-#endif  // __TENSOR_TENSOR_H__
+}  // namespace ir
+}  // namespace mrt
+
+#endif  // __IR_TENSOR_TENSOR_H__

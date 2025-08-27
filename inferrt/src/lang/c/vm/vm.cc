@@ -80,7 +80,7 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
     }
     case ConstType_tensor: {
       slot.type = SlotTensor;
-      slot.value.tensor_ = nullptr;  // TODO: convert string value to tensor value later.
+      slot.tensor_ = nullptr;  // TODO: convert string value to tensor value later.
       return slot;
     }
     default:
@@ -386,7 +386,7 @@ void VM::InstCallIntrin(ssize_t offset) {
     case intrinsic::IntrinsicType_tensor: {
       auto tensor = graphExecutor_.AddTensor();
       resultSlot.type = SlotTensor;
-      resultSlot.value.addr = tensor;
+      resultSlot.tensor_ = tensor;
       break;
     }
     case intrinsic::IntrinsicType_print: {
@@ -423,14 +423,14 @@ void VM::InstCallOps(ssize_t offset) {
   const auto argsSize = static_cast<size_t>(offset);
   const auto &opsNameSlot = *(CurrentStack().crbegin() + argsSize);
 
-  std::vector<tensor::DATensor *> inputs;
+  std::vector<ir::NodePtr> inputs;
   if (argsSize > 0) {  // Has arguments.
     // Move all arguments from caller stack into tensor inputs.
     auto argStartIndex = CurrentStack().size() - argsSize;
     for (size_t i = 0; i < argsSize; ++i) {
       const auto &arg = CurrentStack()[argStartIndex + i];
       LOG_OUT << "Add input " << ToString(arg);
-      inputs.emplace_back((tensor::DATensor *)arg.value.tensor_);
+      inputs.emplace_back(arg.tensor_);
     }
 
     // Erase all arguments.
@@ -443,7 +443,7 @@ void VM::InstCallOps(ssize_t offset) {
   LOG_OUT << "Call ops." << ops::ToStr(opsNameSlot.value.op);
   auto tensor = graphExecutor_.AddTensor(opsNameSlot.value.op, inputs);
   Slot tensorSlot{.type = SlotTensor};
-  tensorSlot.value.tensor_ = tensor;
+  tensorSlot.tensor_ = tensor;
   CurrentStack().emplace_back(std::move(tensorSlot));
 }
 
@@ -771,7 +771,7 @@ void VM::AddGraphParameter(const Code &code, const Slot &arg) {
   // If call a graph.
   if (code.type == CodeGraph) {
     LOG_OUT << "Add parameter " << ToString(arg);
-    graphExecutor_.AddParameter((tensor::DATensor *)arg.value.tensor_);
+    graphExecutor_.AddParameter(arg.tensor_);
   }
 }
 

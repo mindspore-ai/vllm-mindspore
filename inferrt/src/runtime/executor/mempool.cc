@@ -19,21 +19,11 @@
 #include "runtime/executor/mempool.h"
 #include "runtime/utils/utils.h"
 
-namespace da {
+namespace mrt {
 namespace runtime {
-void MemoryPool::Free(DATensor *tensor) const {
+void MemoryPool::Free(ir::NodePtr tensor) const {
   CHECK_IF_NULL(tensor);
-  CHECK_IF_NULL(tensor->data);
-  if (tensor->type == tensor::Type_Tensor) {
-    auto **tensorList = reinterpret_cast<DATensor **>(tensor->data);
-    CHECK_IF_NULL(tensorList);
-    for (size_t i = 0; i < tensor->shape[0]; ++i) {
-      CHECK_IF_NULL(tensorList[i]->data);
-      freeFunc_(tensorList[i]->data);
-    }
-  } else {
-    freeFunc_(tensor->data);
-  }
+  tensor->output = ir::Value();
 }
 
 TensorDataRecycler::TensorDataRecycler() {
@@ -47,25 +37,25 @@ TensorDataRecycler::~TensorDataRecycler() {
   memPool_ = nullptr;
 }
 
-void TensorDataRecycler::ForwardRecordInputsRefCounts(DATensor *node) {
+void TensorDataRecycler::ForwardRecordInputsRefCounts(ir::NodePtr node) {
   CHECK_IF_NULL(node);
   if (IsSkipRecordRefCount(node)) {
     return;
   }
-  for (size_t i = 0; i < node->inputSize; ++i) {
-    if (IsSkipRecordRefCount(node->input[i])) {
+  for (auto input : node->inputs) {
+    if (IsSkipRecordRefCount(input)) {
       continue;
     }
-    CHECK_IF_NULL(node->input[i]);
-    AppendNodeRefRelations(node, node->input[i]);
+    CHECK_IF_NULL(input);
+    AppendNodeRefRelations(node, input);
   }
 }
 
-void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
+void TensorDataRecycler::AppendNodeRefRelations(ir::NodePtr dst, ir::NodePtr src) {
   CHECK_IF_NULL(dst);
   CHECK_IF_NULL(src);
-  std::vector<DATensor *> relations;
-  if (IsDummyDATensorNode(src)) {
+  std::vector<ir::NodePtr> relations;
+  if (IsDummyNode(src)) {
     for (auto related : refRelations_[src]) {
       (void)relations.emplace_back(related);
     }
@@ -73,16 +63,16 @@ void TensorDataRecycler::AppendNodeRefRelations(DATensor *dst, DATensor *src) {
     (void)relations.emplace_back(src);
   }
   for (auto relation : relations) {
-    if (!IsDummyDATensorNode(dst)) {
+    if (!IsDummyNode(dst)) {
       IncreaseInner(relation);
     }
     (void)refRelations_[dst].emplace_back(relation);
   }
 }
 
-void TensorDataRecycler::FreeUnusedNodes(DATensor *node) {
+void TensorDataRecycler::FreeUnusedNodes(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  if (IsSkipRecordRefCount(node) || IsDummyDATensorNode(node)) {
+  if (IsSkipRecordRefCount(node) || IsDummyNode(node)) {
     return;
   }
   for (auto related : refRelations_[node]) {
@@ -90,33 +80,31 @@ void TensorDataRecycler::FreeUnusedNodes(DATensor *node) {
   }
 }
 
-void TensorDataRecycler::IncreaseInner(DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  LOG_OUT << "Increase refCount for ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor;
-  ++refCounts_[tensor];
+void TensorDataRecycler::IncreaseInner(ir::NodePtr node) {
+  CHECK_IF_NULL(node);
+  LOG_OUT << "Increase refCount for node: " << node;
+  ++refCounts_[node];
 }
 
-void TensorDataRecycler::DecreaseInner(DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
+void TensorDataRecycler::DecreaseInner(ir::NodePtr node) {
+  CHECK_IF_NULL(node);
   std::lock_guard<std::mutex> lock(runningRefCountsMutex_);
-  CHECK_IF_FAIL(runningRefCounts_.count(tensor) != 0);
-  CHECK_IF_FAIL(runningRefCounts_[tensor] > 0);
-  LOG_OUT << "Decrease refCount for ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor;
-  --runningRefCounts_[tensor];
-  if (runningRefCounts_[tensor] == 0) {
+  CHECK_IF_FAIL(runningRefCounts_.count(node) != 0);
+  CHECK_IF_FAIL(runningRefCounts_[node] > 0);
+  LOG_OUT << "Decrease refCount for node: " << node;
+  --runningRefCounts_[node];
+  if (runningRefCounts_[node] == 0) {
     CHECK_IF_NULL(memPool_);
-    LOG_OUT << "Free memory of ops." << ops::ToStr(tensor->op) << ", DATensor: " << tensor
-            << ", is DATensorList: " << (tensor->type == tensor::Type_Tensor);
-    memPool_->Free(tensor);
+    LOG_OUT << "Free memory of node: " << node;
+    memPool_->Free(node);
   }
 }
 
 void TensorDataRecycler::PrintRunningRefCounts() const {
   for (auto refCount : runningRefCounts_) {
-    LOG_OUT << "ops." << ops::ToStr(refCount.first->op) << ", DATensor: " << refCount.first
-            << ", refCount: " << refCount.second;
+    LOG_OUT << "node: " << refCount.first << ", refCount: " << refCount.second;
   }
 }
 
 }  // namespace runtime
-}  // namespace da
+}  // namespace mrt

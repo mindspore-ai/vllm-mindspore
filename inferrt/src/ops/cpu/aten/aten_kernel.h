@@ -20,7 +20,7 @@
 #include "ops/operator.h"
 #include "ops/kernel_lib.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 
 // Aten Kernel lib
@@ -28,7 +28,7 @@ class DA_API AtenKernelLib : public KernelLib {
  public:
   AtenKernelLib() : KernelLib("Aten") {}
   ~AtenKernelLib() = default;
-  DAKernel *CreateKernel(tensor::DATensor *tensorNode) const override;
+  DAKernel *CreateKernel(ir::NodePtr node) const override;
 };
 
 // Base class for Aten kernel
@@ -62,6 +62,6 @@ DEFINE_ATEN_KERNEL(Gelu)
 DEFINE_ATEN_KERNEL(Silu)
 
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt
 
 #endif  // __KERNEL_ATEN_ATEN_KERNEL_H__

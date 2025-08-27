@@ -27,7 +27,6 @@
 using Callable = da::vm::VM;
 using Argument = da::vm::Argument;
 using Result = da::vm::Result;
-using Tensor = da::tensor::DATensor;
 
 #ifdef __cplusplus
 extern "C" {

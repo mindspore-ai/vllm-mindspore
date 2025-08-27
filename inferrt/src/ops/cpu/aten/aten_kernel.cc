@@ -22,87 +22,68 @@
 
 #include "ops/cpu/aten/aten_kernel.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 
 // Common Aten utils
 namespace {
-at::ScalarType ToAtenDType(tensor::Type type) {
+at::ScalarType ToAtenDType(ir::DataType type) {
   switch (type) {
-    case tensor::Type_Bool:
+    case ir::DataType::Bool:
       return at::kBool;
-    case tensor::Type_F16:
-      return at::kHalf;
-    case tensor::Type_F32:
+    case ir::DataType::Float32:
       return at::kFloat;
-    case tensor::Type_F64:
+    case ir::DataType::Float64:
       return at::kDouble;
-    case tensor::Type_I16:
+    case ir::DataType::Int16:
       return at::kShort;
-    case tensor::Type_I32:
+    case ir::DataType::Int32:
       return at::kInt;
-    case tensor::Type_I64:
+    case ir::DataType::Int64:
       return at::kLong;
-    case tensor::Type_BF16:
-      return at::kBFloat16;
     default:
-      LOG_ERROR << "Unsupported da::tensor::Type for Aten conversion.";
+      LOG_ERROR << "Unsupported DataType for Aten conversion.";
       exit(EXIT_FAILURE);
   }
 }
 
-at::Tensor ToAtenTensor(const tensor::DATensor *tensor) {
-  CHECK_IF_NULL(tensor);
-  CHECK_IF_NULL(tensor->data);
-  std::vector<int64_t> shape(tensor->shape, tensor->shape + tensor->dim);
-  auto options = at::TensorOptions().dtype(ToAtenDType(tensor->type));
-  return at::from_blob(tensor->data, shape, options);
-}
-
-static void AllocateTensorData(tensor::DATensor *tensor) {
-  size_t size = tensor::ShapeSize(tensor->shape) * tensor::DataTypeSize(tensor->type);
-  tensor->data = malloc(size);
+at::Tensor ToAtenTensor(ir::Value value) {
+  auto tensor = value.ToTensor();
+  auto options = at::TensorOptions().dtype(ToAtenDType(tensor.Dtype()));
+  return at::from_blob(tensor.DataPtr(), tensor.Shape(), options);
 }
 }  // namespace
 
 // AtenKernel
 void AtenKernel::InferShape() {
-  if (tensorNode_->inputSize == 1) {
-    runtime::CloneDATensorTypeAndShape(tensorNode_, tensorNode_->input[0]);
-  } else if (tensorNode_->inputSize == 2) {
-    auto in0 = tensorNode_->input[0];
-    auto in1 = tensorNode_->input[1];
-
-    std::vector<int64_t> in0_shape(in0->shape, in0->shape + in0->dim);
-    std::vector<int64_t> in1_shape(in1->shape, in1->shape + in1->dim);
-    auto out_shape = at::infer_size(in0_shape, in1_shape);
-
-    tensorNode_->dim = out_shape.size();
-    for (size_t i = 0; i < out_shape.size(); ++i) {
-      tensorNode_->shape[i] = out_shape[i];
-    }
+  std::vector<int64_t> dims;
+  auto dtype = node_->inputs[0]->output.ToTensor().Dtype();
+  if (node_->inputs.size() == 1) {
+    dims = node_->inputs[0]->output.ToTensor().Shape();
+  } else if (node_->inputs.size() == 2) {
+    auto in0Dims = node_->inputs[0]->output.ToTensor().Shape();
+    auto in1Dims = node_->inputs[1]->output.ToTensor().Shape();
+    dims = at::infer_size(in0Dims, in1Dims);
   }
-  LOG_OUT << "tensor shape after infer: " << ToString(tensorNode_);
+  node_->output = ir::Value(ir::Empty(dims, dtype, hardware::Device(hardware::DeviceType::CPU, 0)));
 }
 
 void AtenKernel::Resize() {}
 
 // Aten Kernels
-#define IMPLEMENT_ATEN_UNARY_OP_OUT(Name, Op)      \
-  void Aten##Name::Launch() {                      \
-    auto in = ToAtenTensor(tensorNode_->input[0]); \
-    AllocateTensorData(tensorNode_);               \
-    auto out = ToAtenTensor(tensorNode_);          \
-    at::Op##_out(out, in);                         \
+#define IMPLEMENT_ATEN_UNARY_OP_OUT(Name, Op)         \
+  void Aten##Name::Launch() {                         \
+    auto in = ToAtenTensor(node_->inputs[0]->output); \
+    auto out = ToAtenTensor(node_->output);           \
+    at::Op##_out(out, in);                            \
   }
 
-#define IMPLEMENT_ATEN_BINARY_OP_OUT(Name, Op)      \
-  void Aten##Name::Launch() {                       \
-    auto in0 = ToAtenTensor(tensorNode_->input[0]); \
-    auto in1 = ToAtenTensor(tensorNode_->input[1]); \
-    AllocateTensorData(tensorNode_);                \
-    auto out = ToAtenTensor(tensorNode_);           \
-    at::Op##_out(out, in0, in1);                    \
+#define IMPLEMENT_ATEN_BINARY_OP_OUT(Name, Op)         \
+  void Aten##Name::Launch() {                          \
+    auto in0 = ToAtenTensor(node_->inputs[0]->output); \
+    auto in1 = ToAtenTensor(node_->inputs[1]->output); \
+    auto out = ToAtenTensor(node_->output);            \
+    at::Op##_out(out, in0, in1);                       \
   }
 
 IMPLEMENT_ATEN_BINARY_OP_OUT(Add, add)
@@ -120,34 +101,34 @@ IMPLEMENT_ATEN_UNARY_OP_OUT(Gelu, gelu)
 IMPLEMENT_ATEN_UNARY_OP_OUT(Silu, silu)
 
 // AtenKernelLib
-DAKernel *AtenKernelLib::CreateKernel(tensor::DATensor *tensorNode) const {
-  switch (tensorNode->op) {
+DAKernel *AtenKernelLib::CreateKernel(ir::NodePtr node) const {
+  switch (node->op) {
     case ops::Op_add:
-      return new AtenAdd(tensorNode);
+      return new AtenAdd(node);
     case ops::Op_sub:
-      return new AtenSub(tensorNode);
+      return new AtenSub(node);
     case ops::Op_mul:
-      return new AtenMul(tensorNode);
+      return new AtenMul(node);
     case ops::Op_div:
-      return new AtenDiv(tensorNode);
+      return new AtenDiv(node);
     case ops::Op_matmul:
-      return new AtenMatmul(tensorNode);
+      return new AtenMatmul(node);
     case ops::Op_neg:
-      return new AtenNeg(tensorNode);
+      return new AtenNeg(node);
     case ops::Op_square:
-      return new AtenSquare(tensorNode);
+      return new AtenSquare(node);
     case ops::Op_rsqrt:
-      return new AtenRsqrt(tensorNode);
+      return new AtenRsqrt(node);
     case ops::Op_relu:
-      return new AtenRelu(tensorNode);
+      return new AtenRelu(node);
     case ops::Op_sigmoid:
-      return new AtenSigmoid(tensorNode);
+      return new AtenSigmoid(node);
     case ops::Op_gelu:
-      return new AtenGelu(tensorNode);
+      return new AtenGelu(node);
     case ops::Op_silu:
-      return new AtenSilu(tensorNode);
+      return new AtenSilu(node);
     default:
-      LOG_OUT << "Unsupported op for Aten kernel lib: " << ops::ToStr(tensorNode->op);
+      LOG_OUT << "Unsupported op for Aten kernel lib: " << node;
       return nullptr;
   }
 }
@@ -155,4 +136,4 @@ DAKernel *AtenKernelLib::CreateKernel(tensor::DATensor *tensorNode) const {
 DART_REGISTER_KERNEL_LIB("Aten", AtenKernelLib);
 
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt

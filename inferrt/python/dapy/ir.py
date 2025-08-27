@@ -1,6 +1,6 @@
 from typing import List
 import numpy as np
-from _dairpy import GraphExecutor as _GraphExecutor, DATensor, Op
+from _dairpy import GraphExecutor as _GraphExecutor, Node, Op
 
 
 class GraphExecutor:
@@ -10,7 +10,7 @@ class GraphExecutor:
     This class can be used as a context manager:
 
     with GraphExecutor("my_graph") as executor:
-        param = executor.add_parameter(tensor)
+        param = executor.add_parameter(node)
         ...
         executor.run()
     """
@@ -27,26 +27,25 @@ class GraphExecutor:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._executor.end_graph()
 
-    def add_parameter(self, tensor: DATensor) -> DATensor:
-        """Add a const tensor as parameter of the graph."""
-        self._executor.add_parameter(tensor)
+    def add_parameter(self, node: Node) -> Node:
+        """Add a const node as parameter of the graph."""
+        self._executor.add_parameter(node)
 
-    def add_op(self, op: Op, inputs: List[DATensor]) -> DATensor:
-        """Add an operation tensor to the graph."""
+    def add_op(self, op: Op, inputs: List[Node]) -> Node:
+        """Add an operation node to the graph."""
         return self._executor.add_op(op, inputs)
 
-    def make_tuple(self, inputs: List[DATensor]) -> DATensor:
+    def make_tuple(self, inputs: List[Node]) -> Node:
         """Add a make_tuple operation to the graph."""
-        tensor = self._executor.add_op(Op.make_tuple, inputs)
-        self._executor.cast_to_tensor_list(tensor, len(inputs))
-        return tensor
+        node = self._executor.add_op(Op.make_tuple, inputs)
+        return node
 
-    def add_const(self, tensor: np.ndarray) -> DATensor:
-        """Add a constant tensor to the graph from a numpy array."""
-        return self._executor.add_const(tensor)
+    def add_const(self, node: np.ndarray) -> Node:
+        """Add a constant node to the graph from a numpy array."""
+        return self._executor.add_const(node)
 
-    def set_return(self) -> DATensor:
-        """Add a return node to the graph. The last added tensor will be the return value."""
+    def set_return(self) -> Node:
+        """Add a return node to the graph. The last added node will be the return value."""
         self._return_node = self._executor.add_return()
         return self._return_node
 
@@ -71,4 +70,4 @@ class GraphExecutor:
 
 
 # Re-export for convenience
-__all__ = ["GraphExecutor", "DATensor", "Op"]
+__all__ = ["GraphExecutor", "Node", "Op"]

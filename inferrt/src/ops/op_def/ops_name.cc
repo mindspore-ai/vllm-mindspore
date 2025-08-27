@@ -19,7 +19,7 @@
 
 #include "common/logger.h"
 
-namespace da {
+namespace mrt {
 namespace ops {
 #define OP(O) {#O, Op_##O},
 std::unordered_map<std::string_view, Op> _opNames{
@@ -47,4 +47,4 @@ const char *_opStr[] = {
 
 const char *ToStr(const Op op) { return _opStr[op]; }
 }  // namespace ops
-}  // namespace da
+}  // namespace mrt

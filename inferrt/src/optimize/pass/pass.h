@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __PASS_PASS_H__
-#define __PASS_PASS_H__
+#ifndef __OPTIMIZE_PASS_PASS_H__
+#define __OPTIMIZE_PASS_PASS_H__
 
 #include <utility>
 #include <functional>
@@ -25,27 +25,23 @@
 #include <vector>
 #include <unordered_map>
 
-#include "ir/tensor/tensor.h"
-#include "ir/tensor/ud.h"
+#include "ir/graph.h"
+#include "optimize/pass/ud.h"
 
-namespace da {
+namespace mrt {
 namespace pass {
-using tensor::DAGraph;
-using tensor::DATensor;
-using tensor::UserDef;
 
-using TensorCreator = std::function<DATensor *(ops::Op, DATensor **, size_t)>;
+using TensorCreator = std::function<ir::NodePtr(ops::Op, const std::vector<ir::NodePtr> &)>;
 
 class NodePass {
  public:
   // If node is matched.
-  virtual bool Match(const DATensor *node) = 0;
+  virtual bool Match(const ir::NodePtr node) = 0;
 
   // Replacement node for the matched node.
-  virtual DATensor *Replacement() = 0;
+  virtual ir::NodePtr Replacement() = 0;
 
-  DATensor *NewTensor(ops::Op op, DATensor **start, size_t size);
-  DATensor *NewTensor(ops::Op op, const std::vector<DATensor *> &inputs);
+  ir::NodePtr NewTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs);
 };
 
 class PassManager {
@@ -58,56 +54,51 @@ class PassManager {
     return instance;
   }
 
-  void Run(DAGraph *graph, const TensorCreator &creator);
+  void Run(ir::GraphPtr graph, const TensorCreator &creator);
 
   void AddPass(const std::string &name, const NodePass &pass) {
     LOG_OUT << "Add pass '" << name << "'";
     (void)passes_.emplace_back(std::make_pair(name, const_cast<NodePass *>(&pass)));
   }
 
-  DATensor *NewTensor(ops::Op op, DATensor **start, size_t size) {
+  ir::NodePtr NewTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
     CHECK_IF_FAIL(tensorCreator_);
-    return tensorCreator_(op, start, size);
-  }
-
-  DATensor *NewTensor(ops::Op op, const std::vector<DATensor *> &inputs) {
-    CHECK_IF_FAIL(tensorCreator_);
-    return tensorCreator_(op, const_cast<DATensor **>(inputs.data()), inputs.size());
+    return tensorCreator_(op, inputs);
   }
 
  private:
-  using TensorList = std::list<const DATensor *>;
+  using TensorList = std::list<ir::NodePtr>;
 
-  bool Replace(const DATensor *oldNode, const DATensor *newNode);
-  void RemoveOrderedNodes(const DATensor *owner, size_t index, const DATensor *node);
-  void InsertOrderedNodes(const DATensor *owner, size_t index, const DATensor *anchor, const DATensor *node);
+  bool Replace(const ir::NodePtr oldNode, const ir::NodePtr newNode);
+  void RemoveOrderedNodes(const ir::NodePtr owner, size_t index, const ir::NodePtr node);
+  void InsertOrderedNodes(const ir::NodePtr owner, size_t index, const ir::NodePtr anchor, const ir::NodePtr node);
 
   class OrderedNodes {
    public:
     OrderedNodes() = default;
-    explicit OrderedNodes(DAGraph *graph) { Init(graph); }
+    explicit OrderedNodes(ir::GraphPtr graph) { Init(graph); }
 
     // Return true if inserted, or false otherwise.
-    bool Insert(const DATensor *anchor, const DATensor *node);
+    bool Insert(const ir::NodePtr anchor, const ir::NodePtr node);
     // Return true if appended, or false otherwise.
-    bool Append(const DATensor *node);
+    bool Append(const ir::NodePtr node);
     // Return true if erased, or false otherwise.
-    bool Remove(const DATensor *node);
+    bool Remove(const ir::NodePtr node);
     // Build the ordered nodes.
-    void Init(DAGraph *graph);
+    void Init(ir::GraphPtr graph);
     // Flush the nodes back into graph.
-    void Flush(DAGraph *graph);
+    void Flush(ir::GraphPtr graph);
 
     const TensorList &tensorList() const { return tensorList_; }
 
    private:
     TensorList tensorList_;
-    std::unordered_map<const DATensor *, TensorList::iterator> tensorMap_;
+    std::unordered_map<ir::NodePtr, TensorList::iterator> tensorMap_;
   } orderedNodes_;
 
   std::vector<std::pair<std::string, NodePass *>> passes_;
   UserDef ud_;
-  std::vector<const DATensor *> unusedList_;
+  std::vector<ir::NodePtr> unusedList_;
   TensorCreator tensorCreator_;
 };
 
@@ -123,6 +114,6 @@ class PassRegister {
   static const PASS __pass_##PASS##__;    \
   static const PassRegister __passRegister_##PASS##__(PASS_NAME, __pass_##PASS##__);
 }  // namespace pass
-}  // namespace da
+}  // namespace mrt
 
-#endif  // __PASS_PASS_H__
+#endif  // __OPTIMIZE_PASS_PASS_H__

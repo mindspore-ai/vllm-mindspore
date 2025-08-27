@@ -41,7 +41,7 @@ add_subdirectory(optimize)
 add_subdirectory(pybind)
 add_subdirectory(runtime)
 
-set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj tensor_obj runtime_obj ops_obj pass_obj)
+set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
