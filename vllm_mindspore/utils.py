@@ -19,10 +19,15 @@
 # limitations under the License.
 
 import contextlib
+import functools
 import gc
 import os
+import subprocess
 import sys
+import tempfile
+import uuid
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Generator, List, Optional, Tuple, Union
 
 import numpy as np
@@ -266,11 +271,22 @@ def is_version_at_least(current_version, base_version):
     return True
 
 
+@functools.cache
 def get_ascend_soc_version():
     """Get ascend soc version."""
     if is_version_at_least(ms.__version__, "2.2.0"):
-        from mindspore._c_expression import MSContext
-        return MSContext.get_instance().get_ascend_soc_version()
+        # To prevent aclrt initialized early, get soc version in a new process.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            exec_str = (
+                "from mindspore._c_expression import MSContext\n"
+                "print(MSContext.get_instance().get_ascend_soc_version())")
+            temp_file = Path(tmp_dir) / f"{uuid.uuid4()}.py"
+            temp_file.write_text(exec_str)
+            res = subprocess.check_output([sys.executable,
+                                           str(temp_file)]).decode()
+
+            return res.splitlines()[0]
+
     raise ValueError("The get_ascend_soc_version function is only "
                      "supported on MindSpore 2.6 and above.")
 
