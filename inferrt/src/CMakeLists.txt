@@ -41,7 +41,11 @@ add_subdirectory(optimize)
 add_subdirectory(pybind)
 add_subdirectory(runtime)
 
-set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
+set(OBJECTS hardware_abstract_obj lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
+
+if(ENABLE_ASCEND)
+  set(OBJECTS ${OBJECTS} hardware_ascend_obj)
+endif()
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)

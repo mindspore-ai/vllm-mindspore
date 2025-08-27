@@ -1,10 +1,7 @@
 check_debug_log_out()
 
-file(GLOB_RECURSE RUNTIME_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
-add_library(runtime_obj STATIC ${RUNTIME_SRC_FILES})
-target_link_libraries(runtime_obj ops_obj mrt_ir_obj kernel)
-
 if(ENABLE_ASCEND)
+  message(STATUS "Backend Ascend enabled")
   if(DEFINED ENV{ASCEND_CUSTOM_PATH})
     set(ASCEND_PATH $ENV{ASCEND_CUSTOM_PATH})
   else()
@@ -24,5 +21,14 @@ if(ENABLE_ASCEND)
   include_directories(${PYBIND11_PATH}/include)
 
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
-  target_link_libraries(runtime_obj hardware_ascend_obj)
+
+  include_directories(${PROJECT_SOURCE_DIR}/inferrt/src)
+
+  add_executable(hardware_ascend_test_obj ./hardware/hardware_test.cc)
+  target_link_libraries(hardware_ascend_test_obj hardware_ascend_obj)
+
+  enable_testing()
+  add_test(NAME hardware_ascend_test COMMAND hardware_ascend_test_obj)
+else()
+  message("Note ascend backend is disabled")
 endif()

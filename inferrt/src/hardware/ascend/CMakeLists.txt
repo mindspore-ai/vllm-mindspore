@@ -1,9 +1,5 @@
 check_debug_log_out()
 
-file(GLOB_RECURSE RUNTIME_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
-add_library(runtime_obj STATIC ${RUNTIME_SRC_FILES})
-target_link_libraries(runtime_obj ops_obj mrt_ir_obj kernel)
-
 if(ENABLE_ASCEND)
   if(DEFINED ENV{ASCEND_CUSTOM_PATH})
     set(ASCEND_PATH $ENV{ASCEND_CUSTOM_PATH})
@@ -13,6 +9,17 @@ if(ENABLE_ASCEND)
 
   message("Note compile ascend path: ${ASCEND_PATH}")
   include_directories(${ASCEND_PATH}/latest/include/)
+  include_directories(${ASCEND_PATH}/latest/lib64/)
+  find_library(ASCENDCL_LIB ascendcl
+      PATHS ${ASCEND_PATH}/latest/lib64
+      REQUIRED
+      NO_DEFAULT_PATH
+    )
+  find_library(RUNTIME_LIB runtime
+    PATHS ${ASCEND_PATH}/latest/lib64
+    REQUIRED
+    NO_DEFAULT_PATH
+  )
   link_directories(${ASCEND_PATH}/latest/lib64/)
 
   find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
@@ -23,6 +30,12 @@ if(ENABLE_ASCEND)
   set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
   include_directories(${PYBIND11_PATH}/include)
 
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
-  target_link_libraries(runtime_obj hardware_ascend_obj)
+  file(GLOB_RECURSE HARDWARE_ASCEND_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+  add_library(hardware_ascend_obj SHARED ${HARDWARE_ASCEND_SRC_FILES})
+  target_link_libraries(hardware_ascend_obj
+      hardware_abstract_obj
+      Python3::Python
+      ${ASCENDCL_LIB}
+      ${RUNTIME_LIB}
+    )
 endif()

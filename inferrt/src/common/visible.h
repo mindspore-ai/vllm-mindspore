@@ -22,4 +22,16 @@
 #else
 #define DA_API __attribute__((visibility("default")))
 #endif
+
+#if (defined(_WIN32) || defined(__WIN32__) || defined(WIN32) || defined(__CYGWIN__))
+#ifdef HARDWARE_DLL
+#define MRT_EXPORT __declspec(dllexport)
+#else
+#define MRT_EXPORT __declspec(dllimport)
+#endif
+#define MRT_LOCAL
+#else
+#define MRT_EXPORT __attribute__((visibility("default")))
+#define MRT_LOCAL __attribute__((visibility("hidden")))
+#endif
 #endif  // __COMMON_VISIBLE_H__
