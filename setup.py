@@ -141,3 +141,4 @@ setup(
         "vllm.platform_plugins": ["mindspore_model = vllm_mindspore:register_model"],
     },
 )
+
