@@ -80,8 +80,6 @@ class SamplingTensors:
                 pin_memory=pin_memory,
             )
         else:
-            # TODO: to support empty
-            # empty_tensor = torch.empty(0, device=device, dtype=torch.long)
             empty_tensor = Tensor(0, dtype=ms.int64)
             prompt_t = empty_tensor
             output_t = empty_tensor
