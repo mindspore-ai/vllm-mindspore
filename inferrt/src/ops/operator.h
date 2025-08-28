@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "ops/op_def/ops_name.h"
+#include "ops/utils/op_constants.h"
 #include "common/visible.h"
 #include "ir/graph.h"
 
@@ -48,20 +48,17 @@ enum OpsErrorCode {
   SUCCESS = 0,
   INVALID_PARAM,
   INVALID_SHAPE,
+  INVALID_INPUT_NUM,
   INVALID_DEVICE_ADDR,
   UNKNOWN_ERROR = 1000
-
 };
-
-// Need to be deleted in the future.
-using OpName = Op;
 
 // @brief Abstract base class representing a computational kernel. A Operator encapsulates the core computation logic
 // for a specific operator. Derived classes must implement shape inference and launch operations. Kernels of different
 // device types share the InferShape function, but need to implement their respective Launch functions.
 class Operator {
  public:
-  Operator(const OpName &op) : op_(op) {}
+  Operator() = default;
   virtual ~Operator() = default;
 
   /**
@@ -117,9 +114,6 @@ class Operator {
    *         otherwise returns false.
    */
   virtual bool NeedUpdateOutputShapeAfterLaunch() const { return false; }
-
- protected:
-  OpName op_{Op_End};
 };
 }  // namespace ops
 }  // namespace mrt

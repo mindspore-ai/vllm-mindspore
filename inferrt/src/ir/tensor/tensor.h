@@ -17,6 +17,7 @@
 #ifndef __IR_TENSOR_TENSOR_H__
 #define __IR_TENSOR_TENSOR_H__
 
+#include <iostream>
 #include <vector>
 #include <numeric>
 
@@ -126,6 +127,11 @@ class Tensor {
    */
   StoragePtr GetStorage() const { return storage_; }
   /**
+   * @brief Construct a new `storage_` with the same device as the old. Note: Need set shape and dtype first, the device
+   * memory of the old `storage_` might be released.
+   */
+  void ResizeStorage();
+  /**
    * @brief Gets a raw const pointer to the tensor's data.
    * This pointer takes into account the storage offset.
    * @return A const void pointer to the data.
@@ -168,6 +174,10 @@ class Tensor {
   StoragePtr storage_{nullptr};   ///< The underlying storage.
   int64_t storageOffset_ = 0;     ///< The offset in the storage, in number of elements.
 };
+
+std::ostream &operator<<(std::ostream &os, Tensor *tensor);
+std::ostream &operator<<(std::ostream &os, const Tensor *tensor);
+std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 
 }  // namespace ir
 }  // namespace mrt

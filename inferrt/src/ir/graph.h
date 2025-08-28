@@ -49,8 +49,18 @@ struct Graph {
 using NodePtr = std::shared_ptr<Node>;
 using GraphPtr = std::shared_ptr<Graph>;
 
-inline std::ostream &operator<<(std::ostream &os, const NodePtr node) {
-  os << "Node(" << "op=" << ops::ToStr(node->op) << ", output=" << node->output << ")";
+inline std::ostream &operator<<(std::ostream &os, const Node &node) {
+  os << "Node("
+     << "op=" << ops::ToStr(node.op) << ", value=" << node.output << ")";
+  return os;
+}
+
+inline std::ostream &operator<<(std::ostream &os, const NodePtr &node) {
+  if (node == nullptr) {
+    os << "Null";
+  } else {
+    os << *node;
+  }
   return os;
 }
 

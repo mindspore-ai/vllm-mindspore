@@ -31,9 +31,13 @@ namespace ir {
  */
 Storage::Storage(size_t sizeBytes, hardware::Device device) : sizeBytes_(sizeBytes), device_(device), ownsData_(true) {
   if (device.type == hardware::DeviceType::CPU) {
-    data_ = malloc(sizeBytes);
-    if (!data_) {
-      throw std::bad_alloc();
+    if (sizeBytes == 0) {
+      data_ = nullptr;
+    } else {
+      data_ = malloc(sizeBytes);
+      if (!data_) {
+        throw std::bad_alloc();
+      }
     }
   } else {
     // Handle other devices like GPU (e.g., cudaMalloc)
