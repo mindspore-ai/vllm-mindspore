@@ -59,6 +59,7 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8": ms.uint8,
     "fp8_e4m3": ms.uint8,
     "fp8_e5m2": ms.uint8,
+    "int8": ms.int8,
 }
 
 FORMAT_TYPE = {
@@ -163,6 +164,7 @@ STR_DTYPE_TO_TENSOR_DTYPE = {
     "fp8": torch.uint8,
     "fp8_e4m3": torch.uint8,
     "fp8_e5m2": torch.uint8,
+    "int8": torch.int8,
 }
 
 STR_DTYPE_TO_MS_DTYPE = {
@@ -173,6 +175,7 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8": mstype.uint8,
     "fp8_e4m3": mstype.uint8,
     "fp8_e5m2": mstype.uint8,
+    "int8": mstype.int8,
 }
 
 
