@@ -66,7 +66,25 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         self.network, self.lm_head = self._create_network()
         self.casual_mask = self._create_mask()
-
+        if hasattr(self.network, "quant_config") and self.network.quant_config:
+            self.fa3_quant = self.network.quant_config.fa3_quant
+            self.fa3_quant_layer = self.network.quant_config.fa3_quant_layer
+            # used when allocate the kvcache in GPUModelRunner
+            vllm_config.quant_config = self.network.quant_config
+        else:
+            self.fa3_quant = False
+            self.fa3_quant_layer = set()
+        if self.fa3_quant and vllm_config.cache_config.cache_dtype == "auto":
+            raise RuntimeError(
+                "To use fa3_quant, it is necessary to set "
+                "\"--kv-cache-dtype 'int8'\" in the startup command.")
+        if self.fa3_quant and not self.use_ringmla:
+            raise ValueError('To use fa3_quant, '
+                             'it is necessary to set use_ringmla to True.')
+        if not self.fa3_quant and \
+                    vllm_config.cache_config.cache_dtype == "int8":
+            raise RuntimeError("To use kv-cache-dtype 'int8', "
+                               "it is necessary to set fa3_quant to True.")
         self._set_dynamic_inputs()
 
         self.set_modules({"model": self.network})
@@ -105,7 +123,14 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         # Initial kv_caches
         wrapper_func = (MLAAttentionWrapper
                         if self.mla_config else AttentionWrapper)
-        return [wrapper_func() for _ in range(self.num_layers)]
+        if self.fa3_quant:
+            return [wrapper_func(fa3_quant=True, kv_cache_dtype=ms.int8) \
+                    if self.fa3_quant and i in self.fa3_quant_layer \
+                    else wrapper_func(fa3_quant=True,
+                                      kv_cache_dtype=self.model_config.dtype) \
+                        for i in range(self.num_layers)]
+        else:
+            return [wrapper_func() for _ in range(self.num_layers)]
 
     def get_kvcache(self):
         if not self.mla_config:
