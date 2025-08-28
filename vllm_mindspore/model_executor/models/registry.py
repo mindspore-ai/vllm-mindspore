@@ -25,6 +25,8 @@ from vllm_mindspore.utils import (is_mindformers_model_backend,
                                   is_mindone_model_backend,
                                   is_native_model_backend)
 
+logger = init_logger(__name__)
+
 try:
     from mindformers.tools.register.register import (MindFormerModuleType,
                                                      MindFormerRegister)
@@ -35,17 +37,21 @@ try:
         name[len("mcore_"):] for name in model_support_list
         if name.startswith("mcore_")
     ]
-except ImportError:
+except ImportError as e:
+    logger.warning("Error when importing MindSpore Transformers: %s", e)
+    if is_mindformers_model_backend():
+        raise ImportError from e
     mf_supported = False
     mcore_support_list = []
 
 try:
     from mindone import transformers  # noqa: F401
     mindone_supported = True
-except ImportError:
+except ImportError as e:
+    logger.warning("Error when importing MindSpore ONE: %s", e)
+    if is_mindone_model_backend():
+        raise ImportError from e
     mindone_supported = False
-
-logger = init_logger(__name__)
 
 _NATIVE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),

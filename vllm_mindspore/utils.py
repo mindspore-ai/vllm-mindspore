@@ -178,9 +178,9 @@ STR_DTYPE_TO_MS_DTYPE = {
 
 class vllmModelBackendEnum(str, Enum):
     """Define the variable Enum of VLLM_MS_MODEL_BACKEND"""
-    MF = 'MindFormers'
-    MIND_ONE = 'MindONE'
-    NATIVE = 'Native'
+    MF = 'mindformers'
+    MIND_ONE = 'mindone'
+    NATIVE = 'native'
 
 
 def ascend_is_initialized():
@@ -189,10 +189,14 @@ def ascend_is_initialized():
 
 
 old_vllm_model_backend = os.getenv("vLLM_MODEL_BACKEND")  # noqa: SIM112
+logger.info('environment variable "vLLM_MODEL_BACKEND" is %s',
+            old_vllm_model_backend)
 if old_vllm_model_backend is not None:
     logger.warning('"vLLM_MODEL_BACKEND" will be removed, '
                    'please use "VLLM_MS_MODEL_BACKEND"')
 vllm_model_backend = os.getenv("VLLM_MS_MODEL_BACKEND")  # noqa: SIM112
+logger.info('environment variable "VLLM_MS_MODEL_BACKEND" is %s',
+            vllm_model_backend)
 if vllm_model_backend is None:
     vllm_model_backend = old_vllm_model_backend
 
@@ -200,8 +204,8 @@ if vllm_model_backend is None:
 def _check_model_backend(dst_backend):
     if vllm_model_backend is not None:
         try:
-            vllmModelBackendEnum(vllm_model_backend)
-            return vllm_model_backend == dst_backend
+            vllmModelBackendEnum(vllm_model_backend.lower())
+            return vllm_model_backend.lower() == dst_backend
         except ValueError as exc:
             allowed_values = [member.value for member in vllmModelBackendEnum]
             raise ValueError(
