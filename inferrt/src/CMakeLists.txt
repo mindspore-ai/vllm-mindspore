@@ -47,6 +47,10 @@ if(ENABLE_ASCEND)
   set(OBJECTS ${OBJECTS} hardware_ascend_obj)
 endif()
 
+if(ENABLE_CPU)
+  set(OBJECTS ${OBJECTS} hardware_cpu_obj)
+endif()
+
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
 target_link_libraries(da ${OBJECTS})

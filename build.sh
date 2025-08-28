@@ -98,6 +98,10 @@ if [[ $ENABLE_ASCEND == 1 ]]; then
     INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_ASCEND=on"
 fi
 
+if [[ $ENABLE_CPU == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_CPU=on"
+fi
+
 ##################################################
 # Prepare source and build directories
 ##################################################
@@ -167,6 +171,7 @@ if [[ $BUILD_TESTS == 1 ]]; then
         ./tests/hardware_ascend_test_obj
     else
         echo "CPU backend test case"
+        ./tests/hardware_cpu_test_obj
     fi
     echo "Tests completed."
     echo "=============================="
