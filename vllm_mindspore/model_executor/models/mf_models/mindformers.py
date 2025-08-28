@@ -39,7 +39,7 @@ from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (
     AttentionWrapper, MLAAttentionWrapper, MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
-    make_empty_intermediate_tensors_factory)
+    is_use_ringmla, make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
@@ -59,6 +59,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.mf_config = mf_config
         self.mla_config = self.mf_config.get('model', None).get(
             'model_config', None).get('multi_latent_attention', False)
+        self.use_ringmla = is_use_ringmla(vllm_config, mf_config)
+        self.is_chunked = False
 
         build_mf_context(self.mf_config)
 
@@ -111,11 +113,18 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         key_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
-            k_cache = self.kv_caches[i].kv_cache[
-                forward_context.virtual_engine][0]
-            key_cache.append(k_cache)
-        return mutable(key_cache), None
+        key_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            for i in range(self.config.num_hidden_layers)
+        ]
+        if not self.use_ringmla:
+            return mutable(key_cache), None
+        # deepseek mla op need key cache and rope cache
+        rope_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+            for i in range(self.config.num_hidden_layers)
+        ]
+        return mutable(key_cache), mutable(rope_cache)
 
     def _get_padding_index(self, q_seq_len):
         """
@@ -254,15 +263,18 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             seq_lens_np = np.array(seq_lens, dtype=np.int32)
             query_lens_np = np.array(query_lens, dtype=np.int32)
             kv_cache_lens = seq_lens_np - query_lens_np
-            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max(
-            ) == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
+            is_prefill = kv_cache_lens.max() == 0
+            is_ringmla_chunked = self.use_ringmla and \
+                                 attn_metadata.num_decode_tokens == 0 and \
+                                 bool(kv_cache_lens.max() > 0)
             context_lens_tensor = ms.from_numpy(kv_cache_lens)
         else:
             # V1
             is_prefill = attn_metadata.max_context_lens == 0
+            is_ringmla_chunked = \
+                self.use_ringmla and not is_prefill and \
+                bool((attn_metadata.context_lens - \
+                      attn_metadata.num_prompt_tokens).min() < 0)
             query_lens_np = attn_metadata.q_seq_lens_np
             seq_lens_np = attn_metadata.seq_lens_np
             context_lens_tensor = attn_metadata.context_lens
@@ -286,7 +298,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs = (self.update_padding_index_to_inputs(
             model_inputs, q_seq_lens))
 
-        return model_inputs, is_prefill
+        return model_inputs, is_prefill, is_ringmla_chunked
 
     def forward(self,
                 input_ids: Tensor,
@@ -294,21 +306,43 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                 intermediate_tensors: Optional[IntermediateTensors] = None,
                 inputs_embeds: Optional[Tensor] = None,
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
-        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions)
+        """
+        Forward pass of model with support for different computation phases.
+        Handles both prefill (context encoding) and incremental
+        (token generation) phases.
+        Optional RingMLA chunked computation phases for use-MLA model with
+        quantization and tensor parallel size < 16.
+        Notes:
+            - Automatically detects prefill vs incremental phases based on
+              input characteristics.
+            - Supports RingMLA chunked computation for for use-MLA model.
+            - Maintains phase-specific flags for proper graph compilation
+              and execution.
+        """
+        model_inputs, is_prefill, is_ringmla_chunked = self.prepare_inputs(
+            input_ids, positions)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
         if intermediate_tensors is not None:
             model_inputs["hidden_states"] = \
                 intermediate_tensors["hidden_states"]
 
-        if is_prefill:
-            self.network.phase = "prefill"
+        if is_prefill or is_ringmla_chunked:
+            self.network.phase = \
+                "prefill" if not is_ringmla_chunked else "chunked"
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom_mcore(is_prefill=True)
+                if hasattr(self.network, 'add_flags_chunked'):
+                    # chunked means 3-rd graph "chunked"
+                    self.network.add_flags_chunked(
+                        is_chunked=is_ringmla_chunked)
+                # ringmla_chunked means computing chunked-prefills on ringmla
+                self.is_chunked |= is_ringmla_chunked
             hidden_states = self.network(**model_inputs)
             self.network.phase = "increment"
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom_mcore(is_prefill=False)
-                self.set_flags = True
+                self.set_flags = (True
+                                  if not self.use_ringmla else self.is_chunked)
         else:
             hidden_states = self.network(**model_inputs)
 
