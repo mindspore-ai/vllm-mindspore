@@ -31,17 +31,15 @@
 #define TO_STR(s) #s
 
 #ifndef CHECK_IF_NULL
-#define CHECK_IF_NULL(a)                                        \
-  if (a == nullptr) {                                           \
-    LOG_ERROR << '\'' << TO_STR(a) << "\' should not be null."; \
-    exit(EXIT_FAILURE);                                         \
+#define CHECK_IF_NULL(a)                                            \
+  if (a == nullptr) {                                               \
+    LOG_EXCEPTION << '\'' << TO_STR(a) << "\' should not be null."; \
   }
 #endif
 
-#define CHECK_IF_FAIL(a)                                             \
-  if (!(a)) {                                                        \
-    LOG_ERROR << '\'' << TO_STR(a) << "\' is not true. check fail."; \
-    exit(EXIT_FAILURE);                                              \
+#define CHECK_IF_FAIL(a)                                                 \
+  if (!(a)) {                                                            \
+    LOG_EXCEPTION << '\'' << TO_STR(a) << "\' is not true. check fail."; \
   }
 
 #define EVER \

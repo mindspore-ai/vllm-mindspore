@@ -22,6 +22,7 @@
 #include <memory>
 #include <stdexcept>
 
+#include "common/common.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
 
@@ -56,18 +57,11 @@ class Tuple {
    */
   Tuple(Tuple &&other) noexcept : elements_(std::move(other.elements_)) {}
 
-   /**
+  /**
    * @brief Get the size of the tuple.
    * @return The number of elements in the tuple.
    */
   size_t Size() const { return elements_.size(); }
-
-  /**
-   * @brief Get iterators to the beginning and end of the tuple elements.
-   * @return A pair of const iterators to the beginning and end.
-   */
-  auto begin() const { return elements_.begin(); }
-  auto end() const { return elements_.end(); }
 
   /**
    * @brief Retrieves the raw pointer of an element by index.
@@ -75,10 +69,8 @@ class Tuple {
    * @return The element as Value*, or nullptr if the index is out of bounds.
    */
   Value *operator[](size_t index) const {
-    if (index < elements_.size()) {
-      return elements_[index].get();
-    }
-    return nullptr;
+    CHECK_IF_FAIL(index < elements_.size());
+    return elements_[index].get();
   }
 
  private:

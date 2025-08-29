@@ -78,8 +78,7 @@ void ProcessTupleGetItem(ir::NodePtr node) {
   auto index = node->inputs[kSecondInput]->output->ToInt();
   auto tuple = node->inputs[kFirstInput]->output->ToTuple();
   CHECK_IF_FAIL(static_cast<size_t>(index) < tuple->Size());
-  ir::Value *value = (*tuple)[index];
-  node->output = ir::IntrusivePtr<ir::Value>(value);
+  node->output = (*tuple)[index];
 }
 }  // namespace
 
