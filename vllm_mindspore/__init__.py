@@ -288,6 +288,15 @@ SpecDecodeWorker.__init__ = spec_decode_worker_init
 SpecDecodeWorker._verify_tokens = _verify_tokens
 SpecDecodeWorker._run_no_spec = _run_no_spec
 
+from vllm_mindspore.sequence import (
+    sequence_multi_modal_data,
+    sequence_group_multi_modal_data,
+)
+from vllm.sequence import Sequence, SequenceGroup
+
+Sequence.multi_modal_data = sequence_multi_modal_data
+SequenceGroup.multi_modal_data = sequence_group_multi_modal_data
+
 from vllm.model_executor.layers.spec_decode_base_sampler import (
     SpecDecodeBaseSampler, )
 
@@ -323,6 +332,11 @@ MultiModalKwargs.from_items = from_items
 MultiModalFlatField.build_elems = build_elems
 vllm.multimodal.inputs.MultiModalFieldElem = MultiModalFieldElem
 vllm.v1.serial_utils.MultiModalFieldElem = MultiModalFieldElem
+
+from vllm_mindspore.multimodal.base import from_seq_group
+from vllm.multimodal.base import MultiModalPlaceholderMap
+
+MultiModalPlaceholderMap.from_seq_group = from_seq_group
 
 from vllm_mindspore.v1.serial_utils import _encode_tensor, _decode_tensor
 from vllm.v1.serial_utils import MsgpackEncoder, MsgpackDecoder

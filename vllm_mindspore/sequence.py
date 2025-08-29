@@ -33,6 +33,7 @@ import torch
 from vllm.inputs import SingletonInputs
 from vllm.lora.request import LoRARequest
 from vllm.multimodal import MultiModalDataDict, MultiModalPlaceholderDict
+from vllm.multimodal.inputs import MultiModalKwargs
 from vllm.pooling_params import PoolingParams
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import SamplingParams
@@ -1056,3 +1057,26 @@ class SequenceGroupOutput(ABC):
     @abstractmethod
     def __eq__(self, other: object) -> bool:
         pass
+
+
+@property
+def sequence_multi_modal_data(self) -> Optional[MultiModalKwargs]:
+    if self.inputs["type"] == "multimodal":
+        return self.inputs["mm_kwargs"]
+
+    # Avoiding initializing useless multimodal data,
+    # 'MultiModalKwargs({})' is replaced with 'None',
+    # updating by vllm-mindspore plugin
+    return None
+
+
+@property
+def sequence_group_multi_modal_data(self) -> Optional[MultiModalKwargs]:
+    if self.first_seq.multi_modal_data:
+        return self.first_seq.multi_modal_data
+    elif self.encoder_seq is not None:
+        return self.encoder_seq.multi_modal_data
+    # Avoiding initializing useless multimodal data,
+    # 'MultiModalKwargs({})' is replaced with 'None',
+    # updating by vllm-mindspore plugin
+    return None
