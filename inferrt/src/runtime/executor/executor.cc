@@ -66,19 +66,20 @@ const std::string GetEnvKernelLibName() {
 
 void ProcessMakeTuple(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  std::vector<ir::Value> elements;
+  std::vector<ir::ValuePtr> elements;
   for (auto &input : node->inputs) {
-    elements.emplace_back(input->output);
+    (void)elements.emplace_back(input->output);
   }
-  node->output = ir::Value(ir::Tuple(std::move(elements)));
+  node->output = ir::MakeIntrusive<ir::Value>(ir::Tuple(std::move(elements)));
 }
 
 void ProcessTupleGetItem(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  auto index = node->inputs[kSecondInput]->output.ToInt();
-  auto &elements = node->inputs[kFirstInput]->output.ToTuple().GetElements();
-  CHECK_IF_FAIL(static_cast<size_t>(index) < elements.size());
-  node->output = elements[index];
+  auto index = node->inputs[kSecondInput]->output->ToInt();
+  auto tuple = node->inputs[kFirstInput]->output->ToTuple();
+  CHECK_IF_FAIL(static_cast<size_t>(index) < tuple->Size());
+  ir::Value *value = (*tuple)[index];
+  node->output = ir::IntrusivePtr<ir::Value>(value);
 }
 }  // namespace
 
@@ -120,8 +121,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &)) & GraphExecutor::AddTensor, this,
-              std::placeholders::_1, std::placeholders::_2);
+    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &))&GraphExecutor::AddTensor,
+              this, std::placeholders::_1, std::placeholders::_2);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
 
@@ -135,8 +136,6 @@ void GraphExecutor::BuildKernels() {
     if (IsSkipBuildDAKernel(node)) {
       continue;
     }
-    // Get real inputs of the node.
-    GetNodeRealInputs(node);
     auto kernel = kernelLib->CreateKernel(node);
     CHECK_IF_NULL(kernel);
     kernel->Init();
@@ -157,6 +156,7 @@ ir::NodePtr GraphExecutor::AddTensor() {
   LOG_OUT << "Add const tensor";
   auto node = std::make_shared<ir::Node>();
   node->op = ops::Op_End;
+  node->output = ir::MakeIntrusive<ir::Value>();
   return node;
 }
 
@@ -168,6 +168,7 @@ ir::NodePtr GraphExecutor::AddTensor(ops::Op op, const std::vector<ir::NodePtr> 
   CHECK_IF_NULL(node);
   node->op = op;
   node->inputs = inputs;
+  node->output = ir::MakeIntrusive<ir::Value>();
   CHECK_IF_NULL(graph_);
   (void)graph_->nodes.emplace_back(node);
   return node;
@@ -179,7 +180,8 @@ ir::NodePtr GraphExecutor::AddReturn() {
   auto node = std::make_shared<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = ops::Op_return;
-  node->inputs.emplace_back(graph_->nodes[graph_->nodes.size() - 1]);
+  node->output = ir::MakeIntrusive<ir::Value>();
+  (void)node->inputs.emplace_back(graph_->nodes[graph_->nodes.size() - 1]);
   CHECK_IF_NULL(graph_);
   (void)graph_->nodes.emplace_back(node);
   return node;
@@ -222,9 +224,9 @@ void GraphExecutor::RunNode(ir::NodePtr node) {
 
   if (auto it = opsOutputValueFromInputIndex.find(node->op); it != opsOutputValueFromInputIndex.end()) {
     LOG_OUT << "Skip launch kernel for node" << node;
-    auto outputTensor = node->output.ToTensor();
-    auto inputStorage = node->inputs[it->second]->output.ToTensor().GetStorage();
-    node->output = ir::Value(ir::Tensor(inputStorage, outputTensor.Dtype(), outputTensor.Shape()));
+    auto outputTensor = node->output->ToTensor();
+    auto inputStorage = node->inputs[it->second]->output->ToTensor()->GetStorage();
+    node->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(inputStorage, outputTensor->Dtype(), outputTensor->Shape()));
   } else {
     kernel->Launch();
   }

@@ -162,6 +162,12 @@ class IntrusivePtr {
   T *operator->() const { return ptr_; }
 
   /**
+   * @brief Checks if the pointer is null.
+   * @return true if the pointer is null, false otherwise.
+   */
+  bool operator==(const nullptr_t &) const { return ptr_ == nullptr; }
+
+  /**
    * @brief Checks if the pointer is not null.
    * @return true if the pointer is not null, false otherwise.
    */

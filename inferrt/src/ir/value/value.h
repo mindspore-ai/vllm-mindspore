@@ -24,10 +24,66 @@
 
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
-#include "ir/value/tuple.h"
 
 namespace mrt {
 namespace ir {
+
+class Value;
+using ValuePtr = IntrusivePtr<Value>;
+
+/**
+ * @brief A tuple of values.
+ *
+ * This class provides holds a vector of Value objects.
+ */
+class Tuple {
+ public:
+  /**
+   * @brief Default constructor. Creates an empty Tuple.
+   */
+  Tuple() = default;
+
+  /**
+   * @brief Constructs a Tuple from a vector of Value objects.
+   * @param elements The vector of elements to include in the tuple.
+   */
+  explicit Tuple(const std::vector<ValuePtr> &elements) : elements_(elements) {}
+  explicit Tuple(std::vector<ValuePtr> &&elements) : elements_(std::move(elements)) {}
+
+  /**
+   * @brief Move Constructor.
+   * @param other The Tuple to move from.
+   */
+  Tuple(Tuple &&other) noexcept : elements_(std::move(other.elements_)) {}
+
+   /**
+   * @brief Get the size of the tuple.
+   * @return The number of elements in the tuple.
+   */
+  size_t Size() const { return elements_.size(); }
+
+  /**
+   * @brief Get iterators to the beginning and end of the tuple elements.
+   * @return A pair of const iterators to the beginning and end.
+   */
+  auto begin() const { return elements_.begin(); }
+  auto end() const { return elements_.end(); }
+
+  /**
+   * @brief Retrieves the raw pointer of an element by index.
+   * @param index The index of the element to retrieve.
+   * @return The element as Value*, or nullptr if the index is out of bounds.
+   */
+  Value *operator[](size_t index) const {
+    if (index < elements_.size()) {
+      return elements_[index].get();
+    }
+    return nullptr;
+  }
+
+ private:
+  std::vector<ValuePtr> elements_;
+};
 
 /**
  * @brief A generic container for different types of values.
@@ -35,22 +91,17 @@ namespace ir {
  * This class can hold a variety of types, including tensors, scalars, strings,
  * and tuples. It uses a tagged union to store the data efficiently.
  */
-class Value {
+class Value : public RefCounted {
  public:
-  /**
-   * @brief Enumeration of the possible types a Value can hold.
-   */
-  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple };
-
   /**
    * @brief Default constructor. Creates a None value.
    */
   Value() : tag_(Tag::None) {}
   /**
-   * @brief Constructs a Value from a Tensor.
+   * @brief Constructs a Value from a Tensor by moving.
    * @param v The Tensor value.
    */
-  Value(Tensor v);
+  Value(Tensor &&v);
   /**
    * @brief Constructs a Value from a double.
    * @param v The double value.
@@ -67,56 +118,20 @@ class Value {
    */
   Value(bool v);
   /**
-   * @brief Constructs a Value from a std::string.
+   * @brief Constructs a Value from a std::string by moving.
    * @param v The string value.
    */
-  Value(std::string v);
+  Value(std::string &&v);
   /**
-   * @brief Constructs a Value from a Tuple.
+   * @brief Constructs a Value from a Tuple by moving.
    * @param v The Tuple value.
    */
-  Value(Tuple v);
-
-  /**
-   * @brief Move constructor.
-   * @param other The Value to move from.
-   */
-  Value(Value &&other) noexcept;
-  /**
-   * @brief Move assignment operator.
-   * @param other The Value to move from.
-   * @return *this
-   */
-  Value &operator=(Value &&other) noexcept;
-
-  /**
-   * @brief Copy constructor.
-   * @param other The Value to copy from.
-   */
-  Value(const Value &other);
-  /**
-   * @brief Copy assignment operator.
-   * @param other The Value to copy from.
-   * @return *this
-   */
-  Value &operator=(const Value &other);
+  Value(Tuple &&v);
 
   /**
    * @brief Destructor.
    */
   ~Value();
-
-  /**
-   * @brief Get the tag of the value.
-   * @return The tag.
-   */
-  Tag GetTag() const { return tag_; }
-
-  /**
-   * @brief Set the tag of the value.
-   * @param tag The tag.
-   */
-  void SetTag(Tag tag) { tag_ = tag; }
 
   /** @name Type checkers */
   ///@{
@@ -134,26 +149,32 @@ class Value {
    *  std::runtime_error if the type does not match.
    */
   ///@{
-  Tensor ToTensor() const;
+  const Tensor *ToTensor() const;
+  Tensor *ToTensor();
   double ToDouble() const;
   int64_t ToInt() const;
   bool ToBool() const;
-  const std::string &ToString() const;
-  Tuple ToTuple() const;
+  const std::string *ToString() const;
+  std::string *ToString();
+  const Tuple *ToTuple() const;
+  Tuple *ToTuple();
   ///@}
+
+  /**
+   * @brief Overloads the output stream operator for ValuePtr.
+   * @param os The output stream.
+   * @param value The ValuePtr to output.
+   * @return The output stream.
+   */
+  friend std::ostream &operator<<(std::ostream &os, const Value *value);
 
  private:
   /**
-   * @brief Destroys the currently held value.
+   * @brief Enumeration of the possible types a Value can hold.
    */
-  void Destroy();
-  /**
-   * @brief Copies the value from another Value object.
-   * @param other The Value to copy from.
-   */
-  void CopyFrom(const Value &other);
+  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple };
 
-  Tag tag_;  ///< The tag indicating the type of the value.
+  const Tag tag_;  ///< The tag indicating the type of the value.
   union {
     Tensor tensor_;
     double double_;
@@ -164,7 +185,8 @@ class Value {
   };
 };
 
-std::ostream &operator<<(std::ostream &os, const Value &value);
+std::ostream &operator<<(std::ostream &os, const ValuePtr &value);
+std::ostream &operator<<(std::ostream &os, const Value *value);
 
 }  // namespace ir
 }  // namespace mrt

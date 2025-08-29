@@ -44,23 +44,5 @@ const std::set<ops::Op> forceResizeOpsSet = {
   ops::Op_paged_attention,
 };
 
-void GetNodeRealInputs(ir::NodePtr node) {
-  CHECK_IF_NULL(node);
-  std::vector<ir::NodePtr > realInputs;
-  for (auto input : node->inputs) {
-    CHECK_IF_NULL(input);
-    if (input->output.IsTuple()) {
-      auto elements = input->output.ToTuple().GetElements();
-      for (const auto &element : elements) {
-        auto fakeNode = std::make_shared<ir::Node>(); // TODO: 
-        fakeNode->output = element;
-        (void)realInputs.emplace_back(fakeNode);
-      }
-    } else {
-      (void)realInputs.emplace_back(input);
-    }
-  }
-  node->inputs = realInputs;
-}
 }  // namespace runtime
 }  // namespace mrt

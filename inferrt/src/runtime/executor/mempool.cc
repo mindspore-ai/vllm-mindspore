@@ -23,7 +23,7 @@ namespace mrt {
 namespace runtime {
 void MemoryPool::Free(ir::NodePtr tensor) const {
   CHECK_IF_NULL(tensor);
-  tensor->output = ir::Value();
+  tensor->output = ir::MakeIntrusive<ir::Value>();
 }
 
 TensorDataRecycler::TensorDataRecycler() {

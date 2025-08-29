@@ -18,10 +18,11 @@
 #define __IR_TENSOR_STORAGE_H__
 
 #include <cstddef>
+#include <memory>
 
 #include "hardware/device.h"
-#include "ir/common/intrusive_ptr.h"
 #include "ir/common/dtype.h"
+#include "ir/common/intrusive_ptr.h"
 
 namespace mrt {
 namespace ir {
@@ -32,32 +33,37 @@ namespace ir {
  * This class manages a block of memory on a specific device.
  * It is reference-counted and managed by the Storage class.
  */
-class StorageImpl : public RefCounted {
+class Storage : public RefCounted {
  public:
   /**
-   * @brief Constructs a StorageImpl, allocating memory.
+   * @brief Constructs a Storage, allocating memory.
    * @param sizeBytes The size of the storage in bytes.
    * @param device The device where the storage is located.
    */
-  StorageImpl(size_t sizeBytes, hardware::Device device);
+  Storage(size_t sizeBytes, hardware::Device device);
   /**
-   * @brief Constructs a StorageImpl from an existing buffer.
+   * @brief Constructs a Storage from an existing buffer.
    * The storage does not own the data and will not free it.
    * @param data Pointer to the existing data.
    * @param sizeBytes The size of the storage in bytes.
    * @param device The device where the storage is located.
    */
-  StorageImpl(void *data, size_t sizeBytes, hardware::Device device);
+  Storage(void *data, size_t sizeBytes, hardware::Device device);
   /**
    * @brief Destructor. Frees the allocated memory if it owns it.
    */
-  ~StorageImpl();
+  ~Storage();
 
+  /**
+   * @brief Gets a const pointer to the data.
+   * @return A const void pointer to the data.
+   */
+  const void *Data() const { return data_; }
   /**
    * @brief Gets a pointer to the data.
    * @return A void pointer to the data.
    */
-  void *Data() const { return data_; }
+  void *Data() { return data_; }
   /**
    * @brief Gets the size of the storage in bytes.
    * @return The size in bytes.
@@ -76,60 +82,7 @@ class StorageImpl : public RefCounted {
   bool ownsData_{true};      ///< Whether the storage owns the data.
 };
 
-/**
- * @brief A handle to a StorageImpl.
- *
- * This class provides a user-friendly interface to the storage implementation.
- * It uses an IntrusivePtr to manage the lifetime of the StorageImpl.
- */
-class Storage {
- public:
-  /**
-   * @brief Default constructor. Creates an uninitialized Storage.
-   */
-  Storage() = default;
-
-  /**
-   * @brief Constructs a Storage, allocating memory.
-   * @param sizeBytes The size of the storage in bytes.
-   * @param device The device where the storage is located.
-   */
-  Storage(size_t sizeBytes, hardware::Device device) : impl_(MakeIntrusive<StorageImpl>(sizeBytes, device)) {}
-
-  /**
-   * @brief Constructs a Storage from an existing buffer.
-   * The storage does not own the data and will not free it.
-   * @param data Pointer to the existing data.
-   * @param sizeBytes The size of the storage in bytes.
-   * @param device The device where the storage is located.
-   */
-  Storage(void *data, size_t sizeBytes, hardware::Device device)
-      : impl_(MakeIntrusive<StorageImpl>(data, sizeBytes, device)) {}
-
-  /**
-   * @brief Gets a pointer to the data.
-   * @return A void pointer to the data.
-   */
-  void *Data() const { return impl_->Data(); }
-  /**
-   * @brief Gets the size of the storage in bytes.
-   * @return The size in bytes.
-   */
-  size_t SizeBytes() const { return impl_->SizeBytes(); }
-  /**
-   * @brief Gets the device of the storage.
-   * @return The device.
-   */
-  hardware::Device GetDevice() const { return impl_->GetDevice(); }
-  /**
-   * @brief Gets the underlying implementation pointer.
-   * @return A const reference to the IntrusivePtr of the StorageImpl.
-   */
-  const IntrusivePtr<StorageImpl> &GetImpl() const { return impl_; }
-
- private:
-  IntrusivePtr<StorageImpl> impl_;
-};
+using StoragePtr = IntrusivePtr<Storage>;
 
 }  // namespace ir
 }  // namespace mrt
