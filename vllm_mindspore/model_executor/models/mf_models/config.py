@@ -18,6 +18,8 @@ import types
 from mindformers.tools.register.config import MindFormerConfig
 from vllm.config import VllmConfig
 
+from vllm_mindspore.utils import is_310p
+
 MF_CTX_MAPPING = {
     'run_mode': (None, "predict"),
     'use_legacy': (None, False),
@@ -25,14 +27,14 @@ MF_CTX_MAPPING = {
     'auto_trans_ckpt': (None, True),
 }
 
-# yapf: disable
+# yapf: disable # noqa: ERA001
 MF_PARALLEL_MAPPING = {
     'parallel_mode': (None, 'STAND_ALONE'),
     'parallel_config.model_parallel': ('parallel_config.tensor_parallel_size', None),  # noqa: E501
     'parallel_config.pipeline_stage': ('parallel_config.pipeline_parallel_size', None),  # noqa: E501
     'parallel_config.vocab_emb_dp': (None, False)
 }
-# yapf: enable
+# yapf: enable # noqa: ERA001
 
 # model default config
 MODEL_RELATED_MAPPING = {
@@ -45,6 +47,14 @@ MODEL_RELATED_MAPPING = {
         'rotary_dtype': 'bfloat16',
         'router_dense_type': 'bfloat16',
     }
+    # Add anther model type...
+}
+
+MODEL_RELATED_MAPPING_310p = {
+    'qwen3': {
+        'params_dtype': 'float16',  # need an input
+        'compute_dtype': 'float16',
+    },
     # Add anther model type...
 }
 
@@ -93,6 +103,8 @@ def transform_config(mapping_table: dict, vllm_config: VllmConfig,
 
 
 def gen_model_relatived_config(model_type):
+    if is_310p():
+        return MODEL_RELATED_MAPPING_310p.get(model_type)
     return MODEL_RELATED_MAPPING.get(model_type)
 
 
