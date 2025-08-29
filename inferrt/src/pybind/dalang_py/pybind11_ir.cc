@@ -80,8 +80,9 @@ static py::array ConvertValueToNumpyArray(ir::ValuePtr value) {
 
 static std::vector<py::array> ConvertValueToNumpyArrayList(ir::ValuePtr value) {
   std::vector<py::array> result;
-  for (auto &item : *(value->ToTuple())) {
-    (void)result.emplace_back(ConvertValueToNumpyArray(item));
+  const auto tuple = value->ToTuple();
+  for (size_t i = 0; i < tuple->Size(); ++i) {
+    (void)result.emplace_back(ConvertValueToNumpyArray((*tuple)[i]));
   }
   return result;
 }

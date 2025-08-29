@@ -21,6 +21,17 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
+
+static inline std::string GetTime() {
+  auto t = time(0);
+  tm lt;
+  localtime_r(&t, &lt);
+  std::stringstream ss;
+  ss << (lt.tm_year + 1900) << '-' << (lt.tm_mon + 1) << '-' << std::setfill('0') << std::setw(2) << lt.tm_mday << ' '
+     << std::setw(2) << lt.tm_hour << ':' << std::setw(2) << lt.tm_min << ':' << std::setw(2) << lt.tm_sec;
+  return ss.str();
+}
 
 class Cout {
  public:
@@ -46,25 +57,43 @@ class Cerr {
   }
 };
 
-static inline std::string GetTime() {
-  auto t = time(0);
-  tm lt;
-  localtime_r(&t, &lt);
-  std::stringstream ss;
-  ss << (lt.tm_year + 1900) << '-' << (lt.tm_mon + 1) << '-' << std::setfill('0') << std::setw(2) << lt.tm_mday << ' '
-     << std::setw(2) << lt.tm_hour << ':' << std::setw(2) << lt.tm_min << ':' << std::setw(2) << lt.tm_sec;
-  return ss.str();
-}
+class Cexception {
+ public:
+  Cexception(const char *file, int line, const char *func) {
+    prefix_ << GetTime() << " [" << file << ':' << line << ' ' << func << "] exception: ";
+  }
+  ~Cexception() noexcept(false) {
+    std::string msg = msg_.str();
+    std::string prefix = prefix_.str();
+    std::cerr << prefix << msg << std::endl;
+    throw std::runtime_error(msg);
+  }
+
+  template <typename T>
+  Cexception &operator<<(const T &val) {
+    msg_ << val;
+    return *this;
+  }
+
+ private:
+  std::stringstream prefix_;
+  std::stringstream msg_;
+};
 
 #define LOG_OUT Cout() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] "
 
 #define LOG_ERROR Cerr() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] error: "
+
+#define LOG_EXCEPTION Cexception(__FILE__, __LINE__, __FUNCTION__)
 
 #define NO_LOG_OUT \
   while (false) Cout()
 
 #define NO_LOG_ERROR \
   while (false) Cerr()
+
+#define NO_LOG_EXCEPTION \
+  while (false) Cexception()
 
 #ifndef DEBUG_LOG_OUT
 #undef LOG_OUT
