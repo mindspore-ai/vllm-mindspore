@@ -511,4 +511,19 @@ from vllm.model_executor.models.registry import _ModelRegistry
 
 _ModelRegistry._normalize_archs = _normalize_archs
 
+from vllm_mindspore.v1.engine.core_client import (MsCoreEngine,
+                                                  get_core_engine_for_request,
+                                                  add_request_async,
+                                                  process_engine_outputs)
+
+vllm.entrypoints.cli.serve.CoreEngine = MsCoreEngine
+vllm.v1.engine.core_client.CoreEngine = MsCoreEngine
+vllm.v1.utils.CoreEngine = MsCoreEngine
+
+from vllm.v1.engine.core_client import DPAsyncMPClient
+
+DPAsyncMPClient.get_core_engine_for_request = get_core_engine_for_request
+DPAsyncMPClient.add_request_async = add_request_async
+DPAsyncMPClient.process_engine_outputs = staticmethod(process_engine_outputs)
+
 check_ready()
