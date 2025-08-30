@@ -114,6 +114,10 @@ MF_MODEL_MAPPING_310P = {
 
 # model default config
 MODEL_RELATED_MAPPING = {
+    'qwen2': {
+        'layernorm_compute_dtype': 'float32',
+        'add_qkv_bias': True,
+    },
     'qwen3': {
         'layernorm_compute_dtype': 'float32',
     },

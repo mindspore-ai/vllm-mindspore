@@ -25,7 +25,6 @@ def teardown_function():
 
 env_manager = utils.EnvVarManager()
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
@@ -73,7 +72,7 @@ def test_mf_qwen_7b_prefix_caching():
     outputs = llm.generate(prompts, sampling_params)
     second_outputs = llm.generate(second_prompts, sampling_params)
     except_list = [' many times and each time I have found something new']
-    second_except_list = [' in Beijing, but I have to say that the']
+    second_except_list = [' in Beijing, but the one that I like the']
     for i, (output, second_output) in enumerate(zip(outputs, second_outputs)):
         generated_text = output.outputs[i].text
         print(f"Output1 - Prompt: {prompts[i]!r}, "

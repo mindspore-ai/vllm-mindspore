@@ -56,7 +56,6 @@ _NATIVE_MODELS = {
 }
 
 _MINDFORMERS_MODELS = {
-    "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
     "MindFormersForCausalLM": ("mindformers", "MindFormersForCausalLM")
 }
 

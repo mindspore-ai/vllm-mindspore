@@ -27,7 +27,6 @@ def teardown_function():
 env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
