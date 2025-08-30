@@ -115,6 +115,10 @@ MF_MODEL_MAPPING_310P = {
 
 # model default config
 MODEL_RELATED_MAPPING = {
+    'qwen2': {
+        'layernorm_compute_dtype': 'float32',
+        'add_qkv_bias': True,
+    },
     'qwen3': {
         'layernorm_compute_dtype': 'float32',
     },
@@ -299,33 +303,10 @@ def get_mf_offset(vllm_config: VllmConfig):
         return 0
 
 
-def get_mf_offset(vllm_config: VllmConfig):
-    """ get pp offset from vllm style"""
-    partition_list_str = envs.VLLM_PP_LAYER_PARTITION
-    num_layers = vllm_config.model_config.hf_config.num_hidden_layers
-    pp_size = vllm_config.parallel_config.pipeline_parallel_size
-    if partition_list_str is not None:
-        try:
-            partitions = [
-                int(layer) for layer in partition_list_str.split(",")
-            ]
-        except ValueError as err:
-            raise ValueError("Invalid partition string: {}".format(
-                partition_list_str)) from err
-        if len(partitions) != pp_size:
-            raise ValueError(f"{len(partitions)=} does not match {pp_size=}.")
-        if sum(partitions) != num_layers:
-            raise ValueError(
-                f"{sum(partitions)=} does not match {num_layers=}.")
-        partitions = np.array(partitions, dtype=np.int32)
-        avg_layers = num_layers // pp_size
-        avg_layers_list = np.ones((pp_size, ), dtype=np.int32) * avg_layers
-        if (partitions == avg_layers_list).all():
-            return 0
-        else:
-            return (partitions - avg_layers_list).tolist()
-    else:
-        return 0
+def gen_model_relatived_config(model_type):
+    if is_310p():
+        return MODEL_RELATED_MAPPING_310p.get(model_type)
+    return MODEL_RELATED_MAPPING.get(model_type)
 
 
 def gen_model_config_dict(vllm_config: VllmConfig):
