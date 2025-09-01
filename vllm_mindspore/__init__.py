@@ -22,6 +22,9 @@ import os
 import sys
 import warnings
 import msadapter  # noqa F401
+from vllm_mindspore.ray_patch import patch_ray
+
+patch_ray()
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.
@@ -525,10 +528,5 @@ from vllm_mindspore.model_executor.models.registry import _normalize_archs
 from vllm.model_executor.models.registry import _ModelRegistry
 
 _ModelRegistry._normalize_archs = _normalize_archs
-
-from vllm_mindspore.utils import view
-from mindspore import Tensor
-
-Tensor.view = view
 
 check_ready()
