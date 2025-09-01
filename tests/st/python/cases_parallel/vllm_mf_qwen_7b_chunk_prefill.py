@@ -26,7 +26,6 @@ def teardown_function():
 env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG": "./config/predict_qwen2_5_7b_instruct.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
@@ -62,9 +61,9 @@ def test_mf_qwen_7b_chunk_prefill():
             "is easily accessible from Beijing and offers a glimpse into the "
             "strategic genius and resilience of ancient China.",
             "answer":
-            " The city's blend of traditional and modern architecture, "
-            "bustling markets, and vibrant street life make it a unique "
-            "and fascinating destination. In short, Beijing is a city"
+            " The city's blend of traditional and modern elements, "
+            "from the bustling markets to the cutting-edge technology, "
+            "makes it a unique and fascinating place to explore. In summary"
         },
         {
             "prompt":

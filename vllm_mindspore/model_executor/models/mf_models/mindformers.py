@@ -375,7 +375,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                     and selected_token_indices.numel() <= 0):
                 logits = ms.mint.zeros(
                     (0, self.model_config.hf_config.vocab_size),
-                    dtype=self.model_config.hf_config.torch_dtype)
+                    dtype=self.model_config.dtype)
                 return logits
             else:
                 hidden_states = hidden_states.reshape(
