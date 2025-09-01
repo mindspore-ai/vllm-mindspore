@@ -109,12 +109,11 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         if not self.mla_config:
             return super().get_kvcache()
 
-        key_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
-            k_cache = self.kv_caches[i].kv_cache[
-                forward_context.virtual_engine][0]
-            key_cache.append(k_cache)
+        key_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            for i in range(self.num_layers)
+        ]
         return mutable(key_cache), None
 
     def _get_padding_index(self, q_seq_len):

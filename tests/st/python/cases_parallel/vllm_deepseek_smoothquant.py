@@ -29,8 +29,6 @@ def teardown_function():
 env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
-    "MINDFORMERS_MODEL_CONFIG":
-    "./config/predict_deepseek_r1_671b_w8a8_smoothquant.yaml",
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",

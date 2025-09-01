@@ -20,7 +20,6 @@ import numpy as np
 import pytest
 
 from vllm_mindspore import _custom_ops as custom_ops
-from vllm_mindspore import npu_ops
 import torch
 
 from .utils import cleanup_subprocesses

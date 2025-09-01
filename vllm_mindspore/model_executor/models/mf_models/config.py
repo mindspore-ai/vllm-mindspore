@@ -131,14 +131,6 @@ MODEL_RELATED_MAPPING = {
     # Add anther model type...
 }
 
-MODEL_RELATED_MAPPING_310p = {
-    'qwen3': {
-        'params_dtype': 'float16',  # need an input
-        'compute_dtype': 'float16',
-    },
-    # Add anther model type...
-}
-
 
 def _get_nested_attr(obj, path: str, default=None):
     """get nested attr from obj."""
@@ -303,12 +295,6 @@ def get_mf_offset(vllm_config: VllmConfig):
         return 0
 
 
-def gen_model_relatived_config(model_type):
-    if is_310p():
-        return MODEL_RELATED_MAPPING_310p.get(model_type)
-    return MODEL_RELATED_MAPPING.get(model_type)
-
-
 def gen_model_config_dict(vllm_config: VllmConfig):
     """
     Generate model configuration dictionary based on MODEL_RELATED_MAPPING.
@@ -316,8 +302,9 @@ def gen_model_config_dict(vllm_config: VllmConfig):
     target_config = MindFormerConfig()
 
     model_type = vllm_config.model_config.hf_config.model_type
-    model_related_config = gen_model_relatived_config(model_type)
-    target_config.update(model_related_config)
+    model_related_config = MODEL_RELATED_MAPPING.get(model_type)
+    if model_related_config is not None:
+        target_config.update(model_related_config)
     target_config.pre_process = get_pp_group().is_first_rank
     target_config.post_process = get_pp_group().is_last_rank
     target_config.offset = get_mf_offset(vllm_config)
