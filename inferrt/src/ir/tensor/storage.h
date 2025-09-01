@@ -19,7 +19,9 @@
 
 #include <cstddef>
 #include <memory>
+#include <cstring>
 
+#include "common/common.h"
 #include "hardware/device.h"
 #include "ir/common/dtype.h"
 #include "ir/common/intrusive_ptr.h"
@@ -75,9 +77,16 @@ class Storage : public RefCounted {
    */
   hardware::Device GetDevice() const { return device_; }
 
+  void SetData(void *data) {
+    CHECK_IF_FAIL(!ownsData_);
+    data_ = data;
+  }
+
+  void Resize(size_t sizeBytes);
+
  private:
-  void *data_;               ///< Pointer to the allocated memory.
-  size_t sizeBytes_;         ///< Size of the memory in bytes.
+  void *data_{nullptr};      ///< Pointer to the allocated memory.
+  size_t sizeBytes_{0};      ///< Size of the memory in bytes.
   hardware::Device device_;  ///< The device where the memory is allocated.
   bool ownsData_{true};      ///< Whether the storage owns the data.
 };

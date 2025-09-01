@@ -16,77 +16,178 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/numpy.h>
 #include <sstream>
+
+#include <torch/extension.h>
 
 #include "runtime/executor/executor.h"
 #include "ir/graph.h"
+#include "ir/value/value.h"
 #include "ops/op_def/ops_name.h"
 
 namespace py = pybind11;
 using namespace mrt;
 using namespace mrt::runtime;
 
-static ir::ValuePtr ConvertBufferInfoToValue(const py::buffer_info &info) {
-  ir::DataType type;
-  if (info.format == py::format_descriptor<float>::format())
-    type = ir::DataType::Float32;
-  else if (info.format == py::format_descriptor<double>::format())
-    type = ir::DataType::Float64;
-  else if (info.format == py::format_descriptor<int32_t>::format())
-    type = ir::DataType::Int32;
-  else if (info.format == py::format_descriptor<int64_t>::format())
-    type = ir::DataType::Int64;
-  else if (info.format == py::format_descriptor<int16_t>::format())
-    type = ir::DataType::Int16;
-  else if (info.format == py::format_descriptor<bool>::format())
-    type = ir::DataType::Bool;
-  else
-    throw std::runtime_error("Unsupported numpy dtype for buffer conversion");
-  std::vector<int64_t> dims(info.shape.begin(), info.shape.end());
-  auto tensor = ir::Tensor(info.ptr, dims, type, hardware::Device(hardware::DeviceType::CPU, 0));
+namespace {
+// DataType conversion utilities
+ir::DataType FromTorchDType(const at::ScalarType &type) {
+  switch (type) {
+    case at::kFloat:
+      return ir::DataType::Float32;
+    case at::kDouble:
+      return ir::DataType::Float64;
+    case at::kInt:
+      return ir::DataType::Int32;
+    case at::kLong:
+      return ir::DataType::Int64;
+    case at::kShort:
+      return ir::DataType::Int16;
+    case at::kBool:
+      return ir::DataType::Bool;
+    default:
+      LOG_EXCEPTION << "Unsupported at::ScalarType for conversion to ir::DataType";
+      return ir::DataType::Unknown;
+  }
+}
+
+at::ScalarType ToTorchDType(ir::DataType type) {
+  switch (type) {
+    case ir::DataType::Float32:
+      return at::kFloat;
+    case ir::DataType::Float64:
+      return at::kDouble;
+    case ir::DataType::Int32:
+      return at::kInt;
+    case ir::DataType::Int64:
+      return at::kLong;
+    case ir::DataType::Int16:
+      return at::kShort;
+    case ir::DataType::Bool:
+      return at::kBool;
+    default:
+      LOG_EXCEPTION << "Unsupported ir::DataType for conversion to at::ScalarType";
+      return at::kFloat;
+  }
+}
+
+// Device conversion utilities
+hardware::Device FromTorchDevice(const at::Device &device) {
+  hardware::DeviceType deviceType;
+  switch (device.type()) {
+    case at::DeviceType::CPU:
+      deviceType = hardware::DeviceType::CPU;
+      break;
+    default:
+      LOG_EXCEPTION << "Unsupported torch::Device for conversion to hardware::Device";
+  }
+  return hardware::Device(deviceType, device.index());
+}
+
+at::Device ToTorchDevice(const hardware::Device device) {
+  at::DeviceType deviceType;
+  switch (device.type) {
+    case hardware::DeviceType::CPU:
+      deviceType = at::kCPU;
+      break;
+    default:
+      LOG_EXCEPTION << "Unsupported hardware::DeviceType for conversion to torch::Device";
+  }
+  return at::Device(deviceType, device.index);
+}
+
+// Forward declaration for recursive conversion
+py::object to_python(const ir::ValuePtr &value);
+ir::ValuePtr from_python(const py::handle &obj);
+
+// Tensor conversion utilities
+ir::ValuePtr from_torch(const at::Tensor &atTensor) {
+  ir::DataType type = FromTorchDType(atTensor.scalar_type());
+  std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
+  void *data = atTensor.data_ptr();
+  auto device = FromTorchDevice(atTensor.device());
+  auto tensor = ir::Tensor(data, shape, type, device);
   return ir::MakeIntrusive<ir::Value>(std::move(tensor));
 }
 
-static py::array ConvertValueToNumpyArray(ir::ValuePtr value) {
+at::Tensor to_torch(const ir::ValuePtr &value) {
   auto tensor = value->ToTensor();
-  std::string format;
-  switch (tensor->Dtype()) {
-    case ir::DataType::Float32:
-      format = py::format_descriptor<float>::format();
-      break;
-    case ir::DataType::Int32:
-      format = py::format_descriptor<int32_t>::format();
-      break;
-    case ir::DataType::Int64:
-      format = py::format_descriptor<int64_t>::format();
-      break;
-    case ir::DataType::Float64:
-      format = py::format_descriptor<double>::format();
-      break;
-    case ir::DataType::Bool:
-      format = py::format_descriptor<bool>::format();
-      break;
-    case ir::DataType::Int16:
-      format = py::format_descriptor<int16_t>::format();
-      break;
-    default:
-      throw std::runtime_error("Unsupported dtype for numpy conversion");
-  }
-  std::vector<size_t> shape(tensor->Shape().begin(), tensor->Shape().end());
-  auto result = py::array(py::dtype(format), shape, tensor->DataPtr());
-  return result;
+  CHECK_IF_NULL(tensor);
+  auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(ToTorchDevice(tensor->GetDevice()));
+  value->AddRef();
+  return at::from_blob(
+    tensor->DataPtr(), tensor->Shape(), tensor->Strides(), [ptr = value.get()](void *) { ptr->DecRef(); }, options);
 }
 
-static std::vector<py::array> ConvertValueToNumpyArrayList(ir::ValuePtr value) {
-  std::vector<py::array> result;
-  const auto tuple = value->ToTuple();
-  for (size_t i = 0; i < tuple->Size(); ++i) {
-    (void)result.emplace_back(ConvertValueToNumpyArray((*tuple)[i]));
+// New conversion functions
+ir::ValuePtr from_python(const py::handle &obj) {
+  if (THPVariable_Check(obj.ptr())) {
+    return from_torch(obj.cast<at::Tensor>());
   }
-  return result;
+  if (py::isinstance<py::tuple>(obj) || py::isinstance<py::list>(obj)) {
+    auto py_tuple = obj.cast<py::tuple>();
+    std::vector<ir::ValuePtr> elements;
+    elements.reserve(py_tuple.size());
+    for (const auto &elem : py_tuple) {
+      (void)elements.emplace_back(from_python(elem));
+    }
+    return ir::MakeIntrusive<ir::Value>(ir::Tuple(std::move(elements)));
+  }
+  if (py::isinstance<py::int_>(obj)) {
+    return ir::MakeIntrusive<ir::Value>(obj.cast<int64_t>());
+  }
+  if (py::isinstance<py::float_>(obj)) {
+    return ir::MakeIntrusive<ir::Value>(obj.cast<double>());
+  }
+  if (py::isinstance<py::bool_>(obj)) {
+    return ir::MakeIntrusive<ir::Value>(obj.cast<bool>());
+  }
+  if (py::isinstance<py::str>(obj)) {
+    return ir::MakeIntrusive<ir::Value>(obj.cast<std::string>());
+  }
+  if (obj.is_none()) {
+    return ir::MakeIntrusive<ir::Value>();
+  }
+  LOG_EXCEPTION << "Unsupported python type for conversion to ir::Value: " << py::str(obj);
+  return nullptr;
 }
 
+py::object to_python(const ir::ValuePtr &value) {
+  if (!value) {
+    return py::none();
+  }
+  if (value->IsTensor()) {
+    return py::cast(to_torch(value));
+  }
+  if (value->IsTuple()) {
+    const auto *tuple = value->ToTuple();
+    py::tuple py_tuple(tuple->Size());
+    for (size_t i = 0; i < tuple->Size(); ++i) {
+      py_tuple[i] = to_python((*tuple)[i]);
+    }
+    return py_tuple;
+  }
+  if (value->IsInt()) {
+    return py::cast(value->ToInt());
+  }
+  if (value->IsDouble()) {
+    return py::cast(value->ToDouble());
+  }
+  if (value->IsBool()) {
+    return py::cast(value->ToBool());
+  }
+  if (value->IsString()) {
+    return py::cast(*value->ToString());
+  }
+  if (value->IsNone()) {
+    return py::none();
+  }
+  LOG_EXCEPTION << "Unsupported ir::Value for conversion to python object: " << value;
+  return py::none();
+}
+}  // namespace
+
+PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 PYBIND11_MODULE(_dairpy, m) {
   m.doc() = "Python binding for DA IR";
 
@@ -96,14 +197,28 @@ PYBIND11_MODULE(_dairpy, m) {
 #undef OP
     .export_values();
 
-  py::class_<ir::Node, ir::NodePtr>(m, "Node")
-    .def("update_data",
-         [](ir::Node &self, py::buffer b) {
-           py::buffer_info info = b.request();
-           self.output = ConvertBufferInfoToValue(b.request());
-         })
-    .def("numpy", [](ir::Node &self) -> py::array { return ConvertValueToNumpyArray(self.output); })
-    .def("list", [](ir::Node &self) -> std::vector<py::array> { return ConvertValueToNumpyArrayList(self.output); });
+  py::class_<ir::Value, ir::ValuePtr>(m, "Value")
+    .def("update_tensor_data", [](ir::Value &self, const at::Tensor &atTensor) {
+      ir::DataType type = FromTorchDType(atTensor.scalar_type());
+      std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
+      void *data = atTensor.data_ptr();
+
+      auto tensor = self.ToTensor();
+      if (tensor->GetDevice() != FromTorchDevice(atTensor.device())) {
+        LOG_EXCEPTION << "Device mismatch in update_tensor_data";
+      }
+
+      tensor->SetDtype(type);
+      tensor->SetShape(std::move(shape));
+      tensor->ResizeStorage();
+      tensor->UpdateData(data);
+    });
+
+  py::class_<ir::Node, ir::NodePtr>(m, "Node").def_property_readonly(
+    "output", [](const ir::NodePtr &node) { return node->output; });
+
+  m.def("from_python", &from_python, py::arg("obj"));
+  m.def("to_python", &to_python, py::arg("value"));
 
   py::class_<GraphExecutor>(m, "GraphExecutor")
     .def(py::init<>())
@@ -113,22 +228,9 @@ PYBIND11_MODULE(_dairpy, m) {
     .def("build_kernels", &GraphExecutor::BuildKernels)
     .def("run_graph", &GraphExecutor::RunGraph, py::arg("is_dynamic") = false)
     .def("dump_graph", &GraphExecutor::DumpGraph)
-    .def("free_graph_outputs", &GraphExecutor::FreeGraphOutputs)
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)
     .def("add_return", &GraphExecutor::AddReturn, py::return_value_policy::reference)
-    .def("add_parameter", &GraphExecutor::AddParameter, py::arg("tensor"))
-    .def(
-      "add_op",
-      [](GraphExecutor &self, ops::Op op, const std::vector<ir::NodePtr> &inputs) -> ir::NodePtr {
-        return self.AddTensor(op, inputs);
-      },
-      py::arg("op"), py::arg("inputs"), py::return_value_policy::reference)
-    .def(
-      "add_const",
-      [](GraphExecutor &self, const py::buffer b) -> ir::NodePtr {
-        auto tensor = self.AddTensor();
-        tensor->output = ConvertBufferInfoToValue(b.request());
-        return tensor;
-      },
-      py::arg("tensor"), py::return_value_policy::reference);
+    .def("add_parameter", &GraphExecutor::AddParameter, py::arg("param"))
+    .def("add_op_node", &GraphExecutor::AddOpNode, py::arg("op"), py::arg("inputs"), py::return_value_policy::reference)
+    .def("add_value_node", &GraphExecutor::AddValueNode, py::arg("value"), py::return_value_policy::reference);
 }

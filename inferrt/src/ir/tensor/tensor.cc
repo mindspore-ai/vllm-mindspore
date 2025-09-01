@@ -32,7 +32,7 @@ int64_t CalculateNumel(const std::vector<int64_t> &shape, bool allow_dynamic) {
       if (allow_dynamic) {
         return -1;
       } else {
-        throw std::runtime_error("Creating Tensor from existing data does not support dynamic shapes.");
+        LOG_EXCEPTION << "Creating Tensor from existing data does not support dynamic shapes.";
       }
     }
     numel *= dim;
@@ -78,21 +78,22 @@ Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Devi
 
 void Tensor::ResizeStorage() {
   CHECK_IF_NULL(storage_);
-  size_t sizeBytes = 0;
-  if (!HasDynamicShape()) {
-    sizeBytes = numel_ * dtype_.GetSize();
-  }
-
-  storage_ = MakeIntrusive<Storage>(sizeBytes, storage_->GetDevice());
+  CHECK_IF_FAIL(!HasDynamicShape());
+  size_t sizeBytes = numel_ * dtype_.GetSize();
+  storage_->Resize(sizeBytes);
 }
 
-Tensor::Tensor(StoragePtr storage, DataType dtype, const std::vector<int64_t> &shape)
+void Tensor::UpdateData(void *data) {
+  storage_->SetData(data);
+}
+
+Tensor::Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType dtype)
     : dtype_(dtype), shape_(shape), storage_(storage) {
   ComputeStrides();
   numel_ = CalculateNumel(shape_, true);
   if (!HasDynamicShape()) {
     if (storage_->SizeBytes() < numel_ * dtype_.GetSize()) {
-      throw std::runtime_error("Storage size is smaller than required by tensor dimensions and data type.");
+      LOG_EXCEPTION << "Storage size is smaller than required by tensor dimensions and data type.";
     }
   }
 }

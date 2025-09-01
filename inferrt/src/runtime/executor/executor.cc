@@ -120,7 +120,7 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &))&GraphExecutor::AddTensor,
+    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &))&GraphExecutor::AddOpNode,
               this, std::placeholders::_1, std::placeholders::_2);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
@@ -150,19 +150,22 @@ void GraphExecutor::AddParameter(ir::NodePtr param) {
   (void)parameters_.emplace_back(param);
 }
 
-// Add a const tensor.
-ir::NodePtr GraphExecutor::AddTensor() {
-  LOG_OUT << "Add const tensor";
+// Add a value node.
+ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
+  LOG_OUT << "Add value node: " << value;
   auto node = std::make_shared<ir::Node>();
   node->op = ops::Op_End;
-  node->output = ir::MakeIntrusive<ir::Value>();
+  node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
+  if (graph_ != nullptr) {
+    (void)graph_->nodes.emplace_back(node);
+  }
   return node;
 }
 
-// Add operation result tensor.
-ir::NodePtr GraphExecutor::AddTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
-  LOG_OUT << "Add tensor";
-  LOG_OUT << "tensor input size: " << inputs.size();
+// Add an operation node.
+ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
+  LOG_OUT << "Add operation node";
+  LOG_OUT << "operation input size: " << inputs.size();
   auto node = std::make_shared<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = op;
@@ -225,7 +228,7 @@ void GraphExecutor::RunNode(ir::NodePtr node) {
     LOG_OUT << "Skip launch kernel for node" << node;
     auto outputTensor = node->output->ToTensor();
     auto inputStorage = node->inputs[it->second]->output->ToTensor()->GetStorage();
-    node->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(inputStorage, outputTensor->Dtype(), outputTensor->Shape()));
+    node->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(inputStorage, outputTensor->Shape(), outputTensor->Dtype()));
   } else {
     kernel->Launch();
   }
