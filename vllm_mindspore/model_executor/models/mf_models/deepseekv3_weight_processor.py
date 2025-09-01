@@ -711,19 +711,31 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             input_scale_hf_name)
         input_scale_ms_param, _ = self.get_safetensor_from_file(
             input_scale_hf_name, src_hf_dir, hf_weight_map)
-        self.parameter_dict[input_scale_ms_name] = ms.Parameter(
-            ms.from_numpy(input_scale_ms_param).astype(ms.bfloat16),
-            name=input_scale_ms_name,
-            requires_grad=False)
 
         input_zp_hf_name = base_name + name + ".input_offset"
         input_zp_ms_name = self.quant_convert_weight_name(input_zp_hf_name)
         input_zp_ms_param, _ = self.get_safetensor_from_file(
             input_zp_hf_name, src_hf_dir, hf_weight_map)
-        self.parameter_dict[input_zp_ms_name] = ms.Parameter(
-            ms.from_numpy(input_zp_ms_param).astype(ms.int8),
-            name=input_zp_ms_name,
-            requires_grad=False)
+        if name == "q_b_proj" and hasattr(
+                self.config.model.model_config,
+                "use_mla_pre") and self.config.model.model_config.use_mla_pre:
+            self.parameter_dict[input_zp_ms_name] = ms.Parameter(
+                ms.from_numpy(input_zp_ms_param).astype(ms.int8),
+                name=input_zp_ms_name,
+                requires_grad=False)
+            self.parameter_dict[input_scale_ms_name] = ms.Parameter(
+                ms.from_numpy(input_scale_ms_param).astype(ms.bfloat16),
+                name=input_scale_ms_name,
+                requires_grad=False)
+        else:
+            self.parameter_dict[input_zp_ms_name] = ms.Parameter(
+                ms.from_numpy(input_zp_ms_param).astype(ms.bfloat16),
+                name=input_zp_ms_name,
+                requires_grad=False)
+            self.parameter_dict[input_scale_ms_name] = ms.Parameter(
+                ms.from_numpy(1 / input_scale_ms_param).astype(ms.bfloat16),
+                name=input_scale_ms_name,
+                requires_grad=False)
 
         if not is_trans_rope_weigh:
             quant_bias_hf_name = base_name + name + ".quant_bias"
@@ -1032,6 +1044,9 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 qkv2l_scale = np.concatenate(
                     (kv2l_dequant_scale_ms_param, q2l_dequant_scale_ms_param),
                     0)
+                parameter_dict[qkv2l_quant_zp_name] = ms.Parameter(
+                    ms.Tensor(q2l_input_zp_ms_param, ms.int8),
+                    requires_grad=False)
             else:
                 qkv2l_weight = np.concatenate((q2l_ms_param, kv2l_ms_param), 0)
                 qkv2l_bias = np.concatenate(
@@ -1039,6 +1054,10 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 qkv2l_scale = np.concatenate(
                     (q2l_dequant_scale_ms_param, kv2l_dequant_scale_ms_param),
                     0)
+                q2l_input_scale_ms_param = 1 / q2l_input_scale_ms_param
+                parameter_dict[qkv2l_quant_zp_name] = ms.Parameter(
+                    ms.Tensor(q2l_input_zp_ms_param, ms.bfloat16),
+                    requires_grad=False)
 
             parameter_dict[qkv2l_weight_name] = ms.Parameter(
                 ms.Tensor(qkv2l_weight, ms.int8),
@@ -1052,8 +1071,6 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 ms.Tensor(qkv2l_scale, ms.float32),
                 name=qkv2l_scale_name,
                 requires_grad=False)
-            parameter_dict[qkv2l_quant_zp_name] = ms.Parameter(
-                ms.Tensor(q2l_input_zp_ms_param, ms.int8), requires_grad=False)
             parameter_dict[qkv2l_quant_scale_name] = ms.Parameter(
                 ms.Tensor(q2l_input_scale_ms_param, ms.bfloat16),
                 requires_grad=False)
@@ -1085,19 +1102,19 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                 name=kv2l_dequant_scale_ms_name,
                 requires_grad=False)
             parameter_dict[q2l_input_zp_ms_name] = ms.Parameter(
-                ms.Tensor(q2l_input_zp_ms_param, ms.int8),
+                ms.Tensor(q2l_input_zp_ms_param, ms.bfloat16),
                 name=q2l_input_zp_ms_name,
                 requires_grad=False)
             parameter_dict[kv2l_input_zp_ms_name] = ms.Parameter(
-                ms.Tensor(kv2l_input_zp_ms_param, ms.int8),
+                ms.Tensor(kv2l_input_zp_ms_param, ms.bfloat16),
                 name=kv2l_input_zp_ms_name,
                 requires_grad=False)
             parameter_dict[q2l_input_scale_ms_name] = ms.Parameter(
-                ms.Tensor(q2l_input_scale_ms_param, ms.bfloat16),
+                ms.Tensor(1 / q2l_input_scale_ms_param, ms.bfloat16),
                 name=q2l_input_scale_ms_name,
                 requires_grad=False)
             parameter_dict[kv2l_input_scale_ms_name] = ms.Parameter(
-                ms.Tensor(kv2l_input_scale_ms_param, ms.bfloat16),
+                ms.Tensor(1 / kv2l_input_scale_ms_param, ms.bfloat16),
                 name=kv2l_input_scale_ms_name,
                 requires_grad=False)
             parameter_dict[attn_rmsnorm_beta_ms_name] = ms.Parameter(
