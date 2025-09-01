@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "ir/value/value.h"
 #include <iostream>
+#include <vector>
+#include "ir/value/value.h"
 
 namespace mrt {
 namespace ir {
@@ -98,32 +99,60 @@ std::ostream &operator<<(std::ostream &os, const Tuple *tuple) {
   return os;
 }
 
-std::ostream &operator<<(std::ostream &os, const ValuePtr &value) {
-  return operator<<(os, value.get());
+std::ostream &operator<<(std::ostream &os, const ValuePtr &value) { return operator<<(os, value.get()); }
+
+std::ostream &operator<<(std::ostream &os, Value *value) {
+  if (value == nullptr) {
+    os << "Null";
+  } else {
+    os << *value;
+  }
+  return os;
 }
 
 std::ostream &operator<<(std::ostream &os, const Value *value) {
-  switch (value->tag_) {
+  if (value == nullptr) {
+    os << "Null";
+  } else {
+    os << *value;
+  }
+  return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const std::vector<const Value *> &values) {
+  os << "std::vector{";
+  for (size_t i = 0; i < values.size(); ++i) {
+    os << values[i];
+    if (i < values.size() - 1) {
+      os << ", ";
+    }
+  }
+  os << "}";
+  return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const Value &value) {
+  switch (value.tag_) {
     case Value::Tag::None:
       os << "None";
       break;
     case Value::Tag::Tensor:
-      os << value->ToTensor();
+      os << value.ToTensor();
       break;
     case Value::Tag::Double:
-      os << value->ToDouble();
+      os << value.ToDouble();
       break;
     case Value::Tag::Int:
-      os << value->ToInt();
+      os << value.ToInt();
       break;
     case Value::Tag::Bool:
-      os << (value->ToBool() ? "true" : "false");
+      os << (value.ToBool() ? "true" : "false");
       break;
     case Value::Tag::String:
-      os << "\"" << value->ToString() << "\"";
+      os << "\"" << value.ToString() << "\"";
       break;
     case Value::Tag::Tuple:
-      os << value->ToTuple();
+      os << value.ToTuple();
       break;
   }
   return os;
@@ -131,4 +160,3 @@ std::ostream &operator<<(std::ostream &os, const Value *value) {
 
 }  // namespace ir
 }  // namespace mrt
-

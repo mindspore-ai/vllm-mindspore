@@ -18,6 +18,7 @@
 #include <numeric>
 #include <sstream>
 
+#include "common/common.h"
 #include "ir/tensor/tensor.h"
 
 namespace mrt {
@@ -75,6 +76,16 @@ Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Devi
   storage_ = MakeIntrusive<Storage>(sizeBytes, device);
 }
 
+void Tensor::ResizeStorage() {
+  CHECK_IF_NULL(storage_);
+  size_t sizeBytes = 0;
+  if (!HasDynamicShape()) {
+    sizeBytes = numel_ * dtype_.GetSize();
+  }
+
+  storage_ = MakeIntrusive<Storage>(sizeBytes, storage_->GetDevice());
+}
+
 Tensor::Tensor(StoragePtr storage, DataType dtype, const std::vector<int64_t> &shape)
     : dtype_(dtype), shape_(shape), storage_(storage) {
   ComputeStrides();
@@ -107,26 +118,52 @@ void Tensor::SetShape(const std::vector<int64_t> &&shape) {
   numel_ = CalculateNumel(shape_, true);
 }
 
+std::ostream &operator<<(std::ostream &os, Tensor *tensor) {
+  if (tensor == nullptr) {
+    os << "Null";
+  } else {
+    os << *tensor;
+  }
+  return os;
+}
+
 std::ostream &operator<<(std::ostream &os, const Tensor *tensor) {
+  if (tensor == nullptr) {
+    os << "Null";
+  } else {
+    os << *tensor;
+  }
+  return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
+  constexpr size_t numelLimit = 30;
   os << "Tensor(shape=[";
-  const auto &shape = tensor->Shape();
+  const auto &shape = tensor.Shape();
   for (size_t i = 0; i < shape.size(); ++i) {
     os << shape[i];
     if (i < shape.size() - 1) {
       os << ", ";
     }
   }
-  os << "], dtype=" << tensor->Dtype().ToString();
+  os << "], dtype=" << tensor.Dtype().ToString();
   os << ", data=[";
-  if (tensor->DataPtr()) {
-    if (tensor->Dtype() == DataType::Float32) {  // TODO: support other dtypes
-      const auto data = static_cast<const float *>(tensor->DataPtr());
-      const size_t numel = tensor->Numel();
-      for (size_t i = 0; i < numel; ++i) {
-        os << data[i];
-        if (i < numel - 1) {
-          os << ", ";
+  if (tensor.DataPtr()) {
+    if (tensor.Dtype() == DataType::Float32) {  // TODO: support other dtypes
+      const auto data = static_cast<const float *>(tensor.DataPtr());
+      const size_t numel = tensor.Numel();
+      if (numel <= numelLimit) {
+        for (size_t i = 0; i < numel; ++i) {
+          os << data[i];
+          if (i < numel - 1) {
+            os << ", ";
+          }
         }
+      } else {
+        for (size_t i = 0; i < numelLimit; ++i) {
+          os << data[i] << ", ";
+        }
+        os << "...";
       }
     } else {
       os << "...";
@@ -137,6 +174,5 @@ std::ostream &operator<<(std::ostream &os, const Tensor *tensor) {
   os << "])";
   return os;
 }
-
 }  // namespace ir
 }  // namespace mrt

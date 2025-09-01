@@ -1,5 +1,3 @@
-check_debug_log_out()
-
 file(GLOB_RECURSE ATEN_KERNEL_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 
 # Link against torch libraries.
@@ -9,4 +7,4 @@ find_package(Torch REQUIRED)
 
 add_library(kernel_aten SHARED ${ATEN_KERNEL_SRC_FILES})
 target_link_libraries(kernel_aten PRIVATE ${TORCH_LIBRARIES})
-target_link_libraries(kernel_aten PRIVATE kernel ops_obj mrt_ir_obj)
+target_link_libraries(kernel_aten PRIVATE ops_obj ops_base_obj kernel)

@@ -158,7 +158,7 @@ class Value : public RefCounted {
    * @param value The ValuePtr to output.
    * @return The output stream.
    */
-  friend std::ostream &operator<<(std::ostream &os, const Value *value);
+  friend std::ostream &operator<<(std::ostream &os, const Value &value);
 
  private:
   /**
@@ -178,7 +178,10 @@ class Value : public RefCounted {
 };
 
 std::ostream &operator<<(std::ostream &os, const ValuePtr &value);
+std::ostream &operator<<(std::ostream &os, const Value &value);
+std::ostream &operator<<(std::ostream &os, Value *value);
 std::ostream &operator<<(std::ostream &os, const Value *value);
+std::ostream &operator<<(std::ostream &os, const std::vector<const Value *> &values);
 
 }  // namespace ir
 }  // namespace mrt
