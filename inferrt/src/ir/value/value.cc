@@ -15,6 +15,7 @@
  */
 
 #include <iostream>
+#include <utility>
 #include <vector>
 #include "ir/value/value.h"
 
@@ -22,6 +23,7 @@ namespace mrt {
 namespace ir {
 
 Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}
+Value::Value(float v) : tag_(Tag::Float), float_(v) {}
 Value::Value(double v) : tag_(Tag::Double), double_(v) {}
 Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
@@ -48,6 +50,9 @@ Value::Value(Value &&other) noexcept : tag_(other.tag_) {
   switch (tag_) {
     case Tag::Tensor:
       new (&tensor_) TensorPtr(std::move(other.tensor_));
+      break;
+    case Tag::Float:
+      float_ = other.float_;
       break;
     case Tag::Double:
       double_ = other.double_;
@@ -85,6 +90,10 @@ Value &Value::operator=(Value &&other) noexcept {
 const TensorPtr &Value::ToTensor() const {
   CHECK_TAG(Tag::Tensor);
   return tensor_;
+}
+float Value::ToFloat() const {
+  CHECK_TAG(Tag::Float);
+  return float_;
 }
 double Value::ToDouble() const {
   CHECK_TAG(Tag::Double);
@@ -153,6 +162,9 @@ std::ostream &operator<<(std::ostream &os, const Value &value) {
       break;
     case Value::Tag::Tensor:
       os << value.ToTensor();
+      break;
+    case Value::Tag::Float:
+      os << value.ToFloat();
       break;
     case Value::Tag::Double:
       os << value.ToDouble();

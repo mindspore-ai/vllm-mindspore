@@ -43,6 +43,10 @@ if(ENABLE_OPTIMIZER)
   add_subdirectory(${PROJECT_SOURCE_DIR}/mopt)
 endif()
 
+set(TOP_DIR ${PROJECT_SOURCE_DIR})
+include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/securec.cmake)
+
 add_subdirectory(${PROJECT_SOURCE_DIR}/inferrt/src)
 if(BUILD_TESTS)
   enable_testing()

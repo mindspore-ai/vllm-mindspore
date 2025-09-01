@@ -19,12 +19,15 @@
 
 #include <iostream>
 #include <vector>
+#include <utility>
+#include <string>
 #include <numeric>
 
 #include "hardware/device.h"
 #include "ir/common/dtype.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/storage.h"
+#include "ir/tensor/format.h"
 
 namespace mrt {
 namespace ir {
@@ -85,6 +88,11 @@ class Tensor : public RefCounted {
    */
   std::vector<int64_t> &Shape() { return shape_; }
   /**
+   * @brief Gets the memory format of the tensor.
+   * @return The memory format enum value.
+   */
+  MemoryFormat Format() const { return memoryFormat_; }
+  /**
    * @brief Gets the strides of the tensor.
    * @return A const reference to the vector of strides.
    */
@@ -114,6 +122,11 @@ class Tensor : public RefCounted {
    * @return The storage.
    */
   const StoragePtr &GetStorage() const { return storage_; }
+  /**
+   * @brief Gets the storage offset of the tensor.
+   * @return The storage offset.
+   */
+  int64_t StorageOffset() const { return storageOffset_; }
   /**
    * @brief Resizes the storage of the tensor.
    * Note: The shape and dtype must be set before resizing the storage.
@@ -158,6 +171,11 @@ class Tensor : public RefCounted {
    * @param storage The new storage to set.
    */
   void SetStorage(const StoragePtr &storage) { storage_ = storage; }
+  /**
+   * @brief Sets the memory format of the tensor.
+   * @param memoryFromat The memory format enum value.
+   */
+  void SetFormat(MemoryFormat memoryFormat) { memoryFormat_ = memoryFormat; }
 
  private:
   /**
@@ -165,19 +183,20 @@ class Tensor : public RefCounted {
    */
   void ComputeStrides();
 
-  DataType dtype_;                ///< The data type of the elements.
-  std::vector<int64_t> shape_;    ///< The dimensions of the tensor.
-  std::vector<int64_t> strides_;  ///< The strides of the tensor.
-  int64_t numel_ = 0;             ///< The total number of elements.
-  StoragePtr storage_{nullptr};   ///< The underlying storage.
-  int64_t storageOffset_ = 0;     ///< The offset in the storage, in number of elements.
+  DataType dtype_;                                           ///< The data type of the elements.
+  std::vector<int64_t> shape_;                               ///< The dimensions of the tensor.
+  std::vector<int64_t> strides_;                             ///< The strides of the tensor.
+  MemoryFormat memoryFormat_{MemoryFormat::DEFAULT_FORMAT};  ///< The memory format of the tensor.
+  int64_t numel_ = 0;                                        ///< The total number of elements.
+  StoragePtr storage_{nullptr};                              ///< The underlying storage.
+  int64_t storageOffset_ = 0;                                ///< The offset in the storage, in number of elements.
 };
 
 using TensorPtr = IntrusivePtr<Tensor>;
 
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor);
-
+std::string ShapeToString(const std::vector<int64_t> &shape);
 }  // namespace ir
 }  // namespace mrt
 

@@ -28,23 +28,13 @@
 #include <vector>
 #include "hardware/hardware_abstract/device_context.h"
 #include "common/visible.h"
+#include "common/dynamic_lib_loader.h"
 
 namespace mrt {
 namespace device {
 class MultiStreamController;
 using DeviceContextCreator = std::function<std::shared_ptr<DeviceContext>(const DeviceContextKey &)>;
 using MultiStreamControllerPtr = std::shared_ptr<MultiStreamController>;
-
-class PluginLoader {
- public:
-  static bool LoadDynamicLib(const std::string &pluginFile, std::map<std::string, void *> *allHandles,
-                             std::stringstream *errMsg);
-  static void CloseDynamicLib(const std::string &dlName, void *handle);
-  static bool GetPluginPath(std::string *filePath);
-
- private:
-  static std::string GetDynamicLibName(const std::string &pluginFile);
-};
 
 class MRT_EXPORT DeviceContextManager {
  public:
@@ -67,11 +57,10 @@ class MRT_EXPORT DeviceContextManager {
  private:
   DeviceContextManager() = default;
   void LoadPlugin();
-  void UnloadPlugin();
+  void Clear();
 
-  std::map<std::string, void *> pluginMaps_;
+  common::DynamicLibLoader dynamicLibLoader_;
   bool loadInit_;
-  std::string pluginPath_;
 
   // The string converted from DeviceContextKey -> DeviceContextPtr.
   std::map<std::string, DeviceContextPtr> deviceContexts_;

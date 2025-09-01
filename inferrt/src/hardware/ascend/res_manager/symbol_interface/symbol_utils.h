@@ -74,7 +74,7 @@ namespace mrt::device::ascend {
 
 #define HAS_ASCEND_API(funcName) HasAscendApi(mrt::device::ascend::funcName##_)
 
-std::string GetAscendPath();
+DA_API std::string GetAscendPath();
 void *GetLibHandler(const std::string &libPath, bool ifGlobal = false);
 void LoadAscendApiSymbols();
 void LoadSimulationApiSymbols();

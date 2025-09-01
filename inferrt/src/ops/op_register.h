@@ -23,6 +23,7 @@
 #include <memory>
 #include <functional>
 #include <type_traits>
+#include <map>
 #include <unordered_map>
 
 #include "common/logger.h"
@@ -58,6 +59,9 @@ struct OpFactoryTraits<CPUOpFactory> {
   static constexpr std::string_view value = kCPUOpFactory;
 };
 
+// Function for loading op libs.
+DA_API bool LoadOpLib(const std::string &opLibPrefix, std::stringstream *errMsg);
+
 class DA_API OpFactoryBase {
   using OpFactoryMapType = std::unordered_map<std::string_view, std::unique_ptr<OpFactoryBase>>;
 
@@ -90,7 +94,33 @@ class OpFactory : public OpFactoryBase {
       factoryBase = OpFactoryBase::CreateOpFactory(OpFactoryTraits<OpFactoryType>::value,
                                                    std::make_unique<OpFactory<T, OpFactoryType>>());
     }
-    return *static_cast<OpFactory<T, OpFactoryType> *>(factoryBase);
+    auto *opFactory = static_cast<OpFactory<T, OpFactoryType> *>(factoryBase);
+    CHECK_IF_NULL(opFactory);
+    opFactory->LoadOpPlugin();
+    return *opFactory;
+  }
+
+  void LoadOpPlugin() {
+    if (isPluginLoaded_) {
+      return;
+    }
+    isPluginLoaded_ = true;
+    std::stringstream errMsg;
+    if constexpr (std::is_same_v<OpFactoryType, AscendOpFactory>) {
+      if (!LoadOpLib("libops_ascend", &errMsg)) {
+        LOG_EXCEPTION << "Load Ascend Op Lib failed, error message: " << errMsg.str();
+      }
+    } else {
+      if constexpr (std::is_same_v<OpFactoryType, CPUOpFactory>) {
+        if (!LoadOpLib("libkernel_aten", &errMsg)) {
+          LOG_EXCEPTION << "Load CPU Op Lib failed, error message: " << errMsg.str();
+        }
+      } else if constexpr (std::is_same_v<OpFactoryType, UnknownOpFactory>) {
+        LOG_OUT << "Unknown Op Factory, skip load Op Lib, error message: " << errMsg.str();
+      } else {
+        LOG_EXCEPTION << "Got invalid OpFactoryType, only supports AscendOpFactory, CPUOpFactory and UnknownOpFactory.";
+      }
+    }
   }
 
   void Register(const std::string &opName, CreatorFunc &&creator) {
@@ -120,15 +150,20 @@ class OpFactory : public OpFactoryBase {
 
  private:
   std::unordered_map<std::string, CreatorFunc> opCreatorsMap_;
+  bool isPluginLoaded_ = false;
 };
 
 template <typename T, typename OpFactoryType = AscendOpFactory>
 class OpRegistrar {
  public:
-  explicit OpRegistrar(const std::string &opName, std::function<std::unique_ptr<T>()> creator) {
-    OpFactory<T, OpFactoryType>::GetInstance().Register(opName, std::move(creator));
+  explicit OpRegistrar(const std::string &&opName, std::function<std::unique_ptr<T>()> &&creator)
+      : opName_(std::move(opName)) {
+    OpFactory<T, OpFactoryType>::GetInstance().Register(opName_, std::move(creator));
   }
-  ~OpRegistrar() = default;
+  ~OpRegistrar() { OpFactory<T, OpFactoryType>::GetInstance().UnRegister(opName_); }
+
+ private:
+  std::string opName_;
 };
 
 #define MRT_REG_OP(OP_NAME, OP_CLASS, DEVICE_NAME)                                                                  \

@@ -18,6 +18,9 @@
 #include <numeric>
 #include <sstream>
 #include <iomanip>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
@@ -132,20 +135,31 @@ std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {
   return os;
 }
 
+std::string ShapeToString(const std::vector<int64_t> &shape) {
+  std::string str = "[";
+  const size_t count = shape.size();
+  for (size_t i = 0; i < count; ++i) {
+    if (i > 0) {
+      str.append(", ");
+    }
+    str.append(std::to_string(shape[i]));
+  }
+  return str.append("]");
+}
+
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   constexpr size_t numelLimit = 30;
-  os << "Tensor(shape=[";
+  os << "Tensor(shape=";
   const auto &shape = tensor.Shape();
-  for (size_t i = 0; i < shape.size(); ++i) {
-    os << shape[i];
-    if (i < shape.size() - 1) {
-      os << ", ";
-    }
-  }
-  os << "], dtype=" << tensor.Dtype().ToString();
+  os << ShapeToString(shape);
+  os << ", dtype=" << tensor.Dtype().ToString();
+  os << ", device=[type=" << hardware::GetDeviceNameByType(tensor.GetDevice().type)
+     << ", index:" << int(tensor.GetDevice().index) << "]";
   os << ", data=[";
   if (tensor.DataPtr()) {
-    if (tensor.HasDynamicShape()) {
+    if (tensor.GetDevice().type != hardware::DeviceType::CPU) {
+      os << "...";
+    } else if (tensor.HasDynamicShape()) {
       os << "dynamic shape, not materialized";
     } else if (tensor.Numel() > 0) {
       switch (tensor.Dtype()) {

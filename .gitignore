@@ -32,7 +32,11 @@ Makefile
 # IDE
 .vscode
 .idea
+.clangd
 
 # Python files
 *__pycache__*
 .pytest_cache
+
+# Third party libs
+.mrtlibs/
