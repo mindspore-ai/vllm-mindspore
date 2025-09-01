@@ -27,6 +27,7 @@
 #include "common/visible.h"
 #include "ops/operator.h"
 #include "runtime/executor/mempool.h"
+#include "runtime/executor/op_runner.h"
 #include "runtime/utils/utils.h"
 #include "optimize/pass/pass.h"
 #include "ir/graph.h"
@@ -35,6 +36,38 @@
 
 namespace mrt {
 namespace runtime {
+class Builder;
+/**
+ * @brief Base class for executing a computational graph.
+ *
+ * The Executor class provides the basic interface and implementation for
+ * running computational graph. It holds the graph and operation runners
+ * needed for execution.
+ */
+class DA_API Executor {
+ public:
+  Executor() = default;
+  Executor(const ir::GraphPtr &graph, const std::shared_ptr<std::vector<OpRunner>> &opRunners)
+      : graph_(graph), opRunners_(opRunners) {}
+
+  virtual ~Executor() = default;
+
+  /**
+   * @brief Executes the computational graph.
+   * This method runs all operations in the graph by execution order.
+   * Subclasses can override this method to provide specialized execution behavior, such as Pipeline mode, AclGraph
+   * mode.
+   */
+  virtual void Run();
+
+ protected:
+  // The graph that the executor will run.
+  ir::GraphPtr graph_{nullptr};
+
+  // Shared pointer to the vector of OpRunners for all operators by execution order in graph_.
+  std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
+};
+
 class DA_API GraphExecutor {
  public:
   GraphExecutor();
@@ -57,6 +90,8 @@ class DA_API GraphExecutor {
   ir::NodePtr AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs);
   // Add return node.
   ir::NodePtr AddReturn();
+
+  void BuildExecutor();
 
   // Run the built graph.
   void RunGraph(bool isDynamic = false);
@@ -85,6 +120,9 @@ class DA_API GraphExecutor {
   bool isDynamic_{false};
   std::unordered_map<ir::NodePtr, ops::DAKernel *> kernels_;
   TensorDataRecycler *recycler_{nullptr};
+
+  std::unique_ptr<Builder> builder_{nullptr};
+  std::unique_ptr<Executor> executor_{nullptr};
 #ifdef DUMP
   std::unordered_map<ir::NodePtr, size_t> paraNumMap_;
   std::unordered_map<ir::NodePtr, size_t> nodeNumMap_;

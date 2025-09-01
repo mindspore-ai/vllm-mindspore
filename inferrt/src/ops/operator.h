@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __KERNEL_KERNEL_H__
-#define __KERNEL_KERNEL_H__
+#ifndef __OPS_OPERATOR_H__
+#define __OPS_OPERATOR_H__
 
 #include <functional>
 #include <string>
@@ -91,8 +91,9 @@ class Operator {
    * the Launch function. Please refer to the comment for function `NeedUpdateOutputShapeAfterLaunch`
    *
    * @param input Vector of pointers to input data. Contains all input data required for computation.
-   * @param workspace Vector of pointers to workspace data. Provides temporary memory for
+   * @param workspace The pointer to workspace data. Provides temporary memory for
    *                  intermediate calculations and storage during the operation.
+   * @param workspaceSize The workspace memory buffer size in bytes.
    * @param output Pointer to the output data. Stores the result of the computation after
    *               successful execution.
    * @param stream Pointer to the device-specific execution stream (e.g., AclStream for Ascend NPU). Used for
@@ -100,7 +101,7 @@ class Operator {
    * @return OpsErrorCode Return SUCCESS if execution completed successfully, or an appropriate
    *         error code if the operation failed.
    */
-  virtual OpsErrorCode Launch(const std::vector<const ir::Value *> &input, const std::vector<ir::Value *> &workspace,
+  virtual OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                               ir::Value *output, void *stream) = 0;
 
   /**
@@ -117,4 +118,4 @@ class Operator {
 };
 }  // namespace ops
 }  // namespace mrt
-#endif  // __KERNEL_KERNEL_H__
+#endif  // __OPS_OPERATOR_H__
