@@ -25,7 +25,7 @@ import mindspore as ms
 import numpy as np
 import torch
 from mindspore import Generator as msGenerator
-from mindspore import Tensor, mint, mutable
+from mindspore import Tensor, mint, mutable, ops
 from vllm.attention import AttentionType
 from vllm.logger import init_logger
 from vllm.sampling_params import SamplingType
@@ -42,6 +42,7 @@ from vllm_mindspore.model_executor.layers.rotary_embedding import (
 from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.utils import (create_kv_cache, get_dtype_size,
                                   get_valid_dtype, is_310p)
+from vllm_mindspore.v1.kv_cache_interface import MLAQuantFullAttentionSpec
 
 logger = init_logger(__name__)
 
@@ -290,16 +291,43 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
     coef = 1 if use_mla else 2
     # Determine whether deepseek use mla op
     use_ringmla = is_use_ringmla(self.vllm_config)
+    fa3_quant = self.vllm_config.quant_config.fa3_quant \
+                    if self.vllm_config.quant_config else False
+    fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
+                        if self.vllm_config.quant_config else set()
     kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
                                'qk_rope_head_dim', 0)
 
+    def get_dtype_from_groups(layer_name, kv_cache_groups):
+        for group in kv_cache_groups:
+            if layer_name in group.layer_names:
+                kv_cache_spec = group.kv_cache_spec
+                use_mla = kv_cache_spec.use_mla
+                dtype = kv_cache_spec.dtype
+                coef = 1 if use_mla else 2
+                return dtype, coef
+        return None, None
+
     kv_cache_raw_tensors: dict[str, Tensor] = {}
     target_dtype = get_valid_dtype(dtype)
     dtype_size = get_dtype_size(target_dtype)
     for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
+        assert len(kv_cache_tensor.shared_by) == 1
         raw_tensors = []
+
+        layer_name = kv_cache_tensor.shared_by[0]
+        if fa3_quant:
+            # fa3_quant have two groups
+            # fa3 quant layer target_dtype is int8
+            # no fa3 quant layer target_dtype is bfloat16
+            target_dtype, coef = get_dtype_from_groups(
+                layer_name, kv_cache_config.kv_cache_groups)
+            dtype_size = get_dtype_size(target_dtype)
+        is_fa3_quant_layer = use_ringmla and fa3_quant and \
+                             int(layer_name) in fa3_quant_layer
+        # for fa3_quant_layer, target_dtype is int8, dtype_size is 1
         raw_tensor_shape = kv_cache_tensor.size // dtype_size // coef
         for i in range(coef):
             """
@@ -312,9 +340,39 @@ def _allocate_kv_cache_tensors(self, kv_cache_config):
                get_dtype_size(self.dtype))
             4. kv cache shape: num_blocks, block_size, num_kv_heads, head_size
             """
-            raw_tensors.extend(
-                [mint.zeros(raw_tensor_shape, dtype=target_dtype)]
-                if not use_ringmla else [
+            if not use_ringmla:
+                raw_tensors.extend(
+                    [mint.zeros(raw_tensor_shape, dtype=target_dtype)])
+            elif is_fa3_quant_layer:
+                """
+                for fa3_quant_layer, k_cache is int8, v_cache is bfloat16
+                k_cache shape:
+                    [num_block, block_size, 1(head_dim), 512(kv_lora_rank)]
+                v_cache shape:
+                    [num_block, block_size, 1(head_dim), 64(qk_rope_head_dim)]
+                and target_dtype is int8,
+                raw_tensor_shape equals to kv_cache_tensor.size
+                The bytes occupied by k_cache is
+                                    num_block*block_size*512* 1bytes(int8)
+                The bytes occupied by v_cache is
+                                    num_block*block_size*64* 2bytes(bfloat16)
+                so k_cache row tensor shape is:
+                            raw_tensor_shape*kv_lora_rank/
+                                        (kv_lora_rank+qk_rope_head_dim*2)
+                v_cache row tensor shape is:
+                            raw_tensor_shape*qk_rope_head_dim /
+                                        (kv_lora_rank+qk_rope_head_dim*2)
+                """
+                raw_tensors.extend([
+                    mint.zeros(int(raw_tensor_shape * kv_lora_rank /
+                                   (kv_lora_rank + qk_rope_head_dim * 2)),
+                               dtype=target_dtype),
+                    mint.zeros(int(raw_tensor_shape * qk_rope_head_dim /
+                                   (kv_lora_rank + qk_rope_head_dim * 2)),
+                               dtype=self.vllm_config.model_config.dtype)
+                ])
+            else:
+                raw_tensors.extend([
                     mint.zeros(int(raw_tensor_shape * kv_lora_rank /
                                    (kv_lora_rank + qk_rope_head_dim)),
                                dtype=target_dtype),
@@ -352,6 +410,10 @@ def _reshape_kv_cache_tensors(
     """
     # Determine whether deepseek use mla op
     use_ringmla = is_use_ringmla(self.vllm_config)
+    fa3_quant = self.vllm_config.quant_config.fa3_quant \
+                    if self.vllm_config.quant_config else False
+    fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
+                        if self.vllm_config.quant_config else set()
     kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
@@ -364,13 +426,20 @@ def _reshape_kv_cache_tensors(
             raw_tensor = kv_cache_raw_tensors[layer_name]
             target_dtype = get_valid_dtype(kv_cache_spec.dtype)
             dtype_size = get_dtype_size(target_dtype)
-            num_blocks = \
-                (raw_tensor[0].numel()
-                if not use_ringmla else
-                # deepseek mla op need key cache and rope cache
-                (raw_tensor[0].numel() + raw_tensor[1].numel())) * \
-                coef * dtype_size // kv_cache_spec.page_size_bytes
-            if isinstance(kv_cache_spec, FullAttentionSpec):
+            is_fa3_quant_layer = use_ringmla and fa3_quant and \
+                                 int(layer_name) in fa3_quant_layer
+            # fa3_quant_layer k_cache is int8, v_cache is bfloat16
+            # so need to raw_tensor[0].numel() * 1 + raw_tensor[1].numel() * 2
+            if is_fa3_quant_layer:
+                num_blocks = (raw_tensor[0].numel() + raw_tensor[1].numel() *
+                              2) * coef // kv_cache_spec.page_size_bytes
+            else:
+                num_blocks = \
+                    (raw_tensor[0].numel() if not use_ringmla else \
+                    (raw_tensor[0].numel() + raw_tensor[1].numel())) * \
+                    coef * dtype_size // kv_cache_spec.page_size_bytes
+            if isinstance(kv_cache_spec,
+                          (FullAttentionSpec, MLAQuantFullAttentionSpec)):
                 kv_cache_shape = self.attn_backends[i].get_kv_cache_shape(
                     num_blocks, kv_cache_spec.block_size,
                     kv_cache_spec.num_kv_heads, kv_cache_spec.head_size)
@@ -406,7 +475,16 @@ def _reshape_kv_cache_tensors(
                     else:
                         cache_block = kv_cache_raw_tensor.view(
                             kv_cache_shape[1:]).permute(*inv_order[1:])
-                    kv_cache_layer.append(cache_block)
+                    if fa3_quant:
+                        # for fa3_quant, kvcache need be nz format due to ops
+                        num_blocks, block_size, _, _ = cache_block.shape
+                        cache_block = ops.reshape(cache_block,
+                                                  (num_blocks, block_size, -1))
+                        cache_block_nz = ops.auto_generate.format_cast(
+                            cache_block, 29)
+                        kv_cache_layer.append(cache_block_nz)
+                    else:
+                        kv_cache_layer.append(cache_block)
                 kv_caches[layer_name] = mutable(tuple(kv_cache_layer))
             else:
                 raise NotImplementedError
@@ -659,6 +737,10 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     forward_ctx = self.vllm_config.compilation_config.static_forward_context
     block_size = self.vllm_config.cache_config.block_size
     use_mla = self.vllm_config.model_config.use_mla
+    fa3_quant = self.vllm_config.quant_config.fa3_quant \
+                    if self.vllm_config.quant_config else False
+    fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
+                        if self.vllm_config.quant_config else set()
     kv_cache_spec: dict[str, KVCacheSpec] = {}
     for layer_name, attn_module in forward_ctx.items():
         """
@@ -675,12 +757,31 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
                     sliding_window=attn_module.sliding_window,
                     use_mla=use_mla)
             else:
-                kv_cache_spec[layer_name] = FullAttentionSpec(
-                    block_size=block_size,
-                    num_kv_heads=attn_module.num_kv_heads,
-                    head_size=attn_module.head_size,
-                    dtype=self.kv_cache_dtype,
-                    use_mla=use_mla)
+                kv_cache_dtype = self.kv_cache_dtype
+                is_fa3_quant_layer = int(layer_name) in fa3_quant_layer
+                if fa3_quant and not is_fa3_quant_layer:
+                    kv_cache_dtype = self.vllm_config.model_config.dtype
+                if fa3_quant and is_fa3_quant_layer:
+                    '''
+                    fa3_quant_layer k_cache is int8, v_cache is bfloat16
+                    page_size_bytes is block_size * num_kv_heads *
+                    (ctkv_nope_dim * int8(1 bytes)
+                    + qk_rope_dim * float16(2 bytes))
+                    so need the MLAQuantFullAttentionSpec
+                    '''
+                    kv_cache_spec[layer_name] = MLAQuantFullAttentionSpec(
+                        block_size=block_size,
+                        num_kv_heads=attn_module.num_kv_heads,
+                        head_size=attn_module.head_size,
+                        dtype=kv_cache_dtype,
+                        use_mla=use_mla)
+                else:
+                    kv_cache_spec[layer_name] = FullAttentionSpec(
+                        block_size=block_size,
+                        num_kv_heads=attn_module.num_kv_heads,
+                        head_size=attn_module.head_size,
+                        dtype=kv_cache_dtype,
+                        use_mla=use_mla)
         elif attn_module.attn_type in (AttentionType.ENCODER,
                                        AttentionType.ENCODER_ONLY):
             # encoder-only attention does not need KV cache.

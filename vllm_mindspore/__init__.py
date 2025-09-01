@@ -87,12 +87,35 @@ from vllm_mindspore.v1.engine.core import shutdown
 
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
+from vllm_mindspore.v1.core.kv_cache_utils import get_kv_cache_config
+
+vllm.v1.core.kv_cache_utils.get_kv_cache_config = get_kv_cache_config
+vllm.v1.engine.core.get_kv_cache_config = get_kv_cache_config
+from vllm_mindspore.v1.core.single_type_kv_cache_manager import (
+    find_longest_cache_hit, spec_manager_map)
+
+vllm.v1.core.single_type_kv_cache_manager.FullAttentionManager.\
+    find_longest_cache_hit = find_longest_cache_hit
+vllm.v1.core.single_type_kv_cache_manager.spec_manager_map = spec_manager_map
+
 from vllm_mindspore.utils import (
     make_tensor_with_pad,
     async_tensor_h2d,
     ascend_is_initialized,
     ms_memory_profiling,
 )
+
+from vllm_mindspore.config import CacheDType, _CacheConfig, \
+    get_current_and_parent_class_attr_docs
+
+vllm.config.CacheConfig = _CacheConfig
+vllm.config.CacheDType = CacheDType
+vllm.config.get_attr_docs = get_current_and_parent_class_attr_docs
+import vllm.engine.arg_utils
+
+vllm.engine.arg_utils.CacheDType = CacheDType
+vllm.engine.arg_utils.CacheConfig = _CacheConfig
+vllm.engine.arg_utils.get_attr_docs = get_current_and_parent_class_attr_docs
 
 vllm.utils.make_tensor_with_pad = make_tensor_with_pad
 vllm.utils.async_tensor_h2d = async_tensor_h2d
@@ -174,11 +197,17 @@ from vllm_mindspore.worker.cache_engine import (
     ms_swap_out,
 )
 
+from vllm_mindspore.utils import get_dtype_size
 import vllm.worker.cache_engine
 
 vllm.worker.cache_engine.CacheEngine._allocate_kv_cache = ms_allocate_kv_cache
 vllm.worker.cache_engine.CacheEngine.swap_in = ms_swap_in
 vllm.worker.cache_engine.CacheEngine.swap_out = ms_swap_out
+vllm.worker.cache_engine.get_dtype_size = get_dtype_size
+
+import vllm.v1.kv_cache_interface
+
+vllm.v1.kv_cache_interface.get_dtype_size = get_dtype_size
 
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     safetensors_weights_iterator, )
