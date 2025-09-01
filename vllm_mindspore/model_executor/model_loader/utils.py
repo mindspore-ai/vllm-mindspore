@@ -43,6 +43,10 @@ def resolve_mf_mcore_arch(model_config: ModelConfig, architectures: list[str]):
             continue
         if mf_mcore_compatible(arch):
             architectures[i] = "MindFormersForCausalLM"
+        else:
+            raise ValueError(
+                f'"{arch}" is not supported in MindFormers Backend. '
+                f'Supported architectures: {mcore_support_list}')
 
 
 def resolve_mindone_transformers_arch(model_config: ModelConfig,
