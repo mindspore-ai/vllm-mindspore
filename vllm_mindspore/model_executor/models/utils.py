@@ -277,6 +277,9 @@ def is_use_ringmla(vllm_config, mf_config=None):
         return False
     if is_310p():
         return False
+    if vllm_config.model_config.hf_config.model_type == "deepseek_mtp":
+        # weight of deepseek mtp model has not been quantized
+        return False
     use_ringmla = (vllm_config.model_config.use_mla
                    and vllm_config.model_config.quantization is not None
                    and vllm_config.parallel_config.tensor_parallel_size < 16)

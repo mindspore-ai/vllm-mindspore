@@ -350,6 +350,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         if intermediate_tensors is not None:
             model_inputs["hidden_states"] = \
                 intermediate_tensors["hidden_states"]
+        elif kwargs.get("previous_hidden_states") is not None:
+            # used for deepseek-mtp
+            model_inputs["hidden_states"] = kwargs["previous_hidden_states"]
 
         if is_prefill or is_ringmla_chunked:
             self.network.phase = \
