@@ -289,10 +289,18 @@ class TestKVCacheInt8Method:
         k_offset_val = np.random.rand(kv_hidden_size).astype(np.float32)
         v_offset_val = np.random.rand(kv_hidden_size).astype(np.float32)
 
-        layer.k_scale = Parameter(Tensor(k_scale_val), name="k_scale")
-        layer.v_scale = Parameter(Tensor(v_scale_val), name="v_scale")
-        layer.k_offset = Parameter(Tensor(k_offset_val), name="k_offset")
-        layer.v_offset = Parameter(Tensor(v_offset_val), name="v_offset")
+        layer.k_scale = Parameter(Tensor(k_scale_val),
+                                  name="k_scale",
+                                  requires_grad=False)
+        layer.v_scale = Parameter(Tensor(v_scale_val),
+                                  name="v_scale",
+                                  requires_grad=False)
+        layer.k_offset = Parameter(Tensor(k_offset_val),
+                                   name="k_offset",
+                                   requires_grad=False)
+        layer.v_offset = Parameter(Tensor(v_offset_val),
+                                   name="v_offset",
+                                   requires_grad=False)
 
         # process weights
         method.process_weights_after_loading(layer)

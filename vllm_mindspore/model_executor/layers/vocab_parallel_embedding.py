@@ -410,9 +410,9 @@ class ParallelLMHead(VocabParallelEmbedding):
         )
         self.quant_config = quant_config
         if bias:
-            self.bias = Parameter(
-                mint.zeros(self.num_embeddings_per_partition,
-                           dtype=params_dtype))
+            self.bias = Parameter(mint.zeros(self.num_embeddings_per_partition,
+                                             dtype=params_dtype),
+                                  requires_grad=False)
             set_weight_attrs(
                 self.bias,
                 {

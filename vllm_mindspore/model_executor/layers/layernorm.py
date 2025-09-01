@@ -44,7 +44,8 @@ class RMSNorm(nn.Cell):
         super().__init__()
         if params_dtype is None:
             params_dtype = get_current_vllm_config().model_config.dtype
-        self.weight = Parameter(mint.ones(hidden_size, dtype=params_dtype))
+        self.weight = Parameter(mint.ones(hidden_size, dtype=params_dtype),
+                                requires_grad=False)
         self.rms_norm = ops.RmsNorm(eps)
         self.eps = eps
         self.add_rms_norm = AddRmsNorm()

@@ -387,9 +387,11 @@ class KVCacheInt8Method(BaseKVCacheMethod):
         k_offset = layer.k_offset.asnumpy()
         v_offset = layer.v_offset.asnumpy()
         layer.k_offset = Parameter(Tensor(k_offset, dtype=mindspore.int8),
-                                   name=layer.k_offset.name)
+                                   name=layer.k_offset.name,
+                                   requires_grad=False)
         layer.v_offset = Parameter(Tensor(v_offset, dtype=mindspore.int8),
-                                   name=layer.v_offset.name)
+                                   name=layer.v_offset.name,
+                                   requires_grad=False)
         ic = k_scale.shape[0]
         kv_scale = np.concatenate((k_scale.reshape(
             (1, ic)), v_scale.reshape((1, ic))))
@@ -397,10 +399,12 @@ class KVCacheInt8Method(BaseKVCacheMethod):
             (1, ic)), v_offset.reshape((1, ic))))
         layer.kv_scale = Parameter(Tensor(kv_scale,
                                           dtype=layer.kv_scale.dtype),
-                                   name=layer.kv_scale.name)
+                                   name=layer.kv_scale.name,
+                                   requires_grad=False)
         layer.kv_offset = Parameter(Tensor(kv_offset,
                                            dtype=layer.kv_offset.dtype),
-                                    name=layer.kv_offset.name)
+                                    name=layer.kv_offset.name,
+                                    requires_grad=False)
 
     def _run_prefill_forward(
         self,
