@@ -1,0 +1,231 @@
+From 520ed45e7ec671e902170d234cfe68354762d6f9 Mon Sep 17 00:00:00 2001
+From: lvhaoyu <lvhaoyu@huawei.com>
+Date: Mon, 8 Sep 2025 16:47:20 +0800
+Subject: [PATCH] suit glm41v
+
+---
+ vllm/assets/video.py           | 26 ++++++++++++++++++++-
+ vllm/entrypoints/chat_utils.py |  4 ++++
+ vllm/multimodal/inputs.py      |  8 ++++---
+ vllm/multimodal/parse.py       | 41 ++++++++++++++++++++++++++++++++--
+ vllm/multimodal/video.py       | 16 ++++++++++---
+ 5 files changed, 86 insertions(+), 9 deletions(-)
+
+diff --git a/vllm/assets/video.py b/vllm/assets/video.py
+index 01834aeeb..58c357553 100644
+--- a/vllm/assets/video.py
++++ b/vllm/assets/video.py
+@@ -3,7 +3,7 @@
+ 
+ from dataclasses import dataclass
+ from functools import lru_cache
+-from typing import ClassVar, Literal, Optional
++from typing import Any, ClassVar, Literal, Optional
+ 
+ import cv2
+ import numpy as np
+@@ -77,6 +77,24 @@ def video_to_pil_images_list(path: str,
+     ]
+ 
+ 
++def video_get_metadata(path: str) -> dict[str, Any]:
++    cap = cv2.VideoCapture(path)
++    if not cap.isOpened():
++        raise ValueError(f"Could not open video file {path}")
++
++    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
++    fps = cap.get(cv2.CAP_PROP_FPS)
++    duration = total_frames / fps if fps > 0 else 0
++
++    metadata = {
++        "total_num_frames": total_frames,
++        "fps": fps,
++        "duration": duration,
++        "video_backend": "opencv"
++    }
++    return metadata
++
++
+ VideoAssetName = Literal["baby_reading"]
+ 
+ 
+@@ -113,3 +131,9 @@ class VideoAsset:
+         """
+         video_path = download_video_asset(self.filename)
+         return librosa.load(video_path, sr=sampling_rate)[0]
++
++    @property
++    def metadata(self) -> dict[str, Any]:
++        video_path = download_video_asset(self.filename)
++        ret = video_get_metadata(video_path)
++        return ret
+diff --git a/vllm/entrypoints/chat_utils.py b/vllm/entrypoints/chat_utils.py
+index 95c806c22..2ceefed89 100644
+--- a/vllm/entrypoints/chat_utils.py
++++ b/vllm/entrypoints/chat_utils.py
+@@ -511,6 +511,8 @@ class BaseMultiModalItemTracker(ABC, Generic[_T]):
+         if modality in ("image", "image_embeds"):
+             if model_type == "chatglm":
+                 return "<|begin_of_image|><|endoftext|><|end_of_image|>"
++            if model_type == "glm4v":
++                return "<|begin_of_image|><|image|><|end_of_image|>"
+             if model_type in ("phi3_v", "phi4mm"):
+                 return f"<|image_{current_count}|>"
+             if model_type in ("minicpmo", "minicpmv"):
+@@ -559,6 +561,8 @@ class BaseMultiModalItemTracker(ABC, Generic[_T]):
+         elif modality == "video":
+             if model_type == "internvl_chat":
+                 return "<video>"
++            if model_type == "glm4v":
++                return "<|begin_of_video|><|video|><|end_of_video|>"
+             if model_type in ("qwen2_vl", "qwen2_5_vl"):
+                 return "<|vision_start|><|video_pad|><|vision_end|>"
+             if model_type == "qwen2_5_omni":
+diff --git a/vllm/multimodal/inputs.py b/vllm/multimodal/inputs.py
+index 5cb720381..18aae35c6 100644
+--- a/vllm/multimodal/inputs.py
++++ b/vllm/multimodal/inputs.py
+@@ -57,10 +57,12 @@ which are treated as image embeddings;
+ these are directly passed to the model without HF processing.
+ """
+ 
+-VideoItem: TypeAlias = Union[HfVideoItem, "torch.Tensor"]
++VideoItem: TypeAlias = Union[HfVideoItem, "torch.Tensor",
++                             tuple[HfVideoItem, dict[str, Any]]]
+ """
+-A `transformers.image_utils.VideoInput` representing a single video
+-item, which can be passed to a HuggingFace `VideoProcessor`.
++A `transformers.video_utils.VideoInput` representing a single video item. 
++This can be passed to a HuggingFace `VideoProcessor` 
++with `transformers.video_utils.VideoMetadata`.
+ 
+ Alternatively, a 3-D tensor or batch of 2-D tensors,
+ which are treated as video embeddings;
+diff --git a/vllm/multimodal/parse.py b/vllm/multimodal/parse.py
+index cae62b223..4d36184b8 100644
+--- a/vllm/multimodal/parse.py
++++ b/vllm/multimodal/parse.py
+@@ -224,8 +224,14 @@ class ImageEmbeddingItems(EmbeddingItems):
+ 
+ class VideoProcessorItems(ProcessorBatchItems[HfVideoItem]):
+ 
+-    def __init__(self, data: Sequence[HfVideoItem]) -> None:
++    def __init__(
++        self,
++        data: Sequence[HfVideoItem],
++        metadata: Optional[Union[dict[str, Any],
++                                 list[Optional[dict[str, Any]]]]] = None,
++    ) -> None:
+         super().__init__(data, "video")
++        self.metadata = metadata
+ 
+     def get_num_frames(self, item_idx: int) -> int:
+         return len(self.get(item_idx))
+@@ -320,6 +326,7 @@ class MultiModalDataParser:
+         *,
+         target_sr: Optional[float] = None,
+         audio_resample_method: Literal["librosa", "scipy"] = "librosa",
++        video_needs_metadata: bool = False,
+     ) -> None:
+         super().__init__()
+ 
+@@ -327,6 +334,7 @@ class MultiModalDataParser:
+             target_sr=target_sr,
+             method=audio_resample_method,
+         )
++        self.video_needs_metadata = video_needs_metadata
+ 
+     def _is_embeddings(
+             self, data: object
+@@ -361,6 +369,21 @@ class MultiModalDataParser:
+ 
+         assert_never(audio)
+ 
++    def _get_video_with_metadata(
++        self,
++        video: VideoItem,
++    ) -> tuple[np.ndarray, Optional[dict[str, Any]]]:
++        if isinstance(video, tuple):
++            return video
++        if isinstance(video, list):
++            return np.array(video), None
++        if isinstance(video, np.ndarray):
++            return video, None
++        if isinstance(video, torch.Tensor):
++            return video.numpy(), None
++
++        assert_never(video)
++
+     def _parse_audio_data(
+         self,
+         data: ModalityData[AudioItem],
+@@ -433,10 +456,24 @@ class MultiModalDataParser:
+             data_items = [data]
+         elif isinstance(data, (np.ndarray, torch.Tensor)):
+             data_items = [elem for elem in data]
++        elif isinstance(data, tuple) and len(data) == 2:
++            data_items = [data]
+         else:
+             data_items = data
++        new_videos = list[tuple[np.ndarray, Optional[dict[str, Any]]]]()
++        metadata_lst: list[Optional[dict[str, Any]]] = []
++        for data_item in data_items:
++            video, metadata = self._get_video_with_metadata(data_item)
++            if self.video_needs_metadata:
++                new_videos.append((video, metadata))
++                metadata_lst.append(metadata)
++            else:
++                new_videos.append(video)
++
++        if not self.video_needs_metadata:
++            metadata = None
+ 
+-        return VideoProcessorItems(data_items)
++        return VideoProcessorItems(new_videos, metadata=metadata_lst)
+ 
+     def _get_subparsers(self) -> Mapping[str, ModalityDataParser]:
+         return {
+diff --git a/vllm/multimodal/video.py b/vllm/multimodal/video.py
+index bedb9536e..43ec334bf 100644
+--- a/vllm/multimodal/video.py
++++ b/vllm/multimodal/video.py
+@@ -99,15 +99,18 @@ class OpenCVVideoBackend(VideoLoader):
+         return api_pref
+ 
+     @classmethod
+-    def load_bytes(cls, data: bytes, num_frames: int = -1) -> npt.NDArray:
++    def load_bytes(cls,
++                   data: bytes,
++                   num_frames: int = -1) -> tuple[npt.NDArray, dict]:
+         import cv2
+-
+         backend = cls().get_cv2_video_api()
+         cap = cv2.VideoCapture(BytesIO(data), backend, [])
+         if not cap.isOpened():
+             raise ValueError("Could not open video stream")
+ 
+         total_frames_num = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
++        original_fps = cap.get(cv2.CAP_PROP_FPS)
++        duration = total_frames_num / original_fps if original_fps > 0 else 0
+         full_read = num_frames == -1 or total_frames_num < num_frames
+         if full_read:
+             num_frames = total_frames_num
+@@ -136,7 +139,14 @@ class OpenCVVideoBackend(VideoLoader):
+         # we expect all frames loaded
+         assert i == num_frames, (f"Expected reading {num_frames} frames, "
+                                  f"but only loaded {i} frames from video.")
+-        return frames
++        metadata = {
++            "total_num_frames": total_frames_num,
++            "fps": original_fps,
++            "duration": duration,
++            "video_backend": "opencv"
++        }
++
++        return frames, metadata
+ 
+ 
+ class VideoMediaIO(MediaIO[npt.NDArray]):
+-- 
+2.25.1
+
