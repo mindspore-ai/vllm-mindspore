@@ -33,7 +33,10 @@ from vllm_mindspore.utils import (is_mindformers_model_backend,
 
 
 def mf_mcore_compatible(arch):
-    return arch in mcore_support_list
+    # vllm overrides the model arch to `DeepSeekMTPModel` for mtp model,
+    # which is not registered in mf independently and is
+    # a sub-class of `DeepseekV3ForCausalLM`.
+    return arch in mcore_support_list or arch == "DeepSeekMTPModel"
 
 
 def resolve_mf_mcore_arch(model_config: ModelConfig, architectures: list[str]):

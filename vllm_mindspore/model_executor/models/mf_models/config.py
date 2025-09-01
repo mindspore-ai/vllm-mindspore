@@ -126,6 +126,10 @@ MODEL_RELATED_MAPPING = {
     },
     'deepseek_v3': {
         'multi_latent_attention': True,
+    },
+    'deepseek_mtp': {
+        'multi_latent_attention': True,
+        'model_type': 'deepseek_mtp'
     }
     # Add anther model type...
 }
