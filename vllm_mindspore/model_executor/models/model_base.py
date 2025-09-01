@@ -123,6 +123,8 @@ class MsModelBase:
         self.is_multi_step = vllm_config.scheduler_config.is_multi_step
         self.is_multi_step_chunked_prefill = (self.is_multi_step
                                               and self.enable_chunked_prefill)
+        self.num_layers = self.model_config.get_num_layers(
+            self.parallel_config)
 
         self.set_flags: bool = False
         self.kv_caches: list[Any] = []
@@ -241,7 +243,7 @@ class MsModelBase:
         key_cache = []
         value_cache = []
         forward_context = get_forward_context()
-        for i in range(self.config.num_hidden_layers):
+        for i in range(self.num_layers):
             k_cache = self.kv_caches[i].kv_cache[
                 forward_context.virtual_engine][0]
             v_cache = self.kv_caches[i].kv_cache[

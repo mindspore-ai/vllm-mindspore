@@ -20,6 +20,9 @@
 import sys
 import warnings
 import msadapter  # noqa: F401
+from vllm_mindspore.ray_patch import patch_ray
+
+patch_ray()
 
 if "vllm" in sys.modules:
     # Check models variable in sub process, cannot raise here.

@@ -452,20 +452,20 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
                                            w2_scale_hf_name, w3_scale_hf_name,
                                            src_hf_dir, hf_weight_map):
         if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
-            w1_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w1_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-            w2_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w2_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
-            w3_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w3_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
             w1_scale_ms_param, _ = (
-                self.get_safetensor_from_file_split_global_group(
+                self.get_safetensor_from_file_split_tpdp_group(
                     w1_scale_hf_name, src_hf_dir, hf_weight_map, split_axis=0))
             w2_scale_ms_param, _ = self.get_safetensor_from_file(
                 w2_scale_hf_name, src_hf_dir, hf_weight_map)
 
             w3_scale_ms_param, _ = (
-                self.get_safetensor_from_file_split_global_group(
+                self.get_safetensor_from_file_split_tpdp_group(
                     w3_scale_hf_name, src_hf_dir, hf_weight_map, split_axis=0))
         elif self.ep_method == EPMethod.ALLTOALL:
             w1_ms_param, _ = self.get_safetensor_from_file(
@@ -590,7 +590,6 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
             w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
         w2_scale_hf_name = f"model.layers.{layer_id}.mlp.down_proj.weight_scale"
         w2_scale_ms_name = self.quant_convert_weight_name(w2_scale_hf_name)
-        # shape:[7168,1]
         w2_scale_ms_param, _ = self.get_safetensor_from_file(
             w2_scale_hf_name, src_hf_dir, hf_weight_map)
 
@@ -1343,11 +1342,11 @@ class DeepseekV3WeightProcessor(BaseWeightProcessor):
     def get_moe_shared_expert_weight(self, w1_hf_name, w2_hf_name, w3_hf_name,
                                      src_hf_dir, hf_weight_map):
         if self.ep_method in [EPMethod.DEFAULT, EPMethod.ALLGATHER]:
-            w1_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w1_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w1_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
-            w2_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w2_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w2_hf_name, src_hf_dir, hf_weight_map, split_axis=1)
-            w3_ms_param, _ = self.get_safetensor_from_file_split_global_group(
+            w3_ms_param, _ = self.get_safetensor_from_file_split_tpdp_group(
                 w3_hf_name, src_hf_dir, hf_weight_map, split_axis=0)
         elif self.ep_method == EPMethod.ALLTOALL:
             w1_ms_param, _ = self.get_safetensor_from_file(
