@@ -88,8 +88,9 @@ class LinearMethodTestBase:
                               expert_num_per_partition=expert_num)
         method.process_weights_after_loading(simple_layer)
 
-        bias = Parameter(
-            initializer('zeros', (output_size, ), simple_layer.params_dtype))
+        bias = Parameter(initializer('zeros', (output_size, ),
+                                     simple_layer.params_dtype),
+                         requires_grad=False)
         group_list = None
         if is_group_mm:
             group_list = Tensor(np.array([0, 0, 1, 1, 1, 2, 0, 0]),

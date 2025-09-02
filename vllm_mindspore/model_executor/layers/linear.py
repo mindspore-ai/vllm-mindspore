@@ -237,9 +237,9 @@ class ColumnParallelLinear(LinearBase):
                 in WEIGHT_LOADER_V2_SUPPORTED else self.weight_loader),
         )
         if bias:
-            self.bias = Parameter(
-                mint.zeros(self.output_size_per_partition,
-                           dtype=self.params_dtype))
+            self.bias = Parameter(mint.zeros(self.output_size_per_partition,
+                                             dtype=self.params_dtype),
+                                  requires_grad=False)
             set_weight_attrs(
                 self.bias,
                 {
@@ -565,8 +565,9 @@ class RowParallelLinear(LinearBase):
                              "results can lead to incorrect results")
 
         if bias:
-            self.bias = Parameter(
-                mint.zeros(self.output_size, dtype=self.params_dtype))
+            self.bias = Parameter(mint.zeros(self.output_size,
+                                             dtype=self.params_dtype),
+                                  requires_grad=False)
             set_weight_attrs(
                 self.bias,
                 {

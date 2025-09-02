@@ -203,32 +203,38 @@ class A8W8LinearMethod(LinearMethodBase):
         weight_shape = (self.output_size_per_partition //
                         self.quant_config.pack_factor,
                         self.input_size_per_partition)
-        weight = Parameter(initializer('ones', weight_shape, mindspore.int8))
+        weight = Parameter(initializer('ones', weight_shape, mindspore.int8),
+                           requires_grad=False)
         weight_scale_shape = (self.output_size_per_partition //
                               self.quant_config.pack_factor, 1)
         scale_dtype = mindspore.bfloat16 if self.params_dtype == \
                         mindspore.bfloat16 else mindspore.float32
         weight_scale = Parameter(initializer('ones', weight_scale_shape,
                                              scale_dtype),
-                                 name="weight_scale")
+                                 name="weight_scale",
+                                 requires_grad=False)
         deq_scale_shape = (self.output_size_per_partition //
                            self.quant_config.pack_factor)
         scale_dtype = mindspore.int64
         deq_scale = Parameter(initializer('ones', deq_scale_shape,
                                           scale_dtype),
-                              name="deq_scale")
+                              name="deq_scale",
+                              requires_grad=False)
         input_scale_shape = (1, )
         input_scale = Parameter(initializer('ones', input_scale_shape,
                                             self.params_dtype),
-                                name="input_scale")
+                                name="input_scale",
+                                requires_grad=False)
         input_offset = Parameter(initializer('zeros', input_scale_shape,
                                              self.params_dtype),
-                                 name="input_offset")
+                                 name="input_offset",
+                                 requires_grad=False)
         if self.is_310p:
             quant_bias_ = Parameter(initializer(
                 'zeros', (self.output_size_per_partition //
                           self.quant_config.pack_factor, ), mindspore.int32),
-                                    name="quant_bias_")
+                                    name="quant_bias_",
+                                    requires_grad=False)
         else:
             quant_bias_ = None
 
@@ -266,7 +272,8 @@ class A8W8LinearMethod(LinearMethodBase):
                  self.quant_config.pack_factor)
         if self.gmm_transpose:
             shape = (shape[0], shape[2], shape[1])
-        weight = Parameter(initializer('ones', shape, mindspore.int8))
+        weight = Parameter(initializer('ones', shape, mindspore.int8),
+                           requires_grad=False)
         weight_scale_shape = (self.expert_num_per_partition,
                               self.output_size_per_partition //
                               self.quant_config.pack_factor)
@@ -274,18 +281,22 @@ class A8W8LinearMethod(LinearMethodBase):
                         mindspore.bfloat16 else mindspore.float32
         weight_scale = Parameter(initializer('ones', weight_scale_shape,
                                              scale_dtype),
-                                 name="weight_scale")
+                                 name="weight_scale",
+                                 requires_grad=False)
         scale_dtype = mindspore.int64
         deq_scale = Parameter(initializer('ones', weight_scale_shape,
                                           scale_dtype),
-                              name="deq_scale")
+                              name="deq_scale",
+                              requires_grad=False)
         input_scale_shape = (self.expert_num_per_partition, )
         input_scale = Parameter(initializer('ones', input_scale_shape,
                                             self.params_dtype),
-                                name="input_scale")
+                                name="input_scale",
+                                requires_grad=False)
         input_offset = Parameter(initializer('zeros', input_scale_shape,
                                              self.params_dtype),
-                                 name="input_offset")
+                                 name="input_offset",
+                                 requires_grad=False)
         quant_bias_ = None
         set_weight_attrs(weight, {
             "ep_dim": 0,
@@ -318,7 +329,8 @@ class A8W8LinearMethod(LinearMethodBase):
         params_dtype = layer.params_dtype
         layer.input_offset = Parameter(Tensor(input_offset,
                                               dtype=mindspore.int8),
-                                       name=layer.input_offset.name)
+                                       name=layer.input_offset.name,
+                                       requires_grad=False)
         if self.is_group_mm:
             input_scale = layer.input_scale.asnumpy()
             weight_scale = layer.weight_scale.asnumpy()
@@ -326,22 +338,26 @@ class A8W8LinearMethod(LinearMethodBase):
             weight_scale = weight_scale * input_scale[0]
             layer.input_scale = Parameter(Tensor(
                 input_scale, dtype=layer.input_scale.dtype),
-                                          name=layer.input_scale.name)
+                                          name=layer.input_scale.name,
+                                          requires_grad=False)
             if self.is_310p:
                 layer.weight_scale = Parameter(Tensor(weight_scale.view(
                     np.int32).astype(np.int64),
                                                       dtype=mindspore.int64),
-                                               name=layer.weight_scale.name)
+                                               name=layer.weight_scale.name,
+                                               requires_grad=False)
             else:
                 layer.weight_scale = Parameter(Tensor(
                     weight_scale, dtype=layer.weight_scale.dtype),
-                                               name=layer.weight_scale.name)
+                                               name=layer.weight_scale.name,
+                                               requires_grad=False)
         if not self.is_310p and params_dtype is mindspore.bfloat16:
             deq_scale = layer.deq_scale.asnumpy().astype(np.int32).view(
                 np.float32)
             layer.deq_scale = Parameter(Tensor(deq_scale,
                                                dtype=mindspore.float32),
-                                        name=layer.deq_scale.name)
+                                        name=layer.deq_scale.name,
+                                        requires_grad=False)
 
     def apply(self,
               layer: mindspore.nn.Cell,
@@ -425,19 +441,22 @@ class A8W8DYNLinearMethod(LinearMethodBase):
             shape = (expert_num_per_partition, input_size_per_partition,
                      output_size_per_partition //
                      self.quant_config.pack_factor)
-            weight = Parameter(initializer('ones', shape, mindspore.int8))
+            weight = Parameter(initializer('ones', shape, mindspore.int8),
+                               requires_grad=False)
             gmm_weight_scale_shape = (expert_num_per_partition,
                                       output_size_per_partition //
                                       self.quant_config.pack_factor)
             weight_scale_dtype = mindspore.bfloat16 if params_dtype == \
                                 mindspore.bfloat16 else mindspore.float32
-            weight_scale = Parameter(
-                initializer('ones', gmm_weight_scale_shape,
-                            weight_scale_dtype))
+            weight_scale = Parameter(initializer('ones',
+                                                 gmm_weight_scale_shape,
+                                                 weight_scale_dtype),
+                                     requires_grad=False)
 
             smooth_scale_shape = (input_size_per_partition, )
-            smooth_scale = Parameter(
-                initializer('ones', smooth_scale_shape, params_dtype))
+            smooth_scale = Parameter(initializer('ones', smooth_scale_shape,
+                                                 params_dtype),
+                                     requires_grad=False)
             set_weight_attrs(smooth_scale, {"input_dim": 0})
 
             set_weight_attrs(weight, {
@@ -453,17 +472,20 @@ class A8W8DYNLinearMethod(LinearMethodBase):
             weight_shape = (output_size_per_partition //
                             self.quant_config.pack_factor,
                             input_size_per_partition)
-            weight = Parameter(
-                initializer('ones', weight_shape, mindspore.int8))
+            weight = Parameter(initializer('ones', weight_shape,
+                                           mindspore.int8),
+                               requires_grad=False)
             weight_scale_shape = (output_size_per_partition //
                                   self.quant_config.pack_factor)
             weight_scale_dtype = mindspore.bfloat16 if params_dtype == \
                                 mindspore.bfloat16 else mindspore.float32
-            weight_scale = Parameter(
-                initializer('ones', weight_scale_shape, weight_scale_dtype))
+            weight_scale = Parameter(initializer('ones', weight_scale_shape,
+                                                 weight_scale_dtype),
+                                     requires_grad=False)
             smooth_scale_shape = (input_size_per_partition, )
-            smooth_scale = Parameter(
-                initializer('ones', smooth_scale_shape, params_dtype))
+            smooth_scale = Parameter(initializer('ones', smooth_scale_shape,
+                                                 params_dtype),
+                                     requires_grad=False)
 
             set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
             set_weight_attrs(weight_scale, {"output_dim": 0})
@@ -482,7 +504,8 @@ class A8W8DYNLinearMethod(LinearMethodBase):
             smooth_scale = layer.smooth_scale.asnumpy().reshape(1, -1)
             layer.smooth_scale = Parameter(Tensor(smooth_scale,
                                                   dtype=mindspore.float32),
-                                           name=layer.smooth_scale.name)
+                                           name=layer.smooth_scale.name,
+                                           requires_grad=False)
 
     def apply(self,
               layer: mindspore.nn.Cell,

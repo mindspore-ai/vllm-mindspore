@@ -580,7 +580,7 @@ class TransformersForCausalLM(MindONEModelBase):
 
         # TODO: support parallel weight loading
         model_loaded_weights = {
-            n: mindspore.Parameter(mindspore.Tensor(w[:]))
+            n: mindspore.Parameter(mindspore.Tensor(w[:]), requires_grad=False)
             for n, w in weights
         }
         if "lm_head.weight" in model_loaded_weights:
