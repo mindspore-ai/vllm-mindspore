@@ -35,7 +35,7 @@ void PassManager::Run(ir::GraphPtr graph, const TensorCreator &creator) {
 
   // Do transform for each node.
   auto tensors = orderedNodes_.tensorList();
-  for (const ir::NodePtr node : tensors) {
+  for (const ir::NodePtr &node : tensors) {
     LOG_OUT << "Handle node: " << node;
     for (auto &pass : passes_) {
       LOG_OUT << "Handle pass '" << pass.first << "'";
@@ -54,8 +54,7 @@ void PassManager::Run(ir::GraphPtr graph, const TensorCreator &creator) {
 }
 
 bool PassManager::Replace(const ir::NodePtr oldNode, const ir::NodePtr newNode) {
-  LOG_OUT << "To replace " << oldNode << " to " << newNode
-          << ", nodes size: " << orderedNodes_.tensorList().size();
+  LOG_OUT << "To replace " << oldNode << " to " << newNode << ", nodes size: " << orderedNodes_.tensorList().size();
   auto users = ud_.FindUsers(oldNode);
   if (users.empty()) {
     LOG_ERROR << "No user for node: " << oldNode;
@@ -173,9 +172,7 @@ class ManualSamplePass : public NodePass {
   };
 
   // Replacement node for the matched node.
-  ir::NodePtr Replacement() override {
-    return NewTensor(ops::Op_mul, node_->inputs);
-  };
+  ir::NodePtr Replacement() override { return NewTensor(ops::Op_mul, node_->inputs); };
 
  private:
   ir::NodePtr node_{nullptr};

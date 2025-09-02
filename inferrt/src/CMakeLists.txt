@@ -45,7 +45,7 @@ set(OBJECTS lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj 
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
-target_link_libraries(da ${OBJECTS} stdc++fs)
+target_link_libraries(da ${OBJECTS})
 
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
 add_library(inferrt SHARED lang/api/c_api.cc)

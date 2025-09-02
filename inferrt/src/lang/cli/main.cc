@@ -17,13 +17,6 @@
 #define MACRO_HELPER(x) #x
 #define MACRO(x) #x "=" MACRO_HELPER(x)
 #pragma message(MACRO(__GNUC__))
-#if defined(__GNUC__) && (__GNUC__ < 8)
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include <filesystem>
-namespace fs = std::filesystem;
-#endif
 
 #include "common/common.h"
 #include "lang/c/compiler/compiler.h"
@@ -31,6 +24,30 @@ namespace fs = std::filesystem;
 #include "lang/cli/options.h"
 #include "lang/c/parser/parser.h"
 #include "lang/c/vm/vm.h"
+
+#if __has_include(<filesystem>)
+#pragma message("Using filesystem library: <filesystem>")
+#include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#pragma message("Using filesystem library: <experimental/filesystem>")
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#pragma message("No filesystem library found.")
+#define NO_FILESYSTEM_LIBRARY
+namespace fs {
+std::string Canonical(const std::string &path) {
+#ifdef _MSC_VER
+#pragma message("Not make canonical path.")
+  return path;
+#else
+  char pathBuffer[PATH_MAX + 1] = {0};
+  return std::string(realpath(path.c_str(), pathBuffer));
+#endif
+}
+}  // namespace fs
+#endif
 
 using namespace da;
 
@@ -43,6 +60,9 @@ int main(int argc, char **argv) {
 
   // Handle the source file path.
   const std::string filenameArg = args.args[0];
+#ifdef NO_FILESYSTEM_LIBRARY
+  std::string filename = fs::Canonical(filenameArg);
+#else
   const auto path = fs::path(filenameArg);
   std::string filename;
   try {
@@ -51,7 +71,7 @@ int main(int argc, char **argv) {
     std::cout << "error: wrong path: " << path << std::endl;
     exit(EXIT_FAILURE);
   }
-
+#endif
   auto lexer = lexer::Lexer(filename);
   if (args.lex && !args.silent) {
     lexer.Dump();
