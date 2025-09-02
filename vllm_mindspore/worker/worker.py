@@ -75,14 +75,17 @@ def get_numa_map():
                                       "topo"]).strip().split("\n")
     numa_to_npu_map = {}
     max_affinity_cpu = 0
-    if "Affinity" not in numa_topo_info[0]:
+    if "Affinity" not in numa_topo_info[0] or is_310p():
         # If the device does not provide affinity,
         # the CPUs will be evenly distributed.
         cpu_num_per_npu = total_cpu_count // (npu_count * chip_count)
         for i in range(npu_count * chip_count):
             cpu_start = i * cpu_num_per_npu
-            # 4 CPUs are reserved for CANN
-            npu_to_core_map[i] = [cpu_start, cpu_start + cpu_num_per_npu - 4]
+            # 4 CPUs are reserved for CANN(not for 310p)
+            npu_to_core_map[i] = [
+                cpu_start,
+                cpu_start + cpu_num_per_npu - (0 if is_310p() else 4)
+            ]
         return npu_to_core_map
     else:
         npu_num = 0
@@ -153,10 +156,9 @@ def wrapper_worker_bind_cpu(fun):
 
     def new_fun(*arg, **kwargs):
         # Bind CPU with wrapper when workers are initializing.
-        # Support 910B and 910C.
-        if not is_310p():
-            local_rank = kwargs.get("local_rank")
-            bind_cpu(local_rank)
+        # Support 910B, 910C and 310P.
+        local_rank = kwargs.get("local_rank")
+        bind_cpu(local_rank)
         fun(*arg, **kwargs)
 
     return new_fun

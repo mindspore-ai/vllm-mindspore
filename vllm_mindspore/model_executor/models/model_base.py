@@ -77,7 +77,7 @@ class MLAAttentionWrapper(AttentionWrapper):
         if not self.use_ringmla:
             self.kv_cache = [
                 (
-                    ms.mint.zeros(
+                    create_kv_cache(
                         self.kv_shape,  # type: ignore[misc]
                         dtype=vllm_config.model_config.dtype), ) for _ in
                 range(vllm_config.parallel_config.pipeline_parallel_size)
