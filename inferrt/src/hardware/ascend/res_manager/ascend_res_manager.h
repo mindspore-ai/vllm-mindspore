@@ -119,6 +119,10 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
 
   void ResetStreamAndCtx() const override;
 
+  // Memcpy
+  static bool MemcpyDeviceToDevice(void *dst, size_t dst_size, const void *src, size_t src_size, aclrtStream stream);
+  static bool MemcpyDeviceToHost(void *dst, size_t dst_size, const void *src, size_t src_size, aclrtStream stream);
+
  private:
   bool initialized_ = false;
   std::shared_ptr<MemoryManager> memManager_{nullptr};

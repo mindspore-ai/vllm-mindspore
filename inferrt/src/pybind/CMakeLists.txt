@@ -55,7 +55,6 @@ else()
 
     # Include pybind11 directories
     include_directories(${PYBIND11_PATH}/include)
-
     add_subdirectory(${PYBIND11_PATH})
 endif()
 

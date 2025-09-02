@@ -10,12 +10,18 @@ if(ENABLE_ASCEND)
   message("Note compile ascend path: ${ASCEND_PATH}")
   include_directories(${ASCEND_PATH}/latest/include/)
   include_directories(${ASCEND_PATH}/latest/lib64/)
+  include_directories(${ASCEND_PATH}/latest/aarch64-linux/include/experiment)
   find_library(ASCENDCL_LIB ascendcl
       PATHS ${ASCEND_PATH}/latest/lib64
       REQUIRED
       NO_DEFAULT_PATH
     )
   find_library(RUNTIME_LIB runtime
+    PATHS ${ASCEND_PATH}/latest/lib64
+    REQUIRED
+    NO_DEFAULT_PATH
+  )
+  find_library(HCCL hccl
     PATHS ${ASCEND_PATH}/latest/lib64
     REQUIRED
     NO_DEFAULT_PATH
@@ -28,6 +34,7 @@ if(ENABLE_ASCEND)
       hardware_abstract
       ${ASCENDCL_LIB}
       ${RUNTIME_LIB}
+      ${HCCL}
       dl
     )
 endif()

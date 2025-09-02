@@ -28,6 +28,8 @@
 #include <fstream>
 #include "hardware/hardware_abstract/dlopen_macro.h"
 #include "hardware/hardware_abstract/multi_stream_controller.h"
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+
 #include "common/logger.h"
 
 namespace mrt {
@@ -148,8 +150,7 @@ MultiStreamControllerPtr &DeviceContextManager::GetMultiStreamController(const s
     return iter->second;
   }
   LOG_ERROR << "Found multi stream controller failed, and try to initialize, deviceName : " << deviceName << ".";
-  // use 0 temporarily.
-  uint32_t deviceId = 0;
+  uint32_t deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
   DeviceContextKey hostKey = {deviceName, deviceId};
   const auto &realDeviceContext = GetOrCreateDeviceContext(hostKey);
   if (realDeviceContext == nullptr) {

@@ -1,4 +1,6 @@
 check_debug_log_out()
+
+
 add_subdirectory(hardware_abstract)
 if(ENABLE_ASCEND)
   add_subdirectory(ascend)
