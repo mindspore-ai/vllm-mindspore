@@ -2,3 +2,7 @@
 	path = tests/mindformers
 	url = https://gitee.com/mindspore/mindformers.git
 	branch = master
+[submodule "ms_custom_ops"]
+	path = ms_custom_ops
+	url = https://gitee.com/mindspore/akg.git
+	branch = ms_custom_ops
