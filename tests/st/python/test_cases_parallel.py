@@ -204,10 +204,10 @@ def test_cases_parallel_part7():
     run_tasks(cases)
 
 
-@pytest.mark.level1
+@pytest.mark.level3
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
-def test_cases_parallel_level1_part0():
+def test_cases_parallel_level3_part0():
     """
     Feature: test cases parallel.
     Description:
@@ -221,13 +221,13 @@ def test_cases_parallel_level1_part0():
     run_tasks(cases)
 
 
-@pytest.mark.level1
+@pytest.mark.level3
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
-def test_cases_parallel_level1_mcore1():
+def test_cases_parallel_level3_mcore1():
     """
     Mcore currently does not support the following test cases,
-    adjust the level to level 1 until it is re supported
+    adjust the level to level 3 until it is re supported
     """
     cases = [
         (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
@@ -243,13 +243,13 @@ def test_cases_parallel_level1_mcore1():
     run_tasks(cases)
 
 
-@pytest.mark.level1
+@pytest.mark.level3
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
-def test_cases_parallel_level1_mcore2():
+def test_cases_parallel_level3_mcore2():
     """
     Mcore currently does not support the following test cases,
-    adjust the level to level 1 until it is re supported
+    adjust the level to level 3 until it is re supported
     """
     cases = [
         (2, "cases_parallel/vllm_deepseek_a8w4.py::test_deepseek_r1_a8w4",

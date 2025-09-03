@@ -69,7 +69,7 @@ def test_deepseek_r1():
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    except_list = ['ugs611ాలు哒哒哒哒哒哒哒']
+    except_list = ['ugs611ాలు哒ాలు mahassisemaSTE的道德']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt
@@ -106,7 +106,7 @@ def test_deepseek_mtp():
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
-    except_list = ['ugs611ాలు哒哒哒哒哒哒哒']
+    except_list = ['ugs611ాలు哒ాలు mahassisemaSTE的道德']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt
