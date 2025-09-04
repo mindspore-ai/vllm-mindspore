@@ -20,9 +20,10 @@ from collections.abc import Iterable
 from typing import Any, Optional, Union, cast
 
 import mindspore as ms
+import ms_custom_ops
 import numpy as np
 import vllm.envs as envs
-from mindspore import Tensor, mutable, nn, ops
+from mindspore import Tensor, mutable, nn
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
@@ -93,17 +94,16 @@ class MLAAttentionWrapper(AttentionWrapper):
                 # format_cast ops may not recycle device memory
                 k_shape = [1, *(self.kv_shape[1:-2]), kv_lora_rank]
                 r_shape = [1, *(self.kv_shape[1:-2]), qk_rope_head_dim]
-                self.kv_cache = [
-                    (ops.auto_generate.format_cast(
-                        ms.mint.zeros(k_shape, dtype=kv_cache_dtype), 29),
-                     ops.auto_generate.format_cast(
-                         ms.mint.zeros(r_shape,
-                                       dtype=vllm_config.model_config.dtype),
-                         29))
-                    for _ in range(
-                        vllm_config.parallel_config.pipeline_parallel_size)
-                ]
-
+                # Currently, transdata has a bug and ms.jit must be added.
+                # Later, ms.jit will be removed.
+                self.kv_cache = [(ms.jit(ms_custom_ops.trans_data)(
+                    ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
+                    transdata_type=1), ms.jit(ms_custom_ops.trans_data)(
+                        ms.mint.zeros(r_shape,
+                                      dtype=vllm_config.model_config.dtype),
+                        transdata_type=1)) for _ in range(
+                            vllm_config.parallel_config.pipeline_parallel_size)
+                                 ]
             else:
                 k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
