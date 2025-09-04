@@ -66,7 +66,7 @@ void AtenKernel::InferShape() {
     auto in1Dims = node_->inputs[1]->output->ToTensor()->Shape();
     dims = at::infer_size(in0Dims, in1Dims);
   }
-  node_->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(dims, dtype, device));
+  node_->output = ir::MakeIntrusive<ir::Value>(ir::MakeIntrusive<ir::Tensor>(dims, dtype, device));
 }
 
 void AtenKernel::Resize() {}

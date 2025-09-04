@@ -4,7 +4,8 @@ from typing import List, Dict, Any
 from torch.fx.node import Node, map_arg
 from torch.fx.graph_module import GraphModule
 
-from dapy.ir import GraphExecutor, Op
+from mrt.ir import GraphExecutor, Op
+from mrt.torch.utils import from_torch, to_torch, update_tensor_data
 
 
 _GLOBAL_GRAPH_ID = 0
@@ -98,8 +99,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            const_tensor = executor.add_value_node(next(input_iterator))
-            env[node] = const_tensor
+            input = next(input_iterator)
+            if isinstance(input, torch.Tensor):
+                input = from_torch(input)
+            env[node] = executor.add_value_node(input)
 
     with executor:
         for node in gm.graph.nodes:
@@ -114,10 +117,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 for part in target.split("."):
                     attr_val = getattr(attr_val, part)
 
-                if isinstance(attr_val, (torch.Tensor, torch.nn.Parameter)):
-                    env[node] = executor.add_value_node(attr_val)
-                else:
-                    env[node] = attr_val
+                if isinstance(attr_val, torch.Tensor):
+                    attr_val = from_torch(attr_val)
+
+                env[node] = executor.add_value_node(attr_val)
 
             elif node.op in ("call_function", "call_method"):
                 op = _get_op(node.target)
@@ -155,9 +158,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             )
 
         for i, p_node in enumerate(param_nodes):
-            p_node.output.update_tensor_data(new_inputs[i])
+            update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
 
         result = executor.run()
-        return result
+
+        return tuple(to_torch(r) for r in result)
 
     return compiled_callable

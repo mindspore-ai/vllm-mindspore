@@ -23,6 +23,7 @@
 
 #include "hardware/device.h"
 #include "ir/common/dtype.h"
+#include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/storage.h"
 
 namespace mrt {
@@ -34,7 +35,7 @@ namespace ir {
  * This class holds the metadata of a tensor, such as its dimensions, data type,
  * and a reference to the underlying storage.
  */
-class Tensor {
+class Tensor : public RefCounted {
  public:
   /**
    * @brief Constructs an empty Tensor with uninitialized data.
@@ -63,28 +64,10 @@ class Tensor {
    */
   Tensor(void *data, const std::vector<int64_t> &shape, DataType dtype, hardware::Device device);
 
-  /**
-   * @brief Move constructor.
-   */
-  Tensor(Tensor &&other) noexcept {
-    dtype_ = other.dtype_;
-    numel_ = other.numel_;
-    storageOffset_ = other.storageOffset_;
-    shape_ = std::move(other.shape_);
-    strides_ = std::move(other.strides_);
-    storage_ = std::move(other.storage_);
-
-    // Invalidate the moved-from tensor
-    other.dtype_ = DataType::Unknown;
-    other.numel_ = 0;
-    other.storageOffset_ = 0;
-  }
-
-  /**
-   * @brief Deleted copy constructor.
-   */
   Tensor(const Tensor &) = delete;
   Tensor &operator=(const Tensor &) = delete;
+  Tensor(Tensor &&) = delete;
+  Tensor &operator=(Tensor &&) = delete;
 
   /**
    * @brief Gets the data type of the tensor.
@@ -180,9 +163,10 @@ class Tensor {
   int64_t storageOffset_ = 0;     ///< The offset in the storage, in number of elements.
 };
 
-std::ostream &operator<<(std::ostream &os, Tensor *tensor);
-std::ostream &operator<<(std::ostream &os, const Tensor *tensor);
+using TensorPtr = IntrusivePtr<Tensor>;
+
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
+std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor);
 
 }  // namespace ir
 }  // namespace mrt

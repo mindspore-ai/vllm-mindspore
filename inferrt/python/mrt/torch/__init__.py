@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dapy.api import dag, jit
-from dapy.fx_backend import backend
+from .fx_backend import backend
 
-__all__ = ['dag', 'jit', 'backend']
+__all__ = ['backend']

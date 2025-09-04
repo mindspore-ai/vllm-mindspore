@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "pybind/dalang_py/pybind11_api.h"
+#include "pybind/mrt/pybind11_api.h"
 
 DALangPy::~DALangPy() {
   if (callable_ != nullptr) {
@@ -98,7 +98,7 @@ py::object DALangPy::Run(const py::tuple &args) {
 }
 
 // Interface with python
-PYBIND11_MODULE(_dapy, mod) {
+PYBIND11_MODULE(_mrt_api, mod) {
   (void)py::class_<DALangPy, std::shared_ptr<DALangPy>>(mod, "DALangPy_")
     .def_static("get_instance", &DALangPy::GetInstance, "DALangPy single instance.")
     .def("__call__", &DALangPy::Run, py::arg("args") = py::list(), "Run with arguments.")

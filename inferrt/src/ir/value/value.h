@@ -37,7 +37,7 @@ using ValuePtr = IntrusivePtr<Value>;
  *
  * This class provides holds a vector of Value objects.
  */
-class Tuple {
+class Tuple : public RefCounted {
  public:
   /**
    * @brief Default constructor. Creates an empty Tuple.
@@ -51,11 +51,10 @@ class Tuple {
   explicit Tuple(const std::vector<ValuePtr> &elements) : elements_(elements) {}
   explicit Tuple(std::vector<ValuePtr> &&elements) : elements_(std::move(elements)) {}
 
-  /**
-   * @brief Move Constructor.
-   * @param other The Tuple to move from.
-   */
-  Tuple(Tuple &&other) noexcept : elements_(std::move(other.elements_)) {}
+  Tuple(const Tuple &) = delete;
+  Tuple &operator=(const Tuple &) = delete;
+  Tuple(Tuple &&) = delete;
+  Tuple &operator=(Tuple &&) = delete;
 
   /**
    * @brief Get the size of the tuple.
@@ -64,18 +63,28 @@ class Tuple {
   size_t Size() const { return elements_.size(); }
 
   /**
-   * @brief Retrieves the raw pointer of an element by index.
+   * @brief Retrieves an element by index.
    * @param index The index of the element to retrieve.
-   * @return The element as Value*, or nullptr if the index is out of bounds.
+   * @return The element as ValuePtr.
    */
-  Value *operator[](size_t index) const {
+  ValuePtr operator[](size_t index) const {
     CHECK_IF_FAIL(index < elements_.size());
-    return elements_[index].get();
+    return elements_[index];
   }
+
+  auto begin() const { return elements_.cbegin(); }
+  auto end() const { return elements_.cend(); }
+  auto begin() { return elements_.begin(); }
+  auto end() { return elements_.end(); }
 
  private:
   std::vector<ValuePtr> elements_;
 };
+
+/**
+ * @brief A smart pointer for Tuple.
+ */
+using TuplePtr = IntrusivePtr<Tuple>;
 
 /**
  * @brief A generic container for different types of values.
@@ -90,10 +99,10 @@ class Value : public RefCounted {
    */
   Value() : tag_(Tag::None) {}
   /**
-   * @brief Constructs a Value from a Tensor by moving.
-   * @param v The Tensor value.
+   * @brief Constructs a Value from a TensorPtr.
+   * @param v The TensorPtr value.
    */
-  Value(Tensor &&v);
+  Value(TensorPtr v);
   /**
    * @brief Constructs a Value from a double.
    * @param v The double value.
@@ -115,10 +124,10 @@ class Value : public RefCounted {
    */
   Value(std::string &&v);
   /**
-   * @brief Constructs a Value from a Tuple by moving.
-   * @param v The Tuple value.
+   * @brief Constructs a Value from a TuplePtr.
+   * @param v The TuplePtr value.
    */
-  Value(Tuple &&v);
+  Value(TuplePtr v);
 
   /**
    * @brief Destructor.
@@ -141,15 +150,12 @@ class Value : public RefCounted {
    *  std::runtime_error if the type does not match.
    */
   ///@{
-  const Tensor *ToTensor() const;
-  Tensor *ToTensor();
+  TensorPtr ToTensor() const;
   double ToDouble() const;
   int64_t ToInt() const;
   bool ToBool() const;
-  const std::string *ToString() const;
-  std::string *ToString();
-  const Tuple *ToTuple() const;
-  Tuple *ToTuple();
+  const std::string &ToString() const;
+  TuplePtr ToTuple() const;
   ///@}
 
   /**
@@ -168,20 +174,19 @@ class Value : public RefCounted {
 
   const Tag tag_;  ///< The tag indicating the type of the value.
   union {
-    Tensor tensor_;
+    TensorPtr tensor_;
     double double_;
     int64_t int_;
     bool bool_;
     std::string string_;
-    Tuple tuple_;
+    TuplePtr tuple_;
   };
 };
 
-std::ostream &operator<<(std::ostream &os, const ValuePtr &value);
 std::ostream &operator<<(std::ostream &os, const Value &value);
-std::ostream &operator<<(std::ostream &os, Value *value);
-std::ostream &operator<<(std::ostream &os, const Value *value);
+std::ostream &operator<<(std::ostream &os, const ValuePtr &value);
 std::ostream &operator<<(std::ostream &os, const std::vector<const Value *> &values);
+std::ostream &operator<<(std::ostream &os, const TuplePtr &tuple);
 
 }  // namespace ir
 }  // namespace mrt

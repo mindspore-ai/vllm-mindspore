@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <numeric>
 #include <sstream>
+#include <iomanip>
 
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
@@ -39,6 +40,22 @@ int64_t CalculateNumel(const std::vector<int64_t> &shape, bool allow_dynamic) {
   }
   return numel;
 }
+
+template <typename T>
+void PrintData(std::ostream &os, const void *data, size_t numel, size_t limit) {
+  const auto *d = static_cast<const T *>(data);
+  for (size_t i = 0; i < std::min(numel, limit); ++i) {
+    // Promote char types to int for printing
+    os << +d[i];
+    if (i < std::min(numel, limit) - 1) {
+      os << ", ";
+    }
+  }
+  if (numel > limit) {
+    os << ", ...";
+  }
+}
+
 }  // namespace
 
 /**
@@ -119,17 +136,8 @@ void Tensor::SetShape(const std::vector<int64_t> &&shape) {
   numel_ = CalculateNumel(shape_, true);
 }
 
-std::ostream &operator<<(std::ostream &os, Tensor *tensor) {
-  if (tensor == nullptr) {
-    os << "Null";
-  } else {
-    os << *tensor;
-  }
-  return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const Tensor *tensor) {
-  if (tensor == nullptr) {
+std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {
+  if (!tensor) {
     os << "Null";
   } else {
     os << *tensor;
@@ -150,24 +158,39 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   os << "], dtype=" << tensor.Dtype().ToString();
   os << ", data=[";
   if (tensor.DataPtr()) {
-    if (tensor.Dtype() == DataType::Float32) {  // TODO: support other dtypes
-      const auto data = static_cast<const float *>(tensor.DataPtr());
-      const size_t numel = tensor.Numel();
-      if (numel <= numelLimit) {
-        for (size_t i = 0; i < numel; ++i) {
-          os << data[i];
-          if (i < numel - 1) {
-            os << ", ";
-          }
-        }
-      } else {
-        for (size_t i = 0; i < numelLimit; ++i) {
-          os << data[i] << ", ";
-        }
-        os << "...";
+    if (tensor.HasDynamicShape()) {
+      os << "dynamic shape, not materialized";
+    } else if (tensor.Numel() > 0) {
+      switch (tensor.Dtype()) {
+        case DataType::Float32:
+          PrintData<float>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Float64:
+          PrintData<double>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Int8:
+          PrintData<int8_t>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Int16:
+          PrintData<int16_t>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Int32:
+          PrintData<int32_t>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Int64:
+          PrintData<int64_t>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::UInt8:
+          PrintData<uint8_t>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        case DataType::Bool:
+          os << std::boolalpha;
+          PrintData<bool>(os, tensor.DataPtr(), tensor.Numel(), numelLimit);
+          break;
+        default:
+          os << "...";
+          break;
       }
-    } else {
-      os << "...";
     }
   } else {
     os << "null";
