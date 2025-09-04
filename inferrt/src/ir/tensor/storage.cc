@@ -22,42 +22,35 @@
 namespace mrt {
 namespace ir {
 
-/**
- * @brief Constructs a Storage, allocating memory on the specified device.
- * @param sizeBytes The size of the storage in bytes.
- * @param device The device to allocate memory on.
- * @throws std::bad_alloc if memory allocation fails.
- * @throws std::runtime_error if the device type is not supported.
- */
 Storage::Storage(size_t sizeBytes, hardware::Device device) : sizeBytes_(sizeBytes), device_(device), ownsData_(true) {
-  if (device.type == hardware::DeviceType::CPU) {
-    if (sizeBytes == 0) {
+  Resize(sizeBytes_);
+}
+
+Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
+    : data_(data), sizeBytes_(sizeBytes), device_(device), ownsData_(false) {}
+
+Storage::~Storage() { Resize(0); }
+
+void Storage::Resize(size_t sizeBytes) {
+  sizeBytes_ = sizeBytes;
+  if (!ownsData_) {
+    return;
+  }
+  if (device_.type == hardware::DeviceType::CPU) {
+    if (data_) {
+      free(data_);
+    }
+    if (sizeBytes_ == 0) {
       data_ = nullptr;
     } else {
-      data_ = malloc(sizeBytes);
+      data_ = malloc(sizeBytes_);
       if (!data_) {
         throw std::bad_alloc();
       }
     }
   } else {
     // Handle other devices like GPU (e.g., cudaMalloc)
-    throw std::runtime_error("Device not supported yet");
-  }
-}
-
-Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
-    : data_(data), sizeBytes_(sizeBytes), device_(device), ownsData_(false) {}
-
-/**
- * @brief Destroys the Storage, freeing the allocated memory if it owns it.
- */
-Storage::~Storage() {
-  if (data_ && ownsData_) {
-    if (device_.type == hardware::DeviceType::CPU) {
-      free(data_);
-    } else {
-      // Handle other devices (e.g., cudaFree)
-    }
+    LOG_EXCEPTION << "Device not supported yet";
   }
 }
 

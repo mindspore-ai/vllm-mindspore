@@ -44,9 +44,9 @@ Value::~Value() {
   }
 }
 
-#define CHECK_TAG(expected)                       \
-  if (tag_ != expected) {                         \
-    throw std::runtime_error("Bad Value access"); \
+#define CHECK_TAG(expected)              \
+  if (tag_ != expected) {                \
+    LOG_EXCEPTION << "Bad Value access"; \
   }
 
 const Tensor *Value::ToTensor() const {

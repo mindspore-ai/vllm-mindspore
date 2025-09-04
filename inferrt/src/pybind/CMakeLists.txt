@@ -58,8 +58,16 @@ else()
     add_subdirectory(${PYBIND11_PATH})
 endif()
 
-# Add pybind11 sub module
+# Add dapy pybind11 sub module
 pybind11_add_module(_dapy NO_EXTRAS dalang_py/pybind11_api.cc)
-pybind11_add_module(_dairpy NO_EXTRAS dalang_py/pybind11_ir.cc)
 target_link_libraries(_dapy PUBLIC inferrt)
-target_link_libraries(_dairpy PUBLIC inferrt)
+
+# Link against torch libraries for _dairpy
+execute_process(COMMAND python -c "import os; import torch; print(os.path.join(os.path.dirname(torch.__file__), 'share/cmake'))" OUTPUT_VARIABLE PYTORCH_CMAKE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(CMAKE_PREFIX_PATH "${PYTORCH_CMAKE_PATH}")
+find_package(Torch REQUIRED)
+find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_INSTALL_PREFIX}/lib")
+
+# Add dairpy pybind11 sub module
+pybind11_add_module(_dairpy NO_EXTRAS dalang_py/pybind11_ir.cc)
+target_link_libraries(_dairpy PUBLIC inferrt ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})

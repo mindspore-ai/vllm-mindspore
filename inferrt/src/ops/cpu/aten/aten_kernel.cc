@@ -58,6 +58,7 @@ at::Tensor ToAtenTensor(ir::ValuePtr value) {
 void AtenKernel::InferShape() {
   std::vector<int64_t> dims;
   auto dtype = node_->inputs[0]->output->ToTensor()->Dtype();
+  hardware::Device device = node_->inputs[0]->output->ToTensor()->GetDevice();
   if (node_->inputs.size() == 1) {
     dims = node_->inputs[0]->output->ToTensor()->Shape();
   } else if (node_->inputs.size() == 2) {
@@ -65,7 +66,7 @@ void AtenKernel::InferShape() {
     auto in1Dims = node_->inputs[1]->output->ToTensor()->Shape();
     dims = at::infer_size(in0Dims, in1Dims);
   }
-  node_->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(dims, dtype, hardware::Device(hardware::DeviceType::CPU, 0)));
+  node_->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(dims, dtype, device));
 }
 
 void AtenKernel::Resize() {}

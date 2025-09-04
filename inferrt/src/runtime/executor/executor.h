@@ -51,10 +51,10 @@ class DA_API GraphExecutor {
   // Add a parameter for graph.
   void AddParameter(ir::NodePtr param);
 
-  // Add a const tensor.
-  ir::NodePtr AddTensor();
-  // Add operation result tensor.
-  ir::NodePtr AddTensor(ops::Op op, const std::vector<ir::NodePtr> &inputs);
+  // Add a value node.
+  ir::NodePtr AddValueNode(const ir::ValuePtr &value = nullptr);
+  // Add an operation node.
+  ir::NodePtr AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs);
   // Add return node.
   ir::NodePtr AddReturn();
 

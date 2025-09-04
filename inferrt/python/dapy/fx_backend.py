@@ -94,13 +94,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
 
-    numpy_inputs = [t.detach().cpu().numpy() for t in example_inputs]
-    input_iterator = iter(numpy_inputs)
+    input_iterator = iter(example_inputs)
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            numpy_input = next(input_iterator)
-            const_tensor = executor.add_const(numpy_input)
+            const_tensor = executor.add_value_node(next(input_iterator))
             env[node] = const_tensor
 
     with executor:
@@ -117,8 +115,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     attr_val = getattr(attr_val, part)
 
                 if isinstance(attr_val, (torch.Tensor, torch.nn.Parameter)):
-                    numpy_val = attr_val.detach().cpu().numpy()
-                    env[node] = executor.add_const(numpy_val)
+                    env[node] = executor.add_value_node(attr_val)
                 else:
                     env[node] = attr_val
 
@@ -129,7 +126,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
                 args = _map_args(node.args, env)
 
-                env[node] = executor.add_op(op, list(args))
+                env[node] = executor.add_op_node(op, list(args))
 
             elif node.op == "call_module":
                 raise NotImplementedError(
@@ -149,20 +146,18 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.build()
 
     placeholder_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
-    param_tensors = [env[n] for n in placeholder_nodes]
+    param_nodes = [env[n] for n in placeholder_nodes]
 
-    def compiled_callable(*new_inputs: torch.Tensor) -> torch.Tensor:
-        if len(new_inputs) != len(param_tensors):
+    def compiled_callable(*new_inputs: torch.Tensor):
+        if len(new_inputs) != len(param_nodes):
             raise ValueError(
-                f"Expected {len(param_tensors)} inputs, but got {len(new_inputs)}"
+                f"Expected {len(param_nodes)} inputs, but got {len(new_inputs)}"
             )
 
-        numpy_inputs = [t.detach().cpu().numpy() for t in new_inputs]
-        for i, p_tensor in enumerate(param_tensors):
-            p_tensor.update_data(numpy_inputs[i])
+        for i, p_node in enumerate(param_nodes):
+            p_node.output.update_tensor_data(new_inputs[i])
 
-        result_np = executor.run()
-        result = tuple(torch.from_numpy(item) for item in result_np)
+        result = executor.run()
         return result
 
     return compiled_callable

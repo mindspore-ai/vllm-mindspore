@@ -51,7 +51,7 @@ class Tensor {
    * @param dtype The data type of the tensor elements.
    * @param shape The dimensions of the tensor.
    */
-  Tensor(StoragePtr storage, DataType dtype, const std::vector<int64_t> &shape);
+  Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType dtype);
   /**
    * @brief Constructs a Tensor from an existing data blob.
    * The tensor does not own the memory.
@@ -127,10 +127,15 @@ class Tensor {
    */
   StoragePtr GetStorage() const { return storage_; }
   /**
-   * @brief Construct a new `storage_` with the same device as the old. Note: Need set shape and dtype first, the device
-   * memory of the old `storage_` might be released.
+   * @brief Resizes the storage of the tensor.
+   * Note: The shape and dtype must be set before resizing the storage.
    */
   void ResizeStorage();
+  /**
+   * @brief Updates the data of the tensor.
+   * @param data Pointer to the new data.
+   */
+  void UpdateData(void *data);
   /**
    * @brief Gets a raw const pointer to the tensor's data.
    * This pointer takes into account the storage offset.

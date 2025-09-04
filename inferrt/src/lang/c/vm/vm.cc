@@ -384,7 +384,7 @@ void VM::InstCallIntrin(ssize_t offset) {
       break;
     }
     case intrinsic::IntrinsicType_tensor: {
-      auto tensor = graphExecutor_.AddTensor();
+      auto tensor = graphExecutor_.AddValueNode();
       resultSlot.type = SlotTensor;
       resultSlot.tensor_ = tensor;
       break;
@@ -441,7 +441,7 @@ void VM::InstCallOps(ssize_t offset) {
 
   // Call an op.
   LOG_OUT << "Call ops." << ops::ToStr(opsNameSlot.value.op);
-  auto tensor = graphExecutor_.AddTensor(opsNameSlot.value.op, inputs);
+  auto tensor = graphExecutor_.AddOpNode(opsNameSlot.value.op, inputs);
   Slot tensorSlot{.type = SlotTensor};
   tensorSlot.tensor_ = tensor;
   CurrentStack().emplace_back(std::move(tensorSlot));
