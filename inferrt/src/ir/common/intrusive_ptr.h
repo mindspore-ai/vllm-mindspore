@@ -17,6 +17,7 @@
 #ifndef __IR_COMMON_INTRUSIVE_PTR_H__
 #define __IR_COMMON_INTRUSIVE_PTR_H__
 
+#include <functional>
 #include <atomic>
 #include <utility>
 
@@ -162,10 +163,23 @@ class IntrusivePtr {
   T *operator->() const { return ptr_; }
 
   /**
+   * @brief Checks if the pointer is equal to another IntrusivePtr.
+   * @param other The other IntrusivePtr to compare with.
+   * @return true if the pointers are equal, false otherwise.
+   */
+  bool operator==(const IntrusivePtr &other) const { return ptr_ == other.ptr_; }
+
+  /**
    * @brief Checks if the pointer is null.
    * @return true if the pointer is null, false otherwise.
    */
   bool operator==(const nullptr_t &) const { return ptr_ == nullptr; }
+
+  /**
+   * @brief Checks if the pointer is not null.
+   * @return true if the pointer is not null, false otherwise.
+   */
+  bool operator!=(const nullptr_t &) const { return ptr_ != nullptr; }
 
   /**
    * @brief Checks if the pointer is not null.
@@ -213,5 +227,11 @@ IntrusivePtr<T> MakeIntrusive(Args &&...args) {
 
 }  // namespace ir
 }  // namespace mrt
+
+// Specialization of std::hash for IntrusivePtr to allow its use in unordered containers.
+template <typename T>
+struct std::hash<mrt::ir::IntrusivePtr<T>> {
+  std::size_t operator()(const mrt::ir::IntrusivePtr<T> &k) const { return std::hash<T *>()(k.get()); }
+};
 
 #endif  // __IR_COMMON_INTRUSIVE_PTR_H__

@@ -105,7 +105,7 @@ GraphExecutor::~GraphExecutor() {
 void GraphExecutor::BeginGraph(const std::string &name) {
   LOG_OUT << "Begin graph building";
   CHECK_IF_FAIL(graph_ == nullptr);
-  graph_ = std::make_shared<ir::Graph>();
+  graph_ = ir::MakeIntrusive<ir::Graph>();
   name_ = name;
 }
 
@@ -144,7 +144,7 @@ void GraphExecutor::BuildKernels() {
 
 // Add a node as parameter for graph.
 void GraphExecutor::AddParameter(ir::NodePtr param) {
-  LOG_OUT << "Add parameter: " << param << " for graph: " << graph_;
+  LOG_OUT << "Add parameter: " << param;
   CHECK_IF_NULL(param);
   CHECK_IF_FAIL(param->op == ops::Op_End);
   (void)parameters_.emplace_back(param);
@@ -153,7 +153,7 @@ void GraphExecutor::AddParameter(ir::NodePtr param) {
 // Add a value node.
 ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
   LOG_OUT << "Add value node: " << value;
-  auto node = std::make_shared<ir::Node>();
+  auto node = ir::MakeIntrusive<ir::Node>();
   node->op = ops::Op_End;
   node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
   if (graph_ != nullptr) {
@@ -166,7 +166,7 @@ ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
 ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
   LOG_OUT << "Add operation node";
   LOG_OUT << "operation input size: " << inputs.size();
-  auto node = std::make_shared<ir::Node>();
+  auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = op;
   node->inputs = inputs;
@@ -179,7 +179,7 @@ ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> 
 // Add return node.
 ir::NodePtr GraphExecutor::AddReturn() {
   LOG_OUT << "Add return";
-  auto node = std::make_shared<ir::Node>();
+  auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = ops::Op_return;
   node->output = ir::MakeIntrusive<ir::Value>();

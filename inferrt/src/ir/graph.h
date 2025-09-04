@@ -22,6 +22,7 @@
 #include <memory>
 #include <sstream>
 
+#include "ir/common/intrusive_ptr.h"
 #include "ir/value/value.h"
 #include "ops/op_def/ops_name.h"
 
@@ -33,21 +34,21 @@ namespace ir {
  *
  * A node corresponds to an operation, with a set of inputs and a single output.
  */
-struct Node {
-  ops::Op op;                                 ///< The operation performed by this node.
-  std::vector<std::shared_ptr<Node>> inputs;  ///< The input nodes to the operation.
-  ValuePtr output{nullptr};                   ///< The output value from the operation.
+struct Node : public RefCounted {
+  ops::Op op;                              ///< The operation performed by this node.
+  std::vector<IntrusivePtr<Node>> inputs;  ///< The input nodes to the operation.
+  ValuePtr output{nullptr};                ///< The output value from the operation.
 };
 
 /**
  * @brief Represents the entire computation graph.
  */
-struct Graph {
-  std::vector<std::shared_ptr<Node>> nodes;  ///< The list of all nodes in the graph.
+struct Graph : public RefCounted {
+  std::vector<IntrusivePtr<Node>> nodes;  ///< The list of all nodes in the graph.
 };
 
-using NodePtr = std::shared_ptr<Node>;
-using GraphPtr = std::shared_ptr<Graph>;
+using NodePtr = IntrusivePtr<Node>;
+using GraphPtr = IntrusivePtr<Graph>;
 
 inline std::ostream &operator<<(std::ostream &os, const Node &node) {
   os << "Node("
