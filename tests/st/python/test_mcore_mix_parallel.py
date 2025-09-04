@@ -34,6 +34,7 @@ env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
     "vLLM_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
+    "MS_ENABLE_TRACE_MEMORY": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "MS_ALLOC_CONF": "enable_vmm:True",
@@ -241,7 +242,7 @@ def test_deepseek_r1_dp8_tp1_ep8():
                        ds_model_path, quant_type)
 
 
-@pytest.mark.level3
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp2_tp4_ep1():
@@ -276,7 +277,7 @@ def test_deepseek_r1_dp4_tp2_ep8():
                        ds_model_path, quant_type)
 
 
-@pytest.mark.level3
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp8_tp1_ep1():
@@ -293,7 +294,7 @@ def test_deepseek_r1_dp8_tp1_ep1():
                        ds_model_path, quant_type)
 
 
-@pytest.mark.level3
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp8_tp1_ep4():
@@ -310,7 +311,7 @@ def test_deepseek_r1_dp8_tp1_ep4():
                        ds_model_path, quant_type)
 
 
-@pytest.mark.level3
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_tp8_ep8():
@@ -326,7 +327,7 @@ def test_deepseek_r1_tp8_ep8():
                           ds_model_path, quant_type)
 
 
-@pytest.mark.level3
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_tp8_ep4():

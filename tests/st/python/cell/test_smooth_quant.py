@@ -254,7 +254,7 @@ class TestA8W8DYNLinearMethod(LinearMethodTestBase):
         assert simple_layer.smooth_scale.dtype == mstype.float32
 
 
-@pytest.mark.level0
+@pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_linear_method(quant_config, params_dtype, is_group_mm):

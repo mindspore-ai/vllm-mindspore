@@ -23,6 +23,7 @@ from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
 from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, mutable, ops
+from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
@@ -418,6 +419,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         logits = logits.view(-1, logits.shape[-1])
         return logits
 
+    @no_grad()
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None
