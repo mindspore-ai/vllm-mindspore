@@ -198,7 +198,7 @@ def _prepare_input_for_warmup(model_config,
 
     model_input = model_runner.prepare_model_input(seqs)
     previous_hidden_states = None if not is_mtp_model else torch.ones(
-        [bs, seq_len, model_config.get_hidden_size()],
+        [bs * seq_len, model_config.get_hidden_size()],
         dtype=get_valid_dtype(model_config.dtype))
     return model_input, previous_hidden_states
 
