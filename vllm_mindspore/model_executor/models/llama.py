@@ -48,7 +48,6 @@ else:
 
 from mindspore import Tensor, mint, nn
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
@@ -424,7 +423,7 @@ class LlamaModel(nn.Cell):
     def load_weights(self, weights: Iterable[tuple[str, Tensor]], params_dict):
         loaded_params: set[str] = set()
         stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
+            # shape is (param_name, shard_name, shard_id).
             (".qkv_proj", ".q_proj", "q"),
             (".qkv_proj", ".k_proj", "k"),
             (".qkv_proj", ".v_proj", "v"),
@@ -472,11 +471,7 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
 
         if get_pp_group().is_last_rank:
             self.unpadded_vocab_size = self.config.vocab_size
-            # TODO: To support lora
-            # if self.lora_config:
-            #   self.unpadded_vocab_size +=
-            #  self.lora_config.lora_extra_vocab_size
-            # self.unpadded_vocab_size += config.lora_extra_vocab_size
+
             self.lm_head = ParallelLMHead(
                 self.unpadded_vocab_size,
                 self.config.hidden_size,
@@ -498,7 +493,6 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
             self.logits_processor = LogitsProcessor(self.unpadded_vocab_size,
                                                     self.config.vocab_size,
                                                     logit_scale)
-            self.sampler = get_sampler()
         else:
             self.lm_head = PPMissingLayer()
 
@@ -525,11 +519,6 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
         if self.config.tie_word_embeddings:
             load_params.add("lm_head.weight")
         return load_params
-
-    def sample(self, logits: Tensor,
-               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        return next_tokens
 
     def compute_logits(
         self,

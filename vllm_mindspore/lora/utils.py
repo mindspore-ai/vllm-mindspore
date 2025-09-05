@@ -22,7 +22,7 @@ from vllm.lora.fully_sharded_layers import (
     RowParallelLinearWithShardedLoRA)
 
 # yapf conflicts with isort for this block
-# yapf: disable
+# yapf: disable  # noqa: ERA001
 from vllm_mindspore.lora.layers import (BaseLayerWithLoRA,
                                         ColumnParallelLinearWithLoRA,
                                         LinearScalingRotaryEmbeddingWithLoRA,
@@ -33,7 +33,7 @@ from vllm_mindspore.lora.layers import (BaseLayerWithLoRA,
                                         RowParallelLinearWithLoRA,
                                         VocabParallelEmbeddingWithLoRA)
 
-# yapf: enable
+# yapf: enable  # noqa: ERA001
 
 _all_lora_classes: set[type[BaseLayerWithLoRA]] = {
     VocabParallelEmbeddingWithLoRA,

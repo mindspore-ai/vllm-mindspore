@@ -42,12 +42,11 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.attention import Attention
-from vllm_mindspore.model_executor.layers.activation import SwiGLU
+from vllm_mindspore.model_executor.layers.activation import SiluAndMul
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import (
     MergedColumnParallelLinear, QKVParallelLinear, RowParallelLinear)
@@ -90,7 +89,7 @@ class Qwen2MLP(nn.Cell):
         if hidden_act != "silu":
             raise ValueError(f"Unsupported activation: {hidden_act}. "
                              "Only silu is supported for now.")
-        self.act_fn = SwiGLU()
+        self.act_fn = SiluAndMul()
 
     def construct(self, x):
         x, _ = self.gate_up_proj(x)
@@ -367,7 +366,7 @@ class Qwen2Model(nn.Cell):
                      params_dict: dict[str, Parameter]):
         loaded_params: set[str] = set()
         stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
+            # (param_name, shard_name, shard_id) # noqa: ERA001
             (".qkv_proj", ".q_proj", "q"),
             (".qkv_proj", ".k_proj", "k"),
             (".qkv_proj", ".v_proj", "v"),
@@ -464,7 +463,6 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
             self.lm_head = PPMissingLayer()
 
         self.logits_processor = LogitsProcessor(self.config.vocab_size)
-        self.sampler = get_sampler()
 
         self.make_empty_intermediate_tensors = (
             self.model.make_empty_intermediate_tensors)
@@ -484,11 +482,6 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
         self.model.load_weights(weights, params_dict)
-
-    def sample(self, logits: Tensor,
-               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        return next_tokens
 
     def compute_logits(
         self,

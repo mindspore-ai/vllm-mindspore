@@ -22,17 +22,17 @@ from typing import Any, Optional, Union, cast
 import mindspore as ms
 import numpy as np
 import vllm.envs as envs
-from mindspore import Tensor, mutable, nn
+from mindspore import Tensor, mutable, nn, ops
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
-from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
+from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
@@ -67,13 +67,14 @@ class AttentionWrapper:
 
 class MLAAttentionWrapper(AttentionWrapper):
 
-    def __init__(self):
+    def __init__(self, fa3_quant=False, kv_cache_dtype=None):
         super().__init__()
         vllm_config = get_current_vllm_config()
-        self.use_mla_op = bool(
-            vllm_config.additional_config
-            and vllm_config.additional_config.get('use_mla_op') == 1)
-        if not self.use_mla_op:
+        self.use_ringmla = is_use_ringmla(vllm_config)
+        if kv_cache_dtype is None:
+            kv_cache_dtype = vllm_config.model_config.dtype
+        self.dtype = kv_cache_dtype
+        if not self.use_ringmla:
             self.kv_cache = [
                 (
                     ms.mint.zeros(
@@ -87,16 +88,33 @@ class MLAAttentionWrapper(AttentionWrapper):
             qk_rope_head_dim = getattr(vllm_config.model_config.hf_text_config,
                                        'qk_rope_head_dim', 0)
             # k_shape, r_shape used for mla_op
-            k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank
-                       ] if self.use_mla_op else None
-            r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim
-                       ] if self.use_mla_op else None
-            self.kv_cache = [
-                (ms.mint.zeros(k_shape, dtype=vllm_config.model_config.dtype),
-                 ms.mint.zeros(r_shape, dtype=vllm_config.model_config.dtype))
-                for _ in range(
-                    vllm_config.parallel_config.pipeline_parallel_size)
-            ]
+            if fa3_quant:
+                # num_block is set to 1 because setting it to 0,
+                # format_cast ops may not recycle device memory
+                k_shape = [1, *(self.kv_shape[1:-2]), kv_lora_rank]
+                r_shape = [1, *(self.kv_shape[1:-2]), qk_rope_head_dim]
+                self.kv_cache = [
+                    (ops.auto_generate.format_cast(
+                        ms.mint.zeros(k_shape, dtype=kv_cache_dtype), 29),
+                     ops.auto_generate.format_cast(
+                         ms.mint.zeros(r_shape,
+                                       dtype=vllm_config.model_config.dtype),
+                         29))
+                    for _ in range(
+                        vllm_config.parallel_config.pipeline_parallel_size)
+                ]
+
+            else:
+                k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank]
+                r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
+                self.kv_cache = [
+                    (ms.mint.zeros(k_shape,
+                                   dtype=vllm_config.model_config.dtype),
+                     ms.mint.zeros(r_shape,
+                                   dtype=vllm_config.model_config.dtype))
+                    for _ in range(
+                        vllm_config.parallel_config.pipeline_parallel_size)
+                ]
 
 
 class MsModelBase:
@@ -262,14 +280,6 @@ class MsModelBase:
             "Function compute_logits should be Implemented!")
 
     @abstractmethod
-    def sample(
-        self,
-        logits: Tensor,
-        sampling_metadata: SamplingMetadata,
-    ) -> Optional[SamplerOutput]:
-        raise NotImplementedError("Function sample should be Implemented!")
-
-    @abstractmethod
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         raise NotImplementedError(
             "Function load_weights should be Implemented!")
@@ -301,7 +311,8 @@ class MsModelBase:
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.set_flags else 1,
-            query_start_loc=None)
+            query_start_loc=None,
+            num_prompt_tokens=seq_lengths)
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata

@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 from collections.abc import Iterable
 from typing import Optional, Union
 
@@ -20,28 +21,26 @@ import mindspore as ms
 import numpy as np
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
-from mindformers.core.parallel_config import build_parallel_config
 from mindformers.tools.utils import is_pynative
-from mindspore import Tensor, ops
-from mindspore.common.api import _pynative_executor
+from mindspore import Tensor, mutable, ops
+from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
 from vllm.config import VllmConfig, get_current_vllm_config
-from vllm.distributed.parallel_state import get_pp_group
+from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
-    LowerTriangularMask)
+    LowerTriangularMask, MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
-from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
-                                                             MsModelBase)
+from vllm_mindspore.model_executor.models.model_base import (
+    AttentionWrapper, MLAAttentionWrapper, MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
-    make_empty_intermediate_tensors_factory)
+    is_use_ringmla, make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
@@ -52,37 +51,50 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.set_flags = False
-        self.max_model_len = vllm_config.model_config.max_model_len
-        self.hf_config = vllm_config.model_config.hf_config
+        self.model_config = vllm_config.model_config
         self.lm_head_graph = None
 
         mf_config = gen_mf_config(vllm_config)
         mf_config.load_checkpoint = self.get_model_path()
         mf_config.pretrained_model_dir = self.get_model_path()
         self.mf_config = mf_config
+        self.mla_config = self.mf_config.get('model', None).get(
+            'model_config', None).get('multi_latent_attention', False)
+        self.use_ringmla = is_use_ringmla(vllm_config, mf_config)
+        self.is_chunked = False
 
         build_mf_context(self.mf_config)
-        build_parallel_config(self.mf_config)
 
         self.network, self.lm_head = self._create_network()
-        self.casual_mask = LowerTriangularMask(
-            dtype=self.network.compute_dtype, max_model_len=self.max_model_len)
-
-        affinity_config = self.mf_config.get('context',
-                                             {}).get('affinity_cpu_list', {})
-        if isinstance(affinity_config, dict):
-            ms.runtime.set_cpu_affinity(True, affinity_config)
-
+        self.casual_mask = self._create_mask()
+        if hasattr(self.network, "quant_config") and self.network.quant_config:
+            self.fa3_quant = self.network.quant_config.fa3_quant
+            self.fa3_quant_layer = self.network.quant_config.fa3_quant_layer
+            # used when allocate the kvcache in GPUModelRunner
+            vllm_config.quant_config = self.network.quant_config
+        else:
+            self.fa3_quant = False
+            self.fa3_quant_layer = set()
+        if self.fa3_quant and vllm_config.cache_config.cache_dtype == "auto":
+            raise RuntimeError(
+                "To use fa3_quant, it is necessary to set "
+                "\"--kv-cache-dtype 'int8'\" in the startup command.")
+        if self.fa3_quant and not self.use_ringmla:
+            raise ValueError('To use fa3_quant, '
+                             'it is necessary to set use_ringmla to True.')
+        if not self.fa3_quant and \
+                    vllm_config.cache_config.cache_dtype == "int8":
+            raise RuntimeError("To use kv-cache-dtype 'int8', "
+                               "it is necessary to set fa3_quant to True.")
         self._set_dynamic_inputs()
 
-        self.sampler = get_sampler()
         self.set_modules({"model": self.network})
 
-        self.kv_caches = [AttentionWrapper() for _ in range(self.num_layers)]
+        self.kv_caches = self._create_kv_caches()
         compilation_config = get_current_vllm_config().compilation_config
-
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
+
         for i in range(self.num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
@@ -100,6 +112,155 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                                        dtype=self.network.compute_dtype)
         if get_pp_group().is_last_rank:
             self.lm_head.set_inputs(dynamic_hidden_states)
+
+    def _create_mask(self):
+        # Initial mask
+        mask_func = (MLALowerTriangularMask
+                     if self.mla_config else LowerTriangularMask)
+        return mask_func(dtype=self.network.compute_dtype,
+                         max_model_len=self.model_config.max_model_len)
+
+    def _create_kv_caches(self):
+        # Initial kv_caches
+        wrapper_func = (MLAAttentionWrapper
+                        if self.mla_config else AttentionWrapper)
+        if self.fa3_quant:
+            return [wrapper_func(fa3_quant=True, kv_cache_dtype=ms.int8) \
+                    if self.fa3_quant and i in self.fa3_quant_layer \
+                    else wrapper_func(fa3_quant=True,
+                                      kv_cache_dtype=self.model_config.dtype) \
+                        for i in range(self.num_layers)]
+        else:
+            return [wrapper_func() for _ in range(self.num_layers)]
+
+    def get_kvcache(self):
+        if not self.mla_config:
+            return super().get_kvcache()
+
+        forward_context = get_forward_context()
+        key_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            for i in range(self.num_layers)
+        ]
+        if not self.use_ringmla:
+            return mutable(key_cache), None
+        # deepseek mla op need key cache and rope cache
+        rope_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+            for i in range(self.num_layers)
+        ]
+        return mutable(key_cache), mutable(rope_cache)
+
+    def _get_padding_index(self, q_seq_len):
+        """
+        Calculate the padding index used in the mixed parallel scenario.
+        Case 1: When data_parallel_size equals 1, no padding operation
+                required, returns None.
+        Case 2: When data_parallel_size equals expert_parallel_size and
+                model_parallel equals 1, all_to_all communication is applied,
+                no padding operation required, returns None.
+        Case 3: In other DP enabled scenarios, calculate the corresponding
+                padding index based on the query sequence lengths processed
+                by each DP domain.
+
+        e.g. DP2 TP4 MoE_EP2
+        +------------------+------------------------+------------------------+
+        |    DP domain     |          DP0           |           DP1          |
+        +------------------+------------------------+------------------------+
+        |    q_seq_len     |           3            |            5           |
+        +------------------+------------------------+------------------------+
+        | attn_padding_idx |   [0,1,2,0,0,0,0,0]    |   [0,1,2,3,4,0,0,0]    |
+        +------------------+------------------------+------------------------+
+        |attn_unpadding_idx|               [0,1,2,8,9,10,11,12]              |
+        +------------------+------------------------+------------------------+
+        | ffn_padding_idx  |        [0,1,2,0,0,0,0,0,3,4,5,6,7,0,0,0]        |
+        +------------------+------------------------+------------------------+
+        |ffn_unpadding_idx |        [0,1,2]         |      [0,1,2,3,4]       |
+        +------------------+------------------------+------------------------+
+
+        Args:
+        - q_seq_len (Tensor): query sequence lengths.
+
+        Returns:
+        - attn_padding_idx (Tensor or None): Indices mapping positions in
+          attention output sequence to original token positions, used for
+          padding attention output to fixed size.
+        - attn_unpadding_idx (Tensor or None): Indices mapping valid tokens
+          in padded attention output sequence to their original positions,
+          used for removing padding in attention output.
+        - ffn_padding_idx (Tensor or None): Indices mapping positions in MoE
+          output sequence to flattened valid token positions, used for padding
+          MoE output to fixed size.
+        - ffn_unpadding_idx (Tensor or None): Indices mapping valid tokens in
+          padded MoE output sequence to their original positions, used for
+          removing padding in MoE output.
+        """
+        dp_size = self.mf_config.parallel_config.data_parallel
+        tp_size = self.mf_config.parallel_config.model_parallel
+        ep_size = self.mf_config.parallel_config.expert_parallel
+        if dp_size == 1 or (dp_size == ep_size and tp_size == 1):
+            return None, None, None, None
+
+        tokens_len_per_dp = q_seq_len.sum().reshape(-1)
+        tokens_len_per_dp = get_dp_group().all_gather(tokens_len_per_dp)
+        tokens_len_per_dp = tokens_len_per_dp.asnumpy()
+
+        # Simultaneously satisfying the requirement of being divisible by
+        # tensor_parallel_size and greater than the maximum q_seq_len in all
+        # DP domains.
+        padding_size = ((tokens_len_per_dp.max() + tp_size - 1) // tp_size *
+                        tp_size)
+
+        dp_rank_id = get_dp_group().rank_in_group
+        attn_padding_idx = None
+        attn_unpadding_idx = None
+        ffn_padding_idx = None
+        ffn_unpadding_idx = None
+        last_arange_index = 0
+
+        for dp_rank, tokens_length in enumerate(tokens_len_per_dp):
+            arange_data = np.arange(0, int(tokens_length), dtype=np.int32)
+            if dp_rank == dp_rank_id:
+                ffn_unpadding_idx = arange_data
+                pad = np.zeros(padding_size - arange_data.shape[0],
+                               dtype=np.int32)
+                attn_padding_idx = np.concatenate((arange_data, pad), axis=0)
+            if dp_rank == 0:
+                attn_unpadding_idx = arange_data
+                last_arange_index = arange_data[-1]
+                pad = np.zeros(padding_size - attn_unpadding_idx.shape[0],
+                               dtype=np.int32)
+                ffn_padding_idx = np.concatenate((attn_unpadding_idx, pad),
+                                                 axis=0)
+            else:
+                attn_offset_idx = arange_data + padding_size * dp_rank
+                attn_unpadding_idx = np.concatenate(
+                    (attn_unpadding_idx, attn_offset_idx), axis=0)
+                ffn_offset_idx = arange_data + last_arange_index + 1
+                last_arange_index = ffn_offset_idx[-1]
+                pad = np.zeros(padding_size - ffn_offset_idx.shape[0],
+                               dtype=np.int32)
+                ffn_padding_idx = np.concatenate(
+                    (ffn_padding_idx, ffn_offset_idx, pad), axis=0)
+        return (ms.from_numpy(attn_padding_idx),
+                ms.from_numpy(attn_unpadding_idx),
+                ms.from_numpy(ffn_padding_idx),
+                ms.from_numpy(ffn_unpadding_idx))
+
+    def update_padding_index_to_inputs(self, model_inputs, q_seq_lens):
+        """
+        Update the model input and add the related parameters of padding_index.
+        """
+
+        (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
+         ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
+
+        model_inputs["attn_padding_idx"] = attn_padding_idx
+        model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
+        model_inputs["ffn_padding_idx"] = ffn_padding_idx
+        model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
+
+        return model_inputs
 
     def prepare_inputs(self, input_ids, positions):
 
@@ -127,15 +288,18 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             seq_lens_np = np.array(seq_lens, dtype=np.int32)
             query_lens_np = np.array(query_lens, dtype=np.int32)
             kv_cache_lens = seq_lens_np - query_lens_np
-            if attn_metadata.num_decode_tokens == 0 and kv_cache_lens.max(
-            ) == 0:
-                is_prefill = True
-            else:
-                is_prefill = False
+            is_prefill = kv_cache_lens.max() == 0
+            is_ringmla_chunked = self.use_ringmla and \
+                                 attn_metadata.num_decode_tokens == 0 and \
+                                 bool(kv_cache_lens.max() > 0)
             context_lens_tensor = ms.from_numpy(kv_cache_lens)
         else:
             # V1
             is_prefill = attn_metadata.max_context_lens == 0
+            is_ringmla_chunked = \
+                self.use_ringmla and not is_prefill and \
+                bool((attn_metadata.context_lens - \
+                      attn_metadata.num_prompt_tokens).min() < 0)
             query_lens_np = attn_metadata.q_seq_lens_np
             seq_lens_np = attn_metadata.seq_lens_np
             context_lens_tensor = attn_metadata.context_lens
@@ -156,8 +320,10 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
         model_inputs["context_lens_tensor"] = context_lens_tensor
+        model_inputs = (self.update_padding_index_to_inputs(
+            model_inputs, q_seq_lens))
 
-        return model_inputs, is_prefill
+        return model_inputs, is_prefill, is_ringmla_chunked
 
     def forward(self,
                 input_ids: Tensor,
@@ -165,21 +331,43 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                 intermediate_tensors: Optional[IntermediateTensors] = None,
                 inputs_embeds: Optional[Tensor] = None,
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
-        model_inputs, is_prefill = self.prepare_inputs(input_ids, positions)
+        """
+        Forward pass of model with support for different computation phases.
+        Handles both prefill (context encoding) and incremental
+        (token generation) phases.
+        Optional RingMLA chunked computation phases for use-MLA model with
+        quantization and tensor parallel size < 16.
+        Notes:
+            - Automatically detects prefill vs incremental phases based on
+              input characteristics.
+            - Supports RingMLA chunked computation for for use-MLA model.
+            - Maintains phase-specific flags for proper graph compilation
+              and execution.
+        """
+        model_inputs, is_prefill, is_ringmla_chunked = self.prepare_inputs(
+            input_ids, positions)
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
         if intermediate_tensors is not None:
             model_inputs["hidden_states"] = \
                 intermediate_tensors["hidden_states"]
 
-        if is_prefill:
-            self.network.phase = "prefill"
+        if is_prefill or is_ringmla_chunked:
+            self.network.phase = \
+                "prefill" if not is_ringmla_chunked else "chunked"
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom_mcore(is_prefill=True)
+                if hasattr(self.network, 'add_flags_chunked'):
+                    # chunked means 3-rd graph "chunked"
+                    self.network.add_flags_chunked(
+                        is_chunked=is_ringmla_chunked)
+                # ringmla_chunked means computing chunked-prefills on ringmla
+                self.is_chunked |= is_ringmla_chunked
             hidden_states = self.network(**model_inputs)
             self.network.phase = "increment"
             if not self.set_flags or is_pynative():
                 self.network.add_flags_custom_mcore(is_prefill=False)
-                self.set_flags = True
+                self.set_flags = (True
+                                  if not self.use_ringmla else self.is_chunked)
         else:
             hidden_states = self.network(**model_inputs)
 
@@ -189,6 +377,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
     def _create_network(self):
         # Initial network
+        if self.model_config.enforce_eager:
+            os.environ['ENFORCE_EAGER'] = 'True'
         with no_init_parameters():  # Delay initialization
             network: PreTrainedModel = AutoModel.from_config(self.mf_config)
             network.model.return_hidden_states = True
@@ -206,10 +396,11 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     ) -> Optional[Tensor]:
         if sampling_metadata is not None:
             selected_token_indices = sampling_metadata.selected_token_indices
-            if selected_token_indices is not None \
-                and selected_token_indices.numel() <= 0:
-                logits = ms.mint.zeros((0, self.hf_config.vocab_size),
-                                       dtype=self.hf_config.torch_dtype)
+            if (selected_token_indices is not None
+                    and selected_token_indices.numel() <= 0):
+                logits = ms.mint.zeros(
+                    (0, self.model_config.hf_config.vocab_size),
+                    dtype=self.model_config.dtype)
                 return logits
             else:
                 hidden_states = hidden_states.reshape(
@@ -228,15 +419,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         logits = logits.view(-1, logits.shape[-1])
         return logits
 
-    def sample(
-        self,
-        logits: Tensor,
-        sampling_metadata: SamplingMetadata,
-    ) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        _pynative_executor.sync()
-        return next_tokens
-
+    @no_grad()
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None

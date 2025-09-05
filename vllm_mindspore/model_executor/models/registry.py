@@ -22,9 +22,36 @@ from vllm.model_executor.models.registry import (_LazyRegisteredModel,
                                                  _ModelRegistry, _run)
 
 from vllm_mindspore.utils import (is_mindformers_model_backend,
-                                  is_mindone_model_backend)
+                                  is_mindone_model_backend,
+                                  is_native_model_backend)
 
 logger = init_logger(__name__)
+
+try:
+    from mindformers.tools.register.register import (MindFormerModuleType,
+                                                     MindFormerRegister)
+    mf_supported = True
+    model_support_list = list(
+        MindFormerRegister.registry[MindFormerModuleType.MODELS].keys())
+    mcore_support_list = [
+        name[len("mcore_"):] for name in model_support_list
+        if name.startswith("mcore_")
+    ]
+except ImportError as e:
+    logger.warning("Error when importing MindSpore Transformers: %s", e)
+    if is_mindformers_model_backend():
+        raise ImportError from e
+    mf_supported = False
+    mcore_support_list = []
+
+try:
+    from mindone import transformers  # noqa: F401
+    mindone_supported = True
+except ImportError as e:
+    logger.warning("Error when importing MindSpore ONE: %s", e)
+    if is_mindone_model_backend():
+        raise ImportError from e
+    mindone_supported = False
 
 _NATIVE_MODELS = {
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
@@ -35,60 +62,85 @@ _NATIVE_MODELS = {
 }
 
 _MINDFORMERS_MODELS = {
-    "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
-    "DeepseekV3ForCausalLM": ("deepseek_v3", "DeepseekV3ForCausalLM"),
-    "DeepSeekMTPModel": ("deepseek_mtp", "DeepseekV3MTPForCausalLM"),
     "MindFormersForCausalLM": ("mindformers", "MindFormersForCausalLM")
 }
 
 _MINDONE_MODELS = {
     "TransformersForCausalLM": ("transformers", "TransformersForCausalLM"),
 }
+"""
+Models with a fixed import path can be specified here to bypass the automatic 
+backend selection. This is useful if you want to force a specific model to
+always use a certain backend implementation.
 
-_registry_dict = {}
+Example:
+
+AUTO_SELECT_FIXED_MODEL = {
+    "Qwen3ForCausalLM": (
+        "vllm_mindspore.model_executor.models.qwen3",  # module path
+        "Qwen3ForCausalLM"                             # class name
+    ),
+}
+"""
+AUTO_SELECT_FIXED_MODEL = {}
+
+
+def _register_model(backends: list[str], paths: list[str]):
+    _registry_dict = {}
+    for backend, model_dir in zip(backends, paths):
+        if backend == _MINDFORMERS_MODELS:
+            if not mf_supported:
+                continue
+        elif backend == _MINDONE_MODELS:  # noqa: SIM102
+            if not mindone_supported:
+                continue
+        for model_arch, (mod_relname, cls_name) in backend.items():
+            if model_arch not in _registry_dict:
+                _registry_dict.update({
+                    model_arch:
+                    _LazyRegisteredModel(
+                        module_name=model_dir.format(mod_relname),
+                        class_name=cls_name,
+                    )
+                })
+    return _registry_dict
+
+
 if is_mindformers_model_backend():
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=
-            f"vllm_mindspore.model_executor.models.mf_models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDFORMERS_MODELS.items()
-    }
+    model_paths = "vllm_mindspore.model_executor.models.mf_models.{}"
+    _registry_dict = _register_model([_MINDFORMERS_MODELS], [model_paths])
 elif is_mindone_model_backend():
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=
-            f"vllm_mindspore.model_executor.models.mindone_models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _MINDONE_MODELS.items()
-    }
+    model_paths = "vllm_mindspore.model_executor.models.mindone_models.{}"
+    _registry_dict = _register_model([_MINDONE_MODELS], [model_paths])
+elif is_native_model_backend():
+    model_paths = "vllm_mindspore.model_executor.models.{}"
+    _registry_dict = _register_model([_NATIVE_MODELS], [model_paths])
 else:
-    _registry_dict = {
-        model_arch:
-        _LazyRegisteredModel(
-            module_name=f"vllm_mindspore.model_executor.models.{mod_relname}",
-            class_name=cls_name,
-        )
-        for model_arch, (mod_relname, cls_name) in _NATIVE_MODELS.items()
-    }
+    # mix backend selection, priority: mindformers > native > mindone
+    model_backends = [_MINDFORMERS_MODELS, _NATIVE_MODELS, _MINDONE_MODELS]
+    model_paths = [
+        "vllm_mindspore.model_executor.models.mf_models.{}",
+        "vllm_mindspore.model_executor.models.{}",
+        "vllm_mindspore.model_executor.models.mindone_models.{}"
+    ]
+    _registry_dict = _register_model(model_backends, model_paths)
+
+    # To override the auto selection result
+    for arch in AUTO_SELECT_FIXED_MODEL:
+        model_paths, cls_name = AUTO_SELECT_FIXED_MODEL[arch]
+        _registry_dict.update({
+            arch:
+            _LazyRegisteredModel(
+                module_name=model_paths,
+                class_name=cls_name,
+            )
+        })
 
 MindSporeModelRegistry = _ModelRegistry(_registry_dict)
 
 _SUBPROCESS_COMMAND = [
     sys.executable, "-m", "vllm_mindspore.model_executor.models.registry"
 ]
-
-
-def is_mf_mcore_archs(architectures: list) -> bool:
-    if is_mindformers_model_backend():
-        legacy_archs = _MINDFORMERS_MODELS.copy()
-        legacy_archs.pop("MindFormersForCausalLM")
-        return not any(arch in legacy_archs for arch in architectures)
-    return False
 
 
 def _normalize_archs(
@@ -106,11 +158,12 @@ def _normalize_archs(
     normalized_arch = list(
         filter(lambda model: model in self.models, architectures))
 
-    # make sure Transformers backend is put at the last as a fallback
+    # make sure MindFormersForCausalLM and MindONE Transformers backend
+    # is put at the last as a fallback
     if len(normalized_arch) != len(architectures):
+        normalized_arch.append("MindFormersForCausalLM")
         normalized_arch.append("TransformersForCausalLM")
-        if is_mf_mcore_archs(architectures):
-            normalized_arch.append("MindFormersForCausalLM")
+
     return normalized_arch
 
 

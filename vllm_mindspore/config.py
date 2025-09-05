@@ -22,16 +22,17 @@ import socket
 import threading
 import time
 from collections import Counter
-from typing import Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import msgspec
 import torch
 import vllm.envs as envs
+from pydantic.dataclasses import dataclass
 from transformers import PretrainedConfig
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
-from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CompilationConfig,
-                         CompilationLevel, VllmConfig, _find_dtype,
-                         _resolve_auto_dtype)
+from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CacheConfig,
+                         CompilationConfig, CompilationLevel, VllmConfig,
+                         _find_dtype, _resolve_auto_dtype, get_attr_docs)
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
@@ -43,6 +44,10 @@ logger = init_logger(__name__)
 def _verify_quantization(self) -> None:
     # Do not verify now.
     return
+
+
+def vllm_config_get_quantization_config(model_config, load_config):
+    return None
 
 
 def vllm_config_post_init(self):
@@ -391,3 +396,70 @@ def stateless_destroy_socket_process_group(
         dp_group.close()
         logger.info("Socket process group for rank %d destroyed.",
                     dp_group.rank)
+
+
+#The location of the native vllm:
+#https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/config.py#1447
+#Compared with it, "int8" was added.
+CacheDType = Literal["auto", "fp8", "fp8_e4m3", "fp8_e5m2", "int8"]
+
+# the vllm.config.get_attr_docs function can only obtain the' docs' of
+# the current class, but not the 'docs' of the member variables of the
+# parent class.
+get_current_class_attr_docs = get_attr_docs
+
+
+def get_current_and_parent_class_attr_docs(cls: type[Any]) -> dict[str, str]:
+    '''
+    Due to the get_attr_docs function limitation of native vllm, we have added
+    this function to obtain the docs of the attributes of the parent class and
+    the child class.
+
+    The reason for adding this function is that we are going to add the
+    _CacheConfig class, which inherits from the CacheConfig class, but we don't
+    want to add all the member variables of the parent class.
+    '''
+    parent_docs = {}
+    for base in cls.__bases__:
+        if base is object:
+            continue
+        # get docs of parent class
+        parent_docs.update(get_current_class_attr_docs(base))
+    # get docs of current class
+    current_docs = get_current_class_attr_docs(cls)
+    # Merge the parent class and the current class
+    parent_docs.update(current_docs)
+    return parent_docs
+
+
+@dataclass
+class _CacheConfig(CacheConfig):
+    '''
+    Configuration for the KV cache.
+    This _CacheConfig has one modification compared to the original vllm
+    CacheConfig class:
+    1.the data type of the cache_dtype member variable: support int8.(new
+    CacheDType Literal in vllm_mindspore/config.py#L405.)
+
+    The reason for not using the patch method:
+    if the data type of the cache_dtype member variable is modified by
+    changing the __annotations__ of the original vllm CacheConfig class,
+    an error will be reported during the initialization of the
+    CacheConfig class at
+    https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/engine/arg_utils.py#L1060
+    for the int8 verification.
+    The possible reason is that modifying __annotations__ is ineffective
+    for pydantic; a new class must be created.
+
+    The reason for Remove the @config decorator from the current class:
+    The get_attr_docs method in
+    https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/config.py#L191
+    fails to obtain the member 'docs' from the parent class,
+    resulting in an error during subsequent validation when use the
+    @config decorator.
+    '''
+
+    cache_dtype: CacheDType = "auto"
+    """Data type for kv cache storage. If "auto", will use model data type.
+    CUDA 11.8+ supports fp8 (=fp8_e4m3) and fp8_e5m2. ROCm (AMD GPU) supports
+    fp8 (=fp8_e4m3)."""

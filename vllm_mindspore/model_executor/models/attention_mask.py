@@ -22,7 +22,7 @@ from mindspore import dtype as mstype
 from mindspore import mint
 
 # yapf conflicts with isort
-# yapf: disable
+# yapf: disable  # noqa: ERA001
 
 r"""
 PA:ASD-V2.1.5
@@ -36,7 +36,7 @@ FA:ASD-V2.1.5
 2.normal: mask BF16(0/1), FP16 mask(0/-10000);
 """
 
-# yapf: enable
+# yapf: enable  # noqa: ERA001
 
 
 class LowerTriangularMask:

@@ -95,22 +95,8 @@ def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
                            recommend_to_remove=False)
         return False
 
-    # No Fp8 KV cache so far.
-    if self.kv_cache_dtype != "auto":
-        fp8_attention = self.kv_cache_dtype.startswith("fp8")
-        will_use_fa = (current_platform.is_cuda()
-                       and not envs.is_set("VLLM_ATTENTION_BACKEND")
-                       ) or envs.VLLM_ATTENTION_BACKEND == "FLASH_ATTN_VLLM_V1"
-        supported = False
-        if current_platform.is_rocm():
-            supported = True
-        elif fp8_attention and will_use_fa:
-            from vllm.attention.utils.fa_utils import flash_attn_supports_fp8
-            supported = flash_attn_supports_fp8()
-        if not supported:
-            _raise_or_fallback(feature_name="--kv-cache-dtype",
-                               recommend_to_remove=False)
-            return False
+    # The validation of kv_cache_dtype has been removed, as in fa3_quant,
+    # the kv_cache_dtype is required to be of type int8.
 
     # No Prompt Adapter so far.
     if self.enable_prompt_adapter:

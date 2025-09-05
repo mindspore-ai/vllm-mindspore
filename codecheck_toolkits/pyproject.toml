@@ -70,6 +70,8 @@ line-length = 80
 "vllm_mindspore/entrypoints/__main__.py" = ["F401", "E402"]
 "tests/**/*.py" = ["F401", "E402"]
 "tests/st/python/cases_parallel/*.py" = ["F401", "E402"]
+"setup.py" = ["ERA001"]
+"vllm_mindspore/collocation/collocator.py" = ["ERA001"]
 
 [tool.ruff.lint]
 select = [
@@ -87,6 +89,8 @@ select = [
     # "I",
     # flake8-logging-format
     "G",
+    # Commented-out code
+    "ERA001",
 ]
 ignore = [
     # star imports

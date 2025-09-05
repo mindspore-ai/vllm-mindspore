@@ -13,9 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""test vllm qwen."""
-
+"""test mf telechat2 7b."""
 import os
+
 from tests.st.python import utils
 
 
@@ -27,7 +27,7 @@ env_manager = utils.EnvVarManager()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
-    "VLLM_MS_MODEL_BACKEND": "Native",
+    "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "MS_ALLOC_CONF": "enable_vmm:True",
@@ -35,37 +35,32 @@ env_vars = {
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
-    "VLLM_USE_V1": "1"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
-def test_vllm_qwen():
-    """
-    test case qwen2.5 7B
-    """
+def run_mf_telechat2_7b_network():
+    """Run telechat2_7b network and check result."""
+    # isort: off
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    # isort: on
 
     # Sample prompts.
-    prompts = [
-        "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
-        " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
-    ]
+    message = [{"role": "user", "content": "I love Beijing because: "}]
 
     # Create a sampling params object.
-    sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
+    sampling_params = SamplingParams(temperature=0.0, max_tokens=10)
 
     # Create an LLM.
-    llm = LLM(
-        model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
-        gpu_memory_utilization=0.9,
-        tensor_parallel_size=2)
-    # Generate texts from the prompts. The output is a list of RequestOutput
-    # objects that contain the prompt, generated text, and other information.
-    outputs = llm.generate(prompts, sampling_params)
-    except_list = ['中性<｜Assistant｜> 这句话']
+    llm = LLM(model="/home/workspace/mindspore_dataset/weight/telechat2_7b",
+              gpu_memory_utilization=0.9,
+              trust_remote_code=True,
+              tensor_parallel_size=1)
+    # Generate texts from the prompts.
+    # The output is a list of RequestOutput objects
+    # that contain the prompt, generated text, and other information.
+    outputs = llm.chat(message, sampling_params)
+    except_list = [' Beijing is a city that truly captivates with its']
     # Print the outputs.
     for i, output in enumerate(outputs):
         prompt = output.prompt
@@ -73,5 +68,9 @@ def test_vllm_qwen():
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
 
-    # unset env
+
+def test_mf_telechat2_7b():
+    """Test telechat2_7b."""
+    env_manager.setup_ai_environment(env_vars)
+    run_mf_telechat2_7b_network()
     env_manager.unset_all()

@@ -129,20 +129,13 @@ class MsAttentionMetadata:
     max_context_lens: int
     # add by vllm-mindspore end
 
-    #num_actual_tokens: int = None  # Number of tokens excluding padding.
-    #max_query_len: int
     query_start_loc: ms.Tensor
     max_seq_len: int
     seq_lens: ms.Tensor
-    #block_table: torch.Tensor
     slot_mapping: ms.Tensor
 
+    num_prompt_tokens: ms.Tensor
     # For cascade attention.
-    #use_cascade: bool
-    #common_prefix_len: int
-    #cu_prefix_query_lens: Optional[torch.Tensor]
-    #prefix_kv_lens: Optional[torch.Tensor]
-    #suffix_kv_lens: Optional[torch.Tensor]
 
     # For logging.
     num_input_tokens: int = 0  # Number of tokens including padding.
@@ -201,6 +194,8 @@ class MsAttentionMetadataBuilder:
         max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:
                                                                            num_reqs].max(
                                                                            )
+        num_prompt_tokens = ms.from_numpy(
+            self.runner.input_batch.num_prompt_tokens[:num_reqs])
         slot_mapping = ms.from_numpy(
             self.block_table.slot_mapping_np[:num_actual_tokens])
         seq_lens_np = self.runner.seq_lens_np[:num_reqs]
@@ -220,7 +215,8 @@ class MsAttentionMetadataBuilder:
             max_seq_len=max_seq_len,
             context_lens=context_lens,
             max_context_lens=max_context_lens,
-            query_start_loc=query_start_loc)
+            query_start_loc=query_start_loc,
+            num_prompt_tokens=num_prompt_tokens)
         return attn_metadata
 
 

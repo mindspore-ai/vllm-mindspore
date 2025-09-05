@@ -55,8 +55,6 @@ from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
 from vllm.model_executor import SamplingMetadata
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.layers.sampler import SamplerOutput, \
-    get_sampler
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 
 from vllm.multimodal import MULTIMODAL_REGISTRY
@@ -737,13 +735,13 @@ class Qwen2_5_VisionAttention(nn.Cell):
         return tensor_list
 
     def split_qkv(self, qkv: ms.Tensor) -> tuple[ms.Tensor, ...]:
-        # [s, 3 * head * head_dim]
+        # shape is [s, 3 * head * head_dim].
         seq_len, _ = qkv.shape
 
-        # [s, 3 * head * head_dim] -> 3 * [s, head * head_dim]
+        # shape is [s, 3 * head * head_dim] -> 3 * [s, head * head_dim]
         q, k, v = mint.chunk(qkv, 3, dim=-1)
 
-        # 3 * [s, head * head_dim] -> 3 * [s, head, head_dim]
+        # shape is 3 * [s, head * head_dim] -> 3 * [s, head, head_dim]
         new_shape = (seq_len, self.num_attention_heads_per_partition,
                      self.hidden_size_per_attention_head)
         q, k, v = (x.view(*new_shape) for x in (q, k, v))
@@ -1212,7 +1210,6 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
                                               prefix=maybe_prefix(
                                                   prefix, "lm_head"))
             self.logits_processor = LogitsProcessor(config.vocab_size)
-            self.sampler = get_sampler()
         else:
             self.lm_head = PPMissingLayer()
 
@@ -1250,8 +1247,10 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
     def _maybe_ignore_quant_config(self, quant_config: QuantizationConfig):
         # GPTQ configs do not have a list of ignored modules, however AutoGPTQ
         # seems to avoid vision encoder sections for some models.
-        # if isinstance(quant_config, (GPTQConfig, GPTQMarlinConfig)):
-        #     return None
+        '''
+        if isinstance(quant_config, (GPTQConfig, GPTQMarlinConfig)):
+            return None
+        '''
         return quant_config
 
     def _validate_and_reshape_mm_tensor(self, mm_input: object,
@@ -1517,7 +1516,6 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         input_ids: ms.Tensor,
         multimodal_embeddings: Optional[tuple[ms.Tensor, ...]] = None,
     ) -> ms.Tensor:
-        # input_ids = input_ids.to(mstype.int64)
         inputs_embeds = self.model.get_input_embeddings(input_ids)
         if multimodal_embeddings is not None:
             inputs_embeds = merge_multimodal_embeddings(
@@ -1594,11 +1592,6 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
         return logits
-
-    def sample(self, logits: ms.Tensor,
-               sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:
-        next_tokens = self.sampler(logits, sampling_metadata)
-        return next_tokens
 
     def load_weights(
         self, weights: Iterable[tuple[str, ms.Tensor]]
