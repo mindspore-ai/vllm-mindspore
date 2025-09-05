@@ -32,9 +32,9 @@ AscendEvent::AscendEvent() {
   }
 }
 
-AscendEvent::AscendEvent(uint32_t flag, bool use_extensional_api) {
+AscendEvent::AscendEvent(uint32_t flag, bool useExtensionalApi) {
   aclError ret;
-  if (use_extensional_api) {
+  if (useExtensionalApi) {
     ret = CALL_ASCEND_API(aclrtCreateEventExWithFlag, &event_, flag);
   } else {
     ret = CALL_ASCEND_API(aclrtCreateEventWithFlag, &event_, flag);
@@ -80,10 +80,10 @@ void AscendEvent::RecordEvent() {
   needWait_ = true;
 }
 
-void AscendEvent::RecordEvent(uint32_t stream_id) {
-  LOG_OUT << "Ascend record event on stream id : " << stream_id << ".";
+void AscendEvent::RecordEvent(uint32_t streamId) {
+  LOG_OUT << "Ascend record event on stream id : " << streamId << ".";
   CHECK_IF_NULL(event_);
-  recordStream_ = AscendStreamMng::GetInstance().GetStream(stream_id);
+  recordStream_ = AscendStreamMng::GetInstance().GetStream(streamId);
   CHECK_IF_NULL(recordStream_);
   auto ret = CALL_ASCEND_API(aclrtRecordEvent, event_, recordStream_);
   if (ret != ACL_SUCCESS) {
@@ -111,9 +111,9 @@ void AscendEvent::WaitEvent() {
   needWait_ = false;
 }
 
-bool AscendEvent::WaitEvent(uint32_t stream_id) {
-  LOG_OUT << "Ascend wait event on stream id : " << stream_id << ".";
-  waitStream_ = AscendStreamMng::GetInstance().GetStream(stream_id);
+bool AscendEvent::WaitEvent(uint32_t streamId) {
+  LOG_OUT << "Ascend wait event on stream id : " << streamId << ".";
+  waitStream_ = AscendStreamMng::GetInstance().GetStream(streamId);
   auto ret = CALL_ASCEND_API(aclrtStreamWaitEvent, waitStream_, event_);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "aclrtStreamWaitEvent failed, ret:" << ret;
@@ -140,8 +140,8 @@ void AscendEvent::WaitEventWithoutReset() {
   needWait_ = false;
 }
 
-void AscendEvent::WaitEventWithoutReset(uint32_t stream_id) {
-  waitStream_ = AscendStreamMng::GetInstance().GetStream(stream_id);
+void AscendEvent::WaitEventWithoutReset(uint32_t streamId) {
+  waitStream_ = AscendStreamMng::GetInstance().GetStream(streamId);
   WaitEventWithoutReset();
 }
 
@@ -156,8 +156,8 @@ void AscendEvent::ResetEvent() {
   }
 }
 
-void AscendEvent::ResetEvent(uint32_t stream_id) {
-  waitStream_ = AscendStreamMng::GetInstance().GetStream(stream_id);
+void AscendEvent::ResetEvent(uint32_t streamId) {
+  waitStream_ = AscendStreamMng::GetInstance().GetStream(streamId);
   ResetEvent();
 }
 
@@ -179,12 +179,12 @@ bool AscendEvent::QueryEvent() {
   return status == ACL_EVENT_RECORDED_STATUS_COMPLETE;
 }
 
-void AscendEvent::ElapsedTime(float *cost_time, const DeviceEvent *other) {
+void AscendEvent::ElapsedTime(float *costTime, const DeviceEvent *other) {
   CHECK_IF_NULL(event_);
-  auto ascend_other = static_cast<const AscendEvent *>(other);
-  CHECK_IF_NULL(ascend_other);
-  CHECK_IF_NULL(ascend_other->event_);
-  auto ret = CALL_ASCEND_API(aclrtEventElapsedTime, cost_time, event_, ascend_other->event_);
+  auto ascendOther = static_cast<const AscendEvent *>(other);
+  CHECK_IF_NULL(ascendOther);
+  CHECK_IF_NULL(ascendOther->event_);
+  auto ret = CALL_ASCEND_API(aclrtEventElapsedTime, costTime, event_, ascendOther->event_);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "aclrtEventElapsedTime failed, ret:" << ret;
   }

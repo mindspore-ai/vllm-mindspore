@@ -39,13 +39,13 @@ class MRT_EXPORT DeviceContextManager {
  public:
   ~DeviceContextManager() = default;
   static DeviceContextManager &GetInstance();
-  void Register(const std::string &device_name, DeviceContextCreator &&device_context_creator);
-  DeviceContext *GetOrCreateDeviceContext(const DeviceContextKey &device_context_key);
+  void Register(const std::string &deviceName, DeviceContextCreator &&deviceContextCreator);
+  DeviceContext *GetOrCreateDeviceContext(const DeviceContextKey &deviceContextKey);
   // Return the device context of the specified device target.
   // The difference between this method and 'GetOrCreateDeviceContext' is this method only query device context by
   // device target(without device id) since inferrt only supports 'single process, single device'.
-  DeviceContextPtr GetDeviceContext(const std::string &device_target);
-  MultiStreamControllerPtr &GetMultiStreamController(const std::string &device_name);
+  DeviceContextPtr GetDeviceContext(const std::string &deviceTarget);
+  MultiStreamControllerPtr &GetMultiStreamController(const std::string &deviceName);
   void ClearDeviceContexts();
   void ChildAfterFork();
   void WaitTaskFinishOnDevice() const;
@@ -57,7 +57,7 @@ class MRT_EXPORT DeviceContextManager {
  private:
   DeviceContextManager() = default;
   void LoadPlugin();
-  bool SelectGpuPlugin(const std::string &cuda_home, const std::set<std::string> &file_names);
+  bool SelectGpuPlugin(const std::string &cudaHome, const std::set<std::string> &file_names);
 
   std::map<std::string, void *> pluginMaps_;
   bool loadInit_;
@@ -69,7 +69,7 @@ class MRT_EXPORT DeviceContextManager {
   std::map<std::string, DeviceContextPtr> backendToDeviceContext_;
   // The name of device -> DeviceContextCreator.
   std::map<std::string, DeviceContextCreator> deviceContextCreators_;
-  // record error message of dlopen, print when create device_context failed.
+  // record error message of dlopen, print when create deviceContext failed.
   std::stringstream dlopenErrorMsg_;
 
   // Since multi device is not supported currently, here use device target type to improve performance.
@@ -79,16 +79,16 @@ class MRT_EXPORT DeviceContextManager {
 
 class MRT_EXPORT DeviceContextRegister {
  public:
-  DeviceContextRegister(const std::string &device_name, DeviceContextCreator &&runtime_creator) {
-    DeviceContextManager::GetInstance().Register(device_name, std::move(runtime_creator));
+  DeviceContextRegister(const std::string &deviceName, DeviceContextCreator &&runtimeCreator) {
+    DeviceContextManager::GetInstance().Register(deviceName, std::move(runtimeCreator));
   }
   ~DeviceContextRegister() = default;
 };
 
 #define MS_REGISTER_DEVICE(DEVICE_NAME, DEVICE_CONTEXT_CLASS)            \
   static const DeviceContextRegister g_device_##DEVICE_NAME##_reg(       \
-    DEVICE_NAME, [](const DeviceContextKey &device_context_key) {        \
-      return std::make_shared<DEVICE_CONTEXT_CLASS>(device_context_key); \
+    DEVICE_NAME, [](const DeviceContextKey &deviceContextKey) {        \
+      return std::make_shared<DEVICE_CONTEXT_CLASS>(deviceContextKey); \
     })
 }  // namespace device
 }  // namespace mrt

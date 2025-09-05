@@ -45,28 +45,28 @@ AscendMemAdapterPtr AscendMemAdapter::GetInstance() {
   return instance_;
 }
 
-size_t AscendMemAdapter::GetRoundDownAlignSize(size_t input_size) {
-  return (input_size / kAscendMemAlignSize) * kAscendMemAlignSize;
+size_t AscendMemAdapter::GetRoundDownAlignSize(size_t inputSize) {
+  return (inputSize / kAscendMemAlignSize) * kAscendMemAlignSize;
 }
 
-size_t AscendMemAdapter::GetRoundUpAlignSize(size_t input_size) {
-  return ((input_size + kAscendMemAlignSize - 1) / kAscendMemAlignSize) * kAscendMemAlignSize;
+size_t AscendMemAdapter::GetRoundUpAlignSize(size_t inputSize) {
+  return ((inputSize + kAscendMemAlignSize - 1) / kAscendMemAlignSize) * kAscendMemAlignSize;
 }
 
 size_t AscendMemAdapter::GetDeviceMemSizeFromContext() const {
-  size_t size_from_context;
-  float total_device_memory = 32.0f;
-  auto max_device_memory = total_device_memory;
+  size_t sizeFromContext;
+  float totalDeviceMemory = 32.0f;
+  auto maxDeviceMemory = totalDeviceMemory;
   // if (context->ascend_soc_version() == kAscendVersion910b || context->ascend_soc_version() == kAscendVersion910_93) {
-  //   total_device_memory = 64.0f;
+  //   totalDeviceMemory = 64.0f;
   // }
   // if (context->ascend_soc_version() == kAscendVersion310p) {
-  //   total_device_memory = 43.0f;
+  //   totalDeviceMemory = 43.0f;
   // }
-  LOG_OUT << "context max_device_memory:" << max_device_memory;
-  size_from_context = FloatToSize(max_device_memory * kGBToByte);
+  LOG_OUT << "context maxDeviceMemory:" << maxDeviceMemory;
+  sizeFromContext = FloatToSize(maxDeviceMemory * kGBToByte);
 
-  return size_from_context;
+  return sizeFromContext;
 }
 
 bool AscendMemAdapter::Initialize() {
@@ -75,12 +75,12 @@ bool AscendMemAdapter::Initialize() {
   }
 
   // use 0 temporarily.
-  float huge_page_reserve_size = 0;
-  deviceHbmHugePageReservedSize_ = static_cast<size_t>(huge_page_reserve_size * kGBToByte);
+  float hugePageReserveSize = 0;
+  deviceHbmHugePageReservedSize_ = static_cast<size_t>(hugePageReserveSize * kGBToByte);
   if (AscendVmmAdapter::IsEnabled() && deviceHbmHugePageReservedSize_ > 0) {
     LOG_OUT << "Reserve huge page feature is not available when VMM is enabled.";
   }
-  LOG_OUT << "Config huge_page_reserve_size : " << huge_page_reserve_size
+  LOG_OUT << "Config hugePageReserveSize : " << hugePageReserveSize
           << ", deviceHbmHugePageReservedSize_ : " << deviceHbmHugePageReservedSize_;
 
   auto ret = CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM, &deviceHbmFreeSize_, &deviceHbmTotalSize_);
@@ -91,39 +91,39 @@ bool AscendMemAdapter::Initialize() {
 
   if (deviceHbmFreeSize_ < LongToSize(DoubleToLong(deviceHbmTotalSize_ * kHalfRatio))) {
     // use 0 temporarily.
-    unsigned int device_id = 0;
+    unsigned int deviceId = 0;
     LOG_OUT << "Free memory size is less "
                "than half of total memory size."
-            << "Device " << device_id << " Device MOC total size:" << deviceHbmTotalSize_
+            << "Device " << deviceId << " Device MOC total size:" << deviceHbmTotalSize_
             << " Device MOC free size:" << deviceHbmFreeSize_
             << " may be other processes occupying this card, check as: ps -ef|grep python";
   }
 
   // get user define max backend memory
-  auto user_define_ms_size = GetDeviceMemSizeFromContext();
-  auto recommend_mem_size_for_others = LongToSize(DoubleToLong(deviceHbmFreeSize_ * kReservedMemoryRatio));
-  size_t reserved_mem_size_for_others;
-  if (user_define_ms_size == 0) {
+  auto userDefineMsSize = GetDeviceMemSizeFromContext();
+  auto recommendMemSizeForOthers = LongToSize(DoubleToLong(deviceHbmFreeSize_ * kReservedMemoryRatio));
+  size_t reservedMemSizeForOthers;
+  if (userDefineMsSize == 0) {
     msUsedHbmSize_ = DoubleToLong(deviceHbmFreeSize_ * kMSMemoryRatio);
     // sub the extra reserved 10mb after rounding down the 2mb
     msUsedHbmSize_ = (msUsedHbmSize_ / kPerHugePageMemorySize) * kPerHugePageMemorySize - kExtraReservedMemory;
-    reserved_mem_size_for_others = deviceHbmFreeSize_ - SizeToLong(msUsedHbmSize_);
+    reservedMemSizeForOthers = deviceHbmFreeSize_ - SizeToLong(msUsedHbmSize_);
   } else {
-    if (user_define_ms_size >= deviceHbmFreeSize_) {
+    if (userDefineMsSize >= deviceHbmFreeSize_) {
       LOG_ERROR << "#umsg#Framework Error Message:#umsg#The Free Device Memory Size is "
-                << (SizeToFloat(deviceHbmFreeSize_) / kGBToByte) << " GB, max_device_memory should be in range (0-"
+                << (SizeToFloat(deviceHbmFreeSize_) / kGBToByte) << " GB, maxDeviceMemory should be in range (0-"
                 << (SizeToFloat(deviceHbmFreeSize_) / kMBToByte) << "]MB, but got "
-                << (SizeToFloat(user_define_ms_size) / kMBToByte)
-                << "MB, please set the context key max_device_memory in valid range.";
+                << (SizeToFloat(userDefineMsSize) / kMBToByte)
+                << "MB, please set the context key maxDeviceMemory in valid range.";
     }
-    msUsedHbmSize_ = SizeToLong(user_define_ms_size);
+    msUsedHbmSize_ = SizeToLong(userDefineMsSize);
 
-    reserved_mem_size_for_others = deviceHbmTotalSize_ - LongToSize(msUsedHbmSize_);
-    if (reserved_mem_size_for_others < recommend_mem_size_for_others) {
-      LOG_OUT << "Reserved memory size for other components(" << reserved_mem_size_for_others
-              << ") is less than recommend size(" << recommend_mem_size_for_others
+    reservedMemSizeForOthers = deviceHbmTotalSize_ - LongToSize(msUsedHbmSize_);
+    if (reservedMemSizeForOthers < recommendMemSizeForOthers) {
+      LOG_OUT << "Reserved memory size for other components(" << reservedMemSizeForOthers
+              << ") is less than recommend size(" << recommendMemSizeForOthers
               << "), It may lead to Out Of Memory in HCCL or other components, Please double check context key "
-                 "'variable_memory_max_size'/'max_device_memory'";
+                 "'variable_memory_max_size'/'maxDeviceMemory'";
     }
   }
 
@@ -136,19 +136,18 @@ bool AscendMemAdapter::Initialize() {
   }
   maxAvailableMsHbmSize_ = msUsedHbmSize_;
 
-  auto get_init_info = [this, &reserved_mem_size_for_others, &recommend_mem_size_for_others,
-                        &user_define_ms_size]() -> std::string {
+  auto getInitInfo = [this, &reservedMemSizeForOthers, &recommendMemSizeForOthers, &userDefineMsSize]() -> std::string {
     std::ostringstream oss;
     oss << "Device MOC Size:" << deviceHbmTotalSize_ / kMBToByte
         << "M, Device free MOC Size:" << deviceHbmFreeSize_ / kMBToByte
-        << "M, Reserved MOC size for Other Components(HCCL/rts/etc.):" << reserved_mem_size_for_others / kMBToByte
-        << "M, Recommend Reserved MOC size for Other Components:" << recommend_mem_size_for_others / kMBToByte
-        << "M, User define inferrt MOC Size:" << user_define_ms_size / kGBToByte
+        << "M, Reserved MOC size for Other Components(HCCL/rts/etc.):" << reservedMemSizeForOthers / kMBToByte
+        << "M, Recommend Reserved MOC size for Other Components:" << recommendMemSizeForOthers / kMBToByte
+        << "M, User define inferrt MOC Size:" << userDefineMsSize / kGBToByte
         << "G, inferrt Used MOC Size:" << msUsedHbmSize_ / kMBToByte << "M.";
     return oss.str();
   };
 
-  LOG_OUT << get_init_info();
+  LOG_OUT << getInitInfo();
   initialized_ = true;
   return true;
 }
@@ -156,24 +155,24 @@ bool AscendMemAdapter::Initialize() {
 void AscendMemAdapter::SimulationInitialize() {
   deviceHbmTotalSize_ = kSimuHBMTotalMemSizeGB * kGBToByte;
   deviceHbmFreeSize_ = deviceHbmTotalSize_;
-  size_t reserved_mem_size_for_others;
-  auto user_define_ms_size = GetDeviceMemSizeFromContext();
-  if (user_define_ms_size == 0) {
+  size_t reservedMemSizeForOthers;
+  auto userDefineMsSize = GetDeviceMemSizeFromContext();
+  if (userDefineMsSize == 0) {
     msUsedHbmSize_ = DoubleToLong(deviceHbmFreeSize_ * kMSMemoryRatio);
     msUsedHbmSize_ = (msUsedHbmSize_ / kPerHugePageMemorySize) * kPerHugePageMemorySize - kExtraReservedMemory;
-    reserved_mem_size_for_others = deviceHbmFreeSize_ - SizeToLong(msUsedHbmSize_);
+    reservedMemSizeForOthers = deviceHbmFreeSize_ - SizeToLong(msUsedHbmSize_);
   } else {
-    msUsedHbmSize_ = SizeToLong(user_define_ms_size);
-    if (user_define_ms_size > deviceHbmTotalSize_) {
-      deviceHbmTotalSize_ = user_define_ms_size;
+    msUsedHbmSize_ = SizeToLong(userDefineMsSize);
+    if (userDefineMsSize > deviceHbmTotalSize_) {
+      deviceHbmTotalSize_ = userDefineMsSize;
     }
-    reserved_mem_size_for_others = deviceHbmTotalSize_ - user_define_ms_size;
+    reservedMemSizeForOthers = deviceHbmTotalSize_ - userDefineMsSize;
   }
 
   LOG_OUT << "Simulation Device MOC Size:" << deviceHbmTotalSize_ / kMBToByte
           << "M, Device free MOC Size:" << deviceHbmFreeSize_ / kMBToByte
-          << "M, Reserved MOC size for Other Components(HCCL/rts/etc.):" << reserved_mem_size_for_others / kMBToByte
-          << "M, User define inferrt MOC Size:" << user_define_ms_size / kGBToByte
+          << "M, Reserved MOC size for Other Components(HCCL/rts/etc.):" << reservedMemSizeForOthers / kMBToByte
+          << "M, User define inferrt MOC Size:" << userDefineMsSize / kGBToByte
           << "G, inferrt Used MOC Size:" << msUsedHbmSize_ / kMBToByte << "M.";
   maxAvailableMsHbmSize_ = msUsedHbmSize_;
   initialized_ = true;
@@ -184,9 +183,9 @@ bool AscendMemAdapter::DeInitialize() {
     LOG_OUT << "DeInitialize Ascend Memory Adapter when it is not initialize";
     return false;
   }
-  std::ostringstream oss_buf;
-  oss_buf << "Ascend Memory Adapter deinitialize success, statistics:" << DevMemStatistics();
-  LOG_OUT << oss_buf.str();
+  std::ostringstream ossBuf;
+  ossBuf << "Ascend Memory Adapter deinitialize success, statistics:" << DevMemStatistics();
+  LOG_OUT << ossBuf.str();
   deviceHbmTotalSize_ = 0;
   deviceHbmFreeSize_ = 0;
   msUsedHbmSize_ = 0;
@@ -197,31 +196,31 @@ bool AscendMemAdapter::DeInitialize() {
 
 namespace {
 struct HugeMemReserver {
-  HugeMemReserver(size_t size, size_t reserver_size) {
-    LOG_OUT << "Allocate size : " << size << ", reserve_size : " << reserver_size << ".";
-    if (reserver_size < kMBToByte) {
+  HugeMemReserver(size_t size, size_t reserverSize) {
+    LOG_OUT << "Allocate size : " << size << ", reserve_size : " << reserverSize << ".";
+    if (reserverSize < kMBToByte) {
       return;
     }
-    size_t free_size = 0;
-    size_t total_size = 0;
-    auto ret = CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM_HUGE, &free_size, &total_size);
-    LOG_OUT << "Huge mem reserve free_size : " << free_size << ", total_size : " << total_size << ".";
+    size_t freeSize = 0;
+    size_t totalSize = 0;
+    auto ret = CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM_HUGE, &freeSize, &totalSize);
+    LOG_OUT << "Huge mem reserve freeSize : " << freeSize << ", totalSize : " << totalSize << ".";
     if (ret == ACL_SUCCESS) {
-      if (free_size < reserver_size + size) {
-        LOG_OUT << "Free size of huge page mem[" << free_size
-                << "] is less than the sum of reserver_size and allocate size. Reserve size " << reserver_size
-                << ", allocate size : " << size << ", total ACL_HBM_MEM_HUGE size : " << total_size << ".";
-        if (free_size < reserver_size) {
-          LOG_ERROR << "Free size of huge page mem[" << free_size << "] is less than reserver_size : " << reserver_size
+      if (freeSize < reserverSize + size) {
+        LOG_OUT << "Free size of huge page mem[" << freeSize
+                << "] is less than the sum of reserverSize and allocate size. Reserve size " << reserverSize
+                << ", allocate size : " << size << ", total ACL_HBM_MEM_HUGE size : " << totalSize << ".";
+        if (freeSize < reserverSize) {
+          LOG_ERROR << "Free size of huge page mem[" << freeSize << "] is less than reserverSize : " << reserverSize
                     << ", change reserve operation with free size.";
-          reserver_size = free_size;
+          reserverSize = freeSize;
         }
-        ret = CALL_ASCEND_API(aclrtMalloc, reinterpret_cast<void **>(&addr_), reserver_size, ACL_MEM_MALLOC_HUGE_ONLY);
+        ret = CALL_ASCEND_API(aclrtMalloc, reinterpret_cast<void **>(&addr_), reserverSize, ACL_MEM_MALLOC_HUGE_ONLY);
         if (ret != ACL_RT_SUCCESS) {
           addr_ = nullptr;
-          LOG_ERROR << "aclrtMalloc mem size[" << reserver_size << "] fail, ret[" << ret << "]";
+          LOG_ERROR << "aclrtMalloc mem size[" << reserverSize << "] fail, ret[" << ret << "]";
         } else {
-          LOG_OUT << "Huge mem reserve success, addr : " << addr_ << ", size : " << reserver_size << ".";
+          LOG_OUT << "Huge mem reserve success, addr : " << addr_ << ", size : " << reserverSize << ".";
         }
       }
     } else {
@@ -258,13 +257,13 @@ uint8_t *AscendMemAdapter::MallocFromRts(size_t size) const {
   if (ret != ACL_RT_SUCCESS) {
     if (ret == ACL_ERROR_RT_MEMORY_ALLOCATION) {
       // use 0 temporarily.
-      unsigned int device_id = 0;
-      size_t free_size = 0;
+      unsigned int deviceId = 0;
+      size_t freeSize = 0;
       size_t total = 0;
-      (void)CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM, &free_size, &total);
+      (void)CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM, &freeSize, &total);
       LOG_ERROR << "#umsg#Framework Error Message:#umsg#Malloc device memory failed, size[" << size << "], ret[" << ret
                 << "], "
-                << "Device " << device_id << " Available MOC size:" << total << " free size:" << free_size
+                << "Device " << deviceId << " Available MOC size:" << total << " free size:" << freeSize
                 << " may be other processes occupying this card, check as: ps -ef|grep python";
     } else {
       LOG_ERROR << "rtMalloc mem size[" << size << "] fail, ret[" << ret << "]";

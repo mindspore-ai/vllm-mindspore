@@ -35,27 +35,27 @@ class MRT_EXPORT AscendHalManager {
 
   // device
   uint32_t GetDeviceCount();
-  void InitDevice(uint32_t device_id);
-  void ResetDevice(uint32_t device_id);
-  void SetDeviceSatMode(const aclrtFloatOverflowMode &overflow_mode);
-  void SetOpWaitTimeout(uint32_t op_wait_timeout);
-  void SetOpExecuteTimeOut(uint32_t op_execute_timeout);
+  void InitDevice(uint32_t deviceId);
+  void ResetDevice(uint32_t deviceId);
+  void SetDeviceSatMode(const aclrtFloatOverflowMode &overflowMode);
+  void SetOpWaitTimeout(uint32_t opWaitTimeout);
+  void SetOpExecuteTimeOut(uint32_t opExecuteTimeout);
   void InitializeAcl();
   bool EnableLccl();
 
   // context
-  aclrtContext CreateContext(uint32_t device_id);
-  // reset the default context of device_id
-  void ResetContext(uint32_t device_id);
-  void SetContext(uint32_t device_id);
-  void SetContextForce(uint32_t device_id);
+  aclrtContext CreateContext(uint32_t deviceId);
+  // reset the default context of deviceId
+  void ResetContext(uint32_t deviceId);
+  void SetContext(uint32_t deviceId);
+  void SetContextForce(uint32_t deviceId);
   void DestroyContext(aclrtContext context);
   void DestroyAllContext();
 
  private:
   static AscendHalManager instance_;
   std::set<uint32_t> initializedDeviceSet_{};
-  // default <device_id, aclrtcontext> pair
+  // default <deviceId, aclrtcontext> pair
   std::map<uint32_t, aclrtContext> defaultDeviceContextMap_;
 
   // rt_contexts by aclrtCreateContext, to destroy

@@ -28,9 +28,9 @@ namespace device {
 namespace ascend {
 #define CONCAT(l, r) l##r
 // Function Object definition marco.
-#define LIB_FUNC(func_name) CONCAT(func_name, FunObj)
-// Function definition marco, and then can ues `LIB_FUNC(func_name)`.
-#define DEFINE_LIB_METHOD(func_name, ...) ORIGIN_METHOD(func_name, __VA_ARGS__)
+#define LIB_FUNC(funcName) CONCAT(funcName, FunObj)
+// Function definition marco, and then can ues `LIB_FUNC(funcName)`.
+#define DEFINE_LIB_METHOD(funcName, ...) ORIGIN_METHOD(funcName, __VA_ARGS__)
 
 // GMem mem free eager function name. Need to use origin name when export symbol from lib.
 #define GMEM_FREE_EAGER gmemFreeEager
@@ -49,8 +49,8 @@ class AscendGmemAdapter {
   ~AscendGmemAdapter() { UnloadGMemLib(); }
 
  public:
-  const size_t GetRoundUpAlignSize(size_t input_size) const;
-  const size_t GetRoundDownAlignSize(size_t input_size) const;
+  const size_t GetRoundUpAlignSize(size_t inputSize) const;
+  const size_t GetRoundDownAlignSize(size_t inputSize) const;
 
   size_t AllocDeviceMem(size_t size, DeviceMemPtr *addr) const;
   size_t EagerFreeDeviceMem(const DeviceMemPtr addr, const size_t size) const;

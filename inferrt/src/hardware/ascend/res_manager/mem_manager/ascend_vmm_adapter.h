@@ -51,20 +51,20 @@ class MRT_EXPORT AscendVmmAdapter {
   ~AscendVmmAdapter() = default;
 
  public:
-  size_t GetRoundUpAlignSize(size_t input_size) const;
-  size_t GetRoundDownAlignSize(size_t input_size) const;
+  size_t GetRoundUpAlignSize(size_t inputSize) const;
+  size_t GetRoundDownAlignSize(size_t inputSize) const;
 
   void ClearAllMemory();
   size_t AllocDeviceMem(size_t size, DeviceMemPtr *addr);
-  size_t MmapDeviceMem(const size_t size, const DeviceMemPtr addr, const size_t max_size);
+  size_t MmapDeviceMem(const size_t size, const DeviceMemPtr addr, const size_t maxSize);
   size_t EagerFreeDeviceMem(const DeviceMemPtr addr, const size_t size);
   size_t GetAllocatedSize() { return physicalHandleSize_ * vmmAlignSize_; }
 
   size_t EmptyCache();
 
   static const bool IsEnabled() {
-    static bool is_enable_vmm = IsVmmEnabled();
-    return is_enable_vmm;
+    static bool isEnableVmm = IsVmmEnabled();
+    return isEnableVmm;
   }
 
  private:
@@ -80,7 +80,7 @@ class MRT_EXPORT AscendVmmAdapter {
  private:
   uint64_t vmmAlignSize_;
   DeviceMemPtr FindVmmSegment(const DeviceMemPtr addr);
-  size_t GetHandleSize(size_t input_size);
+  size_t GetHandleSize(size_t inputSize);
   std::atomic<size_t> physicalHandleSize_{0};
   std::map<DeviceMemPtr, aclrtDrvMemHandle> vmmMap_;
   std::vector<DeviceMemPtr> allReserveMems_;
@@ -104,21 +104,21 @@ class MRT_EXPORT AscendVmmAdapter {
   }
   static bool CheckVmmDriverVersion() {
     // Get driver version
-    constexpr auto ascend_install_info = "/etc/ascend_install.info";
+    constexpr auto ascendInstallInfo = "/etc/ascend_install.info";
     const std::string DRIVER_INSTALL_PATH_PARAM = "Driver_Install_Path_Param=";
-    std::string driver_path = "/usr/local/Ascend";
+    std::string driverPath = "/usr/local/Ascend";
 
-    std::ifstream ascend_install_file(ascend_install_info);
-    if (!ascend_install_file.is_open()) {
-      LOG_OUT << "Open file " << ascend_install_info << " failed.";
+    std::ifstream ascendInstallFile(ascendInstallInfo);
+    if (!ascendInstallFile.is_open()) {
+      LOG_OUT << "Open file " << ascendInstallInfo << " failed.";
     } else {
       std::string line;
-      while (std::getline(ascend_install_file, line)) {
+      while (std::getline(ascendInstallFile, line)) {
         size_t pos = line.find(DRIVER_INSTALL_PATH_PARAM);
         if (pos != std::string::npos) {
           // Extract the path after "Driver_Install_Path_Param="
-          driver_path = line.substr(pos + DRIVER_INSTALL_PATH_PARAM.length());
-          LOG_OUT << "Driver path is " << driver_path;
+          driverPath = line.substr(pos + DRIVER_INSTALL_PATH_PARAM.length());
+          LOG_OUT << "Driver path is " << driverPath;
           break;
         }
       }
@@ -134,23 +134,23 @@ class MRT_EXPORT AscendVmmAdapter {
       return tokens;
     };
 
-    auto driver_version_info = driver_path + "/driver/version.info";
+    auto driverVersionInfo = driverPath + "/driver/version.info";
     const std::string DRIVER_VERSION_PARAM = "Version=";
-    std::ifstream driver_version_file(driver_version_info);
-    if (!driver_version_file.is_open()) {
-      LOG_OUT << "Open file " << driver_version_info << " failed.";
+    std::ifstream driverVersionFile(driverVersionInfo);
+    if (!driverVersionFile.is_open()) {
+      LOG_OUT << "Open file " << driverVersionInfo << " failed.";
     } else {
       std::string line;
-      while (std::getline(driver_version_file, line)) {
+      while (std::getline(driverVersionFile, line)) {
         size_t pos = line.find(DRIVER_VERSION_PARAM);
         if (pos != std::string::npos) {
           // Extract the version after "Version="
-          std::string driver_version = line.substr(pos + DRIVER_VERSION_PARAM.length());
-          auto split_version = splitString(driver_version, '.');
-          LOG_OUT << "Driver version is " << driver_version << ", major version is " << split_version[0];
-          if (split_version[0] < "24") {
+          std::string driverVersion = line.substr(pos + DRIVER_VERSION_PARAM.length());
+          auto splitVersion = splitString(driverVersion, '.');
+          LOG_OUT << "Driver version is " << driverVersion << ", major version is " << splitVersion[0];
+          if (splitVersion[0] < "24") {
             LOG_OUT << "Driver version is less than 24.0.0, vmm is disabled by default, drvier_version: "
-                    << driver_version;
+                    << driverVersion;
             return false;
           }
           break;

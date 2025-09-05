@@ -87,7 +87,7 @@ ORIGIN_METHOD_WITH_SIMU(aclrtMemSetPidToShareableHandle, aclError, uint64_t, int
 ORIGIN_METHOD_WITH_SIMU(aclrtMemImportFromShareableHandle, aclError, uint64_t, int32_t, aclrtDrvMemHandle *)
 ORIGIN_METHOD_WITH_SIMU(aclrtGetLastError, aclError, aclrtLastErrLevel)
 
-void LoadAclRtApiSymbol(const std::string &ascend_path);
+void LoadAclRtApiSymbol(const std::string &ascendPath);
 void LoadSimulationRtApi();
 }  // namespace mrt::device::ascend
 

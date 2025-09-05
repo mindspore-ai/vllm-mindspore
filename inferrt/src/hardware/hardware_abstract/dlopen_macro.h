@@ -171,7 +171,7 @@ static T DlsymWithCast(void *handle, const char *symbol_name) {
   return symbol;
 }
 
-#define DlsymFuncObj(func_name, plugin_handle) DlsymWithCast<func_name##FunPtr>(plugin_handle, k##func_name##Name);
+#define DlsymFuncObj(funcName, plugin_handle) DlsymWithCast<funcName##FunPtr>(plugin_handle, k##funcName##Name);
 
 template <class T>
 static T DlsymAscend(void *handle, const char *symbol_name) {
@@ -183,5 +183,5 @@ static T DlsymAscend(void *handle, const char *symbol_name) {
   return symbol;
 }
 
-#define DlsymAscendFuncObj(func_name, plugin_handle) DlsymAscend<func_name##FunPtr>(plugin_handle, k##func_name##Name)
+#define DlsymAscendFuncObj(funcName, plugin_handle) DlsymAscend<funcName##FunPtr>(plugin_handle, k##funcName##Name)
 #endif  // INFERRT_SRC_HARDWARE_DLOPEN_MACRO_H

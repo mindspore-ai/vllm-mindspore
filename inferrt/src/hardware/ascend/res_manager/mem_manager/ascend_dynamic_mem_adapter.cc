@@ -56,14 +56,14 @@ bool AscendDynamicMemAdapter::FreeStaticDevMem(void *addr) {
     LOG_ERROR << "addr is not in static memory blocks, addr:" << addr << ".";
     return false;
   }
-  auto mem_block = iter->second;
-  auto ret = FreeToRts(mem_block->memPtr, mem_block->memSize);
+  auto memBlock = iter->second;
+  auto ret = FreeToRts(memBlock->memPtr, memBlock->memSize);
   if (!ret) {
     LOG_ERROR << "Free memory failed.";
     return false;
   }
-  LOG_OUT << "Free memory success, addr:" << addr << ", size:" << mem_block->memSize << ".";
-  hasAllocSize -= mem_block->memSize;
+  LOG_OUT << "Free memory success, addr:" << addr << ", size:" << memBlock->memSize << ".";
+  hasAllocSize -= memBlock->memSize;
   staticMemoryBlocks_.erase(addr);
   return true;
 }
@@ -109,16 +109,16 @@ std::string AscendDynamicMemAdapter::DevMemStatistics() const {
   std::ostringstream oss;
   oss << "\nDevice MOC memory size: " << deviceHbmTotalSize_ / kMBToByte << "M";
   oss << "\ninferrt Used memory size: " << msUsedHbmSize_ / kMBToByte << "M";
-  auto print_actual_peak_memory = AscendVmmAdapter::GetInstance().IsEnabled()
-                                    ? AscendVmmAdapter::GetInstance().GetAllocatedSize()
-                                    : actualPeakMemory_;
+  auto printActualPeakMemory = AscendVmmAdapter::GetInstance().IsEnabled()
+                                 ? AscendVmmAdapter::GetInstance().GetAllocatedSize()
+                                 : actualPeakMemory_;
   oss << "\nUsed peak memory usage (without fragments): " << usedPeakMemory_ / kMBToByte << "M";
-  oss << "\nActual peak memory usage (with fragments): " << print_actual_peak_memory / kMBToByte << "M";
+  oss << "\nActual peak memory usage (with fragments): " << printActualPeakMemory / kMBToByte << "M";
   oss << std::endl;
   return oss.str();
 }
 
-size_t AscendDynamicMemAdapter::GetDynamicMemUpperBound(void *min_static_addr) const {
+size_t AscendDynamicMemAdapter::GetDynamicMemUpperBound(void *minStaticAddr) const {
   LOG_ERROR << "GetDynamicMemUpperBound is disabled.";
   return 0;
 }

@@ -48,10 +48,10 @@ constexpr uint32_t kDefaultHcclExecTimeout = 1800;
 using Callback = std::function<void(void)>;
 std::mutex set_opt_mutex;
 
-void AclrtLaunchCallback(void *user_data) {
-  Callback *callback_func = reinterpret_cast<Callback *>(user_data);
-  (*callback_func)();
-  delete callback_func;
+void AclrtLaunchCallback(void *userData) {
+  Callback *callbackFunc = reinterpret_cast<Callback *>(userData);
+  (*callbackFunc)();
+  delete callbackFunc;
 }
 }  // namespace
 
@@ -101,15 +101,15 @@ void AscendResManager::Destroy() {
 
 bool AscendResManager::IsEnableVmm() const { return AscendVmmAdapter::GetInstance().IsEnabled(); }
 
-void *AscendResManager::AllocateMemory(size_t size, uint32_t stream_id) const {
+void *AscendResManager::AllocateMemory(size_t size, uint32_t streamId) const {
   AscendHalManager::GetInstance().SetContext(deviceId_);
   CHECK_IF_NULL(memManager_);
-  return memManager_->MallocMemFromMemPool(size, false, false, stream_id);
+  return memManager_->MallocMemFromMemPool(size, false, false, streamId);
 }
 
-void *AscendResManager::AllocateStaticMemory(size_t size, uint32_t stream_id) const {
+void *AscendResManager::AllocateStaticMemory(size_t size, uint32_t streamId) const {
   AscendHalManager::GetInstance().SetContext(deviceId_);
-  return memManager_->MallocMemFromMemPool(size, true, false, stream_id);
+  return memManager_->MallocMemFromMemPool(size, true, false, streamId);
 }
 
 size_t AscendResManager::GetMaxUsedMemorySize() const {
@@ -123,9 +123,9 @@ void AscendResManager::FreeMemory(void *ptr) const {
   memManager_->FreeMemFromMemPool(ptr);
 }
 
-void AscendResManager::FreePartMemorys(const std::vector<void *> &free_addrs, const std::vector<void *> &keep_addrs,
-                                       const std::vector<size_t> &keep_addr_sizes) const {
-  AscendMemoryPool::GetInstance().FreePartTensorMems(free_addrs, keep_addrs, keep_addr_sizes);
+void AscendResManager::FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
+                                       const std::vector<size_t> &keepAddrSizes) const {
+  AscendMemoryPool::GetInstance().FreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
 }
 
 void AscendResManager::DefragMemory() { AscendMemoryPool::GetInstance().DefragMemory(); }
@@ -202,29 +202,29 @@ size_t AscendResManager::EmptyCache() {
   return memory_pool->EmptyCache();
 }
 
-std::vector<void *> AscendResManager::AllocateContinuousMemory(const std::vector<size_t> &size_list,
-                                                               uint32_t stream_id) const {
+std::vector<void *> AscendResManager::AllocateContinuousMemory(const std::vector<size_t> &sizeList,
+                                                               uint32_t streamId) const {
   AscendHalManager::GetInstance().SetContext(deviceId_);
 
   CHECK_IF_NULL(memManager_);
-  std::vector<size_t> aligned_size_list;
-  for (auto size : size_list) {
-    auto align_size = device::MemoryManager::GetCommonAlignSize(size);
-    aligned_size_list.emplace_back(align_size);
+  std::vector<size_t> alignedSizeList;
+  for (auto size : sizeList) {
+    auto alignSize = device::MemoryManager::GetCommonAlignSize(size);
+    alignedSizeList.emplace_back(alignSize);
   }
-  return memManager_->MallocContinuousMemFromMemPool(aligned_size_list, stream_id);
+  return memManager_->MallocContinuousMemFromMemPool(alignedSizeList, streamId);
 }
 
-bool AscendResManager::BindDeviceToCurrentThread(bool force_bind) const {
-  static thread_local std::once_flag is_set;
-  std::call_once(is_set, [this]() {
+bool AscendResManager::BindDeviceToCurrentThread(bool forceBind) const {
+  static thread_local std::once_flag isSet;
+  std::call_once(isSet, [this]() {
     auto ret = CALL_ASCEND_API(aclrtSetDevice, static_cast<int32_t>(deviceId_));
     if (ret != ACL_SUCCESS) {
       LOG_ERROR << "Device " << deviceId_ << " call aclrtSetDevice failed, ret:" << static_cast<int>(ret);
     }
   });
 
-  if (force_bind) {
+  if (forceBind) {
     AscendHalManager::GetInstance().SetContextForce(deviceId_);
   } else {
     AscendHalManager::GetInstance().SetContext(deviceId_);
@@ -233,31 +233,31 @@ bool AscendResManager::BindDeviceToCurrentThread(bool force_bind) const {
   return true;
 }
 
-bool AscendResManager::CreateStream(size_t *stream_id) const {
+bool AscendResManager::CreateStream(size_t *streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return false;
   }
-  AscendStreamMng::GetInstance().CreateStream(stream_id);
+  AscendStreamMng::GetInstance().CreateStream(streamId);
   return true;
 }
 
-bool AscendResManager::CreateStreamWithPriority(size_t *stream_id, int32_t priority) const {
+bool AscendResManager::CreateStreamWithPriority(size_t *streamId, int32_t priority) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return false;
   }
-  AscendStreamMng::GetInstance().CreateStreamWithFlags(stream_id, ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC,
+  AscendStreamMng::GetInstance().CreateStreamWithFlags(streamId, ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC,
                                                        static_cast<uint32_t>(priority));
   return true;
 }
 
-bool AscendResManager::DestroyStream(size_t stream_id) const {
+bool AscendResManager::DestroyStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return false;
   }
-  AscendStreamMng::GetInstance().DestroyStream(stream_id);
+  AscendStreamMng::GetInstance().DestroyStream(streamId);
   return true;
 }
 
@@ -265,28 +265,28 @@ size_t AscendResManager::QueryStreamSize() const { return AscendStreamMng::GetIn
 
 std::vector<uint32_t> AscendResManager::GetStreamIds() const { return AscendStreamMng::GetInstance().GetStreamIds(); }
 
-bool AscendResManager::single_op_multi_stream_enable() const {
-  return AscendStreamMng::GetInstance().single_op_multi_stream_enable();
+bool AscendResManager::singleOpMultiStreamEnable() const {
+  return AscendStreamMng::GetInstance().singleOpMultiStreamEnable();
 }
 
-void AscendResManager::set_single_op_multi_stream_enable(bool single_op_multi_stream_enable) {
-  return AscendStreamMng::GetInstance().set_single_op_multi_stream_enable(single_op_multi_stream_enable);
+void AscendResManager::set_single_op_multi_stream_enable(bool singleOpMultiStreamEnable) {
+  return AscendStreamMng::GetInstance().set_single_op_multi_stream_enable(singleOpMultiStreamEnable);
 }
 
-void *AscendResManager::GetStream(size_t stream_id) const {
+void *AscendResManager::GetStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return nullptr;
   }
-  return AscendStreamMng::GetInstance().GetStream(stream_id);
+  return AscendStreamMng::GetInstance().GetStream(streamId);
 }
 
-void AscendResManager::SetCurrentStreamId(size_t stream_id) {
+void AscendResManager::SetCurrentStreamId(size_t streamId) {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return;
   }
-  AscendStreamMng::GetInstance().set_current_stream(stream_id);
+  AscendStreamMng::GetInstance().set_current_stream(streamId);
 }
 
 size_t AscendResManager::GetCurrentStreamId() const {
@@ -297,25 +297,25 @@ size_t AscendResManager::GetCurrentStreamId() const {
   return AscendStreamMng::GetInstance().current_stream();
 }
 
-bool AscendResManager::QueryStream(size_t stream_id) const {
+bool AscendResManager::QueryStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return false;
   }
-  return AscendStreamMng::GetInstance().QueryStream(stream_id);
+  return AscendStreamMng::GetInstance().QueryStream(streamId);
 }
 
-bool AscendResManager::SyncStream(size_t stream_id) const {
+bool AscendResManager::SyncStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
     return false;
   }
-  return AscendStreamMng::GetInstance().SyncStream(stream_id);
+  return AscendStreamMng::GetInstance().SyncStream(streamId);
 }
 
-bool AscendResManager::SyncAllStreams(bool sync_device) const {
+bool AscendResManager::SyncAllStreams(bool syncDevice) const {
   AscendHalManager::GetInstance().SetContext(deviceId_);
-  return AscendStreamMng::GetInstance().SyncAllStreams(sync_device);
+  return AscendStreamMng::GetInstance().SyncAllStreams(syncDevice);
 }
 
 bool AscendResManager::SyncNotDefaultStreams() const {
@@ -340,24 +340,24 @@ size_t AscendResManager::DefaultStream() const {
 //  synchronization between multiple streams.
 // ACL_EVENT_CAPTURE_STREAM_PROGRESS: indicates that the number of created events is not limited and high performance,
 //  and the created events can not be used for timing and synchronization.
-DeviceEventPtr AscendResManager::CreateRuntimeEvent(bool enable_blocking, bool enable_record_wait) {
-  if (!enable_blocking && !enable_record_wait) {
-    LOG_ERROR << "Bad parameters, enable_blocking is false and enable_record_wait is false.";
+DeviceEventPtr AscendResManager::CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) {
+  if (!enableBlocking && !enableRecordWait) {
+    LOG_ERROR << "Bad parameters, enableBlocking is false and enableRecordWait is false.";
   }
 
   uint32_t flag = 0;
-  if (enable_blocking) {
+  if (enableBlocking) {
     flag |= ACL_EVENT_SYNC;
   }
-  if (enable_record_wait) {
+  if (enableRecordWait) {
     flag |= ACL_EVENT_CAPTURE_STREAM_PROGRESS;
   }
   return std::make_shared<AscendEvent>(flag);
 }
 
-DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enable_timing, bool blocking, bool use_extensional_api) {
-  auto flag = enable_timing ? (ACL_EVENT_TIME_LINE | ACL_EVENT_SYNC) : ACL_EVENT_SYNC;
-  auto event = std::make_shared<AscendEvent>(flag, use_extensional_api);
+DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) {
+  auto flag = enableTiming ? (ACL_EVENT_TIME_LINE | ACL_EVENT_SYNC) : ACL_EVENT_SYNC;
+  auto event = std::make_shared<AscendEvent>(flag, useExtensionalApi);
   CHECK_IF_NULL(event);
   std::lock_guard<std::mutex> lock(deviceEventsMutex_);
   deviceEvents_.push_back(event);
@@ -398,49 +398,48 @@ bool AscendResManager::DestroyAllEvents() {
 }
 
 void *AscendResManager::GetCopyDataStream() const {
-  auto copy_out_data_stream = AscendStreamMng::GetInstance().GetCopyOutStream();
-  if (copy_out_data_stream == nullptr) {
-    size_t copy_stream_id;
-    AscendStreamMng::GetInstance().CreateStream(&copy_stream_id);
-    LOG_OUT << "Create ascend copy data stream, stream id: " << copy_stream_id;
-    copy_out_data_stream = AscendStreamMng::GetInstance().GetStream(copy_stream_id);
-    AscendStreamMng::GetInstance().SetCopyOutStream(copy_out_data_stream);
+  auto copyOutDataStream = AscendStreamMng::GetInstance().GetCopyOutStream();
+  if (copyOutDataStream == nullptr) {
+    size_t copyStreamId;
+    AscendStreamMng::GetInstance().CreateStream(&copyStreamId);
+    LOG_OUT << "Create ascend copy data stream, stream id: " << copyStreamId;
+    copyOutDataStream = AscendStreamMng::GetInstance().GetStream(copyStreamId);
+    AscendStreamMng::GetInstance().SetCopyOutStream(copyOutDataStream);
   }
-  return copy_out_data_stream;
+  return copyOutDataStream;
 }
 
-bool AscendResManager::RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
-                                   const DeviceEventPtr &input_event) {
-  return memManager_->RecordEvent(task_id_on_stream, user_stream_id, memory_stream_addresses, input_event);
+bool AscendResManager::RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
+                                   const DeviceEventPtr &inputEvent) {
+  return memManager_->RecordEvent(taskIdOnStream, userStreamId, memoryStreamAddresses, inputEvent);
 }
 
-bool AscendResManager::WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
-  return memManager_->WaitEvent(task_id_on_stream, user_stream_id, memory_stream_id);
+bool AscendResManager::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
+  return memManager_->WaitEvent(taskIdOnStream, userStreamId, memoryStreamId);
 }
 
-bool AscendResManager::WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id) {
-  return memManager_->WaitEvent(task_id_on_stream, user_stream_id);
+bool AscendResManager::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId) {
+  return memManager_->WaitEvent(taskIdOnStream, userStreamId);
 }
 
 bool AscendResManager::SyncAllEvents() { return memManager_->SyncAllEvents(); }
 
-bool AscendResManager::LaunchCallback(std::function<void(void)> callback_func, size_t stream_id, bool is_block) const {
-  auto stream = AscendStreamMng::GetInstance().GetStream(stream_id);
+bool AscendResManager::LaunchCallback(std::function<void(void)> callbackFunc, size_t streamId, bool isBlock) const {
+  auto stream = AscendStreamMng::GetInstance().GetStream(streamId);
   if (stream == nullptr) {
     stream = AscendStreamMng::GetInstance().default_stream();
   }
   CHECK_IF_NULL(stream);
-  auto block_type =
-    is_block ? aclrtCallbackBlockType::ACL_CALLBACK_BLOCK : aclrtCallbackBlockType::ACL_CALLBACK_NO_BLOCK;
-  auto callback_func_ptr = new Callback(callback_func);
-  aclError ret = CALL_ASCEND_API(aclrtLaunchCallback, AclrtLaunchCallback, callback_func_ptr, block_type, stream);
-  LOG_OUT << "Launch callback for stream_id : " << stream_id << ", ret : " << ret << ".";
+  auto blockType = isBlock ? aclrtCallbackBlockType::ACL_CALLBACK_BLOCK : aclrtCallbackBlockType::ACL_CALLBACK_NO_BLOCK;
+  auto callbackFuncPtr = new Callback(callbackFunc);
+  aclError ret = CALL_ASCEND_API(aclrtLaunchCallback, AclrtLaunchCallback, callbackFuncPtr, blockType, stream);
+  LOG_OUT << "Launch callback for streamId : " << streamId << ", ret : " << ret << ".";
   if (ret) {
-    delete callback_func_ptr;
-    LOG_ERROR << "Launch callback for stream_id : " << stream_id << " failed, ret : " << ret << ".";
-    if (SyncStream(stream_id)) {
-      callback_func();
+    delete callbackFuncPtr;
+    LOG_ERROR << "Launch callback for streamId : " << streamId << " failed, ret : " << ret << ".";
+    if (SyncStream(streamId)) {
+      callbackFunc();
       return true;
     }
 

@@ -37,14 +37,14 @@ class MRT_EXPORT AscendMemoryManager : public MemoryManager {
   void Finalize() override;
   void ResetDynamicMemory() override;
   void ClearGlobalIdleMem() override;
-  void *MallocMemFromMemPool(size_t size, bool from_persistent_mem, bool need_recycle = false,
-                             uint32_t stream_id = kDefaultStreamIndex) override;
-  void FreeMemFromMemPool(void *device_ptr) override;
+  void *MallocMemFromMemPool(size_t size, bool fromPersistentMem, bool needRecycle = false,
+                             uint32_t streamId = kDefaultStreamIndex) override;
+  void FreeMemFromMemPool(void *devicePtr) override;
   size_t GetMaxUsedMemorySize() const override;
   uint64_t GetMsMaxMemSize() const;
-  std::vector<void *> MallocContinuousMemFromMemPool(const std::vector<size_t> &size_list,
-                                                     uint32_t stream_id = kDefaultStreamIndex) override {
-    return AscendMemoryPool::GetInstance().AllocContinuousTensorMem(size_list, stream_id);
+  std::vector<void *> MallocContinuousMemFromMemPool(const std::vector<size_t> &sizeList,
+                                                     uint32_t streamId = kDefaultStreamIndex) override {
+    return AscendMemoryPool::GetInstance().AllocContinuousTensorMem(sizeList, streamId);
   }
 
   size_t GetAvailableMemSize() override;
@@ -70,8 +70,8 @@ class MRT_EXPORT AscendMemoryManager : public MemoryManager {
   DynamicMemPool *GetMemoryPool() override;
 
  protected:
-  uint8_t *MallocStaticMem(size_t size, bool communication_mem, uint32_t graph_id) override;
-  uint8_t *MallocDynamicMem(size_t size, bool communication_mem) override;
+  uint8_t *MallocStaticMem(size_t size, bool communicationMem, uint32_t graphId) override;
+  uint8_t *MallocDynamicMem(size_t size, bool communicationMem) override;
 };
 
 class MRT_EXPORT EnhancedAscendMemoryManager : public AscendMemoryManager {
@@ -83,7 +83,7 @@ class MRT_EXPORT EnhancedAscendMemoryManager : public AscendMemoryManager {
 
   void Finalize() override;
 
-  void *MallocMemFromMemPool(size_t size, bool from_persistent_mem, bool need_recycle, uint32_t stream_id) override;
+  void *MallocMemFromMemPool(size_t size, bool fromPersistentMem, bool needRecycle, uint32_t streamId) override;
 
  private:
   inline uint64_t GetCurrentTick() {

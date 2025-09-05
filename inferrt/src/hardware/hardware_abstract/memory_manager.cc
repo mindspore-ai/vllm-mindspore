@@ -22,44 +22,44 @@ namespace mrt {
 namespace device {
 constexpr size_t kAlignBytes = 32;
 
-size_t MemoryManager::GetCommonAlignSize(size_t input_size) {
-  return ((input_size + kMemAlignSize + kAlignBytes - 1) / kMemAlignSize) * kMemAlignSize;
+size_t MemoryManager::GetCommonAlignSize(size_t inputSize) {
+  return ((inputSize + kMemAlignSize + kAlignBytes - 1) / kMemAlignSize) * kMemAlignSize;
 }
 
-size_t MemoryManager::GetCommunicationAlignSize(size_t input_size) {
-  return ((input_size + kMemAlignSize - 1) / kMemAlignSize) * kMemAlignSize + kTwiceMemAlignSize;
+size_t MemoryManager::GetCommunicationAlignSize(size_t inputSize) {
+  return ((inputSize + kMemAlignSize - 1) / kMemAlignSize) * kMemAlignSize + kTwiceMemAlignSize;
 }
 
-void MemoryManager::FreeMemFromMemPool(void *device_ptr) {
-  if (device_ptr == nullptr) {
-    LOG_ERROR << "FreeMemFromMemPool device_ptr is null.";
+void MemoryManager::FreeMemFromMemPool(void *devicePtr) {
+  if (devicePtr == nullptr) {
+    LOG_ERROR << "FreeMemFromMemPool devicePtr is null.";
   }
 }
 
 uint8_t *MemoryManager::MallocWorkSpaceMem(size_t size) { return MallocDynamicMem(size, false); }
 
-uint8_t *MemoryManager::MallocDynamicMem(size_t size, bool communication_mem) {
-  LOG_OUT << "Call default dynamic malloc " << size << " v " << communication_mem;
+uint8_t *MemoryManager::MallocDynamicMem(size_t size, bool communicationMem) {
+  LOG_OUT << "Call default dynamic malloc " << size << " v " << communicationMem;
   return nullptr;
 }
 
-void *MemoryManager::MallocMemFromMemPool(size_t size, bool from_persistent_mem, bool, uint32_t stream_id) {
+void *MemoryManager::MallocMemFromMemPool(size_t size, bool fromPersistentMem, bool, uint32_t streamId) {
   if (size == 0) {
     LOG_ERROR << "MallocMemFromMemPool size is 0.";
   }
   return nullptr;
 }
 
-std::vector<void *> MemoryManager::MallocContinuousMemFromMemPool(const std::vector<size_t> &size_list,
-                                                                  uint32_t stream_id) {
-  if (size_list.empty()) {
+std::vector<void *> MemoryManager::MallocContinuousMemFromMemPool(const std::vector<size_t> &sizeList,
+                                                                  uint32_t streamId) {
+  if (sizeList.empty()) {
     LOG_ERROR << "MallocContinuousMemFromMemPool size list's size is 0.";
   }
-  std::vector<void *> device_ptr_list;
-  for (size_t i = 0; i < size_list.size(); ++i) {
-    (void)device_ptr_list.emplace_back(nullptr);
+  std::vector<void *> devicePtrList;
+  for (size_t i = 0; i < sizeList.size(); ++i) {
+    (void)devicePtrList.emplace_back(nullptr);
   }
-  return device_ptr_list;
+  return devicePtrList;
 }
 }  // namespace device
 }  // namespace mrt

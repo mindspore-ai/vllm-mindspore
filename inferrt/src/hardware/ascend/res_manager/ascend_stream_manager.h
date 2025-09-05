@@ -60,25 +60,25 @@ class MRT_EXPORT AscendStreamMng {
   uint32_t cur_event_num() const { return curEventNum_; }
 
   void CreateStream(aclrtStream *stream, int32_t priority = 0);
-  void CreateStream(size_t *stream_id, int32_t priority = 0);
+  void CreateStream(size_t *streamId, int32_t priority = 0);
   void RegCallback(aclrtStream stream);
   void UnRegCallback(aclrtStream stream, bool delete_item = true);
   void CreateStreamWithFlags(aclrtStream *stream, uint32_t flags, int32_t priority = 0);
-  void CreateStreamWithFlags(size_t *stream_id, uint32_t flags, int32_t priority = 0);
-  bool DestroyStream(size_t stream_id);
+  void CreateStreamWithFlags(size_t *streamId, uint32_t flags, int32_t priority = 0);
+  bool DestroyStream(size_t streamId);
   bool DestroyAllStreams();
   bool ForceDestroyAllStreams();
-  aclrtStream GetStream(size_t stream_id) const;
-  bool SyncStream(size_t stream_id) const;
+  aclrtStream GetStream(size_t streamId) const;
+  bool SyncStream(size_t streamId) const;
   bool SyncStream(aclrtStream stream) const;
-  // 'sync_device' means whether calling 'aclrtSynchronizeDeviceWithTimeout' or 'aclrtSynchronizeStreamWithTimeout'.
-  bool SyncAllStreams(bool sync_device = true) const;
+  // 'syncDevice' means whether calling 'aclrtSynchronizeDeviceWithTimeout' or 'aclrtSynchronizeStreamWithTimeout'.
+  bool SyncAllStreams(bool syncDevice = true) const;
   bool SyncNotDefaultStreams() const;
-  // Sync all streams except the streams in except_streams.
-  bool SyncExceptStreamsInList(const std::set<aclrtStream> &except_streams) const;
+  // Sync all streams except the streams in exceptStreams.
+  bool SyncExceptStreamsInList(const std::set<aclrtStream> &exceptStreams) const;
   size_t QueryStreamSize() const;
-  bool QueryStream(size_t stream_id);
-  size_t GetStreamId(void *stream_ptr);
+  bool QueryStream(size_t streamId);
+  size_t GetStreamId(void *streamPtr);
   std::vector<uint32_t> GetStreamIds() const;
   void SetBusyStreamNum(uint32_t stream_num) { busyStreamNum_ = stream_num; }
   uint32_t GetBusyStreamNum() const { return busyStreamNum_; }
@@ -95,7 +95,7 @@ class MRT_EXPORT AscendStreamMng {
   aclrtStream GetForwardRecvStream() const { return forwardRecvStream_; }
   aclrtStream GetBackwardRecvStream() const { return backwardRecvStream_; }
 
-  void set_current_stream(size_t stream_id) { currentStreamId_ = stream_id; }
+  void set_current_stream(size_t streamId) { currentStreamId_ = streamId; }
   size_t current_stream() const { return currentStreamId_; }
 
   void CreateDefaultStream();
@@ -104,9 +104,9 @@ class MRT_EXPORT AscendStreamMng {
   aclrtStream default_stream() const;
   aclrtStream communication_stream() const;
 
-  bool single_op_multi_stream_enable() const { return singleOpMultiStreamEnable_; }
-  void set_single_op_multi_stream_enable(bool single_op_multi_stream_enable) {
-    singleOpMultiStreamEnable_ = single_op_multi_stream_enable;
+  bool singleOpMultiStreamEnable() const { return singleOpMultiStreamEnable_; }
+  void set_single_op_multi_stream_enable(bool singleOpMultiStreamEnable) {
+    singleOpMultiStreamEnable_ = singleOpMultiStreamEnable;
   }
 
  private:

@@ -24,11 +24,11 @@ aclSetCompileoptFunObj aclSetCompileopt_ = nullptr;
 aclopSetCompileFlagFunObj aclopSetCompileFlag_ = nullptr;
 aclGenGraphAndDumpForOpFunObj aclGenGraphAndDumpForOp_ = nullptr;
 
-void LoadAclOpCompilerApiSymbol(const std::string &ascend_path) {
-  std::string complier_plugin_path = ascend_path + "lib64/libacl_op_compiler.so";
-  auto handler = GetLibHandler(complier_plugin_path);
+void LoadAclOpCompilerApiSymbol(const std::string &ascendPath) {
+  std::string complierPluginPath = ascendPath + "lib64/libacl_op_compiler.so";
+  auto handler = GetLibHandler(complierPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << complier_plugin_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << complierPluginPath << " failed!" << dlerror();
     return;
   }
   aclopCompileAndExecute_ = DlsymAscendFuncObj(aclopCompileAndExecute, handler);

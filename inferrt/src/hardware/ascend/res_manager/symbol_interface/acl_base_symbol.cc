@@ -36,30 +36,30 @@ aclGetDataBufferAddrFunObj aclGetDataBufferAddr_ = nullptr;
 aclGetTensorDescSizeFunObj aclGetTensorDescSize_ = nullptr;
 aclGetRecentErrMsgFunObj aclGetRecentErrMsg_ = nullptr;
 
-void LoadAclBaseApiSymbol(const std::string &ascend_path) {
-  std::string aclbase_plugin_path = "lib64/libascendcl.so";
-  auto base_handler = GetLibHandler(ascend_path + aclbase_plugin_path);
-  if (base_handler == nullptr) {
-    LOG_OUT << "Dlopen " << aclbase_plugin_path << " failed!" << dlerror();
+void LoadAclBaseApiSymbol(const std::string &ascendPath) {
+  std::string aclbasePluginPath = "lib64/libascendcl.so";
+  auto baseHandler = GetLibHandler(ascendPath + aclbasePluginPath);
+  if (baseHandler == nullptr) {
+    LOG_OUT << "Dlopen " << aclbasePluginPath << " failed!" << dlerror();
     return;
   }
-  aclCreateDataBuffer_ = DlsymAscendFuncObj(aclCreateDataBuffer, base_handler);
-  aclCreateTensorDesc_ = DlsymAscendFuncObj(aclCreateTensorDesc, base_handler);
-  aclDataTypeSize_ = DlsymAscendFuncObj(aclDataTypeSize, base_handler);
-  aclDestroyDataBuffer_ = DlsymAscendFuncObj(aclDestroyDataBuffer, base_handler);
-  aclDestroyTensorDesc_ = DlsymAscendFuncObj(aclDestroyTensorDesc, base_handler);
-  aclGetTensorDescDimV2_ = DlsymAscendFuncObj(aclGetTensorDescDimV2, base_handler);
-  aclGetTensorDescNumDims_ = DlsymAscendFuncObj(aclGetTensorDescNumDims, base_handler);
-  aclSetTensorConst_ = DlsymAscendFuncObj(aclSetTensorConst, base_handler);
-  aclSetTensorDescName_ = DlsymAscendFuncObj(aclSetTensorDescName, base_handler);
-  aclSetTensorFormat_ = DlsymAscendFuncObj(aclSetTensorFormat, base_handler);
-  aclSetTensorPlaceMent_ = DlsymAscendFuncObj(aclSetTensorPlaceMent, base_handler);
-  aclSetTensorShape_ = DlsymAscendFuncObj(aclSetTensorShape, base_handler);
-  aclrtGetSocName_ = DlsymAscendFuncObj(aclrtGetSocName, base_handler);
-  aclUpdateDataBuffer_ = DlsymAscendFuncObj(aclUpdateDataBuffer, base_handler);
-  aclGetDataBufferAddr_ = DlsymAscendFuncObj(aclGetDataBufferAddr, base_handler);
-  aclGetTensorDescSize_ = DlsymAscendFuncObj(aclGetTensorDescSize, base_handler);
-  aclGetRecentErrMsg_ = DlsymAscendFuncObj(aclGetRecentErrMsg, base_handler);
+  aclCreateDataBuffer_ = DlsymAscendFuncObj(aclCreateDataBuffer, baseHandler);
+  aclCreateTensorDesc_ = DlsymAscendFuncObj(aclCreateTensorDesc, baseHandler);
+  aclDataTypeSize_ = DlsymAscendFuncObj(aclDataTypeSize, baseHandler);
+  aclDestroyDataBuffer_ = DlsymAscendFuncObj(aclDestroyDataBuffer, baseHandler);
+  aclDestroyTensorDesc_ = DlsymAscendFuncObj(aclDestroyTensorDesc, baseHandler);
+  aclGetTensorDescDimV2_ = DlsymAscendFuncObj(aclGetTensorDescDimV2, baseHandler);
+  aclGetTensorDescNumDims_ = DlsymAscendFuncObj(aclGetTensorDescNumDims, baseHandler);
+  aclSetTensorConst_ = DlsymAscendFuncObj(aclSetTensorConst, baseHandler);
+  aclSetTensorDescName_ = DlsymAscendFuncObj(aclSetTensorDescName, baseHandler);
+  aclSetTensorFormat_ = DlsymAscendFuncObj(aclSetTensorFormat, baseHandler);
+  aclSetTensorPlaceMent_ = DlsymAscendFuncObj(aclSetTensorPlaceMent, baseHandler);
+  aclSetTensorShape_ = DlsymAscendFuncObj(aclSetTensorShape, baseHandler);
+  aclrtGetSocName_ = DlsymAscendFuncObj(aclrtGetSocName, baseHandler);
+  aclUpdateDataBuffer_ = DlsymAscendFuncObj(aclUpdateDataBuffer, baseHandler);
+  aclGetDataBufferAddr_ = DlsymAscendFuncObj(aclGetDataBufferAddr, baseHandler);
+  aclGetTensorDescSize_ = DlsymAscendFuncObj(aclGetTensorDescSize, baseHandler);
+  aclGetRecentErrMsg_ = DlsymAscendFuncObj(aclGetRecentErrMsg, baseHandler);
   LOG_OUT << "Load acl base api success!";
 }
 

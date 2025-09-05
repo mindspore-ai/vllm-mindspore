@@ -32,23 +32,23 @@ static constexpr const char kMsEnableGmem[] = "MS_ENABLE_GMEM";
 constexpr uint64_t kAscendMmapAlignSize = 1 << 21;
 constexpr int kMapPeerShared = 0x8000000;
 
-const size_t AscendGmemAdapter::GetRoundUpAlignSize(size_t input_size) const {
-  return (input_size + kAscendMmapAlignSize - 1) & ~(kAscendMmapAlignSize - 1);
+const size_t AscendGmemAdapter::GetRoundUpAlignSize(size_t inputSize) const {
+  return (inputSize + kAscendMmapAlignSize - 1) & ~(kAscendMmapAlignSize - 1);
 }
 
-const size_t AscendGmemAdapter::GetRoundDownAlignSize(size_t input_size) const {
-  return input_size & ~(kAscendMmapAlignSize - 1);
+const size_t AscendGmemAdapter::GetRoundDownAlignSize(size_t inputSize) const {
+  return inputSize & ~(kAscendMmapAlignSize - 1);
 }
 
 size_t AscendGmemAdapter::AllocDeviceMem(size_t size, DeviceMemPtr *addr) const {
-  size_t align_size = GetRoundUpAlignSize(size);
-  uint8_t *alloc_addr = MmapMemory(align_size, nullptr);
-  if (alloc_addr == nullptr) {
+  size_t alignSize = GetRoundUpAlignSize(size);
+  uint8_t *allocAddr = MmapMemory(alignSize, nullptr);
+  if (allocAddr == nullptr) {
     LOG_OUT << "Malloc memory failed.";
     return 0;
   }
-  *addr = alloc_addr;
-  return align_size;
+  *addr = allocAddr;
+  return alignSize;
 }
 
 size_t AscendGmemAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_t size) const {
@@ -58,17 +58,17 @@ size_t AscendGmemAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size
     LOG_OUT << "Eager free device mem, addr : " << addr << ", size is zero.";
     return 0;
   }
-  size_t addr_size_t = reinterpret_cast<size_t>(addr);
+  size_t addrSizeT = reinterpret_cast<size_t>(addr);
   // Adjust addr -> round up addr, size -> round down size.
-  size_t from_addr = GetRoundUpAlignSize(addr_size_t);
-  size_t end_addr = GetRoundDownAlignSize(addr_size_t + size);
-  if (end_addr <= from_addr) {
-    LOG_OUT << "End addr : " << end_addr << " is not bigger than from_addr : " << from_addr << ".";
+  size_t fromAddr = GetRoundUpAlignSize(addrSizeT);
+  size_t endAddr = GetRoundDownAlignSize(addrSizeT + size);
+  if (endAddr <= fromAddr) {
+    LOG_OUT << "End addr : " << endAddr << " is not bigger than fromAddr : " << fromAddr << ".";
     return 0;
   }
-  size_t real_size = end_addr - from_addr;
-  int ret = freeEager_(from_addr, SizeToUlong(real_size), nullptr);
-  return ret != 0 ? 0 : real_size;
+  size_t realSize = endAddr - fromAddr;
+  int ret = freeEager_(fromAddr, SizeToUlong(realSize), nullptr);
+  return ret != 0 ? 0 : realSize;
 }
 
 uint8_t *AscendGmemAdapter::MmapMemory(size_t size, void *addr) const {
@@ -80,11 +80,11 @@ uint8_t *AscendGmemAdapter::MmapMemory(size_t size, void *addr) const {
 
   int flags = MAP_PRIVATE | MAP_ANONYMOUS | kMapPeerShared;
   int prot = PROT_READ | PROT_WRITE;
-  void *mapped_addr = mmap(addr, size, prot, flags, -1, 0);
-  if (mapped_addr == MAP_FAILED) {
+  void *mappedAddr = mmap(addr, size, prot, flags, -1, 0);
+  if (mappedAddr == MAP_FAILED) {
     LOG_ERROR << "Mmap failed.";
   }
-  return static_cast<uint8_t *>(mapped_addr);
+  return static_cast<uint8_t *>(mappedAddr);
 }
 
 bool AscendGmemAdapter::MunmapMemory(void *addr, const size_t size) const {
@@ -98,10 +98,10 @@ void AscendGmemAdapter::LoadGMemLib() noexcept {
   gmemHandle_ = dlopen(kGMemLibName, RTLD_NOW);
   if (gmemHandle_ != nullptr) {
     LOG_OUT << "Open GMem lib success, inferrt will use gmem to optimize memory usage.";
-    LIB_FUNC(GMEM_FREE_EAGER) gmem_free_eager = DlsymFuncObj(gmemFreeEager, gmemHandle_);
-    if (gmem_free_eager != nullptr) {
+    LIB_FUNC(GMEM_FREE_EAGER) gmemFreeEager = DlsymFuncObj(gmemFreeEager, gmemHandle_);
+    if (gmemFreeEager != nullptr) {
       isEagerFreeEnabled_ = true;
-      freeEager_ = gmem_free_eager;
+      freeEager_ = gmemFreeEager;
     } else {
       LOG_OUT << "Load gmem free eager failed.";
       if (dlclose(gmemHandle_) != 0) {

@@ -45,43 +45,43 @@ class MRT_EXPORT MemoryManager {
   virtual void ClearGlobalIdleMem() {}
 
   uint8_t *MallocWorkSpaceMem(size_t size);
-  virtual void *MallocMemFromMemPool(size_t size, bool from_persistent_mem, bool need_recycle = false,
-                                     uint32_t stream_id = kDefaultStreamIndex);
+  virtual void *MallocMemFromMemPool(size_t size, bool fromPersistentMem, bool needRecycle = false,
+                                     uint32_t streamId = kDefaultStreamIndex);
   virtual size_t GetMaxUsedMemorySize() const { return 0; }
-  virtual void FreeMemFromMemPool(void *device_ptr);
-  virtual std::vector<void *> MallocContinuousMemFromMemPool(const std::vector<size_t> &size_list,
-                                                             uint32_t stream_id = kDefaultStreamIndex);
+  virtual void FreeMemFromMemPool(void *devicePtr);
+  virtual std::vector<void *> MallocContinuousMemFromMemPool(const std::vector<size_t> &sizeList,
+                                                             uint32_t streamId = kDefaultStreamIndex);
 
-  static size_t GetCommonAlignSize(size_t input_size);
-  static size_t GetCommunicationAlignSize(size_t input_size);
+  static size_t GetCommonAlignSize(size_t inputSize);
+  static size_t GetCommunicationAlignSize(size_t inputSize);
 
   virtual size_t GetAvailableMemSize() {
     LOG_ERROR << "Return default 0 mem size!";
     return 0;
   }
 
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                    const DeviceEventPtr &event) {
     if (GetMemoryPool() == nullptr) {
       LOG_OUT << "memory pool is nullptr.";
       return false;
     }
-    return GetMemoryPool()->RecordEvent(task_id_on_stream, user_stream_id, memory_stream_addresses, event);
+    return GetMemoryPool()->RecordEvent(taskIdOnStream, userStreamId, memoryStreamAddresses, event);
   }
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
     if (GetMemoryPool() == nullptr) {
       LOG_OUT << "memory pool is nullptr.";
       return false;
     }
-    return GetMemoryPool()->WaitEvent(task_id_on_stream, user_stream_id, memory_stream_id);
+    return GetMemoryPool()->WaitEvent(taskIdOnStream, userStreamId, memoryStreamId);
   }
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t memory_stream_id) {
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) {
     if (GetMemoryPool() == nullptr) {
       LOG_OUT << "memory pool is nullptr.";
       return false;
     }
-    return GetMemoryPool()->WaitEvent(task_id_on_stream, memory_stream_id);
+    return GetMemoryPool()->WaitEvent(taskIdOnStream, memoryStreamId);
   }
   bool SyncAllEvents() {
     if (GetMemoryPool() == nullptr) {
@@ -115,11 +115,11 @@ class MRT_EXPORT MemoryManager {
   virtual size_t EmptyCache() { return -1L; }
 
  protected:
-  virtual uint8_t *MallocStaticMem(size_t size, bool communication_mem, uint32_t graph_id) = 0;
-  virtual uint8_t *MallocStaticMem(size_t size, bool communication_mem) {
-    return MallocStaticMem(size, communication_mem, kInvalidGraphId);
+  virtual uint8_t *MallocStaticMem(size_t size, bool communicationMem, uint32_t graphId) = 0;
+  virtual uint8_t *MallocStaticMem(size_t size, bool communicationMem) {
+    return MallocStaticMem(size, communicationMem, kInvalidGraphId);
   }
-  virtual uint8_t *MallocDynamicMem(size_t size, bool communication_mem);
+  virtual uint8_t *MallocDynamicMem(size_t size, bool communicationMem);
 
   // Hold memory pool for common operations on memory.
   DynamicMemPool *memoryPool_{nullptr};

@@ -53,7 +53,7 @@ using EventPoolPtr = std::shared_ptr<EventPool>;
 
 class MRT_EXPORT MultiStreamController {
  public:
-  explicit MultiStreamController(DeviceResManager *device_res_base);
+  explicit MultiStreamController(DeviceResManager *deviceResBase);
 
   MultiStreamController(const MultiStreamController &) = delete;
   MultiStreamController &operator=(const MultiStreamController &) = delete;
@@ -63,24 +63,24 @@ class MRT_EXPORT MultiStreamController {
 
   void Refresh();
 
-  bool UpdateTaskIdOnStream(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id);
+  bool UpdateTaskIdOnStream(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId);
 
-  int64_t QueryTaskIdOnStream(uint32_t user_stream_id, uint32_t memory_stream_id);
+  int64_t QueryTaskIdOnStream(uint32_t userStreamId, uint32_t memoryStreamId);
 
-  int64_t LaunchTaskIdOnStream(uint32_t stream_id);
-  int64_t GetTaskIdOnStream(uint32_t stream_id);
+  int64_t LaunchTaskIdOnStream(uint32_t streamId);
+  int64_t GetTaskIdOnStream(uint32_t streamId);
 
-  std::mutex &GetStreamMutex(size_t stream_id);
+  std::mutex &GetStreamMutex(size_t streamId);
 
-  // memory_stream_addresses pair : memory_stream_id, address.
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                   const std::vector<std::pair<uint32_t, void *>> &memory_stream_addresses,
-                   const DeviceEventPtr &input_event = nullptr);
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id);
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id);
-  bool DispatchRecordWaitEvent(uint32_t user_stream_id, uint32_t memory_stream_id);
+  // memoryStreamAddresses pair : memoryStreamId, address.
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                   const std::vector<std::pair<uint32_t, void *>> &memoryStreamAddresses,
+                   const DeviceEventPtr &inputEvent = nullptr);
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId);
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId);
+  bool DispatchRecordWaitEvent(uint32_t userStreamId, uint32_t memoryStreamId);
 
-  bool SyncStream(size_t stream_id);
+  bool SyncStream(size_t streamId);
   bool SyncAllStreams();
   bool SyncNotDefaultStreams();
 

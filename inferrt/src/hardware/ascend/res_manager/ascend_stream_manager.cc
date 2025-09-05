@@ -70,7 +70,7 @@ uint32_t AscendStreamMng::GetCurAllocStreamId() const {
 }
 
 void AscendStreamMng::CreateStream(aclrtStream *stream, int32_t priority) {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   auto ret = CALL_ASCEND_API(aclrtCreateStreamWithConfig, stream, IntToUint(priority),
                              (ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC));
   if (ret != ACL_SUCCESS) {
@@ -83,8 +83,8 @@ void AscendStreamMng::CreateStream(aclrtStream *stream, int32_t priority) {
   (void)streams_.emplace_back(*stream);
 }
 
-void AscendStreamMng::CreateStream(size_t *stream_id, int32_t priority) {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+void AscendStreamMng::CreateStream(size_t *streamId, int32_t priority) {
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   aclrtStream stream;
   auto ret = CALL_ASCEND_API(aclrtCreateStreamWithConfig, &stream, IntToUint(priority),
                              (ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC));
@@ -95,12 +95,12 @@ void AscendStreamMng::CreateStream(size_t *stream_id, int32_t priority) {
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "aclrtSetStreamFailureMode failed, ret:" << ret;
   }
-  *stream_id = streams_.size();
+  *streamId = streams_.size();
   (void)streams_.emplace_back(stream);
 }
 
 void AscendStreamMng::CreateStreamWithFlags(aclrtStream *stream, uint32_t flags, int32_t priority) {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   auto ret = CALL_ASCEND_API(aclrtCreateStreamWithConfig, stream, IntToUint(priority), flags);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Create stream failed, ret:" << ret;
@@ -112,8 +112,8 @@ void AscendStreamMng::CreateStreamWithFlags(aclrtStream *stream, uint32_t flags,
   (void)streams_.emplace_back(*stream);
 }
 
-void AscendStreamMng::CreateStreamWithFlags(size_t *stream_id, uint32_t flags, int32_t priority) {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+void AscendStreamMng::CreateStreamWithFlags(size_t *streamId, uint32_t flags, int32_t priority) {
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   aclrtStream stream;
   auto ret = CALL_ASCEND_API(aclrtCreateStreamWithConfig, &stream, IntToUint(priority), flags);
   if (ret != ACL_SUCCESS) {
@@ -123,41 +123,41 @@ void AscendStreamMng::CreateStreamWithFlags(size_t *stream_id, uint32_t flags, i
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "aclrtSetStreamFailureMode failed, ret:" << ret;
   }
-  *stream_id = streams_.size();
+  *streamId = streams_.size();
   (void)streams_.emplace_back(stream);
 }
 
 aclrtEvent AscendStreamMng::ApplyRtEvent() {
-  aclrtEvent rt_event = nullptr;
+  aclrtEvent rtEvent = nullptr;
   // Use ex api of event, so that no limits on event total size.
   uint32_t flag = ACL_EVENT_SYNC;
-  auto ret = CALL_ASCEND_API(aclrtCreateEventExWithFlag, &rt_event, flag);
+  auto ret = CALL_ASCEND_API(aclrtCreateEventExWithFlag, &rtEvent, flag);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "aclrtCreateEventExWithFlag failed, ret : " << ret << ".";
   }
-  (void)events_.emplace_back(rt_event);
-  return rt_event;
+  (void)events_.emplace_back(rtEvent);
+  return rtEvent;
 }
 
-bool AscendStreamMng::DestroyStream(size_t stream_id) {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
-  if (stream_id >= streams_.size()) {
-    LOG_ERROR << "Ascend stream not found for stream id " << stream_id;
+bool AscendStreamMng::DestroyStream(size_t streamId) {
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
+  if (streamId >= streams_.size()) {
+    LOG_ERROR << "Ascend stream not found for stream id " << streamId;
     return false;
   }
-  if (streams_.at(stream_id) == nullptr) {
-    LOG_OUT << "Ascend stream hsa been destroyed for stream id " << stream_id;
+  if (streams_.at(streamId) == nullptr) {
+    LOG_OUT << "Ascend stream hsa been destroyed for stream id " << streamId;
     return true;
   }
-  const auto ret = CALL_ASCEND_API(aclrtDestroyStream, streams_.at(stream_id));
+  const auto ret = CALL_ASCEND_API(aclrtDestroyStream, streams_.at(streamId));
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call aclrtDestroyStream, ret[" << ret << "]";
   }
-  streams_[stream_id] = nullptr;
-  if (communicationStreamId_ == stream_id) {
+  streams_[streamId] = nullptr;
+  if (communicationStreamId_ == streamId) {
     communicationStream_ = nullptr;
   }
-  if (defaultStreamId_ == stream_id) {
+  if (defaultStreamId_ == streamId) {
     defaultStream_ = nullptr;
   }
 
@@ -165,7 +165,7 @@ bool AscendStreamMng::DestroyStream(size_t stream_id) {
 }
 
 bool AscendStreamMng::ForceDestroyAllStreams() {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   for (const auto &stream : streams_) {
     if (stream == nullptr) {
       continue;
@@ -182,7 +182,7 @@ bool AscendStreamMng::ForceDestroyAllStreams() {
 }
 
 bool AscendStreamMng::DestroyAllStreams() {
-  std::lock_guard<std::mutex> lock_streams(streamMutex_);
+  std::lock_guard<std::mutex> lockStreams(streamMutex_);
   for (const auto &stream : streams_) {
     if (stream == nullptr) {
       continue;
@@ -198,21 +198,21 @@ bool AscendStreamMng::DestroyAllStreams() {
   return true;
 }
 
-aclrtStream AscendStreamMng::GetStream(size_t stream_id) const {
-  if (stream_id >= streams_.size()) {
-    LOG_OUT << "Stream for stream id[" << stream_id << "] not found, return nullptr.";
+aclrtStream AscendStreamMng::GetStream(size_t streamId) const {
+  if (streamId >= streams_.size()) {
+    LOG_OUT << "Stream for stream id[" << streamId << "] not found, return nullptr.";
     return nullptr;
   }
-  return streams_[stream_id];
+  return streams_[streamId];
 }
 
-bool AscendStreamMng::SyncStream(size_t stream_id) const {
-  if (stream_id >= streams_.size()) {
-    LOG_ERROR << "Stream for stream id[" << stream_id << "] has not been created.";
+bool AscendStreamMng::SyncStream(size_t streamId) const {
+  if (streamId >= streams_.size()) {
+    LOG_ERROR << "Stream for stream id[" << streamId << "] has not been created.";
   }
-  const auto stream = streams_[stream_id];
+  const auto stream = streams_[streamId];
   if (stream == nullptr) {
-    LOG_OUT << "Stream for stream id[" << stream_id << "] has been destroyed.";
+    LOG_OUT << "Stream for stream id[" << streamId << "] has been destroyed.";
     return false;
   }
   return SyncStream(stream);
@@ -250,10 +250,10 @@ bool AscendStreamMng::SyncStream(aclrtStream stream) const {
   return true;
 }
 
-bool AscendStreamMng::SyncAllStreams(bool sync_device) const {
+bool AscendStreamMng::SyncAllStreams(bool syncDevice) const {
   auto RET = ACL_ERROR_NONE;
   try {
-    if (sync_device) {
+    if (syncDevice) {
       // According to CANN, we need to set timeout to 2 hours for aclrtSynchronizeDeviceWithTimeout.
       int timeout = 7200000;
       RET = CALL_ASCEND_API(aclrtSynchronizeDeviceWithTimeout, timeout);
@@ -277,8 +277,8 @@ bool AscendStreamMng::SyncAllStreams(bool sync_device) const {
       }
     }
   } catch (const std::exception &e) {
-    std::string sync_method = sync_device ? "aclrtSynchronizeDeviceWithTimeout" : "aclrtSynchronizeStreamWithTimeout";
-    LOG_ERROR << sync_method << " failed. " << e.what()
+    std::string syncMethod = syncDevice ? "aclrtSynchronizeDeviceWithTimeout" : "aclrtSynchronizeStreamWithTimeout";
+    LOG_ERROR << syncMethod << " failed. " << e.what()
               << "Please do the following three things to confirm whether it is caused by the "
               << "execution failure of a certain operator.\n"
               << "    1.Set inferrt.runtime.launch_blocking() at the beginning of your python script.\n"
@@ -288,8 +288,8 @@ bool AscendStreamMng::SyncAllStreams(bool sync_device) const {
     return false;
   }
   if (RET == ACL_ERROR_RT_AICORE_OVER_FLOW) {
-    std::string sync_method = sync_device ? "aclrtSynchronizeDeviceWithTimeout" : "aclrtSynchronizeStreamWithTimeout";
-    LOG_OUT << "Call runtime " << sync_method << ", the stream get overflow."
+    std::string syncMethod = syncDevice ? "aclrtSynchronizeDeviceWithTimeout" : "aclrtSynchronizeStreamWithTimeout";
+    LOG_OUT << "Call runtime " << syncMethod << ", the stream get overflow."
             << "Please do the following three things to confirm whether it is caused by the "
             << "execution failure of a certain operator.\n"
             << "    1.Set inferrt.runtime.launch_blocking() at the beginning of your python script.\n"
@@ -311,10 +311,10 @@ bool AscendStreamMng::SyncNotDefaultStreams() const {
   return res;
 }
 
-bool AscendStreamMng::SyncExceptStreamsInList(const std::set<aclrtStream> &except_streams) const {
+bool AscendStreamMng::SyncExceptStreamsInList(const std::set<aclrtStream> &exceptStreams) const {
   bool res = true;
   for (size_t i = 0; i < streams_.size(); i++) {
-    if (except_streams.count(streams_[i]) > 0) {
+    if (exceptStreams.count(streams_[i]) > 0) {
       LOG_OUT << "Stream id:" << i << " is been synchronized.";
       continue;
     }
@@ -328,41 +328,41 @@ bool AscendStreamMng::SyncExceptStreamsInList(const std::set<aclrtStream> &excep
 
 size_t AscendStreamMng::QueryStreamSize() const { return streams_.size(); }
 
-bool AscendStreamMng::QueryStream(size_t stream_id) {
-  if (stream_id >= streams_.size()) {
-    LOG_ERROR << "Stream for stream id[" << stream_id << "] has not been created.";
+bool AscendStreamMng::QueryStream(size_t streamId) {
+  if (streamId >= streams_.size()) {
+    LOG_ERROR << "Stream for stream id[" << streamId << "] has not been created.";
   }
-  const auto stream = streams_[stream_id];
+  const auto stream = streams_[streamId];
   if (stream == nullptr) {
-    LOG_OUT << "Stream for stream id[" << stream_id << "] has been destroyed.";
+    LOG_OUT << "Stream for stream id[" << streamId << "] has been destroyed.";
     return false;
   }
 
   aclrtStreamStatus status;
   auto ret = CALL_ASCEND_API(aclrtStreamQuery, stream, &status);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Failed to query completion status for stream id: " << stream_id;
+    LOG_ERROR << "Failed to query completion status for stream id: " << streamId;
   }
   return status == ACL_STREAM_STATUS_COMPLETE;
 }
 
-size_t AscendStreamMng::GetStreamId(void *stream_ptr) {
-  auto iter = std::find(streams_.begin(), streams_.end(), stream_ptr);
+size_t AscendStreamMng::GetStreamId(void *streamPtr) {
+  auto iter = std::find(streams_.begin(), streams_.end(), streamPtr);
   if (iter == streams_.end()) {
-    LOG_ERROR << "Failed to find stream_ptr in streams_, stream_ptr:" << stream_ptr;
+    LOG_ERROR << "Failed to find streamPtr in streams_, streamPtr:" << streamPtr;
   }
 
   return LongToSize(std::distance(streams_.begin(), iter));
 }
 
 std::vector<uint32_t> AscendStreamMng::GetStreamIds() const {
-  std::vector<uint32_t> stream_ids;
+  std::vector<uint32_t> streamIds;
   for (size_t i = 0; i < streams_.size(); i++) {
     if (streams_[i] != nullptr) {
-      (void)stream_ids.emplace_back(static_cast<uint32_t>(i));
+      (void)streamIds.emplace_back(static_cast<uint32_t>(i));
     }
   }
-  return stream_ids;
+  return streamIds;
 }
 
 void AscendStreamMng::CreateDefaultStream() {

@@ -42,7 +42,7 @@ struct MRT_EXPORT MemBlock;
 
 using MemBufStatus = DynamicMemBufStatus;
 struct MRT_EXPORT MemBuf : EventBase {
-  explicit MemBuf(size_t size, void *addr, uint32_t stream_id, MemBlock *mem_block, MemBufStatus status);
+  explicit MemBuf(size_t size, void *addr, uint32_t streamId, MemBlock *memBlock, MemBufStatus status);
 
   MemBuf() = delete;
   MemBuf(const MemBuf &) = delete;
@@ -106,7 +106,7 @@ struct MemBufComparator {
 };
 
 struct MRT_EXPORT MemBlock {
-  explicit MemBlock(size_t size, void *addr, uint32_t stream_id) : size_(size), addr_(addr), streamId_(stream_id) {
+  explicit MemBlock(size_t size, void *addr, uint32_t streamId) : size_(size), addr_(addr), streamId_(streamId) {
     minAddr_ = nullptr;
     maxAddr_ = nullptr;
   }
@@ -117,13 +117,13 @@ struct MRT_EXPORT MemBlock {
 
   ~MemBlock() = default;
 
-  inline void UpdateBorderAddr(MemBuf *mem_buf) {
+  inline void UpdateBorderAddr(MemBuf *memBuf) {
     if (minAddr_ == nullptr) {
-      minAddr_ = mem_buf->addr_;
+      minAddr_ = memBuf->addr_;
     } else {
-      minAddr_ = std::min(minAddr_, mem_buf->addr_);
+      minAddr_ = std::min(minAddr_, memBuf->addr_);
     }
-    void *right_addr = static_cast<uint8_t *>(mem_buf->addr_) + mem_buf->size_;
+    void *right_addr = static_cast<uint8_t *>(memBuf->addr_) + memBuf->size_;
     maxAddr_ = std::max(maxAddr_, right_addr);
   }
 
@@ -173,10 +173,10 @@ struct MRT_EXPORT MemStat {
 
   inline size_t IdleSize() const { return allocSize_ + customAllocSize_ - usedSize_; }
 
-  inline void UpdatePeakSize(const bool is_enable_vmm, size_t vmm_used_mem_size) {
+  inline void UpdatePeakSize(const bool isEnableVmm, size_t vmm_used_mem_size) {
     peakSize_ = std::max(peakSize_, usedSize_);
     iterUsedPeakSize_ = std::max(iterUsedPeakSize_, usedSize_);
-    if (is_enable_vmm) {
+    if (isEnableVmm) {
       iterAllocPeakSize_ = std::max(iterAllocPeakSize_, vmm_used_mem_size + customAllocSize_);
     } else {
       iterAllocPeakSize_ = std::max(iterAllocPeakSize_, allocSize_ + customAllocSize_);
@@ -223,16 +223,16 @@ struct MRT_EXPORT MemStat {
 };
 
 struct AllocatorInfo {
-  uint32_t stream_id = 0;
-  bool from_persistent_mem = false;
+  uint32_t streamId = 0;
+  bool fromPersistentMem = false;
   bool use_small_pool = false;
 
   bool operator<(const AllocatorInfo &other) const {
-    if (stream_id != other.stream_id) {
-      return stream_id < other.stream_id;
+    if (streamId != other.streamId) {
+      return streamId < other.streamId;
     }
-    if (from_persistent_mem != other.from_persistent_mem) {
-      return other.from_persistent_mem;
+    if (fromPersistentMem != other.fromPersistentMem) {
+      return other.fromPersistentMem;
     }
     if (use_small_pool != other.use_small_pool) {
       return other.use_small_pool;
@@ -242,7 +242,7 @@ struct AllocatorInfo {
 
   std::string ToString() const {
     std::ostringstream oss;
-    oss << "stream id: " << stream_id << ", is persistent: " << from_persistent_mem
+    oss << "stream id: " << streamId << ", is persistent: " << fromPersistentMem
         << ", use small pool: " << use_small_pool;
     return oss.str();
   }
@@ -252,20 +252,20 @@ class AbstractDynamicMemPool;
 
 class MRT_EXPORT MemBufAllocator {
  public:
-  explicit MemBufAllocator(std::function<MemBlock *(size_t)> mem_block_expander,
-                           std::function<bool(MemBlock *)> mem_block_cleaner,
-                           std::function<size_t(size_t size, void *addr)> mem_mapper,
-                           std::function<size_t(void *addr, size_t size)> mem_eager_freer, bool enable_eager_free,
-                           bool is_persistent, uint32_t stream_id, bool is_small, bool is_customized = false)
-      : memBlockExpander_(mem_block_expander),
-        memBlockCleaner_(mem_block_cleaner),
-        memMapper_(mem_mapper),
-        memEagerFreer_(mem_eager_freer),
-        streamId_(stream_id),
-        enableEagerFree_(enable_eager_free),
-        isPersistent_(is_persistent),
-        isSmall_(is_small),
-        isCustomized_(is_customized) {
+  explicit MemBufAllocator(std::function<MemBlock *(size_t)> memBlockExpander,
+                           std::function<bool(MemBlock *)> memBlockCleaner,
+                           std::function<size_t(size_t size, void *addr)> memMapper,
+                           std::function<size_t(void *addr, size_t size)> memEagerFreer, bool enableEagerFree,
+                           bool isPersistent, uint32_t streamId, bool isSmall, bool isCustomized = false)
+      : memBlockExpander_(memBlockExpander),
+        memBlockCleaner_(memBlockCleaner),
+        memMapper_(memMapper),
+        memEagerFreer_(memEagerFreer),
+        streamId_(streamId),
+        enableEagerFree_(enableEagerFree),
+        isPersistent_(isPersistent),
+        isSmall_(isSmall),
+        isCustomized_(isCustomized) {
     searchKey_ = new MemBuf(0, nullptr, 0, nullptr, MemBufStatus::kMemBufIdle);
   }
 
@@ -280,31 +280,30 @@ class MRT_EXPORT MemBufAllocator {
 
   MemBuf *Malloc(size_t size);
   MemBuf *SearchAvailableMemBuf(size_t size);
-  bool Free(MemBuf *mem_buf, MemBufStatus target_status = MemBufStatus::kMemBufIdle);
+  bool Free(MemBuf *memBuf, MemBufStatus targetStatus = MemBufStatus::kMemBufIdle);
   MemBuf *MallocExpandBlock(size_t size);
   const std::pair<size_t, size_t> FreeIdleMemsByEagerFree();
 
   size_t ReleaseFreeBlocks();
 
   size_t ActualPeakSize() const {
-    size_t peak_size = 0;
-    for (auto mem_block : memBlocks_) {
-      peak_size += mem_block->ActualPeakSize();
+    size_t peakSize = 0;
+    for (auto memBlock : memBlocks_) {
+      peakSize += memBlock->ActualPeakSize();
     }
-    return peak_size;
+    return peakSize;
   }
 
   std::string BriefInfo() const {
     std::stringstream ss;
     ss << "Mem buf allocator, enable vmm : " << enableEagerFree_ << ", is persistent : " << isPersistent_
-       << ", stream id : " << streamId_ << ", is small : " << isSmall_ << ", is customized : " << isCustomized_
-       << ".";
+       << ", stream id : " << streamId_ << ", is small : " << isSmall_ << ", is customized : " << isCustomized_ << ".";
     return ss.str();
   }
 
-  uint32_t stream_id() const { return streamId_; }
-  bool is_persistent() const { return isPersistent_; }
-  bool is_small() const { return isSmall_; }
+  uint32_t streamId() const { return streamId_; }
+  bool isPersistent() const { return isPersistent_; }
+  bool isSmall() const { return isSmall_; }
 #ifndef ENABLE_TEST
 
  protected:
@@ -342,47 +341,47 @@ class MRT_EXPORT AbstractDynamicMemPool : virtual public DynamicMemPool {
   AbstractDynamicMemPool();
   ~AbstractDynamicMemPool() override = default;
 
-  void Initialize(size_t init_size, size_t increase_size, size_t max_size) override;
+  void Initialize(size_t initSize, size_t increaseSize, size_t maxSize) override;
 
   void ReleaseDeviceRes() override;
 
   // The main program entry of memory alloc.
-  DeviceMemPtr AllocTensorMem(size_t size, bool from_persistent_mem = false, bool need_recycle = false,
-                              uint32_t stream_id = kDefaultStreamIndex) override;
+  DeviceMemPtr AllocTensorMem(size_t size, bool fromPersistentMem = false, bool needRecycle = false,
+                              uint32_t streamId = kDefaultStreamIndex) override;
 
   // Alloc mem buf from mem pool, return mem buf and its allocator
-  std::pair<MemBuf *, MemBufAllocator *> AllocMemBuf(size_t align_size, bool from_persistent_mem = false,
-                                                     uint32_t stream_id = kDefaultStreamIndex);
+  std::pair<MemBuf *, MemBufAllocator *> AllocMemBuf(size_t alignSize, bool fromPersistentMem = false,
+                                                     uint32_t streamId = kDefaultStreamIndex);
 
   // The main program entry of continuous memory alloc.
-  std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &size_list,
-                                                     uint32_t stream_id = kDefaultStreamIndex) override;
+  std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
+                                                     uint32_t streamId = kDefaultStreamIndex) override;
   // The main program entry of memory free.
-  void FreeTensorMem(const DeviceMemPtr &device_addr) override;
-  bool DoFreeTensorMem(const DeviceMemPtr &device_addr) override;
+  void FreeTensorMem(const DeviceMemPtr &deviceAddr) override;
+  bool DoFreeTensorMem(const DeviceMemPtr &deviceAddr) override;
   // The main program entry of part memory free and part memory keep.
-  void FreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs, const std::vector<DeviceMemPtr> &keep_addrs,
-                          const std::vector<size_t> &keep_addr_sizes) override;
-  virtual std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs,
-                                                     const std::vector<DeviceMemPtr> &keep_addrs,
-                                                     const std::vector<size_t> &keep_addr_sizes);
+  void FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs, const std::vector<DeviceMemPtr> &keepAddrs,
+                          const std::vector<size_t> &keepAddrSizes) override;
+  virtual std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
+                                                     const std::vector<DeviceMemPtr> &keepAddrs,
+                                                     const std::vector<size_t> &keepAddrSizes);
 
-  // Element in vector : memory_stream_id, address
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
+  // Element in vector : memoryStreamId, address
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                    const DeviceEventPtr &event) override;
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) override;
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t memory_stream_id) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) override;
   bool SyncAllEvents() override;
   bool DoSyncAllEvents();
 
-  size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle = false) override;
-  void SetMemAllocUintSize(size_t common_size, size_t persist_size = kDynamicMemAllocUnitSize) override {
-    commonUnitSize_ = common_size;
-    persistUnitSize_ = persist_size;
+  size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle = false) override;
+  void SetMemAllocUintSize(size_t commonSize, size_t persistSize = kDynamicMemAllocUnitSize) override {
+    commonUnitSize_ = commonSize;
+    persistUnitSize_ = persistSize;
   }
-  size_t MemAllocUnitSize(bool from_persistent_mem = false) const override {
-    return from_persistent_mem ? persistUnitSize_ : commonUnitSize_;
+  size_t MemAllocUnitSize(bool fromPersistentMem = false) const override {
+    return fromPersistentMem ? persistUnitSize_ : commonUnitSize_;
   }
 
   void DefragMemory() override;
@@ -410,14 +409,14 @@ class MRT_EXPORT AbstractDynamicMemPool : virtual public DynamicMemPool {
 
   const bool IsEnableVmm() const override { return enableVmm_; }
 
-  void SetEnableVmm(bool enable_vmm) override { enableVmm_ = enable_vmm; }
+  void SetEnableVmm(bool enableVmm) override { enableVmm_ = enableVmm; }
 
   // Get method for proxy.
   std::unordered_map<void *, std::pair<MemBuf *, MemBufAllocator *>> &addr_mem_buf_allocators() {
     return addrMemBufAllocators_;
   }
 
-  std::unordered_map<std::pair<uint32_t, uint32_t>, std::set<MemBuf *>, pair_hash> &stream_pair_mem_bufs() {
+  std::unordered_map<std::pair<uint32_t, uint32_t>, std::set<MemBuf *>, pair_hash> &streamPairMemBufs() {
     return streamPairMemBufs_;
   }
 
@@ -433,8 +432,8 @@ class MRT_EXPORT AbstractDynamicMemPool : virtual public DynamicMemPool {
  protected:
   void WaitPipelineHelper();
 
-  MemBufAllocatorPtr GenerateAllocator(const AllocatorInfo &allocator_key);
-  MemBufAllocator *GetMemBufAllocator(size_t size, bool from_persistent_mem, uint32_t stream_id);
+  MemBufAllocatorPtr GenerateAllocator(const AllocatorInfo &allocatorKey);
+  MemBufAllocator *GetMemBufAllocator(size_t size, bool fromPersistentMem, uint32_t streamId);
 #ifndef ENABLE_TEST
 
  protected:
@@ -482,10 +481,10 @@ class MRT_EXPORT AbstractEnhancedDynamicMemPool : public AbstractDynamicMemPool 
   virtual void ReportMemoryPoolFreeInfoToMstx(void *ptr);
   bool IsEnableTimeEvent() override { return enableTimeEvent_; }
 
-  void SetEnableTimeEvent(bool enable_time_event) override { enableTimeEvent_ = enable_time_event; }
+  void SetEnableTimeEvent(bool enableTimeEvent) override { enableTimeEvent_ = enableTimeEvent; }
 
-  virtual MemoryTimeEventPtr GenAllocateMemoryTimeEvent(const void *addr, size_t size, uint32_t stream_id,
-                                                        bool from_persistent, bool is_persistent);
+  virtual MemoryTimeEventPtr GenAllocateMemoryTimeEvent(const void *addr, size_t size, uint32_t streamId,
+                                                        bool fromPersistent, bool isPersistent);
 
   virtual MemoryTimeEventPtr GenFreeMemoryTimeEvent(const void *addr);
 

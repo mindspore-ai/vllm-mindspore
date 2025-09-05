@@ -27,27 +27,27 @@ constexpr uint32_t ACL_EVENT_DEFAULT = 0x0000000Eu;
 class MRT_EXPORT AscendEvent : public DeviceEvent {
  public:
   AscendEvent();
-  explicit AscendEvent(uint32_t flag, bool use_extensional_api = true);
+  explicit AscendEvent(uint32_t flag, bool useExtensionalApi = true);
   ~AscendEvent() override;
 
   bool IsReady() const override;
   void WaitEvent() override;
-  bool WaitEvent(uint32_t stream_id) override;
+  bool WaitEvent(uint32_t streamId) override;
   void WaitEventWithoutReset() override;
-  void WaitEventWithoutReset(uint32_t stream_id) override;
+  void WaitEventWithoutReset(uint32_t streamId) override;
 
   void ResetEvent() override;
-  void ResetEvent(uint32_t stream_id) override;
+  void ResetEvent(uint32_t streamId) override;
 
   void RecordEvent() override;
-  void RecordEvent(uint32_t stream_id) override;
+  void RecordEvent(uint32_t streamId) override;
   bool NeedWait() override;
   void SyncEvent() override;
   bool QueryEvent() override;
-  void ElapsedTime(float *cost_time, const DeviceEvent *other) override;
+  void ElapsedTime(float *costTime, const DeviceEvent *other) override;
   bool DestroyEvent() override;
-  void set_wait_stream(aclrtStream wait_stream) override { waitStream_ = wait_stream; }
-  void set_record_stream(aclrtStream record_stream) override { recordStream_ = record_stream; }
+  void set_wait_stream(aclrtStream waitStream) override { waitStream_ = waitStream; }
+  void set_record_stream(aclrtStream recordStream) override { recordStream_ = recordStream; }
 
  protected:
   aclrtEvent event_{nullptr};

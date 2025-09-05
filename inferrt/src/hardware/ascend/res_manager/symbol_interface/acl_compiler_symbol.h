@@ -33,7 +33,7 @@ ORIGIN_METHOD_WITH_SIMU(aclGenGraphAndDumpForOp, aclError, const char *, int, co
                         const aclDataBuffer *const[], int, const aclTensorDesc *const[], aclDataBuffer *const[],
                         const aclopAttr *, aclopEngineType, const char *, const aclGraphDumpOption *);
 
-void LoadAclOpCompilerApiSymbol(const std::string &ascend_path);
+void LoadAclOpCompilerApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclOpCompilerApi();
 }  // namespace mrt::device::ascend
 

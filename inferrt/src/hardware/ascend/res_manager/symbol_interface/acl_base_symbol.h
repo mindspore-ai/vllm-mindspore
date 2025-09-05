@@ -38,7 +38,7 @@ ORIGIN_METHOD_WITH_SIMU(aclGetDataBufferAddr, void *, const aclDataBuffer *)
 ORIGIN_METHOD_WITH_SIMU(aclGetTensorDescSize, size_t, const aclTensorDesc *)
 ORIGIN_METHOD_WITH_SIMU(aclGetRecentErrMsg, const char *)
 
-void LoadAclBaseApiSymbol(const std::string &ascend_path);
+void LoadAclBaseApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclBaseApi();
 }  // namespace mrt::device::ascend
 

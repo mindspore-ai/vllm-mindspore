@@ -42,7 +42,7 @@ extern aclrtAllocatorSetGetAddrFromBlockFuncToDescFunObj aclrtAllocatorSetGetAdd
 extern aclrtAllocatorSetObjToDescFunObj aclrtAllocatorSetObjToDesc_;
 extern aclrtAllocatorUnregisterFunObj aclrtAllocatorUnregister_;
 
-void LoadAclAllocatorApiSymbol(const std::string &ascend_path);
+void LoadAclAllocatorApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclAllocatorApi();
 }  // namespace mrt::device::ascend
 

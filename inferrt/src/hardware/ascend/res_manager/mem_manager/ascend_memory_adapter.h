@@ -58,7 +58,7 @@ class MRT_EXPORT AscendMemAdapter {
   virtual uint8_t *MallocDynamicDevMem(size_t size, const std::string &tag = "") = 0;
   virtual void ResetDynamicMemory() = 0;
   virtual std::string DevMemStatistics() const = 0;
-  virtual size_t GetDynamicMemUpperBound(void *min_static_addr) const = 0;
+  virtual size_t GetDynamicMemUpperBound(void *minStaticAddr) const = 0;
   [[nodiscard]] virtual uint64_t FreeDevMemSize() const = 0;
 
   virtual void SimulationInitialize();
@@ -69,8 +69,8 @@ class MRT_EXPORT AscendMemAdapter {
   void UpdateUsedPeakMemory(int64_t memory) { usedPeakMemory_ = std::max(usedPeakMemory_, memory); }
   [[nodiscard]] uint64_t MaxHbmSizeForMs() const { return maxAvailableMsHbmSize_; }
   [[nodiscard]] int64_t GetMsUsedHbmSize() const { return msUsedHbmSize_; }
-  static size_t GetRoundUpAlignSize(size_t input_size);
-  static size_t GetRoundDownAlignSize(size_t input_size);
+  static size_t GetRoundUpAlignSize(size_t inputSize);
+  static size_t GetRoundDownAlignSize(size_t inputSize);
 
  protected:
   AscendMemAdapter() = default;

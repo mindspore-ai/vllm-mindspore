@@ -32,11 +32,11 @@ aclopSetAttrListStringFunObj aclopSetAttrListString_ = nullptr;
 aclopSetAttrStringFunObj aclopSetAttrString_ = nullptr;
 aclopSetModelDirFunObj aclopSetModelDir_ = nullptr;
 
-void LoadAclOpApiSymbol(const std::string &ascend_path) {
-  std::string ascendcl_plugin_path = ascend_path + "lib64/libascendcl.so";
-  auto handler = GetLibHandler(ascendcl_plugin_path);
+void LoadAclOpApiSymbol(const std::string &ascendPath) {
+  std::string ascendclPluginPath = ascendPath + "lib64/libascendcl.so";
+  auto handler = GetLibHandler(ascendclPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << ascendcl_plugin_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << ascendclPluginPath << " failed!" << dlerror();
     return;
   }
   aclopCreateAttr_ = DlsymAscendFuncObj(aclopCreateAttr, handler);

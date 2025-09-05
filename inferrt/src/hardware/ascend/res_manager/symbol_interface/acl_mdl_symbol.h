@@ -123,7 +123,7 @@ extern aclmdlRIExecuteAsyncFunObj aclmdlRIExecuteAsync_;
 extern aclmdlRIDestroyFunObj aclmdlRIDestroy_;
 #endif
 
-void LoadAclMdlApiSymbol(const std::string &ascend_path);
+void LoadAclMdlApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclMdlApi();
 }  // namespace mrt::device::ascend
 
