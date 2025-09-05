@@ -44,24 +44,33 @@ def _make_sampling_metadata(self) -> SamplingMetadata:
         _copy_slice_from_np(self.top_k_cpu, self.top_k, num_reqs)
     if not self.no_min_p:
         _copy_slice_from_np(self.min_p_cpu, self.min_p, num_reqs)
-
+    frequency_penalties = None
+    presence_penalties = None
+    repetition_penalties = None
+    prompt_token_ids = None
     if not self.no_penalties:
         # Since syncing these tensors is expensive only copy them
         # if necessary i.e. if there are requests which require
         # penalties to be applied during sampling.
-        _copy_slice_from_np(self.frequency_penalties_cpu,
-                            self.frequency_penalties, num_reqs)
-        _copy_slice_from_np(self.presence_penalties_cpu,
-                            self.presence_penalties, num_reqs)
-        _copy_slice_from_np(self.repetition_penalties_cpu,
-                            self.repetition_penalties, num_reqs)
-
-        # The prompt tokens are used only for applying penalties during
-        # the sampling process. Hence copy these tensors only when
-        # there are requests which need penalties to be applied.
+        apply_freq = not np.all(self.frequency_penalties_cpu[:num_reqs] == 0.0)
+        apply_pres = not np.all(self.presence_penalties_cpu[:num_reqs] == 0.0)
+        apply_rep = not np.all(self.repetition_penalties_cpu[:num_reqs] == 1.0)
         prompt_token_ids = self._make_prompt_token_ids_tensor()
-    else:
-        prompt_token_ids = None
+
+        if apply_freq:
+            _copy_slice_from_np(self.frequency_penalties_cpu,
+                                self.frequency_penalties, num_reqs)
+            frequency_penalties = self.frequency_penalties[:num_reqs]
+
+        if apply_pres:
+            _copy_slice_from_np(self.presence_penalties_cpu,
+                                self.presence_penalties, num_reqs)
+            presence_penalties = self.presence_penalties[:num_reqs]
+
+        if apply_rep:
+            _copy_slice_from_np(self.repetition_penalties_cpu,
+                                self.repetition_penalties, num_reqs)
+            repetition_penalties = self.repetition_penalties[:num_reqs]
 
     allowed_token_ids_mask: Optional[Tensor] = None
     if not self.no_allowed_token_ids:
@@ -82,9 +91,9 @@ def _make_sampling_metadata(self) -> SamplingMetadata:
         generators=self.generators,
         max_num_logprobs=self.max_num_logprobs,
         prompt_token_ids=prompt_token_ids,
-        frequency_penalties=self.frequency_penalties[:num_reqs],
-        presence_penalties=self.presence_penalties[:num_reqs],
-        repetition_penalties=self.repetition_penalties[:num_reqs],
+        frequency_penalties=frequency_penalties,
+        presence_penalties=presence_penalties,
+        repetition_penalties=repetition_penalties,
         output_token_ids=cast(list[list[int]], self.req_output_token_ids),
         min_tokens=self.min_tokens,
         no_penalties=self.no_penalties,
