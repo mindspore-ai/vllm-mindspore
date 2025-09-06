@@ -25,7 +25,7 @@ from mindspore.ops.auto_generate import grouped_matmul_v4
 
 
 def einsum_ms(inputs, selected_loras):
-    # mint.einsum("bi, boi -> bo", inputs, selected_loras)
+    # equal to einsum("bi, boi -> bo", inputs, selected_loras)
     selected_loras = mint.transpose(selected_loras, 1, 2)
     outputs = mint.matmul(inputs.unsqueeze(1), selected_loras).squeeze(1)
     return outputs
