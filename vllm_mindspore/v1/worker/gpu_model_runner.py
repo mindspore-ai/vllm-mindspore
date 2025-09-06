@@ -22,7 +22,6 @@ import traceback
 from typing import Any, Optional
 
 import mindspore as ms
-import ms_custom_ops
 import numpy as np
 import torch
 from mindspore import Generator as msGenerator
@@ -481,6 +480,7 @@ def _reshape_kv_cache_tensors(
                         # Currently, transdata has a bug and ms.jit must be
                         # added. Later, ms.jit will be removed.
                         num_blocks, block_size, _, _ = cache_block.shape
+                        import ms_custom_ops
                         cache_block = ops.reshape(cache_block,
                                                   (num_blocks, block_size, -1))
                         cache_block_nz = ms.jit(ms_custom_ops.trans_data)\

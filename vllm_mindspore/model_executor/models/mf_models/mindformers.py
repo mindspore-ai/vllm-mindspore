@@ -61,6 +61,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.mla_config = self.mf_config.get('model', None).get(
             'model_config', None).get('multi_latent_attention', False)
         self.use_ringmla = is_use_ringmla(vllm_config, mf_config)
+        self.mf_config.model.model_config.use_fused_mla = self.use_ringmla
         self.is_chunked = False
 
         build_mf_context(self.mf_config)

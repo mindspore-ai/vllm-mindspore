@@ -20,7 +20,6 @@ from collections.abc import Iterable
 from typing import Any, Optional, Union, cast
 
 import mindspore as ms
-import ms_custom_ops
 import numpy as np
 import vllm.envs as envs
 from mindspore import Tensor, mutable, nn
@@ -96,6 +95,7 @@ class MLAAttentionWrapper(AttentionWrapper):
                 r_shape = [1, *(self.kv_shape[1:-2]), qk_rope_head_dim]
                 # Currently, transdata has a bug and ms.jit must be added.
                 # Later, ms.jit will be removed.
+                import ms_custom_ops
                 self.kv_cache = [(ms.jit(ms_custom_ops.trans_data)(
                     ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
                     transdata_type=1), ms.jit(ms_custom_ops.trans_data)(
@@ -295,7 +295,8 @@ class MsModelBase:
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
         seq_lens_np = np.array([input_len], dtype=np.int32)
-        context_lens_tensor = ms.Tensor([0], dtype=ms.int32)
+        context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not \
+                            self.set_flags else ms.Tensor([1], dtype=ms.int32)
 
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
