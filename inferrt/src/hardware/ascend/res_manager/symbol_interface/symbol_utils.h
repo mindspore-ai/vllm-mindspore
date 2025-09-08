@@ -21,8 +21,6 @@
 #include "acl/acl.h"
 #include "common/visible.h"
 
-extern "C" MRT_EXPORT int (*aclrt_get_last_error)(int);
-
 #ifndef ACL_ERROR_RT_DEVICE_MEM_ERROR
 #define ACL_ERROR_RT_DEVICE_MEM_ERROR 507053
 #endif
@@ -38,9 +36,9 @@ extern "C" MRT_EXPORT int (*aclrt_get_last_error)(int);
 const int thread_level = 0;
 
 template <typename Function, typename... Args>
-auto RunAscendApi(Function f, int line, const char *call_f, const char *func_name, Args... args) {
+auto RunAscendApi(Function f, int line, const char *callF, const char *funcName, Args... args) {
   if (f == nullptr) {
-    LOG_ERROR << func_name << " is null.";
+    LOG_ERROR << funcName << " is null.";
   }
 
   if constexpr (std::is_same_v<std::invoke_result_t<decltype(f), Args...>, int>) {
@@ -52,9 +50,9 @@ auto RunAscendApi(Function f, int line, const char *call_f, const char *func_nam
 }
 
 template <typename Function>
-auto RunAscendApi(Function f, int line, const char *call_f, const char *func_name) {
+auto RunAscendApi(Function f, int line, const char *callF, const char *funcName) {
   if (f == nullptr) {
-    LOG_ERROR << func_name << " is null.";
+    LOG_ERROR << funcName << " is null.";
   }
   if constexpr (std::is_same_v<std::invoke_result_t<decltype(f)>, int>) {
     auto ret = f();
@@ -71,13 +69,13 @@ bool HasAscendApi(Function f) {
 
 namespace mrt::device::ascend {
 
-#define CALL_ASCEND_API(func_name, ...) \
-  RunAscendApi(mrt::device::ascend::func_name##_, __LINE__, __FUNCTION__, #func_name, ##__VA_ARGS__)
+#define CALL_ASCEND_API(funcName, ...) \
+  RunAscendApi(mrt::device::ascend::funcName##_, __LINE__, __FUNCTION__, #funcName, ##__VA_ARGS__)
 
-#define HAS_ASCEND_API(func_name) HasAscendApi(mrt::device::ascend::func_name##_)
+#define HAS_ASCEND_API(funcName) HasAscendApi(mrt::device::ascend::funcName##_)
 
 std::string GetAscendPath();
-void *GetLibHandler(const std::string &lib_path, bool if_global = false);
+void *GetLibHandler(const std::string &libPath, bool ifGlobal = false);
 void LoadAscendApiSymbols();
 void LoadSimulationApiSymbols();
 }  // namespace mrt::device::ascend

@@ -22,15 +22,15 @@ namespace mrt::device::ascend {
 aclInitFunObj aclInit_ = nullptr;
 aclFinalizeFunObj aclFinalize_ = nullptr;
 
-void LoadAclApiSymbol(const std::string &ascend_path) {
-  std::string acl_plugin_path = ascend_path + "lib64/libascendcl.so";
-  auto base_handler = GetLibHandler(acl_plugin_path);
-  if (base_handler == nullptr) {
-    LOG_OUT << "Dlopen " << acl_plugin_path << " failed!" << dlerror();
+void LoadAclApiSymbol(const std::string &ascendPath) {
+  std::string aclPluginPath = ascendPath + "lib64/libascendcl.so";
+  auto baseHandler = GetLibHandler(aclPluginPath);
+  if (baseHandler == nullptr) {
+    LOG_OUT << "Dlopen " << aclPluginPath << " failed!" << dlerror();
     return;
   }
-  aclInit_ = DlsymAscendFuncObj(aclInit, base_handler);
-  aclFinalize_ = DlsymAscendFuncObj(aclFinalize, base_handler);
+  aclInit_ = DlsymAscendFuncObj(aclInit, baseHandler);
+  aclFinalize_ = DlsymAscendFuncObj(aclFinalize, baseHandler);
   LOG_OUT << "Load acl base api success!";
 }
 

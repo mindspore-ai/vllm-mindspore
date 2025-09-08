@@ -32,7 +32,7 @@ namespace device {
 namespace ascend {
 
 class MRT_EXPORT DefaultAscendMemoryPool : public AbstractAscendMemoryPoolSupport,
-                                                public AbstractEnhancedDynamicMemPool {
+                                           public AbstractEnhancedDynamicMemPool {
  public:
   DefaultAscendMemoryPool();
   DefaultAscendMemoryPool(const DefaultAscendMemoryPool &) = delete;
@@ -41,19 +41,19 @@ class MRT_EXPORT DefaultAscendMemoryPool : public AbstractAscendMemoryPoolSuppor
 
   std::string GetMemoryPoolType() const override { return "DefaultAscendMemoryPool"; }
 
-  void SetMemPoolBlockSize(size_t available_device_mem_size) override {
-    return AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(available_device_mem_size);
+  void SetMemPoolBlockSize(size_t availableDeviceMemSize) override {
+    return AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(availableDeviceMemSize);
   }
 
-  size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle = false) override {
-    return AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size, from_persistent_mem, need_recycle);
+  size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle = false) override {
+    return AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size, fromPersistentMem, needRecycle);
   }
 
   const bool IsEnableEagerFree() const override { return AbstractAscendMemoryPoolSupport::IsEnableEagerFree(); }
 
   size_t EmptyCache() override;
 
-  void EnablePluggableAllocator(std::function<MallocFuncType> alloc_fn, std::function<FreeFuncType> free_fn) override;
+  void EnablePluggableAllocator(std::function<MallocFuncType> allocFn, std::function<FreeFuncType> freeFn) override;
   void DisablePluggableAllocator() override;
 };
 using DefaultAscendMemoryPoolPtr = std::shared_ptr<DefaultAscendMemoryPool>;
@@ -66,29 +66,29 @@ class MRT_EXPORT DefaultEnhancedAscendMemoryPool : public DefaultAscendMemoryPoo
   ~DefaultEnhancedAscendMemoryPool() override = default;
 
   // Wrap enhanced function.
-  void Initialize(size_t init_size, size_t increase_size, size_t max_size) override {
-    instance_->Initialize(init_size, increase_size, max_size);
+  void Initialize(size_t initSize, size_t increaseSize, size_t maxSize) override {
+    instance_->Initialize(initSize, increaseSize, maxSize);
   }
 
   void ReleaseDeviceRes() override;
 
-  DeviceMemPtr AllocTensorMem(size_t size, bool from_persistent_mem = false, bool need_recycle = false,
-                              uint32_t stream_id = kDefaultStreamIndex) override;
+  DeviceMemPtr AllocTensorMem(size_t size, bool fromPersistentMem = false, bool needRecycle = false,
+                              uint32_t streamId = kDefaultStreamIndex) override;
 
-  std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &size_list,
-                                                     uint32_t stream_id = kDefaultStreamIndex) override;
+  std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
+                                                     uint32_t streamId = kDefaultStreamIndex) override;
 
-  void FreeTensorMem(const DeviceMemPtr &device_addr) override;
+  void FreeTensorMem(const DeviceMemPtr &deviceAddr) override;
 
-  bool DoFreeTensorMem(const DeviceMemPtr &device_addr) override;
+  bool DoFreeTensorMem(const DeviceMemPtr &deviceAddr) override;
 
-  void FreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs, const std::vector<DeviceMemPtr> &keep_addrs,
-                          const std::vector<size_t> &keep_addr_sizes) override;
+  void FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs, const std::vector<DeviceMemPtr> &keepAddrs,
+                          const std::vector<size_t> &keepAddrSizes) override;
 
-  std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs,
-                                             const std::vector<DeviceMemPtr> &keep_addrs,
-                                             const std::vector<size_t> &keep_addr_sizes) override {
-    return instance_->DoFreePartTensorMems(free_addrs, keep_addrs, keep_addr_sizes);
+  std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
+                                             const std::vector<DeviceMemPtr> &keepAddrs,
+                                             const std::vector<size_t> &keepAddrSizes) override {
+    return instance_->DoFreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
   }
 
   void DefragMemory() override;
@@ -102,40 +102,40 @@ class MRT_EXPORT DefaultEnhancedAscendMemoryPool : public DefaultAscendMemoryPoo
   // Proxy wrapper for AbstractAscendMemoryPoolSupport
   void ResetIdleMemBuf() const override { instance_->ResetIdleMemBuf(); }
 
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                    const DeviceEventPtr &event) override {
-    return instance_->RecordEvent(task_id_on_stream, user_stream_id, memory_stream_addresses, event);
+    return instance_->RecordEvent(taskIdOnStream, userStreamId, memoryStreamAddresses, event);
   }
 
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) override;
 
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t memory_stream_id) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) override;
 
   bool SyncAllEvents() override;
 
-  void EnablePluggableAllocator(std::function<MallocFuncType> alloc_fn, std::function<FreeFuncType> free_fn) override {
-    return instance_->EnablePluggableAllocator(alloc_fn, free_fn);
+  void EnablePluggableAllocator(std::function<MallocFuncType> allocFn, std::function<FreeFuncType> freeFn) override {
+    return instance_->EnablePluggableAllocator(allocFn, freeFn);
   }
 
   void DisablePluggableAllocator() override { return instance_->DisablePluggableAllocator(); }
 
   size_t AlignMemorySize(size_t size) const override { return instance_->AlignMemorySize(size); }
 
-  size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle = false) override {
-    return instance_->CalMemBlockAllocSize(size, from_persistent_mem, need_recycle);
+  size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle = false) override {
+    return instance_->CalMemBlockAllocSize(size, fromPersistentMem, needRecycle);
   }
 
-  void SetMemPoolBlockSize(size_t available_device_mem_size) override {
-    instance_->SetMemPoolBlockSize(available_device_mem_size);
+  void SetMemPoolBlockSize(size_t availableDeviceMemSize) override {
+    instance_->SetMemPoolBlockSize(availableDeviceMemSize);
   }
 
-  size_t MemAllocUnitSize(bool from_persistent_mem) const override {
-    return instance_->MemAllocUnitSize(from_persistent_mem);
+  size_t MemAllocUnitSize(bool fromPersistentMem) const override {
+    return instance_->MemAllocUnitSize(fromPersistentMem);
   }
 
-  void SetMemAllocUintSize(size_t common_size, size_t persist_size = kDynamicMemAllocUnitSize) override {
-    instance_->SetMemAllocUintSize(common_size, persist_size);
+  void SetMemAllocUintSize(size_t commonSize, size_t persistSize = kDynamicMemAllocUnitSize) override {
+    instance_->SetMemAllocUintSize(commonSize, persistSize);
   }
 
   void *GetMinUsingMemoryAddr() const override { return instance_->GetMinUsingMemoryAddr(); }
@@ -198,7 +198,7 @@ class MRT_EXPORT DefaultEnhancedAscendMemoryPool : public DefaultAscendMemoryPoo
 
   const bool IsEnableVmm() const override { return instance_->IsEnableVmm(); }
 
-  void SetEnableVmm(bool enable_vmm) override { instance_->SetEnableVmm(enable_vmm); }
+  void SetEnableVmm(bool enableVmm) override { instance_->SetEnableVmm(enableVmm); }
 
   const bool SyncAllStreams() override { return instance_->SyncAllStreams(); }
 
@@ -224,11 +224,11 @@ class MRT_EXPORT DefaultEnhancedAscendMemoryPool : public DefaultAscendMemoryPoo
 
   bool IsEnableTimeEvent() override { return instance_->IsEnableTimeEvent(); }
 
-  void SetEnableTimeEvent(bool enable_time_event) override { instance_->SetEnableTimeEvent(enable_time_event); }
+  void SetEnableTimeEvent(bool enableTimeEvent) override { instance_->SetEnableTimeEvent(enableTimeEvent); }
 
-  MemoryTimeEventPtr GenAllocateMemoryTimeEvent(const void *addr, size_t size, uint32_t stream_id, bool from_persistent,
-                                                bool is_persistent) override {
-    return instance_->GenAllocateMemoryTimeEvent(addr, size, stream_id, from_persistent, is_persistent);
+  MemoryTimeEventPtr GenAllocateMemoryTimeEvent(const void *addr, size_t size, uint32_t streamId, bool fromPersistent,
+                                                bool isPersistent) override {
+    return instance_->GenAllocateMemoryTimeEvent(addr, size, streamId, fromPersistent, isPersistent);
   }
 
   MemoryTimeEventPtr GenFreeMemoryTimeEvent(const void *addr) override {
@@ -238,7 +238,7 @@ class MRT_EXPORT DefaultEnhancedAscendMemoryPool : public DefaultAscendMemoryPoo
   size_t EmptyCache() override { return instance_->EmptyCache(); }
 
  protected:
-  void SetRankIdGetter(const std::function<size_t()> &rank_id_getter) override;
+  void SetRankIdGetter(const std::function<size_t()> &rankIdGetter) override;
 
  private:
   DefaultAscendMemoryPoolPtr instance_;
@@ -252,12 +252,12 @@ class MRT_EXPORT BestFitAscendMemoryPool : public AbstractAscendMemoryPoolSuppor
   BestFitAscendMemoryPool &operator=(const BestFitAscendMemoryPool &) = delete;
   ~BestFitAscendMemoryPool() override = default;
 
-  void SetMemPoolBlockSize(size_t available_device_mem_size) override {
-    return AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(available_device_mem_size);
+  void SetMemPoolBlockSize(size_t availableDeviceMemSize) override {
+    return AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(availableDeviceMemSize);
   }
 
-  size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle = false) override {
-    return AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size, from_persistent_mem, need_recycle);
+  size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle = false) override {
+    return AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size, fromPersistentMem, needRecycle);
   }
 
   const bool IsEnableEagerFree() const override { return AbstractAscendMemoryPoolSupport::IsEnableEagerFree(); }

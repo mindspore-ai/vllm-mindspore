@@ -28,11 +28,11 @@ aclrtAllocatorSetGetAddrFromBlockFuncToDescFunObj aclrtAllocatorSetGetAddrFromBl
 aclrtAllocatorSetObjToDescFunObj aclrtAllocatorSetObjToDesc_ = nullptr;
 aclrtAllocatorUnregisterFunObj aclrtAllocatorUnregister_ = nullptr;
 
-void LoadAclAllocatorApiSymbol(const std::string &ascend_path) {
-  std::string allocator_plugin_path = ascend_path + "lib64/libascendcl.so";
-  auto handler = GetLibHandler(allocator_plugin_path);
+void LoadAclAllocatorApiSymbol(const std::string &ascendPath) {
+  std::string allocatorPluginPath = ascendPath + "lib64/libascendcl.so";
+  auto handler = GetLibHandler(allocatorPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << allocator_plugin_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << allocatorPluginPath << " failed!" << dlerror();
     return;
   }
   aclrtAllocatorCreateDesc_ = DlsymAscendFuncObj(aclrtAllocatorCreateDesc, handler);

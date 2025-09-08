@@ -17,8 +17,6 @@
 #include <string>
 #include "symbol_utils.h"
 
-int (*aclrt_get_last_error)(int) = nullptr;
-const char *(*acl_get_recent_err_msg)() = nullptr;
 namespace mrt::device::ascend {
 aclrtCreateContextFunObj aclrtCreateContext_ = nullptr;
 aclrtCreateEventFunObj aclrtCreateEvent_ = nullptr;
@@ -85,11 +83,11 @@ aclrtMemSetPidToShareableHandleFunObj aclrtMemSetPidToShareableHandle_ = nullptr
 aclrtMemImportFromShareableHandleFunObj aclrtMemImportFromShareableHandle_ = nullptr;
 aclrtGetLastErrorFunObj aclrtGetLastError_ = nullptr;
 
-void LoadAclRtApiSymbol(const std::string &ascend_path) {
-  std::string aclrt_plugin_path = ascend_path + "lib64/libascendcl.so";
-  auto handler = GetLibHandler(aclrt_plugin_path);
+void LoadAclRtApiSymbol(const std::string &ascendPath) {
+  std::string aclrtPluginPath = ascendPath + "lib64/libascendcl.so";
+  auto handler = GetLibHandler(aclrtPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << aclrt_plugin_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << aclrtPluginPath << " failed!" << dlerror();
     return;
   }
   aclrtCreateContext_ = DlsymAscendFuncObj(aclrtCreateContext, handler);

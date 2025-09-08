@@ -45,19 +45,19 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
 
   std::shared_ptr<MemoryManager> mem_manager() const override { return memManager_; }
 
-  std::vector<void *> AllocateContinuousMemory(const std::vector<size_t> &size_list,
-                                               uint32_t stream_id = kDefaultStreamIndex) const override;
+  std::vector<void *> AllocateContinuousMemory(const std::vector<size_t> &sizeList,
+                                               uint32_t streamId = kDefaultStreamIndex) const override;
   bool IsEnableVmm() const override;
 
-  bool BindDeviceToCurrentThread(bool force_bind) const override;
+  bool BindDeviceToCurrentThread(bool forceBind) const override;
   void *GetStream() const override { return AscendStreamMng::GetInstance().default_stream(); }
   void *GetCopyDataStream() const;
 
-  void *AllocateStaticMemory(size_t size, uint32_t stream_id = kDefaultStreamIndex) const;
-  void *AllocateMemory(size_t size, uint32_t stream_id = kDefaultStreamIndex) const override;
+  void *AllocateStaticMemory(size_t size, uint32_t streamId = kDefaultStreamIndex) const;
+  void *AllocateMemory(size_t size, uint32_t streamId = kDefaultStreamIndex) const override;
   void FreeMemory(void *ptr) const override;
-  void FreePartMemorys(const std::vector<void *> &free_addrs, const std::vector<void *> &keep_addrs,
-                       const std::vector<size_t> &keep_addr_sizes) const override;
+  void FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
+                       const std::vector<size_t> &keepAddrSizes) const override;
   void DefragMemory() override;
 
   size_t GetMaxUsedMemorySize() const override;
@@ -80,42 +80,42 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
 
   size_t EmptyCache() override;
 
-  bool CreateStream(size_t *stream_id) const override;
-  bool CreateStreamWithPriority(size_t *stream_id, int32_t priority) const override;
-  bool DestroyStream(size_t stream_id) const override;
+  bool CreateStream(size_t *streamId) const override;
+  bool CreateStreamWithPriority(size_t *streamId, int32_t priority) const override;
+  bool DestroyStream(size_t streamId) const override;
   size_t QueryStreamSize() const override;
   std::vector<uint32_t> GetStreamIds() const override;
-  void *GetStream(size_t stream_id) const override;
-  void SetCurrentStreamId(size_t stream_id) override;
+  void *GetStream(size_t streamId) const override;
+  void SetCurrentStreamId(size_t streamId) override;
   size_t GetCurrentStreamId() const override;
-  bool QueryStream(size_t stream_id) const override;
-  bool SyncStream(size_t stream_id = 0) const override;
-  bool SyncAllStreams(bool sync_device = true) const override;
+  bool QueryStream(size_t streamId) const override;
+  bool SyncStream(size_t streamId = 0) const override;
+  bool SyncAllStreams(bool syncDevice = true) const override;
   bool SyncNotDefaultStreams() const override;
   size_t DefaultStream() const override;
 
-  DeviceEventPtr CreateRuntimeEvent(bool enable_blocking, bool enable_record_wait) override;
-  DeviceEventPtr CreateEventWithFlag(bool enable_timing, bool blocking, bool use_extensional_api) override;
+  DeviceEventPtr CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) override;
+  DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) override;
   bool DestroyEvent(const DeviceEventPtr &event) override;
   bool DestroyAllEvents() override;
 
-  bool single_op_multi_stream_enable() const override;
-  void set_single_op_multi_stream_enable(bool single_op_multi_stream_enable) override;
+  bool singleOpMultiStreamEnable() const override;
+  void set_single_op_multi_stream_enable(bool singleOpMultiStreamEnable) override;
   // Only used in graph_mode with MS_DISABLE_REF_MODE, delete it when delete MS_DISABLE_REF_MODEF
   void SetCPUMemManager();
 
   // Override interface for multi stream event control.
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
-                   const DeviceEventPtr &input_event) override;
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                   const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
+                   const DeviceEventPtr &inputEvent) override;
 
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) override;
 
-  bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id) override;
+  bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId) override;
 
   bool SyncAllEvents() override;
 
-  bool LaunchCallback(std::function<void(void)> callback_func, size_t stream_id, bool is_block = false) const override;
+  bool LaunchCallback(std::function<void(void)> callbackFunc, size_t streamId, bool isBlock = false) const override;
 
   void ResetStreamAndCtx() const override;
 

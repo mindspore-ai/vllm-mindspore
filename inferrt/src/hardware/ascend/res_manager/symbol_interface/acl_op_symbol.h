@@ -50,7 +50,7 @@ extern aclopSetAttrListStringFunObj aclopSetAttrListString_;
 extern aclopSetAttrStringFunObj aclopSetAttrString_;
 extern aclopSetModelDirFunObj aclopSetModelDir_;
 
-void LoadAclOpApiSymbol(const std::string &ascend_path);
+void LoadAclOpApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclOpApi();
 }  // namespace mrt::device::ascend
 

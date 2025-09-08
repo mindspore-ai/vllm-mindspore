@@ -47,7 +47,7 @@ ORIGIN_METHOD_WITH_SIMU(acltdtReceiveTensor, aclError, const acltdtChannelHandle
 ORIGIN_METHOD_WITH_SIMU(acltdtSendTensor, aclError, const acltdtChannelHandle *, const acltdtDataset *, int32_t)
 ORIGIN_METHOD_WITH_SIMU(acltdtStopChannel, aclError, acltdtChannelHandle *)
 
-void LoadAcltdtApiSymbol(const std::string &ascend_path);
+void LoadAcltdtApiSymbol(const std::string &ascendPath);
 void LoadSimulationTdtApi();
 }  // namespace mrt::device::ascend
 

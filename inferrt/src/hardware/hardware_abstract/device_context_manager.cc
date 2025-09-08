@@ -63,10 +63,10 @@ DeviceContextManager &DeviceContextManager::GetInstance() {
   return instance;
 }
 
-void DeviceContextManager::Register(const std::string &device_name, DeviceContextCreator &&device_context_creator) {
-  LOG_OUT << "Register device context creator for device: " << device_name;
-  if (deviceContextCreators_.find(device_name) == deviceContextCreators_.end()) {
-    (void)deviceContextCreators_.emplace(device_name, device_context_creator);
+void DeviceContextManager::Register(const std::string &deviceName, DeviceContextCreator &&deviceContextCreator) {
+  LOG_OUT << "Register device context creator for device: " << deviceName;
+  if (deviceContextCreators_.find(deviceName) == deviceContextCreators_.end()) {
+    (void)deviceContextCreators_.emplace(deviceName, deviceContextCreator);
   }
 }
 
@@ -104,69 +104,69 @@ void DeviceContextManager::BindDeviceCtx() const {
   }
 }
 
-DeviceContext *DeviceContextManager::GetOrCreateDeviceContext(const DeviceContextKey &device_context_key) {
-  std::string device_context_key_str = device_context_key.ToString();
-  std::string name = device_context_key.deviceName_;
+DeviceContext *DeviceContextManager::GetOrCreateDeviceContext(const DeviceContextKey &deviceContextKey) {
+  std::string deviceContextKeyStr = deviceContextKey.ToString();
+  std::string name = deviceContextKey.deviceName_;
 
-  auto device_context_iter = deviceContexts_.find(device_context_key_str);
-  if (device_context_iter != deviceContexts_.end()) {
-    return device_context_iter->second.get();
+  auto deviceContextIter = deviceContexts_.find(deviceContextKeyStr);
+  if (deviceContextIter != deviceContexts_.end()) {
+    return deviceContextIter->second.get();
   }
 
-  std::shared_ptr<DeviceContext> device_context;
-  auto creator_iter = deviceContextCreators_.find(name);
-  if (creator_iter != deviceContextCreators_.end()) {
-    device_context = (creator_iter->second)(device_context_key);
-    if (device_context == nullptr) {
+  std::shared_ptr<DeviceContext> deviceContext;
+  auto creatorIter = deviceContextCreators_.find(name);
+  if (creatorIter != deviceContextCreators_.end()) {
+    deviceContext = (creatorIter->second)(deviceContextKey);
+    if (deviceContext == nullptr) {
       LOG_ERROR << "create device context failed";
     }
-    if (device_context->deviceResManager_ == nullptr) {
+    if (deviceContext->deviceResManager_ == nullptr) {
       LOG_ERROR << "create device res manager failed";
     }
-    deviceContexts_[device_context_key_str] = device_context;
-    backendToDeviceContext_[name] = device_context;
+    deviceContexts_[deviceContextKeyStr] = deviceContext;
+    backendToDeviceContext_[name] = deviceContext;
     multiStreamControllers_[name] =
-      std::make_shared<MultiStreamController>(device_context->deviceResManager_.get());
+      std::make_shared<MultiStreamController>(deviceContext->deviceResManager_.get());
   } else {
     LOG_ERROR << "Create device context failed, please make sure target device:" << name
               << " is available, error message of loading plugins: " << GetErrorMsg();
   }
-  return device_context.get();
+  return deviceContext.get();
 }
 
-DeviceContextPtr DeviceContextManager::GetDeviceContext(const std::string &device_target) {
-  if (backendToDeviceContext_.count(device_target) == 0) {
-    LOG_OUT << "Device context of device " << device_target << " is not created yet.";
+DeviceContextPtr DeviceContextManager::GetDeviceContext(const std::string &deviceTarget) {
+  if (backendToDeviceContext_.count(deviceTarget) == 0) {
+    LOG_OUT << "Device context of device " << deviceTarget << " is not created yet.";
     return nullptr;
   }
-  return backendToDeviceContext_[device_target];
+  return backendToDeviceContext_[deviceTarget];
 }
 
-MultiStreamControllerPtr &DeviceContextManager::GetMultiStreamController(const std::string &device_name) {
-  auto &&iter = multiStreamControllers_.find(device_name);
+MultiStreamControllerPtr &DeviceContextManager::GetMultiStreamController(const std::string &deviceName) {
+  auto &&iter = multiStreamControllers_.find(deviceName);
   if (iter != multiStreamControllers_.end()) {
     return iter->second;
   }
-  LOG_ERROR << "Found multi stream controller failed, and try to initialize, device_name : " << device_name << ".";
+  LOG_ERROR << "Found multi stream controller failed, and try to initialize, deviceName : " << deviceName << ".";
   // use 0 temporarily.
-  uint32_t device_id = 0;
-  DeviceContextKey host_key = {device_name, device_id};
-  const auto &real_device_context = GetOrCreateDeviceContext(host_key);
-  if (real_device_context == nullptr) {
+  uint32_t deviceId = 0;
+  DeviceContextKey hostKey = {deviceName, deviceId};
+  const auto &realDeviceContext = GetOrCreateDeviceContext(hostKey);
+  if (realDeviceContext == nullptr) {
     LOG_ERROR << "get or create device context failed";
   }
-  auto &&iter_again = multiStreamControllers_.find(device_name);
-  if (iter_again == multiStreamControllers_.end()) {
-    LOG_ERROR << "Get multi stream controller failed, device_name : " << device_name << ".";
+  auto &&iterAgain = multiStreamControllers_.find(deviceName);
+  if (iterAgain == multiStreamControllers_.end()) {
+    LOG_ERROR << "Get multi stream controller failed, deviceName : " << deviceName << ".";
   }
-  return iter_again->second;
+  return iterAgain->second;
 }
 
 void DeviceContextManager::WaitTaskFinishOnDevice() const {
   for (const auto &item : deviceContexts_) {
-    auto device_context = item.second;
+    auto deviceContext = item.second;
     try {
-      if (device_context != nullptr && !device_context->deviceResManager_->SyncAllStreams()) {
+      if (deviceContext != nullptr && !deviceContext->deviceResManager_->SyncAllStreams()) {
         LOG_ERROR << "SyncStream failed";
         return;
       }
@@ -179,9 +179,9 @@ void DeviceContextManager::WaitTaskFinishOnDevice() const {
 
 void DeviceContextManager::SyncAllStreams() const {
   for (const auto &item : deviceContexts_) {
-    auto device_context = item.second;
-    if (device_context != nullptr && !device_context->deviceResManager_->SyncAllStreams()) {
-      LOG_ERROR << "SyncStream failed, device info: " << device_context->device_context_key().ToString();
+    auto deviceContext = item.second;
+    if (deviceContext != nullptr && !deviceContext->deviceResManager_->SyncAllStreams()) {
+      LOG_ERROR << "SyncStream failed, device info: " << deviceContext->deviceContextKey().ToString();
     }
   }
 }

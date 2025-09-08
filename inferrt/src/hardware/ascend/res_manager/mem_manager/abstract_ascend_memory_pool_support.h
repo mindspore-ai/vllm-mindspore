@@ -45,12 +45,12 @@ class MRT_EXPORT AbstractAscendMemoryPoolSupport : virtual public DynamicMemPool
   uint64_t total_mem_size() const override;
 
   // Set mem pool block size
-  void SetMemPoolBlockSize(size_t available_device_mem_size) override;
+  void SetMemPoolBlockSize(size_t availableDeviceMemSize) override;
 
   virtual void ResetIdleMemBuf() const;
 
   // Calculate memory block required alloc size when adding the memory block.
-  size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle) override;
+  size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle) override;
 
   // The related interface of device memory eager free.
   const bool IsEnableEagerFree() const override;

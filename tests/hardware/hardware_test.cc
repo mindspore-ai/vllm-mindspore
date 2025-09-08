@@ -19,44 +19,44 @@
 #include "common/common.h"
 
 void TestDeviceResource() {
-  mrt::device::DeviceContextKey device_context_key{"Ascend", 0};
-  auto device_context =
-    mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(device_context_key);
-  if (device_context == nullptr) {
+  mrt::device::DeviceContextKey deviceContextKey{"Ascend", 0};
+  auto deviceContext =
+    mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+  if (deviceContext == nullptr) {
     LOG_ERROR << "Get device context failed.";
   }
-  if (device_context->deviceResManager_ == nullptr) {
+  if (deviceContext->deviceResManager_ == nullptr) {
     LOG_ERROR << "Get device res manager failed.";
   }
-  device_context->Initialize();
+  deviceContext->Initialize();
 
   // Test allocate memory.
-  auto ptr = device_context->deviceResManager_->AllocateMemory(8);
+  auto ptr = deviceContext->deviceResManager_->AllocateMemory(8);
   LOG_ERROR << "ptr:" << ptr;
 
   // Test event and stream.
-  size_t stream_id = 1;
-  if (!device_context->deviceResManager_->CreateStream(&stream_id)) {
+  size_t streamId = 1;
+  if (!deviceContext->deviceResManager_->CreateStream(&streamId)) {
     LOG_ERROR << "Create stream failed.";
   }
-  std::vector<std::pair<uint32_t, mrt::device::DeviceMemPtr>> memory_stream_addresses;
-  memory_stream_addresses.emplace_back(0, ptr);
-  auto input_event = device_context->deviceResManager_->CreateRuntimeEvent(true, true);
-  int64_t task_id_on_stream = 1;
-  if (!device_context->deviceResManager_->RecordEvent(task_id_on_stream, SizeToUint(stream_id),
-                                                        memory_stream_addresses, input_event)) {
+  std::vector<std::pair<uint32_t, mrt::device::DeviceMemPtr>> memoryStreamAddresses;
+  memoryStreamAddresses.emplace_back(0, ptr);
+  auto inputEvent = deviceContext->deviceResManager_->CreateRuntimeEvent(true, true);
+  int64_t taskIdOnStream = 1;
+  if (!deviceContext->deviceResManager_->RecordEvent(taskIdOnStream, SizeToUint(streamId),
+                                                        memoryStreamAddresses, inputEvent)) {
     LOG_ERROR << "Record event on stream failed.";
   }
-  if (!device_context->deviceResManager_->WaitEvent(task_id_on_stream, SizeToUint(stream_id))) {
+  if (!deviceContext->deviceResManager_->WaitEvent(taskIdOnStream, SizeToUint(streamId))) {
     LOG_ERROR << "Wait event failed.";
   }
-  if (!device_context->deviceResManager_->SyncStream(0)) {
+  if (!deviceContext->deviceResManager_->SyncStream(0)) {
     LOG_ERROR << "Sync stream failed.";
   }
 
   // Free ptr and destroy event.
-  device_context->deviceResManager_->FreeMemory(ptr);
-  if (!device_context->deviceResManager_->DestroyAllEvents()) {
+  deviceContext->deviceResManager_->FreeMemory(ptr);
+  if (!deviceContext->deviceResManager_->DestroyAllEvents()) {
     LOG_ERROR << "Destroy event failed.";
   }
 }

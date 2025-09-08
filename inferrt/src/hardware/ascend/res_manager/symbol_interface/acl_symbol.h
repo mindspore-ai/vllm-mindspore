@@ -28,7 +28,7 @@ ORIGIN_METHOD_WITH_SIMU(aclFinalize, aclError);
 extern aclInitFunObj aclInit_;
 extern aclFinalizeFunObj aclFinalize_;
 
-void LoadAclApiSymbol(const std::string &ascend_path);
+void LoadAclApiSymbol(const std::string &ascendPath);
 void LoadSimulationAclApi();
 }  // namespace mrt::device::ascend
 

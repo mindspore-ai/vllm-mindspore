@@ -34,7 +34,7 @@ namespace ascend {
 static const size_t ASCEND_COMMON_POOL_ALLOC_UNIT_SIZE_FOR_GRAPH_RUN_MODE = 8 << 20;
 constexpr char kGlobalOverflowWorkspace[] = "GLOBAL_OVERFLOW_WORKSPACE";
 
-void AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(size_t available_device_mem_size) {
+void AbstractAscendMemoryPoolSupport::SetMemPoolBlockSize(size_t availableDeviceMemSize) {
   // set by default configuration
   SetMemAllocUintSize(kDynamicMemAllocUnitSize, kDynamicMemAllocUnitSize);
 }
@@ -46,10 +46,10 @@ bool NoAdditionalMemory() {
 }
 }  // namespace
 
-size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle) {
-  auto device_free_mem_size = free_mem_size();
-  if (device_free_mem_size < size) {
-    LOG_OUT << "The device memory is not enough, the free memory size is " << device_free_mem_size
+size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle) {
+  auto deviceFreeMemSize = free_mem_size();
+  if (deviceFreeMemSize < size) {
+    LOG_OUT << "The device memory is not enough, the free memory size is " << deviceFreeMemSize
             << ", but the alloc size is " << size;
     LOG_OUT << "The dynamic memory pool total size is " << TotalMemStatistics() / kMBToByte << "M, total used size is "
             << TotalUsedMemStatistics() / kMBToByte << "M, used peak size is " << UsedMemPeakStatistics() / kMBToByte
@@ -58,34 +58,34 @@ size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool f
     return 0;
   }
 
-  size_t alloc_mem_size;
-  SetMemPoolBlockSize(device_free_mem_size);
-  auto alloc_mem_unit_size = MemAllocUnitSize(from_persistent_mem);
-  if (need_recycle) {
-    alloc_mem_unit_size = kDynamicMemAllocUnitSize;
+  size_t allocMemSize;
+  SetMemPoolBlockSize(deviceFreeMemSize);
+  auto allocMemUnitSize = MemAllocUnitSize(fromPersistentMem);
+  if (needRecycle) {
+    allocMemUnitSize = kDynamicMemAllocUnitSize;
   }
-  LOG_OUT << "Get unit block size " << alloc_mem_unit_size;
-  alloc_mem_size = alloc_mem_unit_size;
+  LOG_OUT << "Get unit block size " << allocMemUnitSize;
+  allocMemSize = allocMemUnitSize;
 
-  const bool is_graph_run_mode = true;
-  if (is_graph_run_mode) {
+  const bool isGraphRunMode = true;
+  if (isGraphRunMode) {
     // Growing at adding alloc unit size
-    while (alloc_mem_size < size) {
-      alloc_mem_size = alloc_mem_size + alloc_mem_unit_size;
+    while (allocMemSize < size) {
+      allocMemSize = allocMemSize + allocMemUnitSize;
     }
   } else {
     // Growing at twice of alloc unit size
     constexpr size_t kDouble = 2;
-    while (alloc_mem_size < size) {
-      alloc_mem_size = alloc_mem_size * kDouble;
+    while (allocMemSize < size) {
+      allocMemSize = allocMemSize * kDouble;
     }
   }
 
-  alloc_mem_size = std::min(alloc_mem_size, device_free_mem_size);
-  if (NoAdditionalMemory() && !need_recycle) {
-    alloc_mem_size = std::min(alloc_mem_size, size);
+  allocMemSize = std::min(allocMemSize, deviceFreeMemSize);
+  if (NoAdditionalMemory() && !needRecycle) {
+    allocMemSize = std::min(allocMemSize, size);
   }
-  return alloc_mem_size;
+  return allocMemSize;
 }
 
 size_t AbstractAscendMemoryPoolSupport::AllocDeviceMem(size_t size, DeviceMemPtr *addr) {
@@ -101,11 +101,11 @@ size_t AbstractAscendMemoryPoolSupport::AllocDeviceMem(size_t size, DeviceMemPtr
 }
 
 size_t AbstractAscendMemoryPoolSupport::GetMaxUsedMemSize() const {
-  void *min_used_addr = GetMinUsingMemoryAddr();
-  if (min_used_addr == nullptr) {
+  void *minUsedAddr = GetMinUsingMemoryAddr();
+  if (minUsedAddr == nullptr) {
     return 0;
   }
-  return AscendMemAdapter::GetInstance()->GetDynamicMemUpperBound(min_used_addr);
+  return AscendMemAdapter::GetInstance()->GetDynamicMemUpperBound(minUsedAddr);
 }
 
 size_t AbstractAscendMemoryPoolSupport::GetVmmUsedMemSize() const {
@@ -161,12 +161,12 @@ size_t AbstractAscendMemoryPoolSupport::MmapDeviceMem(const size_t size, const D
 
 bool AbstractAscendMemoryPoolSupport::FreeDeviceMem(const DeviceMemPtr &addr) {
   CHECK_IF_NULL(addr);
-  int64_t max_actual = ActualPeakStatistics();
-  LOG_OUT << "Max actual used memory size is " << max_actual;
-  AscendMemAdapter::GetInstance()->UpdateActualPeakMemory(max_actual);
-  int64_t max_peak = UsedMemPeakStatistics();
-  LOG_OUT << "Max peak used memory size is " << max_peak;
-  AscendMemAdapter::GetInstance()->UpdateUsedPeakMemory(max_peak);
+  int64_t maxActual = ActualPeakStatistics();
+  LOG_OUT << "Max actual used memory size is " << maxActual;
+  AscendMemAdapter::GetInstance()->UpdateActualPeakMemory(maxActual);
+  int64_t maxPeak = UsedMemPeakStatistics();
+  LOG_OUT << "Max peak used memory size is " << maxPeak;
+  AscendMemAdapter::GetInstance()->UpdateUsedPeakMemory(maxPeak);
   // disable ge kernel use two pointer mem adapter, not support free.
   // if (!IsEnableVmm() && !IsEnableEagerFree() && !IsDisableGeKernel()) {
   //   return AscendMemAdapter::GetInstance()->FreeStaticDevMem(addr);
@@ -181,7 +181,6 @@ void AbstractAscendMemoryPoolSupport::ResetIdleMemBuf() const {
 size_t AbstractAscendMemoryPoolSupport::free_mem_size() { return AscendMemAdapter::GetInstance()->FreeDevMemSize(); }
 
 uint64_t AbstractAscendMemoryPoolSupport::total_mem_size() const {
-
   return AscendMemAdapter::GetInstance()->MaxHbmSizeForMs();
 }
 }  // namespace ascend

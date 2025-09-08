@@ -70,31 +70,31 @@ class TaskIdOnStreamManager {
     initialized_ = true;
   }
 
-  inline int64_t Query(uint32_t user_stream_id, uint32_t memory_stream_id) {
-    return status_[user_stream_id][memory_stream_id];
+  inline int64_t Query(uint32_t userStreamId, uint32_t memoryStreamId) {
+    return status_[userStreamId][memoryStreamId];
   }
 
-  inline bool Update(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
-    if (status_[user_stream_id][memory_stream_id] >= task_id_on_stream) {
+  inline bool Update(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
+    if (status_[userStreamId][memoryStreamId] >= taskIdOnStream) {
       return false;
     }
-    status_[user_stream_id][memory_stream_id] = task_id_on_stream;
+    status_[userStreamId][memoryStreamId] = taskIdOnStream;
     return true;
   }
 
-  inline int64_t Launch(uint32_t stream_id) {
-    if (stream_id >= generator_.size()) {
-      LOG_OUT << "Launch stream id : " << stream_id << " failed, generator_ size : " << generator_.size();
-      generator_.resize(stream_id + 1);
-      status_.resize(stream_id + 1);
+  inline int64_t Launch(uint32_t streamId) {
+    if (streamId >= generator_.size()) {
+      LOG_OUT << "Launch stream id : " << streamId << " failed, generator_ size : " << generator_.size();
+      generator_.resize(streamId + 1);
+      status_.resize(streamId + 1);
       for (auto &vec : status_) {
-        vec.resize(stream_id + 1);
+        vec.resize(streamId + 1);
       }
     }
-    return ++generator_[stream_id].value_;
+    return ++generator_[streamId].value_;
   }
 
-  inline int64_t Get(uint32_t stream_id) { return generator_[stream_id].value_; }
+  inline int64_t Get(uint32_t streamId) { return generator_[streamId].value_; }
 
  private:
   bool initialized_{false};
@@ -188,7 +188,7 @@ class EventPool {
 };
 using EventPoolPtr = std::shared_ptr<EventPool>;
 
-MultiStreamController::MultiStreamController(DeviceResManager *device_res_base) : deviceResBase_(device_res_base) {
+MultiStreamController::MultiStreamController(DeviceResManager *deviceResBase) : deviceResBase_(deviceResBase) {
   if (deviceResBase_ == nullptr) {
     LOG_ERROR << "deviceResBase_ is nullptr.";
   }
@@ -213,66 +213,66 @@ void MultiStreamController::Refresh() {
   }
 }
 
-bool MultiStreamController::UpdateTaskIdOnStream(int64_t task_id_on_stream, uint32_t user_stream_id,
-                                                 uint32_t memory_stream_id) {
+bool MultiStreamController::UpdateTaskIdOnStream(int64_t taskIdOnStream, uint32_t userStreamId,
+                                                 uint32_t memoryStreamId) {
   LockGuard lock(lock_);
-  return taskIdOnStreamManager_->Update(task_id_on_stream, user_stream_id, memory_stream_id);
+  return taskIdOnStreamManager_->Update(taskIdOnStream, userStreamId, memoryStreamId);
 }
 
-int64_t MultiStreamController::QueryTaskIdOnStream(uint32_t user_stream_id, uint32_t memory_stream_id) {
+int64_t MultiStreamController::QueryTaskIdOnStream(uint32_t userStreamId, uint32_t memoryStreamId) {
   LockGuard lock(lock_);
-  return taskIdOnStreamManager_->Query(user_stream_id, memory_stream_id);
+  return taskIdOnStreamManager_->Query(userStreamId, memoryStreamId);
 }
 
-int64_t MultiStreamController::LaunchTaskIdOnStream(uint32_t stream_id) {
+int64_t MultiStreamController::LaunchTaskIdOnStream(uint32_t streamId) {
   LockGuard lock(lock_);
-  return taskIdOnStreamManager_->Launch(stream_id);
+  return taskIdOnStreamManager_->Launch(streamId);
 }
 
-int64_t MultiStreamController::GetTaskIdOnStream(uint32_t stream_id) {
+int64_t MultiStreamController::GetTaskIdOnStream(uint32_t streamId) {
   LockGuard lock(lock_);
-  return taskIdOnStreamManager_->Get(stream_id);
+  return taskIdOnStreamManager_->Get(streamId);
 }
 
-std::mutex &MultiStreamController::GetStreamMutex(size_t stream_id) {
+std::mutex &MultiStreamController::GetStreamMutex(size_t streamId) {
   LockGuard lock(lock_);
-  return streamMutexes_[stream_id];
+  return streamMutexes_[streamId];
 }
 
-bool MultiStreamController::RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                                        const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
-                                        const DeviceEventPtr &input_event) {
+bool MultiStreamController::RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                                        const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
+                                        const DeviceEventPtr &inputEvent) {
   LockGuard lock(lock_);
   DeviceEventPtr event = nullptr;
-  if (input_event != nullptr) {
-    event = input_event;
+  if (inputEvent != nullptr) {
+    event = inputEvent;
   } else {
     event = deviceResBase_->CreateRuntimeEvent(false, true);
     if (event == nullptr) {
       return true;
     }
-    event->RecordEvent(user_stream_id);
+    event->RecordEvent(userStreamId);
   }
 
-  return deviceResBase_->RecordEvent(task_id_on_stream, user_stream_id, memory_stream_addresses, event);
+  return deviceResBase_->RecordEvent(taskIdOnStream, userStreamId, memoryStreamAddresses, event);
 }
 
-bool MultiStreamController::WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
+bool MultiStreamController::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
   LockGuard lock(lock_);
   // If update task id on stream failed, means task id on stream is elder one, no need to wait event on mem manager.
-  if (!taskIdOnStreamManager_->Update(task_id_on_stream, user_stream_id, memory_stream_id)) {
+  if (!taskIdOnStreamManager_->Update(taskIdOnStream, userStreamId, memoryStreamId)) {
     LOG_OUT << "Skip Wait Event.";
     return false;
   }
-  return deviceResBase_->WaitEvent(task_id_on_stream, user_stream_id, memory_stream_id);
+  return deviceResBase_->WaitEvent(taskIdOnStream, userStreamId, memoryStreamId);
 }
 
-bool MultiStreamController::WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id) {
+bool MultiStreamController::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId) {
   LockGuard lock(lock_);
-  return deviceResBase_->WaitEvent(task_id_on_stream, user_stream_id);
+  return deviceResBase_->WaitEvent(taskIdOnStream, userStreamId);
 }
 
-bool MultiStreamController::DispatchRecordWaitEvent(uint32_t user_stream_id, uint32_t memory_stream_id) {
+bool MultiStreamController::DispatchRecordWaitEvent(uint32_t userStreamId, uint32_t memoryStreamId) {
   LockGuard lock(lock_);
   if (eventPool_ == nullptr) {
     LOG_OUT << "Event pool is not initialized.";
@@ -283,16 +283,16 @@ bool MultiStreamController::DispatchRecordWaitEvent(uint32_t user_stream_id, uin
   }
   auto event = eventPool_->Get();
   // Note : record event on memory stream id and wait event on user stream id to make sure memory is safe.
-  event->RecordEvent(memory_stream_id);
-  event->WaitEvent(user_stream_id);
+  event->RecordEvent(memoryStreamId);
+  event->WaitEvent(userStreamId);
   return true;
 }
 
-bool MultiStreamController::SyncStream(size_t stream_id) {
+bool MultiStreamController::SyncStream(size_t streamId) {
   LockGuard lock(lock_);
-  bool ret = deviceResBase_->SyncStream(stream_id);
-  auto task_id_on_stream = taskIdOnStreamManager_->Get(stream_id);
-  deviceResBase_->WaitEvent(task_id_on_stream, stream_id);
+  bool ret = deviceResBase_->SyncStream(streamId);
+  auto taskIdOnStream = taskIdOnStreamManager_->Get(streamId);
+  deviceResBase_->WaitEvent(taskIdOnStream, streamId);
   return ret;
 }
 
@@ -306,10 +306,10 @@ bool MultiStreamController::SyncAllStreams() {
 bool MultiStreamController::SyncNotDefaultStreams() {
   LockGuard lock(lock_);
   bool ret = deviceResBase_->SyncNotDefaultStreams();
-  const auto &stream_ids = deviceResBase_->GetStreamIds();
-  for (auto stream_id : stream_ids) {
-    auto task_id_on_stream = taskIdOnStreamManager_->Get(stream_id);
-    deviceResBase_->WaitEvent(task_id_on_stream, stream_id);
+  const auto &streamIds = deviceResBase_->GetStreamIds();
+  for (auto streamId : streamIds) {
+    auto taskIdOnStream = taskIdOnStreamManager_->Get(streamId);
+    deviceResBase_->WaitEvent(taskIdOnStream, streamId);
   }
   return ret;
 }
@@ -317,7 +317,7 @@ bool MultiStreamController::SyncNotDefaultStreams() {
 bool MultiStreamController::WaitMultiStream(size_t wait_stream_id) {
   LockGuard lock(lock_);
   LOG_OUT << "Wait multi stream on wait stream id : " << wait_stream_id << ".";
-  const auto &stream_ids = deviceResBase_->GetStreamIds();
+  const auto &streamIds = deviceResBase_->GetStreamIds();
   if (eventPool_ == nullptr) {
     LOG_OUT << "Event pool is not initialized.";
     eventPool_ = std::make_shared<EventPool>([&]() {
@@ -327,9 +327,9 @@ bool MultiStreamController::WaitMultiStream(size_t wait_stream_id) {
   }
   deviceResBase_->BindDeviceToCurrentThread(true);
   auto event = eventPool_->Get();
-  for (auto stream_id : stream_ids) {
-    if (stream_id != wait_stream_id) {
-      event->RecordEvent(stream_id);
+  for (auto streamId : streamIds) {
+    if (streamId != wait_stream_id) {
+      event->RecordEvent(streamId);
       event->WaitEvent(wait_stream_id);
     }
   }

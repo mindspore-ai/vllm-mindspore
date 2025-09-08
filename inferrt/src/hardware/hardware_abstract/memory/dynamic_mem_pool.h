@@ -103,40 +103,40 @@ class MRT_EXPORT DynamicMemPool {
   virtual ~DynamicMemPool() = default;
 
   // Initialize memory pool with init size, increase size and max size.
-  virtual void Initialize(size_t init_size, size_t increase_size, size_t max_size) {}
+  virtual void Initialize(size_t initSize, size_t increaseSize, size_t maxSize) {}
 
   // Release the real device memory.
   virtual void ReleaseDeviceRes() { LOG_ERROR << "Not implemented"; }
 
   // The main program entry of memory alloc.
-  virtual DeviceMemPtr AllocTensorMem(size_t size, bool from_persistent_mem = false, bool need_recycle = false,
-                                      uint32_t stream_id = kDefaultStreamIndex) {
+  virtual DeviceMemPtr AllocTensorMem(size_t size, bool fromPersistentMem = false, bool needRecycle = false,
+                                      uint32_t streamId = kDefaultStreamIndex) {
     LOG_ERROR << "Not implemented";
     return nullptr;
   }
 
   // The main program entry of continuous memory alloc.
-  virtual std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &size_list,
-                                                             uint32_t stream_id = kDefaultStreamIndex) {
+  virtual std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
+                                                             uint32_t streamId = kDefaultStreamIndex) {
     LOG_ERROR << "Not implemented";
     return {};
   }
   // The main program entry of memory free.
-  virtual void FreeTensorMem(const DeviceMemPtr &device_addr) { LOG_ERROR << "Not implemented"; }
+  virtual void FreeTensorMem(const DeviceMemPtr &deviceAddr) { LOG_ERROR << "Not implemented"; }
 
-  virtual bool DoFreeTensorMem(const DeviceMemPtr &device_addr) { return false; }
+  virtual bool DoFreeTensorMem(const DeviceMemPtr &deviceAddr) { return false; }
 
   // The main program entry of part memorys free and part memorys keep.
-  virtual void FreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs,
-                                  const std::vector<DeviceMemPtr> &keep_addrs,
-                                  const std::vector<size_t> &keep_addr_sizes) {
+  virtual void FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
+                                  const std::vector<DeviceMemPtr> &keepAddrs,
+                                  const std::vector<size_t> &keepAddrSizes) {
     LOG_ERROR << "Not implemented";
   }
 
   // Help method for dynamic memory proxy.
-  virtual std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs,
-                                                     const std::vector<DeviceMemPtr> &keep_addrs,
-                                                     const std::vector<size_t> &keep_addr_sizes) {
+  virtual std::vector<MemBuf *> DoFreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
+                                                     const std::vector<DeviceMemPtr> &keepAddrs,
+                                                     const std::vector<size_t> &keepAddrSizes) {
     return {};
   }
 
@@ -144,18 +144,16 @@ class MRT_EXPORT DynamicMemPool {
 
   virtual size_t ReleaseFreeBlocks() { return -1L; }
 
-  // Element in vector : memory_stream_id, address
-  virtual bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                           const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
+  // Element in vector : memoryStreamId, address
+  virtual bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                           const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                            const DeviceEventPtr &event) {
     return false;
   }
 
-  virtual bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
-    return false;
-  }
+  virtual bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) { return false; }
 
-  virtual bool WaitEvent(int64_t task_id_on_stream, uint32_t memory_stream_id) { return false; }
+  virtual bool WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) { return false; }
 
   virtual bool SyncAllEvents() { return false; }
 
@@ -168,17 +166,17 @@ class MRT_EXPORT DynamicMemPool {
   }
 
   // Calculate memory block required alloc size when adding the memory block.
-  virtual size_t CalMemBlockAllocSize(size_t size, bool from_persistent_mem, bool need_recycle = false) {
+  virtual size_t CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle = false) {
     return kDynamicMemAllocUnitSize;
   }
 
   // Set mem pool block size
-  virtual void SetMemPoolBlockSize(size_t available_device_mem_size) {}
+  virtual void SetMemPoolBlockSize(size_t availableDeviceMemSize) {}
 
   // Get the minimum memory unit size using for dynamic extend.
-  virtual size_t MemAllocUnitSize(bool from_persistent_mem) const { return kDynamicMemAllocUnitSize; }
+  virtual size_t MemAllocUnitSize(bool fromPersistentMem) const { return kDynamicMemAllocUnitSize; }
 
-  virtual void SetMemAllocUintSize(size_t common_size, size_t persist_size = kDynamicMemAllocUnitSize) {}
+  virtual void SetMemAllocUintSize(size_t commonSize, size_t persistSize = kDynamicMemAllocUnitSize) {}
 
   virtual void *GetMinUsingMemoryAddr() const { return nullptr; }
 
@@ -288,7 +286,7 @@ class MRT_EXPORT DynamicMemPool {
 
   virtual const bool IsEnableVmm() const { return false; }
 
-  virtual void SetEnableVmm(bool enable_vmm) {}
+  virtual void SetEnableVmm(bool enableVmm) {}
 
   virtual const bool SyncAllStreams() { return false; }
 
@@ -302,31 +300,31 @@ class MRT_EXPORT DynamicMemPool {
 
   virtual bool IsEnableTimeEvent() { return false; }
 
-  virtual void SetEnableTimeEvent(bool enable_time_event) {}
+  virtual void SetEnableTimeEvent(bool enableTimeEvent) {}
 
-  virtual void EnablePluggableAllocator(std::function<MallocFuncType> alloc_fn, std::function<FreeFuncType> free_fn) {}
+  virtual void EnablePluggableAllocator(std::function<MallocFuncType> allocFn, std::function<FreeFuncType> freeFn) {}
 
   virtual void DisablePluggableAllocator() {}
 
   // Use set method to avoid performance decrease.
-  void SetMemoryProfilerCallback(const std::function<void()> &memory_profiler_callback) {
-    memoryProfilerCallback_ = memory_profiler_callback;
+  void SetMemoryProfilerCallback(const std::function<void()> &memoryProfilerCallback) {
+    memoryProfilerCallback_ = memoryProfilerCallback;
   }
 
-  void SetMemoryMstxCallback(const std::function<void(void *, size_t)> memory_malloc_mstx_callback,
-                             const std::function<void(void *)> memory_free_mstx_callback) {
-    memoryMallocMstxCallback_ = memory_malloc_mstx_callback;
-    memoryFreeMstxCallback_ = memory_free_mstx_callback;
+  void SetMemoryMstxCallback(const std::function<void(void *, size_t)> memoryMallocMstxCallback,
+                             const std::function<void(void *)> memoryFreeMstxCallback) {
+    memoryMallocMstxCallback_ = memoryMallocMstxCallback;
+    memoryFreeMstxCallback_ = memoryFreeMstxCallback;
   }
 
   // Set rank id getter for memory pool to generate dump path.
-  virtual void SetRankIdGetter(const std::function<size_t()> &rank_id_getter) {
-    if (rank_id_getter != nullptr) {
-      rankIdGetter_ = rank_id_getter;
+  virtual void SetRankIdGetter(const std::function<size_t()> &rankIdGetter) {
+    if (rankIdGetter != nullptr) {
+      rankIdGetter_ = rankIdGetter;
     }
   }
 
-  void SetPipelineCallback(const std::function<void()> &pipeline_callback) { pipelineCallback_ = pipeline_callback; }
+  void SetPipelineCallback(const std::function<void()> &pipelineCallback) { pipelineCallback_ = pipelineCallback; }
 
  protected:
   std::function<void()> memoryProfilerCallback_{nullptr};
@@ -350,8 +348,8 @@ class MRT_EXPORT DynamicMemAllocatorDebugInfo {
   static AllocatorDebugInfo &GetDebugInfo() noexcept;
 
   // Set the debug info when memory alloc.
-  static void SetDebugInfo(const std::string &name, memory::mem_pool::MemType type, int input_index = -1,
-                           int output_index = -1, uint8_t run_mode = 0);
+  static void SetDebugInfo(const std::string &name, memory::mem_pool::MemType type, int inputIndex = -1,
+                           int outputIndex = -1, uint8_t runMode = 0);
 
  private:
   DynamicMemAllocatorDebugInfo() = default;
@@ -363,10 +361,10 @@ class MRT_EXPORT DynamicMemAllocatorDebugInfo {
 using TaskIdOnStreamEvent = std::pair<int64_t, DeviceEventPtr>;
 struct MRT_EXPORT EventBase {
   // Record event on mem buf.
-  bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id, const DeviceEventPtr &event);
+  bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId, const DeviceEventPtr &event);
 
   // Release events on mem buf.
-  bool WaitEvent(uint32_t task_id_on_stream, uint32_t user_stream_id);
+  bool WaitEvent(uint32_t taskIdOnStream, uint32_t userStreamId);
 
   // Indicates if mem buf used by event, return true when no event bind on mem buf.
   bool IsEventNotUsed();
@@ -374,7 +372,7 @@ struct MRT_EXPORT EventBase {
   // Sync all events that bound on mem buf.
   bool SyncAllEvents();
 
-  // Parameter: user_stream_id, list of <task_id_on_stream, event>.
+  // Parameter: userStreamId, list of <taskIdOnStream, event>.
   std::shared_ptr<std::unordered_map<uint32_t, std::shared_ptr<std::list<TaskIdOnStreamEvent>>>> events_{nullptr};
 };
 

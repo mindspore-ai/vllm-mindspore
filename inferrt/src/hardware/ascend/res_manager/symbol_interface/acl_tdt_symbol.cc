@@ -44,16 +44,16 @@ acltdtReceiveTensorFunObj acltdtReceiveTensor_ = nullptr;
 acltdtSendTensorFunObj acltdtSendTensor_ = nullptr;
 acltdtStopChannelFunObj acltdtStopChannel_ = nullptr;
 
-void LoadAcltdtApiSymbol(const std::string &ascend_path) {
-  const std::vector<std::string> depend_libs = {"libacl_tdt_queue.so"};
-  for (const auto &dep_lib : depend_libs) {
-    (void)GetLibHandler(ascend_path + "lib64/" + dep_lib);
+void LoadAcltdtApiSymbol(const std::string &ascendPath) {
+  const std::vector<std::string> dependLibs = {"libacl_tdt_queue.so"};
+  for (const auto &depLib : dependLibs) {
+    (void)GetLibHandler(ascendPath + "lib64/" + depLib);
   }
 
-  std::string aclrt_tdt_path = ascend_path + "lib64/libacl_tdt_channel.so";
-  auto handler = GetLibHandler(aclrt_tdt_path);
+  std::string aclrtTdtPath = ascendPath + "lib64/libacl_tdt_channel.so";
+  auto handler = GetLibHandler(aclrtTdtPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << aclrt_tdt_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << aclrtTdtPath << " failed!" << dlerror();
     return;
   }
   acltdtAddDataItem_ = DlsymAscendFuncObj(acltdtAddDataItem, handler);
@@ -83,12 +83,12 @@ void LoadAcltdtApiSymbol(const std::string &ascend_path) {
 }
 
 void LoadSpecialSimulationTdtApi() {
-  acltdtQueryChannelSize_ = [](const acltdtChannelHandle *handle, size_t *ret_size_ptr) {
+  acltdtQueryChannelSize_ = [](const acltdtChannelHandle *handle, size_t *retSizePtr) {
     if (handle == nullptr) {
       LOG_OUT << "Empty handle!";
     }
-    if (ret_size_ptr != nullptr) {
-      *ret_size_ptr = 1;
+    if (retSizePtr != nullptr) {
+      *retSizePtr = 1;
     }
     return ACL_SUCCESS;
   };

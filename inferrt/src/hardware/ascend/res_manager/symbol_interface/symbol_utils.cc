@@ -26,18 +26,18 @@
 
 namespace mrt::device::ascend {
 
-static bool load_ascend_api = false;
-static bool load_simulation_api = false;
+static bool loadAscendApi = false;
+static bool loadSimulationApi = false;
 
-void *GetLibHandler(const std::string &lib_path, bool if_global) {
+void *GetLibHandler(const std::string &libPath, bool ifGlobal) {
   void *handler = nullptr;
-  if (if_global) {
-    handler = dlopen(lib_path.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+  if (ifGlobal) {
+    handler = dlopen(libPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
   } else {
-    handler = dlopen(lib_path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+    handler = dlopen(libPath.c_str(), RTLD_LAZY | RTLD_LOCAL);
   }
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << lib_path << " failed!" << dlerror();
+    LOG_OUT << "Dlopen " << libPath << " failed!" << dlerror();
   }
   return handler;
 }
@@ -48,36 +48,36 @@ std::string GetAscendPath() {
     LOG_ERROR << "Get dladdr failed.";
     return "";
   }
-  auto path_tmp = std::string(info.dli_fname);
+  auto pathTmp = std::string(info.dli_fname);
   const std::string kLatest = "latest";
-  auto pos = path_tmp.rfind(kLatest);
+  auto pos = pathTmp.rfind(kLatest);
   if (pos == std::string::npos) {
     LOG_ERROR << "Get ascend path failed, please check whether CANN packages are installed correctly, \n"
                  "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
   }
-  return path_tmp.substr(0, pos) + kLatest + "/";
+  return pathTmp.substr(0, pos) + kLatest + "/";
 }
 
 void LoadAscendApiSymbols() {
-  if (load_ascend_api) {
+  if (loadAscendApi) {
     LOG_OUT << "Ascend api is already loaded.";
     return;
   }
-  std::string ascend_path = GetAscendPath();
-  LoadAclBaseApiSymbol(ascend_path);
-  LoadAclOpCompilerApiSymbol(ascend_path);
-  LoadAclMdlApiSymbol(ascend_path);
-  LoadAclOpApiSymbol(ascend_path);
-  LoadAclAllocatorApiSymbol(ascend_path);
-  LoadAclRtApiSymbol(ascend_path);
-  LoadAclApiSymbol(ascend_path);
-  LoadAcltdtApiSymbol(ascend_path);
-  load_ascend_api = true;
+  std::string ascendPath = GetAscendPath();
+  LoadAclBaseApiSymbol(ascendPath);
+  LoadAclOpCompilerApiSymbol(ascendPath);
+  LoadAclMdlApiSymbol(ascendPath);
+  LoadAclOpApiSymbol(ascendPath);
+  LoadAclAllocatorApiSymbol(ascendPath);
+  LoadAclRtApiSymbol(ascendPath);
+  LoadAclApiSymbol(ascendPath);
+  LoadAcltdtApiSymbol(ascendPath);
+  loadAscendApi = true;
   LOG_OUT << "Load ascend api success!";
 }
 
 void LoadSimulationApiSymbols() {
-  if (load_simulation_api) {
+  if (loadSimulationApi) {
     LOG_OUT << "Simulation api is already loaded.";
     return;
   }
@@ -90,7 +90,7 @@ void LoadSimulationApiSymbols() {
   LoadSimulationAclOpApi();
   LoadSimulationAclAllocatorApi();
   LoadSimulationAclApi();
-  load_simulation_api = true;
+  loadSimulationApi = true;
   LOG_OUT << "Load simulation api success!";
 }
 }  // namespace mrt::device::ascend

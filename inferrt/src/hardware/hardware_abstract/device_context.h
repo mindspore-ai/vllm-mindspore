@@ -58,8 +58,8 @@ class KernelExecutor;
 // DeviceContext is unified interface of interaction with device.
 class MRT_EXPORT DeviceContext {
  public:
-  explicit DeviceContext(const DeviceContextKey &device_context_key)
-      : deviceContextKey_(device_context_key), initialized_(false) {}
+  explicit DeviceContext(const DeviceContextKey &deviceContextKey)
+      : deviceContextKey_(deviceContextKey), initialized_(false) {}
   virtual ~DeviceContext() = default;
 
   // Initialize the device context.
@@ -69,12 +69,12 @@ class MRT_EXPORT DeviceContext {
   virtual void Destroy() = 0;
 
   // Get deviceContextKey_ to obtain device name and device id.
-  const DeviceContextKey &device_context_key() const { return deviceContextKey_; }
+  const DeviceContextKey &deviceContextKey() const { return deviceContextKey_; }
 
   // Get kernel executor.
   std::shared_ptr<KernelExecutor> GetKernelExecutor() const { return kernelExecutor_; }
 
-  void SetKernelExecutor(const std::shared_ptr<KernelExecutor> &kernel_executor) { kernelExecutor_ = kernel_executor; }
+  void SetKernelExecutor(const std::shared_ptr<KernelExecutor> &kernelExecutor) { kernelExecutor_ = kernelExecutor; }
 
   // Return whether this device context is initialized.
   bool initialized() const;
@@ -115,31 +115,29 @@ class MRT_EXPORT DeviceResManager {
   virtual void Destroy() {}
 
   // Bind device to current thread to gain device control privileges
-  // If force_bind is true, bind context to current thread every time;
+  // If forceBind is true, bind context to current thread every time;
   // Otherwise, only bind context to current thread for the first time.
-  virtual bool BindDeviceToCurrentThread(bool force_bind) const { return true; }
+  virtual bool BindDeviceToCurrentThread(bool forceBind) const { return true; }
   virtual void ResetStreamAndCtx() const {}
 
   // Relevant function to allocate and free device memory of raw ptr.
-  virtual void *AllocateMemory(size_t size, uint32_t stream_id = kDefaultStreamIndex) const = 0;
+  virtual void *AllocateMemory(size_t size, uint32_t streamId = kDefaultStreamIndex) const = 0;
   virtual void FreeMemory(void *ptr) const = 0;
-  virtual void FreePartMemorys(const std::vector<void *> &free_addrs, const std::vector<void *> &keep_addrs,
-                               const std::vector<size_t> &keep_addr_sizes) const = 0;
+  virtual void FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
+                               const std::vector<size_t> &keepAddrSizes) const = 0;
   virtual void DefragMemory() {}
   virtual bool IsEnableVmm() const { return false; }
 
   // Interface for multi stream event control.
-  virtual bool RecordEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                           const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memory_stream_addresses,
-                           const DeviceEventPtr &input_event) {
+  virtual bool RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                           const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
+                           const DeviceEventPtr &inputEvent) {
     return false;
   }
 
-  virtual bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id, uint32_t memory_stream_id) {
-    return false;
-  }
+  virtual bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) { return false; }
 
-  virtual bool WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id) { return false; }
+  virtual bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId) { return false; }
 
   virtual bool SyncAllEvents() { return false; }
 
@@ -176,22 +174,22 @@ class MRT_EXPORT DeviceResManager {
   // Allocate continuous device memory according to size list.
   // Communication operators may need continuous memory for input and output
   // to optimize the communication performance.
-  virtual std::vector<void *> AllocateContinuousMemory(const std::vector<size_t> &size_list,
-                                                       uint32_t stream_id = kDefaultStreamIndex) const {
+  virtual std::vector<void *> AllocateContinuousMemory(const std::vector<size_t> &sizeList,
+                                                       uint32_t streamId = kDefaultStreamIndex) const {
     LOG_ERROR << "Unimplemented interface.";
     return {};
   }
 
-  // Create a stream with assigning a stream id, the assigned stream id will be written to the parameter '*stream_id'.
-  virtual bool CreateStream(size_t *stream_id) const {
+  // Create a stream with assigning a stream id, the assigned stream id will be written to the parameter '*streamId'.
+  virtual bool CreateStream(size_t *streamId) const {
     LOG_ERROR << "Unimplemented interface: 'CreateStream'.";
-    *stream_id = kSizeZero;
+    *streamId = kSizeZero;
     return false;
   }
 
   // Create a stream with priority.
-  virtual bool CreateStreamWithPriority(size_t *stream_id, int32_t priority) const {
-    *stream_id = kSizeZero;
+  virtual bool CreateStreamWithPriority(size_t *streamId, int32_t priority) const {
+    *streamId = kSizeZero;
     return false;
   }
 
@@ -202,14 +200,14 @@ class MRT_EXPORT DeviceResManager {
   // is executed. Otherwise, out-of-order occurs. Therefore this flag is added.
   // This solution is a temporary solution, this flag will be removed after multi-stream is
   // supported in graph mode.
-  virtual bool single_op_multi_stream_enable() const { return false; }
-  virtual void set_single_op_multi_stream_enable(bool single_op_multi_stream_enable) {}
+  virtual bool singleOpMultiStreamEnable() const { return false; }
+  virtual void set_single_op_multi_stream_enable(bool singleOpMultiStreamEnable) {}
 
-  // Get the stream pointer by stream_id.
-  virtual void *GetStream(size_t stream_id) const { return nullptr; }
+  // Get the stream pointer by streamId.
+  virtual void *GetStream(size_t streamId) const { return nullptr; }
 
   // Set currently using stream id.
-  virtual void SetCurrentStreamId(size_t stream_id) { return; }
+  virtual void SetCurrentStreamId(size_t streamId) { return; }
 
   // Get currently using stream id.
   virtual size_t GetCurrentStreamId() const { return kSizeZero; }
@@ -220,11 +218,11 @@ class MRT_EXPORT DeviceResManager {
 
   virtual size_t GetCommunicationStreamIDByGroup(const std::string &group) const { return GetCommunicationStreamID(); }
 
-  // Destroy a stream bound to the input parameter "stream_id".
-  virtual bool DestroyStream(size_t stream_id) const { return false; }
+  // Destroy a stream bound to the input parameter "streamId".
+  virtual bool DestroyStream(size_t streamId) const { return false; }
 
   // Query tasks' completion status of a stream.
-  virtual bool QueryStream(size_t stream_id) const { return true; }
+  virtual bool QueryStream(size_t streamId) const { return true; }
 
   // Synchronize stream, device such as GPU and Ascend need stream to launch kernel asynchronously,
   // Using 'SyncStream' to block thread and wait for completing all tasks on specific stream.
@@ -232,10 +230,10 @@ class MRT_EXPORT DeviceResManager {
   // Devices without stream could ignore the implementation of these function.
   // Since the current entry for creating streams is not unified, the implementation of the 'SyncStream' and
   // "SyncAllStreams" interfaces are implemented by subclasses.
-  virtual bool SyncStream(size_t stream_id) const { return true; }
+  virtual bool SyncStream(size_t streamId) const { return true; }
 
-  // 'sync_device' is used for Ascend backend.
-  virtual bool SyncAllStreams(bool sync_device = true) const { return true; }
+  // 'syncDevice' is used for Ascend backend.
+  virtual bool SyncAllStreams(bool syncDevice = true) const { return true; }
 
   virtual bool SyncNotDefaultStreams() const { return true; }
 
@@ -243,10 +241,10 @@ class MRT_EXPORT DeviceResManager {
   virtual size_t DefaultStream() const { return 0; }
 
   // Create device event for runtime.
-  virtual DeviceEventPtr CreateRuntimeEvent(bool enable_blocking, bool enable_record_wait) { return nullptr; }
+  virtual DeviceEventPtr CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) { return nullptr; }
 
   // Create device event with flag.
-  virtual DeviceEventPtr CreateEventWithFlag(bool enable_timing, bool blocking, bool use_extensional_api = true) {
+  virtual DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi = true) {
     return nullptr;
   }
 
@@ -258,8 +256,8 @@ class MRT_EXPORT DeviceResManager {
 
   virtual std::shared_ptr<MemoryManager> mem_manager() const { return nullptr; }
 
-  virtual bool LaunchCallback(std::function<void(void)> callback_func, size_t stream_id, bool is_block = false) const {
-    callback_func();
+  virtual bool LaunchCallback(std::function<void(void)> callbackFunc, size_t streamId, bool isBlock = false) const {
+    callbackFunc();
     return true;
   }
 
@@ -269,8 +267,8 @@ class MRT_EXPORT DeviceResManager {
  private:
   template <class... Args>
   friend class DeviceInterface;
-  void SetDeviceContext(DeviceContext *device_context) { deviceContext_ = device_context; }
-  std::shared_ptr<device::OffloadedMemPool> offloaded_mem_pool_;
+  void SetDeviceContext(DeviceContext *deviceContext) { deviceContext_ = deviceContext; }
+  std::shared_ptr<device::OffloadedMemPool> offloadedMemPool_;
 };
 
 using CallbackFunc = std::function<void(void)>;
@@ -282,7 +280,7 @@ class MRT_EXPORT KernelExecutor {
   virtual void Initialize() {}
   virtual void Destroy() {}
 
-  void SetDeviceContext(DeviceContext *device_context) { deviceContext_ = device_context; }
+  void SetDeviceContext(DeviceContext *deviceContext) { deviceContext_ = deviceContext; }
 
  protected:
   DeviceContext *deviceContext_{nullptr};

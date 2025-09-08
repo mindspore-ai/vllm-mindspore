@@ -31,7 +31,7 @@ class AscendResManager;
 
 class AscendDeviceContext : public DeviceInterface<AscendResManager> {
  public:
-  explicit AscendDeviceContext(const DeviceContextKey &device_context_key) : DeviceInterface(device_context_key) {}
+  explicit AscendDeviceContext(const DeviceContextKey &deviceContextKey) : DeviceInterface(deviceContextKey) {}
   ~AscendDeviceContext() override = default;
 
   void Initialize() override;

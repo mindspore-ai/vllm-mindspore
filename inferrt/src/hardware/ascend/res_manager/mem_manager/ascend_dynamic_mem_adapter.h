@@ -34,7 +34,7 @@ class AscendDynamicMemAdapter : public AscendMemAdapter {
   uint8_t *MallocDynamicDevMem(size_t size, const std::string &tag = "") override;
   void ResetDynamicMemory() override;
   std::string DevMemStatistics() const override;
-  size_t GetDynamicMemUpperBound(void *min_static_addr) const override;
+  size_t GetDynamicMemUpperBound(void *minStaticAddr) const override;
   [[nodiscard]] uint64_t FreeDevMemSize() const override;
 
  private:

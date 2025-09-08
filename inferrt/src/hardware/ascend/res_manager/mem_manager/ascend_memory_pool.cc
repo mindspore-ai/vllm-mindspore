@@ -46,19 +46,19 @@ size_t DefaultAscendMemoryPool::EmptyCache() {
   LockGuard lock(AbstractDynamicMemPool::lock());
   AbstractEnhancedDynamicMemPool::WaitPipelineHelper();
   AbstractAscendMemoryPoolSupport::SyncAllStreams();
-  size_t release_free_size = 0;
+  size_t releaseFreeSize = 0;
   if (MS_UNLIKELY(!customizedAllocators_.empty())) {
-    release_free_size += ReleaseCustomFreeBlocks();
+    releaseFreeSize += ReleaseCustomFreeBlocks();
   }
   if (IsEnableVmm()) {
     AbstractEnhancedDynamicMemPool::FreeIdleMemsByEagerFree();
-    release_free_size += AbstractAscendMemoryPoolSupport::EmptyCache();
-    return release_free_size;
+    releaseFreeSize += AbstractAscendMemoryPoolSupport::EmptyCache();
+    return releaseFreeSize;
   } else if (IsEnableEagerFree()) {
     auto ret = AbstractEnhancedDynamicMemPool::FreeIdleMemsByEagerFree();
     LOG_OUT << "Eager free memory size is " << ret.second << ".";
-    release_free_size += ret.second;
-    return release_free_size;
+    releaseFreeSize += ret.second;
+    return releaseFreeSize;
   }
 
   LOG_OUT << "Vmm is not enabled, try to release free blocks.";
@@ -66,14 +66,14 @@ size_t DefaultAscendMemoryPool::EmptyCache() {
   // if (IsDisableGeKernel()) {
   //   return 0L;
   // }
-  release_free_size += ReleaseFreeBlocks();
-  return release_free_size;
+  releaseFreeSize += ReleaseFreeBlocks();
+  return releaseFreeSize;
 }
 
-void DefaultAscendMemoryPool::EnablePluggableAllocator(std::function<MallocFuncType> alloc_fn,
-                                                       std::function<FreeFuncType> free_fn) {
-  customAllocFn_ = alloc_fn;
-  customFreeFn_ = free_fn;
+void DefaultAscendMemoryPool::EnablePluggableAllocator(std::function<MallocFuncType> allocFn,
+                                                       std::function<FreeFuncType> freeFn) {
+  customAllocFn_ = allocFn;
+  customFreeFn_ = freeFn;
   enableCustomAllocator_ = true;
 }
 
@@ -93,14 +93,14 @@ void DefaultEnhancedAscendMemoryPool::ReleaseDeviceRes() {
   instance_->ReleaseDeviceRes();
 }
 
-DeviceMemPtr DefaultEnhancedAscendMemoryPool::AllocTensorMem(size_t size, bool from_persistent_mem, bool need_recycle,
-                                                             uint32_t stream_id) {
-  size_t align_size = AlignMemorySize(size);
-  LOG_OUT << "Allocate tensor mem, size : " << size << ", align_size : " << align_size
-          << ", need_recycle : " << need_recycle << ".";
+DeviceMemPtr DefaultEnhancedAscendMemoryPool::AllocTensorMem(size_t size, bool fromPersistentMem, bool needRecycle,
+                                                             uint32_t streamId) {
+  size_t alignSize = AlignMemorySize(size);
+  LOG_OUT << "Allocate tensor mem, size : " << size << ", alignSize : " << alignSize
+          << ", needRecycle : " << needRecycle << ".";
   LockGuard lock(instance_->lock());
-  const auto [mem_buf, allocator] = instance_->AllocMemBuf(align_size, from_persistent_mem, stream_id);
-  if (mem_buf == nullptr) {
+  const auto [memBuf, allocator] = instance_->AllocMemBuf(alignSize, fromPersistentMem, streamId);
+  if (memBuf == nullptr) {
     LOG_OUT << "Allocate tensor mem, return nullptr.";
     // Dump mem pool state info and debug info when alloc tensor failed.
     DumpDynamicMemPoolStateInfo();
@@ -108,62 +108,62 @@ DeviceMemPtr DefaultEnhancedAscendMemoryPool::AllocTensorMem(size_t size, bool f
     return nullptr;
   }
 
-  mem_buf->SetDebugInfo();
-  instance_->addr_mem_buf_allocators().emplace(mem_buf->addr_, std::make_pair(mem_buf, allocator));
-  auto device_addr = mem_buf->addr_;
+  memBuf->SetDebugInfo();
+  instance_->addr_mem_buf_allocators().emplace(memBuf->addr_, std::make_pair(memBuf, allocator));
+  auto deviceAddr = memBuf->addr_;
 
   instance_->ReportMemoryPoolInfo();
-  instance_->ReportMemoryPoolMallocInfoToMstx(device_addr, align_size);
+  instance_->ReportMemoryPoolMallocInfoToMstx(deviceAddr, alignSize);
 
-  LOG_OUT << "Allocate tensor mem, return : " << mem_buf->ToJson() << ", stat info : " << instance_->mem_stat().ToJson()
+  LOG_OUT << "Allocate tensor mem, return : " << memBuf->ToJson() << ", stat info : " << instance_->mem_stat().ToJson()
           << ".";
-  return device_addr;
+  return deviceAddr;
 }
 
-std::vector<DeviceMemPtr> DefaultEnhancedAscendMemoryPool::AllocContinuousTensorMem(
-  const std::vector<size_t> &size_list, uint32_t stream_id) {
-  LOG_OUT << "Alloc continuous tensor mem, stream id : " << stream_id << ".";
-  const auto &continuous_addrs = instance_->AllocContinuousTensorMem(size_list, stream_id);
-  if (continuous_addrs.size() != size_list.size()) {
-    return continuous_addrs;
+std::vector<DeviceMemPtr> DefaultEnhancedAscendMemoryPool::AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
+                                                                                    uint32_t streamId) {
+  LOG_OUT << "Alloc continuous tensor mem, stream id : " << streamId << ".";
+  const auto &continuousAddrs = instance_->AllocContinuousTensorMem(sizeList, streamId);
+  if (continuousAddrs.size() != sizeList.size()) {
+    return continuousAddrs;
   }
-  if (continuous_addrs.size() == 1 && continuous_addrs[0] == nullptr) {
-    return continuous_addrs;
+  if (continuousAddrs.size() == 1 && continuousAddrs[0] == nullptr) {
+    return continuousAddrs;
   }
-  return continuous_addrs;
+  return continuousAddrs;
 }
 
-void DefaultEnhancedAscendMemoryPool::FreeTensorMem(const DeviceMemPtr &device_addr) {
-  LOG_OUT << "Free tensor mem, device addr : " << device_addr << ".";
+void DefaultEnhancedAscendMemoryPool::FreeTensorMem(const DeviceMemPtr &deviceAddr) {
+  LOG_OUT << "Free tensor mem, device addr : " << deviceAddr << ".";
   LockGuard lock(instance_->lock());
-  DoFreeTensorMem(device_addr);
+  DoFreeTensorMem(deviceAddr);
 }
 
-bool DefaultEnhancedAscendMemoryPool::DoFreeTensorMem(const DeviceMemPtr &device_addr) {
-  void *enhanced_device_addr = device_addr;
-  bool ret = instance_->DoFreeTensorMem(device_addr);
-  LOG_OUT << "Do free tensor mem : " << enhanced_device_addr << ", return : " << ret << ".";
+bool DefaultEnhancedAscendMemoryPool::DoFreeTensorMem(const DeviceMemPtr &deviceAddr) {
+  void *enhancedDeviceAddr = deviceAddr;
+  bool ret = instance_->DoFreeTensorMem(deviceAddr);
+  LOG_OUT << "Do free tensor mem : " << enhancedDeviceAddr << ", return : " << ret << ".";
   return ret;
 }
 
-void DefaultEnhancedAscendMemoryPool::FreePartTensorMems(const std::vector<DeviceMemPtr> &free_addrs,
-                                                         const std::vector<DeviceMemPtr> &keep_addrs,
-                                                         const std::vector<size_t> &keep_addr_sizes) {
+void DefaultEnhancedAscendMemoryPool::FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
+                                                         const std::vector<DeviceMemPtr> &keepAddrs,
+                                                         const std::vector<size_t> &keepAddrSizes) {
   LOG_OUT << "Free part tensor mems.";
   LockGuard lock(instance_->lock());
 
-  const auto keep_mem_bufs = instance_->DoFreePartTensorMems(free_addrs, keep_addrs, keep_addr_sizes);
+  const auto keepMemBufs = instance_->DoFreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
 }
 
 void DefaultEnhancedAscendMemoryPool::DefragMemory() {
   if (lastVmmUsedSize_ == 0) {
     lastVmmUsedSize_ = GetVmmUsedMemSize();
   } else {
-    size_t vmm_used_size = GetVmmUsedMemSize();
-    if (vmm_used_size > lastVmmUsedSize_) {
-      LOG_OUT << "Current vmm used size : " << vmm_used_size
+    size_t vmmUsedSize = GetVmmUsedMemSize();
+    if (vmmUsedSize > lastVmmUsedSize_) {
+      LOG_OUT << "Current vmm used size : " << vmmUsedSize
               << " is bigger than last vmm used size : " << lastVmmUsedSize_ << ".";
-      lastVmmUsedSize_ = vmm_used_size;
+      lastVmmUsedSize_ = vmmUsedSize;
     }
   }
 
@@ -173,58 +173,58 @@ void DefaultEnhancedAscendMemoryPool::DefragMemory() {
 void DefaultEnhancedAscendMemoryPool::DumpDynamicMemPoolStateInfo() { instance_->DumpDynamicMemPoolStateInfo(); }
 
 const std::pair<size_t, size_t> DefaultEnhancedAscendMemoryPool::FreeIdleMemsByEagerFree() {
-  const auto [eager_free_size, real_free_size] = instance_->FreeIdleMemsByEagerFree();
-  return {eager_free_size, real_free_size};
+  const auto [eagerFreeSize, realFreeSize] = instance_->FreeIdleMemsByEagerFree();
+  return {eagerFreeSize, realFreeSize};
 }
 
-bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t task_id_on_stream, uint32_t user_stream_id,
-                                                uint32_t memory_stream_id) {
+bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId,
+                                                uint32_t memoryStreamId) {
   LockGuard lock(instance_->lock());
-  auto key = std::make_pair(user_stream_id, memory_stream_id);
-  auto iter = instance_->stream_pair_mem_bufs().find(key);
-  if (iter == instance_->stream_pair_mem_bufs().end()) {
+  auto key = std::make_pair(userStreamId, memoryStreamId);
+  auto iter = instance_->streamPairMemBufs().find(key);
+  if (iter == instance_->streamPairMemBufs().end()) {
     return false;
   }
 
-  auto mem_bufs_ = iter->second;
-  for (const auto &mem_buf : mem_bufs_) {
-    LOG_OUT << "Wait event for : " << mem_buf->ToJson() << ".";
-    mem_buf->WaitEvent(task_id_on_stream, user_stream_id);
+  auto memBufs_ = iter->second;
+  for (const auto &memBuf : memBufs_) {
+    LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+    memBuf->WaitEvent(taskIdOnStream, userStreamId);
     // Remove event and try to free memory.
-    if (mem_buf->IsEventNotUsed()) {
-      instance_->mem_stat().usedByEventSize_ -= mem_buf->size_;
+    if (memBuf->IsEventNotUsed()) {
+      instance_->mem_stat().usedByEventSize_ -= memBuf->size_;
       // Force clear all mem bufs.
-      for (auto &stream_pair_mem_bufs : instance_->stream_pair_mem_bufs()) {
-        (void)stream_pair_mem_bufs.second.erase(mem_buf);
+      for (auto &streamPairMemBufs : instance_->streamPairMemBufs()) {
+        (void)streamPairMemBufs.second.erase(memBuf);
       }
-      if (mem_buf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
-        (void)DoFreeTensorMem(mem_buf->addr_);
+      if (memBuf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
+        (void)DoFreeTensorMem(memBuf->addr_);
       }
     }
   }
   return true;
 }
 
-bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t task_id_on_stream, uint32_t memory_stream_id) {
+bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) {
   LockGuard lock(instance_->lock());
-  for (auto &stream_pair_mem_bufs : instance_->stream_pair_mem_bufs()) {
-    const auto &[user_stream, memory_stream] = stream_pair_mem_bufs.first;
-    if (memory_stream != memory_stream_id) {
+  for (auto &streamPairMemBufs : instance_->streamPairMemBufs()) {
+    const auto &[userStream, memoryStream] = streamPairMemBufs.first;
+    if (memoryStream != memoryStreamId) {
       continue;
     }
-    auto mem_bufs = stream_pair_mem_bufs.second;
-    for (const auto &mem_buf : mem_bufs) {
-      LOG_OUT << "Wait event for : " << mem_buf->ToJson() << ".";
-      mem_buf->WaitEvent(task_id_on_stream, user_stream);
+    auto memBufs = streamPairMemBufs.second;
+    for (const auto &memBuf : memBufs) {
+      LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+      memBuf->WaitEvent(taskIdOnStream, userStream);
       // Remove event and try to free memory.
-      if (mem_buf->IsEventNotUsed()) {
-        instance_->mem_stat().usedByEventSize_ -= mem_buf->size_;
+      if (memBuf->IsEventNotUsed()) {
+        instance_->mem_stat().usedByEventSize_ -= memBuf->size_;
         // Force clear all mem bufs.
-        for (auto &kv : instance_->stream_pair_mem_bufs()) {
-          (void)kv.second.erase(mem_buf);
+        for (auto &kv : instance_->streamPairMemBufs()) {
+          (void)kv.second.erase(memBuf);
         }
-        if (mem_buf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
-          (void)DoFreeTensorMem(mem_buf->addr_);
+        if (memBuf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
+          (void)DoFreeTensorMem(memBuf->addr_);
         }
       }
     }
@@ -234,30 +234,30 @@ bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t task_id_on_stream, uint3
 
 bool DefaultEnhancedAscendMemoryPool::SyncAllEvents() {
   LockGuard lock(instance_->lock());
-  if (stream_pair_mem_bufs().empty()) {
+  if (streamPairMemBufs().empty()) {
     return false;
   }
 
-  std::set<MemBuf *> carry_event_mem_bufs;
-  for (const auto &stream_pair_mem_buf : instance_->stream_pair_mem_bufs()) {
-    for (const auto &mem_buf : stream_pair_mem_buf.second) {
-      (void)carry_event_mem_bufs.emplace(mem_buf);
+  std::set<MemBuf *> carryEventMemBufs;
+  for (const auto &streamPairMemBuf : instance_->streamPairMemBufs()) {
+    for (const auto &memBuf : streamPairMemBuf.second) {
+      (void)carryEventMemBufs.emplace(memBuf);
     }
   }
-  for (auto &mem_buf : carry_event_mem_bufs) {
-    if (mem_buf->SyncAllEvents() && mem_buf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
-      (void)DoFreeTensorMem(mem_buf->addr_);
+  for (auto &memBuf : carryEventMemBufs) {
+    if (memBuf->SyncAllEvents() && memBuf->status_ == DynamicMemBufStatus::kMemBufUsedByEvent) {
+      (void)DoFreeTensorMem(memBuf->addr_);
     }
   }
 
-  instance_->stream_pair_mem_bufs().clear();
+  instance_->streamPairMemBufs().clear();
   return true;
 }
 
-void DefaultEnhancedAscendMemoryPool::SetRankIdGetter(const std::function<size_t()> &rank_id_getter) {
-  instance_->SetRankIdGetter(rank_id_getter);
-  if (rank_id_getter != nullptr) {
-    rankIdGetter_ = rank_id_getter;
+void DefaultEnhancedAscendMemoryPool::SetRankIdGetter(const std::function<size_t()> &rankIdGetter) {
+  instance_->SetRankIdGetter(rankIdGetter);
+  if (rankIdGetter != nullptr) {
+    rankIdGetter_ = rankIdGetter;
   }
 }
 
@@ -290,13 +290,13 @@ AbstractAscendMemoryPoolSupport &AscendMemoryPool::GetInstance() {
       enhancedInstance_ = std::make_shared<DefaultEnhancedAscendMemoryPool>(memory_pool);
     }
     // Initialize instance and set ptr.
-    float init_size = kDefaultMemInitSize;
-    size_t init_size_byte = FloatToSize(init_size * kGBToByte);
-    float increase_size = kDefaultMemBlockIncreaseSize;
-    size_t increase_size_byte = FloatToSize(increase_size * kGBToByte);
-    float max_size = kDefaultMemMaxSize;
-    size_t max_size_byte = FloatToSize(max_size * kGBToByte);
-    instance_->Initialize(init_size_byte, increase_size_byte, max_size_byte);
+    float initSize = kDefaultMemInitSize;
+    size_t initSizeByte = FloatToSize(initSize * kGBToByte);
+    float increaseSize = kDefaultMemBlockIncreaseSize;
+    size_t increaseSizeByte = FloatToSize(increaseSize * kGBToByte);
+    float maxSize = kDefaultMemMaxSize;
+    size_t maxSizeByte = FloatToSize(maxSize * kGBToByte);
+    instance_->Initialize(initSizeByte, increaseSizeByte, maxSizeByte);
     // Set memory mstx callback func.
     if (!UseEnhancedMemoryPool()) {
       pool_ = instance_;

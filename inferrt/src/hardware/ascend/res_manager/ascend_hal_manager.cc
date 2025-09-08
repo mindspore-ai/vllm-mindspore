@@ -33,95 +33,95 @@ namespace {
 constexpr auto kSaturationMode = "Saturation";
 constexpr auto kINFNANMode = "INFNAN";
 }  // namespace
-static thread_local aclrtContext thread_local_rt_context{nullptr};
+static thread_local aclrtContext threadLocalRtContext{nullptr};
 
 AscendHalManager AscendHalManager::instance_{};
 AscendHalManager &AscendHalManager::GetInstance() { return instance_; }
 
-void AscendHalManager::InitDevice(uint32_t device_id) {
+void AscendHalManager::InitDevice(uint32_t deviceId) {
   LOG_OUT << "Enter SetRtDevice, current initialize device number:" << initializedDeviceSet_.size();
-  if (initializedDeviceSet_.find(device_id) != initializedDeviceSet_.end()) {
-    LOG_OUT << "Device " << device_id << " has been set";
+  if (initializedDeviceSet_.find(deviceId) != initializedDeviceSet_.end()) {
+    LOG_OUT << "Device " << deviceId << " has been set";
     return;
   }
 
-  auto ret = CALL_ASCEND_API(aclrtSetDevice, UintToInt(device_id));
+  auto ret = CALL_ASCEND_API(aclrtSetDevice, UintToInt(deviceId));
   if (ret != ACL_SUCCESS) {
-    auto device_count = GetDeviceCount();
-    LOG_ERROR << "Call aclrtSetDevice failed, ret[" << static_cast<int>(ret) << "]. Got device count[" << device_count
-              << "] and device id[" << device_id << "], please check if device id is valid.";
+    auto deviceCount = GetDeviceCount();
+    LOG_ERROR << "Call aclrtSetDevice failed, ret[" << static_cast<int>(ret) << "]. Got device count[" << deviceCount
+              << "] and device id[" << deviceId << "], please check if device id is valid.";
   }
 
-  aclrtContext rt_context;
-  ret = CALL_ASCEND_API(aclrtGetCurrentContext, &rt_context);
-  if (ret != ACL_SUCCESS || rt_context == nullptr) {
+  aclrtContext rtContext;
+  ret = CALL_ASCEND_API(aclrtGetCurrentContext, &rtContext);
+  if (ret != ACL_SUCCESS || rtContext == nullptr) {
     LOG_ERROR << "Call aclrtGetCurrentContext failed, ret[" << ret << "]";
     return;
   }
 
-  defaultDeviceContextMap_[device_id] = rt_context;
-  (void)initializedDeviceSet_.insert(device_id);
+  defaultDeviceContextMap_[deviceId] = rtContext;
+  (void)initializedDeviceSet_.insert(deviceId);
 }
 
-void AscendHalManager::ResetDevice(uint32_t device_id) {
-  if (initializedDeviceSet_.find(device_id) != initializedDeviceSet_.end()) {
-    auto ret = CALL_ASCEND_API(aclrtResetDevice, UintToInt(device_id));
+void AscendHalManager::ResetDevice(uint32_t deviceId) {
+  if (initializedDeviceSet_.find(deviceId) != initializedDeviceSet_.end()) {
+    auto ret = CALL_ASCEND_API(aclrtResetDevice, UintToInt(deviceId));
     if (ret != ACL_SUCCESS) {
       LOG_ERROR << "Call aclrtResetDevice, ret[" << ret << "]";
     }
-    defaultDeviceContextMap_[device_id] = nullptr;
-    (void)initializedDeviceSet_.erase(device_id);
+    defaultDeviceContextMap_[deviceId] = nullptr;
+    (void)initializedDeviceSet_.erase(deviceId);
   }
 }
 
 uint32_t AscendHalManager::GetDeviceCount() {
-  uint32_t device_count = 0;
-  auto ret = CALL_ASCEND_API(aclrtGetDeviceCount, &device_count);
+  uint32_t deviceCount = 0;
+  auto ret = CALL_ASCEND_API(aclrtGetDeviceCount, &deviceCount);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call rtGetDeviceCount, ret[" << static_cast<int>(ret) << "]";
   }
-  return device_count;
+  return deviceCount;
 }
 
-void AscendHalManager::SetDeviceSatMode(const aclrtFloatOverflowMode &overflow_mode) {
-  auto overflow_mode_str =
-    (overflow_mode == aclrtFloatOverflowMode::ACL_RT_OVERFLOW_MODE_SATURATION) ? kSaturationMode : kINFNANMode;
-  LOG_OUT << "The current overflow detection mode is " << overflow_mode_str << ".";
-  auto ret = CALL_ASCEND_API(aclrtSetDeviceSatMode, overflow_mode);
+void AscendHalManager::SetDeviceSatMode(const aclrtFloatOverflowMode &overflowMode) {
+  auto overflowModeStr =
+    (overflowMode == aclrtFloatOverflowMode::ACL_RT_OVERFLOW_MODE_SATURATION) ? kSaturationMode : kINFNANMode;
+  LOG_OUT << "The current overflow detection mode is " << overflowModeStr << ".";
+  auto ret = CALL_ASCEND_API(aclrtSetDeviceSatMode, overflowMode);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Set " << overflow_mode_str << " mode failed.";
+    LOG_ERROR << "Set " << overflowModeStr << " mode failed.";
   }
 }
 
-void AscendHalManager::SetOpWaitTimeout(uint32_t op_wait_timeout) {
-  LOG_OUT << "Set op wait timeout: " << op_wait_timeout << " s";
-  auto acl_ret = CALL_ASCEND_API(aclrtSetOpWaitTimeout, op_wait_timeout);
-  if (acl_ret != ACL_SUCCESS) {
-    LOG_ERROR << "Set op wait timeout failed, error: " << acl_ret;
+void AscendHalManager::SetOpWaitTimeout(uint32_t opWaitTimeout) {
+  LOG_OUT << "Set op wait timeout: " << opWaitTimeout << " s";
+  auto aclRet = CALL_ASCEND_API(aclrtSetOpWaitTimeout, opWaitTimeout);
+  if (aclRet != ACL_SUCCESS) {
+    LOG_ERROR << "Set op wait timeout failed, error: " << aclRet;
   }
 }
 
-void AscendHalManager::SetOpExecuteTimeOut(uint32_t op_execute_timeout) {
-  LOG_OUT << "Set op execute timeout: " << op_execute_timeout << " s";
-  auto acl_ret = CALL_ASCEND_API(aclrtSetOpExecuteTimeOut, op_execute_timeout);
-  if (acl_ret != ACL_SUCCESS) {
-    LOG_ERROR << "Set op execute timeout failed, error: " << acl_ret;
+void AscendHalManager::SetOpExecuteTimeOut(uint32_t opExecuteTimeout) {
+  LOG_OUT << "Set op execute timeout: " << opExecuteTimeout << " s";
+  auto aclRet = CALL_ASCEND_API(aclrtSetOpExecuteTimeOut, opExecuteTimeout);
+  if (aclRet != ACL_SUCCESS) {
+    LOG_ERROR << "Set op execute timeout failed, error: " << aclRet;
   }
 }
 
-aclrtContext AscendHalManager::CreateContext(uint32_t device_id) {
-  aclrtContext rt_context;
-  auto ret = CALL_ASCEND_API(aclrtCreateContext, &rt_context, device_id);
+aclrtContext AscendHalManager::CreateContext(uint32_t deviceId) {
+  aclrtContext rtContext;
+  auto ret = CALL_ASCEND_API(aclrtCreateContext, &rtContext, deviceId);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call aclrtCreateContext failed, ret: " << ret;
   }
-  rtContexts_.insert(rt_context);
-  return rt_context;
+  rtContexts_.insert(rtContext);
+  return rtContext;
 }
 
-void AscendHalManager::ResetContext(uint32_t device_id) {
-  aclrtContext rt_context = CreateContext(device_id);
-  defaultDeviceContextMap_[device_id] = rt_context;
+void AscendHalManager::ResetContext(uint32_t deviceId) {
+  aclrtContext rtContext = CreateContext(deviceId);
+  defaultDeviceContextMap_[deviceId] = rtContext;
 }
 
 void AscendHalManager::DestroyContext(aclrtContext context) {
@@ -142,32 +142,31 @@ void AscendHalManager::DestroyAllContext() {
   rtContexts_.clear();
 }
 
-void AscendHalManager::SetContextForce(uint32_t device_id) {
-  if (defaultDeviceContextMap_[device_id] == nullptr) {
+void AscendHalManager::SetContextForce(uint32_t deviceId) {
+  if (defaultDeviceContextMap_[deviceId] == nullptr) {
     return;
   }
-  auto ret = CALL_ASCEND_API(aclrtSetCurrentContext, defaultDeviceContextMap_[device_id]);
+  auto ret = CALL_ASCEND_API(aclrtSetCurrentContext, defaultDeviceContextMap_[deviceId]);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call aclrtSetCurrentContext, ret[" << ret << "]";
   }
 }
 
-void AscendHalManager::SetContext(uint32_t device_id) {
-  if (defaultDeviceContextMap_[device_id] == nullptr) {
+void AscendHalManager::SetContext(uint32_t deviceId) {
+  if (defaultDeviceContextMap_[deviceId] == nullptr) {
     return;
   }
-  if (thread_local_rt_context == defaultDeviceContextMap_[device_id]) {
+  if (threadLocalRtContext == defaultDeviceContextMap_[deviceId]) {
     return;
   }
-  auto ret = CALL_ASCEND_API(aclrtSetCurrentContext, defaultDeviceContextMap_[device_id]);
+  auto ret = CALL_ASCEND_API(aclrtSetCurrentContext, defaultDeviceContextMap_[deviceId]);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call aclrtSetCurrentContext, ret[" << ret << "]";
   }
-  thread_local_rt_context = defaultDeviceContextMap_[device_id];
+  threadLocalRtContext = defaultDeviceContextMap_[deviceId];
 }
 
-void AscendHalManager::InitializeAcl() {
-}
+void AscendHalManager::InitializeAcl() {}
 
 bool AscendHalManager::EnableLccl() { return false; }
 }  // namespace ascend

@@ -63,7 +63,7 @@ class MRT_EXPORT LockGuard {
   Lock *lock_;
 };
 
-MRT_EXPORT std::string MemTypeToStr(MemType mem_type);
+MRT_EXPORT std::string MemTypeToStr(MemType memType);
 
 constexpr size_t kPoolGrowSize = 1 << 20;
 
@@ -74,8 +74,8 @@ class ObjectPool {
   };
 
   class Buffer {
-    static const std::size_t bucket_size = sizeof(T) > sizeof(Buf) ? sizeof(T) : sizeof(Buf);
-    static const std::size_t kDataBucketSize = bucket_size * kPoolGrowSize;
+    static const std::size_t bucketSize = sizeof(T) > sizeof(Buf) ? sizeof(T) : sizeof(Buf);
+    static const std::size_t kDataBucketSize = bucketSize * kPoolGrowSize;
 
    public:
     explicit Buffer(Buffer *next) : next_(next) {}
@@ -84,7 +84,7 @@ class ObjectPool {
       if (index >= kPoolGrowSize) {
         throw std::bad_alloc();
       }
-      return reinterpret_cast<T *>(&data_[bucket_size * index]);
+      return reinterpret_cast<T *>(&data_[bucketSize * index]);
     }
 
     Buffer *const next_;
@@ -93,44 +93,44 @@ class ObjectPool {
     uint8_t data_[kDataBucketSize];
   };
 
-  Buf *free_list_ = nullptr;
-  Buffer *buffer_head_ = nullptr;
-  std::size_t buffer_index_ = kPoolGrowSize;
+  Buf *freeList_ = nullptr;
+  Buffer *bufferHead_ = nullptr;
+  std::size_t bufferIndex_ = kPoolGrowSize;
 
  public:
   ObjectPool() = default;
-  ObjectPool(ObjectPool &&object_pool) = delete;
-  ObjectPool(const ObjectPool &object_pool) = delete;
-  ObjectPool operator=(const ObjectPool &object_pool) = delete;
-  ObjectPool operator=(ObjectPool &&object_pool) = delete;
+  ObjectPool(ObjectPool &&objectPool) = delete;
+  ObjectPool(const ObjectPool &objectPool) = delete;
+  ObjectPool operator=(const ObjectPool &objectPool) = delete;
+  ObjectPool operator=(ObjectPool &&objectPool) = delete;
 
   ~ObjectPool() {
-    while (buffer_head_ != nullptr) {
-      Buffer *buffer = buffer_head_;
-      buffer_head_ = buffer->next_;
+    while (bufferHead_ != nullptr) {
+      Buffer *buffer = bufferHead_;
+      bufferHead_ = buffer->next_;
       delete buffer;
     }
   }
 
   T *Borrow() {
-    if (free_list_ != nullptr) {
-      Buf *buf = free_list_;
-      free_list_ = buf->next_;
+    if (freeList_ != nullptr) {
+      Buf *buf = freeList_;
+      freeList_ = buf->next_;
       return reinterpret_cast<T *>(buf);
     }
 
-    if (buffer_index_ >= kPoolGrowSize) {
-      buffer_head_ = new Buffer(buffer_head_);
-      buffer_index_ = 0;
+    if (bufferIndex_ >= kPoolGrowSize) {
+      bufferHead_ = new Buffer(bufferHead_);
+      bufferIndex_ = 0;
     }
 
-    return buffer_head_->GetBlock(buffer_index_++);
+    return bufferHead_->GetBlock(bufferIndex_++);
   }
 
   void Return(T *obj) {
     Buf *buf = reinterpret_cast<Buf *>(obj);
-    buf->next_ = free_list_;
-    free_list_ = buf;
+    buf->next_ = freeList_;
+    freeList_ = buf;
   }
 };
 

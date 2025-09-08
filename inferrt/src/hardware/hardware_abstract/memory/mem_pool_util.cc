@@ -34,7 +34,7 @@ const std::map<MemType, std::string> kMemTypeStr = {{MemType::kWeight, "Weight"}
                                                     {MemType::kWorkSpace, "WorkSpace"},
                                                     {MemType::kOther, "Other"}};
 
-std::string MemTypeToStr(MemType mem_type) { return kMemTypeStr.at(mem_type); }
+std::string MemTypeToStr(MemType memType) { return kMemTypeStr.at(memType); }
 }  // namespace mem_pool
 }  // namespace memory
 }  // namespace mrt
