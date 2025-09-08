@@ -21,7 +21,7 @@
 #include <map>
 #include <thread>
 #include <set>
-#include "hardware/hardware_abstract/common.h"
+#include <unistd.h>
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_base_symbol.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
@@ -50,7 +50,6 @@ void AscendDeviceContext::InitializeForAclop() const {
 }
 
 void AscendDeviceContext::Initialize() {
-  GilReleaseWithCheck gil_release;
   std::lock_guard<std::mutex> lock(initMutex_);
   if (initialized_) {
     return;

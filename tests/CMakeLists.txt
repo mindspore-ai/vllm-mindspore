@@ -12,14 +12,6 @@ if(ENABLE_ASCEND)
   include_directories(${ASCEND_PATH}/latest/include/)
   link_directories(${ASCEND_PATH}/latest/lib64/)
 
-  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-  include_directories(${Python3_INCLUDE_DIRS})
-
-
-  set(depname "pybind11")
-  set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
-  include_directories(${PYBIND11_PATH}/include)
-
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
 
   include_directories(${PROJECT_SOURCE_DIR}/inferrt/src)

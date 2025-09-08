@@ -18,11 +18,6 @@ if(ENABLE_ASCEND)
   find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
   include_directories(${Python3_INCLUDE_DIRS})
 
-
-  set(depname "pybind11")
-  set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
-  include_directories(${PYBIND11_PATH}/include)
-
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
   target_link_libraries(runtime_obj hardware_ascend_obj)
 endif()

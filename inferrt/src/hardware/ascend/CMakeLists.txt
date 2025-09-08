@@ -22,19 +22,10 @@ if(ENABLE_ASCEND)
   )
   link_directories(${ASCEND_PATH}/latest/lib64/)
 
-  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-  include_directories(${Python3_INCLUDE_DIRS})
-
-
-  set(depname "pybind11")
-  set(PYBIND11_PATH "${PROJECT_SOURCE_DIR}/${depname}-src")
-  include_directories(${PYBIND11_PATH}/include)
-
   file(GLOB_RECURSE HARDWARE_ASCEND_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
   add_library(hardware_ascend_obj SHARED ${HARDWARE_ASCEND_SRC_FILES})
   target_link_libraries(hardware_ascend_obj
       hardware_abstract_obj
-      Python3::Python
       ${ASCENDCL_LIB}
       ${RUNTIME_LIB}
     )
