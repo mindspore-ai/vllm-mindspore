@@ -39,3 +39,4 @@ if(ENABLE_KERNEL_ATEN)
 endif()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/inferrt/src)
+add_subdirectory(${PROJECT_SOURCE_DIR}/tests)

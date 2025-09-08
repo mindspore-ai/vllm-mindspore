@@ -17,11 +17,13 @@ usage()
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
   echo "    -a Enable pytorch aten kernel, default off"
+  echo "    -t Build and run tests, default off"
+  echo "    -e Enable Ascend backend, default off"
 }
 
 process_options()
 {
-    while getopts 'Dd:hia' OPT; do
+    while getopts 'Dd:hiate' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -37,6 +39,8 @@ process_options()
                 done
                 ;;
             i) export INC_BUILD=1;;
+            t) export BUILD_TESTS=1;;
+            e) export ENABLE_ASCEND=1;;
             a)
                 export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
                 export TEST_TORCH=1
@@ -57,6 +61,13 @@ process_options $@
 INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
 DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
 
+if [[ $BUILD_TESTS == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DBUILD_TESTS=on"
+fi
+
+if [[ $ENABLE_ASCEND == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_ASCEND=on"
+fi
 
 ##################################################
 # Prepare source and build directories
@@ -116,6 +127,20 @@ $BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/fibonacci_20.da
 echo "# 2/2: ./da sample/da_llm_sample.da"
 $BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/da_llm_sample.da
 echo "=============================="
+
+# Run hardware test
+if [[ $BUILD_TESTS == 1 ]]; then
+    echo "=============================="
+    echo "Run test case:"
+    if [[ $ENABLE_ASCEND == 1 ]]; then
+        echo "Ascend backend test case"
+        ./tests/hardware_ascend_test_obj
+    else
+        echo "CPU backend test case"
+    fi
+    echo "Tests completed."
+    echo "=============================="
+fi
 
 # Run python test
 echo "=============================="
