@@ -1,8 +1,9 @@
 import torch
 import operator
 from typing import List, Dict, Any
-from torch.fx.node import Node, map_arg
+from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
+from torch.fx.passes.fake_tensor_prop import FakeTensorProp
 
 from mrt.ir import GraphExecutor, Op
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data
@@ -83,8 +84,18 @@ def _get_op(target):
     return None
 
 
-def _map_args(node_args, env):
-    return map_arg(node_args, lambda arg: env[arg] if isinstance(arg, Node) else arg)
+def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
+    def _map_arg(arg: Any) -> Node:
+        if isinstance(arg, Node):
+            return env[arg]
+
+        if isinstance(arg, (list, tuple)):
+            nodes = [_map_arg(item) for item in arg]
+            return executor.make_tuple(nodes)
+
+        return executor.add_value_node(arg)
+
+    return [_map_arg(arg) for arg in args]
 
 
 def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
@@ -92,6 +103,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
     and returns a callable that executes the compiled graph.
     """
+    FakeTensorProp(gm).propagate(*example_inputs)
+
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
 
@@ -99,10 +112,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            input = next(input_iterator)
-            if isinstance(input, torch.Tensor):
-                input = from_torch(input)
-            env[node] = executor.add_value_node(input)
+            env[node] = executor.add_value_node(from_torch(next(input_iterator)))
 
     with executor:
         for node in gm.graph.nodes:
@@ -117,19 +127,17 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 for part in target.split("."):
                     attr_val = getattr(attr_val, part)
 
-                if isinstance(attr_val, torch.Tensor):
-                    attr_val = from_torch(attr_val)
-
-                env[node] = executor.add_value_node(attr_val)
+                env[node] = executor.add_value_node(from_torch(attr_val))
 
             elif node.op in ("call_function", "call_method"):
                 op = _get_op(node.target)
                 if op is None:
                     raise NotImplementedError(f"Unsupported op: {node.target}")
 
-                args = _map_args(node.args, env)
+                input_nodes = _map_args(node.args, env, executor)
+                output_value = from_torch(node.meta.get("val", None))
 
-                env[node] = executor.add_op_node(op, list(args))
+                env[node] = executor.add_op_node(op, input_nodes, output_value)
 
             elif node.op == "call_module":
                 raise NotImplementedError(
@@ -137,9 +145,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 )
 
             elif node.op == "output":
-                output_nodes = node.args[0]
-                outputs = list(_map_args(output_nodes, env))
-                env[node] = executor.make_tuple(outputs)
+                input_nodes = _map_args(node.args, env, executor)
+                env[node] = input_nodes[0]
                 executor.set_return()
 
             else:
@@ -161,7 +168,6 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
 
         result = executor.run()
-
-        return tuple(to_torch(r) for r in result)
+        return to_torch(result)
 
     return compiled_callable

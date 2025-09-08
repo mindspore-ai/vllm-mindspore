@@ -21,12 +21,12 @@
 namespace mrt {
 namespace ir {
 
-Value::Value(TensorPtr v) : tag_(Tag::Tensor), tensor_(v) {}
+Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}
 Value::Value(double v) : tag_(Tag::Double), double_(v) {}
 Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
 Value::Value(std::string &&v) : tag_(Tag::String) { new (&string_) std::string(std::move(v)); }
-Value::Value(TuplePtr v) : tag_(Tag::Tuple), tuple_(v) {}
+Value::Value(const TuplePtr &v) : tag_(Tag::Tuple), tuple_(v) {}
 
 Value::~Value() {
   switch (tag_) {
@@ -49,7 +49,7 @@ Value::~Value() {
     LOG_EXCEPTION << "Bad Value access"; \
   }
 
-TensorPtr Value::ToTensor() const {
+const TensorPtr &Value::ToTensor() const {
   CHECK_TAG(Tag::Tensor);
   return tensor_;
 }
@@ -69,7 +69,7 @@ const std::string &Value::ToString() const {
   CHECK_TAG(Tag::String);
   return string_;
 }
-TuplePtr Value::ToTuple() const {
+const TuplePtr &Value::ToTuple() const {
   CHECK_TAG(Tag::Tuple);
   return tuple_;
 }

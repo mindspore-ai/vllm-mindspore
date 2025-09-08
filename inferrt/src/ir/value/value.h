@@ -67,7 +67,7 @@ class Tuple : public RefCounted {
    * @param index The index of the element to retrieve.
    * @return The element as ValuePtr.
    */
-  ValuePtr operator[](size_t index) const {
+  const ValuePtr &operator[](size_t index) const {
     CHECK_IF_FAIL(index < elements_.size());
     return elements_[index];
   }
@@ -102,7 +102,7 @@ class Value : public RefCounted {
    * @brief Constructs a Value from a TensorPtr.
    * @param v The TensorPtr value.
    */
-  Value(TensorPtr v);
+  Value(const TensorPtr &v);
   /**
    * @brief Constructs a Value from a double.
    * @param v The double value.
@@ -127,7 +127,7 @@ class Value : public RefCounted {
    * @brief Constructs a Value from a TuplePtr.
    * @param v The TuplePtr value.
    */
-  Value(TuplePtr v);
+  Value(const TuplePtr &v);
 
   /**
    * @brief Destructor.
@@ -150,12 +150,12 @@ class Value : public RefCounted {
    *  std::runtime_error if the type does not match.
    */
   ///@{
-  TensorPtr ToTensor() const;
+  const TensorPtr &ToTensor() const;
   double ToDouble() const;
   int64_t ToInt() const;
   bool ToBool() const;
   const std::string &ToString() const;
-  TuplePtr ToTuple() const;
+  const TuplePtr &ToTuple() const;
   ///@}
 
   /**
