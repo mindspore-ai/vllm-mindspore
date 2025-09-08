@@ -477,11 +477,14 @@ def _reshape_kv_cache_tensors(
                             kv_cache_shape[1:]).permute(*inv_order[1:])
                     if fa3_quant:
                         # for fa3_quant, kvcache need be nz format due to ops
+                        # Currently, transdata has a bug and ms.jit must be
+                        # added. Later, ms.jit will be removed.
                         num_blocks, block_size, _, _ = cache_block.shape
+                        import ms_custom_ops
                         cache_block = ops.reshape(cache_block,
                                                   (num_blocks, block_size, -1))
-                        cache_block_nz = ops.auto_generate.format_cast(
-                            cache_block, 29)
+                        cache_block_nz = ms.jit(ms_custom_ops.trans_data)\
+                                        (cache_block, transdata_type=1)
                         kv_cache_layer.append(cache_block_nz)
                     else:
                         kv_cache_layer.append(cache_block)
