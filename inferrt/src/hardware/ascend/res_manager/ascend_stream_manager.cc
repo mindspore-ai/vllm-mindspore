@@ -18,7 +18,6 @@
 
 #include <string>
 #include "common/common.h"
-#include "hardware/hardware_abstract/common.h"
 #include "acl/error_codes/rt_error_codes.h"
 #include "hardware/ascend/res_manager/mem_manager/ascend_gmem_adapter.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
@@ -224,7 +223,6 @@ bool AscendStreamMng::SyncStream(aclrtStream stream) const {
   LOG_OUT << "Sync stream: " << stream;
   auto RET = ACL_SUCCESS;
   try {
-    GilReleaseWithCheck gil_release;
     RET = CALL_ASCEND_API(aclrtSynchronizeStreamWithTimeout, stream, -1);
     if (RET != ACL_SUCCESS && RET != ACL_ERROR_RT_AICORE_OVER_FLOW) {  // o for switch stream
       LOG_ERROR << "Call runtime aclrtSynchronizeStreamWithTimeout error."
@@ -255,7 +253,6 @@ bool AscendStreamMng::SyncStream(aclrtStream stream) const {
 bool AscendStreamMng::SyncAllStreams(bool sync_device) const {
   auto RET = ACL_ERROR_NONE;
   try {
-    GilReleaseWithCheck gil_release;
     if (sync_device) {
       // According to CANN, we need to set timeout to 2 hours for aclrtSynchronizeDeviceWithTimeout.
       int timeout = 7200000;

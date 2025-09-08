@@ -23,6 +23,7 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#include <limits>
 
 #include "common/logger.h"
 
