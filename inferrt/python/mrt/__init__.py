@@ -12,21 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mrt import jit
-import argparse
+from mrt.api import dag, jit
 
-_arg_parser = argparse.ArgumentParser()
-_arg_parser.add_argument('--dump', '-d', type=bool, default=False, required=False, help="if dump compiler information")
-_args = _arg_parser.parse_args()
-
-
-@jit(dump_compiler=_args.dump)
-def run_check(x, y):
-    print('hello world.\n')
-    z = x * y
-    z = z + x - y
-    z = z / y
-    return z
-
-assert run_check(12, 6) == 13
-print("The result is correct. 'mrt' module has been installed successfully.")
+__all__ = ['dag', 'jit']

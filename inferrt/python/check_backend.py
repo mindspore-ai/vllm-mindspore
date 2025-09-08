@@ -1,5 +1,5 @@
 import torch
-from dapy import backend
+from mrt.torch import backend
 
 
 def foo(x, y):
@@ -16,4 +16,4 @@ bar = foo(x, y)
 opt_bar = opt_foo(x, y)
 
 assert torch.equal(opt_bar, bar), f"\nopt_bar={opt_bar}\nbar={bar}"
-print("The result is correct. 'dapy' backend has been installed successfully.")
+print("The result is correct. 'mrt' backend has been installed successfully.")

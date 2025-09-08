@@ -15,7 +15,7 @@
 import inspect
 import types
 from functools import wraps
-from _dapy import DALangPy_
+from _mrt_api import DALangPy_
 
 
 def _get_source(func):

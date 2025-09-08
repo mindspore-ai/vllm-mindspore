@@ -122,7 +122,7 @@ echo "=============================="
 echo "Run python test case:"
 echo "python check_api.py"
 echo "=============================="
-export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind:$INFERRT_PATH/inferrt/python
+export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind/mrt:$INFERRT_PATH/inferrt/python
 echo "PYTHONPATH=$PYTHONPATH"
 python $INFERRT_PATH/inferrt/python/check_api.py
 
@@ -132,7 +132,7 @@ if [[ $TEST_TORCH == 1 ]]; then
     echo "Run pytorch backend test case:"
     echo "python check_backend.py"
     echo "=============================="
-    export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind:$INFERRT_PATH/inferrt/python
+    export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind/mrt:$BUILD_DIR/inferrt/src/pybind/mrt_torch:$INFERRT_PATH/inferrt/python
     export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/cpu/aten/libkernel_aten.so
     export DART_KERNEL_LIB_NAME=Aten
     python $INFERRT_PATH/inferrt/python/check_backend.py

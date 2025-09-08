@@ -33,8 +33,8 @@ void TestAtenKernel::Init() {
 
 void TestAtenKernel::InferShape() {
   CHECK_IF_NULL(operator_);
-  node_->output = ir::MakeIntrusive<ir::Value>(
-    ir::Tensor({-1}, ir::DataType::Type::Float32, hardware::Device(hardware::DeviceType::CPU, 0)));
+  node_->output = ir::MakeIntrusive<ir::Value>(ir::MakeIntrusive<ir::Tensor>(
+    std::vector<int64_t>{-1}, ir::DataType::Type::Float32, hardware::Device(hardware::DeviceType::CPU, 0)));
   Init();
   LOG_OUT << "Begin InferShape for operator [" << ToStr(node_->op) << "], input=" << input_ << ", output=" << output_;
   if (operator_->InferShape(input_, output_) != SUCCESS) {

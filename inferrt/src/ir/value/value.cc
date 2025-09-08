@@ -21,23 +21,23 @@
 namespace mrt {
 namespace ir {
 
-Value::Value(Tensor &&v) : tag_(Tag::Tensor) { new (&tensor_) Tensor(std::move(v)); }
+Value::Value(TensorPtr v) : tag_(Tag::Tensor), tensor_(v) {}
 Value::Value(double v) : tag_(Tag::Double), double_(v) {}
 Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
 Value::Value(std::string &&v) : tag_(Tag::String) { new (&string_) std::string(std::move(v)); }
-Value::Value(Tuple &&v) : tag_(Tag::Tuple) { new (&tuple_) Tuple(std::move(v)); }
+Value::Value(TuplePtr v) : tag_(Tag::Tuple), tuple_(v) {}
 
 Value::~Value() {
   switch (tag_) {
     case Tag::Tensor:
-      tensor_.~Tensor();
+      tensor_.~IntrusivePtr();
       break;
     case Tag::String:
       string_.~basic_string();
       break;
     case Tag::Tuple:
-      tuple_.~Tuple();
+      tuple_.~IntrusivePtr();
       break;
     default:
       break;
@@ -49,13 +49,9 @@ Value::~Value() {
     LOG_EXCEPTION << "Bad Value access"; \
   }
 
-const Tensor *Value::ToTensor() const {
+TensorPtr Value::ToTensor() const {
   CHECK_TAG(Tag::Tensor);
-  return &tensor_;
-}
-Tensor *Value::ToTensor() {
-  CHECK_TAG(Tag::Tensor);
-  return &tensor_;
+  return tensor_;
 }
 double Value::ToDouble() const {
   CHECK_TAG(Tag::Double);
@@ -69,48 +65,34 @@ bool Value::ToBool() const {
   CHECK_TAG(Tag::Bool);
   return bool_;
 }
-const std::string *Value::ToString() const {
+const std::string &Value::ToString() const {
   CHECK_TAG(Tag::String);
-  return &string_;
+  return string_;
 }
-std::string *Value::ToString() {
-  CHECK_TAG(Tag::String);
-  return &string_;
-}
-const Tuple *Value::ToTuple() const {
+TuplePtr Value::ToTuple() const {
   CHECK_TAG(Tag::Tuple);
-  return &tuple_;
-}
-Tuple *Value::ToTuple() {
-  CHECK_TAG(Tag::Tuple);
-  return &tuple_;
+  return tuple_;
 }
 
-std::ostream &operator<<(std::ostream &os, const Tuple *tuple) {
-  os << "Tuple(";
-  const auto tupleSize = tuple->Size();
-  for (size_t i = 0; i < tupleSize; ++i) {
-    os << (*tuple)[i];
-    if (i < tupleSize - 1) {
-      os << ", ";
-    }
-  }
-  os << ")";
-  return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const ValuePtr &value) { return operator<<(os, value.get()); }
-
-std::ostream &operator<<(std::ostream &os, Value *value) {
-  if (value == nullptr) {
-    os << "Null";
+std::ostream &operator<<(std::ostream &os, const TuplePtr &tuple) {
+  if (tuple == nullptr) {
+    os << "Tuple(Null)";
   } else {
-    os << *value;
+    os << "Tuple(";
+    bool first = true;
+    for (const auto &item : *tuple) {
+      if (!first) {
+        os << ", ";
+      }
+      os << item;
+      first = false;
+    }
+    os << ")";
   }
   return os;
 }
 
-std::ostream &operator<<(std::ostream &os, const Value *value) {
+std::ostream &operator<<(std::ostream &os, const ValuePtr &value) {
   if (value == nullptr) {
     os << "Null";
   } else {

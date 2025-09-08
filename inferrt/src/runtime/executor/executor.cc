@@ -70,7 +70,7 @@ void ProcessMakeTuple(ir::NodePtr node) {
   for (auto &input : node->inputs) {
     (void)elements.emplace_back(input->output);
   }
-  node->output = ir::MakeIntrusive<ir::Value>(ir::Tuple(std::move(elements)));
+  node->output = ir::MakeIntrusive<ir::Value>(ir::MakeIntrusive<ir::Tuple>(std::move(elements)));
 }
 
 void ProcessTupleGetItem(ir::NodePtr node) {
@@ -228,7 +228,8 @@ void GraphExecutor::RunNode(ir::NodePtr node) {
     LOG_OUT << "Skip launch kernel for node" << node;
     auto outputTensor = node->output->ToTensor();
     auto inputStorage = node->inputs[it->second]->output->ToTensor()->GetStorage();
-    node->output = ir::MakeIntrusive<ir::Value>(ir::Tensor(inputStorage, outputTensor->Shape(), outputTensor->Dtype()));
+    node->output = ir::MakeIntrusive<ir::Value>(
+      ir::MakeIntrusive<ir::Tensor>(inputStorage, outputTensor->Shape(), outputTensor->Dtype()));
   } else {
     kernel->Launch();
   }
