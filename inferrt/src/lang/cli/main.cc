@@ -29,10 +29,6 @@
 #pragma message("Using filesystem library: <filesystem>")
 #include <filesystem>
 namespace fs = std::filesystem;
-#elif __has_include(<experimental/filesystem>)
-#pragma message("Using filesystem library: <experimental/filesystem>")
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
 #else
 #pragma message("No filesystem library found.")
 #define NO_FILESYSTEM_LIBRARY
