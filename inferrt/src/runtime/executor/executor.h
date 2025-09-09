@@ -28,6 +28,7 @@
 #include "ops/operator.h"
 #include "runtime/executor/mempool.h"
 #include "runtime/executor/op_runner.h"
+#include "runtime/builder/builder.h"
 #include "runtime/utils/utils.h"
 #include "optimize/pass/pass.h"
 #include "ir/graph.h"
@@ -36,7 +37,6 @@
 
 namespace mrt {
 namespace runtime {
-class Builder;
 /**
  * @brief Base class for executing a computational graph.
  *

@@ -15,6 +15,7 @@
  */
 
 #include "runtime/builder/builder.h"
+#include "runtime/executor/executor.h"
 #include "ops/op_register.h"
 
 namespace mrt {
