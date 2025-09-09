@@ -36,7 +36,7 @@ class Executor;
  */
 class DA_API Builder {
  public:
-  Builder() = default;
+  Builder() = delete;
   Builder(const ir::GraphPtr &graph) : graph_(graph) {}
   virtual ~Builder() = default;
 
