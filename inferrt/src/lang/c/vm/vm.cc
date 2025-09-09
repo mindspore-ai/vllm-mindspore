@@ -18,12 +18,22 @@
 
 #include <algorithm>
 #include <functional>
+#include <string_view>
 
 #include "common/common.h"
 #include "lang/c/vm/intrinsic.h"
 
 namespace da {
 namespace vm {
+namespace {
+inline bool EnableDummyRun() {
+  static const char dummyRunEnvName[] = "DUMMY_RUN";
+  static const char *dummyRunCStr = std::getenv(dummyRunEnvName);
+  static const bool dummyRunGraph = (dummyRunCStr != nullptr) && (std::string_view(dummyRunCStr) == "on");
+  return dummyRunGraph;
+}
+}  // namespace
+
 bool VM::ReplaceEscapeStr(std::string &dst) {
   constexpr auto escapeSize = 4;
   const char *escapes[] = {"\\\\", "\\n", "\\r", "\\t"};
@@ -740,7 +750,9 @@ bool VM::StartGraph(const Code &code) {  // If call a graph.
   if (code.type == CodeGraph) {
     LOG_OUT << "Call DAGraph: " << code.name;
     if (graphExecutor_.HasGraph()) {
-      graphExecutor_.RunGraph();
+      if (!EnableDummyRun()) {
+        graphExecutor_.RunGraph();
+      }
       return true;
     } else {
       graphExecutor_.BeginGraph(code.name);
@@ -759,7 +771,9 @@ void VM::FinishGraph(const Frame &frame) {
 
     graphExecutor_.DumpGraph();
     graphExecutor_.OptGraph();
-    graphExecutor_.BuildKernels();
+    if (!EnableDummyRun()) {
+      graphExecutor_.BuildExecutor();
+    }
     graphExecutor_.DumpGraph();
   } else {
     LOG_ERROR << "No graph building.";

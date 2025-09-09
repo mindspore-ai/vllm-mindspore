@@ -26,7 +26,7 @@ class DA_API PipelineExecutor : public Executor {
   PipelineExecutor() = default;
   ~PipelineExecutor() override = default;
 
-  void Run() override;
+  void Run(bool isDynamic) override;
 };
 
 }  // namespace runtime

@@ -22,37 +22,58 @@
 namespace mrt {
 namespace ir {
 
-Storage::Storage(size_t sizeBytes, hardware::Device device) : sizeBytes_(sizeBytes), device_(device), ownsData_(true) {
+Storage::Storage(size_t sizeBytes, hardware::Device device)
+    : sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(true) {
   Resize(sizeBytes_);
 }
 
 Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
-    : data_(data), sizeBytes_(sizeBytes), device_(device), ownsData_(false) {}
+    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(false) {}
 
-Storage::~Storage() { Resize(0); }
+Storage::~Storage() {
+  if (ownsData_ && data_ != nullptr) {
+    alloc_.Free(data_);
+  }
+}
 
 void Storage::Resize(size_t sizeBytes) {
   sizeBytes_ = sizeBytes;
   if (!ownsData_) {
     return;
   }
-  if (device_.type == hardware::DeviceType::CPU) {
-    if (data_) {
-      free(data_);
-    }
-    if (sizeBytes_ == 0) {
-      data_ = nullptr;
-    } else {
-      data_ = malloc(sizeBytes_);
-      if (!data_) {
-        throw std::bad_alloc();
-      }
-    }
-  } else {
-    // Handle other devices like GPU (e.g., cudaMalloc)
-    LOG_EXCEPTION << "Device not supported yet";
+  if (data_ != nullptr) {
+    LOG_EXCEPTION << "Device memory leak detected, device type: " << GetDeviceNameByType(device_.type);
   }
 }
 
+void Storage::AllocateMemory() {
+  if (data_ != nullptr && ownsData_) {
+    LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
+                  << GetDeviceNameByType(device_.type) << ", data: " << data_;
+  }
+
+  data_ = alloc_.Allocate(sizeBytes_);
+  CHECK_IF_NULL(data_);
+  ownsData_ = true;
+}
+
+void Storage::FreeMemory() {
+  if (!ownsData_) {
+    LOG_EXCEPTION << "Can not free memory for a storage which doesn't own data, this Storage may be used to "
+                     "reference memory passed in from external sources.";
+  }
+
+  CHECK_IF_NULL(data_);
+  alloc_.Free(data_);
+  data_ = nullptr;
+  ownsData_ = false;
+}
+
+void *Storage::Release() {
+  void *p = data_;
+  data_ = nullptr;
+  ownsData_ = false;
+  return p;
+}
 }  // namespace ir
 }  // namespace mrt

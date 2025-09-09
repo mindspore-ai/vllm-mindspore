@@ -27,6 +27,17 @@
 #include "ir/common/intrusive_ptr.h"
 
 namespace mrt {
+class Allocator {
+ public:
+  Allocator() = default;
+  Allocator(hardware::Device device) {}
+
+  // TODO: use device context or device res manager api instead of malloc/free.
+  void *Allocate(size_t sizeBytes) const { return malloc(sizeBytes); }
+
+  void Free(void *ptr) const { free(ptr); }
+};
+
 namespace ir {
 
 /**
@@ -84,9 +95,39 @@ class Storage : public RefCounted {
 
   void Resize(size_t sizeBytes);
 
+  /**
+   * @brief Retrieves the allocator instance associated with this object.
+   * @return The allocator used for memory management.
+   */
+  Allocator GetAllocator() const { return alloc_; }
+
+  /**
+   * @brief Allocates memory using the configured allocator according to device type.
+   * This function checks for duplicate memory allocation or memory leaks.
+   */
+  void AllocateMemory();
+
+  /**
+   * @brief Frees the currently allocated memory, if owned.
+   */
+  void FreeMemory();
+
+  /**
+   * @brief Check whether this Storage currently owns the data — meaning the buffer pointed to by data_ is managed by
+   * this Storage object.
+   */
+  bool CheckOwnsData() const { return ownsData_; }
+
+  /**
+   * @brief Releases ownership of the managed pointer.
+   * @return The raw data pointer.
+   */
+  void *Release();
+
  private:
-  void *data_{nullptr};      ///< Pointer to the allocated memory.
-  size_t sizeBytes_{0};      ///< Size of the memory in bytes.
+  void *data_{nullptr};  ///< Pointer to the allocated memory.
+  size_t sizeBytes_{0};  ///< Size of the memory in bytes.
+  Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
   bool ownsData_{true};      ///< Whether the storage owns the data.
 };

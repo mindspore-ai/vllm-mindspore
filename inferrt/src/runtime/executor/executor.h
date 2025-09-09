@@ -47,8 +47,7 @@ namespace runtime {
 class DA_API Executor {
  public:
   Executor() = default;
-  Executor(const ir::GraphPtr &graph, const std::shared_ptr<std::vector<OpRunner>> &opRunners)
-      : graph_(graph), opRunners_(opRunners) {}
+  Executor(const std::shared_ptr<std::vector<OpRunner>> &opRunners) : opRunners_(opRunners) {}
 
   virtual ~Executor() = default;
 
@@ -57,14 +56,12 @@ class DA_API Executor {
    * This method runs all operations in the graph by execution order.
    * Subclasses can override this method to provide specialized execution behavior, such as Pipeline mode, AclGraph
    * mode.
+   * @param isDynamic whether run graph by dynamic shape mode.
    */
-  virtual void Run();
+  virtual void Run(bool isDynamic);
 
  protected:
-  // The graph that the executor will run.
-  ir::GraphPtr graph_{nullptr};
-
-  // Shared pointer to the vector of OpRunners for all operators by execution order in graph_.
+  // Shared pointer to the vector of OpRunners for all operators by execution order.
   std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
 };
 
@@ -73,6 +70,7 @@ class DA_API GraphExecutor {
   GraphExecutor();
   ~GraphExecutor();
 
+  // 1. Graph construct and optimize, mlrl->infer ir->execution order(op runners)
   // Start building graph.
   void BeginGraph(const std::string &name);
   // Finish building graph.
@@ -83,7 +81,6 @@ class DA_API GraphExecutor {
   void BuildKernels();
   // Add a parameter for graph.
   void AddParameter(ir::NodePtr param);
-
   // Add a value node.
   ir::NodePtr AddValueNode(const ir::ValuePtr &value = nullptr);
   // Add an operation node.
@@ -91,8 +88,10 @@ class DA_API GraphExecutor {
   // Add return node.
   ir::NodePtr AddReturn();
 
+  // 2. Create Builder, analyse execution order and create Executor by execution mode.
   void BuildExecutor();
 
+  // 3. Run graph via Executor.
   // Run the built graph.
   void RunGraph(bool isDynamic = false);
   // If the graph had been built.

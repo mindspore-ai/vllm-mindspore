@@ -265,17 +265,9 @@ void GraphExecutor::RecordTensorRefCount() {
 
 // Run the built graph.
 void GraphExecutor::RunGraph(bool isDynamic) {
+  CHECK_IF_NULL(executor_);
   LOG_OUT << "Run graph, isDynamic: " << isDynamic;
-  CHECK_IF_NULL(graph_);
-  CHECK_IF_NULL(recycler_);
-
-  isDynamic_ = isDynamic;
-  recycler_->ResetRunningRefCounts();
-
-  for (auto &node : graph_->nodes) {
-    LOG_OUT << "Run node: " << node;
-    RunNode(node);
-  }
+  executor_->Run(isDynamic);
 }
 
 #ifdef DUMP
@@ -347,7 +339,7 @@ void GraphExecutor::BuildExecutor() {
   executor_ = builder_->BuildExecutor();
 }
 
-void Executor::Run() {
+void Executor::Run(bool isDynamic) {
   OpRunner *opRunners = opRunners_->data();
   size_t opNum = opRunners_->size();
   for (size_t i = 0; i < opNum; i++) {

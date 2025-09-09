@@ -96,6 +96,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("end_graph", &GraphExecutor::EndGraph)
     .def("opt_graph", &GraphExecutor::OptGraph)
     .def("build_kernels", &GraphExecutor::BuildKernels)
+    .def("build_executor", &GraphExecutor::BuildExecutor)
     .def("run_graph", &GraphExecutor::RunGraph, py::arg("is_dynamic") = false)
     .def("dump_graph", &GraphExecutor::DumpGraph)
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)

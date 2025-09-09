@@ -3,9 +3,10 @@ from mrt.torch import backend
 
 
 def foo(x, y):
-    a = torch.add(x, y)
-    b = torch.sub(x, y)
-    return a * b
+    a = torch.matmul(x, y)
+    b = torch.matmul(x, y)
+    return a @ b
+
 
 
 opt_foo = torch.compile(foo, backend=backend)

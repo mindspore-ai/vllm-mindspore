@@ -59,8 +59,7 @@ class GraphExecutor:
     def build(self):
         """Optimize the graph and build kernels."""
         # self._executor.opt_graph()
-        self._executor.build_kernels()
-        self._executor.record_tensor_ref_count()
+        self._executor.build_executor()
 
     def dump_graph(self):
         """Dump the graph definition."""
