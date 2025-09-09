@@ -1,6 +1,6 @@
 check_debug_log_out()
 
-if(ENABLE_ASCEND)
+if(ENABLE_ASCEND AND BUILD_TESTS)
   message(STATUS "Backend Ascend enabled")
   if(DEFINED ENV{ASCEND_CUSTOM_PATH})
     set(ASCEND_PATH $ENV{ASCEND_CUSTOM_PATH})
