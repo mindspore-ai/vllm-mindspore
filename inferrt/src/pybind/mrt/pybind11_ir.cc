@@ -30,7 +30,7 @@ using namespace mrt::runtime;
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 
 PYBIND11_MODULE(_mrt_ir, m) {
-  m.doc() = "Python binding for DA IR";
+  m.doc() = "Python binding for MRT";
 
   py::enum_<ops::Op>(m, "Op")
 #define OP(O) .value(#O, ops::Op_##O)
@@ -51,7 +51,8 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<std::vector<ir::ValuePtr>>())
     .def("__len__", &ir::Tuple::Size)
     .def("__getitem__", &ir::Tuple::operator[], py::return_value_policy::reference)
-    .def("__iter__", [](const ir::Tuple &t) { return py::make_iterator(t.begin(), t.end()); }, py::keep_alive<0, 1>())
+    .def(
+      "__iter__", [](const ir::Tuple &t) { return py::make_iterator(t.begin(), t.end()); }, py::keep_alive<0, 1>())
     .def("__repr__", [](const ir::TuplePtr &t) {
       std::stringstream ss;
       ss << t;
@@ -60,12 +61,12 @@ PYBIND11_MODULE(_mrt_ir, m) {
 
   py::class_<ir::Value, ir::ValuePtr>(m, "Value")
     .def(py::init<>())
-    .def(py::init<ir::TensorPtr>())
+    .def(py::init<const ir::TensorPtr &>())
     .def(py::init<double>())
     .def(py::init<int64_t>())
     .def(py::init<bool>())
     .def(py::init<std::string>())
-    .def(py::init<ir::TuplePtr>())
+    .def(py::init<const ir::TuplePtr &>())
     .def("is_tensor", &ir::Value::IsTensor)
     .def("is_tuple", &ir::Value::IsTuple)
     .def("is_double", &ir::Value::IsDouble)
@@ -85,8 +86,9 @@ PYBIND11_MODULE(_mrt_ir, m) {
       return ss.str();
     });
 
-  py::class_<ir::Node, ir::NodePtr>(m, "Node").def_property_readonly(
-    "output", [](const ir::NodePtr &node) { return node->output; });
+  py::class_<ir::Node, ir::NodePtr>(m, "Node").def_property(
+    "output", [](const ir::NodePtr &node) { return node->output; },
+    [](ir::NodePtr &node, const ir::ValuePtr &value) { node->output = value; });
 
   py::class_<GraphExecutor>(m, "GraphExecutor")
     .def(py::init<>())
@@ -99,6 +101,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)
     .def("add_return", &GraphExecutor::AddReturn, py::return_value_policy::reference)
     .def("add_parameter", &GraphExecutor::AddParameter, py::arg("param"))
-    .def("add_op_node", &GraphExecutor::AddOpNode, py::arg("op"), py::arg("inputs"), py::return_value_policy::reference)
+    .def("add_op_node", &GraphExecutor::AddOpNode, py::arg("op"), py::arg("inputs"), py::arg("output"),
+         py::return_value_policy::reference)
     .def("add_value_node", &GraphExecutor::AddValueNode, py::arg("value"), py::return_value_policy::reference);
 }

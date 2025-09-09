@@ -87,7 +87,7 @@ class DA_API GraphExecutor {
   // Add a value node.
   ir::NodePtr AddValueNode(const ir::ValuePtr &value = nullptr);
   // Add an operation node.
-  ir::NodePtr AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs);
+  ir::NodePtr AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs, const ir::ValuePtr &output = nullptr);
   // Add return node.
   ir::NodePtr AddReturn();
 

@@ -91,22 +91,21 @@ at::Device ToTorchDevice(const hardware::Device device) {
   return at::Device(deviceType, device.index);
 }
 
-// Tensor conversion utilities
-ir::TensorPtr FromTorchTensor(const at::Tensor &atTensor) {
-  ir::DataType type = FromTorchDType(atTensor.scalar_type());
-  std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
-  void *data = atTensor.data_ptr();
-  auto device = FromTorchDevice(atTensor.device());
+// Create a new mrt Tensor without owns data
+ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
+  ir::DataType type = FromTorchDType(tensor.scalar_type());
+  std::vector<int64_t> shape(tensor.sizes().begin(), tensor.sizes().end());
+  auto device = FromTorchDevice(tensor.device());
+  void *data = isFake ? nullptr : tensor.data_ptr();
   return ir::MakeIntrusive<ir::Tensor>(data, shape, type, device);
 }
 
+// Create a new torch Tensor with shared data
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(ToTorchDevice(tensor->GetDevice()));
-  tensor->AddRef();
   return at::from_blob(
-    const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(),
-    [ptr = tensor.get()](void *) { ptr->DecRef(); }, options);
+    const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), [tensor](void *) {}, options);
 }
 
 void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {
@@ -128,8 +127,8 @@ void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 
 PYBIND11_MODULE(_mrt_torch, m) {
-  m.doc() = "PyTorch extension for DA IR";
-  m.def("from_torch", &FromTorchTensor);
+  m.doc() = "PyTorch extension for MRT";
+  m.def("from_torch", &FromTorchTensor, py::arg("tensor"), py::arg("is_fake") = false);
   m.def("to_torch", &ToTorchTensor, py::return_value_policy::reference);
   m.def("update_tensor_data", &UpdateTensorData);
 }

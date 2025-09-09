@@ -121,8 +121,9 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &))&GraphExecutor::AddOpNode,
-              this, std::placeholders::_1, std::placeholders::_2);
+    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &,
+                                              const ir::ValuePtr &))&GraphExecutor::AddOpNode,
+              this, std::placeholders::_1, std::placeholders::_2, nullptr);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
 
@@ -164,14 +165,14 @@ ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
 }
 
 // Add an operation node.
-ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs) {
+ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs, const ir::ValuePtr &output) {
   LOG_OUT << "Add operation node";
   LOG_OUT << "operation input size: " << inputs.size();
   auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = op;
   node->inputs = inputs;
-  node->output = ir::MakeIntrusive<ir::Value>();
+  node->output = output == nullptr ? ir::MakeIntrusive<ir::Value>() : output;
   CHECK_IF_NULL(graph_);
   (void)graph_->nodes.emplace_back(node);
   return node;
@@ -179,13 +180,14 @@ ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> 
 
 // Add return node.
 ir::NodePtr GraphExecutor::AddReturn() {
-  LOG_OUT << "Add return";
+  LOG_OUT << "Add return node from last node";
+  CHECK_IF_NULL(graph_);
+  auto lastNode = graph_->nodes[graph_->nodes.size() - 1];
   auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = ops::Op_return;
-  node->output = ir::MakeIntrusive<ir::Value>();
-  (void)node->inputs.emplace_back(graph_->nodes[graph_->nodes.size() - 1]);
-  CHECK_IF_NULL(graph_);
+  node->output = lastNode->output;
+  (void)node->inputs.emplace_back(lastNode);
   (void)graph_->nodes.emplace_back(node);
   return node;
 }
@@ -276,7 +278,6 @@ void GraphExecutor::RunGraph(bool isDynamic) {
   }
 }
 
-#undef DEBUG_DUMP
 #ifdef DUMP
 // Run the built graph.
 void GraphExecutor::DumpGraph() {
@@ -287,11 +288,8 @@ void GraphExecutor::DumpGraph() {
   std::cout << "graph{" << name_ << "}(";
   for (size_t i = 0; i < parameters_.size(); ++i) {
     auto para = parameters_[i];
-    paraNumMap_.emplace(para, i);
+    (void)paraNumMap_.emplace(para, i);
     std::cout << paramPrefix << i;
-#ifdef DEBUG_DUMP
-    std::cout << "(" << para << ")";
-#endif
     if (i < parameters_.size() - 1) {
       std::cout << ", ";
     }
@@ -299,7 +297,7 @@ void GraphExecutor::DumpGraph() {
   std::cout << ") {" << std::endl;
 
   for (size_t i = 0; i < graph_->nodes.size(); ++i) {
-    nodeNumMap_.emplace(graph_->nodes[i], i);
+    (void)nodeNumMap_.emplace(graph_->nodes[i], i);
   }
 
   // Run all tensor nodes.
@@ -323,9 +321,6 @@ void GraphExecutor::DumpGraph() {
           ss << "<ERR>";
         }
       }
-#ifdef DEBUG_DUMP
-      ss << "(" << input << ")";
-#endif
       if (j != inputSize - 1) {
         ss << ", ";
       }
@@ -336,10 +331,8 @@ void GraphExecutor::DumpGraph() {
       exit(EXIT_FAILURE);
     }
     std::cout << "  %" << nodeNumMap_[tensorNode];
-#ifdef DEBUG_DUMP
-    std::cout << "(" << tensorNode << ")";
-#endif
-    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str() << ")" << std::endl;
+    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str() << ")";
+    std::cout << std::setw(10) << "// " << tensorNode->output << std::endl;
   }
 
   std::cout << "  return %" << nodeNumMap_[tensorNode] << std::endl;
