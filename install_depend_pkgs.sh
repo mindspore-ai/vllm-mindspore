@@ -21,15 +21,46 @@ readonly SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
 readonly CONFIG_FILE="$SCRIPT_DIR/.jenkins/test/config/dependent_packages.yaml"
 readonly MF_DIR="$SCRIPT_DIR/mindformers"
 
+readonly PIP_TRUSTED_HOSTS="--trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com"
+readonly PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple"
+
 FORCE_REINSTALL=false
 
-log() { echo "========= $*"; }
+# Detect architecture
+ARCH=$([ "$(uname -m)" = "x86_64" ] && echo "x86_64" || echo "aarch64")
+
+log() {
+    local width=80
+    local text="$*"
+    
+    if [ -z "$text" ]; then
+        printf "\033[92m"
+        printf "%0.s=" $(seq 1 $width)
+        printf "\033[0m"
+        echo
+    else
+        local padding=$(( (width - ${#text} - 2) / 2 ))
+        printf "\033[92m"
+        printf "%0.s=" $(seq 1 $padding)
+        printf " %s " "$text"
+        printf "%0.s=" $(seq 1 $((width - padding - ${#text} - 2)))
+        printf "\033[0m"
+        echo
+    fi
+}
+
+log_package_url() {
+    local package_name="$1"
+    local url="$2"
+    echo -e "\033[38;5;214m${package_name}:\033[0m"
+    echo -e "  \033[38;5;214m${url}\033[0m"
+}
 
 pip_install() {
     if [ "$FORCE_REINSTALL" = true ]; then
-        uv pip install --system --no-cache-dir --force-reinstall --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+        uv pip install --system --no-cache-dir --force-reinstall $PIP_TRUSTED_HOSTS $PIP_INDEX "$@"
     else
-        uv pip install --system --no-cache-dir --trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple "$@"
+        uv pip install --system --no-cache-dir $PIP_TRUSTED_HOSTS $PIP_INDEX "$@"
     fi
 }
 
@@ -87,8 +118,14 @@ install_mindformers() {
     cd "$MF_DIR"
     git checkout "$commit_id"
     cd "$SCRIPT_DIR"
+    pip install $PIP_TRUSTED_HOSTS $PIP_INDEX -r mindformers/requirements.txt
     
     log "Using mindformers commit: $commit_id"
+}
+
+cleanup_package() {
+    log "Cleaning $*"
+    pip uninstall "$@" -y || true
 }
 
 cleanup_torch() {
@@ -145,23 +182,26 @@ main() {
         log "This will remove existing mindformers directory and reinstall all dependencies"
     fi
 
-    pip install --trusted-host mirrors.aliyun.com -i https://mirrors.aliyun.com/pypi/simple uv
+    command -v uv &> /dev/null || pip install $PIP_TRUSTED_HOSTS $PIP_INDEX uv
 
     [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
     
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_package_url "mindspore" "unified/aarch64")
+    local mindspore_url=$(get_package_url "mindspore" "unified/${ARCH}")
     local msadapter_url=$(get_package_url "msadapter" "any")
     local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
     
     log "Package URLs:"
-    log "vLLM: $vllm_url"
-    log "MindSpore: $mindspore_url"
-    log "msadapter: $msadapter_url"
-    log "mindspore-gs: $mindspore_gs_url"
-    
+    log_package_url "vLLM" "$vllm_url"
+    log_package_url "MindSpore" "$mindspore_url"
+    log_package_url "msadapter" "$msadapter_url"
+    log_package_url "mindspore-gs" "$mindspore_gs_url"
+
+    # WARNING: do not adjust sequence of installation steps
+    cleanup_package msadapter
+    cleanup_package vllm
     pip_install "$vllm_url"
     cleanup_torch
     pip_install "$mindspore_url"
@@ -173,32 +213,8 @@ main() {
     
     log "All dependencies installed successfully!"
     log ""
-    log "To use vLLM-MindSpore, environment variables need to be configured:"
-    log "- export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
-    log "- export vLLM_MODEL_BACKEND=MindFormers"
-    log ""
-    
-    if [ "${AUTO_BUILD:-}" = "1" ]; then
-        echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
-        echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
-        log "Environment variables added to ~/.bashrc (automated build)"
-    else
-        echo -n "Add these to ~/.bashrc automatically? (y/N): "
-        read -r response
-        
-        if [[ "$response" == "y" || "$response" == "Y" ]]; then
-            if grep -q "export PYTHONPATH.*mindformers" ~/.bashrc 2>/dev/null && grep -q "export vLLM_MODEL_BACKEND=MindFormers" ~/.bashrc 2>/dev/null; then
-                log "Environment variables already exist in ~/.bashrc, skipping"
-            else
-                echo "export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\"" >> ~/.bashrc
-                echo "export vLLM_MODEL_BACKEND=MindFormers" >> ~/.bashrc
-                log "Environment variables added to ~/.bashrc"
-                log "Run: source ~/.bashrc"
-            fi
-        else
-            log "Please add the environment variables manually and run 'source ~/.bashrc'"
-        fi
-    fi
+    log "When using MindFormers backend, please configure environment variables manually:"
+    echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
+    echo "  export VLLM_MS_MODEL_BACKEND=MindFormers"
 }
-
 main "$@"
