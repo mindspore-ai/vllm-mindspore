@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fx_backend import backend
+from mrt.torch.fx_backend import backend
 
 __all__ = ['backend']

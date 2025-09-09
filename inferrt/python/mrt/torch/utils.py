@@ -2,7 +2,7 @@ import torch
 from typing import Any
 from mrt.ir import Value, Tensor, Tuple
 
-import _mrt_torch
+import mrt._mrt_torch as _mrt_torch
 
 
 def from_torch(obj: Any) -> Value:
