@@ -14,26 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_CPU_ATEN_ATEN_MATMUL_H__
-#define __OPS_CPU_ATEN_ATEN_MATMUL_H__
+#ifndef __RUNTIME_BUILDER_KERNEL_CAPTURE_BUILDER_H__
+#define __RUNTIME_BUILDER_KERNEL_CAPTURE_BUILDER_H__
 
-#include <vector>
-#include <string>
-
-#include "ops/op_base/op_matmul.h"
+#include "runtime/builder/builder.h"
 
 namespace mrt {
-namespace ops {
-class AtenMatMul : public OpMatMul {
+namespace runtime {
+class DA_API KernelCaptureBuilder : public Builder {
  public:
-  AtenMatMul() = default;
-  ~AtenMatMul() override = default;
+  KernelCaptureBuilder() = default;
+  ~KernelCaptureBuilder() override = default;
 
-  OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) override;
-  OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                      ir::Value *output, void *stream) override;
+  std::unique_ptr<Executor> BuildExecutor() override;
 };
-}  // namespace ops
+}  // namespace runtime
 }  // namespace mrt
 
-#endif  // __OPS_CPU_ATEN_ATEN_MATMUL_H__
+#endif  // __RUNTIME_BUILDER_KERNEL_CAPTURE_BUILDER_H__

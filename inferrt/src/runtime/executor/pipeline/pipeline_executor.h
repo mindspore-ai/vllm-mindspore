@@ -14,26 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_CPU_ATEN_ATEN_MATMUL_H__
-#define __OPS_CPU_ATEN_ATEN_MATMUL_H__
+#ifndef __RUNTIME_EXECUTOR_PIPELINE_EXECUTOR_H__
+#define __RUNTIME_EXECUTOR_PIPELINE_EXECUTOR_H__
 
-#include <vector>
-#include <string>
-
-#include "ops/op_base/op_matmul.h"
+#include "runtime/executor/executor.h"
 
 namespace mrt {
-namespace ops {
-class AtenMatMul : public OpMatMul {
+namespace runtime {
+class DA_API PipelineExecutor : public Executor {
  public:
-  AtenMatMul() = default;
-  ~AtenMatMul() override = default;
+  PipelineExecutor() = default;
+  ~PipelineExecutor() override = default;
 
-  OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) override;
-  OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                      ir::Value *output, void *stream) override;
+  void Run() override;
 };
-}  // namespace ops
+
+}  // namespace runtime
 }  // namespace mrt
 
-#endif  // __OPS_CPU_ATEN_ATEN_MATMUL_H__
+#endif  // __RUNTIME_EXECUTOR_PIPELINE_EXECUTOR_H__

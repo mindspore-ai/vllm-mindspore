@@ -23,7 +23,7 @@
 #include "ops/op_def/ops_name.h"
 #include "ops/operator.h"
 #include "ops/kernel_lib.h"
-#include "ops/utils/op_register.h"
+#include "ops/op_register.h"
 // This file need to be deleted in the future.
 namespace mrt {
 namespace ops {

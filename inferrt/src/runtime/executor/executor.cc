@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "ops/kernel_lib.h"
+#include "runtime/builder/builder.h"
 
 namespace mrt {
 namespace runtime {
@@ -345,5 +346,30 @@ void GraphExecutor::DumpGraph() {
   std::cout << "}" << std::endl;
 }
 #endif
+
+void GraphExecutor::BuildExecutor() {
+  CHECK_IF_FAIL(nullptr == builder_);
+  CHECK_IF_FAIL(nullptr == executor_);
+  builder_ = std::make_unique<Builder>(graph_);
+  executor_ = builder_->BuildExecutor();
+}
+
+void Executor::Run() {
+  OpRunner *opRunners = opRunners_->data();
+  size_t opNum = opRunners_->size();
+  for (size_t i = 0; i < opNum; i++) {
+    OpRunner &opRunner = opRunners[i];
+    if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
+      LOG_EXCEPTION << "Infer shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
+    }
+    if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
+      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << ops::ToStr(opRunner.GetNode()->op)
+                    << "Errno: " << errNo;
+    }
+    if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
+      LOG_EXCEPTION << "Launch shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
+    }
+  }
+}
 }  // namespace runtime
 }  // namespace mrt

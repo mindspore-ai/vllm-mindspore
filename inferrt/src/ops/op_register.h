@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_UTILS_OP_REGISTER_H__
-#define __OPS_UTILS_OP_REGISTER_H__
+#ifndef __OPS_OP_REGISTER_H__
+#define __OPS_OP_REGISTER_H__
 
 #include <utility>
 #include <string>
@@ -57,7 +57,7 @@ struct OpFactoryTraits<CPUOpFactory> {
   static constexpr std::string_view value = kCPUOpFactory;
 };
 
-class OpFactoryBase {
+class DA_API OpFactoryBase {
   using OpFactoryMapType = std::unordered_map<std::string_view, std::unique_ptr<OpFactoryBase>>;
 
  public:
@@ -65,27 +65,12 @@ class OpFactoryBase {
   virtual ~OpFactoryBase() = default;
 
  protected:
-  static OpFactoryBase *GetOpFactory(const std::string_view &name) {
-    auto iter = OpFactoryMap().find(name);
-    if (iter == OpFactoryMap().end()) {
-      return nullptr;
-    }
-    return iter->second.get();
-  }
+  static OpFactoryBase *GetOpFactory(const std::string_view &name);
 
-  static OpFactoryBase *CreateOpFactory(const std::string_view &name, std::unique_ptr<OpFactoryBase> &&factory) {
-    if (OpFactoryMap().find(name) != OpFactoryMap().end()) {
-      LOG_EXCEPTION << name << " already has an OpFactory, please check!";
-    }
-    (void)OpFactoryMap().emplace(name, std::move(factory));
-    return GetOpFactory(name);
-  }
+  static OpFactoryBase *CreateOpFactory(const std::string_view &name, std::unique_ptr<OpFactoryBase> &&factory);
 
  private:
-  static OpFactoryMapType &OpFactoryMap() {
-    static OpFactoryMapType factoryMap;
-    return factoryMap;
-  }
+  static OpFactoryMapType &OpFactoryMap();
 };
 
 template <typename T, typename OpFactoryType = AscendOpFactory>
@@ -167,4 +152,4 @@ inline std::unique_ptr<Operator> CreateOperator(const std::string &name) {
 
 }  // namespace ops
 }  // namespace mrt
-#endif  // __OPS_UTILS_OP_REGISTER_H__
+#endif  // __OPS_OP_REGISTER_H__

@@ -50,7 +50,7 @@ void TestAtenKernel::Launch() {
   CHECK_IF_NULL(operator_);
   Init();
   LOG_OUT << "Begin Launch for operator [" << ToStr(node_->op) << "], input=" << input_ << ", output=" << output_;
-  if (operator_->Launch(input_, {}, output_, nullptr) != SUCCESS) {
+  if (operator_->Launch(input_, nullptr, 0, output_, nullptr) != SUCCESS) {
     LOG_EXCEPTION << "Launch operator " << ToStr(node_->op) << " failed";
   }
 }

@@ -18,7 +18,7 @@
 
 #include "ops/cpu/aten/aten_matmul.h"
 #include "ops/cpu/aten/utils/aten_convert.h"
-#include "ops/utils/op_register.h"
+#include "ops/op_register.h"
 
 namespace mrt {
 namespace ops {
@@ -40,7 +40,7 @@ OpsErrorCode AtenMatMul::InferShape(const std::vector<const ir::Value *> &input,
   return SUCCESS;
 }
 
-OpsErrorCode AtenMatMul::Launch(const std::vector<const ir::Value *> &input, const std::vector<ir::Value *> &workspace,
+OpsErrorCode AtenMatMul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                 ir::Value *output, void *stream) {
   auto atenInput0 = ToAtenTensor(input[kIndex0]);
   auto atenInput1 = ToAtenTensor(input[kIndex1]);

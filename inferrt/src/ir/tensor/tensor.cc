@@ -100,9 +100,7 @@ void Tensor::ResizeStorage() {
   storage_->Resize(sizeBytes);
 }
 
-void Tensor::UpdateData(void *data) {
-  storage_->SetData(data);
-}
+void Tensor::UpdateData(void *data) { storage_->SetData(data); }
 
 Tensor::Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType dtype)
     : dtype_(dtype), shape_(shape), storage_(storage) {
@@ -130,7 +128,7 @@ void Tensor::SetShape(const std::vector<int64_t> &shape) {
   numel_ = CalculateNumel(shape_, true);
 }
 
-void Tensor::SetShape(const std::vector<int64_t> &&shape) {
+void Tensor::SetShape(std::vector<int64_t> &&shape) {
   shape_ = std::move(shape);
   ComputeStrides();
   numel_ = CalculateNumel(shape_, true);

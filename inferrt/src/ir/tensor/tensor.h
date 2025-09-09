@@ -147,7 +147,7 @@ class Tensor : public RefCounted {
    * @brief Sets the shape of the tensor.
    * @param shape The new shape to set.
    */
-  void SetShape(const std::vector<int64_t> &&shape);
+  void SetShape(std::vector<int64_t> &&shape);
 
  private:
   /**
