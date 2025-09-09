@@ -21,11 +21,12 @@
 #include <unordered_map>
 
 #include "ops/operator.h"
-#include "runtime/executor/executor.h"
 #include "runtime/executor/op_runner.h"
 
 namespace mrt {
 namespace runtime {
+class Executor;
+
 /**
  * @brief Base class for building executor.
  *
