@@ -25,13 +25,13 @@ std::unique_ptr<Executor> Builder::BuildExecutor() {
   // 1. Analyse ref count
   RecordTensorFreePoint(&tensorFreePoint);
   // 2. Creater OpRunner
-  CreateOpRunners(tensorFreePoint);
+  CreateOpRunners(&tensorFreePoint);
 
-  return std::make_unique<Executor>(graph_, opRunners_);
+  return std::make_unique<Executor>(opRunners_);
 }
 
 void Builder::RecordTensorFreePoint(std::unordered_map<ir::Node *, std::vector<size_t>> *tensorFreePoint) const {
-  if (!graph_ || graph_->nodes.empty()) {
+  if (graph_ == nullptr || graph_->nodes.empty()) {
     return;
   }
 
@@ -65,14 +65,14 @@ void Builder::RecordTensorFreePoint(std::unordered_map<ir::Node *, std::vector<s
       // First encounter, meaning current node is the last consumer
       if (nodeHasRecorded.find(inputNode) == nodeHasRecorded.end()) {
         (void)nodeHasRecorded.insert(inputNode);
-        (*tensorFreePoint)[currentNode].emplace_back(inputIdx);
+        (void)((*tensorFreePoint)[currentNode].emplace_back(inputIdx));
       }
     }
   }
 }
 
-void Builder::CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>> &tensorFreePoint) {
-  size_t nodeNum = graph_->nodes.size();
+void Builder::CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>> *tensorFreePoint) {
+  const size_t nodeNum = graph_->nodes.size();
   opRunners_ = std::make_shared<std::vector<OpRunner>>();
   opRunners_->reserve(nodeNum);
   for (auto &node : graph_->nodes) {
@@ -83,9 +83,9 @@ void Builder::CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>
     auto operatorPtr = ops::OpFactory<ops::Operator, ops::CPUOpFactory>::GetInstance().Create(ops::ToStr(node->op));
     CHECK_IF_NULL(operatorPtr);
     // TODO: need to support ascend stream creation and getting real dynamic shape info.
-    opRunners_->emplace_back(node.get(), std::move(operatorPtr), nullptr /*stream*/, true /*isDynamicShape*/);
-    auto iter = tensorFreePoint.find(node.get());
-    if (iter != tensorFreePoint.end()) {
+    (void)(opRunners_->emplace_back(node.get(), std::move(operatorPtr), nullptr /*stream*/, true /*isDynamicShape*/));
+    auto iter = tensorFreePoint->find(node.get());
+    if (iter != tensorFreePoint->end()) {
       opRunners_->back().SetInputFreeIndex(std::move(iter->second));
     }
   }

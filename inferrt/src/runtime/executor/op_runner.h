@@ -118,7 +118,7 @@ class OpRunner {
    */
   void FreeMemory();
 
-  //   Indices of input tensors that should be freed after operator execution.
+  // Indices of input tensors that should be freed after operator execution.
   std::vector<size_t> inputFreeIndex_;
 
   // Input values for the operator.
@@ -136,6 +136,9 @@ class OpRunner {
   // Execution stream (e.g., Ascend stream) for the operator.
   void *stream_;
 
+  // The allocator used for device memory management for workspace.
+  Allocator alloc_;
+
   // IR node representing the operator to be executed.
   ir::Node *node_;
 
@@ -144,7 +147,7 @@ class OpRunner {
 
   // Flag indicating if the operator has dynamic shapes.
   bool isDynamicShape_;
-};  // namespace runtime
+};
 }  // namespace runtime
 }  // namespace mrt
 

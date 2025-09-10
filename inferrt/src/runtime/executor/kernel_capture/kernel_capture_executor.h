@@ -26,7 +26,7 @@ class DA_API KernelCaptureExecutor : public Executor {
   KernelCaptureExecutor() = default;
   ~KernelCaptureExecutor() override = default;
 
-  void Run() override;
+  void Run(bool isDynamic) override;
 };
 }  // namespace runtime
 }  // namespace mrt

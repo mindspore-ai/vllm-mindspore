@@ -149,6 +149,7 @@ make
 # Run inferrt test
 export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/dummy/libkernel_dummy.so
 export DART_KERNEL_LIB_NAME=Dummy
+export DUMMY_RUN="on"
 echo "=============================="
 echo "Run da execution test cases:"
 echo "# 1/2: ./da sample/fibonacci_20.da"

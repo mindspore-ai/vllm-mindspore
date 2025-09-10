@@ -26,7 +26,7 @@ class DA_API KernelLaunchGroupExecutor : public Executor {
   KernelLaunchGroupExecutor() = default;
   ~KernelLaunchGroupExecutor() override = default;
 
-  void Run() override;
+  void Run(bool isDynamic) override;
 };
 
 }  // namespace runtime

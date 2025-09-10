@@ -43,14 +43,12 @@ void OpRunner::AllocateMemory() {
     if (tensor->DataPtr()) {
       LOG_EXCEPTION << "Memory leak for output of operator: " << ops::ToStr(node_->op);
     }
-    auto *outputAddr = malloc(tensor->GetStorage()->SizeBytes());
-    CHECK_IF_NULL(outputAddr);
-    tensor->UpdateData(outputAddr);
+    tensor->GetStorage()->AllocateMemory();
   }
 
   // Allocate workspace memory if needed.
   if (workspaceSize_ > 0) {
-    workspace_ = malloc(workspaceSize_);
+    workspace_ = alloc_.Allocate(workspaceSize_);
     CHECK_IF_NULL(workspace_);
   }
 }
@@ -62,14 +60,13 @@ void OpRunner::FreeMemory() {
     for (auto inputIndex : inputFreeIndex_) {
       const auto &tensor = input_[inputIndex]->ToTensor();
       CHECK_IF_NULL(tensor);
-      free(tensor->DataPtr());
-      tensor->UpdateData(nullptr);
+      tensor->GetStorage()->FreeMemory();
     }
   }
 
   // Free workspace memory.
   if (workspace_) {
-    free(workspace_);
+    alloc_.Free(workspace_);
   }
 }
 }  // namespace runtime

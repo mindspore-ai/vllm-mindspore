@@ -104,8 +104,15 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(ToTorchDevice(tensor->GetDevice()));
+  const auto &storage = tensor->GetStorage();
+  // Only support operator output as graph output case currently.
+  CHECK_IF_FAIL(storage->CheckOwnsData());
+  auto allocator = storage->GetAllocator();
+  void *dataPtr = storage->Release();
+  CHECK_IF_NULL(dataPtr);
   return at::from_blob(
-    const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), [tensor](void *) {}, options);
+    const_cast<void *>(dataPtr), tensor->Shape(), tensor->Strides(),
+    [allocator](void *dataPtr) { allocator.Free(dataPtr); }, options);
 }
 
 void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {

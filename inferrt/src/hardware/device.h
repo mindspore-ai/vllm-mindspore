@@ -2,18 +2,29 @@
 #define __HARDWARE_DEVICE_H__
 
 #include <cstdint>
+#include <vector>
+
+#include "common/common.h"
 
 namespace mrt {
 namespace hardware {
+const std::vector<std::string> deviceNames = {"CPU", "NPU"};
 
 /**
  * @brief Enumeration of supported device types.
  */
 enum class DeviceType : int8_t {
-  CPU,  ///< CPU device
-  NPU,  ///< NPU device
-        // Add other device types here
+  CPU = 0,  ///< CPU device
+  NPU = 1,  ///< NPU device
+            // Add other device types here
 };
+
+inline const std::string &GetDeviceNameByType(const DeviceType &type) {
+  auto deviceType = static_cast<int8_t>(type);
+  CHECK_IF_FAIL(deviceType >= 0);
+  CHECK_IF_FAIL(static_cast<size_t>(deviceType) < deviceNames.size());
+  return deviceNames[deviceType];
+}
 
 /**
  * @brief Represents a specific device.

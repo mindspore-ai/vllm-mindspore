@@ -108,7 +108,7 @@ class Tensor : public RefCounted {
    * @brief Gets the underlying storage of the tensor.
    * @return The storage.
    */
-  StoragePtr GetStorage() const { return storage_; }
+  const StoragePtr &GetStorage() const { return storage_; }
   /**
    * @brief Resizes the storage of the tensor.
    * Note: The shape and dtype must be set before resizing the storage.

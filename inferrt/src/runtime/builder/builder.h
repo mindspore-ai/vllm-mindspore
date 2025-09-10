@@ -72,7 +72,7 @@ class DA_API Builder {
    *
    * @param tensorFreePoint Store all input tensor indexes that need to be free for a consumer Node.
    */
-  void CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>> &tensorFreePoint);
+  void CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>> *tensorFreePoint);
 
   // The graph that the executor will run.
   ir::GraphPtr graph_{nullptr};
