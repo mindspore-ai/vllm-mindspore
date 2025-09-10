@@ -16,14 +16,22 @@ usage()
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
-  echo "    -a Enable pytorch aten kernel, default off"
   echo "    -t Build and run tests, default off"
-  echo "    -e Enable Ascend backend, default off"
+  echo "    -f Enable frontend, default compile all frontend"
+  echo "    -b Enable backend, default compile cpu backend"
 }
 
 process_options()
 {
-    while getopts 'Dd:hiate' OPT; do
+    # Default to CPU backend
+    export ENABLE_CPU=1
+
+    # Default compile all frontend
+    export ENABLE_MINDSPORE_FRONT=1
+    export ENABLE_TORCH_FRONT=1
+    export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
+
+    while getopts 'Dd:hitf:b:' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -40,14 +48,35 @@ process_options()
                 ;;
             i) export INC_BUILD=1;;
             t) export BUILD_TESTS=1;;
-            e) export ENABLE_ASCEND=1;;
-            a)
-                export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
-                export TEST_TORCH=1
-                ;;
             h)
                 usage
                 exit 0
+                ;;
+            b)
+                if [ "$OPTARG" = "ascend" ]; then
+                    export ENABLE_ASCEND=1
+                    unset ENABLE_CPU
+                elif [ "$OPTARG" = "cpu" ]; then
+                    export ENABLE_CPU=1
+                    unset ENABLE_ASCEND
+                else
+                    echo "Error: Invalid backend '$OPTARG'. Use 'ascend' or 'cpu'."
+                    exit 1
+                fi
+                ;;
+            f)
+                unset ENABLE_MINDSPORE_FRONT
+                unset ENABLE_TORCH_FRONT
+                unset ENABLE_KERNEL_ATEN
+                if [ "$OPTARG" = "ms" ]; then
+                    export ENABLE_MINDSPORE_FRONT=1
+                elif [ "$OPTARG" = "pt" ]; then
+                    export ENABLE_TORCH_FRONT=1
+                    export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
+                else
+                    echo "Error: Invalid frontend '$OPTARG'. Use 'ms' or 'pt'."
+                    exit 1
+                fi
                 ;;
             ?)
                 usage
@@ -142,23 +171,16 @@ if [[ $BUILD_TESTS == 1 ]]; then
     echo "=============================="
 fi
 
-# Run python test
-echo "=============================="
-echo "Run python test case:"
-echo "python check_api.py"
-echo "=============================="
-export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind/mrt:$INFERRT_PATH/inferrt/python
-echo "PYTHONPATH=$PYTHONPATH"
-python $INFERRT_PATH/inferrt/python/check_api.py
+cd $CURRENT_PATH
 
-# Run pytorch backend test
-if [[ $TEST_TORCH == 1 ]]; then
-    echo "=============================="
-    echo "Run pytorch backend test case:"
-    echo "python check_backend.py"
-    echo "=============================="
-    export PYTHONPATH=$BUILD_DIR/inferrt/src/pybind/mrt:$BUILD_DIR/inferrt/src/pybind/mrt_torch:$INFERRT_PATH/inferrt/python
-    export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/cpu/aten/libkernel_aten.so
-    export DART_KERNEL_LIB_NAME=Aten
-    python $INFERRT_PATH/inferrt/python/check_backend.py
-fi
+# 1. Clean up previous build artifacts
+rm -rf output temp_build dist
+
+# 2. Execute Python packaging process
+# This will generate the wheel package in the dist directory
+python setup.py bdist_wheel
+
+# 3. Display build results
+# Show information about the generated wheel package
+echo "Build results:"
+ls -lh output/*.whl

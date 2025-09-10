@@ -1,5 +1,5 @@
 from typing import List
-from _mrt_ir import GraphExecutor as _GraphExecutor, Node, Op, Tensor, Value, Tuple
+from mrt._mrt_ir import GraphExecutor as _GraphExecutor, Node, Op, Tensor, Value, Tuple
 
 
 class GraphExecutor:
