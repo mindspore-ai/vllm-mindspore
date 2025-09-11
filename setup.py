@@ -51,8 +51,8 @@ def copy_py_files(src_python_dir, dst_root_dir):
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Configure paths
-src_dir = os.path.join(script_dir, '../ci/build/inferrt/src')
-python_src_dir = os.path.join(script_dir, '../ci/inferrt/python/mrt')
+src_dir = script_dir + '/build/inferrt/src'
+python_src_dir = script_dir + '/inferrt/python/mrt'
 temp_dir = os.path.join(script_dir, 'temp_build')
 package_name = 'mrt'
 
