@@ -8,6 +8,8 @@ import mrt._mrt_torch as _mrt_torch
 def from_torch(obj: Any) -> Value:
     if isinstance(obj, Value):
         return obj
+    if isinstance(obj, torch.SymInt):
+        return Value(-1)
     if isinstance(obj, (list, tuple)):
         return Value(Tuple([from_torch(e) for e in obj]))
     if isinstance(obj, torch._subclasses.FakeTensor):

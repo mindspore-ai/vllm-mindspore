@@ -58,7 +58,7 @@ void Builder::RecordTensorFreePoint(std::unordered_map<ir::Node *, std::vector<s
       ir::Node *inputNode = currentNode->inputs[inputIdx].get();
       CHECK_IF_NULL(inputNode)
       // Skip input node is graph input case.
-      if (inputNode->op == ops::Op_End) {
+      if (inputNode->op == ops::Op_End || !inputNode->output->IsTensor()) {
         continue;
       }
 

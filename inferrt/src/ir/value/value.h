@@ -134,6 +134,17 @@ class Value : public RefCounted {
    */
   ~Value();
 
+  /**
+   * @brief Move constructor.
+   * @param other The Value to move from.
+   */
+  Value(Value &&other) noexcept;
+  /**
+   * @brief Move assignment operator.
+   * @param other The Value to move from.
+   */
+  Value &operator=(Value &&other) noexcept;
+
   /** @name Type checkers */
   ///@{
   bool IsTensor() const { return tag_ == Tag::Tensor; }
