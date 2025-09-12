@@ -4,3 +4,8 @@ if(ENABLE_ASCEND)
   add_subdirectory(ascend)
   add_dependencies(hardware_ascend_obj hardware_abstract_obj)
 endif()
+
+if(ENABLE_CPU)
+  add_subdirectory(cpu)
+  add_dependencies(hardware_cpu_obj hardware_abstract_obj)
+endif()
