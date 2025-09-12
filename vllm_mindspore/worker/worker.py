@@ -26,7 +26,7 @@ from vllm.model_executor import set_random_seed
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
 
-from vllm_mindspore.utils import get_valid_dtype
+from vllm_mindspore.utils import get_valid_dtype, is_310p
 
 logger = init_logger(__name__)
 
@@ -152,9 +152,10 @@ def bind_cpu(rank):
 def wrapper_worker_bind_cpu(fun):
 
     def new_fun(*arg, **kwargs):
-        # Bind CPU with wrapper when workers are initializing.
-        local_rank = kwargs.get("local_rank")
-        bind_cpu(local_rank)
+        if not is_310p():
+            # Bind CPU with wrapper when workers are initializing.
+            local_rank = kwargs.get("local_rank")
+            bind_cpu(local_rank)
         fun(*arg, **kwargs)
 
     return new_fun
