@@ -49,6 +49,7 @@ _OP_MAP = {
     operator.matmul: Op.matmul,
     operator.neg: Op.neg,
     # tensor methods (as strings)
+    "size": Op.shape,
     "add": Op.add,
     "sub": Op.sub,
     "mul": Op.mul,
@@ -93,7 +94,7 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
             nodes = [_map_arg(item) for item in arg]
             return executor.make_tuple(nodes)
 
-        return executor.add_value_node(arg)
+        return executor.add_value_node(from_torch(arg))
 
     return [_map_arg(arg) for arg in args]
 
@@ -104,6 +105,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     and returns a callable that executes the compiled graph.
     """
     FakeTensorProp(gm).propagate(*example_inputs)
+    gm.print_readable()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
@@ -165,7 +167,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             )
 
         for i, p_node in enumerate(param_nodes):
-            update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
+            if p_node.output.is_tensor():
+                update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
+            else:
+                p_node.output = from_torch(new_inputs[i])
 
         result = executor.run()
         return to_torch(result)

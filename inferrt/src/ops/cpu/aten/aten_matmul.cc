@@ -29,7 +29,7 @@ OpsErrorCode AtenMatMul::InferShape(const std::vector<const ir::Value *> &input,
   }
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto &input1Shape = input[kIndex1]->ToTensor()->Shape();
-  std::vector<int64_t> outputShape = at::infer_size(input0Shape, input1Shape);
+  std::vector<int64_t> outputShape = {input0Shape[0], input1Shape[1]};
   CHECK_IF_NULL(output);
   auto outputTensor = output->ToTensor();
   CHECK_IF_NULL(outputTensor);

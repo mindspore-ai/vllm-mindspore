@@ -44,9 +44,42 @@ Value::~Value() {
   }
 }
 
-#define CHECK_TAG(expected)              \
-  if (tag_ != expected) {                \
-    LOG_EXCEPTION << "Bad Value access"; \
+Value::Value(Value &&other) noexcept : tag_(other.tag_) {
+  switch (tag_) {
+    case Tag::Tensor:
+      new (&tensor_) TensorPtr(std::move(other.tensor_));
+      break;
+    case Tag::Double:
+      double_ = other.double_;
+      break;
+    case Tag::Int:
+      int_ = other.int_;
+      break;
+    case Tag::Bool:
+      bool_ = other.bool_;
+      break;
+    case Tag::String:
+      new (&string_) std::string(std::move(other.string_));
+      break;
+    case Tag::Tuple:
+      new (&tuple_) TuplePtr(std::move(other.tuple_));
+      break;
+    case Tag::None:
+      break;
+  }
+}
+
+Value &Value::operator=(Value &&other) noexcept {
+  if (this != &other) {
+    this->~Value();
+    new (this) Value(std::move(other));
+  }
+  return *this;
+}
+
+#define CHECK_TAG(expected)                                \
+  if (tag_ != expected) {                                  \
+    LOG_EXCEPTION << "Bad Value access, value: " << *this; \
   }
 
 const TensorPtr &Value::ToTensor() const {

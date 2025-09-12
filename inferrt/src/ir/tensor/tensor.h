@@ -148,6 +148,11 @@ class Tensor : public RefCounted {
    * @param shape The new shape to set.
    */
   void SetShape(std::vector<int64_t> &&shape);
+  /**
+   * @brief Sets the storage of the tensor.
+   * @param storage The new storage to set.
+   */
+  void SetStorage(const StoragePtr &storage) { storage_ = storage; }
 
  private:
   /**
