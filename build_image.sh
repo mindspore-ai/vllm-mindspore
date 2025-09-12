@@ -48,7 +48,6 @@ RUN chmod +x /workspace/install_depend_pkgs.sh && \\
     MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT ./install_depend_pkgs.sh
 
 ENV PYTHONPATH="/workspace/mindformers/:\$PYTHONPATH"
-ENV VLLM_MS_MODEL_BACKEND=MindFormers
 WORKDIR /workspace
 
 CMD ["bash"]
