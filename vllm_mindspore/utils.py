@@ -166,43 +166,6 @@ def get_dtype_size(dtype: torch.dtype) -> int:
     return torch.tensor([1], dtype=dtype).itemsize
 
 
-def ascend_device_count_stateless() -> int:
-    visible_device_str = os.environ.get("ASCEND_RT_VISIBLE_DEVICES", None)
-    if visible_device_str:
-        try:
-            res = visible_device_str.split(",")
-        except Exception as e:
-            logger.error('Cannot parse "ASCEND_RT_VISIBLE_DEVICES" for: %s!',
-                         str(e))
-            raise ValueError(
-                f'Error argument({visible_device_str}) of environ "ASCEND_RT_VISIBLE_DEVICES"!'
-            ) from e
-
-        return len(res)
-
-    import re
-    import subprocess
-
-    output = subprocess.check_output(["npu-smi", "info"], encoding="utf-8")
-    res = re.findall(
-        r"\|\s+\d+\s+\w+\s+\|\s+(\w+)\s+\|\s+(?:[0-9\.]+|-)\s+[0-9\.]+\s+\d+\s+\/\s+\d+\s+\|",
-        output,
-    )
-
-    avl_devices = []
-    for i, stat in enumerate(res):
-        if stat != "OK":
-            logger.warning("Device %d is not ok, status is %s!", i, stat)
-        else:
-            avl_devices.append(str(i))
-    visible_device_str = ",".join(avl_devices)
-    os.environ["ASCEND_RT_VISIBLE_DEVICES"] = visible_device_str
-    logger.info('Set environ "ASCEND_RT_VISIBLE_DEVICES" as %s',
-                visible_device_str)
-
-    return len(avl_devices)
-
-
 def ascend_is_initialized():
     # Just return true for check.
     return True

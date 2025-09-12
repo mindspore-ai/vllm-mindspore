@@ -45,7 +45,6 @@ def call_hf_processor(
     try:
         return hf_processor(**data, **merged_kwargs, return_tensors="np")
     except Exception as exc:
-        msg = (f"Failed to apply {type(hf_processor).__name__} "
-                f"on data={data} with kwargs={merged_kwargs}")
+        msg = f"Failed to apply {type(hf_processor).__name__}"
 
         raise RuntimeError(msg) from exc
