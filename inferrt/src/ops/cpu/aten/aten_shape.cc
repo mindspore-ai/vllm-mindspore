@@ -24,9 +24,6 @@
 
 namespace mrt {
 namespace ops {
-OpsErrorCode AtenShape::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  return OpShape::InferShape(input, output);
-}
 
 OpsErrorCode AtenShape::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                ir::Value *output, void *stream) {

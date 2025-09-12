@@ -29,7 +29,6 @@ process_options()
     # Default compile all frontend
     export ENABLE_MINDSPORE_FRONT=1
     export ENABLE_TORCH_FRONT=1
-    export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
 
     while getopts 'Dd:hitf:b:' OPT; do
         case $OPT in
@@ -67,12 +66,10 @@ process_options()
             f)
                 unset ENABLE_MINDSPORE_FRONT
                 unset ENABLE_TORCH_FRONT
-                unset ENABLE_KERNEL_ATEN
                 if [ "$OPTARG" = "ms" ]; then
                     export ENABLE_MINDSPORE_FRONT=1
                 elif [ "$OPTARG" = "pt" ]; then
                     export ENABLE_TORCH_FRONT=1
-                    export ENABLE_KERNEL_ATEN="-DENABLE_KERNEL_ATEN=on"
                 else
                     echo "Error: Invalid frontend '$OPTARG'. Use 'ms' or 'pt'."
                     exit 1
@@ -87,8 +84,7 @@ process_options()
 }
 
 process_options $@
-INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
-DAPY_CMAKE_ARGS="${DAPY_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT $ENABLE_KERNEL_ATEN"
+INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
 
 if [[ $BUILD_TESTS == 1 ]]; then
     INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DBUILD_TESTS=on"
@@ -100,6 +96,10 @@ fi
 
 if [[ $ENABLE_CPU == 1 ]]; then
     INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_CPU=on"
+fi
+
+if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_TORCH_FRONT=on"
 fi
 
 ##################################################
@@ -142,7 +142,7 @@ fi
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
     rm $BUILD_DIR/* -rf
-    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $DAPY_CMAKE_ARGS
+    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS
 fi
 make
 

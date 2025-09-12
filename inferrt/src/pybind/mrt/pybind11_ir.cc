@@ -39,7 +39,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .export_values();
 
   py::class_<ir::Tensor, ir::TensorPtr>(m, "Tensor")
-    .def_property_readonly("shape", &ir::Tensor::Shape)
+    .def_property_readonly("shape", py::overload_cast<>(&ir::Tensor::Shape, py::const_))
     .def_property_readonly("dtype", &ir::Tensor::Dtype)
     .def("__repr__", [](const ir::Tensor &t) {
       std::stringstream ss;
