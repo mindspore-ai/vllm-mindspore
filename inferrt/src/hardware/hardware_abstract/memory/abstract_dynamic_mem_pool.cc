@@ -116,7 +116,7 @@ MemBuf *MemBufAllocator::Malloc(size_t size) {
   return nullptr;
 }
 
-inline MemBuf *MemBufAllocator::SearchAvailableMemBuf(size_t size) {
+MemBuf *MemBufAllocator::SearchAvailableMemBuf(size_t size) {
   if (!enableEagerFree_ || MS_UNLIKELY(isCustomized_)) {
     return nullptr;
   }
@@ -316,7 +316,7 @@ size_t MemBufAllocator::ReleaseFreeBlocks() {
   return releaseSize;
 }
 
-inline MemBuf *MemBufAllocator::MapAndSplitMemBuf(MemBuf *candidate, size_t size) {
+MemBuf *MemBufAllocator::MapAndSplitMemBuf(MemBuf *candidate, size_t size) {
   size_t remainingSize = candidate->size_ - size;
   // Mmap memory first.
   if (candidate->status_ == MemBufStatus::kMemBufEagerFree) {
@@ -361,7 +361,7 @@ inline MemBuf *MemBufAllocator::MapAndSplitMemBuf(MemBuf *candidate, size_t size
   return candidate;
 }
 
-inline MemBlock *MemBufAllocator::ExpandBlock(size_t size) {
+MemBlock *MemBufAllocator::ExpandBlock(size_t size) {
   MemBlock *memBlock = memBlockExpander_(size);
   if (memBlock == nullptr) {
     LOG_OUT << "Expand block failed, expand size : " << size << ", memory is not enough.";
@@ -456,9 +456,8 @@ DeviceMemPtr AbstractDynamicMemPool::AllocTensorMem(size_t size, bool fromPersis
  *    Common memory:  First malloc from its own pool, if fails, it will try to expand the pool.
  *                    If the expansion fails, try to malloc from persistent pool.
  */
-inline std::pair<MemBuf *, MemBufAllocator *> AbstractDynamicMemPool::AllocMemBuf(size_t alignSize,
-                                                                                  bool fromPersistentMem,
-                                                                                  uint32_t streamId) {
+std::pair<MemBuf *, MemBufAllocator *> AbstractDynamicMemPool::AllocMemBuf(size_t alignSize, bool fromPersistentMem,
+                                                                           uint32_t streamId) {
   auto allocator = GetMemBufAllocator(alignSize, fromPersistentMem, streamId);
 
   auto memBuf = allocator->Malloc(alignSize);
@@ -589,8 +588,7 @@ bool AbstractDynamicMemPool::DoFreeTensorMem(const DeviceMemPtr &deviceAddr) {
   return false;
 }
 
-inline MemBufAllocator *AbstractDynamicMemPool::GetMemBufAllocator(size_t size, bool fromPersistentMem,
-                                                                   uint32_t streamId) {
+MemBufAllocator *AbstractDynamicMemPool::GetMemBufAllocator(size_t size, bool fromPersistentMem, uint32_t streamId) {
   // Not use small pool.
   const AllocatorInfo key{streamId, fromPersistentMem, false};
   LOG_OUT << "Get allocator, " << key.ToString() << ".";
