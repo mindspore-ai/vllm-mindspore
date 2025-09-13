@@ -30,10 +30,12 @@ from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
-from vllm.model_executor.models.interfaces import SupportsPP
+from vllm.model_executor.models.interfaces import SupportsPP, HasInnerState
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
+from vllm_mindspore.model_executor.models.mf_models.qwen3_next_cache import \
+    Qwen3NextCacheManager
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask, MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
@@ -46,7 +48,7 @@ from vllm_mindspore.utils import is_310p
 logger = init_logger(__name__)
 
 
-class MindFormersForCausalLM(MsModelBase, SupportsPP):
+class MindFormersForCausalLM(MsModelBase, SupportsPP, HasInnerState):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -105,6 +107,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                 keys=["hidden_states"],
                 hidden_size=self.model_config.hf_config.hidden_size)
 
+        self.qwen3_next_cache = Qwen3NextCacheManager(vllm_config,
+                                                      self.num_layers)
         self.cast = ops.Cast()
 
     def _set_dynamic_inputs(self):
@@ -354,6 +358,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         elif kwargs.get("previous_hidden_states") is not None:
             # used for deepseek-mtp
             model_inputs["hidden_states"] = kwargs["previous_hidden_states"]
+
+        cache_params = self.qwen3_next_cache.current_run_tensors(**kwargs)
+        model_inputs["cache_params"] = cache_params if cache_params.conv_state is not None else None
 
         if is_prefill or is_ringmla_chunked:
             self.network.phase = \
