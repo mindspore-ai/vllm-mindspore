@@ -34,7 +34,8 @@ from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.model_executor.utils import set_model_context
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache, is_310p
+from vllm_mindspore.utils import (STR_DTYPE_TO_MS_DTYPE, create_kv_cache,
+                                  is_310p)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 

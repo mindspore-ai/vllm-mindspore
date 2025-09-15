@@ -25,12 +25,11 @@ from typing import Optional
 import vllm.envs as envs
 from mindspore import Tensor, jit, mint, nn
 from vllm.config import current_platform, get_current_vllm_config
-from vllm.distributed import (tensor_model_parallel_all_gather,
-                              tensor_model_parallel_gather)
+from vllm.distributed import tensor_model_parallel_gather
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.distributed.communication_op import (
-    AllGatherFromModelParallelRegion, GatherFromModelParallelRegion)
+    AllGatherFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
 
@@ -75,37 +74,44 @@ class LogitsProcessor(nn.Cell):
         self.soft_cap = soft_cap
         # Whether to use gather or all-gather to gather the logits.
         self.use_all_gather = current_platform.use_all_gather()
-        
+
         if self.use_all_gather:
-            self.tensor_model_parallel_all_gather = AllGatherFromModelParallelRegion()
-        else:
-            self.tensor_model_parallel_gather = GatherFromModelParallelRegion()
+            self.tensor_model_parallel_all_gather = \
+                AllGatherFromModelParallelRegion()
         self.lm_head = None
         self.run_model = None
         self.cached_input_info = {}
 
     def set_dynamic_inputs(self):
-        dyn_hidden_states = Tensor(
-            shape=[None, None], dtype=self.vllm_config.model_config.dtype)
-        
-        dyn_indices_shape = [None for _ in range(
-                    self.cached_input_info["indices"]["ndim"])]
-        dyn_indices_dtype = self.cached_input_info["indices"]["dtype"]
-        dyn_indices = None if self.cached_input_info["indices"] is None else \
-            Tensor(shape=dyn_indices_shape, dtype=dyn_indices_dtype)
+        dyn_hidden_states = Tensor(shape=[None, None],
+                                   dtype=self.vllm_config.model_config.dtype)
 
-        dyn_bias_shape = [None for _ in range(
-                    self.cached_input_info["bias"]["ndim"])]
-        dyn_bias_dtype = self.cached_input_info["bias"]["dtype"]
-        dyn_bias = None if self.cached_input_info["bias"] is None else \
-            Tensor(shape=dyn_bias_shape, dtype=dyn_bias_dtype)
+        if self.cached_input_info["indices"] is None:
+            dyn_indices = None
+        else:
+            dyn_indices_shape = [
+                None for _ in range(self.cached_input_info["indices"]["ndim"])
+            ]
+            dyn_indices_dtype = self.cached_input_info["indices"]["dtype"]
+            dyn_indices = Tensor(shape=dyn_indices_shape,
+                                 dtype=dyn_indices_dtype)
+
+        if self.cached_input_info["bias"] is None:
+            dyn_bias = None
+        else:
+            dyn_bias_shape = [
+                None for _ in range(self.cached_input_info["bias"]["ndim"])
+            ]
+            dyn_bias_dtype = self.cached_input_info["bias"]["dtype"]
+            dyn_bias = Tensor(shape=dyn_bias_shape, dtype=dyn_bias_dtype)
 
         self.set_inputs(dyn_hidden_states, dyn_indices, dyn_bias)
 
     def __call__(
         self,
+        lm_head: VocabParallelEmbedding,
         hidden_states: Tensor,
-        selected_token_indices: Optional[Tensor] = None,
+        sampling_metadata: Optional[SamplingMetadata] = None,
         embedding_bias: Optional[Tensor] = None,
     ) -> Optional[Tensor]:
         if self.lm_head is None:
@@ -125,19 +131,23 @@ class LogitsProcessor(nn.Cell):
             "ndim": embedding_bias.ndim,
             "dtype": embedding_bias.dtype,
         }
-        if self.cached_input_info != {"indices": dyn_indices_info,
-                                      "bias": dyn_bias_info}:
+        if self.cached_input_info != {
+                "indices": dyn_indices_info,
+                "bias": dyn_bias_info
+        }:
             self.cached_input_info = {
                 "indices": dyn_indices_info,
                 "bias": dyn_bias_info,
             }
             self.set_dynamic_inputs()
 
-        logits = self.run_model(
-            hidden_states,
-            selected_token_indices,
-            embedding_bias
-        )
+        if selected_token_indices is not None and selected_token_indices.numel(
+        ) <= 0:
+            logits = mint.zeros((0, self.vocab_size),
+                                dtype=hidden_states.dtype)
+        else:
+            logits = self.run_model(hidden_states, selected_token_indices,
+                                    embedding_bias)
 
         if sampling_metadata is not None and \
                 sampling_metadata.seq_groups is not None:
@@ -155,14 +165,12 @@ class LogitsProcessor(nn.Cell):
             logits = hidden_states
         else:
             if selected_token_indices is not None:
-                if selected_token_indices.numel() <= 0:
-                    return mint.zeros((0, self.vocab_size), dtype=hidden_states.dtype)
-                hidden_states = mint.index_select(
-                    hidden_states, 0, selected_token_indices)
+                hidden_states = mint.index_select(hidden_states, 0,
+                                                  selected_token_indices)
 
             # Get the logits for the next tokens.
-            logits = self._get_logits(
-                hidden_states, self.lm_head, embedding_bias)
+            logits = self._get_logits(hidden_states, self.lm_head,
+                                      embedding_bias)
         if logits is not None:
             if self.soft_cap is not None:
                 logits = logits / self.soft_cap
@@ -190,7 +198,7 @@ class LogitsProcessor(nn.Cell):
             logits = self.tensor_model_parallel_all_gather(logits)
         else:
             # None may be returned for rank > 0
-            logits = self.tensor_model_parallel_gather(logits)
+            logits = tensor_model_parallel_gather(logits)
         # Remove paddings in vocab (if any).
         if logits is not None:
             logits = logits[..., :self.org_vocab_size]

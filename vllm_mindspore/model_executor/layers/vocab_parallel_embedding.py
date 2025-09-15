@@ -38,7 +38,7 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
-from vllm_mindspore.utils import is_310p, FORMAT_TYPE
+from vllm_mindspore.utils import FORMAT_TYPE, is_310p
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
 
@@ -355,7 +355,8 @@ class VocabParallelEmbedding(nn.Cell):
                     f"and {loaded_weight.shape}")
             param.set_data(ms.from_numpy(loaded_weight))
             if need_nz:
-                param.set_data(ops.auto_generate.format_cast(param, FORMAT_TYPE['nz']))
+                param.set_data(
+                    ops.auto_generate.format_cast(param, FORMAT_TYPE['nz']))
             return
 
         # Shard indexes for loading the weight
@@ -373,7 +374,8 @@ class VocabParallelEmbedding(nn.Cell):
         param[:loaded_weight.shape[0]] = ms.from_numpy(loaded_weight)
         param[loaded_weight.shape[0]:] = 0
         if need_nz:
-            param.set_data(ops.auto_generate.format_cast(param, FORMAT_TYPE['nz']))
+            param.set_data(
+                ops.auto_generate.format_cast(param, FORMAT_TYPE['nz']))
 
 
 class ParallelLMHead(VocabParallelEmbedding):

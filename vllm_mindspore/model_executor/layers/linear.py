@@ -169,7 +169,8 @@ class LinearBase(nn.Cell):
         self.param_load_counts[param.name] = current_count
 
         if current_count == merge_count:
-            cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+            cast_weight = ops.auto_generate.format_cast(
+                param, FORMAT_TYPE['nz'])
             param.set_data(cast_weight)
             del self.param_load_counts[param.name]
 
@@ -491,7 +492,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             assert loaded_weight.shape == param.shape
             param.set_data(loaded_weight)
             if is_310p() and param.name.endswith("weight"):
-                loaded_shard_num = 3 # q/k/v
+                loaded_shard_num = 3  # q/k/v
                 self.format_to_nz(param, loaded_shard_num)
             return
 
@@ -522,7 +523,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             assert loaded_weight.shape == (shard_size, )
         param[shard_offset:shard_offset + shard_size] = loaded_weight
         if is_310p() and param.name.endswith("weight"):
-            loaded_shard_num = 3 # q/k/v
+            loaded_shard_num = 3  # q/k/v
             self.format_to_nz(param, loaded_shard_num)
 
 

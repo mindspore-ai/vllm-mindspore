@@ -21,12 +21,9 @@
 Implement a unified communication interface for both graph and pynative mode.
 """
 
-from typing import Optional
-
-from mindspore import Tensor, mint, nn, ops
+from mindspore import nn, ops
 from vllm.distributed.parallel_state import (
-    get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size,
-    get_tp_group)
+    get_tensor_model_parallel_world_size, get_tp_group)
 
 
 class ReduceFromModelParallelRegion(nn.Cell):
@@ -67,27 +64,3 @@ class AllGatherFromModelParallelRegion(nn.Cell):
         output = self.all_gather_into_tensor(input_)
         output = ops.swapaxes(output, 0, -1)
         return output
-
-
-class GatherFromModelParallelRegion(nn.Cell):
-    "Gather the input from model parallel region and concatenate."
-
-    def __init__(self):
-        super().__init__()
-        self.world_size = get_tensor_model_parallel_world_size()
-        self.tp_rank = get_tensor_model_parallel_rank()
-        if self.world_size > 1:
-            self.tp_group = get_tp_group().device_group._name
-
-    def construct(self,
-                  input_: Tensor,
-                  dst: int = 0,
-                  dim: int = -1) -> Optional[Tensor]:
-        # Size and dimension.
-        if self.world_size == 1:
-            return input_
-        output = ops.CollectiveGather(dest_rank=dst,
-                                      group=self.tp_group)(mint.transpose(input_, 0, dim))
-        if self.tp_rank != dst:
-            return None
-        return mint.transpose(output, 0, dim)
