@@ -128,11 +128,20 @@ class CustomBuildExt(build_ext):
         os.makedirs(BUILD_OPS_DIR, exist_ok=True)
 
         ascend_home_path = _get_ascend_home_path()
-        env_script_path = _get_ascend_env_path()
+        opp_path = os.environ.get("ASCEND_OPP_PATH", "")
+        if not opp_path:
+            raise RuntimeError(
+                "Environment variable ASCEND_OPP_PATH is not detected. "
+                "Please manually source the Ascend environment script before building, for example:\n"
+                "  source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh\n"
+                "If you are building via pip in an isolated environment (PEP 517 build isolation), "
+                "your environment variables may not take effect inside the build. "
+                "Re-run the installation with build isolation disabled, e.g.:\n"
+                "  pip install . --no-build-isolation\n"
+            )
         build_extension_dir = os.path.join(BUILD_OPS_DIR, "kernel_meta", ext_name)
         # Combine all cmake commands into one string
         cmake_cmd = (
-            f"source {env_script_path} && "
             f"cmake -S {OPS_DIR} -B {BUILD_OPS_DIR}"
             f"  -DCMAKE_BUILD_TYPE=Release"
             f"  -DCMAKE_INSTALL_PREFIX={os.path.join(BUILD_OPS_DIR, 'install')}"
