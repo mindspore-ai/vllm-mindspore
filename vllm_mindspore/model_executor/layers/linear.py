@@ -20,6 +20,7 @@
 """ Linear methods for quantized linear layers. """
 
 from abc import abstractmethod
+from ast import Dict
 from typing import Optional, Union
 
 import mindspore as ms
@@ -39,6 +40,7 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.utils import FORMAT_TYPE, is_310p
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod", "AWQMarlinLinearMethod",
@@ -157,9 +159,19 @@ class LinearBase(nn.Cell):
             self.quant_method = quant_config.get_quant_method(self,
                                                               prefix=prefix)
         self.return_bias = return_bias
+        self.param_load_counts: Dict[str, int] = {}
 
     def construct(self, x: Tensor) -> Tensor:
         raise NotImplementedError
+
+    def format_to_nz(self, param, merge_count=1):
+        current_count = self.param_load_counts.get(param.name, 0) + 1
+        self.param_load_counts[param.name] = current_count
+
+        if current_count == merge_count:
+            cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+            param.set_data(cast_weight)
+            del self.param_load_counts[param.name]
 
 
 class ColumnParallelLinear(LinearBase):
@@ -284,6 +296,8 @@ class ColumnParallelLinear(LinearBase):
 
         assert param.shape == loaded_weight.shape
         param.set_data(ms.from_numpy(loaded_weight))
+        if is_310p() and param.name.endswith("weight"):
+            self.format_to_nz(param, merge_count=1)
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -365,6 +379,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             assert loaded_weight.shape == (shard_size, param.shape[1])
             param[shard_offset:shard_offset +
                 shard_size, :] = ms.from_numpy(loaded_weight)
+            if is_310p() and param.name.endswith("weight"):
+                loaded_shard_num = 2 # gating/hidden
+                self.format_to_nz(param, loaded_shard_num)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -473,6 +490,9 @@ class QKVParallelLinear(ColumnParallelLinear):
 
             assert loaded_weight.shape == param.shape
             param.set_data(loaded_weight)
+            if is_310p() and param.name.endswith("weight"):
+                loaded_shard_num = 3 # q/k/v
+                self.format_to_nz(param, loaded_shard_num)
             return
 
         assert loaded_shard_id in ["q", "k", "v"]
@@ -501,6 +521,9 @@ class QKVParallelLinear(ColumnParallelLinear):
         if param.name.endswith("bias"):
             assert loaded_weight.shape == (shard_size, )
         param[shard_offset:shard_offset + shard_size] = loaded_weight
+        if is_310p() and param.name.endswith("weight"):
+            loaded_shard_num = 3 # q/k/v
+            self.format_to_nz(param, loaded_shard_num)
 
 
 class RowParallelLinear(LinearBase):
@@ -635,3 +658,5 @@ class RowParallelLinear(LinearBase):
 
         assert param.shape == loaded_weight.shape
         param.set_data(ms.from_numpy(loaded_weight))
+        if is_310p() and param.name.endswith("weight"):
+            self.format_to_nz(param, merge_count=1)
