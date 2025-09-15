@@ -15,12 +15,11 @@
  */
 
 #include "hardware/cpu/cpu_device_context.h"
-#include "hardware/hardware_abstract/device_context_manager.h"
 #include "common/common.h"
 
 void TestDeviceResource() {
   mrt::device::DeviceContextKey deviceContextKey{"CPU", 0};
-  auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+  auto deviceContext = std::make_shared<mrt::device::cpu::CPUDeviceContext>(deviceContextKey);
   if (deviceContext == nullptr) {
     LOG_ERROR << "Get device context failed.";
   }

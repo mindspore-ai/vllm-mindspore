@@ -22,20 +22,25 @@
 #include <cstring>
 
 #include "common/common.h"
+#include "common/visible.h"
 #include "hardware/device.h"
 #include "ir/common/dtype.h"
 #include "ir/common/intrusive_ptr.h"
 
 namespace mrt {
-class Allocator {
+namespace device {
+class DeviceResManager;
+}
+class MRT_EXPORT Allocator {
  public:
-  Allocator() = default;
-  Allocator(hardware::Device device) {}
+  Allocator() = delete;
+  Allocator(hardware::Device device);
 
-  // TODO: use device context or device res manager api instead of malloc/free.
-  void *Allocate(size_t sizeBytes) const { return malloc(sizeBytes); }
+  void *Allocate(size_t sizeBytes) const;
+  void Free(void *ptr) const;
 
-  void Free(void *ptr) const { free(ptr); }
+ private:
+  device::DeviceResManager *deviceResManager_{nullptr};
 };
 
 namespace ir {
@@ -46,7 +51,7 @@ namespace ir {
  * This class manages a block of memory on a specific device.
  * It is reference-counted and managed by the Storage class.
  */
-class Storage : public RefCounted {
+class MRT_EXPORT Storage : public RefCounted {
  public:
   /**
    * @brief Constructs a Storage, allocating memory.
@@ -89,7 +94,7 @@ class Storage : public RefCounted {
   hardware::Device GetDevice() const { return device_; }
 
   void SetData(void *data) {
-    CHECK_IF_FAIL(!ownsData_);
+    CHECK_IF_FAIL(!canOwnData_);
     data_ = data;
   }
 
@@ -113,10 +118,10 @@ class Storage : public RefCounted {
   void FreeMemory();
 
   /**
-   * @brief Check whether this Storage currently owns the data.
+   * @brief Check whether this Storage can own data.
    * If true, the buffer pointed to by data_ is managed by this Storage object.
    */
-  bool CheckOwnsData() const { return ownsData_; }
+  bool CheckCanOwnData() const { return canOwnData_; }
 
   /**
    * @brief Releases ownership of the managed pointer.
@@ -129,7 +134,7 @@ class Storage : public RefCounted {
   size_t sizeBytes_{0};  ///< Size of the memory in bytes.
   Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
-  bool ownsData_{true};      ///< Whether the storage owns the data.
+  const bool canOwnData_;    ///< Whether the storage can own data.
 };
 
 using StoragePtr = IntrusivePtr<Storage>;

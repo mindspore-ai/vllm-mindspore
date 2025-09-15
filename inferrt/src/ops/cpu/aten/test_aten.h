@@ -29,7 +29,9 @@ namespace mrt {
 namespace ops {
 class TestAtenKernel : public DAKernel {
  public:
-  explicit TestAtenKernel(ir::NodePtr node) : DAKernel(node) { operator_ = CreateOperator(ToStr(node->op)); }
+  explicit TestAtenKernel(ir::NodePtr node) : DAKernel(node) {
+    operator_ = CreateOperator(ToStr(node->op), hardware::DeviceType::CPU);
+  }
   void Init() override;
   void InferShape() override;
   void Resize() override;

@@ -32,10 +32,14 @@ namespace runtime {
  */
 class OpRunner {
  public:
-  OpRunner() = default;
-
-  OpRunner(ir::Node *node, std::unique_ptr<ops::Operator> &&operatorPtr, void *stream, bool isDynamicShape)
-      : stream_(stream), node_(node), operator_(std::move(operatorPtr)), isDynamicShape_(isDynamicShape) {
+  OpRunner() = delete;
+  OpRunner(ir::Node *node, std::unique_ptr<ops::Operator> &&operatorPtr, void *stream, hardware::Device device,
+           bool isDynamicShape)
+      : stream_(stream),
+        alloc_(device),
+        node_(node),
+        operator_(std::move(operatorPtr)),
+        isDynamicShape_(isDynamicShape) {
     output_ = node->output.get();
     auto inputSize = node->inputs.size();
     input_.resize(inputSize, nullptr);
@@ -52,6 +56,7 @@ class OpRunner {
         workspaceSize_(other.workspaceSize_),
         output_(other.output_),
         stream_(other.stream_),
+        alloc_(other.alloc_),
         node_(other.node_),
         operator_(std::move(other.operator_)),
         isDynamicShape_(other.isDynamicShape_) {}
@@ -64,6 +69,7 @@ class OpRunner {
       workspaceSize_ = other.workspaceSize_;
       output_ = other.output_;
       stream_ = other.stream_;
+      alloc_ = other.alloc_;
       node_ = other.node_;
       operator_ = std::move(other.operator_);
       isDynamicShape_ = other.isDynamicShape_;

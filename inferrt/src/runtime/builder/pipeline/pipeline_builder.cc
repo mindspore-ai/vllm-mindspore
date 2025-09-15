@@ -26,7 +26,7 @@ std::unique_ptr<Executor> PipelineBuilder::BuildExecutor() {
   RecordStorageFreePoint();
   CreateOpRunners();
 
-  auto pipelineExecutor = std::make_unique<PipelineExecutor>(opRunners_);
+  auto pipelineExecutor = std::make_unique<PipelineExecutor>(opRunners_, deviceContexts_);
   pipelineExecutor->Initialize();
   LOG_OUT << "End build pipeline executor.";
   return pipelineExecutor;

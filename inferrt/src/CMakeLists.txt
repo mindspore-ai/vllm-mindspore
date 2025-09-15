@@ -41,15 +41,7 @@ add_subdirectory(optimize)
 add_subdirectory(pybind)
 add_subdirectory(runtime)
 
-set(OBJECTS hardware_abstract_obj lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
-
-if(ENABLE_ASCEND)
-  set(OBJECTS ${OBJECTS} hardware_ascend_obj)
-endif()
-
-if(ENABLE_CPU)
-  set(OBJECTS ${OBJECTS} hardware_cpu_obj)
-endif()
+set(OBJECTS hardware_abstract lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
@@ -61,7 +53,7 @@ target_link_libraries(inferrt ${OBJECTS})
 
 set_target_properties(inferrt PROPERTIES
   INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib"
-  BUILD_WITH_INSTALL_RPATH TRUE  
+  BUILD_WITH_INSTALL_RPATH TRUE
 )
 
 install(

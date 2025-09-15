@@ -35,10 +35,21 @@ class MultiStreamController;
 using DeviceContextCreator = std::function<std::shared_ptr<DeviceContext>(const DeviceContextKey &)>;
 using MultiStreamControllerPtr = std::shared_ptr<MultiStreamController>;
 
+class PluginLoader {
+ public:
+  static bool LoadDynamicLib(const std::string &pluginFile, std::map<std::string, void *> *allHandles,
+                             std::stringstream *errMsg);
+  static void CloseDynamicLib(const std::string &dlName, void *handle);
+  static bool GetPluginPath(std::string *filePath);
+
+ private:
+  static std::string GetDynamicLibName(const std::string &pluginFile);
+};
+
 class MRT_EXPORT DeviceContextManager {
  public:
-  ~DeviceContextManager() = default;
   static DeviceContextManager &GetInstance();
+  ~DeviceContextManager();
   void Register(const std::string &deviceName, DeviceContextCreator &&deviceContextCreator);
   DeviceContext *GetOrCreateDeviceContext(const DeviceContextKey &deviceContextKey);
   // Return the device context of the specified device target.
@@ -50,14 +61,13 @@ class MRT_EXPORT DeviceContextManager {
   void ChildAfterFork();
   void WaitTaskFinishOnDevice() const;
   void SyncAllStreams() const;
-  void UnloadPlugin();
   std::string GetErrorMsg() const;
   void BindDeviceCtx() const;
 
  private:
   DeviceContextManager() = default;
   void LoadPlugin();
-  bool SelectGpuPlugin(const std::string &cudaHome, const std::set<std::string> &file_names);
+  void UnloadPlugin();
 
   std::map<std::string, void *> pluginMaps_;
   bool loadInit_;
@@ -73,7 +83,7 @@ class MRT_EXPORT DeviceContextManager {
   std::stringstream dlopenErrorMsg_;
 
   // Since multi device is not supported currently, here use device target type to improve performance.
-  // Device target type : 0, 1, 2, 3, and real device support : 'GPU' 'Ascend' 'CPU'.
+  // Device target type : 0, 1, 2, 3, and real device support : 'Ascend' 'CPU'.
   std::map<std::string, MultiStreamControllerPtr> multiStreamControllers_;
 };
 
@@ -85,11 +95,10 @@ class MRT_EXPORT DeviceContextRegister {
   ~DeviceContextRegister() = default;
 };
 
-#define MS_REGISTER_DEVICE(DEVICE_NAME, DEVICE_CONTEXT_CLASS)            \
-  static const DeviceContextRegister g_device_##DEVICE_NAME##_reg(       \
-    DEVICE_NAME, [](const DeviceContextKey &deviceContextKey) {        \
-      return std::make_shared<DEVICE_CONTEXT_CLASS>(deviceContextKey); \
-    })
+#define MS_REGISTER_DEVICE(DEVICE_NAME, DEVICE_CONTEXT_CLASS)      \
+  static const DeviceContextRegister g_device_##DEVICE_NAME##_reg( \
+    DEVICE_NAME,                                                   \
+    [](const DeviceContextKey &deviceContextKey) { return std::make_shared<DEVICE_CONTEXT_CLASS>(deviceContextKey); })
 }  // namespace device
 }  // namespace mrt
 #endif  // INFERRT_SRC_HARDWARE_DEVICE_CONTEXT_MANAGER_H_

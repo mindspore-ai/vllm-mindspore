@@ -29,6 +29,7 @@
 #include "common/common.h"
 #include "common/visible.h"
 #include "hardware/hardware_abstract/stream_util.h"
+#include "hardware/device.h"
 #ifdef __APPLE__
 #include "async/spinlock.h"
 #endif
@@ -43,7 +44,7 @@ namespace device {
 constexpr size_t kSizeZero = 0;
 
 struct DeviceContextKey {
-  // device type name, such as 'GPU' 'Ascend' 'CPU'.
+  // device type name, such as 'Ascend' 'CPU'.
   std::string deviceName_;
   uint32_t deviceId_{0};
 
@@ -51,6 +52,8 @@ struct DeviceContextKey {
   // in cache map which maintains created DeviceContext objects.
   std::string ToString() const { return deviceName_ + "_" + std::to_string(deviceId_); }
 };
+
+MRT_EXPORT DeviceContextKey DeviceToDeviceContextKey(hardware::Device device);
 
 class DeviceResManager;
 class KernelExecutor;
@@ -224,7 +227,7 @@ class MRT_EXPORT DeviceResManager {
   // Query tasks' completion status of a stream.
   virtual bool QueryStream(size_t streamId) const { return true; }
 
-  // Synchronize stream, device such as GPU and Ascend need stream to launch kernel asynchronously,
+  // Synchronize stream, device such as Ascend need stream to launch kernel asynchronously,
   // Using 'SyncStream' to block thread and wait for completing all tasks on specific stream.
   // Using 'SyncAllStream' to block thread and wait for completing all tasks on all streams.
   // Devices without stream could ignore the implementation of these function.

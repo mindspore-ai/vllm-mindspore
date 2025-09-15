@@ -27,17 +27,9 @@ namespace ops {
 
 OpsErrorCode AtenShape::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                ir::Value *output, void *stream) {
-  auto tensor = input[kIndex0]->ToTensor();
-  auto &shape = tensor->Shape();
-
-  std::vector<ir::ValuePtr> shapeValues;
-  shapeValues.reserve(shape.size());
-  for (auto dim : shape) {
-    (void)shapeValues.emplace_back(ir::MakeIntrusive<ir::Value>(dim));
-  }
-
-  auto tuple_data = ir::MakeIntrusive<ir::Tuple>(shapeValues);
-  *output = ir::Value(tuple_data);
+  // The output of Shape is a tuple, which does not have a shape in the tensor sense.
+  // The tuple will be constructed in the InferShape method, only need input tensor shape information.
+  // Here we just skip launch.
 
   return SUCCESS;
 }

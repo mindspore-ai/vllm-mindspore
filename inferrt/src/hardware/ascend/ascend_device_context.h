@@ -29,7 +29,7 @@ namespace device {
 namespace ascend {
 class AscendResManager;
 
-class AscendDeviceContext : public DeviceInterface<AscendResManager> {
+class MRT_EXPORT AscendDeviceContext : public DeviceInterface<AscendResManager> {
  public:
   explicit AscendDeviceContext(const DeviceContextKey &deviceContextKey) : DeviceInterface(deviceContextKey) {}
   ~AscendDeviceContext() override = default;

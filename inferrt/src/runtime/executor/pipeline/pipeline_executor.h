@@ -24,7 +24,8 @@ namespace runtime {
 class DA_API PipelineExecutor : public Executor {
  public:
   PipelineExecutor() = delete;
-  PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners);
+  PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
+                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts);
   ~PipelineExecutor() override = default;
 
   void Initialize();

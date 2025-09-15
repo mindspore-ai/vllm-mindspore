@@ -54,7 +54,6 @@ process_options()
             b)
                 if [ "$OPTARG" = "ascend" ]; then
                     export ENABLE_ASCEND=1
-                    unset ENABLE_CPU
                 elif [ "$OPTARG" = "cpu" ]; then
                     export ENABLE_CPU=1
                     unset ENABLE_ASCEND
@@ -168,10 +167,10 @@ if [[ $BUILD_TESTS == 1 ]]; then
     echo "Run test case:"
     if [[ $ENABLE_ASCEND == 1 ]]; then
         echo "Ascend backend test case"
-        ./tests/hardware_ascend_test_obj
+        ./tests/run_hardware_ascend_test
     else
         echo "CPU backend test case"
-        ./tests/hardware_cpu_test_obj
+        ./tests/run_hardware_cpu_test
     fi
     echo "Tests completed."
     echo "=============================="

@@ -8,7 +8,7 @@
 
 namespace mrt {
 namespace hardware {
-const std::vector<std::string> deviceNames = {"CPU", "NPU"};
+const std::vector<std::string> deviceNames = {"CPU", "Ascend"};
 
 /**
  * @brief Enumeration of supported device types.

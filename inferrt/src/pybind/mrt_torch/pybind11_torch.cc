@@ -107,8 +107,10 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
   ir::DataType type = FromTorchDType(tensor.scalar_type());
   std::vector<int64_t> shape(tensor.sizes().begin(), tensor.sizes().end());
   auto device = FromTorchDevice(tensor.device());
-  void *data = isFake ? nullptr : tensor.data_ptr();
-  return ir::MakeIntrusive<ir::Tensor>(data, shape, type, device);
+  if (isFake) {
+    return ir::MakeIntrusive<ir::Tensor>(shape, type, device);
+  }
+  return ir::MakeIntrusive<ir::Tensor>(tensor.data_ptr(), shape, type, device);
 }
 
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
@@ -116,9 +118,13 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   // Only support operator output as graph output case currently.
   const auto &storage = tensor->GetStorage();
-  CHECK_IF_FAIL(storage->CheckOwnsData());
+  CHECK_IF_FAIL(storage->CheckCanOwnData());
   auto allocator = storage->GetAllocator();
-  auto deleter = [&allocator](void *dataPtr) { allocator.Free(dataPtr); };
+  auto deleter = [allocator](void *dataPtr) {
+    if (dataPtr != nullptr) {
+      allocator.Free(dataPtr);
+    }
+  };
   void *dataPtr = storage->Release();
   CHECK_IF_NULL(dataPtr);
 
