@@ -1,0 +1,11 @@
+mindspore:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.0/MindSpore'
+
+mindspore_gs:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.0/GoldenStick'
+
+vllm:
+  'https://repo.mindspore.cn/mirrors/vllm/version/202505/20250514/v0.8.4.dev0_newest/'
+
+msadapter:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.0/MSAdapter'
