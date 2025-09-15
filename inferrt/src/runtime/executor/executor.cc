@@ -23,16 +23,34 @@
 #include <queue>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "ops/kernel_lib.h"
 #include "runtime/builder/builder.h"
+#include "runtime/builder/pipeline/pipeline_builder.h"
 
 namespace mrt {
 namespace runtime {
+using BuilderCreationFunc = std::function<std::unique_ptr<Builder>(const ir::GraphPtr &)>;
+static std::vector<BuilderCreationFunc> builderCreators = {
+  [](const ir::GraphPtr &graph) { return std::make_unique<Builder>(graph); },
+  [](const ir::GraphPtr &graph) { return std::make_unique<PipelineBuilder>(graph); }};
+
 namespace {
+ExecutionMode GetExecutionMode() {
+  static const char enablePipelineEnv[] = "MRT_ENABLE_PIPELINE";
+  static const char *enablePipelineCStr = std::getenv(enablePipelineEnv);
+  static const bool enablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "on");
+  ExecutionMode executionMode = Base;
+  if (enablePipeline) {
+    executionMode = Pipeline;
+  }
+  return executionMode;
+}
+
 const std::vector<std::string> GetEnvKernelLibPaths() {
   std::vector<std::string> kernelLibPaths{};
   constexpr char kKernelLibPathsEnvName[] = "DART_KERNEL_LIB_PATH";
@@ -335,8 +353,12 @@ void GraphExecutor::DumpGraph() {
 void GraphExecutor::BuildExecutor() {
   CHECK_IF_FAIL(nullptr == builder_);
   CHECK_IF_FAIL(nullptr == executor_);
-  builder_ = std::make_unique<Builder>(graph_);
+  ExecutionMode executionMode = GetExecutionMode();
+  CHECK_IF_FAIL(static_cast<size_t>(executionMode) < builderCreators.size());
+  builder_ = builderCreators.at(static_cast<size_t>(executionMode))(graph_);
+  CHECK_IF_NULL(builder_);
   executor_ = builder_->BuildExecutor();
+  CHECK_IF_NULL(executor_);
 }
 
 void Executor::Run(bool isDynamic) {

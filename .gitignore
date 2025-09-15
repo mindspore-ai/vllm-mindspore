@@ -3,6 +3,7 @@
 # git rm --cached -r build/
 # Build files
 build/
+output/
 inferrt/src/pybind/pybind11-src/
 
 # Cmake files

@@ -1,8 +1,8 @@
 check_debug_log_out()
-
+find_package(Threads REQUIRED)
 file(GLOB_RECURSE RUNTIME_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 add_library(runtime_obj STATIC ${RUNTIME_SRC_FILES})
-target_link_libraries(runtime_obj ops_obj mrt_ir_obj kernel)
+target_link_libraries(runtime_obj ops_obj mrt_ir_obj kernel Threads::Threads)
 
 if(ENABLE_ASCEND)
   if(DEFINED ENV{ASCEND_CUSTOM_PATH})

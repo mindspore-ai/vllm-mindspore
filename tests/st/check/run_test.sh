@@ -4,3 +4,6 @@ BUILD_DIR=$CURRENT_PATH/build
 export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/cpu/aten/libkernel_aten.so
 export DART_KERNEL_LIB_NAME=Aten
 python $CURRENT_PATH/tests/st/check/check_backend.py
+
+export MRT_ENABLE_PIPELINE="on"
+python $CURRENT_PATH/tests/st/check/check_backend.py

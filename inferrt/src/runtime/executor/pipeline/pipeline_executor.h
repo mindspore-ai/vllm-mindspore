@@ -23,10 +23,15 @@ namespace mrt {
 namespace runtime {
 class DA_API PipelineExecutor : public Executor {
  public:
-  PipelineExecutor() = default;
+  PipelineExecutor() = delete;
+  PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners);
   ~PipelineExecutor() override = default;
 
+  void Initialize();
   void Run(bool isDynamic) override;
+
+ private:
+  bool initialized_;
 };
 
 }  // namespace runtime

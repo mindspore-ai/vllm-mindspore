@@ -37,6 +37,14 @@
 
 namespace mrt {
 namespace runtime {
+enum ExecutionMode : size_t {
+  Base = 0,
+  Pipeline = 1,
+  // TODO:
+  //  KernelGroupLaunch = 2,
+  //  KernelCapture = 3
+};
+
 /**
  * @brief Base class for executing a computational graph.
  *
@@ -46,7 +54,7 @@ namespace runtime {
  */
 class DA_API Executor {
  public:
-  Executor() = default;
+  Executor() = delete;
   Executor(const std::shared_ptr<std::vector<OpRunner>> &opRunners) : opRunners_(opRunners) {}
 
   virtual ~Executor() = default;
