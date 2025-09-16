@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pytest
 from mrt import jit
-import argparse
-
-_arg_parser = argparse.ArgumentParser()
-_arg_parser.add_argument('--dump', '-d', type=bool, default=False, required=False, help="if dump compiler information")
-_args = _arg_parser.parse_args()
+from tests.mark_utils import arg_mark
 
 
-@jit(dump_compiler=_args.dump)
-def run_check(x, y):
-    print('hello world.\n')
-    z = x * y
-    z = z + x - y
-    z = z / y
-    return z
+@arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("dump", (True, False))
+def test_jit(dump):
+    @jit(dump_compiler=dump)
+    def run_check(x, y):
+        print('hello world.\n')
+        z = x * y
+        z = z + x - y
+        z = z / y
+        return z
 
-assert run_check(12, 6) == 13
-print("The result is correct. 'mrt' module has been installed successfully.")
+    assert run_check(12, 6) == 13
+    print("The result is correct. 'mrt' module has been installed successfully.")
