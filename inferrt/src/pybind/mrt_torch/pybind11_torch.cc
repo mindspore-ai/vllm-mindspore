@@ -17,6 +17,10 @@
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
 
+#ifdef ENABLE_TORCH_NPU
+#include "torch_npu/csrc/aten/common/from_blob.h"
+#endif
+
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
 #include "common/logger.h"
@@ -73,8 +77,11 @@ hardware::Device FromTorchDevice(const at::Device &device) {
     case at::DeviceType::CPU:
       deviceType = hardware::DeviceType::CPU;
       break;
+    case at::DeviceType::PrivateUse1:
+      deviceType = hardware::DeviceType::NPU;
+      break;
     default:
-      LOG_EXCEPTION << "Unsupported torch::Device for conversion to hardware::Device";
+      LOG_EXCEPTION << "Unsupported torch::Device " << device.str() << " for conversion to hardware::Device";
   }
   return hardware::Device(deviceType, device.index());
 }
@@ -85,13 +92,17 @@ at::Device ToTorchDevice(const hardware::Device device) {
     case hardware::DeviceType::CPU:
       deviceType = at::kCPU;
       break;
+    case hardware::DeviceType::NPU:
+      deviceType = at::kPrivateUse1;
+      break;
     default:
-      LOG_EXCEPTION << "Unsupported hardware::DeviceType for conversion to torch::Device";
+      LOG_EXCEPTION << "Unsupported hardware::DeviceType " << hardware::GetDeviceNameByType(device.type)
+                    << " for conversion to torch::Device";
   }
   return at::Device(deviceType, device.index);
 }
 
-// Create a new mrt Tensor without owns data
+// Create a new mrt Tensor with a weak ref to torch Tensor data
 ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
   ir::DataType type = FromTorchDType(tensor.scalar_type());
   std::vector<int64_t> shape(tensor.sizes().begin(), tensor.sizes().end());
@@ -100,19 +111,30 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
   return ir::MakeIntrusive<ir::Tensor>(data, shape, type, device);
 }
 
-// Create a new torch Tensor with shared data
+// Create a new torch Tensor by moving ownership of data from mrt Tensor
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
-  auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(ToTorchDevice(tensor->GetDevice()));
-  const auto &storage = tensor->GetStorage();
   // Only support operator output as graph output case currently.
+  const auto &storage = tensor->GetStorage();
   CHECK_IF_FAIL(storage->CheckOwnsData());
   auto allocator = storage->GetAllocator();
+  auto deleter = [allocator](void *dataPtr) { allocator.Free(dataPtr); };
   void *dataPtr = storage->Release();
   CHECK_IF_NULL(dataPtr);
-  return at::from_blob(
-    const_cast<void *>(dataPtr), tensor->Shape(), tensor->Strides(),
-    [allocator](void *dataPtr) { allocator.Free(dataPtr); }, options);
+
+  auto atDevice = ToTorchDevice(tensor->GetDevice());
+  auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
+
+  switch (atDevice.type()) {
+    case at::DeviceType::CPU:
+      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+#ifdef ENABLE_TORCH_NPU
+    case at::DeviceType::PrivateUse1:
+      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+#endif
+    default:
+      LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
+  }
 }
 
 void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {
@@ -126,7 +148,7 @@ void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {
 
   self.SetDtype(type);
   self.SetShape(std::move(shape));
-  self.ResizeStorage();
+  self.Resize();
   self.UpdateData(data);
 }
 }  // namespace

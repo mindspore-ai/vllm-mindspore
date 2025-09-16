@@ -29,7 +29,6 @@ class AtenMatMul : public OpMatMul {
   AtenMatMul() = default;
   ~AtenMatMul() override = default;
 
-  OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
 };

@@ -80,6 +80,11 @@ class Tensor : public RefCounted {
    */
   const std::vector<int64_t> &Shape() const { return shape_; }
   /**
+   * @brief Gets the dimensions of the tensor.
+   * @return A mutable reference to the vector of dimensions.
+   */
+  std::vector<int64_t> &Shape() { return shape_; }
+  /**
    * @brief Gets the strides of the tensor.
    * @return A const reference to the vector of strides.
    */
@@ -113,7 +118,7 @@ class Tensor : public RefCounted {
    * @brief Resizes the storage of the tensor.
    * Note: The shape and dtype must be set before resizing the storage.
    */
-  void ResizeStorage();
+  void Resize();
   /**
    * @brief Updates the data of the tensor.
    * @param data Pointer to the new data.
@@ -142,12 +147,12 @@ class Tensor : public RefCounted {
    * @brief Sets the shape of the tensor.
    * @param shape The new shape to set.
    */
-  void SetShape(const std::vector<int64_t> &shape);
+  void SetShape(const std::vector<int64_t> &shape) { shape_ = shape; }
   /**
    * @brief Sets the shape of the tensor.
    * @param shape The new shape to set.
    */
-  void SetShape(std::vector<int64_t> &&shape);
+  void SetShape(std::vector<int64_t> &&shape) { shape_ = std::move(shape); }
   /**
    * @brief Sets the storage of the tensor.
    * @param storage The new storage to set.

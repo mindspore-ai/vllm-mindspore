@@ -93,9 +93,10 @@ Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Devi
   storage_ = MakeIntrusive<Storage>(sizeBytes, device);
 }
 
-void Tensor::ResizeStorage() {
+void Tensor::Resize() {
   CHECK_IF_NULL(storage_);
-  CHECK_IF_FAIL(!HasDynamicShape());
+  ComputeStrides();
+  numel_ = CalculateNumel(shape_, false);
   size_t sizeBytes = numel_ * dtype_.GetSize();
   storage_->Resize(sizeBytes);
 }
@@ -120,18 +121,6 @@ Tensor::Tensor(void *data, const std::vector<int64_t> &shape, DataType dtype, ha
   size_t sizeBytes = numel_ * dtype_.GetSize();
 
   storage_ = MakeIntrusive<Storage>(data, sizeBytes, device);
-}
-
-void Tensor::SetShape(const std::vector<int64_t> &shape) {
-  shape_ = shape;
-  ComputeStrides();
-  numel_ = CalculateNumel(shape_, true);
-}
-
-void Tensor::SetShape(std::vector<int64_t> &&shape) {
-  shape_ = std::move(shape);
-  ComputeStrides();
-  numel_ = CalculateNumel(shape_, true);
 }
 
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {

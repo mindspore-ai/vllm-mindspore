@@ -62,6 +62,6 @@ endif()
 add_subdirectory(mrt)
 
 # Add mrt_torch pybind11 sub module
-if(ENABLE_KERNEL_ATEN)
+if(ENABLE_TORCH_FRONT)
     add_subdirectory(mrt_torch)
 endif()
