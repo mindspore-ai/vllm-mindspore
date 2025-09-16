@@ -207,7 +207,8 @@ def _merge_multimodal_embeddings(
     Note:
         This updates ``inputs_embeds`` in place.
     """
-    num_expected_tokens = is_multimodal.sum().item()
+    # num_expected_tokens = is_multimodal.sum().item()
+    num_expected_tokens = mint.sum(is_multimodal).item()
     assert isinstance(num_expected_tokens, int)
 
     flattened = _flatten_embeddings(multimodal_embeddings)

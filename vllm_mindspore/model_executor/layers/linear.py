@@ -33,7 +33,7 @@ from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               tensor_model_parallel_all_gather)
 
 from vllm_mindspore.distributed.communication_op import (
-    ReduceFromModelParallelRegion)
+    ReduceFromModelParallelRegion, AllGatherFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
@@ -249,6 +249,9 @@ class ColumnParallelLinear(LinearBase):
         else:
             self.bias = None
 
+        self.tensor_model_parallel_all_gather = \
+            AllGatherFromModelParallelRegion()
+
     def construct(self,
                   input_: Tensor) -> Union[Tensor, tuple[Tensor, Tensor]]:
         bias = self.bias if not self.skip_bias_add else None
@@ -258,7 +261,7 @@ class ColumnParallelLinear(LinearBase):
         output_parallel = self.quant_method.apply(self, input_, bias)
         if self.gather_output:
             # All-gather across the partitions.
-            output = tensor_model_parallel_all_gather(output_parallel)
+            output = self.tensor_model_parallel_all_gather(output_parallel)
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
@@ -339,18 +342,29 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         tp_size = get_tensor_model_parallel_world_size()
         shard_size = 0
         shard_offset = 0
-        if loaded_shard_id is not None:
+
+        if loaded_shard_id is None:
+            current_shard_offset = 0
+            shard_offsets = []
+            for i, output_size in enumerate(self.output_sizes):
+                shard_offsets.append((i, current_shard_offset, output_size))
+                current_shard_offset += output_size
+            for shard_id, shard_offset, shard_size in shard_offsets:
+                loaded_weight_shard = split_loaded_weight(
+                    loaded_weight, output_dim, shard_offset, shard_size)
+                self.weight_loader(param, loaded_weight_shard, shard_id)
+        else:
             assert loaded_shard_id < len(self.output_sizes)
             shard_offset = sum(self.output_sizes[:loaded_shard_id]) // tp_size
             shard_size = self.output_sizes[loaded_shard_id] // tp_size
 
-        start_idx = tp_rank * shard_size
-        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
-                                            start_idx, shard_size)
+            start_idx = tp_rank * shard_size
+            loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                                start_idx, shard_size)
 
-        assert loaded_weight.shape == (shard_size, param.shape[1])
-        param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+            assert loaded_weight.shape == (shard_size, param.shape[1])
+            param[shard_offset:shard_offset +
+                shard_size, :] = ms.from_numpy(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
