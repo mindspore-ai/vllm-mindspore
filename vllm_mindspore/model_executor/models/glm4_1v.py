@@ -73,6 +73,7 @@ from vllm.multimodal.profiling import BaseDummyInputsBuilder
 from vllm.sequence import IntermediateTensors
 from vllm.transformers_utils.config import uses_mrope
 from vllm.model_executor.models.utils import init_vllm_registered_model
+from vllm.config import get_current_vllm_config
 
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
 from vllm_mindspore.model_executor.models.interfaces import (
@@ -90,6 +91,9 @@ from vllm_mindspore.model_executor.models.qwen2_5_vl import _qwen2vl_field_confi
 
 import mindspore as ms
 from mindspore import mint, ops
+from mindspore.ops.operations.nn_ops import FlashAttentionScore
+import ms_custom_ops
+from vllm_mindspore.utils import is_310p
 from mindspore.common.api import _pynative_executor
 _pynative_executor.set_enable_grad(False)
 
@@ -244,12 +248,19 @@ class Glm4vVisionAttention(nn.Cell):
             prefix=f"{prefix}.proj",
             bias=False
         )
+        self.flash_attention_score = FlashAttentionScore(head_num=self.num_attention_heads_per_partition,
+                                                         scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
+                                                         input_layout="TH")
+        prefill_mask_coeff = -10000.0
+        self.dtype = get_current_vllm_config().model_config.dtype
+        self.atten_mask = Tensor(np.triu(np.ones((128, 128), dtype=np.float16), k=1) * prefill_mask_coeff, dtype=self.dtype)
 
     def construct(
             self,
             x: Tensor,
-            cu_seqlens: Tensor,
+            batch_valid_length: Tensor,
             position_embeddings: tuple[ms.Tensor, ms.Tensor],
+            q_seq_lens: Tensor
     ) -> Tensor:
         seq_length = x.shape[0]
         qkv, _ = self.qkv(x)
@@ -258,30 +269,37 @@ class Glm4vVisionAttention(nn.Cell):
                   self.num_attention_heads_per_partition * self.head_dim,
                   self.num_attention_heads_per_partition * self.head_dim), -1)
 
-        q = q.reshape(seq_length, self.num_attention_heads_per_partition,
+        # q/k reshape to BSND
+        q = q.reshape(1, seq_length, self.num_attention_heads_per_partition,
                       self.hidden_size_per_attention_head)
-        k = k.reshape(seq_length, self.num_attention_heads_per_partition,
-                      self.hidden_size_per_attention_head)
-        v = v.reshape(seq_length, self.num_attention_heads_per_partition,
+        k = k.reshape(1, seq_length, self.num_attention_heads_per_partition,
                       self.hidden_size_per_attention_head)
 
         cos, sin = position_embeddings
-        q, k = apply_rotary_pos_emb_flashatt(mint.unsqueeze(q, 0),
-                                             mint.unsqueeze(k, 0), cos, sin)
+        origin_dtype = q.dtype
+        q, k = ms_custom_ops.apply_rotary_pos_emb_ext(q.astype(ms.float32),
+                                                      k.astype(ms.float32),
+                                                      cos, sin, "BSND", "half")
 
-        q = mint.squeeze(q, 0).contiguous()
-        k = mint.squeeze(k, 0).contiguous()
+        # q/k reshape to TH
+        q = q.astype(origin_dtype)
+        k = k.astype(origin_dtype)
+        q = q.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
+        k = k.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
+        v = v.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
 
-        context_layer = ops.flash_attention_score(
+        _, _, _, context_layer = self.flash_attention_score(
             q,
             k,
-            v.contiguous(),
-            self.num_attention_heads_per_partition,
-            actual_seq_qlen=cu_seqlens,
-            actual_seq_kvlen=cu_seqlens,
-            scalar_value=1 / math.sqrt(q.shape[-1]),
-            input_layout="TND",
-        ).reshape(seq_length, -1)
+            v,
+            None,
+            None,
+            None,
+            self.atten_mask,
+            None,
+            batch_valid_length,
+            q_seq_lens,
+        )
         output, _ = self.proj(context_layer)
         return output
 
@@ -320,13 +338,15 @@ class Glm4vVisionBlock(nn.Cell):
     def construct(
             self,
             x: Tensor,
-            cu_seqlens: Tensor,
+            batch_valid_length: Tensor,
             position_embeddings: tuple[ms.Tensor, ms.Tensor],
+            q_seq_lens: Tensor,
     ) -> Tensor:
         x = x + self.attn(
             self.norm1(x),
-            cu_seqlens=cu_seqlens,
-            position_embeddings=position_embeddings
+            batch_valid_length,
+            position_embeddings,
+            q_seq_lens
         )
 
         x = x + self.mlp(self.norm2(x))
@@ -346,7 +366,7 @@ class Glm4vVisionPatchEmbed(nn.Cell):
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.hidden_size = hidden_size
-        self.dtype = ms.bfloat16
+        self.dtype = get_current_vllm_config().model_config.dtype
         self.in_channels = in_channels
 
         self.proj = ms.nn.Dense(temporal_patch_size * patch_size * patch_size *
@@ -394,7 +414,7 @@ class Glm4vPatchMerger(nn.Cell):
             prefix=f"{prefix}.down_proj"
         )
         self.act_fn = SiluAndMul()
-        self.extra_activation_func = ms.ops.gelu
+        self.extra_activation_func = mint.nn.functional.gelu
 
     def construct(self, x: Tensor):
         x, _ = self.proj(x)
@@ -416,8 +436,9 @@ class Glm4vVisionEmbeddings(nn.Cell):
 
         self.num_patches = (self.image_size // self.patch_size)**2
         self.num_positions = self.num_patches
+        self.dtype = get_current_vllm_config().model_config.dtype
         self.position_embedding = mint.nn.Embedding(self.num_positions,
-                                               self.embed_dim, dtype=ms.bfloat16)  # (576, 1536)
+                                               self.embed_dim, dtype=self.dtype)  # (576, 1536)
 
     def construct(self, embeddings, lengths, image_shapes, h_coords,
                 w_coords) -> Tensor:
@@ -593,6 +614,8 @@ class Glm4vVisionTransformer(nn.Cell):
         grid_thw: Tensor,
         rotary_pos_emb,
         image_type_ids,
+        batch_valid_length,
+        q_seq_lens
     ) -> Tensor:
         # patchify
         x = x.to(dtype=self.dtype)
@@ -603,29 +626,16 @@ class Glm4vVisionTransformer(nn.Cell):
         rotary_pos_emb = rotary_pos_emb.reshape(1, seq_len, 1, -1)
         emb = mint.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (mint.cos(emb), mint.sin(emb))
-
-        # compute cu_seqlens
-        grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
-        grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
-        grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
-        cu_seqlens = mint.cumsum(mint.repeat_interleave(
-            grid_thw_1 * grid_thw_2, grid_thw_0),
-                                 dim=0,
-                                 dtype=ms.int32)
-
-        cu_seqlens = F.pad(cu_seqlens, (1, 0), "constant", 0)
-
-        # pre-compute seqlens for attn mask to reduce cuMemcpy operations
-        _, seqlens = self.compute_attn_mask_seqlen(cu_seqlens)
-        x = self.embeddings(x, seqlens, grid_thw, image_type_ids[:, 0],
+        x = self.embeddings(x, batch_valid_length, grid_thw, image_type_ids[:, 0],
                             image_type_ids[:, 1])
 
         # transformers
         for blk in self.blocks:
             x = blk(
                 x,
-                cu_seqlens=cu_seqlens,
-                position_embeddings=position_embeddings,
+                batch_valid_length,
+                position_embeddings,
+                q_seq_lens
             )
 
         # adapter
@@ -687,15 +697,20 @@ class Glm4vVisionTransformer(nn.Cell):
         return loaded_params
 
     def set_model_inputs(self):
-        dyn_x = ms.Tensor(shape=[None, None], dtype=ms.bfloat16) # 1932 * 1092
+        x_dtype = get_current_vllm_config().model_config.dtype
+        dyn_x = ms.Tensor(shape=[None, None], dtype=x_dtype)
         dyn_grid_thw = ms.Tensor(shape=[None, None], dtype=ms.int64)
         dyn_rotary_pos_emb = ms.Tensor(shape=[None, None], dtype=ms.float32)
         dyn_pos_ids = ms.Tensor(shape=[None, None], dtype=ms.int64)
+        dyn_batch_valid_length = ms.Tensor(shape=[None], dtype=ms.int32)
+        dyn_q_seq_lens = ms.Tensor(shape=[None], dtype=ms.int32)
         self.set_inputs(
             dyn_x,
             dyn_grid_thw,
             dyn_rotary_pos_emb,
-            dyn_pos_ids
+            dyn_pos_ids,
+            dyn_batch_valid_length,
+            dyn_q_seq_lens
         )
 
 
@@ -1317,11 +1332,13 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal):
             image_embeds = image_input["image_embeds"].type(self.visual.dtype)
         else:
             pixel_values = image_input["pixel_values"].type(self.visual.dtype)
-            os.environ[
-                "MS_DISABLE_INTERNAL_KERNELS_LIST"] = "FlashAttentionScore"
+            grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
+            grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
+            grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
+            batch_valid_length = mint.repeat_interleave(grid_thw_1 * grid_thw_2, grid_thw_0).astype(ms.int32)
             image_embeds = self.visual(pixel_values, grid_thw,
-                                       rotary_pos_emb, pos_ids)
-            os.environ["MS_DISABLE_INTERNAL_KERNELS_LIST"] = ""
+                                       rotary_pos_emb, pos_ids,
+                                       batch_valid_length, batch_valid_length)
         merge_size = self.visual.spatial_merge_size
         sizes = grid_thw.prod(-1) // merge_size // merge_size
         return image_embeds.split(sizes.tolist())
