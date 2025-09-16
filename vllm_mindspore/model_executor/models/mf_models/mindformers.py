@@ -65,6 +65,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.is_chunked = False
 
         build_mf_context(self.mf_config)
+        if self.mla_config:
+            self._set_runtime_kernel_launch_group()
 
         self.network, self.lm_head = self._create_network()
         self.casual_mask = self._create_mask()
@@ -392,6 +394,15 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
+
+    @staticmethod
+    def _set_runtime_kernel_launch_group():
+        """Set the parameters of kernel_launch_group"""
+        logger.info("........ Enable kernel_launch_group ........")
+        thread_num = 4
+        kernel_group_num = 16
+        ms.runtime.set_kernel_launch_group(thread_num=thread_num,
+                                           kernel_group_num=kernel_group_num)
 
     def compute_logits(
         self,
