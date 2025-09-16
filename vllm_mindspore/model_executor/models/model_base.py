@@ -125,6 +125,7 @@ class MsModelBase:
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
+        self.vllm_config = vllm_config
         self.config = config
         self.model_config = vllm_config.model_config
         self.lora_config = lora_config

@@ -106,14 +106,14 @@ from vllm_mindspore.utils import (
 from vllm_mindspore.config import CacheDType, _CacheConfig, \
     get_current_and_parent_class_attr_docs
 
-vllm.config.CacheConfig = _CacheConfig
-vllm.config.CacheDType = CacheDType
-vllm.config.get_attr_docs = get_current_and_parent_class_attr_docs
+# vllm.config.CacheConfig = _CacheConfig
+# vllm.config.CacheDType = CacheDType
+# vllm.config.get_attr_docs = get_current_and_parent_class_attr_docs
 import vllm.engine.arg_utils
 
-vllm.engine.arg_utils.CacheDType = CacheDType
-vllm.engine.arg_utils.CacheConfig = _CacheConfig
-vllm.engine.arg_utils.get_attr_docs = get_current_and_parent_class_attr_docs
+# vllm.engine.arg_utils.CacheDType = CacheDType
+# vllm.engine.arg_utils.CacheConfig = _CacheConfig
+# vllm.engine.arg_utils.get_attr_docs = get_current_and_parent_class_attr_docs
 
 vllm.utils.make_tensor_with_pad = make_tensor_with_pad
 vllm.utils.async_tensor_h2d = async_tensor_h2d

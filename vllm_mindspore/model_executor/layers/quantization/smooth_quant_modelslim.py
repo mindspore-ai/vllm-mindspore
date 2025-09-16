@@ -19,16 +19,18 @@ from typing import Any, Optional
 
 import mindspore
 import numpy as np
-from mindspore import Parameter, Tensor, mint
+from mindspore import Parameter, Tensor, mint, ops, dtype
 from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
                                          GroupedMatmulV4, QuantBatchMatmul)
 from mindspore.ops.operations._infer_ops import QuantV2
+from mindspore.communication.management import get_rank
 
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.linear import (
     LinearBase, LinearMethodBase, UnquantizedLinearMethod)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.model_executor.layers.linear import RowParallelLinear
 from vllm_mindspore.utils import is_310p
 
 from .attention import BaseKVCacheMethod, KVCacheInt8Method
@@ -49,6 +51,8 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
         modules_to_not_convert: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
+        self.fa3_quant = False
+        self.fa3_quant_layer = set()
         self.full_config = full_config
         self.weight_bits = weight_bits
         self.group_size = group_size
@@ -109,7 +113,7 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
         if isinstance(layer, LinearBase):
             if quant_config and quant_config.lower() == 'w8a8':
                 return A8W8LinearMethod(self)
-            if quant_config and quant_config.lower() == 'w8a8_dyn':
+            if quant_config and quant_config.lower() == 'w8a8_dynamic':
                 self.dynamic_quant = True
                 return A8W8DYNLinearMethod(self)
 
@@ -120,9 +124,14 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
 
 def _build_layer_quant_key(prefix: str) -> str:
     # Split the fused qkv projection into the standard q projection.
-    prefix = prefix.replace("qkv_proj", "q_proj")
+    # prefix = prefix.replace("qkv_proj", "q_proj")
+    prefix = prefix.replace("model", "model.decoder")
+    prefix = prefix.replace("self_attn.o_proj", "self_attention.linear_proj")
+    prefix = prefix.replace("self_attn.qkv_proj", "self_attention.linear_q")
     # Collapse gate+up projection to the canonical gate projection.
-    prefix = prefix.replace("gate_up_proj", "gate_proj")
+    # prefix = prefix.replace("gate_up_proj", "gate_proj")
+    prefix = prefix.replace("gate_up_proj", "linear_fc1")
+    prefix = prefix.replace("down_proj", "linear_fc2")
 
     # If the path contains a bare "experts", inject the default expert index "0"
     if not re.search(r"experts\.\d+", prefix):
@@ -137,6 +146,10 @@ def _build_layer_quant_key(prefix: str) -> str:
         "gate_proj",
         "up_proj",
         "down_proj",
+        "linear_fc1",
+        "linear_fc2",
+        "linear_q",
+        "linear_proj",
     }
     last_token = prefix.split(".")[-1]
     if last_token in proj_names and not prefix.endswith(".weight"):
@@ -204,56 +217,48 @@ class A8W8LinearMethod(LinearMethodBase):
                         self.input_size_per_partition)
         weight = Parameter(initializer('ones', weight_shape, mindspore.int8),
                            requires_grad=False)
-        weight_scale_shape = (self.output_size_per_partition //
-                              self.quant_config.pack_factor, 1)
         scale_dtype = mindspore.bfloat16 if self.params_dtype == \
                         mindspore.bfloat16 else mindspore.float32
-        weight_scale = Parameter(initializer('ones', weight_scale_shape,
-                                             scale_dtype),
-                                 name="weight_scale",
-                                 requires_grad=False)
         deq_scale_shape = (self.output_size_per_partition //
                            self.quant_config.pack_factor)
-        scale_dtype = mindspore.int64
+        scale_dtype = mindspore.float32
         deq_scale = Parameter(initializer('ones', deq_scale_shape,
                                           scale_dtype),
                               name="deq_scale",
                               requires_grad=False)
-        input_scale_shape = (1, )
+        input_scale_shape = (self.input_size_per_partition, )
         input_scale = Parameter(initializer('ones', input_scale_shape,
                                             self.params_dtype),
                                 name="input_scale",
                                 requires_grad=False)
         input_offset = Parameter(initializer('zeros', input_scale_shape,
-                                             self.params_dtype),
+                                             mindspore.int8),
                                  name="input_offset",
                                  requires_grad=False)
-        if self.is_310p:
-            quant_bias_ = Parameter(initializer(
-                'zeros', (self.output_size_per_partition //
-                          self.quant_config.pack_factor, ), mindspore.int32),
-                                    name="quant_bias_",
-                                    requires_grad=False)
-        else:
-            quant_bias_ = None
+
+        quant_bias = Parameter(initializer(
+            'zeros', (self.output_size_per_partition //
+                        self.quant_config.pack_factor, ), mindspore.int32),
+                                name="quant_bias",
+                                requires_grad=False)
 
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
-        set_weight_attrs(weight_scale, {"output_dim": 0})
         set_weight_attrs(deq_scale, {"output_dim": 0})
 
         set_weight_attrs(weight, extra_weight_attrs)
-        set_weight_attrs(weight_scale, extra_weight_attrs)
         set_weight_attrs(deq_scale, extra_weight_attrs)
+        set_weight_attrs(input_scale, {"input_dim": 0})
         set_weight_attrs(input_scale, extra_weight_attrs)
+        set_weight_attrs(input_offset, {"input_dim": 0})
         set_weight_attrs(input_offset, extra_weight_attrs)
-        if quant_bias_ is not None:
-            set_weight_attrs(quant_bias_, extra_weight_attrs)
-            layer.insert_param_to_cell("quant_bias_", quant_bias_)
+        if quant_bias is not None:
+            set_weight_attrs(quant_bias, {"output_dim": 0})
+            set_weight_attrs(quant_bias, extra_weight_attrs)
+            layer.insert_param_to_cell("quant_bias", quant_bias)
         else:
-            layer.quant_bias_ = None
+            layer.quant_bias = None
 
         layer.insert_param_to_cell("weight", weight)
-        layer.insert_param_to_cell("weight_scale", weight_scale)
         layer.insert_param_to_cell("deq_scale", deq_scale)
         layer.insert_param_to_cell("input_scale", input_scale)
         layer.insert_param_to_cell("input_offset", input_offset)
@@ -282,7 +287,7 @@ class A8W8LinearMethod(LinearMethodBase):
                                              scale_dtype),
                                  name="weight_scale",
                                  requires_grad=False)
-        scale_dtype = mindspore.int64
+        scale_dtype = mindspore.int64 if is_310p() else mindspore.float32
         deq_scale = Parameter(initializer('ones', weight_scale_shape,
                                           scale_dtype),
                               name="deq_scale",
@@ -296,7 +301,7 @@ class A8W8LinearMethod(LinearMethodBase):
                                              self.params_dtype),
                                  name="input_offset",
                                  requires_grad=False)
-        quant_bias_ = None
+        quant_bias = None
         set_weight_attrs(weight, {
             "ep_dim": 0,
             "input_dim": 1,
@@ -311,11 +316,11 @@ class A8W8LinearMethod(LinearMethodBase):
         set_weight_attrs(deq_scale, extra_weight_attrs)
         set_weight_attrs(input_scale, extra_weight_attrs)
         set_weight_attrs(input_offset, extra_weight_attrs)
-        if quant_bias_ is not None:
-            set_weight_attrs(quant_bias_, extra_weight_attrs)
-            layer.insert_param_to_cell("quant_bias_", quant_bias_)
+        if quant_bias is not None:
+            set_weight_attrs(quant_bias, extra_weight_attrs)
+            layer.insert_param_to_cell("quant_bias", quant_bias)
         else:
-            layer.quant_bias_ = None
+            layer.quant_bias = None
 
         layer.insert_param_to_cell("weight", weight)
         layer.insert_param_to_cell("weight_scale", weight_scale)
@@ -324,12 +329,7 @@ class A8W8LinearMethod(LinearMethodBase):
         layer.insert_param_to_cell("input_offset", input_offset)
 
     def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
-        input_offset = np.array([0])
-        params_dtype = layer.params_dtype
-        layer.input_offset = Parameter(Tensor(input_offset,
-                                              dtype=mindspore.int8),
-                                       name=layer.input_offset.name,
-                                       requires_grad=False)
+
         if self.is_group_mm:
             input_scale = layer.input_scale.asnumpy()
             weight_scale = layer.weight_scale.asnumpy()
@@ -350,13 +350,19 @@ class A8W8LinearMethod(LinearMethodBase):
                     weight_scale, dtype=layer.weight_scale.dtype),
                                                name=layer.weight_scale.name,
                                                requires_grad=False)
-        if not self.is_310p and params_dtype is mindspore.bfloat16:
-            deq_scale = layer.deq_scale.asnumpy().astype(np.int32).view(
-                np.float32)
+        if self.is_310p and layer.deq_scale.dtype is mindspore.float32:
+            deq_scale = layer.deq_scale.asnumpy().view(np.int32).astype(np.int64)
             layer.deq_scale = Parameter(Tensor(deq_scale,
-                                               dtype=mindspore.float32),
+                                               dtype=mindspore.int64),
                                         name=layer.deq_scale.name,
                                         requires_grad=False)
+        rank_id = get_rank()
+        if rank_id != 0 and isinstance(layer, RowParallelLinear) and layer.quant_bias is not None:
+            quant_bias = mint.zeros_like(layer.quant_bias, dtype=layer.quant_bias.dtype).asnumpy()
+            layer.quant_bias = Parameter(Tensor(
+                    quant_bias, dtype=layer.quant_bias.dtype),
+                                               name=layer.quant_bias.name,
+                                               requires_grad=False)
 
     def apply(self,
               layer: mindspore.nn.Cell,
@@ -365,7 +371,6 @@ class A8W8LinearMethod(LinearMethodBase):
               group_list=None,
               cumsum_flag=False) -> mindspore.Tensor:
         weight = layer.weight
-        weight_scale = layer.weight_scale
         deq_scale = layer.deq_scale
         input_scale = layer.input_scale
         input_offset = layer.input_offset
@@ -374,6 +379,7 @@ class A8W8LinearMethod(LinearMethodBase):
         output_shape = qx.shape[:-1] + (self.output_size_per_partition, )
         qx = qx.reshape(-1, self.input_size_per_partition)
         if self.is_group_mm:
+            weight_scale = layer.weight_scale
             if self.is_310p:
                 qx = self.matmul([qx], [weight], None, [weight_scale], None,
                                  None, None, group_list.to(mindspore.int32))[0]
@@ -389,7 +395,7 @@ class A8W8LinearMethod(LinearMethodBase):
                                  group_type=0,
                                  group_list_type=0 if cumsum_flag else 1)[0]
         else:
-            qx = self.matmul(qx, weight, deq_scale, None, layer.quant_bias_,
+            qx = self.matmul(qx, weight, deq_scale, None, layer.quant_bias,
                              None)
         if bias is not None:
             qx = mint.add(qx, bias)
@@ -514,8 +520,18 @@ class A8W8DYNLinearMethod(LinearMethodBase):
         weight = layer.weight
         weight_scale = layer.weight_scale
         smooth_scale = layer.smooth_scale
-
-        qx, qx_scale = self.quant(x, smooth_scale)
+        ori_shape = x.shape
+        if len(ori_shape) == 3:
+            x = x.reshape((x.shape[1], x.shape[2]))
+        else:
+            x = x
+        x = ops.cast(x, dtype=dtype.float32)
+        x_scale = mint.max(ops.abs(x), dim=1, keepdim=True)[0] / 127
+        qx = ops.round(x / x_scale)
+        qx = qx.reshape(ori_shape)
+        qx = ops.cast(qx, dtype=dtype.int8)
+        qx_scale = ops.cast(x_scale, dtype=dtype.float32)
+        # qx, qx_scale = self.quant(x, smooth_scale)
         qx_scale = qx_scale.reshape(-1)
         output_shape = qx.shape[:-1] + (self.output_size_per_partition, )
         qx = qx.reshape(-1, self.input_size_per_partition)

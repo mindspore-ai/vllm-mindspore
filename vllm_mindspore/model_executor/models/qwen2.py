@@ -62,6 +62,7 @@ from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
+from vllm_mindspore.utils import is_310p, FORMAT_TYPE
 from mindspore.communication.management import get_rank
 
 
@@ -388,7 +389,7 @@ class Qwen2Model(nn.Cell):
                 "o_proj.weight",
                 "gate_up_proj.weight",
                 "down_proj.weight",
-                # "lm_head.weight",
+                "lm_head.weight",
             ]
 
             rank_id = get_rank()
