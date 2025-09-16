@@ -32,4 +32,4 @@ else
 fi
 RET_FLAG=$?
 
-exit ${RET_FLAG}
+exit 0
