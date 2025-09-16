@@ -18,7 +18,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Linear methods for quantized linear layers. """
-
 from abc import abstractmethod
 from ast import Dict
 from typing import Optional, Union
@@ -381,7 +380,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             param[shard_offset:shard_offset +
                 shard_size, :] = ms.from_numpy(loaded_weight)
             if is_310p() and param.name.endswith("weight"):
-                loaded_shard_num = 2 # gating/hidden
+                loaded_shard_num = 2  # gating/hidden
                 self.format_to_nz(param, loaded_shard_num)
 
 

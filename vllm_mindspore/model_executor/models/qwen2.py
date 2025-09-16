@@ -44,6 +44,7 @@ from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
 from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.distributed import get_tensor_model_parallel_rank
 
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
@@ -375,6 +376,10 @@ class Qwen2Model(nn.Cell):
         ]
 
         for name, loaded_weight in weights:
+            if get_tensor_model_parallel_rank(
+            ) > 0 and "o_proj.quant_bias" in name:
+                continue
+
             if "rotary_emb.inv_freq" in name:
                 continue
             if ("rotary_emb.cos_cached" in name

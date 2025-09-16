@@ -19,19 +19,132 @@
 # limitations under the License.
 """Adaption for arguments utils."""
 
+import argparse
+import json
 import threading
-from typing import get_args
+from dataclasses import MISSING, fields, is_dataclass
+from typing import Any, Literal, get_origin
 
 import torch
 import vllm.envs as envs
-from vllm.config import (GuidedDecodingBackendV1, LoadFormat, ModelConfig,
-                         ParallelConfig, SchedulerConfig)
-from vllm.engine.arg_utils import (EngineArgs, _raise_or_fallback,
-                                   _warn_or_fallback)
 from vllm.logger import init_logger
 from vllm.usage.usage_lib import UsageContext
 
 logger = init_logger(__name__)
+from pydantic import TypeAdapter, ValidationError
+from vllm.config import (ConfigType, GuidedDecodingBackendV1, LoadFormat,
+                         ModelConfig, ParallelConfig, SchedulerConfig)
+from vllm.engine.arg_utils import (EngineArgs, TypeHint, _raise_or_fallback,
+                                   _warn_or_fallback, contains_type, get_args,
+                                   get_attr_docs, get_type, get_type_hints,
+                                   human_readable_int, is_not_builtin,
+                                   literal_to_kwargs, optional_type,
+                                   parse_type, union_dict_and_str)
+
+from vllm_mindspore.model_executor.layers.quantization import (
+    QUANTIZATION_METHODS)
+
+
+def get_kwargs(cls: ConfigType) -> dict[str, Any]:
+    cls_docs = get_attr_docs(cls)
+    kwargs = {}
+    for field in fields(cls):
+        type_hints: set[TypeHint] = get_type_hints(field.type)
+
+        # If the field is a dataclass, we can use the model_validate_json
+        generator = (th for th in type_hints if is_dataclass(th))
+        dataclass_cls = next(generator, None)
+
+        # Get the default value of the field
+        if field.default is not MISSING:
+            default = field.default
+        elif field.default_factory is not MISSING:
+            default = field.default_factory()
+
+        # Get the help text for the field
+        name = field.name
+        help = cls_docs[name].strip()
+        # Escape % for argparse
+        help = help.replace("%", "%%")
+
+        # Initialise the kwargs dictionary for the field
+        kwargs[name] = {"default": default, "help": help}
+
+        # Set other kwargs based on the type hints
+        json_tip = """\n\nShould either be a valid JSON string or JSON keys
+        passed individually. For example, the following sets of arguments are
+        equivalent:\n\n
+        - `--json-arg '{"key1": "value1", "key2": {"key3": "value2"}}'`\n
+        - `--json-arg.key1 value1 --json-arg.key2.key3 value2`\n\n"""
+        if dataclass_cls is not None:
+
+            def parse_dataclass(val: str, cls=dataclass_cls) -> Any:
+                try:
+                    if hasattr(cls, "from_cli"):
+                        return cls.from_cli(val)
+                    return TypeAdapter(cls).validate_json(val)
+                except ValidationError as e:
+                    raise argparse.ArgumentTypeError(repr(e)) from e
+
+            kwargs[name]["type"] = parse_dataclass
+            kwargs[name]["help"] += json_tip
+        elif contains_type(type_hints, bool):
+            # Creates --no-<name> and --<name> flags
+            kwargs[name]["action"] = argparse.BooleanOptionalAction
+        elif contains_type(type_hints, Literal):
+            kwargs[name].update(literal_to_kwargs(type_hints))
+        elif contains_type(type_hints, tuple):
+            type_hint = get_type(type_hints, tuple)
+            types = get_args(type_hint)
+            tuple_type = types[0]
+            assert all(t is tuple_type for t in types if t is not Ellipsis), (
+                "All non-Ellipsis tuple elements must be of the same "
+                f"type. Got {types}.")
+            kwargs[name]["type"] = tuple_type
+            kwargs[name]["nargs"] = "+" if Ellipsis in types else len(types)
+        elif contains_type(type_hints, list):
+            type_hint = get_type(type_hints, list)
+            types = get_args(type_hint)
+            assert len(types) == 1, (
+                "List type must have exactly one type. Got "
+                f"{type_hint} with types {types}")
+            kwargs[name]["type"] = types[0]
+            kwargs[name]["nargs"] = "+"
+        elif contains_type(type_hints, int):
+            kwargs[name]["type"] = int
+            # Special case for large integers
+            if name in {"max_model_len", "max_num_batched_tokens"}:
+                kwargs[name]["type"] = human_readable_int
+        elif contains_type(type_hints, float):
+            kwargs[name]["type"] = float
+        elif (contains_type(type_hints, dict)
+              and (contains_type(type_hints, str)
+                   or any(is_not_builtin(th) for th in type_hints))):
+            kwargs[name]["type"] = union_dict_and_str
+        elif contains_type(type_hints, dict):
+            kwargs[name]["type"] = parse_type(json.loads)
+            kwargs[name]["help"] += json_tip
+        elif (contains_type(type_hints, str)
+              or any(is_not_builtin(th) for th in type_hints)):
+            kwargs[name]["type"] = str
+        else:
+            raise ValueError(
+                f"Unsupported type {type_hints} for argument {name}.")
+
+        # If the type hint was a sequence of literals, use the helper function
+        # to update the type and choices
+        if get_origin(kwargs[name].get("type")) is Literal:
+            kwargs[name].update(literal_to_kwargs({kwargs[name]["type"]}))
+
+        # If None is in type_hints, make the argument optional.
+        # But not if it's a bool, argparse will handle this better.
+        if type(None) in type_hints and not contains_type(type_hints, bool):
+            kwargs[name]["type"] = optional_type(kwargs[name]["type"])
+            if kwargs[name].get("choices"):
+                kwargs[name]["choices"].append("None")
+        if field.name == "quantization":
+            kwargs[name]["choices"] = QUANTIZATION_METHODS
+    return kwargs
 
 
 def _is_v1_supported_oracle(self, model_config: ModelConfig) -> bool:
