@@ -44,9 +44,9 @@ import vllm_mindspore
 from vllm import LLM, SamplingParams
 
 
-def test_vllm_qwen3_8b():
+def run_vllm_qwen3_8b(enforce_eager=False):
     """
-    test case qwen3 8B
+    run case qwen3 8B
     """
 
     # Sample prompts.
@@ -63,6 +63,7 @@ def test_vllm_qwen3_8b():
     llm = LLM(model="/home/workspace/mindspore_dataset/weight/Qwen3-8B",
               gpu_memory_utilization=0.9,
               tensor_parallel_size=1,
+              enforce_eager=enforce_eager,
               max_model_len=4096)
     # Generate texts from the prompts.
     # The output is a list of RequestOutput objects
@@ -116,3 +117,17 @@ def test_vllm_qwen3_0_6b():
 
     # unset env
     env_manager.unset_all()
+
+
+def test_vllm_qwen3_8b():
+    """
+    test case qwen3 8B
+    """
+    run_vllm_qwen3_8b()
+
+
+def test_qwen3_enforce_eager():
+    """
+    Test qwen3 8B using ENFORCE_EAGER.
+    """
+    run_vllm_qwen3_8b(enforce_eager=True)

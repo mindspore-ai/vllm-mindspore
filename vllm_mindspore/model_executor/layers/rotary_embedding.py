@@ -165,6 +165,8 @@ class InferRotaryEmbedding(nn.Cell):
         self.is_neox_style = is_neox_style
         self.dtype = dtype
         self.freqs_cos, self.freqs_sin = self._compute_cos_sin_cache()
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
 
     def _compute_inv_freq(self, base: Union[int, float]) -> Tensor:
         """
@@ -196,8 +198,10 @@ class InferRotaryEmbedding(nn.Cell):
         batch_valid_length: Tensor,
         offsets: Optional[Tensor] = None,
     ) -> tuple[Tensor, Tensor]:
-        query = query.contiguous()
-        key = key.contiguous()
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
+
         if get_model_context("is_prefill"):
             return self.rotary_embedding_op(query, key, self.freqs_cos,
                                             self.freqs_sin, batch_valid_length)

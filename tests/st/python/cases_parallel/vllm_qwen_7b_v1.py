@@ -43,9 +43,9 @@ import vllm_mindspore  # noqa: F401, E402
 from vllm import LLM, SamplingParams  # noqa: E402
 
 
-def test_vllm_qwen():
+def run_vllm_qwen(enforce_eager=False):
     """
-    test case qwen2.5 7B
+    run qwen2.5 7B
     """
 
     # Sample prompts.
@@ -61,6 +61,7 @@ def test_vllm_qwen():
     llm = LLM(
         model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
         gpu_memory_utilization=0.9,
+        enforce_eager=enforce_eager,
         tensor_parallel_size=2)
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
@@ -75,3 +76,17 @@ def test_vllm_qwen():
 
     # unset env
     env_manager.unset_all()
+
+
+def test_vllm_qwen():
+    """
+    test case qwen2.5 7B
+    """
+    run_vllm_qwen()
+
+
+def test_qwen_enforce_eager():
+    """
+    Test qwen2.5 7B using ENFORCE_EAGER.
+    """
+    run_vllm_qwen(enforce_eager=True)
