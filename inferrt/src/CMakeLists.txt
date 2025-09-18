@@ -58,3 +58,14 @@ target_link_libraries(da ${OBJECTS})
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
 add_library(inferrt SHARED lang/api/c_api.cc)
 target_link_libraries(inferrt ${OBJECTS})
+
+set_target_properties(inferrt PROPERTIES
+  INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib"
+  BUILD_WITH_INSTALL_RPATH TRUE  
+)
+
+install(
+  TARGETS inferrt da
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
