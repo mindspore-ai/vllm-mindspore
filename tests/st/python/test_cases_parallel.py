@@ -178,6 +178,10 @@ def test_cases_parallel_part5():
     cases = [
         (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
          "multilora_inference_test_multilora_inference.log"),
+        (2, "cases_parallel/vllm_qwen_7b_v1.py::test_qwen_enforce_eager",
+         "vllm_qwen_7b_v1_test_qwen_enforce_eager.log"),
+        (1, "cases_parallel/vllm_qwen3.py::test_qwen3_enforce_eager",
+         "vllm_qwen3_test_qwen3_enforce_eager.log"),
     ]
     run_tasks(cases)
 

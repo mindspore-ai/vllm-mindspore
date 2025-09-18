@@ -21,7 +21,6 @@ import mindspore as ms
 import numpy as np
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context
-from mindformers.tools.utils import is_pynative
 from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
@@ -53,6 +52,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.set_flags = False
         self.model_config = vllm_config.model_config
         self.lm_head_graph = None
+        self.is_eager_mode = vllm_config.model_config.enforce_eager
 
         mf_config = gen_mf_config(vllm_config)
         mf_config.load_checkpoint = self.get_model_path()
@@ -358,7 +358,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         if is_prefill or is_ringmla_chunked:
             self.network.phase = \
                 "prefill" if not is_ringmla_chunked else "chunked"
-            if not self.set_flags or is_pynative():
+            if not self.set_flags or self.is_eager_mode:
                 self.network.add_flags_custom_mcore(is_prefill=True)
                 if hasattr(self.network, 'add_flags_chunked'):
                     # chunked means 3-rd graph "chunked"
@@ -368,7 +368,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                 self.is_chunked |= is_ringmla_chunked
             hidden_states = self.network(**model_inputs)
             self.network.phase = "increment"
-            if not self.set_flags or is_pynative():
+            if not self.set_flags or self.is_eager_mode:
                 self.network.add_flags_custom_mcore(is_prefill=False)
                 self.set_flags = (True
                                   if not self.use_ringmla else self.is_chunked)

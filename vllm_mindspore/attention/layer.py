@@ -24,7 +24,7 @@ from mindspore import Tensor, nn, ops
 from mindspore.ops.auto_generate import PagedAttention, ReshapeAndCache
 from mindspore.ops.operations.nn_ops import FlashAttentionScore
 from vllm.attention.backends.abstract import AttentionType
-from vllm.config import CacheConfig
+from vllm.config import CacheConfig, get_current_vllm_config
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
 
@@ -84,6 +84,8 @@ class Attention(nn.Cell):
         self.paged_attention = PagedAttention(head_num=num_heads,
                                               scale_value=scale,
                                               kv_head_num=num_kv_heads)
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
 
     def construct(self, query: Tensor, key: Tensor, value: Tensor,
                   key_cache: Tensor, value_cache: Tensor, slot_mapping: Tensor,
@@ -100,10 +102,11 @@ class Attention(nn.Cell):
             batch_valid_length: shape = [batch_size, ]
             block_tables: shape = [block_size, num_block]
         """
-        output = query
-        # ensure that the input tensors of reshape_and_cache is continuous
-        key = key.contiguous()
-        value = value.contiguous()
+        if self.is_eager_mode:
+            # ensure that the input tensors of reshape_and_cache is continuous
+            key = key.contiguous()
+            value = value.contiguous()
+
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)
