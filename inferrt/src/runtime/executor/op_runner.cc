@@ -54,14 +54,9 @@ void OpRunner::AllocateMemory() {
 }
 
 void OpRunner::FreeMemory() {
-  // TODO: adapter for Ascend platform and useless self output tensor release.
   // Free input tensors that were marked to free.
-  if (!inputFreeIndex_.empty()) {
-    for (auto inputIndex : inputFreeIndex_) {
-      const auto &tensor = input_[inputIndex]->ToTensor();
-      CHECK_IF_NULL(tensor);
-      tensor->GetStorage()->FreeMemory();
-    }
+  for (auto &storage : storagesToFree_) {
+    storage->FreeMemory();
   }
 
   // Free workspace memory.

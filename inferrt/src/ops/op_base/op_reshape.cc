@@ -49,7 +49,7 @@ OpsErrorCode OpReshape::InferShape(const std::vector<const ir::Value *> &input, 
     } else {
       knownDimProduct *= dim;
     }
-    (void)outputShape.push_back(dim);
+    (void)outputShape.emplace_back(dim);
   }
 
   if (hasNegativeDim) {

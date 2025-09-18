@@ -118,7 +118,7 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   const auto &storage = tensor->GetStorage();
   CHECK_IF_FAIL(storage->CheckOwnsData());
   auto allocator = storage->GetAllocator();
-  auto deleter = [allocator](void *dataPtr) { allocator.Free(dataPtr); };
+  auto deleter = [&allocator](void *dataPtr) { allocator.Free(dataPtr); };
   void *dataPtr = storage->Release();
   CHECK_IF_NULL(dataPtr);
 

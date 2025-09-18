@@ -28,7 +28,7 @@ Storage::Storage(size_t sizeBytes, hardware::Device device)
 }
 
 Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
-    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(false) {}
+    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(data == nullptr) {}
 
 Storage::~Storage() {
   if (ownsData_ && data_ != nullptr) {
