@@ -54,14 +54,12 @@ class DA_API Builder {
 
  protected:
   /**
-   * @brief Records tensor free points to optimize memory management.
+   * @brief Records storage free points to optimize memory management.
    *
-   * This method analyzes the computational graph to determine when tensors
+   * This method analyzes the computational graph to determine when storages
    * are no longer needed and can be freed to optimize memory usage.
-   *
-   * @param tensorFreePoint Store all input tensor indexes that need to be free for a consumer Node.
    */
-  void RecordTensorFreePoint(std::unordered_map<ir::Node *, std::vector<size_t>> *tensorFreePoint) const;
+  void RecordStorageFreePoint();
 
   /**
    * @brief Creates operation runners for all nodes in the graph.
@@ -69,16 +67,17 @@ class DA_API Builder {
    * This method iterates through all nodes in the computational graph,
    * creates corresponding operator runners, and configures them with
    * appropriate memory management settings.
-   *
-   * @param tensorFreePoint Store all input tensor indexes that need to be free for a consumer Node.
    */
-  void CreateOpRunners(std::unordered_map<ir::Node *, std::vector<size_t>> *tensorFreePoint);
+  void CreateOpRunners();
 
   // The graph that the executor will run.
   ir::GraphPtr graph_{nullptr};
 
   // Shared pointer to the vector of OpRunners for all operators by execution order in graph_.
   std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
+
+  // The storages that can be safely freed once the last consumer node is done.
+  std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToFree_;
 };
 }  // namespace runtime
 }  // namespace mrt

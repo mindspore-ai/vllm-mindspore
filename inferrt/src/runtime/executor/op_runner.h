@@ -46,7 +46,7 @@ class OpRunner {
   }
 
   OpRunner(OpRunner &&other) noexcept
-      : inputFreeIndex_(std::move(other.inputFreeIndex_)),
+      : storagesToFree_(std::move(other.storagesToFree_)),
         input_(std::move(other.input_)),
         workspace_(other.workspace_),
         workspaceSize_(other.workspaceSize_),
@@ -58,7 +58,7 @@ class OpRunner {
 
   OpRunner &operator=(OpRunner &&other) noexcept {
     if (this != &other) {
-      inputFreeIndex_ = std::move(other.inputFreeIndex_);
+      storagesToFree_ = std::move(other.storagesToFree_);
       input_ = std::move(other.input_);
       workspace_ = other.workspace_;
       workspaceSize_ = other.workspaceSize_;
@@ -102,10 +102,10 @@ class OpRunner {
   const ir::Node *GetNode() const { return node_; }
 
   /**
-   * @brief Sets the indices of input tensors that should be freed after execution.
-   * @param inputFreeIndex Vector of indices indicating which input tensors to free.
+   * @brief Sets the storages that should be freed after execution.
+   * @param storagesToFree Vector of storages to free.
    */
-  void SetInputFreeIndex(std::vector<size_t> &&inputFreeIndex) { inputFreeIndex_ = std::move(inputFreeIndex); }
+  void SetStoragesToFree(std::vector<ir::Storage *> &&storagesToFree) { storagesToFree_ = std::move(storagesToFree); }
 
  private:
   /**
@@ -118,8 +118,8 @@ class OpRunner {
    */
   void FreeMemory();
 
-  // Indices of input tensors that should be freed after operator execution.
-  std::vector<size_t> inputFreeIndex_;
+  // Storages that should be freed after operator execution.
+  std::vector<ir::Storage *> storagesToFree_;
 
   // Input values for the operator.
   std::vector<const ir::Value *> input_;

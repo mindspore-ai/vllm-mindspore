@@ -113,8 +113,8 @@ class Storage : public RefCounted {
   void FreeMemory();
 
   /**
-   * @brief Check whether this Storage currently owns the data — meaning the buffer pointed to by data_ is managed by
-   * this Storage object.
+   * @brief Check whether this Storage currently owns the data.
+   * If true, the buffer pointed to by data_ is managed by this Storage object.
    */
   bool CheckOwnsData() const { return ownsData_; }
 

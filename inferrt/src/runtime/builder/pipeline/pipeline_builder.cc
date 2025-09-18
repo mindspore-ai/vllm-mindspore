@@ -23,11 +23,8 @@ PipelineBuilder::PipelineBuilder(const ir::GraphPtr &graph) : Builder(graph) {}
 
 std::unique_ptr<Executor> PipelineBuilder::BuildExecutor() {
   LOG_OUT << "Begin build pipeline executor.";
-  std::unordered_map<ir::Node *, std::vector<size_t>> tensorFreePoint;
-  // 1. Analyse ref count
-  RecordTensorFreePoint(&tensorFreePoint);
-  // 2. Creater OpRunner
-  CreateOpRunners(&tensorFreePoint);
+  RecordStorageFreePoint();
+  CreateOpRunners();
 
   auto pipelineExecutor = std::make_unique<PipelineExecutor>(opRunners_);
   pipelineExecutor->Initialize();
