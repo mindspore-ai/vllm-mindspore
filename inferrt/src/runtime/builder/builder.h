@@ -19,13 +19,17 @@
 
 #include <vector>
 #include <unordered_map>
+#include <map>
 
 #include "ops/operator.h"
+#include "hardware/device.h"
+#include "hardware/hardware_abstract/device_context.h"
 #include "runtime/executor/op_runner.h"
 
 namespace mrt {
 namespace runtime {
 class Executor;
+class DeviceContext;
 
 /**
  * @brief Base class for building executor.
@@ -78,6 +82,7 @@ class DA_API Builder {
 
   // The storages that can be safely freed once the last consumer node is done.
   std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToFree_;
+  std::map<hardware::DeviceType, device::DeviceContext *> deviceContexts_{};
 };
 }  // namespace runtime
 }  // namespace mrt

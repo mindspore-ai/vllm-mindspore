@@ -19,8 +19,9 @@
 
 namespace mrt {
 namespace runtime {
-PipelineExecutor::PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners)
-    : Executor(opRunners), initialized_(false) {}
+PipelineExecutor::PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
+                                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts)
+    : Executor(opRunners, deviceContexts), initialized_(false) {}
 
 void PipelineExecutor::Initialize() {
   if (initialized_) {
@@ -44,7 +45,7 @@ void PipelineExecutor::Run(bool isDynamic) {
   AsyncTaskQueue *launchQeueue = asyncTaskQueueManager.GetLaunchQueue();
   OpRunner *opRunners = opRunners_->data();
   size_t opNum = opRunners_->size();
-  for (size_t i = 0; i < opNum; i++) {
+  for (size_t i = 0; i < opNum; ++i) {
     OpRunner &opRunner = opRunners[i];
 
     auto inferTask = [&opRunner, launchQeueue]() {
@@ -72,6 +73,12 @@ void PipelineExecutor::Run(bool isDynamic) {
 
   asyncTaskQueueManager.WaitAll();
   asyncTaskQueueManager.PauseAll();
+
+  for (auto &deviceItem : deviceContexts_) {
+    const auto &res_manager = deviceItem.second->deviceResManager_;
+    CHECK_IF_NULL(res_manager);
+    res_manager->SyncAllStreams();
+  }
   LOG_OUT << "End pipeline executor run.";
 }
 }  // namespace runtime

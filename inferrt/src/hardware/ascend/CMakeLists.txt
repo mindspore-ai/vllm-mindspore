@@ -23,10 +23,11 @@ if(ENABLE_ASCEND)
   link_directories(${ASCEND_PATH}/latest/lib64/)
 
   file(GLOB_RECURSE HARDWARE_ASCEND_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
-  add_library(hardware_ascend_obj SHARED ${HARDWARE_ASCEND_SRC_FILES})
-  target_link_libraries(hardware_ascend_obj
-      hardware_abstract_obj
+  add_library(hardware_ascend SHARED ${HARDWARE_ASCEND_SRC_FILES})
+  target_link_libraries(hardware_ascend
+      hardware_abstract
       ${ASCENDCL_LIB}
       ${RUNTIME_LIB}
+      dl
     )
 endif()

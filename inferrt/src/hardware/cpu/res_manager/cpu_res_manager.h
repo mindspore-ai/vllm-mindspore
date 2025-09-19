@@ -21,11 +21,12 @@
 #include <string>
 #include <memory>
 #include "hardware/hardware_abstract/device_context.h"
+#include "common/common.h"
 
 namespace mrt {
 namespace device {
 namespace cpu {
-class CPUResManager : public DeviceResManager {
+class MRT_EXPORT CPUResManager : public DeviceResManager {
  public:
   CPUResManager() { Initialize(); }
   ~CPUResManager() override = default;

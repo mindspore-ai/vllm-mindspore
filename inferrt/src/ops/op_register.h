@@ -28,6 +28,7 @@
 #include "common/logger.h"
 #include "common/common.h"
 #include "ops/operator.h"
+#include "hardware/device.h"
 
 namespace mrt {
 namespace ops {
@@ -140,17 +141,16 @@ class OpRegistrar {
   static const ops::OpRegistrar<ops::Operator, ops::DEVICE_NAME##OpFactory>                                         \
     g_##OP_NAME##_##OP_CLASS##_##DEVICE_NAME##_reg(#OP_NAME, CREATOR)
 
-inline std::unique_ptr<Operator> CreateOperator(const std::string &name) {
-  auto op = OpFactory<Operator>::GetInstance().Create(name);
-  if (op == nullptr) {
-    op = OpFactory<Operator, CPUOpFactory>::GetInstance().Create(name);
+inline std::unique_ptr<Operator> CreateOperator(const std::string &name, const hardware::DeviceType type) {
+  if (type == hardware::DeviceType::NPU) {
+    return OpFactory<Operator>::GetInstance().Create(name);
+  } else if (type == hardware::DeviceType::CPU) {
+    return OpFactory<Operator, CPUOpFactory>::GetInstance().Create(name);
+  } else {
+    LOG_EXCEPTION << "Got invalid device type, only supports CPU and NPU.";
+    return nullptr;
   }
-  if (op == nullptr) {
-    LOG_EXCEPTION << "Failed to create operator [" << name << "], maybe it has not been registered";
-  }
-  return op;
 }
-
 }  // namespace ops
 }  // namespace mrt
 #endif  // __OPS_OP_REGISTER_H__

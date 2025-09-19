@@ -18,12 +18,13 @@
 
 namespace mrt {
 namespace device {
-DeviceResManager::DeviceResManager() {
-  deviceContext_ = nullptr;
-}
+DeviceResManager::DeviceResManager() { deviceContext_ = nullptr; }
 
-bool DeviceContext::initialized() const {
-  return initialized_;
+bool DeviceContext::initialized() const { return initialized_; }
+
+DeviceContextKey DeviceToDeviceContextKey(hardware::Device device) {
+  uint32_t deviceId = static_cast<uint32_t>(std::max(static_cast<int32_t>(0), static_cast<int32_t>(device.index)));
+  return {hardware::GetDeviceNameByType(device.type), deviceId};
 }
 }  // namespace device
 }  // namespace mrt

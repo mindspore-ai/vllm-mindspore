@@ -100,7 +100,9 @@ bool AscendMemAdapter::Initialize() {
   }
 
   // get user define max backend memory
-  auto userDefineMsSize = GetDeviceMemSizeFromContext();
+  // Set the default value to 0 temporarily, and an API for configuration will be provided subsequently.
+  // auto userDefineMsSize = GetDeviceMemSizeFromContext();
+  size_t userDefineMsSize = 0;
   auto recommendMemSizeForOthers = LongToSize(DoubleToLong(deviceHbmFreeSize_ * kReservedMemoryRatio));
   size_t reservedMemSizeForOthers;
   if (userDefineMsSize == 0) {

@@ -30,6 +30,7 @@
 #include "runtime/executor/op_runner.h"
 #include "runtime/builder/builder.h"
 #include "runtime/utils/utils.h"
+#include "hardware/hardware_abstract/device_context.h"
 #include "optimize/pass/pass.h"
 #include "ir/graph.h"
 
@@ -40,9 +41,6 @@ namespace runtime {
 enum ExecutionMode : size_t {
   Base = 0,
   Pipeline = 1,
-  // TODO:
-  //  KernelGroupLaunch = 2,
-  //  KernelCapture = 3
 };
 
 /**
@@ -55,7 +53,9 @@ enum ExecutionMode : size_t {
 class DA_API Executor {
  public:
   Executor() = delete;
-  Executor(const std::shared_ptr<std::vector<OpRunner>> &opRunners) : opRunners_(opRunners) {}
+  Executor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
+           const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts)
+      : opRunners_(opRunners), deviceContexts_(deviceContexts) {}
 
   virtual ~Executor() = default;
 
@@ -71,6 +71,8 @@ class DA_API Executor {
  protected:
   // Shared pointer to the vector of OpRunners for all operators by execution order.
   std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
+
+  std::map<hardware::DeviceType, device::DeviceContext *> deviceContexts_{};
 };
 
 class DA_API GraphExecutor {

@@ -377,6 +377,12 @@ void Executor::Run(bool isDynamic) {
       LOG_EXCEPTION << "Launch shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
     }
   }
+
+  for (auto &deviceItem : deviceContexts_) {
+    const auto &res_manager = deviceItem.second->deviceResManager_;
+    CHECK_IF_NULL(res_manager);
+    res_manager->SyncAllStreams();
+  }
 }
 }  // namespace runtime
 }  // namespace mrt
