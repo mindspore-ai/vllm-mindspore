@@ -80,9 +80,6 @@ from vllm_mindspore.model_executor.models.interfaces import (
     MultiModalEmbeddings, SupportsLoRA, SupportsMultiModal)
 from vllm_mindspore.model_executor.models.utils import (WeightsMapper,
     maybe_prefix, merge_multimodal_embeddings)
-from vllm_mindspore.model_executor.models.mf_models.mindformers import (
-    MindFormersForCausalLM
-)
 from vllm_mindspore.model_executor.models.model_base import NativeModel, \
     AttentionWrapper
 from vllm_mindspore.model_executor.models.attention_mask import \
