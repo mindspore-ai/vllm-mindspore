@@ -142,6 +142,9 @@ class QuantizationConfig(ABC):
         """
         raise NotImplementedError
 
+    def get_cache_scale(self, name: str) -> Optional[str]:
+        return None
+
 
 def method_has_implemented_embedding(
         method_class: type[QuantizeMethodBase]) -> bool:

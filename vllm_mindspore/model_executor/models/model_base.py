@@ -34,7 +34,8 @@ from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.model_executor.utils import set_model_context
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
+from vllm_mindspore.utils import (STR_DTYPE_TO_MS_DTYPE, create_kv_cache,
+                                  is_310p)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
@@ -124,6 +125,7 @@ class MsModelBase:
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
+        self.vllm_config = vllm_config
         self.config = config
         self.model_config = vllm_config.model_config
         self.lora_config = lora_config
@@ -446,7 +448,8 @@ class NativeModel(MsModelBase):
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
         head_size = self.model_config.get_head_size()
-        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+        kv_cache_shape = (None, block_size, num_kv_heads * head_size) \
+            if is_310p() else (None, block_size, num_kv_heads, head_size)
 
         kv_cache_dtype = (self.model_config.dtype
                           if self.cache_config.cache_dtype == "auto" else

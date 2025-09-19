@@ -25,12 +25,14 @@
 from collections.abc import Iterable
 from typing import Optional, Union
 
-from mindspore import Parameter, Tensor, mint, nn
+import numpy as np
+import mindspore as ms
+from mindspore import Parameter, Tensor, mint, nn, ops
 from transformers import Glm4Config
 
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
-from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
+from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
@@ -51,6 +53,8 @@ from vllm_mindspore.model_executor.models.utils import (
     maybe_prefix)
 from vllm_mindspore.model_executor.models.llama import LlamaModel
 from vllm_mindspore.model_executor.models.llama import LlamaMLP as Glm4MLP
+from vllm_mindspore.utils import is_310p, FORMAT_TYPE
+from mindspore.communication.management import get_rank
 
 
 class Glm4Attention(nn.Cell):
@@ -242,6 +246,85 @@ class Glm4Model(LlamaModel):
                          prefix=prefix,
                          layer_type=Glm4DecoderLayer)
 
+    def load_weights(self, weights: Iterable[tuple[str, Tensor]], params_dict):
+        loaded_params: set[str] = set()
+        stacked_params_mapping = [
+            # shape is (param_name, shard_name, shard_id).
+            (".qkv_proj", ".q_proj", "q"),
+            (".qkv_proj", ".k_proj", "k"),
+            (".qkv_proj", ".v_proj", "v"),
+            (".gate_up_proj", ".gate_proj", 0),
+            (".gate_up_proj", ".up_proj", 1),
+        ]
+
+        for name, loaded_weight in weights:
+            # replace mcore model name to native model name
+            name = name.replace("embedding.word_embeddings", "embed_tokens")
+            name = name.replace("model.output_layer", "lm_head")
+            name = name.replace("final_layernorm", "norm")
+            name = name.replace("model.decoder", "model")
+            name = name.replace("self_attention", "self_attn")
+            name = name.replace("pre_mlp_layernorm", "post_attention_layernorm")
+            name = name.replace("linear_q", "q_proj")
+            name = name.replace("linear_k", "k_proj")
+            name = name.replace("linear_v", "v_proj")
+            name = name.replace("linear_proj", "o_proj")
+            name = name.replace("linear_fc1", "gate_up_proj")
+            name = name.replace("linear_fc2", "down_proj")
+
+            if "rotary_emb.inv_freq" in name:
+                continue
+            if "rotary_emb.cos_cached" in name or \
+                "rotary_emb.sin_cached" in name:
+                # Models trained using ColossalAI may include these tensors in
+                # the checkpoint. Skip them.
+                continue
+
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in name:
+                    continue
+                name = name.replace(weight_name, param_name)
+                if name in params_dict:
+                    param = params_dict[name]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id)
+                    loaded_params.add(name)
+                    break
+            else:
+                if name in params_dict:
+                    param = params_dict[name]
+                    weight_loader = getattr(param, "weight_loader",
+                                            default_weight_loader)
+                    weight_loader(param, loaded_weight)
+                    loaded_params.add(name)
+
+        def adjust_weight(params_dict):
+            if not is_310p():
+                return
+
+            target_keywords = [
+                "qkv_proj.weight",
+                "o_proj.weight",
+                "gate_up_proj.weight",
+                "down_proj.weight",
+                "lm_head.weight",
+            ]
+
+            for name, param in params_dict.items():
+                if any(name.endswith(keyword) for keyword in target_keywords):
+                    cast_weight = ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+                    ms.runtime.synchronize()
+                    param.set_data(cast_weight)
+
+        if is_310p():
+            ms.runtime.synchronize()
+            adjust_weight(params_dict)
+            ms.runtime.synchronize()
+
+        network_not_load = set(params_dict.keys()) - loaded_params
+        print(f"These parameters are not loaded in the network: {network_not_load}")
+        return loaded_params
+
 
 class Glm4ForCausalLM(NativeModel):
 
@@ -299,4 +382,7 @@ class Glm4ForCausalLM(NativeModel):
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
-        return self.model.load_weights(weights, params_dict)
+        # if self.vllm_config.model_config.quantization == "smoothquant":
+        #     self.model.load_split_weights(weights, params_dict)
+        # else:
+        self.model.load_weights(weights, params_dict)
