@@ -18,4 +18,16 @@ if(ENABLE_ASCEND)
   include_directories(${TORCH_NPU_PATH}/include/)
   target_link_directories(_mrt_torch PRIVATE ${TORCH_NPU_PATH}/lib/)
   target_link_libraries(_mrt_torch PUBLIC hardware_ascend_obj torch_npu)
+
 endif()
+
+set_target_properties(_mrt_torch PROPERTIES
+  INSTALL_RPATH "$ORIGIN:$ORIGIN/lib:${TORCH_INSTALL_PREFIX}/lib"
+  BUILD_WITH_INSTALL_RPATH TRUE  
+)
+
+install(
+  TARGETS _mrt_torch
+  LIBRARY DESTINATION .
+  RUNTIME DESTINATION bin
+)
