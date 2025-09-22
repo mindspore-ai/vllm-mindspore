@@ -1,6 +1,7 @@
 import os
 import shutil
 import fnmatch
+import subprocess
 from setuptools import setup
 from setuptools.dist import Distribution
 
@@ -8,6 +9,21 @@ class BinaryDistribution(Distribution):
     """Custom distribution class to indicate binary extensions exist"""
     def has_ext_modules(self):
         return True
+
+def get_git_commit_id():
+    """Get the current git commit ID"""
+    try:
+        commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+        return commit_id
+    except Exception as e:
+        print(f"Warning: Could not get git commit ID: {e}")
+        return "unknown"
+
+def create_commit_id_file(dst_dir, commit_id):
+    """Create .commit-id file in the target directory"""
+    commit_file = os.path.join(dst_dir, '.commit-id')
+    with open(commit_file, 'w') as f:
+        f.write(commit_id)
 
 def copy_so_files(src_dir, dst_root_dir, dst_lib_dir, special_so_patterns):
     """
@@ -68,6 +84,9 @@ package_dir = os.path.join(temp_dir, package_name)
 shutil.rmtree(temp_dir, ignore_errors=True)
 os.makedirs(package_dir, exist_ok=True)
 
+# Get current git commit ID
+commit_id = get_git_commit_id()
+
 # Copy files to temporary directory
 copy_so_files(
     src_dir=src_dir,
@@ -77,22 +96,31 @@ copy_so_files(
 )
 copy_py_files(python_src_dir, package_dir)
 
+# Create .commit-id file in package directory
+create_commit_id_file(package_dir, commit_id)
+
 # Generate wheel package
 setup(
     name=package_name,
     version='1.0',
+    author='The MS-Inferrt Authors',
+    author_email='contact@ms-inferrt.com',
     packages=[package_name],
+    description='MS-INFERRT is a new open source deep learning inference '
+                'framework that could be used for cloud scenarios.',
     package_dir={'': 'temp_build'},
     package_data={
         package_name: [
             '*.so',       # Include .so files in root directory
             'lib/*.so',   # Include .so files in lib directory
             '**/*.py',    # Include all Python files recursively
+            '.commit-id', # Include the commit ID file
         ],
     },
     include_package_data=True,
     distclass=BinaryDistribution,
     zip_safe=False,
+    license='Apache 2.0',
 )
 
 # Move generated wheel to output directory and clean up
