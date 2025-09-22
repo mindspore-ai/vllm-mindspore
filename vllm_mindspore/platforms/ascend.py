@@ -100,7 +100,8 @@ class AscendPlatform(Platform):
 
         cache_config = vllm_config.cache_config
         if cache_config and cache_config.block_size is None:
-            cache_config.block_size = 16
+            # default value: 16 -> 128 for better performance
+            cache_config.block_size = 128
 
         model_config = vllm_config.model_config
         model_config.disable_cascade_attn = True

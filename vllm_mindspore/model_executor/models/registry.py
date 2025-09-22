@@ -38,7 +38,8 @@ try:
         if name.startswith("mcore_")
     ]
 except ImportError as e:
-    logger.warning("Error when importing MindSpore Transformers: %s", e)
+    logger.info("Can't get model support list from MindSpore Transformers: %s",
+                e)
     if is_mindformers_model_backend():
         raise ImportError from e
     mf_supported = False
@@ -48,7 +49,7 @@ try:
     from mindone import transformers  # noqa: F401
     mindone_supported = True
 except ImportError as e:
-    logger.warning("Error when importing MindSpore ONE: %s", e)
+    logger.info("No MindSpore ONE: %s", e)
     if is_mindone_model_backend():
         raise ImportError from e
     mindone_supported = False
