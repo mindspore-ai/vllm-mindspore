@@ -180,6 +180,8 @@ def test_cases_parallel_part5():
          "multilora_inference_test_multilora_inference.log"),
         (2, "cases_parallel/vllm_qwen_7b_v1.py::test_qwen_enforce_eager",
          "vllm_qwen_7b_v1_test_qwen_enforce_eager.log"),
+        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
+         "vllm_deepseek_part_test_deepseek_mtp.log"),
         (1, "cases_parallel/vllm_qwen3.py::test_qwen3_enforce_eager",
          "vllm_qwen3_test_qwen3_enforce_eager.log"),
     ]
@@ -236,8 +238,6 @@ def test_cases_parallel_level4_mcore1():
     cases = [
         (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
          "vllm_deepseek_osl_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
-         "vllm_deepseek_part_test_deepseek_mtp.log"),
         (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
          "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
         (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"

@@ -46,6 +46,7 @@ logger = init_logger(__name__)
 
 
 class MindFormersForCausalLM(MsModelBase, SupportsPP):
+    _set_launch_group = False
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -395,14 +396,17 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     def update_model_inputs(self, model_inputs, **kwargs):
         return model_inputs
 
-    @staticmethod
-    def _set_runtime_kernel_launch_group():
+    @classmethod
+    def _set_runtime_kernel_launch_group(cls):
         """Set the parameters of kernel_launch_group"""
         logger.info("........ Enable kernel_launch_group ........")
+        if cls._set_launch_group:
+            return
         thread_num = 4
         kernel_group_num = 16
         ms.runtime.set_kernel_launch_group(thread_num=thread_num,
                                            kernel_group_num=kernel_group_num)
+        cls._set_launch_group = True
 
     def compute_logits(
         self,
