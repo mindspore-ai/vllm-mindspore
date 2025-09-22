@@ -25,6 +25,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
 check_debug_log_out()
 
+set(PYBIND11_PYTHON_VERSION 3.9)
 if(TARGET pybind11::headers)
     message("-- pybind11 already included")
 else()
