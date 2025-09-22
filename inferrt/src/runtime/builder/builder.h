@@ -18,6 +18,7 @@
 #define __RUNTIME_BUILDER_BUILDER_H__
 
 #include <vector>
+#include <memory>
 #include <unordered_map>
 #include <map>
 
@@ -29,7 +30,6 @@
 namespace mrt {
 namespace runtime {
 class Executor;
-class DeviceContext;
 
 /**
  * @brief Base class for building executor.
@@ -41,7 +41,7 @@ class DeviceContext;
 class DA_API Builder {
  public:
   Builder() = delete;
-  Builder(const ir::GraphPtr &graph) : graph_(graph) {}
+  explicit Builder(const ir::GraphPtr &graph) : graph_(graph) {}
   virtual ~Builder() = default;
 
   /**

@@ -15,6 +15,9 @@
  */
 
 #include "runtime/builder/builder.h"
+#include <unordered_set>
+#include <memory>
+#include <utility>
 #include "runtime/executor/executor.h"
 #include "ops/op_register.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
@@ -64,7 +67,7 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
 
     if (!allTensor) {
       // Mixed or non-tensor types in tuple - default to CPU.
-      return hardware::DeviceType::CPU;
+      return {hardware::DeviceType::CPU, 0};
     } else {
       // All elements are tensors - use first tensor's device.
       return (*tuple->begin())->ToTensor()->GetDevice();
@@ -72,7 +75,7 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
   }
 
   // CPU for any other output type.
-  return hardware::DeviceType::CPU;
+  return {hardware::DeviceType::CPU, 0};
 }
 }  // namespace
 
@@ -113,7 +116,7 @@ void Builder::RecordStorageFreePoint() {
       recurseTensorValue(inputNode->output, [&](const ir::ValuePtr &tensorValue) {
         auto storage = tensorValue->ToTensor()->GetStorage().get();
         CHECK_IF_NULL(storage);
-        if (!storage->CheckCanOwnData()) {
+        if (!storage->CheckOwnsData()) {
           LOG_OUT << "Skip storage that is not managed by mrt";
           return;
         }
@@ -168,8 +171,9 @@ void Builder::CreateOpRunners() {
     }
     void *stream = deviceContext->deviceResManager_->GetStream(0);
 
-    // TODO: need to support ascend stream creation and getting real dynamic shape info.
-    (void)(opRunners_->emplace_back(node.get(), std::move(operatorPtr), stream, device, true /*isDynamicShape*/));
+    // TODO: need to support ascend stream creation and getting real dynamic shape info.  // NOLINT(readability/todo)
+    (void)(opRunners_->emplace_back(node->op, node->inputs, node->output, std::move(operatorPtr), stream, device,
+                                    true /*isDynamicShape*/));
     auto iter = storagesToFree_.find(node.get());
     if (iter != storagesToFree_.end()) {
       opRunners_->back().SetStoragesToFree(std::move(iter->second));

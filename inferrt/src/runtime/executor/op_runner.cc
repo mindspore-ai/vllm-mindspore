@@ -29,25 +29,53 @@ ops::OpsErrorCode OpRunner::InferShape() {
 ops::OpsErrorCode OpRunner::CalcWorkspace() { return operator_->CalcWorkspace(input_, output_, &workspaceSize_); }
 
 ops::OpsErrorCode OpRunner::Launch() {
-  AllocateMemory();
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream_);
-  FreeMemory();
+  return ret;
+}
+
+ops::OpsErrorCode OpRunner::Launch(void *stream) {
+  CHECK_IF_NULL(stream);
+  auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
   return ret;
 }
 
 void OpRunner::AllocateMemory() {
-  // TODO: adapter Ascend platform and Tuple output case.
   // Allocate memory for output tensor.
   if (output_->IsTensor()) {
     const auto &tensor = output_->ToTensor();
     if (tensor->DataPtr()) {
-      LOG_EXCEPTION << "Memory leak for output of operator: " << ops::ToStr(node_->op);
+      LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
     }
-    tensor->GetStorage()->AllocateMemory();
+    // For op output ref graph input tensor case.
+    bool need_alloc = tensor->GetStorage()->Data() == nullptr;
+    if (need_alloc) {
+      tensor->GetStorage()->AllocateMemory();
+    }
+  } else if (output_->IsTuple()) {
+    const auto &tuple = output_->ToTuple();
+    CHECK_IF_NULL(tuple);
+    size_t size = tuple->Size();
+    for (size_t i = 0; i < size; i++) {
+      const auto &value = (*tuple)[i];
+      CHECK_IF_NULL(value);
+      CHECK_IF_FAIL(!value->IsTuple());
+      if (value->IsTensor()) {
+        const auto &tensor = value->ToTensor();
+        if (tensor->DataPtr()) {
+          LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
+        }
+        // For op output ref graph input tensor case.
+        bool need_alloc = tensor->GetStorage()->Data() == nullptr;
+        if (need_alloc) {
+          tensor->GetStorage()->AllocateMemory();
+        }
+      }
+    }
   }
 
   // Allocate workspace memory if needed.
   if (workspaceSize_ > 0) {
+    CHECK_IF_FAIL(workspace_ == nullptr);
     workspace_ = alloc_.Allocate(workspaceSize_);
     CHECK_IF_NULL(workspace_);
   }
@@ -62,6 +90,7 @@ void OpRunner::FreeMemory() {
   // Free workspace memory.
   if (workspace_) {
     alloc_.Free(workspace_);
+    workspace_ = nullptr;
   }
 }
 }  // namespace runtime

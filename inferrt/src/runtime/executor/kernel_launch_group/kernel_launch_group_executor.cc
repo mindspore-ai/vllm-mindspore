@@ -1,0 +1,482 @@
+/**
+ * Copyright 2025 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "runtime/executor/kernel_launch_group/kernel_launch_group_executor.h"
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <map>
+#include <memory>
+#include <vector>
+#include "runtime/executor/pipeline/async_task_queue_manager.h"
+#include "hardware/hardware_abstract/device_context_manager.h"
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+
+namespace mrt {
+namespace runtime {
+std::vector<std::pair<size_t, void *>> KernelLaunchGroupExecutor::streams_;
+std::vector<DeviceEventPtr> KernelLaunchGroupExecutor::events_;
+std::vector<AsyncTaskQueuePtr> KernelLaunchGroupExecutor::queues_;
+
+KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
+  const std::shared_ptr<std::vector<OpRunner>> &opRunners,
+  const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
+  const std::shared_ptr<std::vector<std::pair<OpRunner *, size_t>>> &opRunnerGroups,
+  const std::shared_ptr<std::vector<OpRunner *>> &serialLaunchOps,
+  const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputsWithShape,
+  const std::shared_ptr<std::unordered_set<ir::Tensor *>> &graphOutputs, uint64_t parallelDispatchNum,
+  uint64_t parallelSliceNum)
+    : PipelineExecutor(opRunners, deviceContexts),
+      opRunnerGroups_(opRunnerGroups),
+      serialLaunchOps_(serialLaunchOps),
+      graphInputsWithShape_(graphInputsWithShape),
+      graphOutputs_(graphOutputs),
+      parallelDispatchNum_(parallelDispatchNum),
+      parallelSliceNum_(parallelSliceNum),
+      memoryCache_() {
+  device::DeviceContextKey deviceContextKey = device::DeviceToDeviceContextKey(
+    {hardware::DeviceType::NPU, Uint32ToInt8(mrt::collective::CollectiveManager::Instance().local_rank_id())});
+  deviceContext_ = device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+}
+
+KernelLaunchGroupExecutor::~KernelLaunchGroupExecutor() { memoryCache_.ClearAllCache(); }
+
+void KernelLaunchGroupExecutor::Run(bool isDynamic) {
+  bool shapeChange = CheckInputShapeChange();
+  if (shapeChange) {
+    ResetTensorCacheMemory();
+    memoryCache_.ClearExpiredCache();
+    static const size_t memoryBlockSize = 3000;
+    memoryCache_.ReserveKernelMemoryBlocks(memoryBlockSize, deviceContext_);
+
+    RunWithRecordCacheMemory();
+  } else {
+    AllocateGraphCacheMemory();
+    // Real parallel dispatch with use memory trace.
+    AllocateGraphOutputMemory();
+    ParallelDispatchKernels();
+    FreeGraphCacheMemory();
+  }
+
+  for (auto &deviceItem : deviceContexts_) {
+    const auto &resManager = deviceItem.second->deviceResManager_;
+    CHECK_IF_NULL(resManager);
+    resManager->SyncAllStreams();
+  }
+}
+
+void KernelLaunchGroupExecutor::Initialize() {
+  LOG_OUT << "Begin initialize";
+  PipelineExecutor::Initialize();
+
+  if (streams_.empty()) {
+    streams_.resize(parallelDispatchNum_);
+    for (size_t i = 0; i < parallelDispatchNum_; i++) {
+      if (!deviceContext_->deviceResManager_->CreateStream(&(streams_[i].first))) {
+        LOG_EXCEPTION << "Create stream failed.";
+      }
+      streams_[i].second = deviceContext_->deviceResManager_->GetStream(streams_[i].first);
+      CHECK_IF_NULL(streams_[i].second);
+    }
+  }
+
+  if (events_.empty()) {
+    // New one more for sync between default stream and last launch stream;
+    for (size_t i = 0; i < parallelDispatchNum_ * parallelSliceNum_ + 1; i++) {
+      auto event = deviceContext_->deviceResManager_->CreateEventWithFlag(false, false, false);
+      CHECK_IF_NULL(event);
+      events_.push_back(event);
+    }
+  }
+
+  if (queues_.empty()) {
+    for (size_t i = 0; i < parallelDispatchNum_; i++) {
+      auto queue = std::make_unique<AsyncTaskQueue>(std::string("batch_launch_") + std::to_string(i));
+      CHECK_IF_NULL(queue);
+      queue->Initialize();
+      queues_.push_back(std::move(queue));
+    }
+  }
+
+  const size_t kEventNum = 2;
+  CHECK_IF_NULL(serialLaunchOps_);
+  for (auto *opRunner : *serialLaunchOps_) {
+    serialLaunchKernelsToEvents_[opRunner] = std::vector<DeviceEventPtr>(kEventNum, nullptr);
+  }
+
+  for (auto &item : serialLaunchKernelsToEvents_) {
+    auto &eventArray = item.second;
+    for (size_t i = 0; i < eventArray.size(); i++) {
+      auto event = deviceContext_->deviceResManager_->CreateEventWithFlag(false, false, false);
+      CHECK_IF_NULL(event);
+      eventArray[i] = event;
+    }
+  }
+  LOG_OUT << "End initialize";
+}
+
+bool KernelLaunchGroupExecutor::CheckInputShapeChange() {
+  bool shapeChange = false;
+  CHECK_IF_NULL(graphInputsWithShape_);
+  auto &graphInputsWithShape = *graphInputsWithShape_;
+  LOG_OUT << "Dynamic input tensor number: " << graphInputsWithShape.size();
+
+  // Disable parallel dispatch for static shape case.
+  if (graphInputsWithShape.empty()) {
+    return true;
+  }
+
+  for (auto &[tensor, shape] : graphInputsWithShape) {
+    if (!shapeChange && (tensor->Shape() != shape || tensor->Shape().empty())) {
+      shapeChange = true;
+    }
+    shape = tensor->Shape();
+  }
+  LOG_OUT << "Input tensor shape changed: " << shapeChange;
+  return shapeChange;
+}
+
+void KernelLaunchGroupExecutor::ResetTensorCacheMemory() {
+  std::unordered_map<OpRunner *, std::vector<KernelMemoryTraceBlockPtr>> &allKernelBlockInfo =
+    *(memoryCache_.GetAllKernelBlocksInfo());
+  for (auto &iter : allKernelBlockInfo) {
+    if (iter.first->GetWorkspace() != nullptr) {
+      iter.first->SetWorkspace(nullptr);
+    }
+    const auto &kernelMemBlock = iter.second;
+    for (auto &block : kernelMemBlock) {
+      CHECK_IF_NULL(block);
+      if (block->memType_ == kOutputMem) {
+        const auto *tensor = block->tensor_;
+        CHECK_IF_NULL(tensor);
+        tensor->GetStorage()->SetData(nullptr);
+      }
+    }
+  }
+}
+
+void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
+  LOG_OUT << "Begin pipeline executor run.";
+  auto &asyncTaskQueueManager = AsyncTaskQueueManager::GetInstance();
+  asyncTaskQueueManager.ContinueAll();
+
+  AsyncTaskQueue *inferQueue = asyncTaskQueueManager.GetInferQueue();
+  AsyncTaskQueue *launchQueue = asyncTaskQueueManager.GetLaunchQueue();
+  OpRunner *opRunners = opRunners_->data();
+  size_t opNum = opRunners_->size();
+  for (size_t i = 0; i < opNum; ++i) {
+    OpRunner &opRunner = opRunners[i];
+
+    auto inferTask = [&opRunner, launchQueue, this]() {
+      // Do infer shape and calculate workspace size in infer queue.
+      if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
+        LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      }
+      if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
+        LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      }
+
+      // Push async launch task into launch queue.
+      auto launchTask = [&opRunner, this]() {
+        opRunner.AllocateMemory();
+        RecordMemory(&opRunner, opRunner.GetOutput());
+        if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
+          LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+        }
+        opRunner.FreeMemory();
+      };
+      launchQueue->Push(std::move(launchTask));
+    };
+
+    inferQueue->Push(std::move(inferTask));
+  }
+
+  asyncTaskQueueManager.WaitAll();
+  asyncTaskQueueManager.PauseAll();
+
+  memoryCache_.MergeBlocks();
+  LOG_OUT << "End pipeline executor run.";
+}
+
+void KernelLaunchGroupExecutor::RecordMemory(OpRunner *opRunner, const ir::Value *value) {
+  CHECK_IF_NULL(value);
+  CHECK_IF_NULL(graphOutputs_);
+
+  if (value->IsTensor()) {
+    auto &tensor = value->ToTensor();
+    CHECK_IF_NULL(tensor);
+    if ((graphOutputs_->find(tensor.get()) == graphOutputs_->end()) && tensor->GetStorage()->CheckOwnsData()) {
+      memoryCache_.AddKernelMemoryTraceBlock(
+        std::make_shared<KernelMemoryTraceBlock>(opRunner, tensor->GetStorage()->Data(),
+                                                 tensor->GetStorage()->SizeBytes(), kOutputMem, 0, tensor.get(),
+                                                 deviceContext_),
+        deviceContext_);
+    }
+  } else if (value->IsTuple()) {
+    auto &tuple = value->ToTuple();
+    CHECK_IF_NULL(tuple);
+    size_t size = tuple->Size();
+    for (size_t i = 0; i < size; i++) {
+      auto &value = (*tuple)[i];
+      CHECK_IF_NULL(value);
+      CHECK_IF_FAIL(!value->IsTensor());
+      auto &tensor = value->ToTensor();
+      // If enable kernel launch capture, the kernel output as graph output will be captured and can not changed, so
+      // need trace the graph output kernel tensor device address, which device memory will be allocated and released
+      // with the whole graph.
+      if ((graphOutputs_->find(tensor.get()) != graphOutputs_->end()) || !tensor->GetStorage()->CheckOwnsData()) {
+        continue;
+      }
+      memoryCache_.AddKernelMemoryTraceBlock(
+        std::make_shared<KernelMemoryTraceBlock>(opRunner, tensor->GetStorage()->Data(),
+                                                 tensor->GetStorage()->SizeBytes(), kOutputMem, i, tensor.get(),
+                                                 deviceContext_),
+        deviceContext_);
+    }
+  }
+
+  if (opRunner->GetWorkspaceSize() > 0) {
+    memoryCache_.AddKernelMemoryTraceBlock(
+      std::make_shared<KernelMemoryTraceBlock>(opRunner, opRunner->GetWorkspace(), opRunner->GetWorkspaceSize(),
+                                               kWorkspaceMem, 0, nullptr, deviceContext_),
+      deviceContext_);
+  }
+}
+
+void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
+  if (index >= parallelDispatchNum_) {
+    LOG_EXCEPTION << "Invalid index: " << index << ", expected less than: " << parallelDispatchNum_;
+  }
+  deviceContext_->deviceResManager_->BindDeviceToCurrentThread(false);
+  size_t realStreamId = streams_[index].first;
+  void *realStream = streams_[index].second;
+
+  for (size_t innerIndex = 0; innerIndex < parallelSliceNum_; innerIndex++) {
+    events_[index + innerIndex * parallelDispatchNum_]->WaitEventWithoutReset(realStreamId);
+
+    const std::pair<OpRunner *, size_t> &opRunners = (*opRunnerGroups_)[index + innerIndex * parallelDispatchNum_];
+
+    auto *firstOpRunner = opRunners.first;
+    size_t opNum = opRunners.second;
+    for (size_t i = 0; i < opNum; ++i) {
+      auto *opRunner = firstOpRunner + i;
+
+      auto commuIter = serialLaunchKernelsToEvents_.find(opRunner);
+      if (commuIter != serialLaunchKernelsToEvents_.end()) {
+        const auto &eventArray = commuIter->second;
+        auto &recordEvent = eventArray[0];
+        auto &waitEvent = eventArray[1];
+        recordEvent->RecordEvent(realStreamId);
+        waitEvent->WaitEventWithoutReset(realStreamId);
+        continue;
+      }
+
+      SetOutputAndWsCacheMemory(opRunner);
+      SetInputCacheMemory(opRunner);
+      if (auto errNo = opRunner->Launch(realStream) != ops::SUCCESS) {
+        LOG_EXCEPTION << "Launch shape failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+      }
+    }
+
+    events_[index + innerIndex * parallelDispatchNum_ + 1]->RecordEvent(realStreamId);
+  }
+}
+
+void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
+  auto *defaultStream = deviceContext_->deviceResManager_->GetStream(0);
+  const auto &serialLaunchKernels = *serialLaunchOps_;
+  for (auto *opRunner : serialLaunchKernels) {
+    CHECK_IF_NULL(opRunner);
+    auto iter = serialLaunchKernelsToEvents_.find(opRunner);
+    if (iter == serialLaunchKernelsToEvents_.end()) {
+      LOG_EXCEPTION << "Not find event for operator  : " << opRunner->GetOpName();
+    }
+
+    SetOutputAndWsCacheMemory(opRunner);
+    SetInputCacheMemory(opRunner);
+
+    const auto &eventArray = iter->second;
+    auto &waitEvent = eventArray[0];
+    waitEvent->WaitEventWithoutReset(0);
+
+    // TODO: force resize. // NOLINT(readability/todo)
+
+    if (auto errNo = opRunner->Launch(defaultStream) != ops::SUCCESS) {
+      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+    }
+
+    auto &recordEvent = eventArray[1];
+    recordEvent->RecordEvent(0);
+  }
+}
+
+void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
+  LOG_OUT << "Begin parallel dispatch kernels";
+
+  // Record a event to default stream to notify parallel launch kernels execute on other stream.
+  events_.front()->RecordEvent(0);
+
+  // Dispatch kernel which can parallel launch.
+  for (size_t i = 0; i < parallelDispatchNum_; i++) {
+    const auto &q = queues_[i];
+    q->Continue();
+    q->Push([this, i]() { DispatchParallelLaunchKernels(i); });
+  }
+
+  // Dispatch serial launch kernels: communication ops and the kernel need force resize.
+  DispatchSerialLaunchKernels();
+
+  for (auto &q : queues_) {
+    q->Pause();
+  }
+
+  // The default stream need wait all parallel launch kernel execute finish.
+  events_.back()->WaitEventWithoutReset(0);
+  // Reset all event for reuse.
+  for (auto &e : events_) {
+    e->ResetEvent();
+  }
+  for (auto &item : serialLaunchKernelsToEvents_) {
+    for (auto &e : item.second) {
+      e->ResetEvent();
+    }
+  }
+
+  LOG_OUT << "End parallel dispatch kernels";
+}
+
+void KernelLaunchGroupExecutor::SetOutputAndWsCacheMemory(OpRunner *opRunner) {
+  // Allocate trace memory for static memory step.
+  const std::shared_ptr<std::unordered_map<OpRunner *, std::vector<KernelMemoryTraceBlockPtr>>> &allKernelBlockInfo =
+    memoryCache_.GetAllKernelBlocksInfo();
+  CHECK_IF_NULL(allKernelBlockInfo);
+  const auto &iter = allKernelBlockInfo->find(opRunner);
+  if (iter == allKernelBlockInfo->end()) {
+    LOG_OUT << "Not found kernel block info for kernel: " << opRunner->GetOpName();
+  } else {
+    const auto &kernelMemBlocks = iter->second;
+    const auto &mergeBlocksWithDeviceContext = memoryCache_.GetMergeBlocks();
+    CHECK_IF_NULL(mergeBlocksWithDeviceContext);
+    const auto &mergeBlocks = mergeBlocksWithDeviceContext->at(deviceContext_);
+    for (auto &block : kernelMemBlocks) {
+      CHECK_IF_NULL(block);
+      void *ptr = mergeBlocks.at(block->memoryTraceBlockIndex_)->start_ + block->offsetInMemoryTraceBlock_;
+      CHECK_IF_NULL(ptr);
+      if (block->memType_ == kOutputMem) {
+        const auto *tensor = block->tensor_;
+        CHECK_IF_NULL(tensor);
+        std::lock_guard<SpinLock> lock(block->lock_);
+        if (tensor->GetStorage()->Data() != ptr) {
+          tensor->GetStorage()->SetData(ptr);
+        }
+      } else {
+        CHECK_IF_FAIL(block->index_ != 0);
+        opRunner->SetWorkspace(ptr);
+      }
+    }
+  }
+}
+
+void KernelLaunchGroupExecutor::UpdateInputTensorData(
+  const std::shared_ptr<std::unordered_map<const Tensor *, KernelMemoryTraceBlockPtr>> &tensorToKernelMemBlocks,
+  const std::shared_ptr<std::map<const DeviceContext *, std::vector<MemoryTraceBlockPtr>>>
+    &mergeBlocksWithDeviceContext,
+  const ir::Tensor *tensor) const {
+  const auto &iter = tensorToKernelMemBlocks->find(tensor);
+  if (iter == tensorToKernelMemBlocks->end()) {
+    return;
+  }
+  auto &kernelMemBlock = iter->second;
+  const auto &mergeBlocks = mergeBlocksWithDeviceContext->at(kernelMemBlock->deviceContext_);
+  void *ptr =
+    mergeBlocks.at(kernelMemBlock->memoryTraceBlockIndex_)->start_ + kernelMemBlock->offsetInMemoryTraceBlock_;
+
+  std::lock_guard<SpinLock> lock(kernelMemBlock->lock_);
+  if (tensor->GetStorage()->Data() != ptr) {
+    tensor->GetStorage()->SetData(ptr);
+  }
+}
+
+void KernelLaunchGroupExecutor::SetInputCacheMemory(const OpRunner *opRunner) const {
+  const auto &mergeBlocksWithDeviceContext = memoryCache_.GetMergeBlocks();
+  CHECK_IF_NULL(mergeBlocksWithDeviceContext);
+
+  const auto &tensorToKernelMemBlocks = memoryCache_.GetTensorToMemBlocksInfo();
+  CHECK_IF_NULL(tensorToKernelMemBlocks);
+  const auto &inputs = opRunner->GetInput();
+  for (const auto &input : inputs) {
+    if (input->IsTensor()) {
+      const auto &tensor = input->ToTensor();
+      UpdateInputTensorData(tensorToKernelMemBlocks, mergeBlocksWithDeviceContext, tensor.get());
+    } else if (input->IsTuple()) {
+      auto &tuple = input->ToTuple();
+      CHECK_IF_NULL(tuple);
+      size_t size = tuple->Size();
+      for (size_t i = 0; i < size; ++i) {
+        const auto &value = (*tuple)[i];
+        // Not support nested tuple.
+        CHECK_IF_FAIL(!value->IsTuple());
+        if (value->IsTensor()) {
+          const auto &tensor = value->ToTensor();
+          UpdateInputTensorData(tensorToKernelMemBlocks, mergeBlocksWithDeviceContext, tensor.get());
+        }
+      }
+    }
+  }
+}
+
+void KernelLaunchGroupExecutor::AllocateGraphCacheMemory() const {
+  const auto &mergeBlocksWithDeviceContext = memoryCache_.GetMergeBlocks();
+  CHECK_IF_NULL(mergeBlocksWithDeviceContext);
+  for (auto &item : *mergeBlocksWithDeviceContext) {
+    const auto &deviceContext = item.first;
+    CHECK_IF_NULL(deviceContext);
+    const auto &mergeBlocks = item.second;
+    for (auto &block : mergeBlocks) {
+      CHECK_IF_NULL(block);
+      static const size_t kMemoryAlignSize = 1024;
+      void *blockAddr = deviceContext->deviceResManager_->AllocateMemory(block->size_ + kMemoryAlignSize);
+      CHECK_IF_NULL(blockAddr);
+      block->start_ = reinterpret_cast<uint8_t *>(blockAddr);
+    }
+  }
+}
+
+void KernelLaunchGroupExecutor::FreeGraphCacheMemory() const {
+  const auto &mergeBlocksWithDeviceContext = memoryCache_.GetMergeBlocks();
+  CHECK_IF_NULL(mergeBlocksWithDeviceContext);
+  for (auto &item : *mergeBlocksWithDeviceContext) {
+    const auto &deviceContext = item.first;
+    CHECK_IF_NULL(deviceContext);
+    const auto &mergeBlocks = item.second;
+    for (auto &block : mergeBlocks) {
+      CHECK_IF_NULL(block);
+      deviceContext->deviceResManager_->FreeMemory(block->start_);
+    }
+  }
+}
+
+void KernelLaunchGroupExecutor::AllocateGraphOutputMemory() {
+  const auto &graphOutputs = *graphOutputs_;
+  for (const auto &outputTensor : graphOutputs) {
+    if (outputTensor->GetStorage()->Data() == nullptr) {
+      outputTensor->GetStorage()->AllocateMemory();
+    }
+  }
+}
+}  // namespace runtime
+}  // namespace mrt

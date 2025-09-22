@@ -153,6 +153,7 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
 
 
 # pylint: disable=bad-continuation
+# pylint: disable=unused-argument
 def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     """
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
@@ -162,7 +163,6 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
-    input_iterator = iter(example_inputs)
 
     if dist.is_initialized():
         _extract_global_comm_info()
@@ -174,7 +174,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            env[node] = executor.add_value_node(from_torch(next(input_iterator)))
+            output_value = from_torch(node.meta.get("example_value", None))
+            env[node] = executor.add_value_node(output_value)
 
     with executor:
         for node in gm.graph.nodes:
@@ -256,8 +257,6 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     sym_eval(dim) for dim in output_shape
                 ]
 
-        print("Running Graph:")
-        executor.dump_graph()
         result = executor.run()
         return to_torch(result)
 

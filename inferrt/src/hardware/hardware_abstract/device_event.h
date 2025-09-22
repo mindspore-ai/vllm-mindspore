@@ -19,9 +19,10 @@
 
 #include <memory>
 #include <vector>
+#include "common/visible.h"
 
 namespace mrt {
-class DeviceEvent {
+class MRT_EXPORT DeviceEvent {
  public:
   virtual ~DeviceEvent() = default;
   virtual bool IsReady() const = 0;

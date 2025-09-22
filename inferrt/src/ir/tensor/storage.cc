@@ -33,22 +33,22 @@ void Allocator::Free(void *ptr) const { deviceResManager_->FreeMemory(ptr); }
 
 namespace ir {
 Storage::Storage(size_t sizeBytes, hardware::Device device)
-    : sizeBytes_(sizeBytes), alloc_(device), device_(device), canOwnData_(true) {
+    : sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(true) {
   Resize(sizeBytes_);
 }
 
 Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
-    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), canOwnData_(false) {}
+    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(false) {}
 
 Storage::~Storage() {
-  if (canOwnData_ && data_ != nullptr) {
+  if (ownsData_ && data_ != nullptr) {
     alloc_.Free(data_);
   }
 }
 
 void Storage::Resize(size_t sizeBytes) {
   sizeBytes_ = sizeBytes;
-  if (!canOwnData_) {
+  if (!ownsData_) {
     return;
   }
   if (data_ != nullptr) {
@@ -57,39 +57,50 @@ void Storage::Resize(size_t sizeBytes) {
 }
 
 void Storage::AllocateMemory() {
-  if (!canOwnData_) {
-    LOG_EXCEPTION << "Can not allocate memory for a storage which can not own data, this Storage is used to "
-                     "reference memory passed in from external sources. The device type: "
-                  << GetDeviceNameByType(device_.type) << ", data: " << data_;
-  }
-
-  if (data_ != nullptr) {
+  // if (data_ != nullptr && !ownsData_) {
+  //   return;
+  // }
+  if (data_ != nullptr && ownsData_) {
     LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
                   << GetDeviceNameByType(device_.type) << ", data: " << data_;
   }
   data_ = alloc_.Allocate(sizeBytes_);
   CHECK_IF_NULL(data_);
+  ownsData_ = true;
 }
 
 void Storage::FreeMemory() {
-  if (!canOwnData_) {
-    LOG_EXCEPTION << "Can not free memory for a storage which can not own data, this Storage is used to "
+  if (!ownsData_) {
+    LOG_EXCEPTION << "Can not free memory for a storage which doesn't own data, this Storage is used to "
                      "reference memory passed in from external sources.";
   }
 
   CHECK_IF_NULL(data_);
   alloc_.Free(data_);
   data_ = nullptr;
+  ownsData_ = false;
 }
 
 void *Storage::Release() {
-  if (!canOwnData_) {
-    LOG_EXCEPTION << "Can not release memory to other for a storage which can not own data, this Storage is used to "
+  if (!ownsData_) {
+    LOG_EXCEPTION << "Can not release memory to other from a storage which doesn't own data, this Storage is used to "
                      "reference memory passed in from external sources.";
   }
   void *p = data_;
   data_ = nullptr;
+  ownsData_ = false;
   return p;
+}
+
+void Storage::DisableOwnData() {
+  if (!ownsData_) {
+    return;
+  }
+
+  if (ownsData_ && data_ != nullptr) {
+    LOG_EXCEPTION << "Can not disable own data for storage which has already allocated memory.";
+  }
+  ownsData_ = false;
 }
 }  // namespace ir
 }  // namespace mrt

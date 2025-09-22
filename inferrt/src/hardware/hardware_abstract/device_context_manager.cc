@@ -23,6 +23,7 @@
 #endif  // #ifdef __linux__
 #include <dirent.h>
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <set>
 #include <fstream>
@@ -182,7 +183,7 @@ void DeviceContextManager::SyncAllStreams() const {
   for (const auto &item : deviceContexts_) {
     auto deviceContext = item.second;
     if (deviceContext != nullptr && !deviceContext->deviceResManager_->SyncAllStreams()) {
-      LOG_ERROR << "SyncStream failed, device info: " << deviceContext->deviceContextKey().ToString();
+      LOG_ERROR << "SyncStream failed, device info: " << deviceContext->GetDeviceContextKey().ToString();
     }
   }
 }

@@ -45,6 +45,7 @@ struct Node : public RefCounted {
  */
 struct Graph : public RefCounted {
   std::vector<IntrusivePtr<Node>> nodes;  ///< The list of all nodes in the graph.
+  std::vector<IntrusivePtr<Node>> parameters;
 };
 
 using NodePtr = IntrusivePtr<Node>;
