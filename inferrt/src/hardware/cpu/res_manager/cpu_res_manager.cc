@@ -30,7 +30,7 @@ void CPUResManager::Destroy() { LOG_OUT << "Unimplemented interface."; }
 void *CPUResManager::AllocateMemory(size_t size, uint32_t streamId) const {
   void *ptr = std::malloc(size);
   if (ptr == nullptr) {
-    LOG_ERROR << "Memory allocation failed";
+    LOG_ERROR << "Memory allocate failed";
     return nullptr;
   }
   return ptr;
