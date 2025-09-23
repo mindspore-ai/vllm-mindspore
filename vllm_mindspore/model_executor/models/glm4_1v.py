@@ -248,9 +248,7 @@ class Glm4vVisionAttention(nn.Cell):
         self.flash_attention_score = FlashAttentionScore(head_num=self.num_attention_heads_per_partition,
                                                          scale_value=1 / math.sqrt(self.hidden_size_per_attention_head),
                                                          input_layout="TH")
-        prefill_mask_coeff = -10000.0
         self.dtype = get_current_vllm_config().model_config.dtype
-        self.atten_mask = Tensor(np.triu(np.ones((128, 128), dtype=np.float16), k=1) * prefill_mask_coeff, dtype=self.dtype)
 
     def construct(
             self,
@@ -292,7 +290,7 @@ class Glm4vVisionAttention(nn.Cell):
             None,
             None,
             None,
-            self.atten_mask,
+            None,
             None,
             batch_valid_length,
             q_seq_lens,
