@@ -37,7 +37,11 @@ from transformers import PretrainedConfig
 from vllm.config import get_current_vllm_config
 
 from vllm_mindspore.model_executor.utils import get_model_context
-
+try:
+    import ms_custom_ops
+    ms_custom_ops_avail = True
+except ImportError:
+    ms_custom_ops_avail = False
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -316,17 +320,22 @@ class MRotaryEmbedding(RotaryEmbedding):
 
         query_shape = query.shape
         query = query.view(num_tokens, -1, self.head_size)
-        query_rot = query[..., :self.rotary_dim]
-        query_pass = query[..., self.rotary_dim:]
-        query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
-        query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
-
         key_shape = key.shape
         key = key.view(num_tokens, -1, self.head_size)
-        key_rot = key[..., :self.rotary_dim]
-        key_pass = key[..., self.rotary_dim:]
-        key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
-        key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
+        if ms_custom_ops_avail is False:
+            query_rot = query[..., :self.rotary_dim]
+            query_pass = query[..., self.rotary_dim:]
+            query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
+            query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
+
+            key_rot = key[..., :self.rotary_dim]
+            key_pass = key[..., self.rotary_dim:]
+            key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
+            key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
+        else:
+            query, key = ms_custom_ops.apply_rotary_pos_emb_v3(query, key, cos, sin, "BSH", "interleave")
+            query = query.view(query_shape)
+            key = key.view(key_shape)
         return query, key
 
     @staticmethod
