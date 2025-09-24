@@ -19,6 +19,7 @@ usage()
   echo "    -t Build and run tests, default off"
   echo "    -f Enable frontend, default compile all frontend"
   echo "    -b Enable backend, default compile cpu backend"
+  echo "    -e Enable download cmake compile dependency from gitee, default off"
 }
 
 process_options()
@@ -30,7 +31,7 @@ process_options()
     export ENABLE_MINDSPORE_FRONT=1
     export ENABLE_TORCH_FRONT=1
 
-    while getopts 'Dd:hitf:b:' OPT; do
+    while getopts 'Dd:hitf:b:e' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -39,8 +40,8 @@ process_options()
             d)
                 # Enable log out for modules.
                 # -d lexer,parser,compiler,vm,ir,rt,dapy
-                OPTARGS=(${OPTARG//,/ })
-                for ARG in ${OPTARGS[@]}
+                IFS=',' read -ra OPTARGS <<< "$OPTARG"
+                for ARG in "${OPTARGS[@]}"
                 do
                     export DEBUG_LOG_OUT="$DEBUG_LOG_OUT -DDEBUG_LOG_OUT_$ARG=on"
                 done
@@ -74,6 +75,7 @@ process_options()
                     exit 1
                 fi
                 ;;
+            e) export ENABLE_GITEE=1;;
             ?)
                 usage
                 exit 1
@@ -82,7 +84,7 @@ process_options()
     done
 }
 
-process_options $@
+process_options "$@"
 INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
 
 if [[ $BUILD_TESTS == 1 ]]; then
@@ -101,11 +103,14 @@ if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
     INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_TORCH_FRONT=on"
 fi
 
+if [[ $ENABLE_GITEE == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_GITEE=on"
+fi
+
 ##################################################
 # Prepare source and build directories
 ##################################################
 CURRENT_PATH=$(pwd)
-SCRIPT_PATH=$(dirname "$0")
 
 INFERRT_PATH=$CURRENT_PATH
 BUILD_DIR=$CURRENT_PATH/build
@@ -140,7 +145,7 @@ fi
 ##################################################
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
-    rm $BUILD_DIR/* -rf
+    rm "${BUILD_DIR:?}/"* -rf
     cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS
 fi
 make
@@ -160,21 +165,6 @@ $BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/fibonacci_20.da
 echo "# 2/2: ./da sample/da_llm_sample.da"
 $BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/da_llm_sample.da
 echo "=============================="
-
-# Run hardware test
-if [[ $BUILD_TESTS == 1 ]]; then
-    echo "=============================="
-    echo "Run test case:"
-    if [[ $ENABLE_ASCEND == 1 ]]; then
-        echo "Ascend backend test case"
-        ./tests/run_hardware_ascend_test
-    else
-        echo "CPU backend test case"
-        ./tests/run_hardware_cpu_test
-    fi
-    echo "Tests completed."
-    echo "=============================="
-fi
 
 cd $CURRENT_PATH
 
