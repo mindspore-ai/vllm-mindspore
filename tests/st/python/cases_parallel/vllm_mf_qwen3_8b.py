@@ -85,3 +85,13 @@ def test_mf_qwen3_v1():
     env_manager.setup_ai_environment(env_vars)
     run_mf_qwen3_networt()
     env_manager.unset_all()
+
+
+def test_mf_qwen3_v1_310p():
+    """Test qwen3 8B using V1 LLMEngine in 310p."""
+    env_vars["VLLM_USE_V1"] = "1"
+    # In 310p, INTERNAL BOOST will case unsupported kernel fusion
+    env_vars["MS_ENABLE_INTERNAL_BOOST"] = "off"
+    env_manager.setup_ai_environment(env_vars)
+    run_mf_qwen3_networt()
+    env_manager.unset_all()

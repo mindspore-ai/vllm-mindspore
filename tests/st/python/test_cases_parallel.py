@@ -263,6 +263,7 @@ def test_cases_parallel_level4_mcore2():
 
 
 @pytest.mark.level0
+@pytest.mark.platform_ascend310p
 @pytest.mark.env_single
 def test_cases_parallel_310p_part0():
     """
@@ -271,7 +272,7 @@ def test_cases_parallel_310p_part0():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1_310p",
          "vllm_mf_qwen3_8b_v1_310p_test_mf_qwen3.log"),
     ]
     run_tasks(cases)
