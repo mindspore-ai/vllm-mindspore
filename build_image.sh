@@ -16,12 +16,48 @@
 # limitations under the License.
 
 set -euo pipefail
+TARGET="910b"
+ARCH=$(uname -m)
+
+build_usage() {
+    echo "Usage: $0 [-a 910b|310p]"
+    exit 1
+}
+
+while getopts "a:h" opt; do
+    case $opt in
+        a)
+            if [[ "$OPTARG" == "910b" || "$OPTARG" == "310p" ]]; then
+                TARGET="$OPTARG"
+            else
+                echo "Error: -a must be '910b' or '310p', got '$OPTARG'" >&2
+                exit 1
+            fi
+            ;;
+        h)
+            build_usage
+            ;;
+        \?|:)
+            build_usage
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+if [ $# -gt 0 ]; then
+    echo "Error: invalid input $@"
+    build_usage
+fi
 
 readonly IMAGE_TAG="vllm_ms_$(date +%Y%m%d)"
 
 log() {
-    echo "========= $*"
+    echo "===== Build image for ${TARGET} ==== $*"
 }
+
+CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-toolkit_8.1.RC1_linux-${ARCH}.run
+CANN_KERNELS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-kernels-${TARGET}_8.1.RC1_linux-${ARCH}.run
+CANN_NNRT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-nnrt_8.1.RC1_linux-${ARCH}.run
 
 add_verbose() {
     if docker build -h 2>&1 | grep -q "\-\-progress"; then
@@ -63,6 +99,20 @@ main() {
     
     cat > Dockerfile.tmp << EOF
 FROM base_env
+
+RUN set -ex && \\
+    cd /root && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_TOOLKIT_URL} -O Ascend-cann-toolkit.run --no-check-certificate && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_KERNELS_URL} -O Ascend-cann-kernels-${TARGET}.run --no-check-certificate && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_NNRT_URL} -O Ascend-cann-nnrt.run --no-check-certificate
+
+RUN set -ex && \\
+    cd /root && \\
+    chmod a+x *.run && \\
+    bash /root/Ascend-cann-toolkit.run --install -q && \\
+    bash /root/Ascend-cann-kernels-${TARGET}.run --install -q && \\
+    bash Ascend-cann-nnrt.run --install -q && \\
+    rm /root/*.run
 
 COPY install_depend_pkgs.sh /workspace/
 COPY .jenkins/test/config/dependent_packages.yaml /workspace/.jenkins/test/config/

@@ -64,6 +64,14 @@ vllm-mindspore serve Qwen/Qwen3-8B
 
 Please refer to [Quick Start](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/quick_start/quick_start.html) and [Installation](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html) for more details.
 
+## Image build
+
+A Docker image for vLLM-MindSpore Plugin deployment can be built using the following command. Use the -a parameter to specify the corresponding Ascend device type. `device_type` indicates the device type: `910b` refers to the Atlas A2 series, and `310p` refers to the Atlas 300I Pro/Duo or Atlas 300V Pro series, default is `910b`:
+
+```bash
+bash build_image.sh -a device_type
+```
+
 ## Contributing
 
 Please read [CONTRIBUTING](https://www.mindspore.cn/vllm_mindspore/docs/en/master/developer_guide/contributing.html) for details on setting up development environments, testing functions, and submitting PR.
