@@ -21,18 +21,18 @@
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union
 
 import mindspore as ms
-from mindspore import mint
+from mindspore import Parameter, Tensor, mint, ops
+from mindspore.common.initializer import initializer
 from transformers import PretrainedConfig
 from vllm.adapter_commons.layers import AdapterMapping
 from vllm.config import LoRAConfig
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
                               split_tensor_along_last_dim,
-                              tensor_model_parallel_all_gather,
-                              tensor_model_parallel_all_reduce)
+                              tensor_model_parallel_all_gather)
 from vllm.distributed.utils import divide
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.rotary_embedding import (
@@ -43,6 +43,7 @@ from vllm.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.layers.linear import (
     ColumnParallelLinear, LinearBase, MergedColumnParallelLinear,
     QKVParallelLinear, RowParallelLinear)
+from vllm_mindspore.utils import FORMAT_TYPE, is_310p
 
 if TYPE_CHECKING:
     from vllm.lora.punica_wrapper import PunicaWrapperBase
@@ -320,49 +321,42 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
                                    self.output_size, self.tp_size))
         else:
             raise NotImplementedError
-
-        self.lora_a_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_a_out_size,
-                    self.input_size,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
-        self.lora_b_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_b_out_size,
-                    lora_config.max_lora_rank,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
+        self.lora_a_stacked = Parameter(
+            initializer('zeros',
+                        (max_loras + 1, self.input_size, lora_a_out_size),
+                        lora_config.lora_dtype))
+        self.lora_b_stacked = Parameter(
+            initializer('zeros',
+                        (max_loras + 1, lora_a_out_size, lora_b_out_size),
+                        lora_config.lora_dtype))
         if lora_config.bias_enabled:
             lora_bias_out_size = lora_b_out_size
-            self.lora_bias_stacked = tuple(
-                mint.zeros(
-                    (
-                        max_loras,
-                        1,
-                        lora_bias_out_size,
-                    ),
-                    dtype=lora_config.lora_dtype,
-                ) for _ in range(self.n_slices))
-        self.output_slices = (self.lora_b_stacked[0].shape[2], )
+            self.lora_bias_stacked = Parameter(
+                initializer('zeros', (max_loras + 1, lora_bias_out_size),
+                            lora_config.lora_dtype))
+        else:
+            self.lora_bias_stacked = None
 
     def reset_lora(self, index: int):
-        for s_index in range(self.n_slices):
-            self.lora_a_stacked[s_index][index] = 0
-            self.lora_b_stacked[s_index][index] = 0
-            if self.lora_config.bias_enabled:
-                # Make mypy happy
-                self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                              self.lora_bias_stacked)
-                self.lora_bias_stacked[s_index][index] = 0
+        tmp_lora_a = self.lora_a_stacked.value()
+        tmp_lora_b = self.lora_b_stacked.value()
+        tmp_lora_a[index + 1] = 0
+        tmp_lora_b[index + 1] = 0
+        if is_310p():
+            tmp_lora_a = ops.auto_generate.format_cast(tmp_lora_a,
+                                                       FORMAT_TYPE['nz'])
+            tmp_lora_b = ops.auto_generate.format_cast(tmp_lora_b,
+                                                       FORMAT_TYPE['nz'])
+        self.lora_a_stacked.set_data(tmp_lora_a)
+        self.lora_b_stacked.set_data(tmp_lora_b)
+        if self.lora_bias_stacked:
+            # Make mypy happy
+            tmp_lora_bias = self.lora_bias_stacked.value()
+            tmp_lora_bias[index + 1] = 0
+            tmp_lora_bias = ops.auto_generate.format_cast(
+                tmp_lora_bias, FORMAT_TYPE['nz'])
+            self.lora_bias_stacked.set_data(
+                Tensor(tmp_lora_bias, dtype=self.lora_bias_stacked.dtype))
 
     def set_lora(
         self,
@@ -376,8 +370,6 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
         # MergedColumnParallelLinearWithLoRA, all other linear LoRA layers
         # store weights in a tuple of size 1. These two layers will
         # override this function.
-        assert (len(self.lora_a_stacked) == len(self.lora_b_stacked) ==
-                self.n_slices == 1)
 
         self.reset_lora(index)
         if self.tp_size > 1:
@@ -386,28 +378,34 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
             if lora_bias is not None:
                 lora_bias = self.slice_bias(lora_bias)
 
-        self.lora_a_stacked[0][index,
-                               0, :lora_a.shape[1], :lora_a.shape[0]].copy_(
-                                   lora_a.T, non_blocking=True)
-        self.lora_b_stacked[0][index,
-                               0, :lora_b.shape[1], :lora_b.shape[0]].copy_(
-                                   lora_b.T, non_blocking=True)
-        if lora_bias is not None:
+        tmp_lora_a = self.lora_a_stacked.value()
+        tmp_lora_b = self.lora_b_stacked.value()
+        tmp_lora_a[index + 1, :, :lora_a.shape[1]] = lora_a
+        tmp_lora_b[index + 1, :lora_b.shape[0], :] = lora_b
+        if is_310p():
+            tmp_lora_a = ops.auto_generate.format_cast(tmp_lora_a,
+                                                       FORMAT_TYPE['nz'])
+            tmp_lora_b = ops.auto_generate.format_cast(tmp_lora_b,
+                                                       FORMAT_TYPE['nz'])
+        self.lora_a_stacked.set_data(tmp_lora_a)
+        self.lora_b_stacked.set_data(tmp_lora_b)
 
-            self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                          self.lora_bias_stacked)
+        if self.lora_bias_stacked is not None:
             assert len(self.lora_bias_stacked)
-            self.lora_bias_stacked[0][index, 0, :lora_bias.shape[0]].copy_(
-                lora_bias.T, non_blocking=True)
+            tmp_lora_bias = self.lora_bias_stacked.value()
+            tmp_lora_bias[index + 1] = lora_bias
+            if is_310p():
+                tmp_lora_bias = ops.auto_generate.format_cast(
+                    tmp_lora_bias, FORMAT_TYPE['nz'])
+            self.lora_bias_stacked.set_data(tmp_lora_bias)
 
     def apply(self,
               x: ms.Tensor,
               bias: Optional[ms.Tensor] = None) -> ms.Tensor:
         output = self.base_layer.quant_method.apply(self.base_layer, x, bias)
-        self.punica_wrapper.add_lora_linear(output, x, self.lora_a_stacked,
-                                            self.lora_b_stacked,
-                                            self.lora_bias_stacked, 1.0,
-                                            self.output_slices)
+        output = self.punica_wrapper(output, x, self.lora_a_stacked,
+                                     self.lora_b_stacked,
+                                     self.lora_bias_stacked, 1.0)
         return output
 
 
@@ -540,7 +538,7 @@ class MergedColumnParallelLinearWithLoRA(ColumnParallelLinearWithLoRA):
         model_config: Optional[PretrainedConfig] = None,
     ) -> None:
         """
-        The main reason for overriding this function is to enhance  code 
+        The main reason for overriding this function is to enhance code
         maintainability.
         """
         self.lora_config = lora_config
@@ -548,36 +546,22 @@ class MergedColumnParallelLinearWithLoRA(ColumnParallelLinearWithLoRA):
         lora_a_output_size_per_partition = (
             lora_config.max_lora_rank if not lora_config.fully_sharded_loras
             else divide(lora_config.max_lora_rank, self.tp_size))
-        self.lora_a_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_a_output_size_per_partition,
-                    self.input_size,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
-        self.lora_b_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    output_size,
-                    lora_config.max_lora_rank,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for output_size in self.output_slices)
+        output_size = sum(self.output_slices)
+        self.lora_a_stacked = Parameter(
+            initializer('zeros',
+                        (max_loras + 1, self.input_size,
+                         lora_a_output_size_per_partition * self.n_slices),
+                        lora_config.lora_dtype))
+        self.lora_b_stacked = Parameter(
+            initializer('zeros',
+                        (max_loras + 1, lora_a_output_size_per_partition *
+                         self.n_slices, output_size), lora_config.lora_dtype))
         if lora_config.bias_enabled:
-            self.lora_bias_stacked = tuple(
-                mint.zeros(
-                    (
-                        max_loras,
-                        1,
-                        output_size,
-                    ),
-                    dtype=lora_config.lora_dtype,
-                ) for output_size in self.output_slices)
+            self.lora_bias_stacked = Parameter(
+                initializer('zeros', (max_loras + 1, output_size),
+                            lora_config.lora_dtype))
+        else:
+            self.lora_bias_stacked = None
 
     def slice_lora_a(
             self, lora_a: list[Union[ms.Tensor,
@@ -619,26 +603,36 @@ class MergedColumnParallelLinearWithLoRA(ColumnParallelLinearWithLoRA):
             lora_b = self.slice_lora_b(lora_b)
             if lora_bias is not None:
                 lora_bias = self.slice_bias(lora_bias)
-
-        for i in range(self.n_slices):
-            if (lora_a_i := lora_a[i]) is not None:
-                self.lora_a_stacked[i][
-                    index, 0, :lora_a_i.shape[1], :lora_a_i.shape[0]].copy_(
-                        lora_a_i.T, non_blocking=True)
-            if (lora_b_i := lora_b[i]) is not None:
-                self.lora_b_stacked[i][
-                    index, 0, :lora_b_i.shape[1], :lora_b_i.shape[0]].copy_(
-                        lora_b_i.T, non_blocking=True)
-
-        if lora_bias is not None:
-            self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                          self.lora_bias_stacked)
-            for i in range(self.n_slices):
-                if (lora_bias_i := lora_bias[i]) is not None:
-                    self.lora_bias_stacked[i][index,
-                                              0, :lora_bias_i.shape[0]].copy_(
-                                                  lora_bias_i.T,
-                                                  non_blocking=True)
+        tmp_lora_a = self.lora_a_stacked.value()
+        tmp_lora_b = self.lora_b_stacked.value()
+        tmp_lora_a[index + 1, :, :lora_a[0].shape[1]] = lora_a[0]
+        tmp_lora_a[
+            index + 1, :,
+            self.lora_config.max_lora_rank:self.lora_config.max_lora_rank +
+            lora_a[1].shape[1]] = lora_a[1]
+        tmp_lora_b[index +
+                   1, :lora_b[0].shape[0], :lora_b[0].shape[1]] = lora_b[0]
+        tmp_lora_b[
+            index + 1,
+            self.lora_config.max_lora_rank:self.lora_config.max_lora_rank +
+            lora_b[1].shape[0], lora_b[0].shape[1]:lora_b[0].shape[1] +
+            lora_b[1].shape[1]] = lora_b[1]
+        if is_310p():
+            tmp_lora_a = ops.auto_generate.format_cast(tmp_lora_a,
+                                                       FORMAT_TYPE['nz'])
+            tmp_lora_b = ops.auto_generate.format_cast(tmp_lora_b,
+                                                       FORMAT_TYPE['nz'])
+        self.lora_a_stacked.set_data(tmp_lora_a)
+        self.lora_b_stacked.set_data(tmp_lora_b)
+        if self.lora_bias_stacked is not None:
+            assert len(self.lora_bias_stacked)
+            lora_bias = ops.concat(lora_bias, axis=0)
+            tmp_lora_bias = self.lora_bias_stacked.value()
+            tmp_lora_bias[index + 1] = lora_bias
+            if is_310p():
+                tmp_lora_bias = ops.auto_generate.format_cast(
+                    tmp_lora_bias, FORMAT_TYPE['nz'])
+            self.lora_bias_stacked.set_data(tmp_lora_bias)
 
     @classmethod
     @_not_fully_sharded_can_replace
@@ -757,17 +751,59 @@ class MergedQKVParallelLinearWithLoRA(MergedColumnParallelLinearWithLoRA):
             self.kv_shard_id,
         )
 
-    def create_lora_weights(
+    def set_lora(
         self,
-        max_loras: int,
-        lora_config: LoRAConfig,
-        model_config: Optional[PretrainedConfig] = None,
-    ) -> None:
-        """
-        The main reason for overloading this function is to handle inconsistent 
-        weight dimensions in qkv lora.
-        """
-        super().create_lora_weights(max_loras, lora_config, model_config)
+        index: int,
+        lora_a: ms.Tensor,
+        lora_b: ms.Tensor,
+        embeddings_tensor: Optional[ms.Tensor],
+        lora_bias: Optional[ms.Tensor] = None,
+    ):
+        self.reset_lora(index)
+
+        if self.tp_size > 1:
+            lora_a = self.slice_lora_a(lora_a)
+            lora_b = self.slice_lora_b(lora_b)
+            if lora_bias is not None:
+                lora_bias = self.slice_bias(lora_bias)
+
+        tmp_lora_a = self.lora_a_stacked.value()
+        tmp_lora_b = self.lora_b_stacked.value()
+        tmp_lora_a[index + 1, :, :lora_a[0].shape[1]] = lora_a[0]
+        tmp_lora_a[
+            index + 1, :,
+            self.lora_config.max_lora_rank:self.lora_config.max_lora_rank +
+            lora_a[1].shape[1]] = lora_a[1]
+        tmp_lora_a[index + 1, :, self.lora_config.max_lora_rank *
+                   2:self.lora_config.max_lora_rank * 2 +
+                   lora_a[2].shape[1]] = lora_a[2]
+        tmp_lora_b[index +
+                   1, :lora_b[0].shape[0], :lora_b[0].shape[1]] = lora_b[0]
+        tmp_lora_b[
+            index + 1,
+            self.lora_config.max_lora_rank:self.lora_config.max_lora_rank +
+            lora_b[1].shape[0], lora_b[0].shape[1]:lora_b[0].shape[1] +
+            lora_b[1].shape[1]] = lora_b[1]
+        tmp_lora_b[index + 1, self.lora_config.max_lora_rank *
+                   2:self.lora_config.max_lora_rank * 2 + lora_b[2].shape[0],
+                   lora_b[0].shape[1] + lora_b[1].shape[1]:] = lora_b[2]
+        if is_310p():
+            tmp_lora_a = ops.auto_generate.format_cast(tmp_lora_a,
+                                                       FORMAT_TYPE['nz'])
+            tmp_lora_b = ops.auto_generate.format_cast(tmp_lora_b,
+                                                       FORMAT_TYPE['nz'])
+        self.lora_a_stacked.set_data(tmp_lora_a)
+        self.lora_b_stacked.set_data(tmp_lora_b)
+
+        if self.lora_bias_stacked is not None:
+            assert len(self.lora_bias_stacked)
+            lora_bias = ops.concat(lora_bias, axis=0)
+            tmp_lora_bias = self.lora_bias_stacked.value()
+            tmp_lora_bias[index + 1] = lora_bias
+            if is_310p():
+                tmp_lora_bias = ops.auto_generate.format_cast(
+                    tmp_lora_bias, FORMAT_TYPE['nz'])
+            self.lora_bias_stacked.set_data(tmp_lora_bias)
 
     @classmethod
     @_not_fully_sharded_can_replace
@@ -836,7 +872,8 @@ class RowParallelLinearWithLoRA(BaseLinearLayerWithLoRA):
         # Matrix multiply.
         output_parallel = self.apply(input_parallel)
         if self.base_layer.reduce_results and self.base_layer.tp_size > 1:
-            output_ = tensor_model_parallel_all_reduce(output_parallel)
+            output_ = self.base_layer.tensor_model_parallel_all_reduce(
+                output_parallel)
         else:
             output_ = output_parallel
 
@@ -1012,24 +1049,22 @@ class LogitsProcessorWithLoRA(BaseLayerWithLoRA):
             return None
 
         if self.sharded_to_full_mapping_gpu is not None:
-            """
-            Reindex full logits tensor to ensure 1:1 mapping between
-            index and token_id
-            Example for:
-              org_vocab_size = 4
-              added_vocab_size = 2
-              pad_to_size = 8
-              tp_size = 2
+            # Reindex full logits tensor to ensure 1:1 mapping between
+            # index and token_id
+            # Example for:
+            #   org_vocab_size: 4 # noqa: ERA001
+            #   added_vocab_size: 2 # noqa: ERA001
+            #   pad_to_size: 8 # noqa: ERA001
+            #   tp_size: 2 # noqa: ERA001
 
-            indices:  [0, 1, 2,  3, 4, 5, 6,  7]
-            token_id: [0, 1, 4, -1, 2, 3, 5, -1]
+            # indices:  [0, 1, 2,  3, 4, 5, 6,  7] # noqa: ERA001
+            # token_id: [0, 1, 4, -1, 2, 3, 5, -1] # noqa: ERA001
 
-            Therefore, the mapping is expected to be:
-            [0, 1, 4, 6, 2, 3, 5, 7] so that when we reindex,
-            we get:
-            indices:  [0, 1, 2, 3, 4, 5,  6,  7]
-            token_id: [0, 1, 2, 3, 4, 5, -1, -1]
-            """
+            # Therefore, the mapping is expected to be:
+            # [0, 1, 4, 6, 2, 3, 5, 7] so that when we reindex,
+            # we get:
+            # indices:  [0, 1, 2, 3, 4, 5,  6,  7] # noqa: ERA001
+            # token_id: [0, 1, 2, 3, 4, 5, -1, -1] # noqa: ERA001
             logits = logits[:, self.sharded_to_full_mapping_gpu]
 
         lora_logits = mint.empty(

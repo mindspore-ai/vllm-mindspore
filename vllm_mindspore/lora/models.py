@@ -23,6 +23,7 @@ import os
 from typing import Optional, Union
 
 import mindspore as ms
+import numpy as np
 import safetensors.torch
 from mindspore import mint
 from vllm.lora.lora import LoRALayerWeights
@@ -33,6 +34,7 @@ from vllm.model_executor.models.utils import WeightsMapper
 from vllm.utils import is_pin_memory_available
 
 from vllm_mindspore.lora.layers import BaseLayerWithLoRA
+from vllm_mindspore.utils import is_310p
 
 _GLOBAL_LORA_ID = 0
 
@@ -198,7 +200,10 @@ def from_local_checkpoint(
             check_unexpected_modules(f)
             for module in f.keys():  # noqa
                 # vllm-mindspore add numpy to tensor
-                tensors[module] = mint.Tensor(f.get_tensor(module))
+                np_data = f.get_tensor(module)
+                if is_310p() and str(np_data.dtype) == "bfloat16":
+                    np_data = np_data.astype(np.float32).astype(np.float16)
+                tensors[module] = mint.Tensor(np_data)
     elif os.path.isfile(lora_bin_file_path):
         # When a bin file is provided, we rely on config to find unexpected
         # modules.

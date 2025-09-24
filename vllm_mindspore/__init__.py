@@ -127,10 +127,11 @@ vllm.utils.memory_profiling = ms_memory_profiling
 import vllm.lora.utils
 
 from vllm_mindspore.model_executor.layers.linear import LinearBase
-from vllm_mindspore.lora.utils import _all_lora_classes
+from vllm_mindspore.lora.utils import _all_lora_classes, replace_submodule
 
 vllm.lora.utils._all_lora_classes = _all_lora_classes
 vllm.lora.utils.LinearBase = LinearBase
+vllm.lora.utils.replace_submodule = replace_submodule
 
 import vllm.lora.models
 from vllm_mindspore.lora.models import (
@@ -233,12 +234,14 @@ V0Worker.init_device = wrapper_worker_init_device(V0Worker.init_device)
 from vllm_mindspore.worker.model_runner import (
     _get_cuda_graph_pad_size,
     _dummy_run,
+    profile_run,
     _get_supported_attention_backends,
 )
 
 vllm.worker.model_runner.ModelInputForGPUBuilder._get_cuda_graph_pad_size = (
     _get_cuda_graph_pad_size)
 vllm.worker.model_runner.GPUModelRunnerBase._dummy_run = _dummy_run
+vllm.worker.model_runner.GPUModelRunnerBase.profile_run = profile_run
 
 import vllm.worker.multi_step_model_runner
 

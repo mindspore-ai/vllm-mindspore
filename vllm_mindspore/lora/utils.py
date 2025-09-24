@@ -50,3 +50,18 @@ _all_lora_classes: set[type[BaseLayerWithLoRA]] = {
     RowParallelLinearWithShardedLoRA,
     LinearScalingRotaryEmbeddingWithLoRA,
 }
+
+
+def replace_submodule(model, module_name, new_module):
+    """Replace a submodule in a model with a new module."""
+    parent = model.get_submodule(".".join(module_name.split(".")[:-1]))
+    target_name = module_name.split(".")[-1]
+    setattr(parent, target_name, new_module)
+    new_module.base_layer.weight.name = module_name + ".weight"
+    new_module.lora_a_stacked.name = module_name + ".lora_a_weight"
+    new_module.lora_b_stacked.name = module_name + ".lora_b_weight"
+    if new_module.base_layer.bias is not None:
+        new_module.base_layer.bias.name = module_name + ".bias"
+    if new_module.lora_bias_stacked is not None:
+        new_module.lora_bias_stacked.name = module_name + ".lora_bias"
+    return new_module

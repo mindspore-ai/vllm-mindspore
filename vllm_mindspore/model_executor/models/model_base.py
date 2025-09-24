@@ -37,7 +37,8 @@ from vllm_mindspore.model_executor.models.interfaces import (
     is_mixture_of_experts, supports_moe_dp_tp)
 from vllm_mindspore.model_executor.models.utils import (convert_pin,
                                                         is_use_ringmla)
-from vllm_mindspore.model_executor.utils import set_model_context
+from vllm_mindspore.model_executor.utils import (get_model_context,
+                                                 set_model_context)
 from vllm_mindspore.utils import (STR_DTYPE_TO_MS_DTYPE, create_kv_cache,
                                   is_310p)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
@@ -383,12 +384,13 @@ class NativeModel(MsModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.quant_config = vllm_config.quant_config
-        if vllm_config.lora_config is not None:
-            # native model lora only support pynative mode now
-            vllm_config.model_config.enforce_eager = True
         self.is_eager_mode = vllm_config.model_config.enforce_eager
+        if not self.is_eager_mode and vllm_config.lora_config is not None:
+            self.lora_prefill_graph = None
+            self.lora_decode_graph = None
         self.prefill_graph = None
         self.decode_graph = None
+        set_model_context("enforce_eager", self.is_eager_mode)
 
         if is_mixture_of_experts(self):
             ep_size = get_ep_group().world_size
@@ -630,6 +632,30 @@ class NativeModel(MsModelBase):
         if self.is_eager_mode:
             set_model_context("is_prefill", is_prefill)
             model_output = self.model(**model_inputs)
+            return model_output
+
+        if not get_model_context("no_lora"):
+            # graph mode with lora
+            if is_prefill:
+                self.model.phase = "prefill_for_lora"
+                if self.lora_prefill_graph is None:
+                    set_model_context("is_prefill", True)
+                    self.model._set_jit_graph_name("prefill_for_lora")
+                    self.set_model_inputs(input_ids, positions,
+                                          intermediate_tensors, inputs_embeds)
+                    self.lora_prefill_graph = ms.jit(function=self.model,
+                                                     jit_level="O0")
+                model_output = self.lora_prefill_graph(**model_inputs)
+            else:
+                self.model.phase = "increment_for_lora"
+                if self.lora_decode_graph is None:
+                    set_model_context("is_prefill", False)
+                    self.model._set_jit_graph_name("decode_for_lora")
+                    self.set_model_inputs(input_ids, positions,
+                                          intermediate_tensors, inputs_embeds)
+                    self.lora_decode_graph = ms.jit(function=self.model,
+                                                    jit_level="O0")
+                model_output = self.lora_decode_graph(**model_inputs)
             return model_output
 
         # graph mode

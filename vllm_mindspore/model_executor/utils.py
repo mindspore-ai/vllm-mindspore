@@ -33,7 +33,11 @@ def set_weight_attrs(
         setattr(weight, key, value)
 
 
-_native_model_context = {"is_prefill": True}
+_native_model_context = {
+    "is_prefill": True,
+    "no_lora": True,
+    "enforce_eager": False
+}
 
 
 def set_model_context(key, value):

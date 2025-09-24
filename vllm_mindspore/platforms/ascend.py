@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 else:
     ModelConfig = None
     VllmConfig = None
+from vllm_mindspore.model_executor.utils import get_model_context
 
 logger = init_logger(__name__)
 
@@ -72,7 +73,6 @@ class AscendPlatform(Platform):
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
         parallel_config = vllm_config.parallel_config
         scheduler_config = vllm_config.scheduler_config
-        model_config = vllm_config.model_config
 
         if parallel_config.worker_cls == "auto":
             if scheduler_config.is_multi_step:
@@ -168,7 +168,10 @@ class AscendPlatform(Platform):
         return True
 
     def get_punica_wrapper(cls) -> str:
-        return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"
+        if get_model_context("enforce_eager"):
+            return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"  # noqa E501
+        else:
+            return "vllm_mindspore.lora.punica_wrapper.punica_npu.InferPunicaWrapperNPU"  # noqa E501
 
     @classmethod
     def use_all_gather(cls) -> bool:
