@@ -246,7 +246,7 @@ class Glm4Model(LlamaModel):
                          prefix=prefix,
                          layer_type=Glm4DecoderLayer)
 
-    def load_weights(self, weights: Iterable[tuple[str, Tensor]], params_dict):
+    def load_quant_weights(self, weights: Iterable[tuple[str, Tensor]], params_dict):
         loaded_params: set[str] = set()
         stacked_params_mapping = [
             # shape is (param_name, shard_name, shard_id).
@@ -382,7 +382,7 @@ class Glm4ForCausalLM(NativeModel):
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
-        # if self.vllm_config.model_config.quantization == "smoothquant":
-        #     self.model.load_split_weights(weights, params_dict)
-        # else:
-        self.model.load_weights(weights, params_dict)
+        if self.vllm_config.model_config.quantization == "smoothquant":
+            self.model.load_quant_weights(weights, params_dict)
+        else:
+            self.model.load_weights(weights, params_dict)
