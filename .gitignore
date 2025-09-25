@@ -5,6 +5,7 @@
 build/
 output/
 inferrt/src/pybind/pybind11-src/
+output/
 
 # Cmake files
 CMakeFiles/
