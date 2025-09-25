@@ -405,17 +405,17 @@ class MRotaryEmbedding(RotaryEmbedding):
         context_len: int = 0,
         seq_len: Optional[int] = None,
     ) -> tuple[Tensor, int]:
-        """Get mrope input positions and delta value for GLM4V."""
+        """Get mrope input positions and delta value for GLM4V (NumPy only)."""
 
         image_token_id = hf_config.image_token_id
         video_start_token_id = hf_config.video_start_token_id
         video_end_token_id = hf_config.video_end_token_id
         spatial_merge_size = hf_config.vision_config.spatial_merge_size
-        llm_pos_ids_list: list = []
+        llm_pos_ids_list: list[np.ndarray] = []
 
         if not (image_grid_thw is None and video_grid_thw is None):
             if isinstance(image_grid_thw, Tensor):
-                image_grid_thw = image_grid_thw.tolist()
+                image_grid_thw = image_grid_thw.asnumpy().tolist()
 
             input_token_type: list[str] = []
             video_check_flg = False
@@ -443,7 +443,7 @@ class MRotaryEmbedding(RotaryEmbedding):
             video_frame_num = 1
             mm_data_idx = 0
             for modality_type, start_idx, end_idx in input_type_group:
-                st_idx = llm_pos_ids_list[-1].max() + 1 if len(
+                st_idx = int(llm_pos_ids_list[-1].max() + 1) if len(
                     llm_pos_ids_list) > 0 else 0
                 if modality_type == "image":
                     t, h, w = (
@@ -451,17 +451,24 @@ class MRotaryEmbedding(RotaryEmbedding):
                         image_grid_thw[mm_data_idx][1],
                         image_grid_thw[mm_data_idx][2],
                     )
-                    llm_grid_t, llm_grid_h, llm_grid_w = \
-                        t, h // spatial_merge_size, w // spatial_merge_size
+                    llm_grid_t = int(t)
+                    llm_grid_h = int(h // spatial_merge_size)
+                    llm_grid_w = int(w // spatial_merge_size)
 
-                    t_index = mint.arange(llm_grid_t).view(-1, 1).expand(
-                        -1, llm_grid_h * llm_grid_w).flatten()
-                    h_index = mint.arange(llm_grid_h).view(1, -1, 1).expand(
-                        llm_grid_t, -1, llm_grid_w).flatten()
-                    w_index = mint.arange(llm_grid_w).view(1, 1, -1).expand(
-                        llm_grid_t, llm_grid_h, -1).flatten()
-                    llm_pos_ids_list.append(
-                        mint.stack([t_index, h_index, w_index]) + st_idx)
+                    t_indices, h_indices, w_indices = np.meshgrid(
+                        np.arange(llm_grid_t, dtype=np.int64),
+                        np.arange(llm_grid_h, dtype=np.int64),
+                        np.arange(llm_grid_w, dtype=np.int64),
+                        indexing='ij'
+                    )
+                    
+                    stacked = np.stack([
+                        t_indices.ravel(),
+                        h_indices.ravel(), 
+                        w_indices.ravel()
+                    ], axis=0) + st_idx
+                    
+                    llm_pos_ids_list.append(stacked)
                     mm_data_idx += 1
 
                 elif modality_type == "video":
@@ -470,39 +477,45 @@ class MRotaryEmbedding(RotaryEmbedding):
                         image_grid_thw[mm_data_idx][1],
                         image_grid_thw[mm_data_idx][2],
                     )
-                    llm_grid_t, llm_grid_h, llm_grid_w = \
-                        t, h // spatial_merge_size, w // spatial_merge_size
+                    llm_grid_t = int(t)
+                    llm_grid_h = int(h // spatial_merge_size)
+                    llm_grid_w = int(w // spatial_merge_size)
 
                     for t_idx in range(llm_grid_t):
-                        t_index = tensor(t_idx).view(-1, 1).expand(
-                            -1, llm_grid_h * llm_grid_w).flatten()
-                        h_index = mint.arange(llm_grid_h).view(
-                            1, -1, 1).expand(1, -1, llm_grid_w).flatten()
-                        w_index = mint.arange(llm_grid_w).view(
-                            1, 1, -1).expand(1, llm_grid_h, -1).flatten()
-                        llm_pos_ids_list.append(
-                            mint.stack([t_index, h_index, w_index]) + st_idx)
+                        t_indices, h_indices, w_indices = np.meshgrid(
+                            np.arange(t_idx, dtype=np.int64),
+                            np.arange(llm_grid_h, dtype=np.int64),
+                            np.arange(llm_grid_w, dtype=np.int64),
+                            indexing='ij'
+                        )
+                    
+                        stacked = np.stack([
+                            t_indices.ravel(),
+                            h_indices.ravel(),
+                            w_indices.ravel()
+                        ], axis=0) + st_idx
+
+                        llm_pos_ids_list.append(stacked)
 
                     mm_data_idx += 1
                     video_frame_num += 1
 
                 else:
-                    text_len = end_idx - start_idx
-                    llm_pos_ids_list.append(
-                        mint.arange(text_len).view(1, -1).expand(3, -1) +
-                        st_idx)
+                    text_len = int(end_idx - start_idx)
+                    base = np.arange(text_len, dtype=np.int64)
+                    stacked = np.tile(base, (3, 1)) + st_idx
+                    llm_pos_ids_list.append(stacked)
                     video_frame_num = 1
 
         else:
             text_len = len(input_tokens)
-            llm_pos_ids_list.append(
-                mint.arange(text_len).view(1, -1).expand(3, -1))
+            base = np.arange(text_len, dtype=np.int64)
+            llm_pos_ids_list.append(np.tile(base, (3, 1)))
 
-        llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
+        llm_positions = np.concatenate(llm_pos_ids_list, axis=1).reshape(3, -1)
         llm_positions = llm_positions[:, context_len:seq_len]
-        mrope_position_delta = (llm_positions.max() + 1 -
-                                len(input_tokens)).item()
-        return llm_positions, mrope_position_delta
+        mrope_position_delta = int(llm_positions.max() + 1 - len(input_tokens))
+        return Tensor(llm_positions), mrope_position_delta
 
     @classmethod
     def _vl_get_input_positions_tensor(
