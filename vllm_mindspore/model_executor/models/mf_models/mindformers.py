@@ -438,7 +438,14 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         logits = logits.view(-1, logits.shape[-1])
         return logits
 
+    def capture_start_time(self, weights: Iterable[tuple[str, Tensor]]):
+        """A hook to capture the start time of loading weights."""
+        # To capture the start time of loading weights,
+        # we break after the first iteration.
+        next(weights, None)
+
     @no_grad()
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]):
+        self.capture_start_time(weights)
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None
