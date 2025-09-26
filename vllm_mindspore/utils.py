@@ -320,6 +320,13 @@ def check_ready():
 
     if is_mindformers_model_backend():
         logger.info("Run with Mindformers backend!")
+        if os.getenv("MINDFORMERS_MODEL_CONFIG", None):
+            raise ValueError("MINDFORMERS_MODEL_CONFIG is not supported, "
+                             "please unset MINDFORMERS_MODEL_CONFIG. "
+                             "For usage of vllm_mindspore, refer to "
+                             "https://www.mindspore.cn/vllm_mindspore/"
+                             "docs/zh-CN/master/getting_started/"
+                             "quick_start/quick_start.html")
     elif is_mindone_model_backend():
         logger.info("Run with MindONE backend!")
     elif is_native_model_backend():
