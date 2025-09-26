@@ -43,6 +43,7 @@ class AdapterProfiler:
         self.profiler = Profiler(
             profiler_level=ProfilerLevel.Level1,
             activities=[ProfilerActivity.CPU, ProfilerActivity.NPU],
+            with_stack=True,
             output_path=path,
             start_profile=False)
 

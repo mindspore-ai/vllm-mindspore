@@ -524,6 +524,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         super().__init__(head_size, rotary_dim, self.cache_max_position_num,
                          base, is_neox_style, dtype)
 
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
@@ -605,9 +607,9 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             positions = positions.flatten()
             freqs_cos = self.freqs_cos.index_select(0, positions)
             freqs_sin = self.freqs_sin.index_select(0, positions)
-
-        query = query.contiguous()
-        key = key.contiguous()
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
                                         batch_valid_length)
 
