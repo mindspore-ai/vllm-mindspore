@@ -52,6 +52,12 @@ PROMPT_TEMPLATE = (
     "What is in the image?<|im_end|>\n"
     "<|im_start|>assistant\n")
 
+PROMPT_TEMPLATE_2 = (
+    "<|im_start|>system\nYou are a helpful assistant.<|im_end|>"
+    "\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
+    "Is there anyone in the picture?<|im_end|>\n"
+    "<|im_start|>assistant\n")
+
 video_path = "/home/workspace/mindspore_dataset/video_file/korean_eating.mp4"
 model_path = "/home/workspace/mindspore_dataset/weight/Qwen2.5-VL-7B-Instruct"
 
@@ -75,12 +81,20 @@ def generate_llm_engine(enforce_eager=False, tensor_parallel_size=1):
 
 
 def forward_and_check(llm):
-    inputs = [{
-        "prompt": PROMPT_TEMPLATE,
-        "multi_modal_data": {
-            "image": pil_image()
+    inputs = [
+        {
+            "prompt": PROMPT_TEMPLATE,
+            "multi_modal_data": {
+                "image": pil_image()
+            },
         },
-    }]
+        {
+            "prompt": PROMPT_TEMPLATE_2,
+            "multi_modal_data": {
+                "image": pil_image()
+            },
+        },
+    ]
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=128, top_k=1)

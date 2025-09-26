@@ -65,6 +65,7 @@ def test_deepseek_r1():
         tensor_parallel_size=2,
         max_model_len=4096,
         quantization='ascend',
+        block_size=16,
     )
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
@@ -102,7 +103,8 @@ def test_deepseek_mtp():
               tensor_parallel_size=2,
               max_model_len=4096,
               quantization='ascend',
-              speculative_config={"num_speculative_tokens": 1})
+              speculative_config={"num_speculative_tokens": 1},
+              block_size=16)
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
