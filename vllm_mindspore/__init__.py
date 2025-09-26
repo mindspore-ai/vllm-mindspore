@@ -346,6 +346,7 @@ from vllm.inputs.registry import InputProcessingContext
 InputProcessingContext.call_hf_processor = call_hf_processor
 
 from vllm_mindspore.multimodal.inputs import (as_kwargs, batched_reduce_data,
+                                              flat_build_elems,
                                               flat_reduce_data, from_items,
                                               MultiModalFieldElem, _try_stack)
 
@@ -354,6 +355,7 @@ from vllm.multimodal.inputs import MultiModalFlatField
 from vllm.multimodal.inputs import MultiModalKwargs
 
 MultiModalBatchedField._reduce_data = batched_reduce_data
+MultiModalFlatField.build_elems = flat_build_elems
 MultiModalFlatField._reduce_data = flat_reduce_data
 MultiModalKwargs.as_kwargs = as_kwargs
 MultiModalKwargs.from_items = from_items

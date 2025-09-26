@@ -19,6 +19,7 @@
 # limitations under the License.
 """Adaption for mindspore."""
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Union, cast
 
@@ -109,6 +110,16 @@ def from_items(items):
     }
 
     return MultiModalKwargs(data, items=items)
+
+
+def flat_build_elems(
+    self,
+    modality: str,
+    key: str,
+    data: NestedTensors,
+) -> Sequence[MultiModalFieldElem]:
+    field_factory = self._field_factory(modality=modality, key=key)
+    return [field_factory(data[cast(slice, s)]) for s in self.slices]
 
 
 def batched_reduce_data(self, batch: list[NestedTensors]) -> NestedTensors:
