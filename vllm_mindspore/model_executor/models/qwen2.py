@@ -35,12 +35,15 @@ if TYPE_CHECKING:
 else:
     Qwen2Config = None
 
-from mindspore import Parameter, Tensor, mint, nn
 from mindspore.nn.utils import no_init_parameters
+from mindspore import Parameter, Tensor, mint, nn, ops
+from mindspore.communication.management import get_rank
 
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
-from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
+from vllm.distributed import (get_pp_group,
+                              get_tensor_model_parallel_world_size,
+                              get_tensor_model_parallel_rank)
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
@@ -62,6 +65,7 @@ from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
+from vllm_mindspore.utils import is_310p, FORMAT_TYPE
 
 
 class Qwen2MLP(nn.Cell):
@@ -363,8 +367,55 @@ class Qwen2Model(nn.Cell):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
+    def load_sparsequant_weights(self, weights: Iterable[tuple[str, Tensor]],
+                                 params_dict: dict[str, Parameter]):
+        weights_dict = dict(weights)
+
+        for name, loaded_weight in weights_dict.items():
+            if get_tensor_model_parallel_rank(
+            ) > 0 and "o_proj.quant_bias" in name:
+                continue
+
+            if name not in params_dict:
+                continue
+
+            param = params_dict[name]
+            param.set_data(Tensor(loaded_weight[:]).contiguous())
+
+        def adjust_weight(params_dict):
+            if not is_310p():
+                return
+
+            target_keywords = [
+                "qkv_proj.weight",
+                "o_proj.weight",
+                "gate_up_proj.weight",
+                "down_proj.weight",
+                "lm_head.weight",
+            ]
+
+            rank_id = get_rank()
+            for name, param in params_dict.items():
+                if any(name.endswith(keyword) for keyword in target_keywords):
+                    weight_type = self.quant_config.full_config[
+                        f"rank_{rank_id}"][name]
+                    if weight_type.lower() == "w8a8s":
+                        # Compressed weights do not need to be
+                        # converted to Nz format.
+                        continue
+
+                    cast_weight = ops.auto_generate.format_cast(
+                        param, FORMAT_TYPE['nz'])
+                    param.set_data(cast_weight)
+
+        if is_310p():
+            adjust_weight(params_dict)
+
     def load_weights(self, weights: Iterable[tuple[str, Tensor]],
                      params_dict: dict[str, Parameter]):
+        if self.quant_config is not None and self.quant_config.sparse_quant:
+            self.load_sparsequant_weights(weights, params_dict)
+            return
         loaded_params: set[str] = set()
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id) # noqa: ERA001
@@ -376,6 +427,10 @@ class Qwen2Model(nn.Cell):
         ]
 
         for name, loaded_weight in weights:
+            if get_tensor_model_parallel_rank(
+            ) > 0 and "o_proj.quant_bias" in name:
+                continue
+
             if "rotary_emb.inv_freq" in name:
                 continue
             if ("rotary_emb.cos_cached" in name

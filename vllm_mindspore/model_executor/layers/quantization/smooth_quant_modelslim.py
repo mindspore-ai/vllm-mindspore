@@ -19,15 +19,16 @@ from typing import Any, Optional
 import mindspore
 import numpy as np
 import regex as re
-from mindspore import Parameter, Tensor, mint
+from mindspore import Parameter, Tensor, mint, ops
 from mindspore.common.initializer import initializer
+from mindspore.communication import get_rank
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
                                          GroupedMatmulV4, QuantBatchMatmul)
 from mindspore.ops.operations._infer_ops import QuantV2
 
 from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.linear import (
-    LinearBase, LinearMethodBase, UnquantizedLinearMethod)
+    LinearBase, LinearMethodBase, RowParallelLinear, UnquantizedLinearMethod)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
@@ -49,12 +50,16 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
         modules_to_not_convert: Optional[list[str]] = None,
     ) -> None:
         super().__init__()
+        self.fa3_quant = False
+        self.fa3_quant_layer = set()
+        self.rank_id = get_rank()
         self.full_config = full_config
         self.weight_bits = weight_bits
         self.group_size = group_size
         self.zero_point = zero_point
         self.dynamic_quant = dynamic_quant
         self.kv_cache_bits = kv_cache_bits
+        self.sparse_quant = False
         self.modules_to_not_convert = modules_to_not_convert or []
 
         if self.weight_bits != 8:
@@ -87,7 +92,11 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
 
     @staticmethod
     def get_config_filenames() -> list[str]:
-        return ["quant_model_description.json"]
+        return [
+            "quant_model_description.json",
+            "quant_model_description_w8a8.json",
+            "quant_model_description_w8a8s.json"
+        ]
 
     @classmethod
     def from_config(cls, config: dict[str,
@@ -112,6 +121,18 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
             if quant_config and quant_config.lower() == 'w8a8_dyn':
                 self.dynamic_quant = True
                 return A8W8DYNLinearMethod(self)
+            if f'rank_{self.rank_id}' in self.full_config:
+                sparse_quant_description = self.full_config[
+                    f'rank_{self.rank_id}']
+                if sparse_quant_description[f"{prefix}.weight"].lower(
+                ) == "w8a8s":
+                    self.sparse_quant = True
+                    compress_weight_size = sparse_quant_description[
+                        f"{prefix}.weight.shape"]
+                    compress_index_size = sparse_quant_description[
+                        f"{prefix}.index.shape"]
+                    return A8W8SCLinearMethod(self, compress_weight_size[0],
+                                              compress_index_size[0])
 
         print(f"get_quant_method unmatched {layer.__class__.__name__}, "
               f"{quant_key,self.full_config.get(quant_key)}")
@@ -539,3 +560,120 @@ class A8W8DYNLinearMethod(LinearMethodBase):
             qx = mint.add(qx, bias)
         qx = qx.reshape(output_shape)
         return qx
+
+
+class A8W8SCLinearMethod(LinearMethodBase):
+    '''Linear method for A8W8SCLinearMethod.'''
+
+    def __init__(self,
+                 quant_config: SmoothQuantModelSlimConfig,
+                 compress_weight_size=None,
+                 compress_index_size=None):
+        self.quant_config = quant_config
+        self.quant = QuantV2()
+        self.compress_weight_size = compress_weight_size
+        self.compress_index_size = compress_index_size
+        self.linear_sparse = ops.auto_generate.QuantLinearSparse()
+
+    def create_weights(self,
+                       layer: mindspore.nn.Cell,
+                       input_size_per_partition: int,
+                       output_partition_sizes: list[int],
+                       input_size: int,
+                       output_size: int,
+                       params_dtype,
+                       is_group_mm=False,
+                       expert_num_per_partition=1,
+                       **extra_weight_attrs):
+        if input_size_per_partition % self.quant_config.group_size != 0:
+            raise ValueError(
+                "The input size is not aligned with the quantized "
+                "weight shape. This can be caused by too large "
+                "tensor parallel size.")
+
+        output_size_per_partition = sum(output_partition_sizes)
+        self.output_size_per_partition = output_size_per_partition
+        self.input_size_per_partition = input_size_per_partition
+        if output_size_per_partition % self.quant_config.pack_factor != 0:
+            raise ValueError(
+                "The output size is not aligned with the quantized "
+                "weight shape. This can be caused by too large "
+                "tensor parallel size.")
+
+        weight = Parameter(initializer('normal', (self.compress_weight_size),
+                                       mindspore.int8),
+                           name="weight")
+        index = Parameter(initializer('normal', (self.compress_index_size),
+                                      mindspore.int8),
+                          name="index")
+        deq_scale = Parameter(initializer('normal',
+                                          (self.output_size_per_partition),
+                                          mindspore.int64),
+                              name="deq_scale")
+        quant_bias = Parameter(initializer('zeros',
+                                           (self.output_size_per_partition),
+                                           mindspore.int32),
+                               name="quant_bias")
+        input_scale = Parameter(Tensor(np.ones(self.input_size_per_partition),
+                                       mindspore.float16),
+                                name="input_scale")
+        input_offset = Parameter(Tensor(
+            np.zeros(self.input_size_per_partition), mindspore.int8),
+                                 name="input_offset")
+
+        layer.insert_param_to_cell("weight", weight)
+        layer.insert_param_to_cell("index", index)
+        layer.insert_param_to_cell("deq_scale", deq_scale)
+        layer.insert_param_to_cell("quant_bias", quant_bias)
+        layer.insert_param_to_cell("input_scale", input_scale)
+        layer.insert_param_to_cell("input_offset", input_offset)
+
+    def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
+        input_scale = layer.input_scale.asnumpy()
+        input_offset = layer.input_offset.asnumpy()
+        if input_scale.shape == (1, ) and input_offset.shape == (1, ):
+            input_scale = np.full(shape=self.input_size_per_partition,
+                                  fill_value=input_scale[0])
+            input_offset = np.full(shape=self.input_size_per_partition,
+                                   fill_value=input_offset[0])
+            layer.input_scale = Parameter(Tensor(input_scale,
+                                                 dtype=mindspore.float16),
+                                          name=layer.input_scale.name,
+                                          requires_grad=False)
+            layer.input_offset = Parameter(Tensor(input_offset,
+                                                  dtype=mindspore.int8),
+                                           name=layer.input_offset.name,
+                                           requires_grad=False)
+        rank_id = get_rank()
+        if isinstance(layer, RowParallelLinear) and \
+            layer.quant_bias is not None and\
+            rank_id != 0:
+            quant_bias = np.zeros_like(layer.quant_bias, dtype=np.int32)
+            layer.quant_bias = Parameter(Tensor(quant_bias,
+                                                dtype=mindspore.int32),
+                                         name=layer.quant_bias.name,
+                                         requires_grad=False)
+
+    def apply(self,
+              layer: mindspore.nn.Cell,
+              x: mindspore.Tensor,
+              bias: mindspore.Parameter = None,
+              group_list=None,
+              cumsum_flag=False) -> mindspore.Tensor:
+        weight = layer.weight
+        index = layer.index
+        deq_scale = layer.deq_scale
+        quant_bias = layer.quant_bias
+        input_scale = layer.input_scale
+        input_offset = layer.input_offset
+
+        output_shape = x.shape[:-1] + (self.output_size_per_partition, )
+        x = x.reshape(-1, self.input_size_per_partition)
+
+        x = self.quant(x, input_scale, input_offset, False, "ROUND",
+                       mindspore.int8)
+        x = self.linear_sparse(x, weight, deq_scale, index, quant_bias)
+
+        x = x.reshape(output_shape)
+
+        return x

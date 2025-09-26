@@ -31,7 +31,7 @@ from tests.st.python.utils.env_var_manager import EnvVarManager
 env_manager = EnvVarManager()
 env_manager.setup_mindformers_environment()
 env_vars = {
-    "vLLM_MODEL_BACKEND": "MindFormers",
+    "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
     "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
