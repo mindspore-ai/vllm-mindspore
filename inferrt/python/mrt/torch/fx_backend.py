@@ -1,9 +1,12 @@
-import torch
+"""
+A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
+"""
+
 import operator
 from typing import List, Dict, Any
+import torch
 from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
-from torch.fx.passes.fake_tensor_prop import FakeTensorProp
 
 from mrt.ir import GraphExecutor, Op
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data
@@ -66,6 +69,7 @@ _OP_MAP = {
 
 
 def _get_op(target):
+    """Get the corresponding Op enum for a given target."""
     if isinstance(target, str):
         return _OP_MAP.get(target)
     if callable(target):
@@ -74,10 +78,6 @@ def _get_op(target):
             return op
         # For torch ops that are not in _OP_MAP, try to get their name
         # and look up in the Op enum. This is more generic.
-        if hasattr(target, "_overloadpacket"):
-            op_name = target._overloadpacket.__name__
-            if hasattr(Op, op_name):
-                return getattr(Op, op_name)
         if hasattr(target, "__name__"):
             op_name = target.__name__
             if hasattr(Op, op_name):
@@ -86,6 +86,11 @@ def _get_op(target):
 
 
 def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
+    """
+    Map torch.fx node arguments to GraphExecutor nodes.
+    This function handles nested structures like lists and tuples.
+    """
+
     def _map_arg(arg: Any) -> Node:
         if isinstance(arg, Node):
             return env[arg]
@@ -104,7 +109,6 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
     and returns a callable that executes the compiled graph.
     """
-    FakeTensorProp(gm).propagate(*example_inputs)
     gm.print_readable()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
@@ -137,7 +141,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     raise NotImplementedError(f"Unsupported op: {node.target}")
 
                 input_nodes = _map_args(node.args, env, executor)
-                output_value = from_torch(node.meta.get("val", None))
+                output_value = from_torch(node.meta.get("example_value", None))
 
                 env[node] = executor.add_op_node(op, input_nodes, output_value)
 

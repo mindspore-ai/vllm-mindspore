@@ -26,7 +26,8 @@
 #include "common/logger.h"
 
 namespace py = pybind11;
-using namespace mrt;
+namespace ir = mrt::ir;
+namespace hardware = mrt::hardware;
 
 namespace {
 // DataType conversion utilities
@@ -105,7 +106,17 @@ at::Device ToTorchDevice(const hardware::Device device) {
 // Create a new mrt Tensor with a weak ref to torch Tensor data
 ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
   ir::DataType type = FromTorchDType(tensor.scalar_type());
-  std::vector<int64_t> shape(tensor.sizes().begin(), tensor.sizes().end());
+  std::vector<int64_t> shape;
+  shape.reserve(tensor.dim());
+  for (auto &dim : tensor.sym_sizes()) {
+    if (dim.is_symbolic()) {
+      (void)shape.emplace_back(-1);
+    } else if (dim.maybe_as_int().has_value()) {
+      (void)shape.emplace_back(dim.maybe_as_int().value());
+    } else {
+      LOG_EXCEPTION << "Dynamic shape with non-int dimension is not supported";
+    }
+  }
   auto device = FromTorchDevice(tensor.device());
   if (isFake) {
     return ir::MakeIntrusive<ir::Tensor>(shape, type, device);
@@ -143,19 +154,19 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   }
 }
 
-void UpdateTensorData(ir::Tensor &self, const at::Tensor &atTensor) {
+void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
   ir::DataType type = FromTorchDType(atTensor.scalar_type());
   std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
   void *data = atTensor.data_ptr();
 
-  if (self.GetDevice() != FromTorchDevice(atTensor.device())) {
+  if (self->GetDevice() != FromTorchDevice(atTensor.device())) {
     LOG_EXCEPTION << "Device mismatch in update_tensor_data";
   }
 
-  self.SetDtype(type);
-  self.SetShape(std::move(shape));
-  self.Resize();
-  self.UpdateData(data);
+  self->SetDtype(type);
+  self->SetShape(std::move(shape));
+  self->Resize();
+  self->UpdateData(data);
 }
 }  // namespace
 
