@@ -279,9 +279,9 @@ class Glm4vVisionAttention(nn.Cell):
         # q/k reshape to TH
         q = q.astype(origin_dtype)
         k = k.astype(origin_dtype)
-        q = q.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
-        k = k.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
-        v = v.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head).contiguous()
+        q = q.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head)
+        k = k.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head)
+        v = v.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head)
 
         _, _, _, context_layer = self.flash_attention_score(
             q,

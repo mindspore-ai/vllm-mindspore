@@ -37,4 +37,4 @@ class SiluAndMul(nn.Cell):
     def construct(self, x):
         d = x.shape[-1] // 2
         gate, hidden = mint.split(x, [d, d], dim=-1)
-        return mint.mul(hidden, mint.nn.functional.silu(gate.contiguous()))
+        return mint.mul(hidden, mint.nn.functional.silu(gate))

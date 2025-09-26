@@ -641,7 +641,7 @@ class RowParallelLinear(LinearBase):
             tp_rank = get_tensor_model_parallel_rank()
             splitted_input = split_tensor_along_last_dim(
                 input_, num_partitions=self.tp_size)
-            input_parallel = splitted_input[tp_rank].contiguous()
+            input_parallel = splitted_input[tp_rank]
 
         # Matrix multiply.
         assert self.quant_method is not None
