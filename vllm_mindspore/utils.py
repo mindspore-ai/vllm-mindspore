@@ -67,7 +67,7 @@ FORMAT_TYPE = {
 }
 
 
-def create_kv_cache(kv_shape, dtype):
+def create_kv_cache(kv_shape, dtype, is_fa3_quant=False):
     if is_310p():
         if len(kv_shape) != 4:
             raise ValueError(f"Format_cast op need kv_cache shape be"
@@ -80,6 +80,16 @@ def create_kv_cache(kv_shape, dtype):
 
         return ms.ops.auto_generate.format_cast(zeros_tensor,
                                                 FORMAT_TYPE['nz'])
+    if is_fa3_quant:
+        if len(kv_shape) != 4:
+            raise ValueError(f"trans_data op need kv_cache shape be"
+                             f"(num_blocks, block_size, head_dim, kv_dim), "
+                             f"but got {len(kv_shape)} dimensions: {kv_shape}")
+        num_blocks, block_size, head_dim, kv_dim = kv_shape
+        reshaped_for_nz = (num_blocks, block_size, head_dim * kv_dim)
+        zeros_tensor = ms.mint.zeros(reshaped_for_nz, dtype=dtype)
+        import ms_custom_ops
+        return ms_custom_ops.trans_data(zeros_tensor, transdata_type=1)
     return ms.mint.zeros(kv_shape, dtype=dtype)
 
 
