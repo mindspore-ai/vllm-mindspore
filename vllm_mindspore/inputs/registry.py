@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Adapted from
-# https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/inputs/registry.py
-#
 # Copyright 2025 Huawei Technologies Co., Ltd.
-# Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +15,10 @@
 # limitations under the License.
 """Adaption for input processor."""
 
-from vllm.inputs.registry import (BatchFeature, Mapping, ProcessorMixin,
-                                  resolve_mm_processor_kwargs)
+from vllm.inputs.registry import (BatchFeature, InputProcessingContext,
+                                  Mapping, ProcessorMixin)
+
+origin_call_hf_processor = InputProcessingContext.call_hf_processor
 
 
 def call_hf_processor(
@@ -30,28 +28,16 @@ def call_hf_processor(
         kwargs: Mapping[str, object] = {},  # noqa: B006
 ) -> BatchFeature:
     """
-    Call :code:`hf_processor` on the prompt :code:`data`
-    (text, image, audio...) with configurable options :code:`kwargs`.
+    Call :code:`hf_processor` to get numpy tensors.
     """
-    assert callable(hf_processor)
 
-    base_kwargs = self.model_config.mm_processor_kwargs
-    if base_kwargs is None:
-        base_kwargs = {}
+    def _wrapper(func):
 
-    merged_kwargs = resolve_mm_processor_kwargs(
-        base_kwargs,
-        kwargs,
-        hf_processor,
-        requires_kw_only=False,
-        allow_var_kwargs=True,
-    )
+        def _inner(*args, **kwargs):
+            kwargs["return_tensors"] = "np"
+            return func(*args, **kwargs)
 
-    # replace call_hf_processor of vLLM for multi-model
-    try:
-        return hf_processor(**data, **merged_kwargs, return_tensors="np")
-    except Exception as exc:
-        msg = (f"Failed to apply {type(hf_processor).__name__} "
-               f"on data={data} with kwargs={merged_kwargs}")
+        return _inner
 
-        raise RuntimeError(msg) from exc
+    wrapped_hf_processor = _wrapper(hf_processor)
+    return origin_call_hf_processor(self, wrapped_hf_processor, data, kwargs)
