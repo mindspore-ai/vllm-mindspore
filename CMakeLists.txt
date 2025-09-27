@@ -27,7 +27,8 @@ function(check_debug_log_out)
 endfunction()
 
 if(ENABLE_TORCH_FRONT)
-  execute_process(COMMAND python -c "import torch; print(torch.compiled_with_cxx11_abi())" OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND python -c "import torch; print(torch.compiled_with_cxx11_abi())"
+  OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 
   if("${PYTORCH_CXX11_ABI_VERSION}" STREQUAL "True")
     message("-- Enable _GLIBCXX_USE_CXX11_ABI")
@@ -39,4 +40,7 @@ if(ENABLE_TORCH_FRONT)
 endif()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/inferrt/src)
-add_subdirectory(${PROJECT_SOURCE_DIR}/tests)
+if(BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(${PROJECT_SOURCE_DIR}/tests)
+endif()
