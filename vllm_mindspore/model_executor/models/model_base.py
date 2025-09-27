@@ -89,21 +89,14 @@ class MLAAttentionWrapper(AttentionWrapper):
                                        'qk_rope_head_dim', 0)
             # k_shape, r_shape used for mla_op
             if fa3_quant:
-                # num_block is set to 1 because setting it to 0,
-                # format_cast ops may not recycle device memory
-                k_shape = [1, *(self.kv_shape[1:-2]), kv_lora_rank]
-                r_shape = [1, *(self.kv_shape[1:-2]), qk_rope_head_dim]
-                # Currently, transdata has a bug and ms.jit must be added.
-                # Later, ms.jit will be removed.
-                import ms_custom_ops
-                self.kv_cache = [(ms.jit(ms_custom_ops.trans_data)(
+                k_shape = [*(self.kv_shape[0:-2]), kv_lora_rank]
+                r_shape = [*(self.kv_shape[0:-2]), qk_rope_head_dim]
+                self.kv_cache = [(
                     ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
-                    transdata_type=1), ms.jit(ms_custom_ops.trans_data)(
-                        ms.mint.zeros(r_shape,
-                                      dtype=vllm_config.model_config.dtype),
-                        transdata_type=1)) for _ in range(
-                            vllm_config.parallel_config.pipeline_parallel_size)
-                                 ]
+                    ms.mint.zeros(r_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                ) for _ in range(
+                    vllm_config.parallel_config.pipeline_parallel_size)]
             else:
                 k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
