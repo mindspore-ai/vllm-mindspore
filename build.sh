@@ -20,6 +20,7 @@ usage()
   echo "    -f Enable frontend, default compile all frontend"
   echo "    -b Enable backend, default compile cpu backend"
   echo "    -e Enable download cmake compile dependency from gitee, default off"
+  echo "    -O Enable optimizer, default off"
 }
 
 process_options()
@@ -30,8 +31,9 @@ process_options()
     # Default compile all frontend
     export ENABLE_MINDSPORE_FRONT=1
     export ENABLE_TORCH_FRONT=1
+    export BUILD_OPT=0 # Default disable optimizer for now
 
-    while getopts 'Dd:hitf:b:e' OPT; do
+    while getopts 'Dd:hitf:b:eO' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -48,6 +50,7 @@ process_options()
                 ;;
             i) export INC_BUILD=1;;
             t) export BUILD_TESTS=1;;
+            O) export BUILD_OPT=1;;
             h)
                 usage
                 exit 0
@@ -140,13 +143,28 @@ else
     export CCACHE_CMAKE_ARGS=""
 fi
 
+
+# Build mopt
+if [[ $BUILD_OPT == 1 ]]; then
+    # Build mlir
+    export LLVM_INSTALL_PREFIX="$BUILD_DIR/third_party/install/llvm"
+    export TORCHMLIR_INSTALL_PREFIX="$BUILD_DIR/third_party/install/torch_mlir"
+    if [[ $INC_BUILD != 1 ]]; then
+        bash "${CURRENT_PATH}/scripts/build_llvm.sh"
+    fi
+    export MLIR_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/mlir"
+    export LLVM_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/llvm"
+    MOPT_CMAKE_ARGS="-DENABLE_OPTIMIZER=on -DMLIR_DIR=${MLIR_DIR} -DLLVM_DIR=${LLVM_DIR}"
+else
+    MOPT_CMAKE_ARGS=""
+fi
+
 ##################################################
 # Make da & dapy execution and shared library
 ##################################################
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
-    rm "${BUILD_DIR:?}/"* -rf
-    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS
+    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $MOPT_CMAKE_ARGS
 fi
 make
 

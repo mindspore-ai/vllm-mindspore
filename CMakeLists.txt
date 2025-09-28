@@ -39,6 +39,10 @@ if(ENABLE_TORCH_FRONT)
   endif()
 endif()
 
+if(ENABLE_OPTIMIZER)
+  add_subdirectory(${PROJECT_SOURCE_DIR}/mopt)
+endif()
+
 add_subdirectory(${PROJECT_SOURCE_DIR}/inferrt/src)
 if(BUILD_TESTS)
   enable_testing()
