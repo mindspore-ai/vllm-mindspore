@@ -85,15 +85,17 @@ from vllm_mindspore.v1.engine.core import shutdown
 
 vllm.v1.engine.core.DPEngineCoreProc.shutdown = shutdown
 
-from vllm_mindspore.v1.core.kv_cache_utils import get_kv_cache_config
+from vllm_mindspore.v1.core.kv_cache_utils import (get_kv_cache_config,
+                                                   unify_kv_cache_configs)
 
 vllm.v1.core.kv_cache_utils.get_kv_cache_config = get_kv_cache_config
 vllm.v1.engine.core.get_kv_cache_config = get_kv_cache_config
-from vllm_mindspore.v1.core.single_type_kv_cache_manager import (
-    find_longest_cache_hit, spec_manager_map)
+vllm.v1.core.kv_cache_utils.unify_kv_cache_configs = unify_kv_cache_configs
+vllm.v1.engine.core.unify_kv_cache_configs = unify_kv_cache_configs
 
-vllm.v1.core.single_type_kv_cache_manager.FullAttentionManager.\
-    find_longest_cache_hit = find_longest_cache_hit
+from vllm_mindspore.v1.core.single_type_kv_cache_manager import (
+    spec_manager_map)
+
 vllm.v1.core.single_type_kv_cache_manager.spec_manager_map = spec_manager_map
 
 from vllm_mindspore.utils import (
