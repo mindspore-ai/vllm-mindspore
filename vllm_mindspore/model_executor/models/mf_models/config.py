@@ -82,7 +82,7 @@ MF_CTX_MAPPING = {
 
 # yapf: disable # noqa: ERA001
 MF_PARALLEL_MAPPING = {
-    'parallel_mode': (None, 'STAND_ALONE'),
+    'parallel.parallel_mode': (None, 'STAND_ALONE'),
     'parallel_config.model_parallel': ('parallel_config.tensor_parallel_size', None),
     'parallel_config.pipeline_stage': ('parallel_config.pipeline_parallel_size', None),
     'parallel_config.data_parallel': ('parallel_config.data_parallel_size', None),

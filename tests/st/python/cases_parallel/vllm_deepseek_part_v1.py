@@ -60,7 +60,9 @@ def test_deepseek_r1():
     llm = LLM(
         model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
         trust_remote_code=True,
-        gpu_memory_utilization=0.9,
+        gpu_memory_utilization=0.8,
+        # Reduce gpu_memory_utilization because new memory will be allocated
+        # during the warm-up stage, otherwise, it may cause OOM.
         tensor_parallel_size=2,
         max_model_len=4096,
         quantization='ascend',

@@ -90,8 +90,10 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
                                      max_tokens=3)
 
     # Create an LLM.
+    gpu_memory_utilization = 0.7 if model_path == ds_model_path else 0.9
     llm = LLM(model=model_path,
               tensor_parallel_size=tp_size,
+              gpu_memory_utilization=gpu_memory_utilization,
               max_model_len=4096,
               max_num_batched_tokens=8,
               max_num_seqs=8,

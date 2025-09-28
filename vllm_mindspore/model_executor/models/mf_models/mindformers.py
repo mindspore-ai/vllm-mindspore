@@ -20,7 +20,7 @@ from typing import Optional, Union
 import mindspore as ms
 import numpy as np
 from mindformers import AutoModel, PreTrainedModel
-from mindformers.core.context import build_mf_context
+from mindformers.core.context import build_mf_context, build_parallel_context
 from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
@@ -67,6 +67,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.set_decode_flags = False
 
         build_mf_context(self.mf_config)
+        mf_par_ctx = build_parallel_context(self.mf_config)
+        mf_par_ctx.init_communication()
         if self.mla_config:
             self._set_runtime_kernel_launch_group()
 
