@@ -138,6 +138,7 @@ class MsModelBase:
             self.parallel_config)
 
         self.set_flags: bool = False
+        self.set_chunked_flags: bool = False
         self.kv_caches: list[Any] = []
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -290,7 +291,9 @@ class MsModelBase:
         seq_lens_np = np.array([input_len], dtype=np.int32)
         context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not \
                             self.set_flags else ms.Tensor([1], dtype=ms.int32)
-
+        # create input for chunked graph.
+        num_prompt_tokens = seq_lengths + 1 \
+            if (self.set_flags and not self.set_chunked_flags) else seq_lengths
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
@@ -306,7 +309,7 @@ class MsModelBase:
             # So set max_context_lens to 0 for prefill and 1 for decode.
             max_context_lens=0 if not self.set_flags else 1,
             query_start_loc=None,
-            num_prompt_tokens=seq_lengths)
+            num_prompt_tokens=num_prompt_tokens)
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata

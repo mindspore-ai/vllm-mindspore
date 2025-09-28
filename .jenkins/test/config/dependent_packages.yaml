@@ -1,11 +1,11 @@
 mindspore:
-  'https://repo.mindspore.cn/mindspore/mindspore/version/202509/20250925/master_20250925010016_22f21404a880c9932bcd86594836ff1476a1e4ba_newest/'
+  'https://repo.mindspore.cn/mindspore/mindspore/version/202509/20250927/master_20250927010016_1bd70be392807891ccb1c5f247beff2e7c3403a4_newest/'
 
 mindspore_gs:
   'https://repo.mindspore.cn/mindspore/golden-stick/version/202509/20250901/master_20250901221800_3e34fd43040b0c5d296e6bc1a82212deae3ee041_newest/'
 
 msadapter:
-  'https://repo.mindspore.cn/mindspore/msadapter/version/202509/20250906/master_20250906160017_75be4576b7f1081f95dd8b6bca95b0b9a6697f49_newest/'
+  'https://repo.mindspore.cn/mindspore/msadapter/version/202509/20250927/master_20250927010016_9d331d34b4371f874360a0ba2a9b8a543bd28964_newest/'
 
 vllm:
   'https://repo.mindspore.cn/mirrors/vllm/version/202507/20250715/v0.9.1/'

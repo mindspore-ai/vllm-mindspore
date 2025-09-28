@@ -50,7 +50,6 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
-        self.set_flags = False
         self.model_config = vllm_config.model_config
         self.lm_head_graph = None
         self.is_eager_mode = vllm_config.model_config.enforce_eager
@@ -63,7 +62,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             'model_config', None).get('multi_latent_attention', False)
         self.use_ringmla = is_use_ringmla(vllm_config, mf_config)
         self.mf_config.model.model_config.use_fused_mla = self.use_ringmla
-        self.is_chunked = False
+        # run chunked graph independently only if ringmla enabled.
+        self.set_chunked_flags = not self.use_ringmla
+        self.set_decode_flags = False
 
         build_mf_context(self.mf_config)
         if self.mla_config:
@@ -358,25 +359,24 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             # used for deepseek-mtp
             model_inputs["hidden_states"] = kwargs["previous_hidden_states"]
 
-        if is_prefill or is_ringmla_chunked:
-            self.network.phase = \
-                "prefill" if not is_ringmla_chunked else "chunked"
-            if not self.set_flags or self.is_eager_mode:
-                self.network.add_flags_custom_mcore(is_prefill=True)
-                if hasattr(self.network, 'add_flags_chunked'):
-                    # chunked means 3-rd graph "chunked"
-                    self.network.add_flags_chunked(
-                        is_chunked=is_ringmla_chunked)
-                # ringmla_chunked means computing chunked-prefills on ringmla
-                self.is_chunked |= is_ringmla_chunked
-            hidden_states = self.network(**model_inputs)
-            self.network.phase = "increment"
-            if not self.set_flags or self.is_eager_mode:
-                self.network.add_flags_custom_mcore(is_prefill=False)
-                self.set_flags = (True
-                                  if not self.use_ringmla else self.is_chunked)
-        else:
-            hidden_states = self.network(**model_inputs)
+        self.network.phase = "prefill" if is_prefill else \
+            "chunked" if is_ringmla_chunked else "increment"
+        if (not self.set_flags or not self.set_chunked_flags
+                or self.is_eager_mode):
+            self.set_flags = True
+            self.network.add_flags_custom_mcore(is_prefill=True)
+            if hasattr(self.network, 'add_flags_chunked'):
+                # chunked means 3-rd graph "chunked"
+                self.network.add_flags_chunked(is_chunked=is_ringmla_chunked)
+            # ringmla_chunked means computing chunked-prefills on ringmla
+            self.set_chunked_flags |= is_ringmla_chunked
+        elif not self.set_decode_flags or self.is_eager_mode:
+            self.network.add_flags_custom_mcore(is_prefill=False)
+            if hasattr(self.network, 'add_flags_chunked'):
+                self.network.add_flags_chunked(is_chunked=False)
+            self.set_decode_flags = True
+
+        hidden_states = self.network(**model_inputs)
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})
