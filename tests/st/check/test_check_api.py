@@ -20,6 +20,11 @@ from tests.mark_utils import arg_mark
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dump", (True, False))
 def test_jit(dump):
+    """
+    Feature: JIT compilation
+    Description: Test JIT decorator functionality when dump_compiler is enabled/disabled
+    Expectation: Function executes correctly and returns expected result in both dump modes
+    """
     @jit(dump_compiler=dump)
     def run_check(x, y):
         print('hello world.\n')

@@ -16,14 +16,22 @@ DART project is a collection of programming language, intermediate representatio
 bash build.sh
 ```
 
-### Build with unit tests
+### Build with tests
 
 ```bash
 bash build.sh -t
 ```
 
-### Run all unit tests
+### Run tests
+
+Run system tests
 
 ```bash
-bash tests/ut/cpp/run_test.sh
+bash tests/st/runtest.sh {cpu|ascend}
+```
+
+Run unit tests
+
+```bash
+bash tests/ut/runtest.sh {cpp|python}
 ```
