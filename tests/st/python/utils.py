@@ -79,7 +79,7 @@ class EnvVarManager:
         else:
             os.environ["PYTHONPATH"] = mindformers_path
 
-        os.environ["MS_DISABLE_INTERNAL_KERNELS_LIST"] = "QuantBatchMatmul"
+        os.environ['MS_ENABLE_TRACE_MEMORY'] = "off"
 
         # Update environments.
         for var_name, value in env_vars.items():
