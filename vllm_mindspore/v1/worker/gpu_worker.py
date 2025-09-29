@@ -30,7 +30,8 @@ def compile_or_warm_up_model(self) -> None:
     # Since prefill is done previously, we do decode here.
     default_max_num_reqs = 1  # For MindSpore, we only do one more decode here.
 
-    if hasattr(self.model_runner.model, 'set_chunked_flags'):
+    if hasattr(self.model_runner.model, 'has_chunked_warmup') \
+            and not self.model_runner.model.has_chunked_warmup:
         logger.info("Warmup for chunked graph.")
         self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
 
