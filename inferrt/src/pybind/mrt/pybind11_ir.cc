@@ -24,16 +24,16 @@
 #include "ops/op_def/ops_name.h"
 
 namespace py = pybind11;
-using namespace mrt;
-using namespace mrt::runtime;
+namespace ir = mrt::ir;
+using mrt::runtime::GraphExecutor;
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 
 PYBIND11_MODULE(_mrt_ir, m) {
   m.doc() = "Python binding for MRT";
 
-  py::enum_<ops::Op>(m, "Op")
-#define OP(O) .value(#O, ops::Op_##O)
+  py::enum_<mrt::ops::Op>(m, "Op")
+#define OP(O) .value(#O, mrt::ops::Op_##O)
 #include "ops/op_def/ops.list"
 #undef OP
     .export_values();
@@ -62,6 +62,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
   py::class_<ir::Value, ir::ValuePtr>(m, "Value")
     .def(py::init<>())
     .def(py::init<const ir::TensorPtr &>())
+    .def(py::init<float>())
     .def(py::init<double>())
     .def(py::init<int64_t>())
     .def(py::init<bool>())
@@ -69,6 +70,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<const ir::TuplePtr &>())
     .def("is_tensor", &ir::Value::IsTensor)
     .def("is_tuple", &ir::Value::IsTuple)
+    .def("is_float", &ir::Value::IsFloat)
     .def("is_double", &ir::Value::IsDouble)
     .def("is_int", &ir::Value::IsInt)
     .def("is_bool", &ir::Value::IsBool)
@@ -76,6 +78,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("is_none", &ir::Value::IsNone)
     .def("to_tensor", &ir::Value::ToTensor)
     .def("to_tuple", &ir::Value::ToTuple)
+    .def("to_float", &ir::Value::ToFloat)
     .def("to_double", &ir::Value::ToDouble)
     .def("to_int", &ir::Value::ToInt)
     .def("to_bool", &ir::Value::ToBool)

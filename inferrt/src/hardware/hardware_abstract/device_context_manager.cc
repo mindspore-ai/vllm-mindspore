@@ -53,67 +53,7 @@ constexpr bool kIsWindowsPlatform = false;
 #endif
 }  // namespace
 namespace device {
-bool PluginLoader::LoadDynamicLib(const std::string &pluginFile, std::map<std::string, void *> *allHandles,
-                                  std::stringstream *errMsg) {
-  CHECK_IF_NULL(allHandles);
-  CHECK_IF_NULL(errMsg);
-  auto soName = GetDynamicLibName(pluginFile);
-  void *handle = dlopen(pluginFile.c_str(), RTLD_LAZY | RTLD_LOCAL);
-  if (handle == nullptr) {
-    std::string errMsgStr = GetDlErrorMsg();
-    LOG_OUT << "Load dynamic library: " << soName << " failed. " << errMsgStr;
-    *errMsg << "Load dynamic library: " << soName << " failed. " << errMsgStr << std::endl;
-    return false;
-  }
-  (*allHandles)[soName] = handle;
-  return true;
-}
-
-void PluginLoader::CloseDynamicLib(const std::string &dlName, void *handle) {
-  if (dlclose(handle) != 0) {
-    LOG_ERROR << "Closing dynamic lib: " << dlName << "failed, error message: " << GetDlErrorMsg();
-  }
-}
-
-bool PluginLoader::GetPluginPath(std::string *filePath) {
-  CHECK_IF_NULL(filePath);
-  Dl_info dlInfo;
-  if (dladdr(reinterpret_cast<void *>(PluginLoader::GetPluginPath), &dlInfo) == 0) {
-    LOG_ERROR << "Get file path by dladdr failed";
-    return false;
-  }
-  std::string curSoPath = dlInfo.dli_fname;
-  LOG_OUT << "Current so path : " << curSoPath;
-
-  auto lastSlashPos = curSoPath.find_last_of("/");
-  if (curSoPath.empty() || lastSlashPos == std::string::npos) {
-    LOG_ERROR << "Current so path empty or the path [" << curSoPath << "] is invalid.";
-    return false;
-  }
-  // During project build, place the current shared library (libhardware_abstract.so) and various hardware plugins in
-  // the same directory.
-  auto pluginSoPath = curSoPath.substr(0, lastSlashPos);
-  LOG_OUT << "Current plugin so dir path : " << pluginSoPath;
-  if (pluginSoPath.size() >= PATH_MAX) {
-    LOG_ERROR << "Current path [" << pluginSoPath << "] is invalid.";
-    return false;
-  }
-  char realPathMem[PATH_MAX] = {0};
-  if (realpath(pluginSoPath.c_str(), realPathMem) == nullptr) {
-    LOG_ERROR << "Plugin path is invalid: [" << pluginSoPath << "], skip!";
-    return false;
-  }
-  *filePath = std::string(realPathMem);
-  return true;
-}
-
-std::string PluginLoader::GetDynamicLibName(const std::string &pluginFile) {
-  auto p1 = pluginFile.find_last_of("/") + 1;
-  auto targetSo = pluginFile.substr(p1);
-  return targetSo;
-}
-
-DeviceContextManager::~DeviceContextManager() { UnloadPlugin(); }
+DeviceContextManager::~DeviceContextManager() { Clear(); }
 
 DeviceContextManager &DeviceContextManager::GetInstance() {
   static DeviceContextManager instance{};
@@ -176,11 +116,13 @@ DeviceContext *DeviceContextManager::GetOrCreateDeviceContext(const DeviceContex
   if (creatorIter != deviceContextCreators_.end()) {
     deviceContext = (creatorIter->second)(deviceContextKey);
     if (deviceContext == nullptr) {
-      LOG_EXCEPTION << "Create device context failed, device context key: " << deviceContextKeyStr;
+      LOG_ERROR << "Create device context failed, device context key: " << deviceContextKeyStr;
+      return nullptr;
     }
     deviceContext->Initialize();
     if (deviceContext->deviceResManager_ == nullptr) {
-      LOG_EXCEPTION << "Create device res manager failed, device context key: " << deviceContextKeyStr;
+      LOG_ERROR << "Create device res manager failed, device context key: " << deviceContextKeyStr;
+      return nullptr;
     }
     deviceContexts_[deviceContextKeyStr] = deviceContext;
     backendToDeviceContext_[name] = deviceContext;
@@ -251,22 +193,17 @@ void DeviceContextManager::LoadPlugin() {
     return;
   }
   loadInit_ = true;
-  if (pluginPath_.empty() && !PluginLoader::GetPluginPath(&pluginPath_)) {
-    LOG_ERROR << "Plugin path is invalid, skip!";
-    dlopenErrorMsg_ << "Plugin path is invalid, skip!" << std::endl;
-    return;
-  }
 
-  DIR *dir = opendir(pluginPath_.c_str());
+  DIR *dir = opendir(dynamicLibLoader_.GetDynamicLibFilePath().c_str());
   if (dir == nullptr) {
-    LOG_ERROR << "Open plugin dir failed, plugin path:" << pluginPath_;
-    dlopenErrorMsg_ << "Open plugin dir failed, plugin path:" << pluginPath_ << std::endl;
+    LOG_ERROR << "Open plugin dir failed, plugin path:" << dynamicLibLoader_.GetDynamicLibFilePath();
+    dlopenErrorMsg_ << "Open plugin dir failed, plugin path:" << dynamicLibLoader_.GetDynamicLibFilePath() << std::endl;
     return;
   }
   struct dirent *entry;
-  std::map<std::string, std::set<std::string> > multiVersionPluginMap;  // key: plugin name, value: so file name
+  std::set<std::string> pluginFiles;
   while ((entry = readdir(dir)) != nullptr) {
-    auto pluginFile = pluginPath_ + "/" + entry->d_name;
+    std::string pluginFile = entry->d_name;
     constexpr auto pluginPrefix = "libhardware_";
     if (pluginFile.find(pluginPrefix) == std::string::npos) {
       continue;
@@ -274,43 +211,26 @@ void DeviceContextManager::LoadPlugin() {
     if (pluginFile.find("libhardware_abstract") != std::string::npos) {
       continue;
     }
-    std::string fileName = entry->d_name;
-    auto dot = fileName.find_first_of(".");
-    if (dot == std::string::npos) {
+    if (pluginFile.find_first_of(".") == std::string::npos) {
       continue;
     }
-    (void)multiVersionPluginMap[fileName.substr(0, dot)].insert(pluginFile);
+    pluginFiles.insert(pluginFile);
   }
 
-  for (const auto &[pluginName, fileNames] : multiVersionPluginMap) {
-    for (auto iter = fileNames.rbegin(); iter != fileNames.rend(); iter++) {
-      const auto &fileName = *iter;
-      auto ret = PluginLoader::LoadDynamicLib(fileName, &pluginMaps_, &dlopenErrorMsg_);
-      if (ret) {
-        LOG_OUT << "Load " << pluginName << " plugin file " << fileName << " successfully.";
-      } else {
-        LOG_ERROR << "Load " << pluginName << " plugin file " << fileName << " failed.";
-      }
+  for (const auto &targetPluginFile : pluginFiles) {
+    if (!dynamicLibLoader_.LoadDynamicLib(targetPluginFile, &dlopenErrorMsg_)) {
+      LOG_ERROR << "Load " << targetPluginFile << " plugin file failed, error message: " << dlopenErrorMsg_.str();
     }
   }
+
   (void)closedir(dir);
 }
 
-void DeviceContextManager::UnloadPlugin() {
+void DeviceContextManager::Clear() {
   backendToDeviceContext_.clear();
   deviceContexts_.clear();
   deviceContextCreators_.clear();
   multiStreamControllers_.clear();
-
-  if (pluginMaps_.empty()) {
-    return;
-  }
-  auto iter = pluginMaps_.begin();
-  while (iter != pluginMaps_.end()) {
-    PluginLoader::CloseDynamicLib(iter->first, iter->second);
-    (void)iter++;
-  }
-  pluginMaps_.clear();
 }
 
 }  // namespace device

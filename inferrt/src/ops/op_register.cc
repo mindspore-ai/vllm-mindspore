@@ -14,9 +14,49 @@
  * limitations under the License.
  */
 
+#include <dirent.h>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <type_traits>
+
+#include "common/logger.h"
+#include "common/dynamic_lib_loader.h"
 #include "ops/op_register.h"
+
 namespace mrt {
 namespace ops {
+bool LoadOpLib(const std::string &opLibPrefix, std::stringstream *errMsg) {
+  static std::unique_ptr<common::DynamicLibLoader> dynamicLibLoader = std::make_unique<common::DynamicLibLoader>();
+  CHECK_IF_NULL(dynamicLibLoader);
+  CHECK_IF_NULL(errMsg);
+  DIR *dir = opendir(dynamicLibLoader->GetDynamicLibFilePath().c_str());
+  if (dir == nullptr) {
+    *errMsg << "Open Op Lib dir failed, file path:" << dynamicLibLoader->GetDynamicLibFilePath() << std::endl;
+    return false;
+  }
+  struct dirent *entry;
+  std::set<std::string> opLibs;
+  while ((entry = readdir(dir)) != nullptr) {
+    std::string opLibName = entry->d_name;
+    if (opLibName.find(opLibPrefix) == std::string::npos) {
+      continue;
+    }
+    if (opLibName.find_first_of(".") == std::string::npos) {
+      continue;
+    }
+    opLibs.insert(opLibName);
+  }
+  for (const auto &opLibName : opLibs) {
+    if (!dynamicLibLoader->LoadDynamicLib(opLibName, errMsg)) {
+      return false;
+    }
+  }
+  (void)closedir(dir);
+  return true;
+}
+
 OpFactoryBase *OpFactoryBase::GetOpFactory(const std::string_view &name) {
   auto iter = OpFactoryMap().find(name);
   if (iter == OpFactoryMap().end()) {
@@ -40,5 +80,6 @@ OpFactoryBase::OpFactoryMapType &OpFactoryBase::OpFactoryMap() {
   static OpFactoryBase::OpFactoryMapType factoryMap;
   return factoryMap;
 }
+
 }  // namespace ops
 }  // namespace mrt

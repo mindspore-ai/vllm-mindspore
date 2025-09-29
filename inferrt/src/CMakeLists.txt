@@ -33,6 +33,7 @@ include_directories(${PROJECT_SOURCE_DIR}/../include)
 include_directories(${PROJECT_SOURCE_DIR})
 
 # Add compiler, ir, runtime and kernels directories
+add_subdirectory(common)
 add_subdirectory(hardware)
 add_subdirectory(ir)
 add_subdirectory(lang)
@@ -41,7 +42,8 @@ add_subdirectory(optimize)
 add_subdirectory(pybind)
 add_subdirectory(runtime)
 
-set(OBJECTS hardware_abstract lexer_obj parser_obj ir_obj compiler_obj vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
+set(OBJECTS mrt_common hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
+    vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)

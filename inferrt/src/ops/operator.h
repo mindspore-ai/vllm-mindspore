@@ -79,7 +79,7 @@ class Operator {
    * @return OpsErrorCode Error code indicating success or failure of workspace calculation.
    */
   virtual OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                     size_t *workspace_size) {
+                                     size_t *workspaceSize) {
     return SUCCESS;
   }
 

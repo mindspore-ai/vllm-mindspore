@@ -2,3 +2,4 @@ check_debug_log_out()
 
 file(GLOB_RECURSE IR_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 add_library(mrt_ir_obj STATIC ${IR_SRC_FILES})
+target_link_libraries(mrt_ir_obj hardware_abstract)

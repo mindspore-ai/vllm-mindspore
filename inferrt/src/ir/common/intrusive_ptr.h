@@ -17,9 +17,11 @@
 #ifndef __IR_COMMON_INTRUSIVE_PTR_H__
 #define __IR_COMMON_INTRUSIVE_PTR_H__
 
+#include <cstddef>
 #include <functional>
 #include <atomic>
 #include <utility>
+#include <type_traits>
 
 namespace mrt {
 namespace ir {
@@ -80,6 +82,7 @@ class IntrusivePtr {
    * @brief Constructor from a raw pointer. Takes ownership of the pointer.
    * @param p The raw pointer to manage.
    */
+  // NOLINTNEXTLINE(runtime/explicit)
   IntrusivePtr(T *p) : ptr_(p) {
     if (ptr_) {
       ptr_->AddRef();
@@ -101,6 +104,26 @@ class IntrusivePtr {
    * @param other The IntrusivePtr to move from.
    */
   IntrusivePtr(IntrusivePtr &&other) noexcept : ptr_(other.ptr_) { other.ptr_ = nullptr; }
+
+  /**
+   * @brief Conversion constructor from derived type.
+   * @tparam U The derived type that inherits from T.
+   * @param other The IntrusivePtr of the derived type.
+   */
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+  IntrusivePtr(const IntrusivePtr<U> &other) : ptr_(other.get()) {
+    if (ptr_) {
+      ptr_->AddRef();
+    }
+  }
+
+  /**
+   * @brief Move conversion constructor from derived type.
+   * @tparam U The derived type that inherits from T.
+   * @param other The IntrusivePtr of the derived type to move from.
+   */
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+  IntrusivePtr(IntrusivePtr<U> &&other) noexcept : ptr_(other.Release()) {}
 
   /**
    * @brief Destructor. Decrements the reference count.
@@ -141,6 +164,43 @@ class IntrusivePtr {
       }
       ptr_ = other.ptr_;
       other.ptr_ = nullptr;
+    }
+    return *this;
+  }
+
+  /**
+   * @brief Copy assignment operator from derived type.
+   * @tparam U The derived type that inherits from T.
+   * @param other The IntrusivePtr of the derived type to copy from.
+   * @return *this
+   */
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+  IntrusivePtr &operator=(const IntrusivePtr<U> &other) {
+    if (ptr_ != other.get()) {
+      if (ptr_) {
+        ptr_->DecRef();
+      }
+      ptr_ = other.get();
+      if (ptr_) {
+        ptr_->AddRef();
+      }
+    }
+    return *this;
+  }
+
+  /**
+   * @brief Move assignment operator from derived type.
+   * @tparam U The derived type that inherits from T.
+   * @param other The IntrusivePtr of the derived type to move from.
+   * @return *this
+   */
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+  IntrusivePtr &operator=(IntrusivePtr<U> &&other) noexcept {
+    if (ptr_ != other.get()) {
+      if (ptr_) {
+        ptr_->DecRef();
+      }
+      ptr_ = other.Release();
     }
     return *this;
   }

@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <string>
+#include <utility>
 #include <memory>
 #include <stdexcept>
 
@@ -102,32 +103,37 @@ class Value : public RefCounted {
    * @brief Constructs a Value from a TensorPtr.
    * @param v The TensorPtr value.
    */
-  Value(const TensorPtr &v);
+  explicit Value(const TensorPtr &v);
+  /**
+   * @brief Constructs a Value from a float.
+   * @param v The float value.
+   */
+  explicit Value(float v);
   /**
    * @brief Constructs a Value from a double.
    * @param v The double value.
    */
-  Value(double v);
+  explicit Value(double v);
   /**
    * @brief Constructs a Value from an int64_t.
    * @param v The int64_t value.
    */
-  Value(int64_t v);
+  explicit Value(int64_t v);
   /**
    * @brief Constructs a Value from a bool.
    * @param v The bool value.
    */
-  Value(bool v);
+  explicit Value(bool v);
   /**
    * @brief Constructs a Value from a std::string by moving.
    * @param v The string value.
    */
-  Value(std::string &&v);
+  explicit Value(std::string &&v);
   /**
    * @brief Constructs a Value from a TuplePtr.
    * @param v The TuplePtr value.
    */
-  Value(const TuplePtr &v);
+  explicit Value(const TuplePtr &v);
 
   /**
    * @brief Destructor.
@@ -148,6 +154,7 @@ class Value : public RefCounted {
   /** @name Type checkers */
   ///@{
   bool IsTensor() const { return tag_ == Tag::Tensor; }
+  bool IsFloat() const { return tag_ == Tag::Float; }
   bool IsDouble() const { return tag_ == Tag::Double; }
   bool IsInt() const { return tag_ == Tag::Int; }
   bool IsBool() const { return tag_ == Tag::Bool; }
@@ -162,6 +169,7 @@ class Value : public RefCounted {
    */
   ///@{
   const TensorPtr &ToTensor() const;
+  float ToFloat() const;
   double ToDouble() const;
   int64_t ToInt() const;
   bool ToBool() const;
@@ -181,11 +189,12 @@ class Value : public RefCounted {
   /**
    * @brief Enumeration of the possible types a Value can hold.
    */
-  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple };
+  enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple };
 
   const Tag tag_;  ///< The tag indicating the type of the value.
   union {
     TensorPtr tensor_;
+    float float_;
     double double_;
     int64_t int_;
     bool bool_;
