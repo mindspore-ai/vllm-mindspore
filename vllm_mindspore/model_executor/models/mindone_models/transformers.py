@@ -542,8 +542,8 @@ class TransformersForCausalLM(MindONEModelBase):
                         q_seq_lens, block_tables)
 
         # for dummy_attention_metadata
-        if is_prefill and not self.set_flags:  #type: ignore
-            self.set_flags = True
+        if is_prefill and not self.has_prefill_warmup:  #type: ignore
+            self.has_prefill_warmup = True
 
         set_model_context("is_prefill", is_prefill)
 
