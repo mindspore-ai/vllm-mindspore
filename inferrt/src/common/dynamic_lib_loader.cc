@@ -50,7 +50,7 @@ DynamicLibLoader::~DynamicLibLoader() {
 
 std::string DynamicLibLoader::GetFilePathFromDlInfo() {
   Dl_info dlInfo;
-  if (dladdr(reinterpret_cast<void *>(DynamicLibLoader::GetFilePathFromDlInfo), &dlInfo) == 0) {
+  if (dladdr(reinterpret_cast<void *>(__builtin_return_address(0)), &dlInfo) == 0) {
     LOG_ERROR << "Get file path by dladdr failed";
     return "";
   }
