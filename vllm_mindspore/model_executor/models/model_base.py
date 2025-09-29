@@ -32,7 +32,8 @@ from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.model_executor.models.utils import is_use_ringmla
+from vllm_mindspore.model_executor.models.utils import (convert_pin,
+                                                        is_use_ringmla)
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
@@ -355,13 +356,14 @@ class MsModelBase:
             is_prefill, position_ids, query_lens_np, seq_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids
-        model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-        model_inputs["position_ids"] = position_ids
-        model_inputs["q_seq_lens"] = q_seq_lens
-        model_inputs["attention_mask"] = attention_mask
+        model_inputs["input_ids"] = convert_pin(input_ids)
+        model_inputs["batch_valid_length"] = convert_pin(
+            ms.from_numpy(seq_lens_np))
+        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
+        model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        model_inputs["position_ids"] = convert_pin(position_ids)
+        model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
+        model_inputs["attention_mask"] = convert_pin(attention_mask)
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
 

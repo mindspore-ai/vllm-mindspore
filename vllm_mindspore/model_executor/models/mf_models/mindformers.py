@@ -39,7 +39,7 @@ from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (
     AttentionWrapper, MLAAttentionWrapper, MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
-    is_use_ringmla, make_empty_intermediate_tensors_factory)
+    convert_pin, is_use_ringmla, make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
@@ -317,16 +317,18 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             is_prefill, position_ids, query_lens_np, seq_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids.astype(ms.int32) * 1
-        model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables * 1
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-        model_inputs["positions"] = position_ids
-        model_inputs["q_seq_lens"] = q_seq_lens
-        model_inputs["attention_mask"] = attention_mask
+        model_inputs["input_ids"] = convert_pin(input_ids.astype(ms.int32) * 1)
+        model_inputs["batch_valid_length"] = convert_pin(
+            ms.from_numpy(seq_lens_np))
+        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables *
+                                                   1)
+        model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        model_inputs["positions"] = convert_pin(position_ids)
+        model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
+        model_inputs["attention_mask"] = convert_pin(attention_mask)
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
-        model_inputs["context_lens_tensor"] = context_lens_tensor
+        model_inputs["context_lens_tensor"] = convert_pin(context_lens_tensor)
         model_inputs = (self.update_padding_index_to_inputs(
             model_inputs, q_seq_lens))
 
@@ -356,10 +358,11 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs = self.update_model_inputs(model_inputs, **kwargs)
         if intermediate_tensors is not None:
             model_inputs["hidden_states"] = \
-                intermediate_tensors["hidden_states"]
+                convert_pin(intermediate_tensors["hidden_states"])
         elif kwargs.get("previous_hidden_states") is not None:
             # used for deepseek-mtp
-            model_inputs["hidden_states"] = kwargs["previous_hidden_states"]
+            model_inputs["hidden_states"] = convert_pin(
+                kwargs["previous_hidden_states"])
 
         self.network.phase = "prefill" if is_prefill else \
             "chunked" if is_ringmla_chunked else "increment"
