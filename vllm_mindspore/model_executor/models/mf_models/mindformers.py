@@ -262,10 +262,10 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         (attn_padding_idx, attn_unpadding_idx, ffn_padding_idx,
          ffn_unpadding_idx) = self._get_padding_index(q_seq_lens)
 
-        model_inputs["attn_padding_idx"] = attn_padding_idx
-        model_inputs["attn_unpadding_idx"] = attn_unpadding_idx
-        model_inputs["ffn_padding_idx"] = ffn_padding_idx
-        model_inputs["ffn_unpadding_idx"] = ffn_unpadding_idx
+        model_inputs["attn_padding_idx"] = convert_pin(attn_padding_idx)
+        model_inputs["attn_unpadding_idx"] = convert_pin(attn_unpadding_idx)
+        model_inputs["ffn_padding_idx"] = convert_pin(ffn_padding_idx)
+        model_inputs["ffn_unpadding_idx"] = convert_pin(ffn_unpadding_idx)
 
         return model_inputs
 
@@ -317,11 +317,10 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             is_prefill, position_ids, query_lens_np, seq_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = convert_pin(input_ids.astype(ms.int32) * 1)
+        model_inputs["input_ids"] = convert_pin(input_ids.astype(ms.int32))
         model_inputs["batch_valid_length"] = convert_pin(
             ms.from_numpy(seq_lens_np))
-        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables *
-                                                   1)
+        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
         model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
         model_inputs["positions"] = convert_pin(position_ids)
         model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
