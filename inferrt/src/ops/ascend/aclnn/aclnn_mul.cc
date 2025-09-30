@@ -24,7 +24,7 @@ namespace ops {
 OpsErrorCode AclnnMul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                      size_t *workspaceSize) {
   LOG_OUT << "Begin CalcWorkspace for op [Mul]";
-  executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), this, input[kIndex0]->ToTensor(),
+  executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[kIndex0]->ToTensor(),
                               input[kIndex1]->ToTensor(), output->ToTensor());
   return SUCCESS;
 }
