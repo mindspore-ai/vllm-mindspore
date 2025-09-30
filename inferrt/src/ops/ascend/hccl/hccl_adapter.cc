@@ -52,7 +52,10 @@ void HcclAdapter::InitPlugin() {
     LOG_EXCEPTION << "Dlopen " << kHcclPluginFileName << " failed, result = " << GetDlErrorMsg();
   }
 
+  launch_hccl_all_reduce_ = DlsymFuncObj(HcclAllReduce, plugin_handle_);
+  launch_hccl_reduce_scatter_ = DlsymFuncObj(HcclReduceScatter, plugin_handle_);
   launch_hccl_all_gather_ = DlsymFuncObj(HcclAllGather, plugin_handle_);
+  launch_hccl_all_to_all_ = DlsymFuncObj(HcclAlltoAll, plugin_handle_);
 }
 
 void HcclAdapter::FinalizePlugin() {
@@ -103,7 +106,7 @@ std::string HcclAdapter::GetHcclModeString(HcclMode hccl_mode) {
   return kHcclModeString.at(hccl_mode);
 }
 
-bool HcclAdapter::InitHccl(uint32_t device_id, std::string_view rank_id) {
+bool HcclAdapter::InitHccl() {
   LOG_OUT << "Start init hccl adapter.";
   std::lock_guard<std::mutex> lock(init_mutex_);
   if (init_flag_) {

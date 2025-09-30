@@ -42,6 +42,10 @@ _OP_MAP = {
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
+    torch.ops._c10d_functional.all_reduce: Op.all_reduce,
+    torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
+    torch.ops._c10d_functional.all_to_all_single: Op.all_to_all,
+
     torch.ops._c10d_functional.wait_tensor: Op.wait_tensor,
     # torch.nn.functional
     torch.nn.functional.relu: Op.relu,
@@ -75,7 +79,10 @@ _OP_MAP = {
 }
 
 _DIST_OP_LIST = [
-    Op.all_gather
+    Op.all_gather,
+    Op.all_reduce,
+    Op.reduce_scatter,
+    Op.all_to_all
 ]
 
 def _get_op(target):
@@ -125,7 +132,7 @@ def _set_communication_info(ptd):
 
 
 def _extract_and_setup_comm_groups(node_args):
-    ptd_arg = node_args[2]
+    ptd_arg = node_args[-1]
 
     if CollectiveManager.instance().is_group_exist(f"{ptd_arg}"):
         return

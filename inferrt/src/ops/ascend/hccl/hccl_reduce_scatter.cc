@@ -13,11 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <vector>
 #include <string>
-
-#include "ops/ascend/hccl/hccl_all_gather.h"
+#include <vector>
+#include "ops/ascend/hccl/hccl_reduce_scatter.h"
 #include "ops/ascend/hccl/hccl_adapter.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "ops/ascend/hccl/hcom_utils.h"
@@ -31,32 +29,36 @@
 
 namespace mrt {
 namespace ops {
-OpsErrorCode HcclAllGather::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                          size_t *workspace_size) {
-  LOG_OUT << "HcclAllGather CalcWorkspace";
+OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                              size_t *workspace_size) {
+  LOG_OUT << "HcclReduceScatter CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
-  auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
+  auto rank_size = input[kIndex2]->ToInt();
+  auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor(), rank_size);
   hcclKernel.hccl_count_ = hccl_count;
   hcclKernel.hccl_data_type_ = hccl_data_type;
-  const string &group_name = input[kIndex2]->ToString();
+  const string &group_name = input[kIndex3]->ToString();
   hcclKernel.comm_ = HcomUtil::LoadHcclLibrary(group_name);
 
   return SUCCESS;
 }
 
-OpsErrorCode HcclAllGather::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                   ir::Value *output, void *stream) {
-  LOG_OUT << "HcclAllGather launch";
+OpsErrorCode HcclReduceScatter::Launch(const std::vector<const ir::Value *> &input, void *workspace,
+                                       size_t workspaceSize, ir::Value *output, void *stream) {
+  LOG_OUT << "HcclReduceScatter launch";
+  auto hccl_op_type = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
+  auto out_tensor = output->ToTensor();
 
-  auto hccl_result = HcclAdapter::GetInstance().HcclAllGather(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
-                                                              output->ToTensor()->DataPtr(), hcclKernel.hccl_count_,
-                                                              hcclKernel.hccl_data_type_, stream, hcclKernel.comm_);
+  auto hccl_result = HcclAdapter::GetInstance().HcclReduceScatter(
+    const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), out_tensor->DataPtr(), hcclKernel.hccl_count_,
+    hcclKernel.hccl_data_type_, hccl_op_type, stream, hcclKernel.comm_);
+
   if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcomAllGather failed, hccl_result: " << hccl_result;
+    LOG_ERROR << "HcclReduceScatter failed, hccl_result: " << hccl_result;
   }
 
   return SUCCESS;
 }
-MRT_REG_OP(all_gather, HcclAllGather, Ascend);
+MRT_REG_OP(reduce_scatter, HcclReduceScatter, Ascend);
 }  // namespace ops
 }  // namespace mrt
