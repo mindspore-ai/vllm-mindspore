@@ -309,7 +309,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             is_ringmla_chunked = \
                 self.use_ringmla and not is_prefill and \
                 bool((attn_metadata.context_lens - \
-                      attn_metadata.num_prompt_tokens).min() < 0)
+                      attn_metadata.num_prompt_tokens).min() < 0 or
+                      attn_metadata.q_seq_lens_np.max() > 1)
             query_lens_np = attn_metadata.q_seq_lens_np
             seq_lens_np = attn_metadata.seq_lens_np
             context_lens_tensor = attn_metadata.context_lens
