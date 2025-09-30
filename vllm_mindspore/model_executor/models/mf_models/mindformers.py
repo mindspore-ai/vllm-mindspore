@@ -93,6 +93,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
                     vllm_config.cache_config.cache_dtype == "int8":
             raise RuntimeError("To use kv-cache-dtype 'int8', "
                                "it is necessary to set fa3_quant to True.")
+        if self.fa3_quant:
+            logger.info("fa_quant is enabled, quant_layer is %s.",
+                        self.fa3_quant_layer)
         self._set_dynamic_inputs()
 
         self.set_modules({"model": self.network})

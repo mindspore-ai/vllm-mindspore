@@ -294,8 +294,6 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
         for i, group in enumerate(kv_cache_config.kv_cache_groups)
         for layer_name in group.layer_names
     }
-
-    # fa3_quant have two groups
     # fa3 quant layer target_dtype is int8
     # no fa3 quant layer target_dtype is bfloat16
     fa3_quant = self.vllm_config.quant_config.fa3_quant \
@@ -310,17 +308,16 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
     for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
         if not kv_cache_tensor.shared_by:
             continue
-
         rep_layer_name = kv_cache_tensor.shared_by[0]
-        group_idx, kv_cache_spec = layer_to_group_info[rep_layer_name]
+        _, kv_cache_spec = layer_to_group_info[rep_layer_name]
 
-        num_blocks = kv_cache_tensor.size // kv_cache_spec.page_size_bytes
-        block_size = kv_cache_spec.block_size
-        target_dtype = get_valid_dtype(kv_cache_spec.dtype)
-
-        kv_cache_layer = []
         is_fa3_quant_layer = fa3_quant and int(rep_layer_name) \
             in fa3_quant_layer
+        num_blocks = kv_cache_tensor.size // kv_cache_spec.get_page_size(
+            is_fa3_quant_layer)
+        block_size = kv_cache_spec.block_size
+
+        kv_cache_layer = []
         """
         for fa3_quant_layer, k_cache is int8, v_cache is bfloat16
         for not_fa3_quant_layer, k_cache and v_cache are bfloat16
@@ -330,8 +327,8 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
             [num_block, block_size, 1(head_dim), 64(qk_rope_head_dim)]
         and target_dtype is int8
         """
-        k_dtype = target_dtype if is_fa3_quant_layer else \
-                       self.vllm_config.model_config.dtype
+        k_dtype = ms.int8 if is_fa3_quant_layer else \
+                  self.vllm_config.model_config.dtype
         v_dtype = self.vllm_config.model_config.dtype
         head_dim = 1  # head_dim usually = 1
         k_shape = (num_blocks, block_size, head_dim, kv_lora_rank)
@@ -768,20 +765,38 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
                 is_fa3_quant_layer = int(layer_name) in fa3_quant_layer
                 if fa3_quant and not is_fa3_quant_layer:
                     kv_cache_dtype = self.vllm_config.model_config.dtype
-                if fa3_quant and is_fa3_quant_layer:
+                if fa3_quant:
                     '''
                     fa3_quant_layer k_cache is int8, v_cache is bfloat16
                     page_size_bytes is block_size * num_kv_heads *
                     (ctkv_nope_dim * int8(1 bytes)
                     + qk_rope_dim * float16(2 bytes))
-                    so need the MLAQuantFullAttentionSpec
+                    so need the MLAQuantFullAttentionSpec, which is a new
+                    AttentionSpec.
+                    and we also need the MLAQuantFullAttentionSpec for no fa3
+                    quant.
+                    if we have two different AttentionSpec, the
+                    len(kv_cache_config.kv_cache_groups) is 2, and the
+                    get_kv_cache_coordinator function return
+                    HybridKVCacheCoordinator. in this coordinator,
+                    the block_pool will be used by two AttentionManager.
+                    and if we not change the logic of HybridKVCacheCoordinator,
+                    the block pool will be allocate twice every time by two
+                    AttentionManager. this will double the gpu utilization.
+
+                    In our fa_quant scene, although we have
+                    two paged size in different layer, but the block_id and
+                    block table is same of different layer. so we only
+                    need one AttentionManager.
                     '''
+
                     kv_cache_spec[layer_name] = MLAQuantFullAttentionSpec(
                         block_size=block_size,
                         num_kv_heads=attn_module.num_kv_heads,
                         head_size=attn_module.head_size,
                         dtype=kv_cache_dtype,
-                        use_mla=use_mla)
+                        use_mla=use_mla,
+                        fa3_quant=is_fa3_quant_layer)
                 else:
                     kv_cache_spec[layer_name] = FullAttentionSpec(
                         block_size=block_size,
