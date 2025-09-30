@@ -24,16 +24,11 @@ fi
 
 if [ "$TEST_TYPE" = "cpp" ]; then
     TEST_PATH=${BUILD_PATH}/tests/ut/cpp
-    TEST_CASES=(
-        "./run_storage_cpu_test"
-        "./run_hardware_cpu_test"
-    )
+    TEST_CASES=($(find "$TEST_PATH" -type f -name "run_*_test" -executable))
 else
     echo "Python UT testcases are not implemented yet, skipping."
     exit 0
 fi
-
-cd ${TEST_PATH}
 
 set +e
 
@@ -51,5 +46,4 @@ done
 
 echo "All testcases completed."
 echo "===================================="
-cd -
 exit $RET
