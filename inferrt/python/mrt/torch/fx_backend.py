@@ -4,6 +4,7 @@ A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 
 import operator
 from typing import List, Dict, Any
+import sympy
 import torch
 from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
@@ -104,6 +105,7 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
     return [_map_arg(arg) for arg in args]
 
 
+# pylint: disable=bad-continuation
 def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     """
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
@@ -158,24 +160,50 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             else:
                 raise NotImplementedError(f"Unsupported node op: {node.op}")
 
+    print("Building Graph:")
     executor.dump_graph()
     executor.build()
 
-    placeholder_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
-    param_nodes = [env[n] for n in placeholder_nodes]
+    fx_param_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
+    fx_param_values = [n.meta["example_value"] for n in fx_param_nodes]
+    mrt_param_nodes = [env[n] for n in fx_param_nodes]
 
-    def compiled_callable(*new_inputs: torch.Tensor):
-        if len(new_inputs) != len(param_nodes):
+    def compiled_callable(*inputs: torch.Tensor):
+        if len(inputs) != len(mrt_param_nodes):
             raise ValueError(
-                f"Expected {len(param_nodes)} inputs, but got {len(new_inputs)}"
+                f"Expected {len(mrt_param_nodes)} inputs, but got {len(inputs)}"
             )
 
-        for i, p_node in enumerate(param_nodes):
-            if p_node.output.is_tensor():
-                update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
+        sym_bindings = {}
+        for fx_param_value, mrt_param_node, input_value in zip(
+            fx_param_values, mrt_param_nodes, inputs
+        ):
+            if isinstance(fx_param_value, torch.Tensor):
+                update_tensor_data(mrt_param_node.output.to_tensor(), input_value)
+            elif isinstance(fx_param_value, torch.SymInt):
+                sym_bindings[fx_param_value.node.expr] = input_value
             else:
-                p_node.output = from_torch(new_inputs[i])
+                mrt_param_node.output = from_torch(input_value)
 
+        def sym_eval(value):
+            if isinstance(value, torch.SymInt):
+                value = sympy.expand(value.node.expr.xreplace(sym_bindings))
+                if value.is_number:
+                    value = value.evalf()
+            return value
+
+        for fx_node, mrt_node in env.items():
+            if (
+                fx_node.op in ("call_function", "call_method")
+                and mrt_node.output.is_tensor()
+            ):
+                output_shape = fx_node.meta.get("example_value", None).shape
+                mrt_node.output.to_tensor().shape = [
+                    sym_eval(dim) for dim in output_shape
+                ]
+
+        print("Running Graph:")
+        executor.dump_graph()
         result = executor.run()
         return to_torch(result)
 
