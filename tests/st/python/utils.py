@@ -79,8 +79,6 @@ class EnvVarManager:
         else:
             os.environ["PYTHONPATH"] = mindformers_path
 
-        os.environ['MS_ENABLE_TRACE_MEMORY'] = "off"
-
         # Update environments.
         for var_name, value in env_vars.items():
             self.set_env_var(var_name, value)
