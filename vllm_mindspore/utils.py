@@ -93,6 +93,24 @@ def create_kv_cache(kv_shape, dtype, is_fa3_quant=False):
     return ms.mint.zeros(kv_shape, dtype=dtype)
 
 
+def cast_weight_for_310p(loaded_weight):
+    """
+    Casts weights to float16 for 310p.
+
+    In non-quantized scenarios, the 310P hardware only supports float16 weights.
+    This function converts float32 or bfloat16 weights to float16.
+    """
+    cast_weight = (loaded_weight.astype(np.float16) if
+                   (str(loaded_weight.dtype) == "float32" or str(
+                       loaded_weight.dtype) == "bfloat16") else loaded_weight)
+    return cast_weight
+
+
+def set_weight_format_to_nz(param):
+    cast_weight = ms.ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
+    param.set_data(cast_weight)
+
+
 def get_valid_dtype(dtype):
     if isinstance(dtype, str):
         dtype = STR_DTYPE_TO_MS_DTYPE[dtype]

@@ -38,6 +38,7 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod", "AWQMarlinLinearMethod",
@@ -116,6 +117,10 @@ class UnquantizedLinearMethod(LinearMethodBase):
             x = mint.add(x, bias)
         x = x.view(output_shape)
         return x
+
+    def process_weights_after_loading(self, layer):
+        if is_310p():
+            set_weight_format_to_nz(layer.weight)
 
 
 class LinearBase(nn.Cell):

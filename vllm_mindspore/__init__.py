@@ -340,6 +340,22 @@ RejectionSampler._smallest_positive_value = _smallest_positive_value
 RejectionSampler._smallest_positive_value.__set_name__(
     RejectionSampler, "_smallest_positive_value")
 
+from vllm_mindspore.model_executor.model_loader.utils import (
+    ms_device_loading_context)
+
+vllm.model_executor.model_loader.utils.device_loading_context = (
+    ms_device_loading_context)
+
+from vllm_mindspore.model_executor.layers.quantization.base_config import (
+    QuantizeMethodBase)
+
+vllm.model_executor.model_loader.utils.QuantizeMethodBase = QuantizeMethodBase
+
+from vllm_mindspore.distributed.parallel_state import gc_broadcast_tensor_dict
+
+vllm.distributed.parallel_state.GroupCoordinator.broadcast_tensor_dict = (
+    gc_broadcast_tensor_dict)
+
 ######### for multi-model
 from vllm_mindspore.inputs.registry import call_hf_processor
 from vllm.inputs.registry import InputProcessingContext

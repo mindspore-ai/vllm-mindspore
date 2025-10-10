@@ -26,6 +26,8 @@ import vllm.envs as envs
 from vllm.logger import init_logger
 from vllm.platforms.interface import Platform, PlatformEnum, _Backend
 
+from vllm_mindspore.utils import is_310p
+
 if TYPE_CHECKING:
     from vllm.config import ModelConfig, VllmConfig
 else:
@@ -191,3 +193,10 @@ class AscendPlatform(Platform):
                 if ASCEND_QUANTIZATION_METHOD not in quant_action.choices:
                     quant_action.choices.extend(ASCEND_QUANTIZATION_METHOD)
                     logger.debug("--quantization support ascend/golden-stick.")
+
+    @property
+    def supported_dtypes(self) -> list[torch.dtype]:
+        if is_310p():
+            # bfloat16 is not supported on the 310p due to hardware limitations.
+            return [torch.float16, torch.float32]
+        return [torch.bfloat16, torch.float16, torch.float32]

@@ -28,7 +28,7 @@ from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
 
-from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE
+from vllm_mindspore.utils import STR_DTYPE_TO_TENSOR_DTYPE, create_kv_cache
 
 logger = init_logger(__name__)
 
@@ -142,17 +142,10 @@ def _dummy_run(self,
         head_size = self.model_config.get_head_size()
         kv_shape = [0, block_size, num_kv_heads, head_size]
         kv_caches = mutable([
-            mutable(
-                (
-                    mutable(
-                        torch.tensor([],
-                                     dtype=kv_cache_dtype,
-                                     device=self.device).reshape(kv_shape)),
-                    mutable(
-                        torch.tensor([],
-                                     dtype=kv_cache_dtype,
-                                     device=self.device).reshape(kv_shape)),
-                )) for _ in range(num_layers)
+            mutable((
+                mutable(create_kv_cache(kv_shape, kv_cache_dtype)),
+                mutable(create_kv_cache(kv_shape, kv_cache_dtype)),
+            )) for _ in range(num_layers)
         ])
         finished_requests_ids = [seq.request_id for seq in seqs]
         model_input = self.prepare_model_input(
