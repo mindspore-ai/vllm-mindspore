@@ -138,8 +138,9 @@ class MsModelBase:
         self.num_layers = self.model_config.get_num_layers(
             self.parallel_config)
 
-        self.set_flags: bool = False
-        self.set_chunked_flags: bool = False
+        self.use_ringmla: bool = False
+        self.has_prefill_warmup: bool = False
+        self.has_chunked_warmup: bool = not self.use_ringmla
         self.kv_caches: list[Any] = []
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -290,11 +291,14 @@ class MsModelBase:
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
         seq_lens_np = np.array([input_len], dtype=np.int32)
-        context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not \
-                            self.set_flags else ms.Tensor([1], dtype=ms.int32)
-        # create input for chunked graph.
+        # context len is 0 for prefill, and 1 for chunked and decode.
+        context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not (
+            self.has_chunked_warmup) else ms.Tensor([1], dtype=ms.int32)
+        # num_prompt_tokens is equal to seq_len for prefill and decode,
+        # and equal to seq_len + 1 for chunked.
         num_prompt_tokens = seq_lengths + 1 \
-            if (self.set_flags and not self.set_chunked_flags) else seq_lengths
+            if (self.has_prefill_warmup and not self.has_chunked_warmup) \
+            else seq_lengths
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
@@ -308,7 +312,7 @@ class MsModelBase:
             context_lens=context_lens_tensor,
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
-            max_context_lens=0 if not self.set_flags else 1,
+            max_context_lens=0 if not self.has_prefill_warmup else 1,
             query_start_loc=None,
             num_prompt_tokens=num_prompt_tokens)
 
@@ -510,8 +514,8 @@ class NativeModel(MsModelBase):
                                                        inputs_embeds)
 
         # for dummy_attention_metadata
-        if is_prefill and not self.set_flags:
-            self.set_flags = True
+        if is_prefill and not self.has_prefill_warmup:
+            self.has_prefill_warmup = True
 
         # eager mode
         if self.is_eager_mode:
