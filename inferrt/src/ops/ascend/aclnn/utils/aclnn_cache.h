@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <functional>
 #include <utility>
+#include <list>
 
 #include "common/common.h"
 #include "ir/value/value.h"
@@ -50,11 +51,64 @@ class CacheEntry : public ir::RefCounted {
   virtual void Release(const CacheReleaseType &type) = 0;
   virtual void UpdateTensorAddr(size_t *index, size_t *relativeIndex, void *tensorAddr) = 0;
   virtual aclOpExecutor *GetExecutor() = 0;
+  virtual uint64_t GetWorkspaceSize() = 0;
+  virtual uint64_t GetHashId() = 0;
 
  private:
   DISABLE_COPY_AND_ASSIGN(CacheEntry)
 };
 using CacheEntryPtr = ir::IntrusivePtr<CacheEntry>;
+
+// Manager for cache entry
+class CacheEntryManager : public ir::RefCounted {
+ public:
+  CacheEntryManager() = default;
+  ~CacheEntryManager() = default;
+
+  void AddCacheEntry(uint64_t hashId, const CacheEntryPtr &cacheEntry) {
+    CHECK_IF_NULL(cacheEntry);
+    if (cacheCapacity_ == 0) {
+      hashId_ = hashId;
+      cacheEntry_ = cacheEntry;
+      LOG_OUT << "Add cache entry for hashId: " << hashId;
+      return;
+    }
+    cacheList_.emplace_front(cacheEntry);
+    cacheMap_[hashId] = cacheList_.begin();
+    if (cacheList_.size() > cacheCapacity_) {
+      cacheMap_.erase(cacheList_.back()->GetHashId());
+      cacheList_.pop_back();
+    }
+    LOG_OUT << "Add cache entry for hashId: " << hashId;
+  }
+
+  CacheEntryPtr GetCacheEntry(uint64_t hashId) {
+    if (cacheCapacity_ == 0) {
+      if (hashId == hashId_) {
+        LOG_OUT << "Get cache entry for hashId: " << hashId;
+        return cacheEntry_;
+      }
+      return nullptr;
+    }
+    auto it = cacheMap_.find(hashId);
+    if (it != cacheMap_.end()) {
+      LOG_OUT << "Get cache entry for hashId: " << hashId;
+      return *it->second;
+    }
+    return nullptr;
+  }
+
+ private:
+  DISABLE_COPY_AND_ASSIGN(CacheEntryManager)
+
+  // May be configured by user in the future
+  inline static size_t cacheCapacity_{64};
+  uint64_t hashId_{0};
+  CacheEntryPtr cacheEntry_{nullptr};
+  std::list<CacheEntryPtr> cacheList_;
+  std::unordered_map<uint64_t, std::list<CacheEntryPtr>::iterator> cacheMap_;
+};
+using CacheEntryManagerPtr = ir::IntrusivePtr<CacheEntryManager>;
 
 // Update tensor address
 template <typename T>
@@ -122,14 +176,16 @@ inline void UpdateAclTensorListAddr(aclTensorList *tensorList, size_t *index, si
 template <typename Tuple>
 class CacheProcessor {
  public:
-  explicit CacheProcessor(Tuple &&tuple, aclOpExecutor *executor)
-      : convertedParams_(std::move(tuple)), executor_(executor) {
+  explicit CacheProcessor(uint64_t hashId, Tuple &&tuple, aclOpExecutor *executor, uint64_t workspaceSize)
+      : hashId_(hashId), convertedParams_(std::move(tuple)), executor_(executor), workspaceSize_(workspaceSize) {
     InitTensorAddrUpdaters();
   }
 
   CacheProcessor(CacheProcessor &&other) noexcept
-      : convertedParams_(std::move(other.convertedParams_)),
+      : hashId_(other.hashId_),
+        convertedParams_(std::move(other.convertedParams_)),
         executor_(other.executor_),
+        workspaceSize_(other.workspaceSize_),
         isParamsReleased_(other.isParamsReleased_),
         isExecutorReleased_(other.isExecutorReleased_) {
     other.executor_ = nullptr;
@@ -143,8 +199,10 @@ class CacheProcessor {
         ReleaseConvertedParams(convertedParams_);
       }
 
+      hashId_ = other.hashId_;
       convertedParams_ = std::move(other.convertedParams_);
       executor_ = other.executor_;
+      workspaceSize_ = other.workspaceSize_;
       isParamsReleased_ = other.isParamsReleased_;
       isExecutorReleased_ = other.isExecutorReleased_;
 
@@ -249,12 +307,18 @@ class CacheProcessor {
 
   aclOpExecutor *GetExecutor() { return executor_; }
 
+  uint64_t GetWorkspaceSize() { return workspaceSize_; }
+
+  uint64_t GetHashId() { return hashId_; }
+
   using TensorAddrUpdater = std::function<void(const Tuple &, aclOpExecutor *, size_t *, size_t *, void *)>;
 
  private:
   DISABLE_COPY_AND_ASSIGN(CacheProcessor)
+  uint64_t hashId_;
   Tuple convertedParams_;
   aclOpExecutor *executor_;
+  uint64_t workspaceSize_;
 
   // Static map for updater functions (no instance data)
   inline static std::unordered_map<size_t, TensorAddrUpdater> tensorAddrUpdatersMap_;
@@ -277,6 +341,8 @@ class CacheEntryImpl : public CacheEntry {
   }
 
   aclOpExecutor *GetExecutor() override { return cacheProcessor_.GetExecutor(); }
+  uint64_t GetWorkspaceSize() override { return cacheProcessor_.GetWorkspaceSize(); }
+  uint64_t GetHashId() override { return cacheProcessor_.GetHashId(); }
 
  private:
   DISABLE_COPY_AND_ASSIGN(CacheEntryImpl)

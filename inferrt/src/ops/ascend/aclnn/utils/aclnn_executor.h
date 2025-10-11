@@ -21,6 +21,8 @@
 #include <utility>
 #include <memory>
 #include <functional>
+#include <list>
+#include <unordered_map>
 
 #include "ops/ascend/aclnn/utils/aclnn_hash.h"
 #include "ops/ascend/aclnn/utils/aclnn_cache.h"
@@ -31,39 +33,57 @@
 namespace mrt {
 namespace ops {
 inline constexpr const char *kNameGetWorkspaceSize = "GetWorkspaceSize";
-using RunOpFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStream);
+using RunOpApiFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStream);
 
 class AclnnExecutor {
  public:
   explicit AclnnExecutor(const std::string &&opApiName) : opApiName_(std::move(opApiName)) {
     getWorkspaceSizeApiName_ = opApiName_ + kNameGetWorkspaceSize;
+    cacheEntryManager_ = ir::MakeIntrusive<CacheEntryManager>();
     AclnnInit();
   }
   ~AclnnExecutor() { AclnnFinalize(); }
 
-  template <typename OpClass, typename... Args>
-  void GetWorkspaceSize(uint64_t *workspaceSize, const OpClass *op, const Args &...args) {
-    // no cache
-    if (cacheCapacity_ == 0) {
-      GetWorkspaceSizeWithoutCacheList(workspaceSize, args...);
+  template <typename... Args>
+  void GetWorkspaceSize(uint64_t *workspaceSize, const Args &...args) {
+    auto hashId = CalcAclnnHash(opApiName_, args...);
+    cacheEntry_ = cacheEntryManager_->GetCacheEntry(hashId);
+    if (cacheEntry_ != nullptr) {
+      LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId;
+      *workspaceSize = cacheEntry_->GetWorkspaceSize();
       return;
     }
 
-    // TODO(linux): with cache list
-    // hashId_ = CalcAclnnHash(opName_, args...);
-
-    LOG_ERROR << "No cache list";
+    LOG_OUT << opApiName_ << " miss cache with hashId: " << hashId;
+    auto [convertedParams, opExecutor] = GenerateOpExecutor(workspaceSize, args...);
+    if (CheckExecutorRepeatable(opExecutor)) {
+      cacheEntry_ = ir::MakeIntrusive<CacheEntryImpl<CacheProcessor<decltype(convertedParams)>>>(
+        CacheProcessor<decltype(convertedParams)>(hashId, std::move(convertedParams), opExecutor, *workspaceSize));
+      cacheEntryManager_->AddCacheEntry(hashId, cacheEntry_);
+      LOG_OUT << opApiName_ << " cache the params with hashId: " << hashId;
+      return;
+    }
+    ReleaseConvertedParams(convertedParams);
+    ReleaseExecutor(opExecutor);
   }
 
   template <typename... Args>
-  void GetWorkspaceSizeWithoutCacheList(uint64_t *workspaceSize, const Args &...args) {
-    auto hashId = CalcAclnnHash(opApiName_, args...);
-    if (isExecutorRepeatable_ && hashId == hashId_) {
-      LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId;
-      *workspaceSize = workspaceSize_;
+  void Launch(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
+    if (cacheEntry_ != nullptr) {
+      CallUpdateAddr(cacheEntry_, args...);
+      RunOpApi(workspace, workspaceSize, cacheEntry_->GetExecutor(), stream);
       return;
     }
 
+    uint64_t workspaceSizeTmp = 0;
+    auto [convertedParams, opExecutor] = GenerateOpExecutor(&workspaceSizeTmp, args...);
+    RunOpApi(workspace, workspaceSize, opExecutor, stream);
+    ReleaseConvertedParams(convertedParams);
+    ReleaseExecutor(opExecutor);
+  }
+
+  template <typename... Args>
+  auto GenerateOpExecutor(uint64_t *workspaceSize, const Args &...args) {
     const auto getWorkspaceSizeFuncPtr = GET_ACLNN_OP_FUNC(getWorkspaceSizeApiName_);
     if (getWorkspaceSizeFuncPtr == nullptr) {
       LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
@@ -77,108 +97,43 @@ class AclnnExecutor {
     if (ret != 0) {
       LOG_EXCEPTION << "Call " << getWorkspaceSizeApiName_ << " failed";
     }
-    SetExecutorRepeatable(opExecutor);
-    if (isExecutorRepeatable_) {
-      workspaceSize_ = *workspaceSize;
-      hashId_ = hashId;
-      // cache the params
-      cacheEntry_ = ir::MakeIntrusive<CacheEntryImpl<CacheProcessor<decltype(convertedParams)>>>(
-        CacheProcessor<decltype(convertedParams)>(std::move(convertedParams), opExecutor));
-      LOG_OUT << "Cache the params for op[" << opApiName_ << "] success";
-      return;
-    }
-    hashId_ = 0;
-    ReleaseConvertedParams(convertedParams);
-    ReleaseExecutor(opExecutor);
-    LOG_OUT << "Release the params and executor for op[" << opApiName_ << "] success";
+    return std::make_tuple(convertedParams, opExecutor);
   }
 
-  template <typename... Args>
-  void Launch(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
-    if (isExecutorRepeatable_ && hashId_ != 0) {
-      LaunchOpWithCache(workspace, workspaceSize, stream, args...);
-    } else {
-      LaunchOpWithoutCache(workspace, workspaceSize, stream, args...);
-    }
-  }
-
-  template <typename... Args>
-  void LaunchOpWithCache(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
-    // update tensor addr
-    CallUpdateAddr(cacheEntry_, args...);
-    // run op
-    const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
-    if (opApiFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
-    }
-    auto opApiFunc = reinterpret_cast<RunOpFunc>(opApiFuncPtr);
-    auto opApiFuncRet = opApiFunc(workspace, workspaceSize, cacheEntry_->GetExecutor(), stream);
-    if (opApiFuncRet != 0) {
-      LOG_EXCEPTION << "Call " << opApiName_ << " failed";
-    }
-  }
-
-  template <typename... Args>
-  void LaunchOpWithoutCache(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
-    // convert args and generate aclOpExecutor
-    const auto getWorkspaceSizeFuncPtr = GET_ACLNN_OP_FUNC(getWorkspaceSizeApiName_);
-
-    if (getWorkspaceSizeFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
-    }
-    uint64_t workspaceSizeTmp = 0;
-    aclOpExecutor *opExecutor = nullptr;
-    auto convertedParams = ConvertParams(args..., &workspaceSizeTmp, &opExecutor);
-    auto getWorkspaceSizeFunc = ConvertToOpApiFunc(convertedParams, getWorkspaceSizeFuncPtr);
-    CHECK_IF_NULL(getWorkspaceSizeFunc);
-    auto getWorkspaceSizeRet = CallOpApiFunc(getWorkspaceSizeFunc, convertedParams);
-    if (getWorkspaceSizeRet != 0) {
-      LOG_EXCEPTION << "Call " << getWorkspaceSizeApiName_ << " failed";
-    }
-
-    // run op
-    const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
-    if (opApiFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
-    }
-    auto opApiFunc = reinterpret_cast<RunOpFunc>(opApiFuncPtr);
-    auto opApiFuncRet = opApiFunc(workspace, workspaceSize, opExecutor, stream);
-    if (opApiFuncRet != 0) {
-      LOG_EXCEPTION << "Call " << opApiName_ << " failed";
-    }
-
-    // release params and executor
-    ReleaseConvertedParams(convertedParams);
-    ReleaseExecutor(opExecutor);
-  }
-
-  void SetExecutorRepeatable(aclOpExecutor *executor) {
+  bool CheckExecutorRepeatable(aclOpExecutor *executor) {
     static const auto aclSetAclOpExecutorRepeatable = GET_ACLNN_COMMON_META_FUNC(aclSetAclOpExecutorRepeatable);
     if (aclSetAclOpExecutorRepeatable == nullptr) {
       LOG_OUT << "aclSetAclOpExecutorRepeatable is nullptr, which means the executor is not repeatable for op["
               << opApiName_ << "]";
-      isExecutorRepeatable_ = false;
-      return;
+      return false;
     }
     auto ret = aclSetAclOpExecutorRepeatable(executor);
     if (ret != 0) {
       LOG_OUT << "aclSetAclOpExecutorRepeatable failed, which means the executor is not repeatable for op["
               << opApiName_ << "]";
-      isExecutorRepeatable_ = false;
-      return;
+      return false;
     }
-    isExecutorRepeatable_ = true;
     LOG_OUT << "Set executor repeatable for op[" << opApiName_ << "] success";
+    return true;
+  }
+
+  void RunOpApi(void *workspace, size_t workspaceSize, aclOpExecutor *opExecutor, void *stream) {
+    const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
+    if (opApiFuncPtr == nullptr) {
+      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
+    }
+    auto opApiFunc = reinterpret_cast<RunOpApiFunc>(opApiFuncPtr);
+    auto opApiFuncRet = opApiFunc(workspace, workspaceSize, opExecutor, stream);
+    if (opApiFuncRet != 0) {
+      LOG_EXCEPTION << "Call " << opApiName_ << " failed";
+    }
   }
 
  private:
   std::string opApiName_;
   std::string getWorkspaceSizeApiName_;
   CacheEntryPtr cacheEntry_{nullptr};
-  bool isExecutorRepeatable_{false};
-  uint64_t workspaceSize_{0};
-  uint64_t hashId_{0};
-  size_t cacheCapacity_{0};
+  CacheEntryManagerPtr cacheEntryManager_{nullptr};
 };
 
 }  // namespace ops
