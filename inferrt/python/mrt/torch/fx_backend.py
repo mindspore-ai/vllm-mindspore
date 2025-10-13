@@ -1,16 +1,19 @@
 """
 A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 """
-
+import os
 import operator
 from typing import List, Dict, Any
 import sympy
 import torch
 from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
+from torch._C._distributed_c10d import _resolve_process_group
+from torch import distributed as dist
 
 from mrt.ir import GraphExecutor, Op
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data
+from mrt._mrt_collective import CollectiveManager
 
 
 _GLOBAL_GRAPH_ID = 0
@@ -21,7 +24,7 @@ def _next_unique_graph_id():
     _GLOBAL_GRAPH_ID += 1
     return _GLOBAL_GRAPH_ID
 
-
+# pylint: disable=protected-access
 # A comprehensive mapping from torch fx ops to our custom ops.
 _OP_MAP = {
     # torch functions
@@ -38,6 +41,8 @@ _OP_MAP = {
     torch.rsqrt: Op.rsqrt,
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
+    torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
+    torch.ops._c10d_functional.wait_tensor: Op.wait_tensor,
     # torch.nn.functional
     torch.nn.functional.relu: Op.relu,
     torch.nn.functional.sigmoid: Op.sigmoid,
@@ -66,8 +71,12 @@ _OP_MAP = {
     "square": Op.square,
     "rsqrt": Op.rsqrt,
     "view": Op.reshape,  # view is often used like reshape
+    "copy_": Op.copy,
 }
 
+_DIST_OP_LIST = [
+    Op.all_gather
+]
 
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
@@ -84,6 +93,44 @@ def _get_op(target):
             if hasattr(Op, op_name):
                 return getattr(Op, op_name)
     return None
+
+
+def _extract_global_comm_info():
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    local_rank = int(os.getenv('LOCAL_RANK', "0"))
+    world_size = dist.get_world_size()
+
+    CollectiveManager.instance().set_global_rank_id(rank)
+    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_global_rank_size(world_size)
+
+
+def _set_communication_info(ptd):
+    '''Get communication info from torch and set to CollectiveManager for a given process group.'''
+    pg = _resolve_process_group(ptd)
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    local_rank = int(os.getenv('LOCAL_RANK', "0"))
+    world_size = dist.get_world_size()
+
+    group_rank = dist.get_rank(pg)
+    rank_list = dist.get_process_group_ranks(pg)
+
+    hccl_comm_handle = pg._get_backend(torch.device('npu')).get_hccl_comm(rank)
+
+    CollectiveManager.instance().set_global_rank_id(rank)
+    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_global_rank_size(world_size)
+
+    CollectiveManager.instance().create_communication_group(f"{ptd}", rank_list, group_rank, hccl_comm_handle)
+
+
+def _extract_and_setup_comm_groups(node_args):
+    ptd_arg = node_args[2]
+
+    if CollectiveManager.instance().is_group_exist(f"{ptd_arg}"):
+        return
+
+    _set_communication_info(ptd_arg)
 
 
 def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
@@ -115,8 +162,15 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
-
     input_iterator = iter(example_inputs)
+
+    if dist.is_initialized():
+        _extract_global_comm_info()
+        for node in gm.graph.nodes:
+            if node.op in ("call_function", "call_method"):
+                op = _get_op(node.target)
+                if op in _DIST_OP_LIST:
+                    _extract_and_setup_comm_groups(node.args)
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":

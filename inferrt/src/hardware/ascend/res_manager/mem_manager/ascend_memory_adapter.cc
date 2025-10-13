@@ -20,6 +20,8 @@
 #include "hardware/ascend/res_manager/mem_manager/ascend_vmm_adapter.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
 #include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+
 #include "common/common.h"
 
 namespace mrt {
@@ -55,7 +57,9 @@ size_t AscendMemAdapter::GetRoundUpAlignSize(size_t inputSize) {
 
 size_t AscendMemAdapter::GetDeviceMemSizeFromContext() const {
   size_t sizeFromContext;
-  float totalDeviceMemory = 32.0f;
+  // float totalDeviceMemory = 32.0f;
+  // set to 0 temporary
+  float totalDeviceMemory = 0.0f;
   auto maxDeviceMemory = totalDeviceMemory;
   // if (context->ascend_soc_version() == kAscendVersion910b || context->ascend_soc_version() == kAscendVersion910_93) {
   //   totalDeviceMemory = 64.0f;
@@ -90,8 +94,7 @@ bool AscendMemAdapter::Initialize() {
   }
 
   if (deviceHbmFreeSize_ < LongToSize(DoubleToLong(deviceHbmTotalSize_ * kHalfRatio))) {
-    // use 0 temporarily.
-    unsigned int deviceId = 0;
+    unsigned int deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
     LOG_OUT << "Free memory size is less "
                "than half of total memory size."
             << "Device " << deviceId << " Device MOC total size:" << deviceHbmTotalSize_
@@ -100,9 +103,7 @@ bool AscendMemAdapter::Initialize() {
   }
 
   // get user define max backend memory
-  // Set the default value to 0 temporarily, and an API for configuration will be provided subsequently.
-  // auto userDefineMsSize = GetDeviceMemSizeFromContext();
-  size_t userDefineMsSize = 0;
+  auto userDefineMsSize = GetDeviceMemSizeFromContext();
   auto recommendMemSizeForOthers = LongToSize(DoubleToLong(deviceHbmFreeSize_ * kReservedMemoryRatio));
   size_t reservedMemSizeForOthers;
   if (userDefineMsSize == 0) {
@@ -258,8 +259,7 @@ uint8_t *AscendMemAdapter::MallocFromRts(size_t size) const {
   auto ret = CALL_ASCEND_API(aclrtMalloc, reinterpret_cast<void **>(&ptr), size, ACL_MEM_TYPE_HIGH_BAND_WIDTH);
   if (ret != ACL_RT_SUCCESS) {
     if (ret == ACL_ERROR_RT_MEMORY_ALLOCATION) {
-      // use 0 temporarily.
-      unsigned int deviceId = 0;
+      unsigned int deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
       size_t freeSize = 0;
       size_t total = 0;
       (void)CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM, &freeSize, &total);

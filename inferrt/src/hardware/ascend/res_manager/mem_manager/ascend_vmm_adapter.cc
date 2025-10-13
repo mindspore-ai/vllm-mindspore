@@ -22,6 +22,8 @@
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
 #include "common/common.h"
 
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+
 namespace mrt {
 namespace device {
 namespace ascend {
@@ -106,7 +108,8 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
   LOG_OUT << "VMM MmapDeviceMem size:" << size << ", addr:" << addr
           << ", cachedHandleSets_ size : " << cachedHandleSets_.size() << ".";
   // use 0 temporarily
-  auto deviceId = 0;
+  auto local_rank_id = mrt::collective::CollectiveManager::Instance().local_rank_id();
+  auto deviceId = local_rank_id;
 
   auto vmmStartAddr = FindVmmSegment(addr);
   if (vmmStartAddr == nullptr) {
@@ -142,8 +145,8 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
       cachedHandleSets_.erase(cachedHandleSets_.begin());
     } else {
       if (physicalHandleSize_ * vmmAlignSize_ >= maxSize) {
-        LOG_OUT << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_
-                << ", maxSize : " << maxSize << ", addr : " << addr << ", size : " << size << ".";
+        LOG_OUT << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_ << ", maxSize : " << maxSize
+                << ", addr : " << addr << ", size : " << size << ".";
         MoveBackMappedHandle(&mappedVmmHandle, &vmmMap_, &cachedHandleSets_);
         return 0;
       }

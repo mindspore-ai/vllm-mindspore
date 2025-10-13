@@ -67,7 +67,6 @@ void Storage::AllocateMemory() {
     LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
                   << GetDeviceNameByType(device_.type) << ", data: " << data_;
   }
-
   data_ = alloc_.Allocate(sizeBytes_);
   CHECK_IF_NULL(data_);
 }

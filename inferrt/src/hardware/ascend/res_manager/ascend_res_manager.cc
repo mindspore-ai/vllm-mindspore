@@ -39,6 +39,8 @@
 #include "hardware/ascend/res_manager/ascend_hal_manager.h"
 #include "common/common.h"
 
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+
 namespace mrt {
 namespace device {
 namespace ascend {
@@ -56,8 +58,7 @@ void AclrtLaunchCallback(void *userData) {
 }  // namespace
 
 void AscendResManager::Initialize() {
-  // use 0 temporarily.
-  deviceId_ = 0;
+  deviceId_ = mrt::collective::CollectiveManager::Instance().local_rank_id();
   if (initialized_) {
     AscendHalManager::GetInstance().SetContextForce(deviceId_);
     return;
@@ -453,6 +454,26 @@ void AscendResManager::ResetStreamAndCtx() const {
   AscendStreamMng::GetInstance().DestroyAllStreams();
   AscendHalManager::GetInstance().ResetContext(deviceId_);
   AscendStreamMng::GetInstance().CreateDefaultStream();
+}
+
+bool AscendResManager::MemcpyDeviceToDevice(void *dst, size_t dst_size, const void *src, size_t src_size,
+                                            aclrtStream stream) {
+  auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, dst_size, src, src_size, ACL_MEMCPY_DEVICE_TO_DEVICE, stream);
+  if (ret != ACL_SUCCESS) {
+    LOG_ERROR << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    return false;
+  }
+  return true;
+}
+
+bool AscendResManager::MemcpyDeviceToHost(void *dst, size_t dst_size, const void *src, size_t src_size,
+                                          aclrtStream stream) {
+  auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, dst_size, src, src_size, ACL_MEMCPY_DEVICE_TO_HOST, stream);
+  if (ret != ACL_SUCCESS) {
+    LOG_ERROR << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    return false;
+  }
+  return true;
 }
 
 }  // namespace ascend

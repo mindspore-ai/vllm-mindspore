@@ -136,6 +136,7 @@ package_name = 'mrt'
 special_so_files_patterns = [
     '_mrt_api*.so',    # Matches all .so files starting with _mrt_api
     '_mrt_ir*.so',     # Matches all .so files starting with _mrt_ir
+    '_mrt_collective*.so',     # Matches all .so files starting with _mrt_collective
     '_mrt_torch*.so'   # Matches all .so files starting with _mrt_torch
 ]
 

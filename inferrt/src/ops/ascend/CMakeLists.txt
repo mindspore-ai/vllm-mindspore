@@ -6,6 +6,9 @@ endif()
 
 include_directories(${ASCEND_PATH}/latest/include/)
 include_directories(${ASCEND_PATH}/latest/lib64/)
+include_directories(${ASCEND_PATH}/latest/aarch64-linux/include/experiment)
+
 link_directories(${ASCEND_PATH}/latest/lib64/)
 
 add_subdirectory(aclnn)
+add_subdirectory(hccl)
