@@ -85,25 +85,21 @@ def get_masked_input_and_mask(
     added_vocab_start_index: int,
     added_vocab_end_index: int,
 ) -> tuple[Tensor, Tensor]:
-    displaced_x = mint.sub(input_, org_vocab_start_index)
-    down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(
-        down_truncated_x, (org_vocab_end_index - org_vocab_start_index - 1))
-    org_vocab_mask = mint.eq(displaced_x, truncated_x)
-
-    displaced_x = mint.sub(input_, added_vocab_start_index)
-    down_truncated_x = mint.nn.functional.relu(displaced_x)
-    truncated_x = mint.minimum(
-        down_truncated_x,
-        (added_vocab_end_index - added_vocab_start_index - 1))
-    added_vocab_mask = mint.eq(displaced_x, truncated_x)
-    added_offset = added_vocab_start_index - (
-        org_vocab_end_index - org_vocab_start_index) - num_org_vocab_padding
-    valid_offset = (org_vocab_start_index *
-                    org_vocab_mask) + (added_offset * added_vocab_mask)
+    org_vocab_mask_a = mint.greater_equal(input_, org_vocab_start_index)
+    org_vocab_mask_b = mint.less(input_, org_vocab_end_index)
+    org_vocab_mask = mint.logical_and(org_vocab_mask_a, org_vocab_mask_b)
+    added_vocab_mask_a = mint.greater_equal(input_, added_vocab_start_index)
+    added_vocab_mask_b = mint.less(input_, added_vocab_end_index)
+    added_vocab_mask = mint.logical_and(added_vocab_mask_a, added_vocab_mask_b)
+    added_offset = mint.sub(
+        mint.sub(added_vocab_start_index,
+                 mint.sub(org_vocab_end_index, org_vocab_start_index)),
+        num_org_vocab_padding)
+    valid_offset = mint.add(mint.mul(org_vocab_start_index, org_vocab_mask),
+                            mint.mul(added_offset, added_vocab_mask))
     vocab_mask = mint.logical_or(org_vocab_mask, added_vocab_mask)
-    input_ = vocab_mask * (input_ - valid_offset)
-    return input_, vocab_mask.expand_dims(-1)
+    input_ = mint.mul(vocab_mask, mint.sub(input_, valid_offset))
+    return input_, vocab_mask.unsqueeze(-1)
 
 
 def pad_vocab_size(vocab_size: int,
