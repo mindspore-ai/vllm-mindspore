@@ -124,14 +124,10 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
 
 def _build_layer_quant_key(prefix: str) -> str:
     # Split the fused qkv projection into the standard q projection.
-    # prefix = prefix.replace("qkv_proj", "q_proj")
-    prefix = prefix.replace("model", "model.decoder")
-    prefix = prefix.replace("self_attn.o_proj", "self_attention.linear_proj")
-    prefix = prefix.replace("self_attn.qkv_proj", "self_attention.linear_q")
+    prefix = prefix.replace("language_model.model", "model")
+    prefix = prefix.replace("qkv_proj", "q_proj")
     # Collapse gate+up projection to the canonical gate projection.
-    # prefix = prefix.replace("gate_up_proj", "gate_proj")
-    prefix = prefix.replace("gate_up_proj", "linear_fc1")
-    prefix = prefix.replace("down_proj", "linear_fc2")
+    prefix = prefix.replace("gate_up_proj", "gate_proj")
 
     # If the path contains a bare "experts", inject the default expert index "0"
     if not re.search(r"experts\.\d+", prefix):
@@ -146,10 +142,6 @@ def _build_layer_quant_key(prefix: str) -> str:
         "gate_proj",
         "up_proj",
         "down_proj",
-        "linear_fc1",
-        "linear_fc2",
-        "linear_q",
-        "linear_proj",
     }
     last_token = prefix.split(".")[-1]
     if last_token in proj_names and not prefix.endswith(".weight"):
