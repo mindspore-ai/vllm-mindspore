@@ -460,8 +460,7 @@ class Glm4vVisionEmbeddings(nn.Cell):
             orig_size = int(orig_size_sq**0.5)  # 24
             pos_embed_2d = (pos_embed_weight.view(
                 orig_size, orig_size,
-                hidden_size).permute(2, 0,
-                                     1).unsqueeze(0).astype(ms.float32)) # (24, 24, 1536) -> (1, 1536, 24, 24)
+                hidden_size).unsqueeze(0).astype(ms.float32)) # (24, 24, 1536) -> (1, 24, 24, 1536)
 
             # Calculate target dimensions for each patch
             h_values = image_shapes[:, 1]
@@ -481,18 +480,18 @@ class Glm4vVisionEmbeddings(nn.Cell):
                                 dim=-1).unsqueeze(0).unsqueeze(2))
 
             # Perform bicubic interpolation
-            interpolated_embed_fp32 = F.grid_sample(
+            interpolated_embed_fp32 = ms_custom_ops.grid_sample(
                 pos_embed_2d,
                 grid,
                 # mode="bicubic",
-                mode="bilinear",
-                align_corners=False,
-                padding_mode="border",
+                "bilinear", # mode
+                "border", # padding_mode
+                False, # align_corners
             )
 
             # Reshape and convert back to original dtype
             adapted_pos_embed_fp32 = (
-                interpolated_embed_fp32.squeeze(0).squeeze(-1).permute(1, 0))
+                interpolated_embed_fp32.squeeze(0).squeeze(-2)) # (1, 10724, 1, 1536) -> (10724, 1536)
             adapted_pos_embed = adapted_pos_embed_fp32.to(
                 pos_embed_weight.dtype)
 
