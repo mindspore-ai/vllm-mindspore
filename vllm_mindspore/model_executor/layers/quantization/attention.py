@@ -140,8 +140,6 @@ class BaseKVCacheMethod(QuantizeMethodBase):
         block_tables: Tensor,
     ) -> Tensor:
         output = query
-        key = key.contiguous()
-        value = value.contiguous()
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)
