@@ -17,6 +17,8 @@
 #ifndef __RUNTIME_EXECUTOR_H__
 #define __RUNTIME_EXECUTOR_H__
 
+#include <map>
+#include <memory>
 #include <utility>
 #include <string>
 #include <functional>
@@ -41,6 +43,7 @@ namespace runtime {
 enum ExecutionMode : size_t {
   Base = 0,
   Pipeline = 1,
+  GroupLaunch = 2,
 };
 
 /**
@@ -85,6 +88,9 @@ class DA_API GraphExecutor {
   void BeginGraph(const std::string &name);
   // Finish building graph.
   void EndGraph();
+
+  void DisableParamsOwnData();
+
   // Optimize the graph.
   void OptGraph();
   // Build DAKernels for graph.
@@ -125,7 +131,6 @@ class DA_API GraphExecutor {
 
   std::string name_;
   ir::GraphPtr graph_;
-  std::vector<ir::NodePtr> parameters_;
   bool isDynamic_{false};
   std::unordered_map<ir::NodePtr, ops::DAKernel *> kernels_;
   TensorDataRecycler *recycler_{nullptr};

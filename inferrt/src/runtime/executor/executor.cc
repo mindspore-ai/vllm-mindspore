@@ -20,33 +20,48 @@
 #include <condition_variable>
 #include <cstdlib>
 #include <mutex>
+#include <memory>
+#include <iostream>
 #include <queue>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "ops/kernel_lib.h"
 #include "runtime/builder/builder.h"
 #include "runtime/builder/pipeline/pipeline_builder.h"
+#include "runtime/builder/kernel_launch_group/kernel_launch_group_builder.h"
 
 namespace mrt {
 namespace runtime {
 using BuilderCreationFunc = std::function<std::unique_ptr<Builder>(const ir::GraphPtr &)>;
 static std::vector<BuilderCreationFunc> builderCreators = {
   [](const ir::GraphPtr &graph) { return std::make_unique<Builder>(graph); },
-  [](const ir::GraphPtr &graph) { return std::make_unique<PipelineBuilder>(graph); }};
+  [](const ir::GraphPtr &graph) { return std::make_unique<PipelineBuilder>(graph); },
+  [](const ir::GraphPtr &graph) {
+    return std::make_unique<KernelLaunchGroupBuilder>(graph);
+  }};  // NOLINT(whitespace/indent)
 
 namespace {
 ExecutionMode GetExecutionMode() {
   static const char enablePipelineEnv[] = "MRT_ENABLE_PIPELINE";
-  static const char *enablePipelineCStr = std::getenv(enablePipelineEnv);
-  static const bool enablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "on");
+  const char *enablePipelineCStr = std::getenv(enablePipelineEnv);
+  const bool enablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "on");
+
+  static const char kernelLaunchGroupNum[] = "MRT_KERNEL_LAUNCH_GROUP_NUM";
+  const char *enableGroupLaunchCStr = std::getenv(kernelLaunchGroupNum);
+  const bool enableGroupLaunch = (enableGroupLaunchCStr != nullptr) && !std::string_view(enableGroupLaunchCStr).empty();
+
   ExecutionMode executionMode = Base;
   if (enablePipeline) {
     executionMode = Pipeline;
+  }
+  if (enableGroupLaunch) {
+    executionMode = GroupLaunch;
   }
   return executionMode;
 }
@@ -132,6 +147,7 @@ void GraphExecutor::BeginGraph(const std::string &name) {
 void GraphExecutor::EndGraph() {
   LOG_OUT << "End graph building";
   CHECK_IF_NULL(graph_);
+  DisableParamsOwnData();
 }
 
 // Finish building graph.
@@ -165,9 +181,10 @@ void GraphExecutor::BuildKernels() {
 // Add a node as parameter for graph.
 void GraphExecutor::AddParameter(ir::NodePtr param) {
   LOG_OUT << "Add parameter: " << param;
+  CHECK_IF_NULL(graph_);
   CHECK_IF_NULL(param);
   CHECK_IF_FAIL(param->op == ops::Op_End);
-  (void)parameters_.emplace_back(param);
+  (void)graph_->parameters.emplace_back(param);
 }
 
 // Add a value node.
@@ -284,7 +301,7 @@ void GraphExecutor::RecordTensorRefCount() {
 // Run the built graph.
 void GraphExecutor::RunGraph(bool isDynamic) {
   CHECK_IF_NULL(executor_);
-  LOG_OUT << "Run graph, isDynamic: " << isDynamic;
+  LOG_OUT << "Run graph: " << name_ << ", isDynamic: " << isDynamic;
   executor_->Run(isDynamic);
 }
 
@@ -296,11 +313,11 @@ void GraphExecutor::DumpGraph() {
 
   constexpr auto paramPrefix = "param_";
   std::cout << "graph{" << name_ << "}(";
-  for (size_t i = 0; i < parameters_.size(); ++i) {
-    auto para = parameters_[i];
+  for (size_t i = 0; i < graph_->parameters.size(); ++i) {
+    auto para = graph_->parameters[i];
     (void)paraNumMap_.emplace(para, i);
     std::cout << paramPrefix << i;
-    if (i < parameters_.size() - 1) {
+    if (i < graph_->parameters.size() - 1) {
       std::cout << ", ";
     }
   }
@@ -350,6 +367,34 @@ void GraphExecutor::DumpGraph() {
 }
 #endif
 
+void GraphExecutor::DisableParamsOwnData() {
+  for (auto &param : graph_->parameters) {
+    CHECK_IF_NULL(param);
+    auto &value = param->output;
+    CHECK_IF_NULL(value);
+    if (value->IsTensor()) {
+      const auto &tensor = value->ToTensor();
+      CHECK_IF_NULL(tensor);
+      tensor->GetStorage()->DisableOwnData();
+    } else if (value->IsTuple()) {
+      auto &tuple = value->ToTuple();
+      CHECK_IF_NULL(tuple);
+      size_t size = tuple->Size();
+      for (size_t i = 0; i < size; i++) {
+        auto &elem = (*tuple)[i];
+        CHECK_IF_NULL(elem);
+        // Not support nested tuple.
+        CHECK_IF_FAIL(!elem->IsTuple());
+        if (elem->IsTensor()) {
+          const auto &tensor = elem->ToTensor();
+          CHECK_IF_NULL(tensor);
+          tensor->GetStorage()->DisableOwnData();
+        }
+      }
+    }
+  }
+}
+
 void GraphExecutor::BuildExecutor() {
   CHECK_IF_FAIL(nullptr == builder_);
   CHECK_IF_FAIL(nullptr == executor_);
@@ -367,15 +412,16 @@ void Executor::Run(bool isDynamic) {
   for (size_t i = 0; i < opNum; i++) {
     OpRunner &opRunner = opRunners[i];
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Infer shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
+      LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << ops::ToStr(opRunner.GetNode()->op)
-                    << "Errno: " << errNo;
+      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
+    opRunner.AllocateMemory();
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
+      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
+    opRunner.FreeMemory();
   }
 
   for (auto &deviceItem : deviceContexts_) {

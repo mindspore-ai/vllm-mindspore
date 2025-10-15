@@ -15,6 +15,9 @@
  */
 
 #include "runtime/executor/pipeline/pipeline_executor.h"
+#include <memory>
+#include <map>
+#include <utility>
 #include "runtime/executor/pipeline/async_task_queue_manager.h"
 
 namespace mrt {
@@ -51,19 +54,19 @@ void PipelineExecutor::Run(bool isDynamic) {
     auto inferTask = [&opRunner, launchQeueue]() {
       // Do infer shape and calculate workspace size in infer queue.
       if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-        LOG_EXCEPTION << "Infer shape failed for operator " << ops::ToStr(opRunner.GetNode()->op) << "Errno: " << errNo;
+        LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
       if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-        LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << ops::ToStr(opRunner.GetNode()->op)
-                      << "Errno: " << errNo;
+        LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
 
       // Push async launch task into launch queue.
       auto launchTask = [&opRunner]() {
+        opRunner.AllocateMemory();
         if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-          LOG_EXCEPTION << "Launch shape failed for operator " << ops::ToStr(opRunner.GetNode()->op)
-                        << "Errno: " << errNo;
+          LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
         }
+        opRunner.FreeMemory();
       };
       launchQeueue->Push(std::move(launchTask));
     };

@@ -29,14 +29,13 @@
 #include "common/common.h"
 #include "common/visible.h"
 #include "hardware/hardware_abstract/stream_util.h"
+#include "hardware/hardware_abstract/device_event.h"
 #include "hardware/device.h"
 #ifdef __APPLE__
 #include "async/spinlock.h"
 #endif
 
 namespace mrt {
-class DeviceEvent;
-using DeviceEventPtr = std::shared_ptr<DeviceEvent>;
 namespace runtime {
 enum class KernelTaskType;
 }
@@ -72,7 +71,7 @@ class MRT_EXPORT DeviceContext {
   virtual void Destroy() = 0;
 
   // Get deviceContextKey_ to obtain device name and device id.
-  const DeviceContextKey &deviceContextKey() const { return deviceContextKey_; }
+  const DeviceContextKey &GetDeviceContextKey() const { return deviceContextKey_; }
 
   // Get kernel executor.
   std::shared_ptr<KernelExecutor> GetKernelExecutor() const { return kernelExecutor_; }
@@ -314,7 +313,7 @@ class DeviceInterface<T, Args...> : public DeviceInterface<Args...> {
                                   "DeviceResManager has been registered!");
       DeviceContext::deviceResManager_ = std::make_unique<T>();
       DeviceContext::deviceResManager_->SetDeviceContext(this);
-    } else if constexpr (std::is_base_of_v<KernelExecutor, T>) {
+    } else if constexpr (std::is_base_of_v<KernelExecutor, T>) {  // NOLINT(readability/braces)
       DeviceInterface::CheckUnset(reinterpret_cast<void *>(DeviceContext::GetKernelExecutor().get()),
                                   "KernelExecutor has been registered!");
       DeviceContext::SetKernelExecutor(std::make_shared<T>());

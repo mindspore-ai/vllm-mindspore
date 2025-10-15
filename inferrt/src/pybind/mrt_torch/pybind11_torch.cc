@@ -16,6 +16,8 @@
 
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
+#include <vector>
+#include <utility>
 
 #ifdef ENABLE_TORCH_NPU
 #include "torch_npu/csrc/aten/common/from_blob.h"
@@ -117,6 +119,7 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
       LOG_EXCEPTION << "Dynamic shape with non-int dimension is not supported";
     }
   }
+
   auto device = FromTorchDevice(tensor.device());
   if (isFake) {
     return ir::MakeIntrusive<ir::Tensor>(shape, type, device);
@@ -129,7 +132,7 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   // Only support operator output as graph output case currently.
   const auto &storage = tensor->GetStorage();
-  CHECK_IF_FAIL(storage->CheckCanOwnData());
+  CHECK_IF_FAIL(storage->CheckOwnsData());
   auto allocator = storage->GetAllocator();
   auto deleter = [allocator](void *dataPtr) {
     if (dataPtr != nullptr) {
@@ -166,6 +169,7 @@ void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
   self->SetDtype(type);
   self->SetShape(std::move(shape));
   self->Resize();
+  CHECK_IF_NULL(data);
   self->UpdateData(data);
 }
 }  // namespace

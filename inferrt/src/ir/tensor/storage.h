@@ -34,7 +34,7 @@ class DeviceResManager;
 class MRT_EXPORT Allocator {
  public:
   Allocator() = delete;
-  Allocator(hardware::Device device);
+  explicit Allocator(hardware::Device device);
 
   void *Allocate(size_t sizeBytes) const;
   void Free(void *ptr) const;
@@ -94,7 +94,7 @@ class MRT_EXPORT Storage : public RefCounted {
   hardware::Device GetDevice() const { return device_; }
 
   void SetData(void *data) {
-    CHECK_IF_FAIL(!canOwnData_);
+    CHECK_IF_FAIL(!ownsData_);
     data_ = data;
   }
 
@@ -118,10 +118,12 @@ class MRT_EXPORT Storage : public RefCounted {
   void FreeMemory();
 
   /**
-   * @brief Check whether this Storage can own data.
+   * @brief Check whether this Storage currently owns the data.
    * If true, the buffer pointed to by data_ is managed by this Storage object.
    */
-  bool CheckCanOwnData() const { return canOwnData_; }
+  bool CheckOwnsData() const { return ownsData_; }
+
+  void DisableOwnData();
 
   /**
    * @brief Releases ownership of the managed pointer.
@@ -134,7 +136,7 @@ class MRT_EXPORT Storage : public RefCounted {
   size_t sizeBytes_{0};  ///< Size of the memory in bytes.
   Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
-  const bool canOwnData_;    ///< Whether the storage can own data.
+  bool ownsData_;            ///< Whether the storage can own data.
 };
 
 using StoragePtr = IntrusivePtr<Storage>;

@@ -46,7 +46,7 @@ TEST_F(StorageTest, TestConstructor) {
   Storage storage(dataSize, device);
   EXPECT_EQ(storage.SizeBytes(), dataSize);
   EXPECT_EQ(storage.GetDevice().type, device.type);
-  EXPECT_TRUE(storage.CheckCanOwnData());
+  EXPECT_TRUE(storage.CheckOwnsData());
   EXPECT_EQ(storage.Data(), nullptr);
 }
 
@@ -57,7 +57,7 @@ TEST_F(StorageTest, TestConstructorWithNonOwnedData) {
   Storage storage(data, dataSize, device);
   EXPECT_EQ(storage.SizeBytes(), dataSize);
   EXPECT_EQ(storage.GetDevice().type, device.type);
-  EXPECT_FALSE(storage.CheckCanOwnData());
+  EXPECT_FALSE(storage.CheckOwnsData());
   EXPECT_EQ(storage.Data(), data);
 }
 
@@ -125,7 +125,9 @@ TEST_F(StorageTest, TestRelease) {
 /// Expectation: External data remains valid after Storage destruction
 TEST_F(StorageTest, TestDestructorWithNonOwnedData) {
   void *dataPtr = malloc(512);
-  { Storage storage(dataPtr, 512, device); }
+  {
+    Storage storage(dataPtr, 512, device);
+  }
   EXPECT_NO_THROW(free(dataPtr));
 }
 
