@@ -91,7 +91,12 @@ bool HcomUtil::GetHcomCount(const std::vector<HcclDataType> &data_type_list,
   uint64_t total_size = 0;
   size_t input_size;
   uint32_t type_size = 4;
-  // size_t rank_size = 1;
+  size_t rank_size = 1;
+  bool is_reduce_scatter = false;
+  if (rank_size_opt.has_value()) {
+    rank_size = rank_size_opt.value();
+    is_reduce_scatter = true;
+  }
   CHECK_IF_FAIL(data_type_list.size() == shape_list.size());
 
   for (size_t i = 0; i < data_type_list.size(); ++i) {
@@ -109,6 +114,9 @@ bool HcomUtil::GetHcomCount(const std::vector<HcclDataType> &data_type_list,
       input_size = (input_size + align_size - 1 + filled_size) / align_size * align_size;
     }
 
+    if (is_reduce_scatter) {
+      input_size /= rank_size;
+    }
     bool all_dynamic = std::all_of(shape_list[i].begin(), shape_list[i].end(), [](int64_t x) { return x == -1; });
     if (!all_dynamic && (type_size == 0 || input_size % type_size != 0)) {
       return false;

@@ -65,7 +65,7 @@ class HcclAdapter {
 
   // common
   bool InitHccl(uint32_t device_id, std::string_view rank_id, std::string_view rank_file, HcclMode hccl_mode);
-  bool InitHccl(uint32_t device_id, std::string_view rank_id);
+  bool InitHccl();
   uint32_t HcclGetCommConfigCapability();
   HcclResult HcclSetGlobalCommInfo(uint32_t masterIp, uint32_t masterPort, uint32_t totalRankSize, uint32_t nodeId,
                                    uint32_t localRankSize);
