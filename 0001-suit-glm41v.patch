@@ -96,7 +96,7 @@ index 5cb720381..18aae35c6 100644
 -A `transformers.image_utils.VideoInput` representing a single video
 -item, which can be passed to a HuggingFace `VideoProcessor`.
 +A `transformers.video_utils.VideoInput` representing a single video item. 
-+This can be passed to a HuggingFace `VideoProcessor` 
++This can be passed to a HuggingFace `VideoProcessor`
 +with `transformers.video_utils.VideoMetadata`.
  
  Alternatively, a 3-D tensor or batch of 2-D tensors,
