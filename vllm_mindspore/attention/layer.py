@@ -101,9 +101,6 @@ class Attention(nn.Cell):
             block_tables: shape = [block_size, num_block]
         """
         output = query
-        # ensure that the input tensors of reshape_and_cache is continuous
-        key = key.contiguous()
-        value = value.contiguous()
         cache_out = self.reshape_and_cache(key, value, key_cache, value_cache,
                                            slot_mapping)
         query = ops.depend(query, cache_out)

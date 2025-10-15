@@ -1200,10 +1200,12 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal):
         # self.language_model = MindFormersForCausalLM(vllm_config=vllm_config,
         #         prefix=maybe_prefix(prefix, "language_model"))
         self.model = self.wrap_model.model
-        self.model.embed_tokens.construct = ms.jit(
-            function=self.model.embed_tokens, jit_level='O0')
+        self.model.embed_tokens._set_jit_graph_name("prefill")
+        self.model.embed_tokens.phase = "prefill"
         dyn_input_ids = ms.Tensor(shape=[None], dtype=ms.int32)
         self.model.embed_tokens.set_inputs(dyn_input_ids)
+        self.model.embed_tokens.construct = ms.jit(
+            function=self.model.embed_tokens, jit_level='O0')
         self.lm_head = self.wrap_model.lm_head
         self.common_preprocess(vllm_config, prefix)
 
