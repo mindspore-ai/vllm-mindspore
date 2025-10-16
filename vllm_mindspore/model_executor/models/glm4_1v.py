@@ -1529,11 +1529,6 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal):
             if "visual." in name:
                 self.visual.load_weights([(name, weight)], params_dict)
             else:
-                if "language_model" not in name:
-                    name = name.replace("model.layers", "model.language_model.layers")
-                    name = name.replace("model.norm", "model.language_model.norm")
-                    name = name.replace("model.embed_tokens", "model.language_model.embed_tokens")
-                name = name.replace("output_layer", "lm_head")
                 self.model.load_weights([(name, weight)], params_dict)
 
         return None

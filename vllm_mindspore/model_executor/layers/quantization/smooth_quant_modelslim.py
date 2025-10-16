@@ -91,7 +91,7 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
 
     @staticmethod
     def get_config_filenames() -> list[str]:
-        return ["quant_model_description.json"]
+        return ["quant_model_description.json", "quantization_description.json"]
 
     @classmethod
     def from_config(cls, config: dict[str,
@@ -124,7 +124,7 @@ class SmoothQuantModelSlimConfig(QuantizationConfig):
 
 def _build_layer_quant_key(prefix: str) -> str:
     # Split the fused qkv projection into the standard q projection.
-    prefix = prefix.replace("language_model.model", "model")
+    prefix = prefix.replace("language_model.model", "model.language_model")
     prefix = prefix.replace("qkv_proj", "q_proj")
     # Collapse gate+up projection to the canonical gate projection.
     prefix = prefix.replace("gate_up_proj", "gate_proj")
