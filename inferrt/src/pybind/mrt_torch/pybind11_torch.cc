@@ -33,44 +33,41 @@ namespace hardware = mrt::hardware;
 
 namespace {
 // DataType conversion utilities
+
+static const std::map<at::ScalarType, ir::DataType> kAtScalarTypeToDataTypeMap = {
+  {at::kHalf, ir::DataType::Type::Float16},  {at::kBFloat16, ir::DataType::Type::BFloat16},
+  {at::kFloat, ir::DataType::Type::Float32}, {at::kDouble, ir::DataType::Type::Float64},
+  {at::kChar, ir::DataType::Type::Int8},     {at::kShort, ir::DataType::Type::Int16},
+  {at::kInt, ir::DataType::Type::Int32},     {at::kLong, ir::DataType::Type::Int64},
+  {at::kByte, ir::DataType::Type::UInt8},    {at::kBool, ir::DataType::Type::Bool},
+};
+
+static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap = {
+  {ir::DataType::Type::Float16, at::kHalf},  {ir::DataType::Type::BFloat16, at::kBFloat16},
+  {ir::DataType::Type::Float32, at::kFloat}, {ir::DataType::Type::Float64, at::kDouble},
+  {ir::DataType::Type::Int8, at::kChar},     {ir::DataType::Type::Int16, at::kShort},
+  {ir::DataType::Type::Int32, at::kInt},     {ir::DataType::Type::Int64, at::kLong},
+  {ir::DataType::Type::UInt8, at::kByte},    {ir::DataType::Type::Bool, at::kBool},
+};
+
 ir::DataType FromTorchDType(const at::ScalarType &type) {
-  switch (type) {
-    case at::kFloat:
-      return ir::DataType::Float32;
-    case at::kDouble:
-      return ir::DataType::Float64;
-    case at::kInt:
-      return ir::DataType::Int32;
-    case at::kLong:
-      return ir::DataType::Int64;
-    case at::kShort:
-      return ir::DataType::Int16;
-    case at::kBool:
-      return ir::DataType::Bool;
-    default:
-      LOG_EXCEPTION << "Unsupported at::ScalarType for conversion to ir::DataType";
-      return ir::DataType::Unknown;
+  auto iter = kAtScalarTypeToDataTypeMap.find(type);
+  if (iter == kAtScalarTypeToDataTypeMap.end()) {
+    LOG_EXCEPTION << "Unsupported at::ScalarType" << type << "for conversion to ir::DataType";
+    return ir::DataType::Unknown;
   }
+
+  return iter->second;
 }
 
 at::ScalarType ToTorchDType(ir::DataType type) {
-  switch (type) {
-    case ir::DataType::Float32:
-      return at::kFloat;
-    case ir::DataType::Float64:
-      return at::kDouble;
-    case ir::DataType::Int32:
-      return at::kInt;
-    case ir::DataType::Int64:
-      return at::kLong;
-    case ir::DataType::Int16:
-      return at::kShort;
-    case ir::DataType::Bool:
-      return at::kBool;
-    default:
-      LOG_EXCEPTION << "Unsupported ir::DataType for conversion to at::ScalarType";
-      return at::kFloat;
+  auto iter = kDataTypeToAtScalarTypeMap.find(type);
+  if (iter == kDataTypeToAtScalarTypeMap.end()) {
+    LOG_EXCEPTION << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
+    return at::kFloat;
   }
+
+  return iter->second;
 }
 
 // Device conversion utilities
