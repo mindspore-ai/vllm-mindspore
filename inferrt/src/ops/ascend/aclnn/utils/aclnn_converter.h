@@ -35,7 +35,7 @@
 namespace mrt {
 namespace ops {
 // Convert dtype
-aclDataType Convert(ir::DataType::Type dtype);
+DA_API aclDataType Convert(ir::DataType::Type dtype);
 
 // Convert tensor
 inline aclTensor *Convert(const ir::TensorPtr &tensor) {

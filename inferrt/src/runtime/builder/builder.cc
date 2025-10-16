@@ -149,6 +149,12 @@ void Builder::CreateOpRunners() {
       LOG_EXCEPTION << "Create operator for: " << ops::ToStr(node->op)
                     << " failed, please register it on platform: " << hardware::GetDeviceNameByType(device.type);
     }
+    std::vector<const ir::Value *> inputs;
+    for (auto &input : node->inputs) {
+      const ir::Value *value = input != nullptr ? input->output.get() : nullptr;
+      (void)inputs.emplace_back(value);
+    }
+    operatorPtr->Init(inputs, node->output.get());
 
     device::DeviceContext *deviceContext;
     if (auto iter = deviceContexts_.find(device.type); iter != deviceContexts_.end()) {

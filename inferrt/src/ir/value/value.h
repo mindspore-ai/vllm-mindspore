@@ -26,6 +26,7 @@
 #include <ostream>
 
 #include "common/common.h"
+#include "common/visible.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
 
@@ -95,7 +96,7 @@ using TuplePtr = IntrusivePtr<Tuple>;
  * This class can hold a variety of types, including tensors, scalars, strings,
  * and tuples. It uses a tagged union to store the data efficiently.
  */
-class Value : public RefCounted {
+class DA_API Value : public RefCounted {
  public:
   /**
    * @brief Default constructor. Creates a None value.

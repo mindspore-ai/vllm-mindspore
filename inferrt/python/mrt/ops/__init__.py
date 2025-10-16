@@ -11,9 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 # pylint: disable=missing-docstring
+# pylint: disable=redefined-builtin
 
-from mrt.api import dag, jit
-from mrt import ops
+# Export functions from load module
+from mrt.ops.load import compile, load, load_library, CustomOpLoader
 
-__all__ = ['dag', 'jit', 'ops']
+__all__ = ['compile', 'load', 'load_library', 'CustomOpLoader']

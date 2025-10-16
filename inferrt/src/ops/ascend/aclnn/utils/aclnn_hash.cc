@@ -23,7 +23,7 @@
 namespace mrt {
 namespace ops {
 constexpr size_t kSizeFive = 5;
-void GatherHash(const ir::TensorPtr &tensor) {
+DA_API void GatherHash(const ir::TensorPtr &tensor) {
   if (tensor == nullptr || tensor->Dtype().value == ir::DataType::Type::Unknown) {
     MemcpyToBuf("None", kSizeFive);
     return;

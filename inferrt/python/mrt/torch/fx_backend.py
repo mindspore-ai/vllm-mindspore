@@ -173,6 +173,12 @@ def _get_op(target):
             op_name = target.__name__
             if hasattr(Op, op_name):
                 return getattr(Op, op_name)
+
+        if isinstance(target, torch._ops.OpOverloadPacket):
+            node_module = target.__module__
+            if not node_module.startswith("torch._ops.aten") and \
+               not node_module.startswith("torch._ops.prims"):
+                return Op.custom_call
     return None
 
 
@@ -256,7 +262,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 if op is None:
                     raise NotImplementedError(f"Unsupported op: {node.target}")
 
-                input_nodes = _map_args(node.args, env, executor)
+                input_args = node.args
+                if op == Op.custom_call:
+                    op_name = node.target.__name__
+                    input_args = (op_name,) + node.args
+                input_nodes = _map_args(input_args, env, executor)
                 example_value = node.meta.get("example_value", None)
                 output_value = from_torch(example_value)
                 _create_symbolic_shape_if_needed(example_value, output_value)

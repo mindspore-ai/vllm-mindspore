@@ -56,10 +56,17 @@ enum OpsErrorCode {
 // @brief Abstract base class representing a computational kernel. A Operator encapsulates the core computation logic
 // for a specific operator. Derived classes must implement shape inference and launch operations. Kernels of different
 // device types share the InferShape function, but need to implement their respective Launch functions.
-class Operator {
+class DA_API Operator {
  public:
   Operator() = default;
   virtual ~Operator() = default;
+
+  /**
+   * @brief Initialize the operator with input and output.
+   * @param input Vector of pointers to input data.
+   * @param output Pointer to the output data.
+   */
+  virtual void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {}
 
   /**
    *  @brief Infer the output shape based on input shape or value.

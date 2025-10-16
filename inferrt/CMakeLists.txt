@@ -12,6 +12,7 @@ endif()
 
 set(CC gcc)
 set(CXX g++)
+set(INSTALL_BASE_DIR ".")
 
 if(NOT DEFINED CMAKE_CXX_COMPILER)
   set(CMAKE_CXX_COMPILER "/usr/bin/g++")
@@ -61,3 +62,16 @@ add_subdirectory(python)
 if(BUILD_TESTS)
   add_subdirectory(tests)
 endif()
+
+# Install header files
+install(DIRECTORY ${securec_INC}
+        DESTINATION ${INSTALL_BASE_DIR}/include/third_party/securec
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include
+        DESTINATION ${INSTALL_BASE_DIR}/include/
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src
+        DESTINATION ${INSTALL_BASE_DIR}/include/
+        FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.list")

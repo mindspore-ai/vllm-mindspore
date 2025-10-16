@@ -17,19 +17,20 @@
 #ifndef __OPS_ASCEND_ACLNN_UTILS_ACLNN_COMMON_META_H__
 #define __OPS_ASCEND_ACLNN_UTILS_ACLNN_COMMON_META_H__
 
+#include "common/visible.h"
 #include "acl/acl_base.h"
 
 namespace mrt {
 namespace ops {
 
 // Base acl data structure
-using aclOpExecutor = struct aclOpExecutor;
-using aclTensor = struct aclTensor;
-using aclTensorList = struct aclTensorList;
-using aclScalar = struct aclScalar;
-using aclIntArray = struct aclIntArray;
-using aclFloatArray = struct aclFloatArray;
-using aclBoolArray = struct aclBoolArray;
+typedef struct aclOpExecutor aclOpExecutor;
+typedef struct aclTensor aclTensor;
+typedef struct aclTensorList aclTensorList;
+typedef struct aclScalar aclScalar;
+typedef struct aclIntArray aclIntArray;
+typedef struct aclFloatArray aclFloatArray;
+typedef struct aclBoolArray aclBoolArray;
 
 // Base acl creators
 using _aclCreateTensorFuncPtr = aclTensor *(*)(const int64_t *viewDims, uint64_t viewDimsNum, aclDataType dataType,
@@ -62,7 +63,7 @@ using _aclSetTensorAddrFuncPtr = int (*)(aclOpExecutor *executor, const size_t i
 using _aclSetDynamicTensorAddrFuncPtr = int (*)(aclOpExecutor *executor, const size_t index, const size_t relativeIndex,
                                                 aclTensorList *tensors, void *addr);
 
-#define DECLARE_ACLNN_COMMON_META_FUNC(name) _##name##FuncPtr name##_ = nullptr
+#define DECLARE_ACLNN_COMMON_META_FUNC(name)  DA_API _##name##FuncPtr name##_ = nullptr
 
 #define EXTERN_ACLNN_COMMON_META_FUNC(name) \
   extern _##name##FuncPtr name##_;          \
