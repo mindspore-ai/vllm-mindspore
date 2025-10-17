@@ -46,7 +46,8 @@ if TYPE_CHECKING:
 else:
     LlamaConfig = None
 
-from mindspore import Tensor, mint, nn
+import mindspore as ms
+from mindspore import Tensor, mint, nn, ops
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -70,6 +71,7 @@ from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, extract_layer_index,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+from vllm_mindspore.utils import FORMAT_TYPE, is_310p
 
 
 class LlamaMLP(nn.Cell):
@@ -462,6 +464,26 @@ class LlamaModel(nn.Cell):
                                             default_weight_loader)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
+
+        def adjust_weight(params_dict):
+            target_keywords = [
+                "qkv_proj.weight",
+                "o_proj.weight",
+                "gate_up_proj.weight",
+                "down_proj.weight",
+            ]
+
+            for name, param in params_dict.items():
+                if any(name.endswith(keyword) for keyword in target_keywords):
+                    cast_weight = ops.auto_generate.format_cast(
+                        param, FORMAT_TYPE['nz'])
+                    ms.runtime.synchronize()
+                    param.set_data(cast_weight)
+
+        if is_310p():
+            ms.runtime.synchronize()
+            adjust_weight(params_dict)
+            ms.runtime.synchronize()
 
         return loaded_params
 
