@@ -36,6 +36,7 @@ class HcclAllToAll : public OpAllToAll {
 
  private:
   HcclKernel hcclKernel;
+  bool useAllToAllV;
 };
 }  // namespace ops
 }  // namespace mrt

@@ -65,14 +65,28 @@ def test_check_all_reduce_op(pipeline, monkeypatch):
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
-def test_check_all_to_all_op(pipeline, monkeypatch):
+def test_check_all_to_all_single_op(pipeline, monkeypatch):
     """
-    Feature: Check all_to_all op launch
-    Description: Check all_to_all op launch with cache
+    Feature: Check all_to_all_single op launch
+    Description: Check all_to_all_single op launch with cache
     Expectation: The result is correct
     """
     if pipeline:
         monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
-    command = "torchrun --nproc_per_node=2 tests/st/inferrt/distributed/check_distributed_ops.py test_all_to_all"
+    command = "torchrun --nproc_per_node=2 tests/st/inferrt/distributed/check_distributed_ops.py test_all_to_all_single"
+    return_code = os.system(command)
+    assert return_code == 0
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("pipeline", (True, False))
+def test_check_all_to_all_v_single_op(pipeline, monkeypatch):
+    """
+    Feature: Check all_to_all_v_single op launch
+    Description: Check all_to_all_v_single op launch with cache
+    Expectation: The result is correct
+    """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+    command = "torchrun --nproc_per_node=2 tests/st/inferrt/distributed/check_distributed_ops.py test_all_to_all_v_single"
     return_code = os.system(command)
     assert return_code == 0

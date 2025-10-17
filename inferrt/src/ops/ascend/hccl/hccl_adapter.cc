@@ -56,6 +56,7 @@ void HcclAdapter::InitPlugin() {
   launch_hccl_reduce_scatter_ = DlsymFuncObj(HcclReduceScatter, plugin_handle_);
   launch_hccl_all_gather_ = DlsymFuncObj(HcclAllGather, plugin_handle_);
   launch_hccl_all_to_all_ = DlsymFuncObj(HcclAlltoAll, plugin_handle_);
+  launch_hccl_all_to_allv_ = DlsymFuncObj(HcclAlltoAllV, plugin_handle_);
 }
 
 void HcclAdapter::FinalizePlugin() {

@@ -17,19 +17,50 @@
 #include <vector>
 
 #include "ops/ascend/hccl/hccl_all_to_all.h"
-#include "ops/ascend/hccl/hccl_adapter.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
+#include "hardware/ascend/res_manager/ascend_stream_manager.h"
 #include "ops/ascend/hccl/hcom_utils.h"
+#include "ops/ascend/hccl/hccl_adapter.h"
 #include "hccl/hccl_types.h"
 #include "hccl/hccl.h"
 
 #include "common/logger.h"
 #include "ops/op_register.h"
 
-#include "hardware/ascend/res_manager/ascend_stream_manager.h"
-
 namespace mrt {
 namespace ops {
+bool is_all_to_all_v(const ir::TuplePtr &send_numel_list, const ir::TuplePtr &recv_numel_list) {
+  for (size_t i = 0; i < send_numel_list->Size(); i++) {
+    if (send_numel_list->operator[](i)->ToInt() != send_numel_list->operator[](0)->ToInt()) {
+      return true;
+    }
+  }
+  for (size_t i = 0; i < recv_numel_list->Size(); i++) {
+    if (recv_numel_list->operator[](i)->ToInt() != recv_numel_list->operator[](0)->ToInt()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void GetAllToAllVParam(const ir::TuplePtr &send_numel_list, const ir::TuplePtr &recv_numel_list,
+                       HcclAllToAllVParams *params) {
+  uint64_t offset = 0;
+  for (size_t i = 0; i < send_numel_list->Size(); i++) {
+    auto count = static_cast<uint64_t>(send_numel_list->operator[](i)->ToInt());
+    params->sendcounts.push_back(count);
+    params->sdispls.push_back(offset);
+    offset += count;
+  }
+  offset = 0;
+  for (size_t i = 0; i < recv_numel_list->Size(); i++) {
+    auto count = static_cast<uint64_t>(recv_numel_list->operator[](i)->ToInt());
+    params->recvcounts.push_back(count);
+    params->rdispls.push_back(offset);
+    offset += count;
+  }
+}
+
 OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspace_size) {
   LOG_OUT << "HcclAllToAll CalcWorkspace";
@@ -38,10 +69,9 @@ OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &i
   HcclAdapter::GetInstance().InitHccl();
   auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
   hcclKernel.hccl_count_ = hccl_count / rank_size;
-
   hcclKernel.hccl_data_type_ = hccl_data_type;
   hcclKernel.comm_ = HcomUtil::LoadHcclLibrary(group_name);
-
+  useAllToAllV = is_all_to_all_v(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple());
   return SUCCESS;
 }
 
@@ -49,10 +79,21 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
                                   ir::Value *output, void *stream) {
   LOG_OUT << "HcclAllToAll launch";
   auto out_tensor = output->ToTensor();
-  HcclAllToAllParams params = {hcclKernel.hccl_count_, hcclKernel.hccl_count_};
-  auto hccl_result = HcclAdapter::GetInstance().HcclAllToAll(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
-                                                             out_tensor->DataPtr(), params, hcclKernel.hccl_data_type_,
-                                                             stream, hcclKernel.comm_);
+  ::HcclResult hccl_result;
+  if (useAllToAllV) {
+    LOG_OUT << "HcclAllToAll launch AllToAllV Kernel";
+    HcclAllToAllVParams params;
+    GetAllToAllVParam(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple(), &params);
+    hccl_result = HcclAdapter::GetInstance().HcclAlltoAllV(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
+                                                           out_tensor->DataPtr(), params, hcclKernel.hccl_data_type_,
+                                                           stream, hcclKernel.comm_);
+  } else {
+    LOG_OUT << "HcclAllToAll launch AllToAll Kernel";
+    HcclAllToAllParams params = {hcclKernel.hccl_count_, hcclKernel.hccl_count_};
+    hccl_result = HcclAdapter::GetInstance().HcclAllToAll(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
+                                                          out_tensor->DataPtr(), params, hcclKernel.hccl_data_type_,
+                                                          stream, hcclKernel.comm_);
+  }
 
   if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
     LOG_ERROR << "HcclAllReduce failed, hccl_result: " << hccl_result;

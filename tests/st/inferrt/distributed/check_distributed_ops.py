@@ -78,6 +78,12 @@ def check_group_info(pg=None):
     return
 
 
+def check_op_output_with_mul(output, expect_out):
+    output = output.cpu()
+    expect_output = (expect_out * expect_out).cpu()
+    assert (output == expect_output).all(), f"expected output is {expect_output}, but got {output}"
+
+
 def test_all_gather():
     """
     Feature: Check all_gather op launch
@@ -92,11 +98,6 @@ def test_all_gather():
             dist.all_gather_into_tensor(gathered, x, group=pg)
             output = torch.mul(gathered, gathered)
             return output
-
-    def check_allgather_output(output, expect_output):
-        output = output.cpu()
-        expect_output = (expect_output * expect_output).cpu()
-        assert (output == expect_output).all(), f"expected output is {expect_output}, but got {output}"
 
     setup_distributed()
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -122,7 +123,7 @@ def test_all_gather():
     output = compiled_model(example_input, gathered, new_pg)
 
     check_group_info(new_pg)
-    check_allgather_output(output, expect_output)
+    check_op_output_with_mul(output, expect_output)
     dist.destroy_process_group()
 
 
@@ -140,11 +141,6 @@ def test_reduce_scatter():
             dist.reduce_scatter_tensor(tensor_out, tensor_in, group=pg)
             output = torch.mul(tensor_out, tensor_out)
             return output
-
-    def check_reduce_scatter_output(output, expect_out):
-        output = output.cpu()
-        expect_output = (expect_out * expect_out).cpu()
-        assert (output == expect_output).all(), f"expected output is {expect_output}, but got {output}"
 
     setup_distributed()
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -169,7 +165,7 @@ def test_reduce_scatter():
     output = compiled_model(tensor_out, tensor_in, new_pg)
 
     check_group_info(new_pg)
-    check_reduce_scatter_output(output, expect_out)
+    check_op_output_with_mul(output, expect_out)
     dist.destroy_process_group()
 
 
@@ -188,10 +184,6 @@ def test_all_reduce():
             output = torch.mul(tensor_in, tensor_in)
             return output
 
-    def check_all_reduce_output(output, expect_out):
-        output = output.cpu()
-        expect_output = (expect_out * expect_out).cpu()
-        assert (output == expect_output).all(), f"expected output is {expect_output}, but got {output}"
     setup_distributed()
     rank = dist.get_rank() if dist.is_initialized() else 0
     world_size = dist.get_world_size()
@@ -214,11 +206,11 @@ def test_all_reduce():
     output = compiled_model(tensor_in, new_pg)
 
     check_group_info(new_pg)
-    check_all_reduce_output(output, expect_out)
+    check_op_output_with_mul(output, expect_out)
     dist.destroy_process_group()
 
 
-def test_all_to_all():
+def test_all_to_all_single():
     """
     Feature: Check all_to_all op launch
     Description: Check all_to_all op launch with cache
@@ -232,11 +224,6 @@ def test_all_to_all():
             dist.all_to_all_single(tensor_out, tensor_in, group=pg)
             output = torch.mul(tensor_out, tensor_out)
             return output
-
-    def check_all_to_all_output(output, expect_out):
-        output = output.cpu()
-        expect_output = (expect_out * expect_out).cpu()
-        assert (output == expect_output).all(), f"expected output is {expect_output}, but got {output}"
 
     setup_distributed()
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -260,9 +247,58 @@ def test_all_to_all():
     output = compiled_model(tensor_out, tensor_in, new_pg)
 
     check_group_info(new_pg)
-    check_all_to_all_output(output, expect_out)
+    check_op_output_with_mul(output, expect_out)
     dist.destroy_process_group()
 
+
+def test_all_to_all_v_single():
+    """
+    Feature: Check all_to_all op launch
+    Description: Check all_to_all op launch with cache
+    Expectation: The result is correct
+    """
+    class SimpleNetwork(nn.Module):
+        def __init__(self):
+            super().__init__()
+        
+        def forward(self, tensor_out, tensor_in, output_split_sizes, input_split_sizes, pg=None):
+            dist.all_to_all_single(tensor_out, tensor_in, output_split_sizes, input_split_sizes, group=pg)
+            output = torch.mul(tensor_out, tensor_out)
+            return output
+
+    setup_distributed()
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    world_size = dist.get_world_size()
+    group_list = [ii for ii in range(world_size)]
+    new_pg = dist.new_group(group_list)
+    
+    model = SimpleNetwork().npu()
+    if rank == 0:
+        tensor = torch.arange(6, dtype=torch.int64).npu()
+        input_split_sizes = [2, 4]
+        output_split_sizes = [2, 3]
+        output = torch.zeros(size=[5], dtype=torch.int64).npu()
+        expect_out = torch.zeros(size=[5], dtype=torch.int64).npu()
+
+    else:
+        tensor = torch.arange(4, dtype=torch.int64).npu() + 6
+        input_split_sizes = [3, 1]
+        output_split_sizes = [4, 1]
+        output = torch.zeros(size=[5], dtype=torch.int64).npu()
+        expect_out = torch.zeros(size=[5], dtype=torch.int64).npu()
+
+    dist.all_to_all_single(expect_out, tensor, output_split_sizes, input_split_sizes, group=new_pg)
+    compiled_model = torch.compile(
+        model,
+        backend=backend,
+        fullgraph=True,
+    )
+
+    output = compiled_model(output, tensor, output_split_sizes, input_split_sizes, new_pg)
+
+    check_group_info(new_pg)
+    check_op_output_with_mul(output, expect_out)
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     import sys

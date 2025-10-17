@@ -25,7 +25,12 @@ OpsErrorCode OpAllToAll::InferShape(const std::vector<const ir::Value *> &input,
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto outputShape = input0Shape;
-
+  auto output_split_sizes = input[kIndex1]->ToTuple();
+  int64_t output_size = 0;
+  for (size_t i = 0; i < output_split_sizes->Size(); ++i) {
+    output_size += output_split_sizes->operator[](i)->ToInt();
+  }
+  outputShape[0] = output_size;
   auto outputTensor = output->ToTensor();
   CHECK_IF_NULL(outputTensor);
   outputTensor->SetShape(outputShape);
