@@ -107,23 +107,23 @@ static const std::unordered_map<std::string, CollectiveOpReduceType> kConstOpCol
 
 class HcomUtil {
  public:
-  static ::HcclDataType ConvertHcclType(DataType type_id);
-  static HcclComm LoadHcclLibrary(const std::string &group_name) {
-    int64_t hccl_comm = collective::CollectiveManager::Instance().GetCommunicationGroup(group_name)->communicator();
-    return reinterpret_cast<HcclComm>(static_cast<intptr_t>(hccl_comm));
+  static ::HcclDataType ConvertHcclType(DataType typeId);
+  static HcclComm LoadHcclLibrary(const std::string &groupName) {
+    int64_t hcclComm = collective::CollectiveManager::Instance().GetCommunicationGroup(groupName)->communicator();
+    return reinterpret_cast<HcclComm>(static_cast<intptr_t>(hcclComm));
   }
   // static bool GetHcomDataType(const std::string &kernel_name, const std::vector<TensorPtr> &inputs,
   //                             const std::vector<TensorPtr> &outputs, std::vector<HcclDataType> *data_type_list);
-  static bool GetHcclOpSize(const HcclDataType &data_type, const std::vector<int64_t> &shape, size_t *size);
-  static bool GetHcomTypeSize(const HcclDataType &data_type, uint32_t *size);
-  static bool GetHcomCount(const std::vector<HcclDataType> &data_type_list,
-                           const std::vector<std::vector<int64_t>> &shape_list, const size_t input_tensor_num,
-                           const std::optional<int64_t> rank_size_opt, uint64_t *total_count);
+  static bool GetHcclOpSize(const HcclDataType &dataType, const std::vector<int64_t> &shape, size_t *size);
+  static bool GetHcomTypeSize(const HcclDataType &dataType, uint32_t *size);
+  static bool GetHcomCount(const std::vector<HcclDataType> &dataTypeList,
+                           const std::vector<std::vector<int64_t>> &shapeList, const size_t inputTensorNum,
+                           const std::optional<int64_t> rankSizeOpt, uint64_t *totalCount);
 
   static std::pair<uint64_t, ::HcclDataType> GetHcclCountAndTypeFromTensor(
-    const ir::TensorPtr &tensor, const std::optional<int64_t> rank_size_opt = std::nullopt);
-  static CollectiveOpReduceType GetCollectiveOpReduceType(const std::string &reduce_op);
-  static HcclReduceOp GetHcomReduceOpType(const std::string &reduce_op);
+    const ir::TensorPtr &tensor, const std::optional<int64_t> rankSizeOpt = std::nullopt);
+  static CollectiveOpReduceType GetCollectiveOpReduceType(const std::string &reduceOp);
+  static HcclReduceOp GetHcomReduceOpType(const std::string &reduceOp);
 };
 }  // namespace mrt::ops
 

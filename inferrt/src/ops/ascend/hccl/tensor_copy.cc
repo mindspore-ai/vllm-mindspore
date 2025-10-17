@@ -39,22 +39,22 @@ OpsErrorCode HcclTensorCopy::InferShape(const std::vector<const ir::Value *> &in
 }
 
 OpsErrorCode HcclTensorCopy::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                           size_t *workspace_size) {
+                                           size_t *workspaceSize) {
   return SUCCESS;
 }
 
 OpsErrorCode HcclTensorCopy::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                     ir::Value *output, void *stream) {
   LOG_OUT << "TensorCopy launch";
-  auto src_tensor = input[kIndex1]->ToTensor();
-  auto out_tensor = input[kIndex0]->ToTensor();
-  auto dst_size = out_tensor->Numel() * out_tensor->Dtype().GetSize();
+  auto srcTensor = input[kIndex1]->ToTensor();
+  auto outTensor = input[kIndex0]->ToTensor();
+  auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
 
   // host_ptr, size, device_ptr, size, ACL_MEMCPY_DEVICE_TO_HOST, stream_ptr
-  auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(out_tensor->DataPtr(), dst_size,
-                                                                         src_tensor->DataPtr(), dst_size, stream);
+  auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
+                                                                         srcTensor->DataPtr(), dstSize, stream);
   if (ret == false) {
-    LOG_ERROR << " call aclrtMemcpyAsync in Op HcclTensorCopy failed";
+    LOG_ERROR << " call aclrtMemcpyAsync in Op TensorCopy failed";
   }
 
   return SUCCESS;

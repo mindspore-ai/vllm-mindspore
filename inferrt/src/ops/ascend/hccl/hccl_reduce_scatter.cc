@@ -30,15 +30,15 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                              size_t *workspace_size) {
+                                              size_t *workspaceSize) {
   LOG_OUT << "HcclReduceScatter CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
-  auto rank_size = input[kIndex2]->ToInt();
-  auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor(), rank_size);
-  hcclKernel.hccl_count_ = hccl_count;
-  hcclKernel.hccl_data_type_ = hccl_data_type;
-  const string &group_name = input[kIndex3]->ToString();
-  hcclKernel.comm_ = HcomUtil::LoadHcclLibrary(group_name);
+  auto rankSize = input[kIndex2]->ToInt();
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor(), rankSize);
+  hcclKernel_.hcclCount_ = hcclCount;
+  hcclKernel_.hcclDataType_ = hcclDataType;
+  const string &groupName = input[kIndex3]->ToString();
+  hcclKernel_.comm_ = HcomUtil::LoadHcclLibrary(groupName);
 
   return SUCCESS;
 }
@@ -46,15 +46,15 @@ OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value 
 OpsErrorCode HcclReduceScatter::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                        size_t workspaceSize, ir::Value *output, void *stream) {
   LOG_OUT << "HcclReduceScatter launch";
-  auto hccl_op_type = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
-  auto out_tensor = output->ToTensor();
+  auto hcclOpType = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
+  auto outTensor = output->ToTensor();
 
-  auto hccl_result = HcclAdapter::GetInstance().HcclReduceScatter(
-    const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), out_tensor->DataPtr(), hcclKernel.hccl_count_,
-    hcclKernel.hccl_data_type_, hccl_op_type, stream, hcclKernel.comm_);
+  auto hcclResult = HcclAdapter::GetInstance().HcclReduceScatter(
+    const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), outTensor->DataPtr(), hcclKernel_.hcclCount_,
+    hcclKernel_.hcclDataType_, hcclOpType, stream, hcclKernel_.comm_);
 
-  if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcclReduceScatter failed, hccl_result: " << hccl_result;
+  if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
+    LOG_ERROR << "HcclReduceScatter failed, hccl_result: " << hcclResult;
   }
 
   return SUCCESS;

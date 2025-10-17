@@ -32,14 +32,14 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode HcclAllGather::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                          size_t *workspace_size) {
+                                          size_t *workspaceSize) {
   LOG_OUT << "HcclAllGather CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
-  auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
-  hcclKernel.hccl_count_ = hccl_count;
-  hcclKernel.hccl_data_type_ = hccl_data_type;
-  const string &group_name = input[kIndex2]->ToString();
-  hcclKernel.comm_ = HcomUtil::LoadHcclLibrary(group_name);
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
+  hcclKernel_.hcclCount_ = hcclCount;
+  hcclKernel_.hcclDataType_ = hcclDataType;
+  const string &groupName = input[kIndex2]->ToString();
+  hcclKernel_.comm_ = HcomUtil::LoadHcclLibrary(groupName);
 
   return SUCCESS;
 }
@@ -49,8 +49,8 @@ OpsErrorCode HcclAllGather::Launch(const std::vector<const ir::Value *> &input, 
   LOG_OUT << "HcclAllGather launch";
 
   auto hccl_result = HcclAdapter::GetInstance().HcclAllGather(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
-                                                              output->ToTensor()->DataPtr(), hcclKernel.hccl_count_,
-                                                              hcclKernel.hccl_data_type_, stream, hcclKernel.comm_);
+                                                              output->ToTensor()->DataPtr(), hcclKernel_.hcclCount_,
+                                                              hcclKernel_.hcclDataType_, stream, hcclKernel_.comm_);
   if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
     LOG_ERROR << "HcomAllGather failed, hccl_result: " << hccl_result;
   }

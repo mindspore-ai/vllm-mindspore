@@ -24,10 +24,10 @@ OpsErrorCode OpAllGather::InferShape(const std::vector<const ir::Value *> &input
   LOG_OUT << "HcclAllGather InferShape";
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
-  auto rank_size = input[kIndex1]->ToInt();
+  auto rankSize = input[kIndex1]->ToInt();
 
   auto outputShape = input0Shape;
-  outputShape[0] *= rank_size;
+  outputShape[0] *= rankSize;
 
   auto outputTensor = output->ToTensor();
   CHECK_IF_NULL(outputTensor);

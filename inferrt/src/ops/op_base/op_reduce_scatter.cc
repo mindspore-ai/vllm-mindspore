@@ -24,9 +24,9 @@ OpsErrorCode OpReduceScatter::InferShape(const std::vector<const ir::Value *> &i
   LOG_OUT << "HcclReduceScatter InferShape";
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
-  auto rank_size = input[kIndex2]->ToInt();
+  auto rankSize = input[kIndex2]->ToInt();
   auto outputShape = input0Shape;
-  outputShape[kIndex0] /= rank_size;
+  outputShape[kIndex0] /= rankSize;
 
   auto outputTensor = output->ToTensor();
   CHECK_IF_NULL(outputTensor);
