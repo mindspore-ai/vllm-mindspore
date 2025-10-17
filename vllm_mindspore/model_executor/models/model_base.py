@@ -293,7 +293,7 @@ class MsModelBase:
         seq_lens_np = np.array([input_len], dtype=np.int32)
         # context len is 0 for prefill, and 1 for chunked and decode.
         context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not (
-            self.has_chunked_warmup) else ms.Tensor([1], dtype=ms.int32)
+            self.has_prefill_warmup) else ms.Tensor([1], dtype=ms.int32)
         # num_prompt_tokens is equal to seq_len for prefill and decode,
         # and equal to seq_len + 1 for chunked.
         num_prompt_tokens = seq_lengths + 1 \

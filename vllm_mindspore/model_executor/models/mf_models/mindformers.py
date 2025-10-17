@@ -366,9 +366,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         def _set_network_flags(prefill_flag, chunked_flag):
             self.network.add_flags_custom_mcore(is_prefill=prefill_flag)
-            if (hasattr(self.network, "add_flags_chunked")
-                    and is_ringmla_chunked):
-                self.network.add_flags_chunked(is_chunked=chunked_flag)
+            if hasattr(self.network, "add_flags_chunked"):
+                self.network.add_flags_chunked(
+                    is_chunked=(chunked_flag and is_ringmla_chunked))
 
         if self.is_eager_mode:
             # In eager_mode, there is no need to set flags repeatedly in
@@ -381,7 +381,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             need_set_flag = (not self.has_prefill_warmup
                              or not self.has_chunked_warmup)
             self.network.phase =  "prefill" if is_prefill \
-                else "chunked" if is_ringmla_chunked else "decode"
+                else "chunked" if is_ringmla_chunked else "increment"
 
         # The value of has_prefill_warmup and has_chunked_warmup indicates
         # whether the corresponding inference graph has been executed.
