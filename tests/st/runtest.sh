@@ -20,18 +20,16 @@ BASE_PATH=$(
   pwd
 )
 PROJECT_PATH=${BASE_PATH}/../..
-if [ $BUILD_PATH ]; then
-  echo "BUILD_PATH = $BUILD_PATH"
-else
-  BUILD_PATH=${PROJECT_PATH}/build
-  echo "BUILD_PATH = $BUILD_PATH"
-fi
+TEST_PATH=${PROJECT_PATH}/tests/st
+echo "=== Collected Test Cases ==="
+mapfile -t TEST_CASES < <(python -m pytest "$TEST_PATH" -m "level0 and $TEST_PLAT" --collect-only -q | grep -E 'test_.*\.py::' | tee /dev/tty)
 
-TEST_CASES=$(find tests/st -name test_*.py -type f | xargs -r grep -l 'arg_mark' | xargs -r grep -l "$TEST_PLAT" | xargs -r grep -l 'level0')
-
-if [ -n "$TEST_CASES" ]; then
-    echo "$TEST_CASES" | xargs python -m pytest -v -m "level0 and $TEST_PLAT"
-else
+if [ ${#TEST_CASES[@]} -eq 0 ]; then
     echo "No matching testcases found."
     exit 0
 fi
+
+for test_case in "${TEST_CASES[@]}"; do
+  python -m pytest -s -v "$test_case"
+done
+echo "All testcases completed."
