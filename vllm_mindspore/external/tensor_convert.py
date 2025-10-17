@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+#
+# Copyright 2023 The vLLM team.
+# Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
+#
+# This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
+# and OPT implementations in this library. It has been modified from its
+# original forms to accommodate minor architectural differences compared
+# to GPT-NeoX and OPT used by the Meta AI team that trained the model.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""convert torch tensor and mindspore tensor"""
+import mindspore as ms
+import torch
+
+def tensor_torch2ms(x: torch.Tensor):
+    if x is None or not isinstance(x, torch.Tensor):
+        return x
+
+    if x.device.type == "cpu":
+        # TODO: dlpack support CPU, for now will slow down the weight loading
+        if x.dtype == torch.bfloat16:
+            return ms.Tensor(
+                x.contiguous().to(torch.float32).numpy(), dtype=ms.bfloat16
+            )
+        return ms.Tensor(x.contiguous().numpy())
+
+    # torch tensor -> dlpack -> mindspore tensor
+    pt_dlpack = torch.utils.dlpack.to_dlpack(x)
+    ms_tensor = ms.Tensor.from_dlpack(pt_dlpack)
+    return ms_tensor
+
+
+def tensor_ms2torch(x: ms.Tensor):
+    if x is None or not isinstance(x, ms.Tensor):
+        return x
+
+    if x.device == "CPU":  # TODO: dlpack support CPU
+        if x.dtype == ms.bfloat16:
+            return torch.tensor(
+                x.contiguous().to(ms.float32).asnumpy(), dtype=torch.bfloat16
+            )
+        return torch.tensor(x.contiguous().asnumpy())
+
+    # ms tensor -> dlpack -> torch tensor
+    ms_dlpack = x.to_dlpack()
+    torch_tensor = torch.from_dlpack(ms_dlpack)
+    return torch_tensor
