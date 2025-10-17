@@ -18,6 +18,7 @@ import os
 from abc import abstractmethod
 from collections.abc import Iterable
 from typing import Any, Optional, Union, cast
+import copy
 
 import mindspore as ms
 import numpy as np
@@ -38,9 +39,14 @@ from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
+#####
+from vllm.attention.layer import Attention
+from vllm_mindspore.external.tensor_convert import (tensor_ms2torch, 
+    tensor_torch2ms, get_ms_dtype)
+#####
 
-class AttentionWrapper:
-
+#class AttentionWrapper:
+class AttentionWrapper(Attention):
     def __init__(self):
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
@@ -48,10 +54,13 @@ class AttentionWrapper:
             vllm_config.parallel_config)
         head_size = vllm_config.model_config.get_head_size()
         num_block = 0
+        self.ms_dtype = get_ms_dtype(vllm_config.model_config.dtype)
         self.kv_shape = [num_block, block_size, num_kv_heads, head_size]
         self.kv_cache = [
-            (create_kv_cache(self.kv_shape, vllm_config.model_config.dtype),
-             create_kv_cache(self.kv_shape, vllm_config.model_config.dtype))
+            # (create_kv_cache(self.kv_shape, vllm_config.model_config.dtype),
+            #  create_kv_cache(self.kv_shape, vllm_config.model_config.dtype))
+            (create_kv_cache(self.kv_shape, self.ms_dtype),
+             create_kv_cache(self.kv_shape, self.ms_dtype))
             for _ in range(vllm_config.parallel_config.pipeline_parallel_size)
         ]
 
@@ -60,11 +69,20 @@ class AttentionWrapper:
         # add for v1
         self.num_kv_heads = num_kv_heads
         self.head_size = head_size
-        self.dtype = vllm_config.model_config.dtype
+        #self.dtype = vllm_config.model_config.dtype
+        self.dtype = self.ms_dtype
         self.block_size = block_size
         self.sliding_window = None
         self.kv_sharing_target_layer_name = None
 
+    ###############
+    def kvcache_torch2ms(self):
+        new_kv_cache = []
+        for kv_pt in self.kv_cache:
+            kv_ms = tensor_torch2ms(kv_pt)
+            new_kv_cache.append(kv_ms)
+        self.ms_kv_cache = new_kv_cache
+    ###############
 
 class MLAAttentionWrapper(AttentionWrapper):
 
@@ -74,13 +92,14 @@ class MLAAttentionWrapper(AttentionWrapper):
         self.use_ringmla = is_use_ringmla(vllm_config)
         if kv_cache_dtype is None:
             kv_cache_dtype = vllm_config.model_config.dtype
-        self.dtype = kv_cache_dtype
+        #self.dtype = kv_cache_dtype
+        self.dtype = get_ms_dtype(kv_cache_dtype)
         if not self.use_ringmla:
             self.kv_cache = [
                 (
                     ms.mint.zeros(
                         self.kv_shape,  # type: ignore[misc]
-                        dtype=vllm_config.model_config.dtype), ) for _ in
+                        dtype=self.dtype), ) for _ in
                 range(vllm_config.parallel_config.pipeline_parallel_size)
             ]
         else:
@@ -93,9 +112,8 @@ class MLAAttentionWrapper(AttentionWrapper):
                 k_shape = [*(self.kv_shape[0:-2]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-2]), qk_rope_head_dim]
                 self.kv_cache = [(
-                    ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
-                    ms.mint.zeros(r_shape,
-                                  dtype=vllm_config.model_config.dtype),
+                    ms.mint.zeros(k_shape, dtype=self.dtype),
+                    ms.mint.zeros(r_shape, dtype=self.dtype),
                 ) for _ in range(
                     vllm_config.parallel_config.pipeline_parallel_size)]
             else:
@@ -103,9 +121,9 @@ class MLAAttentionWrapper(AttentionWrapper):
                 r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
                 self.kv_cache = [
                     (ms.mint.zeros(k_shape,
-                                   dtype=vllm_config.model_config.dtype),
+                                   dtype=self.dtype),
                      ms.mint.zeros(r_shape,
-                                   dtype=vllm_config.model_config.dtype))
+                                   dtype=self.dtype))
                     for _ in range(
                         vllm_config.parallel_config.pipeline_parallel_size)
                 ]
@@ -115,11 +133,19 @@ class MsModelBase:
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__()
+        #####
+        self.model_dtype = get_ms_dtype(vllm_config.model_config.dtype)
+        set_model_context("model_dtype", self.model_dtype)
+        #####
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
 
         self.config = config
-        self.model_config = vllm_config.model_config
+        ###########
+        #self.model_config = vllm_config.model_config
+        self.model_config = copy.deepcopy(vllm_config.model_config)
+        self.model_config.dtype = self.model_dtype
+        ###########
         self.lora_config = lora_config
         self.cache_config = vllm_config.cache_config
         self.parallel_config = vllm_config.parallel_config
@@ -237,6 +263,13 @@ class MsModelBase:
         spec_step_idx: int = 0,
         **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:
+        ######################
+        input_ids = tensor_torch2ms(input_ids)
+        positions = tensor_torch2ms(positions)
+        inputs_embeds = tensor_torch2ms(inputs_embeds)
+        previous_hidden_states = tensor_torch2ms(previous_hidden_states)
+        ######################
+
         return self.forward(input_ids,
                             positions,
                             intermediate_tensors,
@@ -363,8 +396,12 @@ class MsModelBase:
         model_inputs["input_ids"] = convert_pin(input_ids)
         model_inputs["batch_valid_length"] = convert_pin(
             ms.from_numpy(seq_lens_np))
-        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
-        model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        # model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
+        # model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        ###########
+        model_inputs["block_tables"] = tensor_torch2ms(attn_metadata.block_tables)
+        model_inputs["slot_mapping"] = tensor_torch2ms(attn_metadata.slot_mapping)
+        ###########
         model_inputs["position_ids"] = convert_pin(position_ids)
         model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
         model_inputs["attention_mask"] = convert_pin(attention_mask)

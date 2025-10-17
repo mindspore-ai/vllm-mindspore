@@ -26,7 +26,7 @@ import mindspore as ms
 import numpy as np
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
-from vllm.config import get_current_vllm_config
+#from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
                               split_tensor_along_last_dim,
@@ -39,6 +39,8 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.model_executor.utils import get_model_context
+from vllm_mindspore.external.tensor_convert import tensor_torch2ms
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod", "AWQMarlinLinearMethod",
@@ -148,7 +150,8 @@ class LinearBase(nn.Cell):
         self.output_size = output_size
         self.skip_bias_add = skip_bias_add
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            # params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = get_model_context("model_dtype")
         self.params_dtype = params_dtype
         if quant_config is None:
             self.quant_method: Optional[
@@ -280,7 +283,10 @@ class ColumnParallelLinear(LinearBase):
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        param.set_data(ms.from_numpy(loaded_weight))
+        #########
+        #param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(tensor_torch2ms(loaded_weight))
+        #########
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -349,8 +355,10 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                                             start_idx, shard_size)
 
         assert loaded_weight.shape == (shard_size, param.shape[1])
+        # param[shard_offset:shard_offset +
+        #       shard_size, :] = ms.from_numpy(loaded_weight)
         param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+              shard_size, :] = tensor_torch2ms(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -455,7 +463,8 @@ class QKVParallelLinear(ColumnParallelLinear):
                     loaded_weight, output_dim, start_idx, shard_size)
                 loaded_weight_list.append(loaded_weight_shard)
 
-            loaded_weight = ms.from_numpy(np.concatenate(loaded_weight_list))
+            #loaded_weight = ms.from_numpy(np.concatenate(loaded_weight_list))
+            loaded_weight = tensor_torch2ms(torch.cat(loaded_weight_list))
 
             assert loaded_weight.shape == param.shape
             param.set_data(loaded_weight)
@@ -480,7 +489,8 @@ class QKVParallelLinear(ColumnParallelLinear):
         start_idx = shard_id * shard_size
         loaded_weight = split_loaded_weight(loaded_weight, output_dim,
                                             start_idx, shard_size)
-        loaded_weight = ms.from_numpy(loaded_weight)
+        #loaded_weight = ms.from_numpy(loaded_weight)
+        loaded_weight = tensor_torch2ms(loaded_weight)
 
         if param.name.endswith("weight"):
             assert loaded_weight.shape == (shard_size, param.shape[1])
@@ -620,4 +630,5 @@ class RowParallelLinear(LinearBase):
             loaded_weight = loaded_weight.reshape(1)
 
         assert param.shape == loaded_weight.shape
-        param.set_data(ms.from_numpy(loaded_weight))
+        #param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(tensor_torch2ms(loaded_weight))

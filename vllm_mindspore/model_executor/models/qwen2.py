@@ -490,4 +490,8 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
     ) -> Optional[Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        ##########
+        # logits = tensor_ms2torch(logits).npu()
+        logits = torch.tensor(logits.contiguous().asnumpy()).npu()
+        ##########
         return logits

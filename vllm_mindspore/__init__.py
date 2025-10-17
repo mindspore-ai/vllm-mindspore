@@ -26,5 +26,5 @@ if not external_mode:
     from vllm_mindspore.ray_patch import patch_ray
     patch_ray()
 
-    import vllm_mindspore.apply_patch import vllm_patch_enable
+    from vllm_mindspore.apply_patch import vllm_patch_enable
     vllm_patch_enable()
