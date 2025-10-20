@@ -57,3 +57,27 @@ def tensor_ms2torch(x: ms.Tensor):
     ms_dlpack = x.to_dlpack()
     torch_tensor = torch.from_dlpack(ms_dlpack)
     return torch_tensor
+
+
+TORCH_DTYPE_TO_MS_DTYPE = {
+    torch.bfloat16: ms.bfloat16,
+    torch.float16: ms.float16,
+    torch.float32: ms.float32,
+    torch.float64: ms.float64,
+    torch.int8: ms.int8,
+    torch.int16: ms.int16,
+    torch.int32: ms.int32,
+    torch.int64: ms.int64,
+    torch.int64: ms.int64,
+    torch.uint8: ms.uint8,
+    torch.bool: ms.bool_,
+    torch.long: ms.int64,
+    torch.half: ms.float16,
+    torch.int: ms.int32,
+    torch.double: ms.float64,
+    torch.float: ms.float32,
+    torch.short: ms.int16
+}
+
+def get_ms_dtype(torch_dtype):
+    return TORCH_DTYPE_TO_MS_DTYPE.get(torch_dtype)

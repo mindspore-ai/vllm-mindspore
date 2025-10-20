@@ -27,6 +27,7 @@ from safetensors import safe_open
 from tqdm.auto import tqdm
 from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
                                                            enable_tqdm)
+from vllm_mindspore.external.tensor_convert import tensor_torch2ms
 
 
 def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
@@ -77,4 +78,5 @@ def safetensors_weights_iterator(
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
     loaded_weight = loaded_weight[:]
-    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+    #param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+    param.set_data(tensor_torch2ms(loaded_weight))

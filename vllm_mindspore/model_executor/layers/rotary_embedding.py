@@ -190,6 +190,12 @@ class InferRotaryEmbedding(nn.Cell):
         freqs_sin = Tensor(freqs_sin, dtype=self.dtype)
         return freqs_cos, freqs_sin
 
+    ############
+    def get_cos_sin(self, positions, offsets = None):
+        return None, None
+    ############
+
+
     def construct(
         self,
         positions: Tensor,
@@ -736,7 +742,8 @@ def get_rope(
     partial_rotary_factor: float = 1.0,
 ):
     if dtype is None:
-        dtype = get_current_vllm_config().model_config.dtype
+        #dtype = get_current_vllm_config().model_config.dtype
+        params_dtype = get_model_context("model_dtype")
 
     if rope_scaling is not None:
         # Transforms every value that is a list into a tuple for caching calls
