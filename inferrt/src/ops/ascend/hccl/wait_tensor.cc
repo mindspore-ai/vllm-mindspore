@@ -38,7 +38,7 @@ OpsErrorCode HcclWaitTensor::InferShape(const std::vector<const ir::Value *> &in
 }
 
 OpsErrorCode HcclWaitTensor::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                           size_t *workspace_size) {
+                                           size_t *workspaceSize) {
   return SUCCESS;
 }
 
@@ -46,14 +46,14 @@ OpsErrorCode HcclWaitTensor::Launch(const std::vector<const ir::Value *> &input,
                                     ir::Value *output, void *stream) {
   LOG_OUT << "WaitTensor launch";
 
-  auto src_tensor = input[kIndex0]->ToTensor();
-  auto out_tensor = output->ToTensor();
-  auto dst_size = out_tensor->Numel() * out_tensor->Dtype().GetSize();
+  auto srcTensor = input[kIndex0]->ToTensor();
+  auto outTensor = output->ToTensor();
+  auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
 
-  auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(out_tensor->DataPtr(), dst_size,
-                                                                         src_tensor->DataPtr(), dst_size, stream);
+  auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
+                                                                         srcTensor->DataPtr(), dstSize, stream);
   if (ret == false) {
-    LOG_ERROR << " call aclrtMemcpyAsync in Op HcclTensorCopy failed";
+    LOG_ERROR << " call aclrtMemcpyAsync in Op WaitTensor failed";
   }
 
   mrt::device::ascend::AscendStreamMng::GetInstance().SyncStream(stream);

@@ -35,9 +35,6 @@ class HcclTensorCopy : public Operator {
                              size_t *workspace_size) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
-
- private:
-  HcclKernel hcclKernel;
 };
 }  // namespace ops
 }  // namespace mrt

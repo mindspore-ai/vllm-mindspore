@@ -26,7 +26,7 @@
 namespace mrt {
 namespace ops {
 
-HcclKernel::HcclKernel() : hccl_count_(0), root_id_(0), src_rank_(0), dest_rank_(0), comm_(nullptr) {}
+HcclKernel::HcclKernel() : hcclCount_(0), rootId_(0), comm_(nullptr) {}
 
 }  // namespace ops
 }  // namespace mrt

@@ -30,12 +30,13 @@ class HcclAllToAll : public OpAllToAll {
   ~HcclAllToAll() = default;
 
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                             size_t *workspace_size) override;
+                             size_t *workspaceSize) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
 
  private:
-  HcclKernel hcclKernel;
+  HcclKernel hcclKernel_;
+  bool useAllToAllV_;
 };
 }  // namespace ops
 }  // namespace mrt

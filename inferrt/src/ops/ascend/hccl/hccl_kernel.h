@@ -38,16 +38,12 @@ class HcclKernel {
   ~HcclKernel() = default;
 
  public:
-  HcclDataType hccl_data_type_;
-  uint64_t hccl_count_;
-  uint32_t root_id_;
-  uint32_t src_rank_;
-  uint32_t dest_rank_;
+  HcclDataType hcclDataType_;
+  uint64_t hcclCount_;
+  uint32_t rootId_;
   std::string group_;
   HcclComm comm_;
-  ulong loop_size_{0};
-  bool is_graph_mode_{false};
-  std::string hccl_inner_comm_name_;
+  std::string hcclInnerCommName_;
 };
 
 }  // namespace ops

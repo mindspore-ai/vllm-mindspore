@@ -31,14 +31,14 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                          size_t *workspace_size) {
+                                          size_t *workspaceSize) {
   LOG_OUT << "HcclAllReduce CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
-  auto [hccl_count, hccl_data_type] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
-  hcclKernel.hccl_count_ = hccl_count;
-  hcclKernel.hccl_data_type_ = hccl_data_type;
-  const string &group_name = input[kIndex2]->ToString();
-  hcclKernel.comm_ = HcomUtil::LoadHcclLibrary(group_name);
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
+  hcclKernel_.hcclCount_ = hcclCount;
+  hcclKernel_.hcclDataType_ = hcclDataType;
+  const string &groupName = input[kIndex2]->ToString();
+  hcclKernel_.comm_ = HcomUtil::LoadHcclLibrary(groupName);
 
   return SUCCESS;
 }
@@ -46,15 +46,15 @@ OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &
 OpsErrorCode HcclAllReduce::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                    ir::Value *output, void *stream) {
   LOG_OUT << "HcclAllReduce launch";
-  auto hccl_op_type = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
-  auto out_tensor = output->ToTensor();
+  auto hcclOpType = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
+  auto outTensor = output->ToTensor();
 
-  auto hccl_result = HcclAdapter::GetInstance().HcclAllReduce(
-    const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), out_tensor->DataPtr(), hcclKernel.hccl_count_,
-    hcclKernel.hccl_data_type_, hccl_op_type, stream, hcclKernel.comm_);
+  auto hcclResult = HcclAdapter::GetInstance().HcclAllReduce(
+    const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), outTensor->DataPtr(), hcclKernel_.hcclCount_,
+    hcclKernel_.hcclDataType_, hcclOpType, stream, hcclKernel_.comm_);
 
-  if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcclAllReduce failed, hccl_result: " << hccl_result;
+  if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
+    LOG_ERROR << "HcclAllReduce failed, hcclResult: " << hcclResult;
   }
 
   return SUCCESS;
