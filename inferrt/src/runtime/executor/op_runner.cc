@@ -41,8 +41,7 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
 
 void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
-  if (output_->IsTensor()) {
-    const auto &tensor = output_->ToTensor();
+  ir::VisitAllTensors(output_, [&](const ir::TensorPtr &tensor) {
     if (tensor->DataPtr()) {
       LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
     }
@@ -51,27 +50,7 @@ void OpRunner::AllocateMemory() {
     if (need_alloc) {
       tensor->GetStorage()->AllocateMemory();
     }
-  } else if (output_->IsTuple()) {
-    const auto &tuple = output_->ToTuple();
-    CHECK_IF_NULL(tuple);
-    size_t size = tuple->Size();
-    for (size_t i = 0; i < size; i++) {
-      const auto &value = (*tuple)[i];
-      CHECK_IF_NULL(value);
-      CHECK_IF_FAIL(!value->IsTuple());
-      if (value->IsTensor()) {
-        const auto &tensor = value->ToTensor();
-        if (tensor->DataPtr()) {
-          LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
-        }
-        // For op output ref graph input tensor case.
-        bool need_alloc = tensor->GetStorage()->Data() == nullptr;
-        if (need_alloc) {
-          tensor->GetStorage()->AllocateMemory();
-        }
-      }
-    }
-  }
+  });
 
   // Allocate workspace memory if needed.
   if (workspaceSize_ > 0) {

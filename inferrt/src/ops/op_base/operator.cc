@@ -15,30 +15,22 @@
  */
 
 #include "ops/operator.h"
-#include "ops/kernel_lib.h"
 
 namespace mrt {
 namespace ops {
 
-// Dummy kernel
-class DummyKernel : public DAKernel {
- public:
-  using DAKernel::DAKernel;
-  void Init() override {}
-  void InferShape() override {}
-  void Resize() override {}
-  void Launch() override {}
-};
-
-// Dummy Kernel lib
-class DA_API DummyKernelLib : public KernelLib {
- public:
-  DummyKernelLib() : KernelLib("Dummy") {}
-  ~DummyKernelLib() = default;
-  DAKernel *CreateKernel(ir::NodePtr node) const override { return new DummyKernel(node); }
-};
-
-DART_REGISTER_KERNEL_LIB("Dummy", DummyKernelLib);
+OpsErrorCode Operator::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
+  ir::VisitAllTensors(output, [](const ir::TensorPtr &tensor) {
+    if (tensor->HasSymbolicShape()) {
+      tensor->EvalSymbolicShape();
+    }
+    if (tensor->HasDynamicShape()) {
+      LOG_EXCEPTION << "Tensor shape still unknown before launch: " << tensor;
+    }
+  });
+  LOG_OUT << "Operator output shape inferred: " << *output;
+  return SUCCESS;
+}
 
 }  // namespace ops
 }  // namespace mrt

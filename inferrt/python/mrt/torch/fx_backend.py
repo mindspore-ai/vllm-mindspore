@@ -1,8 +1,24 @@
+# Copyright 2025 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 """
+
 import os
 import operator
+from functools import reduce
 from typing import List, Dict, Any
 import sympy
 import torch
@@ -10,10 +26,45 @@ from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
 from torch._C._distributed_c10d import _resolve_process_group
 from torch import distributed as dist
+from torch.utils._sympy.functions import FloorDiv
 
-from mrt.ir import GraphExecutor, Op
+from mrt.ir import GraphExecutor, Op, SymbolicVar, SymbolicConst, SymbolicExpr
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data
 from mrt._mrt_collective import CollectiveManager
+
+
+# pylint: disable=bad-continuation
+def _convert_sympy_expr_to_symbolic_expr(
+    expr: sympy.Expr, symbol_map: Dict[sympy.Symbol, SymbolicVar]
+) -> SymbolicExpr:
+    """Recursively convert a sympy expression to a SymbolicExpr."""
+    if expr.is_Symbol:
+        if expr not in symbol_map:
+            symbol_map[expr] = SymbolicVar(str(expr))
+        return symbol_map[expr]
+
+    if expr.is_Integer:
+        return SymbolicConst(int(expr))
+
+    if isinstance(expr, FloorDiv):
+        base_expr = _convert_sympy_expr_to_symbolic_expr(expr.base, symbol_map)
+        divisor_expr = _convert_sympy_expr_to_symbolic_expr(expr.divisor, symbol_map)
+        return base_expr // divisor_expr
+
+    # It's an expression with args
+    converted_args = [
+        _convert_sympy_expr_to_symbolic_expr(arg, symbol_map) for arg in expr.args
+    ]
+
+    if expr.is_Add:
+        return reduce(operator.add, converted_args)
+
+    if expr.is_Mul:
+        return reduce(operator.mul, converted_args)
+
+    raise NotImplementedError(
+        f"Unsupported sympy expression: {expr} (type: {type(expr)})"
+    )
 
 
 _GLOBAL_GRAPH_ID = 0
@@ -23,6 +74,7 @@ def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
     _GLOBAL_GRAPH_ID += 1
     return _GLOBAL_GRAPH_ID
+
 
 # pylint: disable=protected-access
 # A comprehensive mapping from torch fx ops to our custom ops.
@@ -45,7 +97,6 @@ _OP_MAP = {
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
     torch.ops._c10d_functional.all_to_all_single: Op.all_to_all,
-
     torch.ops._c10d_functional.wait_tensor: Op.wait_tensor,
     # torch.nn.functional
     torch.nn.functional.relu: Op.relu,
@@ -78,12 +129,8 @@ _OP_MAP = {
     "copy_": Op.copy,
 }
 
-_DIST_OP_LIST = [
-    Op.all_gather,
-    Op.all_reduce,
-    Op.reduce_scatter,
-    Op.all_to_all
-]
+_DIST_OP_LIST = [Op.all_gather, Op.all_reduce, Op.reduce_scatter, Op.all_to_all]
+
 
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
@@ -104,7 +151,7 @@ def _get_op(target):
 
 def _extract_global_comm_info():
     rank = dist.get_rank() if dist.is_initialized() else 0
-    local_rank = int(os.getenv('LOCAL_RANK', "0"))
+    local_rank = int(os.getenv("LOCAL_RANK", "0"))
     world_size = dist.get_world_size()
 
     CollectiveManager.instance().set_global_rank_id(rank)
@@ -113,22 +160,24 @@ def _extract_global_comm_info():
 
 
 def _set_communication_info(ptd):
-    '''Get communication info from torch and set to CollectiveManager for a given process group.'''
+    """Get communication info from torch and set to CollectiveManager for a given process group."""
     pg = _resolve_process_group(ptd)
     rank = dist.get_rank() if dist.is_initialized() else 0
-    local_rank = int(os.getenv('LOCAL_RANK', "0"))
+    local_rank = int(os.getenv("LOCAL_RANK", "0"))
     world_size = dist.get_world_size()
 
     group_rank = dist.get_rank(pg)
     rank_list = dist.get_process_group_ranks(pg)
 
-    hccl_comm_handle = pg._get_backend(torch.device('npu')).get_hccl_comm(rank)
+    hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
     CollectiveManager.instance().set_global_rank_id(rank)
     CollectiveManager.instance().set_local_rank_id(local_rank)
     CollectiveManager.instance().set_global_rank_size(world_size)
 
-    CollectiveManager.instance().create_communication_group(f"{ptd}", rank_list, group_rank, hccl_comm_handle)
+    CollectiveManager.instance().create_communication_group(
+        f"{ptd}", rank_list, group_rank, hccl_comm_handle
+    )
 
 
 def _extract_and_setup_comm_groups(node_args):
@@ -170,6 +219,22 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
+    symbol_map: Dict[sympy.Symbol, SymbolicVar] = {}
+
+    def _create_symbolic_shape_if_needed(example_value, output_value):
+        if isinstance(example_value, torch.Tensor) and any(
+            isinstance(d, torch.SymInt) for d in example_value.shape
+        ):
+            symbolic_shape = []
+            for dim in example_value.shape:
+                if isinstance(dim, torch.SymInt):
+                    expr = dim.node.expr
+                    symbolic_shape.append(
+                        _convert_sympy_expr_to_symbolic_expr(expr, symbol_map)
+                    )
+                else:
+                    symbolic_shape.append(SymbolicConst(int(dim)))
+            output_value.to_tensor().symbolic_shape = symbolic_shape
 
     if dist.is_initialized():
         _extract_global_comm_info()
@@ -181,7 +246,9 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            output_value = from_torch(node.meta.get("example_value", None))
+            example_value = node.meta.get("example_value", None)
+            output_value = from_torch(example_value)
+            _create_symbolic_shape_if_needed(example_value, output_value)
             env[node] = executor.add_value_node(output_value)
 
     with executor:
@@ -205,7 +272,9 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     raise NotImplementedError(f"Unsupported op: {node.target}")
 
                 input_nodes = _map_args(node.args, env, executor)
-                output_value = from_torch(node.meta.get("example_value", None))
+                example_value = node.meta.get("example_value", None)
+                output_value = from_torch(example_value)
+                _create_symbolic_shape_if_needed(example_value, output_value)
 
                 env[node] = executor.add_op_node(op, input_nodes, output_value)
 
@@ -236,33 +305,17 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 f"Expected {len(mrt_param_nodes)} inputs, but got {len(inputs)}"
             )
 
-        sym_bindings = {}
         for fx_param_value, mrt_param_node, input_value in zip(
             fx_param_values, mrt_param_nodes, inputs
         ):
             if isinstance(fx_param_value, torch.Tensor):
                 update_tensor_data(mrt_param_node.output.to_tensor(), input_value)
             elif isinstance(fx_param_value, torch.SymInt):
-                sym_bindings[fx_param_value.node.expr] = input_value
+                expr = fx_param_value.node.expr
+                if expr in symbol_map:
+                    symbol_map[expr].set_value(int(input_value))
             else:
                 mrt_param_node.output = from_torch(input_value)
-
-        def sym_eval(value):
-            if isinstance(value, torch.SymInt):
-                value = sympy.expand(value.node.expr.xreplace(sym_bindings))
-                if value.is_number:
-                    value = value.evalf()
-            return value
-
-        for fx_node, mrt_node in env.items():
-            if (
-                fx_node.op in ("call_function", "call_method")
-                and mrt_node.output.is_tensor()
-            ):
-                output_shape = fx_node.meta.get("example_value", None).shape
-                mrt_node.output.to_tensor().shape = [
-                    sym_eval(dim) for dim in output_shape
-                ]
 
         result = executor.run()
         return to_torch(result)

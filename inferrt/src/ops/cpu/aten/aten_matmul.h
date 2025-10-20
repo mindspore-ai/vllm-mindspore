@@ -24,7 +24,7 @@
 
 namespace mrt {
 namespace ops {
-class AtenMatMul : public OpMatMul {
+class AtenMatMul : public Operator {
  public:
   AtenMatMul() = default;
   ~AtenMatMul() override = default;

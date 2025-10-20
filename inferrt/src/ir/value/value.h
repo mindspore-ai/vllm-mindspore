@@ -22,6 +22,8 @@
 #include <utility>
 #include <memory>
 #include <stdexcept>
+#include <functional>
+#include <ostream>
 
 #include "common/common.h"
 #include "ir/common/intrusive_ptr.h"
@@ -207,6 +209,9 @@ std::ostream &operator<<(std::ostream &os, const Value &value);
 std::ostream &operator<<(std::ostream &os, const ValuePtr &value);
 std::ostream &operator<<(std::ostream &os, const std::vector<const Value *> &values);
 std::ostream &operator<<(std::ostream &os, const TuplePtr &tuple);
+
+// Recursively visits all tensors contained within the given Value.
+void VisitAllTensors(const ir::ValuePtr &value, const std::function<void(const ir::TensorPtr &)> &func);
 
 }  // namespace ir
 }  // namespace mrt

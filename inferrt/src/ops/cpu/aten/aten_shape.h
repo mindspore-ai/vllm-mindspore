@@ -24,7 +24,7 @@
 
 namespace mrt {
 namespace ops {
-class AtenShape : public OpShape {
+class AtenShape : public Operator {
  public:
   AtenShape() = default;
   ~AtenShape() override = default;

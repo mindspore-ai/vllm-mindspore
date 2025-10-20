@@ -164,6 +164,12 @@ fi
 ##################################################
 cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
+    # Clean previous build files except third_party
+    for dir in *; do
+        if [ "$dir" != "third_party" ]; then
+            rm -rf $dir
+        fi
+    done
     cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $MOPT_CMAKE_ARGS
 fi
 make
