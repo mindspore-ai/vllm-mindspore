@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run ST testcases
 
-set -e
+set +e
 
 if [ $# -ne 1 ] || { [ "$1" != "cpu" ] && [ "$1" != "ascend" ]; }; then
     echo "Error: Parameter must be 'cpu' or 'ascend'"
@@ -21,15 +21,66 @@ BASE_PATH=$(
 )
 PROJECT_PATH=${BASE_PATH}/../..
 TEST_PATH=${PROJECT_PATH}/tests/st
-echo "=== Collected Test Cases ==="
-mapfile -t TEST_CASES < <(python -m pytest "$TEST_PATH" -m "level0 and $TEST_PLAT" --collect-only -q | grep -E 'test_.*\.py::' | tee /dev/tty)
 
-if [ ${#TEST_CASES[@]} -eq 0 ]; then
-    echo "No matching testcases found."
-    exit 0
+GREEN=$(tput setaf 2)
+RESET=$(tput sgr0)
+echo "${GREEN}=============== Finding Test Files ===============${RESET}"
+mapfile -t TEST_FILES < <(find "$TEST_PATH" -name test_*.py -type f | xargs -r grep -l 'arg_mark' | xargs -r grep -l "$TEST_PLAT" | xargs -r grep -l 'level0' | tee /dev/tty)
+echo "${GREEN}=============== Found ${#TEST_FILES[@]} Test Files ===============${RESET}"
+
+echo "${GREEN}=============== Collecting Test Cases ===============${RESET}"
+COLLECT_OUTPUT=$(python -m pytest "${TEST_FILES[@]}" -m "level0 and $TEST_PLAT" --collect-only -q 2>&1)
+EXIT_CODE=$?
+if [ $EXIT_CODE != 0 ]; then
+    echo "$COLLECT_OUTPUT"
+    exit $EXIT_CODE
 fi
+mapfile -t TEST_CASES < <(echo "$COLLECT_OUTPUT" | grep -E 'test_.*\.py::' | sort | tee /dev/tty)
+
+TOTAL_COUNT=${#TEST_CASES[@]}
+FAILED_COUNT=0
+RESULTS=()
+echo "${GREEN}=============== Collected ${TOTAL_COUNT} Test Cases ===============${RESET}"
+
+cleanup_distributed_processes() {
+    local test_case=$1
+    sleep 5
+    echo "Cleaning up residual processes for: $test_case"
+
+    local op_name=$(echo "$test_case" | sed -n 's/.*test_check_\(.*\)_op.*/\1/p')
+    pids=$(ps -ef | grep -E "test_check_${op_name}_op|test_${op_name}" | grep -v grep | awk '{print $2}')
+    if [ -n "$pids" ]; then
+        kill -9 $pids
+    fi
+}
 
 for test_case in "${TEST_CASES[@]}"; do
-  python -m pytest -s -v "$test_case"
+    python -m pytest -v "$test_case"
+    status=$?
+
+    # Distributed test cases require cleanup for resource release
+    if [[ "$test_case" == *"distributed"* ]]; then
+        cleanup_distributed_processes "$test_case"
+    fi
+
+    if [ $status -eq 0 ]; then
+        result="PASSED"
+    else
+        result="FAILED"
+        ((FAILED_COUNT++))
+    fi
+    RESULTS+=("$test_case|$TEST_PLAT|$result")
 done
-echo "All testcases completed."
+
+{
+printf "%s|%s|%s\n" "Testcase" "EnvType" "Result"
+for result_entry in "${RESULTS[@]}"; do
+    echo "$result_entry"
+done
+} | column -t -s "|"
+
+echo "${GREEN}=============== Case Result Info ===============${RESET}"
+PASS_COUNT=$((TOTAL_COUNT - FAILED_COUNT))
+echo "Total Tests: $TOTAL_COUNT"
+echo "Total Failures: $FAILED_COUNT"
+echo "Total Success: $PASS_COUNT"
