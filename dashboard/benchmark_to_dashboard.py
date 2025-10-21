@@ -127,8 +127,19 @@ def get_commit_info_for_packages(short=True):
     return info
 
 
+# 允许字母数字、下划线、中划线、点、斜杠、冒号、@、{}、'、"、=、,、空格
+ARGS_RE = re.compile(r'^[\w\-\./:@{}\'\"=, ]+$')
+
+
+def validate_args(name: str):
+    if not isinstance(name, str) or not ARGS_RE.match(name):
+        raise ValueError("args not valid")
+
+
 # ===== vLLM benchmark 功能 =====
 def start_vllm_mindspore_server(model: str, serve_args: str):
+    validate_args(model)
+    validate_args(serve_args)
     cmd = f"vllm-mindspore serve {model} {serve_args} --port 8333"
     print(f"🚀 Starting vLLM-mindspore server: {cmd}")
     process = subprocess.Popen(shlex.split(cmd))
@@ -146,6 +157,8 @@ def start_vllm_mindspore_server(model: str, serve_args: str):
 
 
 def run_benchmark_serving(model: str, bench_args: str):
+    validate_args(model)
+    validate_args(bench_args)
     cmd = (f"vllm-mindspore bench serve --base-url=http://0.0.0.0:8333 "
            f"--model={model} {bench_args}")
     print(f"▶️ Running benchmark: {cmd}")
