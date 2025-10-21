@@ -68,7 +68,7 @@ class Operator {
    *  output may be one of types such as Tensor, Tuple, etc.
    *  @return OpsErrorCode Error code indicating success or failure of shape inference.
    */
-  virtual OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) = 0;
+  virtual OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output);
 
   /**
    * @brief Calculate total workspace memory size requirements for the kernel computation.

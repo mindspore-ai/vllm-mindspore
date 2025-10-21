@@ -372,26 +372,10 @@ void GraphExecutor::DisableParamsOwnData() {
     CHECK_IF_NULL(param);
     auto &value = param->output;
     CHECK_IF_NULL(value);
-    if (value->IsTensor()) {
-      const auto &tensor = value->ToTensor();
+    ir::VisitAllTensors(value, [&](const ir::TensorPtr &tensor) {
       CHECK_IF_NULL(tensor);
       tensor->GetStorage()->DisableOwnData();
-    } else if (value->IsTuple()) {
-      auto &tuple = value->ToTuple();
-      CHECK_IF_NULL(tuple);
-      size_t size = tuple->Size();
-      for (size_t i = 0; i < size; i++) {
-        auto &elem = (*tuple)[i];
-        CHECK_IF_NULL(elem);
-        // Not support nested tuple.
-        CHECK_IF_FAIL(!elem->IsTuple());
-        if (elem->IsTensor()) {
-          const auto &tensor = elem->ToTensor();
-          CHECK_IF_NULL(tensor);
-          tensor->GetStorage()->DisableOwnData();
-        }
-      }
-    }
+    });
   }
 }
 

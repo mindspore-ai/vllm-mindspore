@@ -22,6 +22,7 @@
 #include "ir/graph.h"
 #include "ir/value/value.h"
 #include "ops/op_def/ops_name.h"
+#include "ir/symbolic/symbolic.h"
 
 namespace py = pybind11;
 namespace ir = mrt::ir;
@@ -38,9 +39,23 @@ PYBIND11_MODULE(_mrt_ir, m) {
 #undef OP
     .export_values();
 
+  py::class_<ir::SymbolicExpr, ir::SymbolicExprPtr>(m, "SymbolicExpr")
+    .def("__repr__", &ir::SymbolicExpr::ToString)
+    .def("__add__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a + b; })
+    .def("__mul__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a * b; })
+    .def("__floordiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a / b; });
+
+  py::class_<ir::SymbolicVar, ir::SymbolicExpr, ir::IntrusivePtr<ir::SymbolicVar>>(m, "SymbolicVar")
+    .def(py::init<const std::string &>(), py::arg("name"))
+    .def("set_value", &ir::SymbolicVar::SetValue, py::arg("value"));
+
+  py::class_<ir::SymbolicConst, ir::SymbolicExpr, ir::IntrusivePtr<ir::SymbolicConst>>(m, "SymbolicConst")
+    .def(py::init<int64_t>(), py::arg("value"));
+
   py::class_<ir::Tensor, ir::TensorPtr>(m, "Tensor")
     .def_property("shape", py::overload_cast<>(&ir::Tensor::Shape, py::const_),
                   py::overload_cast<const std::vector<int64_t> &>(&ir::Tensor::SetShape))
+    .def_property("symbolic_shape", &ir::Tensor::GetSymbolicShape, &ir::Tensor::SetSymbolicShape)
     .def_property("dtype", &ir::Tensor::Dtype, &ir::Tensor::SetDtype)
     .def("__repr__", [](const ir::Tensor &t) {
       std::stringstream ss;

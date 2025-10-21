@@ -185,5 +185,15 @@ std::ostream &operator<<(std::ostream &os, const Value &value) {
   return os;
 }
 
+void VisitAllTensors(const ir::ValuePtr &value, const std::function<void(const ir::TensorPtr &)> &func) {
+  if (value->IsTensor()) {
+    func(value->ToTensor());
+  } else if (value->IsTuple()) {
+    for (auto &item : *value->ToTuple()) {
+      VisitAllTensors(item, func);
+    }
+  }
+}
+
 }  // namespace ir
 }  // namespace mrt

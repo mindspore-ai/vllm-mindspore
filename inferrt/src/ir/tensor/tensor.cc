@@ -24,6 +24,7 @@
 
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
+#include "ir/symbolic/symbolic.h"
 
 namespace mrt {
 namespace ir {
@@ -126,6 +127,30 @@ Tensor::Tensor(void *data, const std::vector<int64_t> &shape, DataType dtype, ha
   storage_ = MakeIntrusive<Storage>(data, sizeBytes, device);
 }
 
+void Tensor::EvalSymbolicShape() {
+  if (!HasSymbolicShape()) {
+    return;
+  }
+  for (size_t i = 0; i < symbolicShape_.size(); ++i) {
+    shape_[i] = symbolicShape_[i]->Evaluate();
+  }
+  Resize();
+}
+
+void Tensor::SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape) {
+  symbolicShape_ = shape;
+  shape_.resize(shape.size());
+  for (size_t i = 0; i < shape.size(); ++i) {
+    if (auto c = dynamic_cast<const SymbolicConst *>(shape[i].get())) {
+      shape_[i] = c->GetValue();
+    } else {
+      shape_[i] = -1;
+    }
+  }
+  ComputeStrides();
+  numel_ = CalculateNumel(shape_, true);
+}
+
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {
   if (!tensor) {
     os << "Null";
@@ -152,6 +177,16 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   os << "Tensor(shape=";
   const auto &shape = tensor.Shape();
   os << ShapeToString(shape);
+  if (tensor.HasSymbolicShape()) {
+    os << ", sym_shape=[";
+    for (auto &dim : tensor.GetSymbolicShape()) {
+      if (&dim != &tensor.GetSymbolicShape().front()) {
+        os << ", ";
+      }
+      os << dim->ToString();
+    }
+    os << "]";
+  }
   os << ", dtype=" << tensor.Dtype().ToString();
   os << ", device=[type=" << hardware::GetDeviceNameByType(tensor.GetDevice().type)
      << ", index:" << int(tensor.GetDevice().index) << "]";

@@ -26,16 +26,6 @@ namespace mrt {
 namespace runtime {
 
 namespace {
-void recurseTensorValue(const ir::ValuePtr &value, const std::function<void(const ir::ValuePtr &)> &func) {
-  if (value->IsTensor()) {
-    func(value);
-  } else if (value->IsTuple()) {
-    for (auto &item : *value->ToTuple()) {
-      recurseTensorValue(item, func);
-    }
-  }
-}
-
 /**
  * @brief Get the device type of an operation node.
  *  The function follows these rules:
@@ -94,8 +84,8 @@ void Builder::RecordStorageFreePoint() {
 
   // The output of graph should not be freed by any node.
   auto &graphOutput = graph_->nodes.back()->output;
-  recurseTensorValue(graphOutput, [&](const ir::ValuePtr &tensorValue) {
-    auto storage = tensorValue->ToTensor()->GetStorage().get();
+  ir::VisitAllTensors(graphOutput, [&](const ir::TensorPtr &tensor) {
+    auto storage = tensor->GetStorage().get();
     CHECK_IF_NULL(storage);
     LOG_OUT << "Record graph output Storage: " << storage;
     (void)recordedStorages.insert(storage);
@@ -113,8 +103,8 @@ void Builder::RecordStorageFreePoint() {
     // Each op node is responsible for freeing the storage of its inputs.
     for (auto &inputNode : currentNode->inputs) {
       LOG_OUT << "Input: " << inputNode;
-      recurseTensorValue(inputNode->output, [&](const ir::ValuePtr &tensorValue) {
-        auto storage = tensorValue->ToTensor()->GetStorage().get();
+      ir::VisitAllTensors(inputNode->output, [&](const ir::TensorPtr &tensor) {
+        auto storage = tensor->GetStorage().get();
         CHECK_IF_NULL(storage);
         if (!storage->CheckOwnsData()) {
           LOG_OUT << "Skip storage that is not managed by mrt";
@@ -131,8 +121,8 @@ void Builder::RecordStorageFreePoint() {
     }
 
     // Current output should freed by itself if it is not freed by later nodes.
-    recurseTensorValue(currentNode->output, [&](const ir::ValuePtr &tensorValue) {
-      auto storage = tensorValue->ToTensor()->GetStorage().get();
+    ir::VisitAllTensors(currentNode->output, [&](const ir::TensorPtr &tensor) {
+      auto storage = tensor->GetStorage().get();
       CHECK_IF_NULL(storage);
       if (recordedStorages.find(storage) == recordedStorages.end()) {
         LOG_OUT << "Record node output Storage: " << storage;

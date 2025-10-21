@@ -28,6 +28,7 @@
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/storage.h"
 #include "ir/tensor/format.h"
+#include "ir/symbolic/symbolic.h"
 
 namespace mrt {
 namespace ir {
@@ -112,6 +113,27 @@ class Tensor : public RefCounted {
    * @return true if the shape is dynamic, false otherwise.
    */
   bool HasDynamicShape() const { return numel_ < 0; }
+
+  /**
+   * @brief Checks if the tensor has a symbolic shape.
+   * @return true if the shape is symbolic, false otherwise.
+   */
+  bool HasSymbolicShape() const { return !symbolicShape_.empty(); }
+  /**
+   * @brief Evaluates the symbolic shape and stores it in the concrete shape.
+   */
+  void EvalSymbolicShape();
+  /**
+   * @brief Gets the symbolic shape of the tensor.
+   * @return A const reference to the vector of symbolic shape expressions.
+   */
+  const std::vector<SymbolicExprPtr> &GetSymbolicShape() const { return symbolicShape_; }
+  /**
+   * @brief Sets the symbolic shape of the tensor.
+   * @param shape The new symbolic shape to set.
+   */
+  void SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape);
+
   /**
    * @brief Gets the device where the tensor data is stored.
    * @return The device.
@@ -185,6 +207,7 @@ class Tensor : public RefCounted {
 
   DataType dtype_;                                           ///< The data type of the elements.
   std::vector<int64_t> shape_;                               ///< The dimensions of the tensor.
+  std::vector<SymbolicExprPtr> symbolicShape_;               ///< The symbolic dimensions of the tensor.
   std::vector<int64_t> strides_;                             ///< The strides of the tensor.
   MemoryFormat memoryFormat_{MemoryFormat::DEFAULT_FORMAT};  ///< The memory format of the tensor.
   int64_t numel_ = 0;                                        ///< The total number of elements.
