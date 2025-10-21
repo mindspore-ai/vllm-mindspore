@@ -18,6 +18,7 @@
 import importlib.util
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -171,13 +172,13 @@ class CustomBuildExt(build_ext):
                                            ext_name)
         # Combine all cmake commands into one string
         cmake_cmd = (
-            f"source {env_script_path} && "
+            f"source {shlex.quote(env_script_path)} && "
             f"cmake -S {OPS_DIR} -B {BUILD_OPS_DIR}"
             f"  -DCMAKE_BUILD_TYPE=Release"
             f"  -DCMAKE_INSTALL_PREFIX={os.path.join(BUILD_OPS_DIR, 'install')}"
             f"  -DBUILD_EXTENSION_DIR={build_extension_dir}"
             f"  -DMS_EXTENSION_NAME={ext_name}"
-            f"  -DASCEND_CANN_PACKAGE_PATH={ascend_home_path} && "
+            f"  -DASCEND_CANN_PACKAGE_PATH={shlex.quote(ascend_home_path)} && "
             f"cmake --build {BUILD_OPS_DIR} -j --verbose")
 
         # Run the combined cmake command
