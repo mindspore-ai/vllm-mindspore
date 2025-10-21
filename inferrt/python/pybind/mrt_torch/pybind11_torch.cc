@@ -22,6 +22,7 @@
 #ifdef ENABLE_TORCH_NPU
 #include "torch_npu/csrc/aten/common/from_blob.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
+#include "torch_npu/csrc/core/npu/NPUFormat.h"
 #endif
 
 #include "hardware/hardware_abstract/device_context.h"
@@ -39,19 +40,31 @@ namespace {
 // DataType conversion utilities
 
 static const std::map<at::ScalarType, ir::DataType> kAtScalarTypeToDataTypeMap = {
-  {at::kHalf, ir::DataType::Type::Float16},  {at::kBFloat16, ir::DataType::Type::BFloat16},
-  {at::kFloat, ir::DataType::Type::Float32}, {at::kDouble, ir::DataType::Type::Float64},
-  {at::kChar, ir::DataType::Type::Int8},     {at::kShort, ir::DataType::Type::Int16},
-  {at::kInt, ir::DataType::Type::Int32},     {at::kLong, ir::DataType::Type::Int64},
-  {at::kByte, ir::DataType::Type::UInt8},    {at::kBool, ir::DataType::Type::Bool},
+  {at::kHalf, ir::DataType::Type::Float16},
+  {at::kBFloat16, ir::DataType::Type::BFloat16},
+  {at::kFloat, ir::DataType::Type::Float32},
+  {at::kDouble, ir::DataType::Type::Float64},
+  {at::kComplexFloat, ir::DataType::Type::Complex64},
+  {at::kChar, ir::DataType::Type::Int8},
+  {at::kShort, ir::DataType::Type::Int16},
+  {at::kInt, ir::DataType::Type::Int32},
+  {at::kLong, ir::DataType::Type::Int64},
+  {at::kByte, ir::DataType::Type::UInt8},
+  {at::kBool, ir::DataType::Type::Bool},
 };
 
 static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap = {
-  {ir::DataType::Type::Float16, at::kHalf},  {ir::DataType::Type::BFloat16, at::kBFloat16},
-  {ir::DataType::Type::Float32, at::kFloat}, {ir::DataType::Type::Float64, at::kDouble},
-  {ir::DataType::Type::Int8, at::kChar},     {ir::DataType::Type::Int16, at::kShort},
-  {ir::DataType::Type::Int32, at::kInt},     {ir::DataType::Type::Int64, at::kLong},
-  {ir::DataType::Type::UInt8, at::kByte},    {ir::DataType::Type::Bool, at::kBool},
+  {ir::DataType::Type::Float16, at::kHalf},
+  {ir::DataType::Type::BFloat16, at::kBFloat16},
+  {ir::DataType::Type::Float32, at::kFloat},
+  {ir::DataType::Type::Float64, at::kDouble},
+  {ir::DataType::Type::Complex64, at::kComplexFloat},
+  {ir::DataType::Type::Int8, at::kChar},
+  {ir::DataType::Type::Int16, at::kShort},
+  {ir::DataType::Type::Int32, at::kInt},
+  {ir::DataType::Type::Int64, at::kLong},
+  {ir::DataType::Type::UInt8, at::kByte},
+  {ir::DataType::Type::Bool, at::kBool},
 };
 
 ir::DataType FromTorchDType(const at::ScalarType &type) {
@@ -124,8 +137,9 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
   auto device = FromTorchDevice(tensor.device());
   if (isFake) {
     return ir::MakeIntrusive<ir::Tensor>(shape, type, device);
+  } else {
+    return ir::MakeIntrusive<ir::Tensor>(tensor.data_ptr(), shape, type, device);
   }
-  return ir::MakeIntrusive<ir::Tensor>(tensor.data_ptr(), shape, type, device);
 }
 
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
@@ -151,7 +165,8 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
       return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1:
-      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), tensor->StorageOffset(),
+                                       std::move(deleter), options);
 #endif
     default:
       LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
@@ -163,9 +178,23 @@ void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
   std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
   void *data = atTensor.data_ptr();
 
-  if (self->GetDevice() != FromTorchDevice(atTensor.device())) {
+  auto device = self->GetDevice();
+  if (device != FromTorchDevice(atTensor.device())) {
     LOG_EXCEPTION << "Device mismatch in update_tensor_data";
   }
+
+#ifdef ENABLE_TORCH_NPU
+  if (device.type == hardware::DeviceType::NPU) {
+    auto npuFormat = at_npu::native::get_npu_format(atTensor);
+    self->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
+    self->SetStrides(atTensor.strides().vec());
+    self->SetStorageOffset(atTensor.storage_offset());
+    self->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
+    LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(self->Format()) << ", strides=" << self->Strides()
+            << ", storageOffset=" << self->StorageOffset() << ", storageShape=" << self->StorageShape()
+            << ", isView=" << atTensor.is_view();
+  }
+#endif
 
   self->SetDtype(type);
   self->SetShape(std::move(shape));

@@ -31,7 +31,7 @@ if(ENABLE_ASCEND)
   file(GLOB_RECURSE HARDWARE_ASCEND_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
   add_library(hardware_ascend SHARED ${HARDWARE_ASCEND_SRC_FILES})
   target_link_libraries(hardware_ascend
-      hardware_abstract
+      hardware_abstract mrt_config
       ${ASCENDCL_LIB}
       ${RUNTIME_LIB}
       ${HCCL}

@@ -4,7 +4,7 @@ check_debug_log_out()
 add_subdirectory(hardware_abstract)
 if(ENABLE_ASCEND)
   add_subdirectory(ascend)
-  add_dependencies(hardware_ascend hardware_abstract)
+  add_dependencies(hardware_ascend hardware_abstract mrt_config)
 endif()
 
 if(ENABLE_CPU)

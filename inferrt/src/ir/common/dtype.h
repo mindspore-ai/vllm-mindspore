@@ -32,17 +32,18 @@ struct DataType {
    * @brief Enumeration of supported data types.
    */
   enum Type : int8_t {
-    Unknown,   ///< Unknown data type
-    Float16,   ///< 16-bit floating point
-    BFloat16,  ///< 16-bit bfloating point
-    Float32,   ///< 32-bit floating point
-    Float64,   ///< 64-bit floating point
-    Int8,      ///< 8-bit signed integer
-    Int16,     ///< 16-bit signed integer
-    Int32,     ///< 32-bit signed integer
-    Int64,     ///< 64-bit signed integer
-    UInt8,     ///< 8-bit unsigned integer
-    Bool,      ///< Boolean
+    Unknown,    ///< Unknown data type
+    Float16,    ///< 16-bit floating point
+    BFloat16,   ///< 16-bit bfloating point
+    Float32,    ///< 32-bit floating point
+    Float64,    ///< 64-bit floating point
+    Complex64,  ///< 64-bit complex floating point
+    Int8,       ///< 8-bit signed integer
+    Int16,      ///< 16-bit signed integer
+    Int32,      ///< 32-bit signed integer
+    Int64,      ///< 64-bit signed integer
+    UInt8,      ///< 8-bit unsigned integer
+    Bool,       ///< Boolean
   };
 
   Type value;  ///< The underlying enum value.
@@ -69,6 +70,7 @@ struct DataType {
    * @throws std::runtime_error if the data type is unsupported.
    */
   size_t GetSize() const {
+    constexpr size_t kComplexFactor = 2;
     switch (value) {
       case Float16:
         return 2;
@@ -78,6 +80,8 @@ struct DataType {
         return 4;
       case Float64:
         return 8;
+      case Complex64:
+        return kComplexFactor * sizeof(float);
       case Int8:
         return 1;
       case Int16:
@@ -110,6 +114,8 @@ struct DataType {
         return "float32";
       case Float64:
         return "float64";
+      case Complex64:
+        return "complex64";
       case Int8:
         return "int8";
       case Int16:

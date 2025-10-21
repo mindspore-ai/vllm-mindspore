@@ -16,27 +16,29 @@
 
 #include <vector>
 
-#include "ops/ascend/aclnn/aclnn_mul.h"
+#include "ops/ascend/aclnn/matmul.h"
+#include "ops/ascend/aclnn/utils/opapi_utils.h"
 #include "ops/op_register.h"
 
 namespace mrt {
 namespace ops {
-OpsErrorCode AclnnMul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                     size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [Mul]";
+OpsErrorCode AclnnMatul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                       size_t *workspaceSize) {
+  LOG_OUT << "Begin CalcWorkspace for op [matmul]";
+  cubeMathType_ = GetCubeMathType();
   executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[kIndex0]->ToTensor(),
-                              input[kIndex1]->ToTensor(), output->ToTensor());
+                              input[kIndex1]->ToTensor(), output->ToTensor(), cubeMathType_);
   return SUCCESS;
 }
 
-OpsErrorCode AclnnMul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                              ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch op [Mul]";
+OpsErrorCode AclnnMatul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                                ir::Value *output, void *stream) {
+  LOG_OUT << "Begin Launch op [matmul]";
   executor_->Launch(workspace, workspaceSize, stream, input[kIndex0]->ToTensor(), input[kIndex1]->ToTensor(),
-                    output->ToTensor());
+                    output->ToTensor(), cubeMathType_);
   return SUCCESS;
 }
 
-MRT_REG_OP(mul, AclnnMul, Ascend);
+MRT_REG_OP(matmul, AclnnMatul, Ascend);
 }  // namespace ops
 }  // namespace mrt

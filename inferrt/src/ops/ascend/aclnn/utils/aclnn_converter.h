@@ -18,6 +18,7 @@
 #define __OPS_ASCEND_ACLNN_UTILS_ACLNN_CONVERTER_H__
 
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <vector>
 #include <tuple>
@@ -26,6 +27,7 @@
 
 #include "ir/value/value.h"
 #include "ops/utils/op_constants.h"
+#include "ops/ascend/aclnn/utils/opapi_utils.h"
 #include "ops/ascend/aclnn/utils/convert_utils.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
 #include "ops/ascend/aclnn/utils/opapi_lib_loader.h"
@@ -42,26 +44,41 @@ inline aclTensor *Convert(const ir::TensorPtr &tensor) {
   if (tensor == nullptr || tensor->Dtype().value == ir::DataType::Type::Unknown) {
     return nullptr;
   }
+
+  auto aclDtype = Convert(tensor->Dtype().value);
   aclFormat format = ACL_FORMAT_ND;
-  switch (tensor->Dim()) {
-    case kDim3:
-      format = ACL_FORMAT_NCL;
-      break;
-    case kDim4:
-      format = ACL_FORMAT_NCHW;
-      break;
-    case kDim5:
-      format = ACL_FORMAT_NCDHW;
-      break;
-    default:
-      format = ACL_FORMAT_ND;
+  std::vector<int64_t> storageDims;
+  if (!IsTensorBaseFormat(tensor)) {
+    format = static_cast<aclFormat>(tensor->Format());
+    if (aclDtype != ACL_STRING) {
+      storageDims = tensor->StorageShape();
+    }
+  } else {
+    switch (tensor->Dim()) {
+      case kDim3:
+        format = ACL_FORMAT_NCL;
+        break;
+      case kDim4:
+        format = ACL_FORMAT_NCHW;
+        break;
+      case kDim5:
+        format = ACL_FORMAT_NCDHW;
+        break;
+      default:
+        format = ACL_FORMAT_ND;
+    }
+    if (aclDtype != ACL_STRING) {
+      storageDims.emplace_back(tensor->Numel());
+    }
   }
-  if (tensor->Format() == ir::MemoryFormat::FRACTAL_NZ) {
-    format = ACL_FORMAT_FRACTAL_NZ;
-  }
-  return aclCreateTensor(tensor->Shape().data(), tensor->Dim(), Convert(tensor->Dtype().value),
-                         tensor->Strides().data(), tensor->StorageOffset(), format, tensor->Shape().data(),
-                         tensor->Dim(), tensor->DataPtr());
+
+  LOG_OUT << "Create aclTensor, viewShape=" << tensor->Shape() << ", strides=" << tensor->Strides()
+          << ", StorageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
+          << ", storageDims=" << storageDims
+          << ", format=" << ir::FormatEnumToStr(static_cast<ir::MemoryFormat>(format));
+
+  return aclCreateTensor(tensor->Shape().data(), tensor->Dim(), aclDtype, tensor->Strides().data(),
+                         tensor->StorageOffset(), format, storageDims.data(), storageDims.size(), tensor->DataPtr());
 }
 
 inline aclTensorList *Convert(const std::vector<ir::TensorPtr> &tensorList) {
@@ -127,6 +144,7 @@ inline void *Convert(const ir::TuplePtr &tuple) {
     return Convert(boolList);
   } else {
     LOG_EXCEPTION << "Invalid element type in tuple: " << tuple;
+    return nullptr;
   }
 }
 

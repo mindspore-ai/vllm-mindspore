@@ -95,7 +95,7 @@ class AclnnExecutor {
     CHECK_IF_NULL(getWorkspaceSizeFunc);
     auto ret = CallOpApiFunc(getWorkspaceSizeFunc, convertedParams);
     if (ret != 0) {
-      LOG_EXCEPTION << "Call " << getWorkspaceSizeApiName_ << " failed";
+      LOG_EXCEPTION << "Call " << getWorkspaceSizeApiName_ << " failed, ret=" << ret;
     }
     return std::make_tuple(convertedParams, opExecutor);
   }
@@ -125,7 +125,7 @@ class AclnnExecutor {
     auto opApiFunc = reinterpret_cast<RunOpApiFunc>(opApiFuncPtr);
     auto opApiFuncRet = opApiFunc(workspace, workspaceSize, opExecutor, stream);
     if (opApiFuncRet != 0) {
-      LOG_EXCEPTION << "Call " << opApiName_ << " failed";
+      LOG_EXCEPTION << "Call " << opApiName_ << " failed, ret=" << opApiFuncRet;
     }
   }
 

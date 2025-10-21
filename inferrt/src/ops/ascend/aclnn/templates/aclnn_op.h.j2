@@ -1,0 +1,33 @@
+{% import "common.j2" as common %}
+{{ common.license }}
+{% set upper_case_op_name = op_name|to_upper_case %}
+{% set capitalize_op_name = op_name|to_capitalize_case -%}
+
+#ifndef __OPS_ASCEND_ACLNN_ACLNN_{{ upper_case_op_name }}_H__
+#define __OPS_ASCEND_ACLNN_ACLNN_{{ upper_case_op_name }}_H__
+
+#include <vector>
+#include <memory>
+
+#include "ops/operator.h"
+#include "ops/ascend/aclnn/utils/aclnn_executor.h"
+
+namespace mrt {
+namespace ops {
+class Aclnn{{ capitalize_op_name }} : public Operator {
+ public:
+  Aclnn{{ capitalize_op_name }}() { executor_ = std::make_unique<AclnnExecutor>("aclnn{{ capitalize_op_name }}"); }
+  ~Aclnn{{ capitalize_op_name }}() override = default;
+
+  OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                             size_t *workspaceSize) override;
+  OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                      ir::Value *output, void *stream) override;
+
+ private:
+  std::unique_ptr<AclnnExecutor> executor_{nullptr};
+};
+
+}  // namespace ops
+}  // namespace mrt
+#endif  // __OPS_ASCEND_ACLNN_ACLNN_{{ upper_case_op_name }}_H__

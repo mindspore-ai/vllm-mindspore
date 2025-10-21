@@ -17,6 +17,7 @@
 #ifndef __IR_TENSOR_TENSOR_H__
 #define __IR_TENSOR_TENSOR_H__
 
+#include <cstdint>
 #include <iostream>
 #include <vector>
 #include <utility>
@@ -99,6 +100,11 @@ class Tensor : public RefCounted {
    */
   const std::vector<int64_t> &Strides() const { return strides_; }
   /**
+   * @brief Set the Strides of the tensor.
+   * @param strides A const reference to the vector of strides.
+   */
+  void SetStrides(const std::vector<int64_t> &strides) { strides_ = strides; }
+  /**
    * @brief Gets the number of dimensions of the tensor.
    * @return The number of dimensions.
    */
@@ -149,6 +155,21 @@ class Tensor : public RefCounted {
    * @return The storage offset.
    */
   int64_t StorageOffset() const { return storageOffset_; }
+  /**
+   * @brief Set the Storage Offset of the tensor.
+   * @param storageOffset The storage offset.
+   */
+  void SetStorageOffset(int64_t storageOffset) { storageOffset_ = storageOffset; }
+  /**
+   * @brief Get the storage shape of the tensor.
+   * @return The storage shape.
+   */
+  const std::vector<int64_t> &StorageShape() const { return storageShape_; }
+  /**
+   * @brief Set the Storage Shape of the tensor.
+   * @param storageShape The storage shape to be set.
+   */
+  void SetStorageShape(const std::vector<int64_t> &storageShape) { storageShape_ = storageShape; }
   /**
    * @brief Resizes the storage of the tensor.
    * Note: The shape and dtype must be set before resizing the storage.
@@ -205,14 +226,15 @@ class Tensor : public RefCounted {
    */
   void ComputeStrides();
 
-  DataType dtype_;                                           ///< The data type of the elements.
-  std::vector<int64_t> shape_;                               ///< The dimensions of the tensor.
-  std::vector<SymbolicExprPtr> symbolicShape_;               ///< The symbolic dimensions of the tensor.
-  std::vector<int64_t> strides_;                             ///< The strides of the tensor.
-  MemoryFormat memoryFormat_{MemoryFormat::DEFAULT_FORMAT};  ///< The memory format of the tensor.
-  int64_t numel_ = 0;                                        ///< The total number of elements.
-  StoragePtr storage_{nullptr};                              ///< The underlying storage.
-  int64_t storageOffset_ = 0;                                ///< The offset in the storage, in number of elements.
+  DataType dtype_;                               ///< The data type of the elements.
+  std::vector<int64_t> shape_;                   ///< The dimensions of the tensor.
+  std::vector<SymbolicExprPtr> symbolicShape_;   ///< The symbolic dimensions of the tensor.
+  std::vector<int64_t> strides_;                 ///< The strides of the tensor.
+  MemoryFormat memoryFormat_{FORMAT_UNDEFINED};  ///< The memory format of the tensor.
+  int64_t numel_ = 0;                            ///< The total number of elements.
+  StoragePtr storage_{nullptr};                  ///< The underlying storage.
+  std::vector<int64_t> storageShape_;            ///< The underlying storage shape of the tensor.
+  int64_t storageOffset_ = 0;                    ///< The offset in the storage, in number of elements.
 };
 
 using TensorPtr = IntrusivePtr<Tensor>;

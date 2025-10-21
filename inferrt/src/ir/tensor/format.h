@@ -25,51 +25,81 @@
 namespace mrt {
 namespace ir {
 enum MemoryFormat : int8_t {
-  DEFAULT_FORMAT = -1,
-  ND,  // Nd Tensor
-  FRACTAL_NZ,
-  NC1HWC0,    // NC1HWC0
-  FRACTAL_Z,  // FRACTAL_Z
-  NUM_OF_FORMAT
+  FORMAT_UNDEFINED = -1,
+  FORMAT_NCHW = 0,
+  FORMAT_NHWC = 1,
+  FORMAT_ND = 2,
+  FORMAT_NC1HWC0 = 3,
+  FORMAT_FRACTAL_Z = 4,
+  FORMAT_NC1HWC0_C04 = 12,
+  FORMAT_HWCN = 16,
+  FORMAT_NDHWC = 27,
+  FORMAT_FRACTAL_NZ = 29,
+  FORMAT_NCDHW = 30,
+  FORMAT_NDC1HWC0 = 32,
+  FORMAT_FRACTAL_Z_3D = 33,
+  FORMAT_NC = 35,
+  FORMAT_NCL = 47,
 };
 
-inline const std::vector<std::string> &GetFormatNames() {
-  static std::vector<std::string> names = {
-    "ND",
-    "FRACTAL_NZ",
-    "NC1HWC0",
-    "FRACTAL_Z",
+inline const std::map<MemoryFormat, std::string> &GetFormatEnumToStrMap() {
+  static std::map<MemoryFormat, std::string> formatEnumToStrMap = {
+    {FORMAT_UNDEFINED, "FORMAT_UNDEFINED"},
+    {FORMAT_NCHW, "FORMAT_NCHW"},
+    {FORMAT_NHWC, "FORMAT_NHWC"},
+    {FORMAT_ND, "FORMAT_ND"},
+    {FORMAT_NC1HWC0, "FORMAT_NC1HWC0"},
+    {FORMAT_FRACTAL_Z, "FORMAT_FRACTAL_Z"},
+    {FORMAT_NC1HWC0_C04, "FORMAT_NC1HWC0_C04"},
+    {FORMAT_HWCN, "FORMAT_HWCN"},
+    {FORMAT_NDHWC, "FORMAT_NDHWC"},
+    {FORMAT_FRACTAL_NZ, "FORMAT_FRACTAL_NZ"},
+    {FORMAT_NCDHW, "FORMAT_NCDHW"},
+    {FORMAT_NDC1HWC0, "FORMAT_NDC1HWC0"},
+    {FORMAT_FRACTAL_Z_3D, "FORMAT_FRACTAL_Z_3D"},
+    {FORMAT_NC, "FORMAT_NC"},
+    {FORMAT_NCL, "FORMAT_NCL"},
   };
-  return names;
+  return formatEnumToStrMap;
 }
 
 inline const std::map<std::string, MemoryFormat> &GetFormatStrToEnumMap() {
   static std::map<std::string, MemoryFormat> formatStrToEnumMap = {
-    {"DefaultFormat", MemoryFormat::DEFAULT_FORMAT}, {"ND", MemoryFormat::ND},
-    {"FRACTAL_NZ", MemoryFormat::FRACTAL_NZ},        {"NC1HWC0", MemoryFormat::NC1HWC0},
-    {"FRACTAL_Z", MemoryFormat::FRACTAL_Z},
+    {"FORMAT_UNDEFINED", FORMAT_UNDEFINED},
+    {"FORMAT_NCHW", FORMAT_NCHW},
+    {"FORMAT_NHWC", FORMAT_NHWC},
+    {"FORMAT_ND", FORMAT_ND},
+    {"FORMAT_NC1HWC0", FORMAT_NC1HWC0},
+    {"FORMAT_FRACTAL_Z", FORMAT_FRACTAL_Z},
+    {"FORMAT_NC1HWC0_C04", FORMAT_NC1HWC0_C04},
+    {"FORMAT_HWCN", FORMAT_HWCN},
+    {"FORMAT_NDHWC", FORMAT_NDHWC},
+    {"FORMAT_FRACTAL_NZ", FORMAT_FRACTAL_NZ},
+    {"FORMAT_NCDHW", FORMAT_NCDHW},
+    {"FORMAT_NDC1HWC0", FORMAT_NDC1HWC0},
+    {"FORMAT_FRACTAL_Z_3D", FORMAT_FRACTAL_Z_3D},
+    {"FORMAT_NC", FORMAT_NC},
+    {"FORMAT_NCL", FORMAT_NCL},
   };
   return formatStrToEnumMap;
 }
 
-inline std::string FormatEnumToString(MemoryFormat format) {
-  const auto &names = GetFormatNames();
-  if (format == MemoryFormat::DEFAULT_FORMAT) {
-    return "DefaultFormat";
+inline std::string FormatEnumToStr(MemoryFormat format) {
+  const auto &formatEnumToStrMap = GetFormatEnumToStrMap();
+  auto it = formatEnumToStrMap.find(format);
+  if (it == formatEnumToStrMap.end()) {
+    return "FORMAT_UNDEFINED";
   }
-  if (format < MemoryFormat::ND || format >= MemoryFormat::NUM_OF_FORMAT) {
-    return "";
-  }
-  return names[format];
+  return it->second;
 }
 
-inline MemoryFormat FormatFromStrToEnum(const std::string &formatStr) {
+inline MemoryFormat FormatStrToEnum(const std::string &formatStr) {
   const auto &formatStrToEnumMap = GetFormatStrToEnumMap();
   auto it = formatStrToEnumMap.find(formatStr);
-  if (it != formatStrToEnumMap.end()) {
-    return it->second;
+  if (it == formatStrToEnumMap.end()) {
+    return FORMAT_UNDEFINED;
   }
-  return MemoryFormat::DEFAULT_FORMAT;
+  return it->second;
 }
 
 }  // namespace ir

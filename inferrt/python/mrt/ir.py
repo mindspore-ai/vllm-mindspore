@@ -59,7 +59,15 @@ class GraphExecutor:
 
     def add_op_node(self, op: Op, inputs: List[Node], output: Value) -> Node:
         """Add an operation node to the graph."""
+        if op == Op.tuple_getitem:
+            output = self._tuple_getitem(inputs)
         return self._executor.add_op_node(op, inputs, output)
+
+    def _tuple_getitem(self, inputs: List[Node]) -> Value:
+        """Get a value from a tuple, only used for Op.tuple_getitem."""
+        if len(inputs) != 2:
+            raise ValueError("Tuple getitem requires exactly 2 inputs")
+        return inputs[0].output.to_tuple()[inputs[1].output.to_int()]
 
     def make_tuple(self, inputs: List[Node]) -> Node:
         """Add a make_tuple operation to the graph."""

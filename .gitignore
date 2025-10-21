@@ -41,3 +41,6 @@ Makefile
 # Third party libs
 .mrtlibs/
 third_party/
+
+# Codegen files
+inferrt/src/ops/ascend/aclnn/auto_gen/

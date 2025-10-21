@@ -32,6 +32,19 @@ install(
   RUNTIME DESTINATION bin
 )
 
+# Add mrt_config pybind11 sub module
+pybind11_add_module(_mrt_config NO_EXTRAS pybind11_config.cc)
+target_link_libraries(_mrt_config PRIVATE inferrt)
+set_target_properties(_mrt_config PROPERTIES
+  INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
+  BUILD_WITH_INSTALL_RPATH TRUE
+)
+install(
+  TARGETS _mrt_config
+  LIBRARY DESTINATION .
+  RUNTIME DESTINATION bin
+)
+
 set_target_properties(_mrt_ir PROPERTIES
   INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
   BUILD_WITH_INSTALL_RPATH TRUE
