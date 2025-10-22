@@ -32,15 +32,17 @@ struct DataType {
    * @brief Enumeration of supported data types.
    */
   enum Type : int8_t {
-    Unknown,  ///< Unknown data type
-    Float32,  ///< 32-bit floating point
-    Float64,  ///< 64-bit floating point
-    Int8,     ///< 8-bit signed integer
-    Int16,    ///< 16-bit signed integer
-    Int32,    ///< 32-bit signed integer
-    Int64,    ///< 64-bit signed integer
-    UInt8,    ///< 8-bit unsigned integer
-    Bool,     ///< Boolean
+    Unknown,   ///< Unknown data type
+    Float16,   ///< 16-bit floating point
+    BFloat16,  ///< 16-bit bfloating point
+    Float32,   ///< 32-bit floating point
+    Float64,   ///< 64-bit floating point
+    Int8,      ///< 8-bit signed integer
+    Int16,     ///< 16-bit signed integer
+    Int32,     ///< 32-bit signed integer
+    Int64,     ///< 64-bit signed integer
+    UInt8,     ///< 8-bit unsigned integer
+    Bool,      ///< Boolean
   };
 
   Type value;  ///< The underlying enum value.
@@ -54,7 +56,7 @@ struct DataType {
    * @brief Constructs a DataType from a Type enum.
    * @param v The enum value.
    */
-  DataType(Type v) : value(v) {}
+  DataType(Type v) : value(v) {}  // NOLINT(runtime/explicit)
 
   /**
    * @brief Allows for using DataType in a switch statement.
@@ -68,6 +70,10 @@ struct DataType {
    */
   size_t GetSize() const {
     switch (value) {
+      case Float16:
+        return 2;
+      case BFloat16:
+        return 2;
       case Float32:
         return 4;
       case Float64:
@@ -96,6 +102,10 @@ struct DataType {
    */
   std::string ToString() const {
     switch (value) {
+      case Float16:
+        return "float16";
+      case BFloat16:
+        return "bfloat16";
       case Float32:
         return "float32";
       case Float64:

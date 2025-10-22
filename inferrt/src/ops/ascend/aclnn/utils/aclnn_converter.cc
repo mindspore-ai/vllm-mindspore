@@ -22,6 +22,8 @@ namespace mrt {
 namespace ops {
 static const std::map<ir::DataType::Type, aclDataType> kDataTypeToAclDataTypeMap = {
   {ir::DataType::Type::Unknown, ACL_DT_UNDEFINED},
+  {ir::DataType::Type::Float16, ACL_FLOAT16},
+  {ir::DataType::Type::BFloat16, ACL_BF16},
   {ir::DataType::Type::Float32, ACL_FLOAT},
   {ir::DataType::Type::Float64, ACL_DOUBLE},
   {ir::DataType::Type::Int8, ACL_INT8},

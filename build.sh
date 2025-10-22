@@ -21,6 +21,7 @@ usage()
   echo "    -b Enable backend, default compile cpu backend"
   echo "    -e Enable download cmake compile dependency from gitee, default off"
   echo "    -O Enable optimizer, default off"
+  echo "    -j Set the number of parallel build jobs, default 8"
 }
 
 process_options()
@@ -32,8 +33,9 @@ process_options()
     export ENABLE_MINDSPORE_FRONT=1
     export ENABLE_TORCH_FRONT=1
     export BUILD_OPT=0 # Default disable optimizer for now
+    export BUILD_JOBS=8 
 
-    while getopts 'Dd:hitf:b:eO' OPT; do
+    while getopts 'Dd:hitf:b:eOj:' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -51,6 +53,7 @@ process_options()
             i) export INC_BUILD=1;;
             t) export BUILD_TESTS=1;;
             O) export BUILD_OPT=1;;
+            j) export BUILD_JOBS=$OPTARG;;
             h)
                 usage
                 exit 0
@@ -172,7 +175,7 @@ if [[ $INC_BUILD != 1 ]]; then
     done
     cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $MOPT_CMAKE_ARGS
 fi
-make
+make -j ${BUILD_JOBS}
 
 
 ##################################################
