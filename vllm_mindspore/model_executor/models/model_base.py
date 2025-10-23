@@ -378,6 +378,7 @@ class NativeModel(MsModelBase):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
+        set_model_context("model_dtype", vllm_config.model_config.dtype)
         self.quant_config = vllm_config.quant_config
         if vllm_config.lora_config is not None:
             # native model lora only support pynative mode now
@@ -545,3 +546,6 @@ class NativeModel(MsModelBase):
             model_output = self.decode_graph(**model_inputs)
 
         return model_output
+
+    def convert_logits(self, logits):
+        return logits

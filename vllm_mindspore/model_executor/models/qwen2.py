@@ -57,7 +57,8 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead, VocabParallelEmbedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
-from vllm_mindspore.model_executor.models.model_base import (NativeModel)
+from vllm_mindspore.model_executor.models.native_common import (
+    UnifiedNativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
@@ -414,7 +415,7 @@ class Qwen2Model(nn.Cell):
         return loaded_params
 
 
-class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
+class Qwen2ForCausalLM(UnifiedNativeModel, SupportsLoRA):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -490,4 +491,5 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
     ) -> Optional[Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        logits = self.convert_logits(logits)
         return logits
