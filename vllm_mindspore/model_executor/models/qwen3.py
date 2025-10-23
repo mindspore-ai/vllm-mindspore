@@ -72,6 +72,8 @@ from vllm_mindspore.model_executor.models.qwen2 import (  # type: ignore[attr-de
     Qwen2MLP as Qwen3MLP)
 from vllm_mindspore.model_executor.models.qwen2 import (  # type: ignore[attr-defined]  # isort: skip
     Qwen2Model)
+from vllm_mindspore.model_executor.models.native_common import (
+    UnifiedNativeModel)
 
 logger = init_logger(__name__)
 
@@ -271,7 +273,7 @@ class Qwen3Model(Qwen2Model):
                          decoder_layer_type=Qwen3DecoderLayer)
 
 
-class Qwen3ForCausalLM(NativeModel):
+class Qwen3ForCausalLM(UnifiedNativeModel):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -325,6 +327,7 @@ class Qwen3ForCausalLM(NativeModel):
     ) -> Optional[Tensor]:
         logits = self.logits_processor(self.lm_head, hidden_states,
                                        sampling_metadata)
+        logits = self.convert_logits(logits)
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

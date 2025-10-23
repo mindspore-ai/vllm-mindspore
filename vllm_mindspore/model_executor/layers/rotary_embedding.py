@@ -211,6 +211,10 @@ class InferRotaryEmbedding(nn.Cell):
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
                                         batch_valid_length)
 
+    def get_cos_sin(self, positions, offsets = None):
+        # adapt external models mode
+        return None, None
+
 
 class InferLlama3RotaryEmbedding(InferRotaryEmbedding):
 
@@ -736,7 +740,7 @@ def get_rope(
     partial_rotary_factor: float = 1.0,
 ):
     if dtype is None:
-        dtype = get_current_vllm_config().model_config.dtype
+        dtype = get_model_context("model_dtype")
 
     if rope_scaling is not None:
         # Transforms every value that is a list into a tuple for caching calls

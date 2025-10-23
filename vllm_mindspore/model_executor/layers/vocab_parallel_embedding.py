@@ -25,7 +25,6 @@ from typing import Optional
 import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore.common.dtype import typing
-from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.model_executor.layers.quantization.base_config import (
@@ -37,7 +36,10 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
-from vllm_mindspore.model_executor.utils import set_weight_attrs
+from vllm_mindspore.model_executor.utils import (set_weight_attrs,
+    get_model_context)
+from vllm_mindspore.model_executor.models.native_common import get_ms_tensor
+
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
 
@@ -253,7 +255,7 @@ class VocabParallelEmbedding(nn.Cell):
         self.quant_method: QuantizeMethodBase = quant_method
 
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = get_model_context("model_dtype")
         # Divide the weight matrix along the vocaburaly dimension.
         self.num_added_embeddings = self.num_embeddings - self.org_vocab_size
         self.num_embeddings_per_partition = divide(self.num_embeddings_padded,
@@ -351,7 +353,7 @@ class VocabParallelEmbedding(nn.Cell):
                     f"'param.data.shape' should be equal to "
                     f"'loaded_weight.shape', but got {param.data.shape} "
                     f"and {loaded_weight.shape}")
-            param.set_data(ms.from_numpy(loaded_weight))
+            param.set_data(get_ms_tensor(loaded_weight))
             return
 
         # Shard indexes for loading the weight
@@ -366,7 +368,7 @@ class VocabParallelEmbedding(nn.Cell):
                 f"'org_vocab_size', but got {loaded_weight.shape[output_dim]} "
                 f"and {self.org_vocab_size}")
 
-        param[:loaded_weight.shape[0]] = ms.from_numpy(loaded_weight)
+        param[:loaded_weight.shape[0]] = get_ms_tensor(loaded_weight)
         param[loaded_weight.shape[0]:] = 0
 
 
