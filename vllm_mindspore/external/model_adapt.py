@@ -27,6 +27,7 @@ from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.forward_context import get_forward_context
 from vllm.sequence import IntermediateTensors
 from vllm.attention.layer import Attention
+from vllm.distributed.parallel_state import get_world_group
 
 from omni.layers.attention.backend.attention import AscendAttentionState
 
@@ -39,6 +40,7 @@ from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.external.tensor_convert import (tensor_torch2ms,
     get_ms_dtype)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
+from vllm_mindspore.external.utils import init_ms_distributed
 
 
 class AttentionWrapper(Attention):
@@ -151,6 +153,11 @@ class MsModelAdapter(NativeModel):
         # add local ms kv-cache
         self.ms_key_caches = []
         self.ms_value_caches = []
+
+        self.rank = torch.distributed.get_rank()
+        self.local_rank = get_world_group().local_rank
+
+        init_ms_distributed(self.parallel_config, self.rank, self.local_rank)
 
     def __call__(
         self,
