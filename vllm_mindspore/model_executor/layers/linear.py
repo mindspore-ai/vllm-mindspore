@@ -28,11 +28,10 @@ from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
-                              split_tensor_along_last_dim,
-                              tensor_model_parallel_all_gather)
+                              split_tensor_along_last_dim)
 
-from vllm_mindspore.distributed.communication_op import (
-    ReduceFromModelParallelRegion)
+from vllm_mindspore.distributed.communication_op import (get_tensor_parallel_all_gather_func,
+                                                         ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
@@ -251,6 +250,8 @@ class ColumnParallelLinear(LinearBase):
         else:
             self.bias = None
 
+        self.tensor_parallel_all_gather = get_tensor_parallel_all_gather_func()
+
     def construct(self,
                   input_: Tensor) -> Union[Tensor, tuple[Tensor, Tensor]]:
         bias = self.bias if not self.skip_bias_add else None
@@ -260,7 +261,7 @@ class ColumnParallelLinear(LinearBase):
         output_parallel = self.quant_method.apply(self, input_, bias)
         if self.gather_output:
             # All-gather across the partitions.
-            output = tensor_model_parallel_all_gather(output_parallel)
+            output = self.tensor_parallel_all_gather(output_parallel)
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
