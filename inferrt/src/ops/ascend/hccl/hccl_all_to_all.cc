@@ -29,7 +29,7 @@
 
 namespace mrt {
 namespace ops {
-bool is_all_to_all_v(const ir::TuplePtr &sendNumelList, const ir::TuplePtr &recvNumelList) {
+bool IsAllToAllV(const ir::TuplePtr &sendNumelList, const ir::TuplePtr &recvNumelList) {
   for (size_t i = 0; i < sendNumelList->Size(); i++) {
     if (sendNumelList->operator[](i)->ToInt() != sendNumelList->operator[](0)->ToInt()) {
       return true;
@@ -71,7 +71,7 @@ OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &i
   hcclKernel_.hcclCount_ = hcclCount / rankSize;
   hcclKernel_.hcclDataType_ = hcclDataType;
   hcclKernel_.comm_ = HcomUtil::LoadHcclLibrary(groupName);
-  useAllToAllV_ = is_all_to_all_v(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple());
+  useAllToAllV_ = IsAllToAllV(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple());
   return SUCCESS;
 }
 
@@ -85,14 +85,14 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
     HcclAllToAllVParams params;
     GetAllToAllVParam(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple(), &params);
     hcclResult = HcclAdapter::GetInstance().HcclAlltoAllV(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
-                                                           outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
-                                                           stream, hcclKernel_.comm_);
+                                                          outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
+                                                          stream, hcclKernel_.comm_);
   } else {
     LOG_OUT << "HcclAllToAll launch AllToAll Kernel";
     HcclAllToAllParams params = {hcclKernel_.hcclCount_, hcclKernel_.hcclCount_};
     hcclResult = HcclAdapter::GetInstance().HcclAllToAll(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
-                                                          outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
-                                                          stream, hcclKernel_.comm_);
+                                                         outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
+                                                         stream, hcclKernel_.comm_);
   }
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {

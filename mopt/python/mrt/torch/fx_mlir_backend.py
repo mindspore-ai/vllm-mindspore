@@ -29,7 +29,7 @@ from torch.func import functionalize
 from torch._subclasses.fake_tensor import FakeTensorMode
 
 from mrt.ir import GraphExecutor, Node, Op
-from mrt.torch.utils import from_torch, to_torch, update_tensor_data
+from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch
 from mrt.torch.decompositions import DEFAULT_DECOMPOSITIONS
 
 
@@ -372,6 +372,8 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     """FX backend entry point: decompose, import to StableHLO, and build executor."""
     from torch_mlir import fx  # grouped third-party import kept local to reduce module import overhead
     from torch_mlir.compiler_utils import OutputType
+
+    get_collective_info_from_torch(gm)
 
     gm = apply_decompositions(gm, example_inputs, DEFAULT_DECOMPOSITIONS)
 

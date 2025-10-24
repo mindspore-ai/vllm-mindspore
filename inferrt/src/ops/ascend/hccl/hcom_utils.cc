@@ -127,8 +127,8 @@ bool HcomUtil::GetHcomCount(const std::vector<HcclDataType> &dataTypeList,
   return true;
 }
 
-std::pair<uint64_t, ::HcclDataType> HcomUtil::GetHcclCountAndTypeFromTensor(
-  const ir::TensorPtr &tensor, const std::optional<int64_t> rankSizeOpt) {
+std::pair<uint64_t, ::HcclDataType> HcomUtil::GetHcclCountAndTypeFromTensor(const ir::TensorPtr &tensor,
+                                                                            const std::optional<int64_t> rankSizeOpt) {
   auto typeId = tensor->Dtype();
   auto shape = tensor->Shape();
 
