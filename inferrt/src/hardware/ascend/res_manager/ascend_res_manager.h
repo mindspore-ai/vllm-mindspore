@@ -88,6 +88,9 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   void *GetStream(size_t streamId) const override;
   void SetCurrentStreamId(size_t streamId) override;
   size_t GetCurrentStreamId() const override;
+  void SetCurrentStream(void *currentStream) override;
+  void *GetCurrentStream() const override;
+
   bool QueryStream(size_t streamId) const override;
   bool SyncStream(size_t streamId = 0) const override;
   bool SyncAllStreams(bool syncDevice = true) const override;
@@ -124,12 +127,12 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   static bool MemcpyDeviceToHost(void *dst, size_t dst_size, const void *src, size_t src_size, aclrtStream stream);
 
  private:
-  bool initialized_ = false;
-  std::shared_ptr<MemoryManager> memManager_{nullptr};
-  DeviceEventPtrList deviceEvents_{};
   std::mutex deviceEventsMutex_;
+  DeviceEventPtrList deviceEvents_{};
+  std::shared_ptr<MemoryManager> memManager_{nullptr};
   uint32_t deviceId_{0};
   bool enableMemoryTracker_{false};
+  bool initialized_ = false;
 };
 }  // namespace ascend
 }  // namespace device

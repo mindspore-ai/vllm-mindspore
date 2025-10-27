@@ -69,6 +69,8 @@ class MRT_EXPORT AscendStreamMng {
   bool DestroyAllStreams();
   bool ForceDestroyAllStreams();
   aclrtStream GetStream(size_t streamId) const;
+  void SetCurrentStream(void *currentStream);
+  void *GetCurrentStream() const;
   bool SyncStream(size_t streamId) const;
   bool SyncStream(aclrtStream stream) const;
   // 'syncDevice' means whether calling 'aclrtSynchronizeDeviceWithTimeout' or 'aclrtSynchronizeStreamWithTimeout'.
@@ -138,6 +140,7 @@ class MRT_EXPORT AscendStreamMng {
   size_t defaultStreamId_{0};
   aclrtStream communicationStream_{nullptr};
   size_t communicationStreamId_{0};
+  void *currentStream_{nullptr};
 
   bool singleOpMultiStreamEnable_{false};
 };

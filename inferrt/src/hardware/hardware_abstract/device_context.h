@@ -42,7 +42,7 @@ enum class KernelTaskType;
 namespace device {
 constexpr size_t kSizeZero = 0;
 
-struct DeviceContextKey {
+struct MRT_EXPORT DeviceContextKey {
   // device type name, such as 'Ascend' 'CPU'.
   std::string deviceName_;
   uint32_t deviceId_{0};
@@ -213,6 +213,9 @@ class MRT_EXPORT DeviceResManager {
 
   // Get currently using stream id.
   virtual size_t GetCurrentStreamId() const { return kSizeZero; }
+
+  virtual void SetCurrentStream(void *currentStream) {}
+  virtual void *GetCurrentStream() const { return nullptr; }
 
   virtual void *GetStream() const { return nullptr; }
 

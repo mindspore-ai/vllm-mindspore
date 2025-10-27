@@ -25,7 +25,8 @@ from torch.fx.graph_module import GraphModule
 from torch.utils._sympy.functions import FloorDiv
 
 from mrt.ir import GraphExecutor, Op, SymbolicVar, SymbolicConst, SymbolicExpr
-from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch
+from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch, \
+    _set_device_context
 
 
 # pylint: disable=bad-continuation
@@ -207,6 +208,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     symbolic_shape.append(SymbolicConst(int(dim)))
             output_value.to_tensor().symbolic_shape = symbolic_shape
 
+    _set_device_context()
     get_collective_info_from_torch(gm)
 
     for node in gm.graph.nodes:

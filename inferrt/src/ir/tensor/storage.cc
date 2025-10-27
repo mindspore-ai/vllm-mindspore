@@ -57,9 +57,6 @@ void Storage::Resize(size_t sizeBytes) {
 }
 
 void Storage::AllocateMemory() {
-  // if (data_ != nullptr && !ownsData_) {
-  //   return;
-  // }
   if (data_ != nullptr && ownsData_) {
     LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
                   << GetDeviceNameByType(device_.type) << ", data: " << data_;

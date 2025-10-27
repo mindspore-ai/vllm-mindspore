@@ -79,12 +79,6 @@ void PipelineExecutor::Run(bool isDynamic) {
 
   asyncTaskQueueManager.WaitAll();
   asyncTaskQueueManager.PauseAll();
-
-  for (auto &deviceItem : deviceContexts_) {
-    const auto &res_manager = deviceItem.second->deviceResManager_;
-    CHECK_IF_NULL(res_manager);
-    res_manager->SyncAllStreams();
-  }
   LOG_OUT << "End pipeline executor run.";
 }
 }  // namespace runtime

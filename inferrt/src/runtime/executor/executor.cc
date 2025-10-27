@@ -391,6 +391,13 @@ void GraphExecutor::BuildExecutor() {
 }
 
 void Executor::Run(bool isDynamic) {
+  for (const auto &item : deviceContexts_) {
+    auto *deviceContext = item.second;
+    CHECK_IF_NULL(deviceContext);
+    CHECK_IF_NULL(deviceContext->deviceResManager_);
+    deviceContext->deviceResManager_->BindDeviceToCurrentThread(false);
+  }
+
   OpRunner *opRunners = opRunners_->data();
   size_t opNum = opRunners_->size();
   for (size_t i = 0; i < opNum; i++) {
@@ -406,12 +413,6 @@ void Executor::Run(bool isDynamic) {
       LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.FreeMemory();
-  }
-
-  for (auto &deviceItem : deviceContexts_) {
-    const auto &res_manager = deviceItem.second->deviceResManager_;
-    CHECK_IF_NULL(res_manager);
-    res_manager->SyncAllStreams();
   }
 }
 }  // namespace runtime

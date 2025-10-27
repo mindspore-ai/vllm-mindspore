@@ -21,8 +21,12 @@
 
 #ifdef ENABLE_TORCH_NPU
 #include "torch_npu/csrc/aten/common/from_blob.h"
+#include "torch_npu/csrc/core/npu/NPUStream.h"
 #endif
 
+#include "hardware/hardware_abstract/device_context.h"
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+#include "hardware/hardware_abstract/device_context_manager.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
 #include "common/logger.h"
@@ -169,6 +173,19 @@ void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
   CHECK_IF_NULL(data);
   self->UpdateData(data);
 }
+
+void SetDeviceContext() {
+#ifdef ENABLE_TORCH_NPU
+  mrt::device::DeviceContextKey deviceContextKey{"Ascend",
+                                                 mrt::collective::CollectiveManager::Instance().local_rank_id()};
+  auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+  CHECK_IF_NULL(deviceContext);
+  CHECK_IF_NULL(deviceContext->deviceResManager_);
+  auto currentStream = c10_npu::getCurrentNPUStream().stream();
+  CHECK_IF_NULL(currentStream);
+  deviceContext->deviceResManager_->SetCurrentStream(currentStream);
+#endif
+}
 }  // namespace
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
@@ -178,4 +195,5 @@ PYBIND11_MODULE(_mrt_torch, m) {
   m.def("from_torch", &FromTorchTensor, py::arg("tensor"), py::arg("is_fake") = false);
   m.def("to_torch", &ToTorchTensor, py::return_value_policy::reference);
   m.def("update_tensor_data", &UpdateTensorData);
+  m.def("set_device_context", &SetDeviceContext);
 }

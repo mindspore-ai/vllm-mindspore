@@ -22,7 +22,7 @@ import torch
 from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
 
-import mrt._mrt_torch as _mrt_torch
+from mrt import _mrt_torch
 from mrt.ir import Value, Tensor, Tuple
 from mrt._mrt_collective import CollectiveManager
 
@@ -92,6 +92,7 @@ def from_torch(obj: Any) -> Value:
         return Value(-1)
     if isinstance(obj, (list, tuple)):
         return Value(Tuple([from_torch(e) for e in obj]))
+    # pylint: disable=protected-access
     if isinstance(obj, torch._subclasses.FakeTensor):
         return Value(_mrt_torch.from_torch(obj, is_fake=True))
     if isinstance(obj, torch.Tensor):
@@ -128,3 +129,6 @@ def to_torch(value: Value) -> Any:
 
 def update_tensor_data(tensor: Tensor, torch_tensor: torch.Tensor):
     _mrt_torch.update_tensor_data(tensor, torch_tensor)
+
+def _set_device_context():
+    _mrt_torch.set_device_context()

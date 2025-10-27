@@ -44,7 +44,7 @@ class AsyncTaskQueue {
   void Initialize();
 
   // Bind device and set device context for async pipeline thread.
-  void BindDevice(const std::set<const device::DeviceContext *> &device_contexts);
+  void BindDevice(const std::set<const device::DeviceContext *> &deviceContexts);
 
   // Push element to lock free queue, the args parameter must be of type std::function<void()> or convertible to this
   // type. Push is multi thread safety.
