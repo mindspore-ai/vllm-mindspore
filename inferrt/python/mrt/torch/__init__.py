@@ -12,6 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: disable=missing-module-docstring
+# Import placed after env setup due to NPU library dependencies.
+import os
+try:
+    import torch_npu
+    torch_npu_path = os.path.dirname(torch_npu.__file__)
+except ImportError:
+    torch_npu_path = None
+if torch_npu_path:
+    lib_path = os.path.join(torch_npu_path, "lib")
+    ld_lib_path = os.environ.get("LD_LIBRARY_PATH")
+    os.environ["LD_LIBRARY_PATH"] = f"{lib_path}:{ld_lib_path}"
+
+# pylint: disable=wrong-import-position
 from mrt.torch.fx_backend import backend
 
 __all__ = ['backend']
