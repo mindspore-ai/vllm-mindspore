@@ -19,18 +19,19 @@
 # limitations under the License.
 """A layer that compute logits from hidden_stats."""
 import inspect
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import vllm.envs as envs
 from mindspore import Tensor, mint, nn
 from vllm.config import current_platform
-from vllm.distributed import (tensor_model_parallel_all_gather,
-                              tensor_model_parallel_gather)
+from vllm.distributed import tensor_model_parallel_gather
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
+from vllm_mindspore.distributed.communication_op import get_tensor_parallel_all_gather_func
 
 _logits_processor_threadpool: Optional[ThreadPoolExecutor] = None
 if envs.VLLM_LOGITS_PROCESSOR_THREADS is not None:
@@ -70,6 +71,8 @@ class LogitsProcessor(nn.Cell):
         self.soft_cap = soft_cap
         # Whether to use gather or all-gather to gather the logits.
         self.use_all_gather = current_platform.use_all_gather()
+
+        self.tensor_parallel_all_gather = get_tensor_parallel_all_gather_func()
 
     def construct(
         self,
@@ -118,7 +121,7 @@ class LogitsProcessor(nn.Cell):
                                             bias=embedding_bias)
         if self.use_all_gather:
             # Gather is not supported for some devices such as NPUs.
-            logits = tensor_model_parallel_all_gather(logits)
+            logits = self.tensor_parallel_all_gather(logits)
         else:
             # None may be returned for rank > 0
             logits = tensor_model_parallel_gather(logits)
