@@ -9,8 +9,8 @@ def get_llm_pos_ids_for_vision(
     grid_ws: Tensor,
 ) -> Tensor:
     llm_pos_ids_list = []
-    llm_grid_h = grid_hs[vision_idx] // spatial_merge_size
-    llm_grid_w = grid_ws[vision_idx] // spatial_merge_size
+    llm_grid_h = grid_hs[vision_idx].item() // spatial_merge_size
+    llm_grid_w = grid_ws[vision_idx].item() // spatial_merge_size
     h_index = (
         mint.arange(llm_grid_h)
         .view(1, -1, 1)
@@ -25,7 +25,6 @@ def get_llm_pos_ids_for_vision(
     )
     t_index_tensor = (
         Tensor(t_index)
-        .to(llm_grid_h.device)
         .view(-1, 1)
         .expand(-1, llm_grid_h * llm_grid_w)
         .long()
