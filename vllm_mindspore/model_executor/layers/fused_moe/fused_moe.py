@@ -29,8 +29,8 @@ from mindspore.ops.auto_generate import (GroupedMatmulV4, MoeDistributeCombine,
                                          MoeDistributeDispatch,
                                          MoeGatingTopKSoftmax,
                                          MoeInitRoutingV2, MoeTokenUnpermute)
-from vllm.distributed.parallel_state import get_ep_group
 
+from vllm_mindspore.distributed.communication_op import get_ep_group_name
 from vllm_mindspore.model_executor.layers.fused_moe.config import MoeMode
 from vllm_mindspore.utils import is_910b
 
@@ -87,7 +87,7 @@ class FusedExperts(nn.Cell):
                                    ((self.experts_num // self.ep_size) *
                                     (self.ep_size - 1)))
             self.experts_num_map = experts_num_map
-            self.ep_group = get_ep_group().device_group._name
+            self.ep_group = get_ep_group_name()
 
         # pure ep mode
         if moe_config.moe_parallel_config.ep_size > 1 and \

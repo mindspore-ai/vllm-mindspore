@@ -24,10 +24,21 @@ Implement a unified communication interface for both graph and pynative mode.
 import os
 from mindspore import nn, ops
 from vllm.distributed.parallel_state import (
-    get_tensor_model_parallel_world_size, get_tp_group)
+    get_tensor_model_parallel_world_size, get_dp_group,
+    get_ep_group, get_tp_group)
 from vllm.distributed import tensor_model_parallel_all_gather
 
 is_external_mode = bool(int(os.getenv("ENABLE_MS_MODELS", '0')))
+
+def get_dp_group_name():
+    if is_external_mode:
+        return get_dp_group().unique_name
+    return get_dp_group().device_group._name
+
+def get_ep_group_name():
+    if is_external_mode:
+        return get_ep_group().unique_name
+    return get_ep_group().device_group._name
 
 def get_tp_group_name():
     if is_external_mode:
