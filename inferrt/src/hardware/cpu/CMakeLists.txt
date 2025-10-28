@@ -6,4 +6,13 @@ if(ENABLE_CPU)
   target_link_libraries(hardware_cpu
       hardware_abstract
     )
+
+  set_target_properties(hardware_cpu PROPERTIES
+    INSTALL_RPATH "$ORIGIN"
+    BUILD_WITH_INSTALL_RPATH TRUE
+  )
+
+  install(TARGETS hardware_cpu
+          LIBRARY DESTINATION lib
+          RUNTIME DESTINATION bin)
 endif()

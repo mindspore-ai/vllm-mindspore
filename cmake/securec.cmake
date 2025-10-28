@@ -17,7 +17,7 @@ mrt_add_pkg(securec
         URL ${REQ_URL}
         SHA256 ${SHA256}
         CMAKE_OPTION ${CMAKE_OPTION} -DTARGET_OHOS_LITE=OFF
-        PATCHES ${CMAKE_SOURCE_DIR}/third_party/patch/securec/securec.patch001
+        PATCHES ${CMAKE_SOURCE_DIR}/../third_party/patch/securec/securec.patch001
         )
 
 include_directories(${securec_INC})
