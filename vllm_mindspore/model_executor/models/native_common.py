@@ -24,8 +24,8 @@ import numpy as np
 
 import mindspore as ms
 
-
-if not int(os.getenv("ENABLE_MS_MODELS", '0')):
+external_mode = bool(int(os.getenv("ENABLE_MS_MODELS", '0')))
+if not external_mode:
     from vllm_mindspore.model_executor.models.model_base import NativeModel
     UnifiedNativeModel = NativeModel
 else:

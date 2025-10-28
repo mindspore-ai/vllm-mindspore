@@ -224,7 +224,7 @@ class ReplicatedLinear(LinearBase):
             f"Tried to load weights of size {loaded_weight.size()}"
             f"to a parameter of size {param.size()}")
 
-        param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(get_ms_tensor(loaded_weight))
 
     def construct(
             self,
