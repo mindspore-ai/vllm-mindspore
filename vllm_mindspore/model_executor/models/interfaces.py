@@ -18,10 +18,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Iterable, MutableSequence
 from typing import (TYPE_CHECKING, ClassVar, Literal, Optional, Protocol,
                     Union, overload, runtime_checkable)
 
 from mindspore import Tensor
+from typing_extensions import TypeIs
 
 if TYPE_CHECKING:
     from vllm.attention import AttentionMetadata
@@ -108,3 +110,59 @@ class _SupportsLoRAType(Protocol):
     supported_lora_modules: list[str]
     embedding_modules: dict[str, str]
     embedding_padding_modules: list[str]
+
+
+@runtime_checkable
+class MixtureOfExperts(Protocol):
+    """
+    Check if the model is a mixture of experts (MoE) model.
+    """
+
+    expert_weights: MutableSequence[Iterable[Tensor]]
+    """
+    Expert weights saved in this rank.
+
+    The first dimension is the layer, and the second dimension is different
+    parameters in the layer, e.g. up/down projection weights.
+    """
+
+    num_moe_layers: int
+    """Number of MoE layers in this model."""
+
+    num_expert_groups: int
+    """Number of expert groups in this model."""
+
+    num_logical_experts: int
+    """Number of logical experts in this model."""
+
+    num_physical_experts: int
+    """Number of physical experts in this model."""
+
+    num_local_physical_experts: int
+    """Number of local physical experts in this model."""
+
+    num_routed_experts: int
+    """Number of routed experts in this model."""
+
+    num_shared_experts: int
+    """Number of shared experts in this model."""
+
+    num_redundant_experts: int
+    """Number of redundant experts in this model."""
+
+
+def is_mixture_of_experts(model: object) -> TypeIs[MixtureOfExperts]:
+    return isinstance(model, MixtureOfExperts)
+
+
+@runtime_checkable
+class SupportesMoeDpTp(Protocol):
+    """
+    The interface required for MoE models that MoE layer
+    supports TP parallel under DP Context.
+    """
+    support_moe_dp_tp: ClassVar[Literal[True]] = True
+
+
+def supports_moe_dp_tp(model: object) -> bool:
+    return getattr(model, "support_moe_dp_tp", False)

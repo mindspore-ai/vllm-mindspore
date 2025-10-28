@@ -191,6 +191,24 @@ def test_cases_parallel_part5():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
+def test_cases_parallel_part6():
+    """
+    Feature: test cases parallel.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b",
+         "test_vllm_qwen3_30b_a3b.log"),
+        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b_eager",
+         "test_vllm_qwen3_30b_a3b_eager.log"),
+    ]
+    run_tasks(cases)
+
+
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
 def test_cases_parallel_part7():
     """
     Feature: test cases parallel.

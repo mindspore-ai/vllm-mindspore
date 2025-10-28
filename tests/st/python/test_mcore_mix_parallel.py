@@ -17,6 +17,7 @@
 # isort:skip_file
 """test vllm mix parallel."""
 import os
+import copy
 from multiprocessing import Process, Queue
 
 import pytest
@@ -32,7 +33,7 @@ def teardown_function():
 env_manager = utils.EnvVarManager()
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
-    "vLLM_MODEL_BACKEND": "MindFormers",
+    "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
     "MS_ENABLE_TRACE_MEMORY": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
@@ -343,3 +344,48 @@ def test_deepseek_r1_tp8_ep4():
     expect_list = [common_ds_expect_result]
     exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
                           ds_model_path, quant_type)
+
+
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_vllm_native_qwen3_moe_30b_dp4_tp2_ep4():
+    """
+    test case qwen3_moe_30B with DP4TP2EP4
+    """
+    tmp_env = copy.deepcopy(env_vars)
+    tmp_env["VLLM_MS_MODEL_BACKEND"] = "Native"
+    env_manager.unset_all()
+    env_manager.setup_ai_environment(tmp_env)
+    dp_size = 4
+    tp_size = 2
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_qwen_prompt] * 4
+    expect_list = [common_qwen_expect_result] * 4
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       qwen_model_path)
+    env_manager.unset_all()
+    env_manager.setup_ai_environment(env_vars)
+
+
+@pytest.mark.level4
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_vllm_native_qwen3_moe_30b_tp8_ep4():
+    """
+    test case qwen3_moe_30B with TP8EP4
+    """
+    tmp_env = copy.deepcopy(env_vars)
+    tmp_env["VLLM_MS_MODEL_BACKEND"] = "Native"
+    env_manager.unset_all()
+    env_manager.setup_ai_environment(tmp_env)
+    tp_size = 8
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_qwen_prompt]
+    expect_list = [common_qwen_expect_result]
+    exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
+                          qwen_model_path, quant_type)
+    env_manager.unset_all()
+    env_manager.setup_ai_environment(env_vars)
