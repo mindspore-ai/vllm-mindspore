@@ -33,6 +33,9 @@ void PipelineExecutor::Initialize() {
   auto &asyncTaskQueueManager = AsyncTaskQueueManager::GetInstance();
   asyncTaskQueueManager.InitializeAll();
   asyncTaskQueueManager.ContinueAll();
+  for (const auto &item : deviceContexts_) {
+    asyncTaskQueueManager.AddDeviceContext(item.second);
+  }
   asyncTaskQueueManager.BindDevice();
   asyncTaskQueueManager.PauseAll();
 
