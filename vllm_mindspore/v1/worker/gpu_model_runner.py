@@ -27,6 +27,7 @@ import torch
 from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
+from vllm.config import get_layers_from_vllm_config
 from vllm.logger import init_logger
 from vllm.sampling_params import SamplingType
 from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
@@ -39,6 +40,7 @@ from vllm.v1.worker.utils import initialize_kv_cache_for_kv_sharing
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
     InferMRotaryEmbedding as MRotaryEmbedding)
+from vllm_mindspore.model_executor.models.model_base import AttentionWrapper
 from vllm_mindspore.model_executor.models.utils import is_use_ringmla
 from vllm_mindspore.utils import (create_kv_cache, get_dtype_size,
                                   get_valid_dtype, is_310p)
@@ -738,7 +740,6 @@ def wrapper_gpu_model_runner_execute_model(func):
 
 
 def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
-    forward_ctx = self.vllm_config.compilation_config.static_forward_context
     block_size = self.vllm_config.cache_config.block_size
     use_mla = self.vllm_config.model_config.use_mla
     fa3_quant = self.vllm_config.quant_config.fa3_quant \
@@ -746,7 +747,9 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
                         if self.vllm_config.quant_config else set()
     kv_cache_spec: dict[str, KVCacheSpec] = {}
-    for layer_name, attn_module in forward_ctx.items():
+    attn_layers = get_layers_from_vllm_config(self.vllm_config,
+                                              AttentionWrapper)
+    for layer_name, attn_module in attn_layers.items():
         """
         vllm-mindspore AttentionWrapper is not an Attention isinstance
         assert isinstance(attn_module, Attention)

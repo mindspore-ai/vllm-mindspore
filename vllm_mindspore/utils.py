@@ -313,6 +313,11 @@ def is_310p():
     return device in ['310p', 'ascend310p']
 
 
+def is_910b():
+    device = get_ascend_soc_version()
+    return '910b' in device.lower()
+
+
 def check_ready():
     from mindspore import set_context
 

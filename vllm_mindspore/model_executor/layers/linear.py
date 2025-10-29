@@ -29,11 +29,10 @@ from mindspore._c_expression.typing import Type as MSDtype
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
-                              split_tensor_along_last_dim,
-                              tensor_model_parallel_all_gather)
+                              split_tensor_along_last_dim)
 
 from vllm_mindspore.distributed.communication_op import (
-    ReduceFromModelParallelRegion)
+    AllGatherFromModelParallelRegion, ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
@@ -162,6 +161,86 @@ class LinearBase(nn.Cell):
         raise NotImplementedError
 
 
+class ReplicatedLinear(LinearBase):
+    """Replicated linear layer.
+
+    Args:
+        input_size: input dimension of the linear layer.
+        output_size: output dimension of the linear layer.
+        bias: If true, add bias.
+        skip_bias_add: If true, skip adding bias but instead return it.
+        params_dtype: Data type for the parameters.
+        quant_config: Quantization configure.
+        prefix: The name of the layer in the state dict, including all parents
+                        (e.g. model.layers.0.qkv_proj)
+        return_bias: If true, return bias together with outputs in forward pass.
+    """
+
+    def __init__(self,
+                 input_size: int,
+                 output_size: int,
+                 bias: bool = True,
+                 skip_bias_add: bool = False,
+                 params_dtype=None,
+                 quant_config: Optional[QuantizationConfig] = None,
+                 prefix: str = "",
+                 *,
+                 return_bias: bool = True):
+        super().__init__(input_size,
+                         output_size,
+                         skip_bias_add,
+                         params_dtype,
+                         quant_config,
+                         prefix=prefix,
+                         return_bias=return_bias)
+
+        # All the linear layer supports quant method.
+        assert self.quant_method is not None
+        self.quant_method.create_weights(self,
+                                         self.input_size, [self.output_size],
+                                         self.input_size,
+                                         self.output_size,
+                                         self.params_dtype,
+                                         weight_loader=self.weight_loader)
+
+        if bias:
+            self.bias = Parameter(
+                mint.empty(self.output_size, dtype=self.params_dtype))
+            set_weight_attrs(self.bias, {
+                "output_dim": 0,
+                "weight_loader": self.weight_loader,
+            })
+        else:
+            self.bias = None
+
+    def weight_loader(self, param: Parameter, loaded_weight: Tensor):
+        loaded_weight = loaded_weight[:]
+        if len(loaded_weight.shape) == 0:
+            loaded_weight = loaded_weight.reshape(1)
+
+        assert param.shape == loaded_weight.shape, (
+            f"Tried to load weights of size {loaded_weight.size()}"
+            f"to a parameter of size {param.size()}")
+
+        param.set_data(ms.from_numpy(loaded_weight))
+
+    def construct(
+            self,
+            x: Tensor) -> Union[Tensor, tuple[Tensor, Optional[Parameter]]]:
+        bias = self.bias if not self.skip_bias_add else None
+        output = self.quant_method.apply(self, x, bias)
+        output_bias = self.bias if self.skip_bias_add else None
+        if not self.return_bias:
+            return output
+        return output, output_bias
+
+    def extra_repr(self) -> str:
+        s = f"in_features={self.input_size}"
+        s += f", output_features={self.output_size}"
+        s += f", bias={self.bias is not None}"
+        return s
+
+
 class ColumnParallelLinear(LinearBase):
     """Linear layer with column parallelism.
 
@@ -249,6 +328,9 @@ class ColumnParallelLinear(LinearBase):
         else:
             self.bias = None
 
+        self.tensor_model_parallel_all_gather = \
+            AllGatherFromModelParallelRegion()
+
     def construct(self,
                   input_: Tensor) -> Union[Tensor, tuple[Tensor, Tensor]]:
         bias = self.bias if not self.skip_bias_add else None
@@ -258,7 +340,7 @@ class ColumnParallelLinear(LinearBase):
         output_parallel = self.quant_method.apply(self, input_, bias)
         if self.gather_output:
             # All-gather across the partitions.
-            output = tensor_model_parallel_all_gather(output_parallel)
+            output = self.tensor_model_parallel_all_gather(output_parallel)
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
@@ -339,18 +421,28 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         tp_size = get_tensor_model_parallel_world_size()
         shard_size = 0
         shard_offset = 0
-        if loaded_shard_id is not None:
+        if loaded_shard_id is None:
+            current_shard_offset = 0
+            shard_offsets = []
+            for i, output_size in enumerate(self.output_sizes):
+                shard_offsets.append((i, current_shard_offset, output_size))
+                current_shard_offset += output_size
+            for shard_id, shard_offset, shard_size in shard_offsets:
+                loaded_weight_shard = split_loaded_weight(
+                    loaded_weight, output_dim, shard_offset, shard_size)
+                self.weight_loader(param, loaded_weight_shard, shard_id)
+        else:
             assert loaded_shard_id < len(self.output_sizes)
             shard_offset = sum(self.output_sizes[:loaded_shard_id]) // tp_size
             shard_size = self.output_sizes[loaded_shard_id] // tp_size
 
-        start_idx = tp_rank * shard_size
-        loaded_weight = split_loaded_weight(loaded_weight, output_dim,
-                                            start_idx, shard_size)
+            start_idx = tp_rank * shard_size
+            loaded_weight = split_loaded_weight(loaded_weight, output_dim,
+                                                start_idx, shard_size)
 
-        assert loaded_weight.shape == (shard_size, param.shape[1])
-        param[shard_offset:shard_offset +
-              shard_size, :] = ms.from_numpy(loaded_weight)
+            assert loaded_weight.shape == (shard_size, param.shape[1])
+            param[shard_offset:shard_offset +
+                  shard_size, :] = ms.from_numpy(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):

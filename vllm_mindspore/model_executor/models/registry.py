@@ -64,6 +64,7 @@ _NATIVE_MODELS = {
         "qwen3_omni_moe_thinker",
         "Qwen3OmniMoeThinkerForConditionalGeneration",
     ),
+    "Qwen3MoeForCausalLM": ("qwen3_moe", "Qwen3MoeForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {
