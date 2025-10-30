@@ -5,6 +5,15 @@ add_subdirectory(op_def)
 add_library(kernel SHARED kernel_lib.cc op_register.cc)
 target_link_libraries(kernel PRIVATE mrt_common mrt_ir_obj ${CMAKE_DL_LIBS})
 
+set_target_properties(kernel PROPERTIES
+  INSTALL_RPATH "$ORIGIN"
+  BUILD_WITH_INSTALL_RPATH TRUE
+)
+
+install(TARGETS kernel
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
+
 add_subdirectory(op_base)
 
 if(ENABLE_TORCH_FRONT)

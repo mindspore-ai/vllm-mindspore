@@ -28,10 +28,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 # Set PIC option
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # add_compile_options(-fPIC)
 
-# Include directories
-include_directories(${PROJECT_SOURCE_DIR}/../include)
-include_directories(${PROJECT_SOURCE_DIR})
-
 # Add compiler, ir, runtime and kernels directories
 add_subdirectory(common)
 add_subdirectory(hardware)
@@ -39,7 +35,6 @@ add_subdirectory(ir)
 add_subdirectory(lang)
 add_subdirectory(ops)
 add_subdirectory(optimize)
-add_subdirectory(pybind)
 add_subdirectory(runtime)
 
 set(OBJECTS mrt_common hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
@@ -54,7 +49,7 @@ add_library(inferrt SHARED lang/api/c_api.cc)
 target_link_libraries(inferrt ${OBJECTS})
 
 set_target_properties(inferrt PROPERTIES
-  INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib"
+  INSTALL_RPATH "$ORIGIN"
   BUILD_WITH_INSTALL_RPATH TRUE
 )
 
