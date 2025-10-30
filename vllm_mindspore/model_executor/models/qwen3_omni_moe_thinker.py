@@ -24,12 +24,13 @@
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
-from typing import Any
+from typing import Any, Optional
 
 import math
 import numpy as np
 # import torch
-from mindspore import Parameter, Tensor, mint, nn
+from mindspore import Parameter, Tensor, mint, nn, mutable
+from mindspore.common import dtype as mstype
 import mindspore.mint.nn.functional as F
 import mindspore as ms
 from mindspore import ops
@@ -44,9 +45,9 @@ from transformers.models.qwen3_omni_moe.configuration_qwen3_omni_moe import (
     Qwen3OmniMoeConfig,
     Qwen3OmniMoeThinkerConfig,
 )
-from transformers.models.qwen3_omni_moe.modeling_qwen3_omni_moe import (
-    Qwen3OmniMoeAudioEncoder,
-)
+# from transformers.models.qwen3_omni_moe.modeling_qwen3_omni_moe import (
+#     Qwen3OmniMoeAudioEncoder,
+# )
 from transformers.models.qwen3_omni_moe.processing_qwen3_omni_moe import (
     Qwen3OmniMoeProcessor,
 )
@@ -91,7 +92,7 @@ from vllm_mindspore.model_executor.models.interfaces import (
     SupportsMultiModal,
 )
 from vllm_mindspore.model_executor.models.utils import (WeightsMapper,
-    maybe_prefix, merge_multimodal_embeddings)
+    maybe_prefix, _merge_multimodal_embeddings)
 from vllm_mindspore.model_executor.models.model_base import NativeModel, \
     AttentionWrapper
 from vllm_mindspore.model_executor.models.attention_mask import \
@@ -119,6 +120,9 @@ from vllm_mindspore.model_executor.models.qwen2_5_omni_thinker import (
     Qwen2_5OmniThinkerMultiModalProcessor,
     Qwen2_5OmniThinkerProcessingInfo,
 )
+
+from vllm_mindspore.model_executor.layers.rotary_embedding import _apply_rotary_emb
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
 
 from mindspore.common.api import _pynative_executor
 _pynative_executor.set_enable_grad(False)
@@ -159,16 +163,22 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
                   self.num_attention_heads_per_partition * self.head_dim), -1)
 
         # q/k reshape to BSND
-        q = q.reshape(1, seq_length, self.num_attention_heads_per_partition,
+        # q = q.reshape(1, seq_length, self.num_attention_heads_per_partition,
+        #               self.hidden_size_per_attention_head)
+        # k = k.reshape(1, seq_length, self.num_attention_heads_per_partition,
+        #               self.hidden_size_per_attention_head)
+        q = q.reshape(seq_length, self.num_attention_heads_per_partition,
                       self.hidden_size_per_attention_head)
-        k = k.reshape(1, seq_length, self.num_attention_heads_per_partition,
+        k = k.reshape(seq_length, self.num_attention_heads_per_partition,
                       self.hidden_size_per_attention_head)
 
         cos, sin = position_embeddings
         origin_dtype = q.dtype
-        q, k = ms_custom_ops.apply_rotary_pos_emb_ext(q.astype(ms.float32),
-                                                      k.astype(ms.float32),
-                                                      cos, sin, "BSND", "half")
+        # q, k = ms_custom_ops.apply_rotary_pos_emb_ext(q.astype(ms.float32),
+        #                                               k.astype(ms.float32),
+        #                                               cos, sin, "BSND", "half")
+        q = _apply_rotary_emb(q, cos, sin, True)
+        k = _apply_rotary_emb(k, cos, sin, True)
 
         # q/k reshape to TH
         q = q.astype(origin_dtype)
@@ -465,8 +475,9 @@ class Qwen3Omni_VisionTransformer(nn.Cell):
         # hidden_states = hidden_states.unsqueeze(1)
         seq_len, _ = x.shape
         rotary_pos_emb = rotary_pos_emb.astype(hidden_states.dtype)
-        rotary_pos_emb = rotary_pos_emb.reshape(1, seq_len, 1, -1)
-        emb = mint.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
+        # rotary_pos_emb = rotary_pos_emb.reshape(1, seq_len, 1, -1)
+        emb = rotary_pos_emb
+        # emb = mint.cat((rotary_pos_emb, rotary_pos_emb), dim=-1)
         position_embeddings = (mint.cos(emb), mint.sin(emb))
 
         hidden_states_list = []
@@ -522,17 +533,17 @@ class Qwen3Omni_VisionTransformer(nn.Cell):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
-                if name in params_dict:
-                    param = params_dict[name]
-                    if "patch_embed.proj.weight" in name:
-                        loaded_weight = loaded_weight[:]
-                        loaded_weight = loaded_weight.reshape(loaded_weight.shape[0],
-                                                              -1)
-                        param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
-                    else:
-                        weight_loader = getattr(param, "weight_loader",
-                                                default_weight_loader)
-                        weight_loader(param, loaded_weight)
+                param = params_dict[name]
+                if "patch_embed.proj.weight" in name:
+                    loaded_weight = loaded_weight[:]
+                    loaded_weight = loaded_weight.reshape(loaded_weight.shape[0],
+                                                            -1)
+                    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+                else:
+                    weight_loader = getattr(param, "weight_loader",
+                                            default_weight_loader)
+                    weight_loader(param, loaded_weight)
+            loaded_params.add(name)
         return loaded_params
 
     def set_model_inputs(self):
@@ -560,11 +571,18 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
 
     def construct(
         self,
-        input_ids: ms.Tensor,
-        positions: ms.Tensor,
-        intermediate_tensors: IntermediateTensors | None = None,
-        inputs_embeds: ms.Tensor | None = None,
-        deepstack_input_embeds: IntermediateTensors | None = None,
+        input_ids: Tensor,
+        positions: Tensor,
+        key_caches: list[Tensor],
+        value_caches: list[Tensor],
+        slot_mapping: Tensor,
+        attn_mask: Tensor,
+        batch_valid_length: Tensor,
+        q_seq_lens: Tensor,
+        block_tables: Tensor,
+        intermediate_tensors: Optional[IntermediateTensors] = None,
+        inputs_embeds: Optional[Tensor] = None,
+        deepstack_input_embeds: Optional[Mapping[str, Tensor]] = None,
     ) -> ms.Tensor | IntermediateTensors:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
@@ -576,23 +594,30 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
             assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
-        for layer_idx, layer in enumerate(
-            self.layers[self.start_layer : self.end_layer]
-        ):
-            layer_idx = layer_idx + self.start_layer
+        # for layer_idx, layer in enumerate(
+        #     self.layers[self.start_layer : self.end_layer]
+        # ):
+        #     layer_idx = layer_idx + self.start_layer
 
+        #     hidden_states, residual = layer(
+        #         positions,
+        #         hidden_states,
+        #         residual,
+        #     )
+        for i in range(self.start_layer, self.end_layer):
+            layer = self.layers[i]
             hidden_states, residual = layer(
-                positions,
-                hidden_states,
-                residual,
-            )
+                positions, hidden_states, key_caches[i - self.start_layer],
+                value_caches[i - self.start_layer], slot_mapping, attn_mask,
+                batch_valid_length, q_seq_lens, block_tables, residual,
+                None, None, None, None)
 
-            if deepstack_input_embeds is not None and layer_idx in range(
+            if deepstack_input_embeds is not None and i in range(
                 0, len(deepstack_input_embeds)
             ):
                 hidden_states = (
                     hidden_states
-                    + deepstack_input_embeds[f"deepstack_input_embeds_{layer_idx}"]
+                    + deepstack_input_embeds[f"deepstack_input_embeds_{i}"]
                 )
 
         if not get_pp_group().is_last_rank:
@@ -605,7 +630,7 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
 
 class Qwen3MoeLLMForCausalLM(Qwen3MoeForCausalLM):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
-        super(Qwen3MoeForCausalLM, self).__init__()
+        super(Qwen3MoeForCausalLM, self).__init__(vllm_config=vllm_config)
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
         self.config = config
@@ -633,7 +658,8 @@ class Qwen3OmniMoeThinkerProcessingInfo(
     def get_hf_processor(self, **kwargs: object) -> Qwen3OmniMoeProcessor:
         processor = self.ctx.get_hf_processor(
             Qwen3OmniMoeProcessor,
-            use_fast=kwargs.pop("use_fast", True),
+            # use_fast=kwargs.pop("use_fast", True),
+            use_fast=False,
             **kwargs,
         )
         if not hasattr(processor, "audio_token"):
@@ -851,7 +877,7 @@ class Qwen3OmniMoeThinkerMultiModalProcessor(
                 mm_item_counts,
             )
         else:
-            prompt_ids, mm_placeholders = self._apply_prompt_updates(
+            prompt_ids, prompt, mm_placeholders = self._apply_prompt_updates(
                 prompt_ids,
                 mm_prompt_updates,
                 mm_item_counts
@@ -930,9 +956,8 @@ class Qwen3OmniMoeThinkerMultiModalProcessor(
         image_token_id = vocab[image_token]
         video_token_id = vocab[video_token]
 
-        out_mm_data = out_mm_kwargs.get_data()
-        audio_feature_lengths = out_mm_data.get("audio_feature_lengths")
-        feature_attention_mask = out_mm_data.get("feature_attention_mask")
+        audio_feature_lengths = out_mm_kwargs.get("audio_feature_lengths")
+        feature_attention_mask = out_mm_kwargs.get("feature_attention_mask")
         if audio_feature_lengths is None and feature_attention_mask is None:
             audio_output_lengths = []
         elif audio_feature_lengths is not None:
@@ -969,7 +994,7 @@ class Qwen3OmniMoeThinkerMultiModalProcessor(
             return [audio_token_id] * num_features
 
         def get_replacement_qwen2_vision(item_idx: int, modality: str):
-            grid_thw = out_mm_data[f"{modality}_grid_thw"][item_idx]
+            grid_thw = out_mm_kwargs[f"{modality}_grid_thw"][item_idx]
             assert isinstance(grid_thw, ms.Tensor)
             merge_length = image_processor.merge_size**2
 
@@ -982,7 +1007,7 @@ class Qwen3OmniMoeThinkerMultiModalProcessor(
         def get_replacement_qwen2_use_audio_in_video(item_idx: int):
             nonlocal audio_in_video_item_idx
             audio_num_features = audio_output_lengths[audio_item_idx + item_idx]
-            video_grid_thw = out_mm_data["video_grid_thw"][item_idx]
+            video_grid_thw = out_mm_kwargs["video_grid_thw"][item_idx]
 
             audio_in_video_item_idx += 1
 
@@ -1207,7 +1232,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         )
         self.visual.set_model_inputs()
         self.visual.construct = ms.jit(function=self.visual, jit_level='O0')
-
+        self.vision_config = thinker_config.vision_config
         self.quant_config = quant_config
 
         self.language_model = Qwen3MoeLLMForCausalLM(
@@ -1217,6 +1242,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             prefix=maybe_prefix(prefix, "language_model"),
         )
         self.model = self.language_model.model
+        self.text_config = thinker_config.text_config
         self.lm_head = self.language_model.lm_head
         self.common_preprocess(vllm_config, prefix)
 
@@ -1236,8 +1262,9 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         self.deepstack_input_embeds = (
             [
                 mint.zeros(
-                    vllm_config.scheduler_config.max_num_batched_tokens,
-                    thinker_config.text_config.hidden_size,
+                    (vllm_config.scheduler_config.max_num_batched_tokens,
+                    thinker_config.text_config.hidden_size),
+                    dtype=self.model_config.dtype
                 )
                 for _ in range(self.deepstack_num_level)
             ]
@@ -1246,10 +1273,16 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         )
         self.visual_dim = thinker_config.vision_config.out_hidden_size
         self.multiscale_dim = self.visual_dim * self.deepstack_num_level
+        head_dim = (self.vision_config.hidden_size // 
+                   self.vision_config.num_heads)
+        self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
+        # self.num_grid_per_side = (self.vision_config.image_size // 
+        #                           self.vision_config.patch_size)
+        # self.spatial_merge_size = self.vision_config.spatial_merge_size
 
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
-            "thinker.visual.model": self.visual,
+            "thinker.visual": self.visual,
             "thinker.model": self.language_model.model,
             "thinker.lm_head": self.language_model.lm_head
         })
@@ -1257,13 +1290,13 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             dtype=self.model_config.dtype,
             max_model_len=self.model_config.max_model_len)
         self.kv_caches = [
-            AttentionWrapper() for i in range(self.config.num_hidden_layers)
+            AttentionWrapper() for i in range(self.text_config.num_hidden_layers)
         ]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.config.num_hidden_layers):
+        for i in range(self.text_config.num_hidden_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -1284,8 +1317,8 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         if num_tokens > self.deepstack_input_embeds[0].shape[0]:
             self.deepstack_input_embeds = [
                 mint.zeros(
-                    num_tokens,
-                    self.config.text_config.hidden_size,
+                    (num_tokens,
+                    self.config.text_config.hidden_size),
                     dtype=self.deepstack_input_embeds[0].dtype,
                 )
                 for _ in range(self.deepstack_num_level)
@@ -1361,19 +1394,25 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         self,
         input_ids: ms.Tensor,
         multimodal_embeddings: MultiModalEmbeddings | None = None,
-        *,
-        is_multimodal: ms.Tensor | None = None,
-        handle_oov_mm_token: bool = False,
+        # *,
+        # is_multimodal: ms.Tensor | None = None,
+        # handle_oov_mm_token: bool = False,
     ) -> ms.Tensor:
-        inputs_embeds = self._get_text_embeddings(
-            input_ids,
-            self.language_model.get_input_embeddings,
-            is_multimodal=is_multimodal,
-            handle_oov_mm_token=handle_oov_mm_token,
-        )
+        # inputs_embeds = self._get_text_embeddings(
+        #     input_ids,
+        #     self.language_model.get_input_embeddings,
+        #     is_multimodal=is_multimodal,
+        #     handle_oov_mm_token=handle_oov_mm_token,
+        # )
+        inputs_embeds = self.language_model.get_input_embeddings(input_ids)
 
         if multimodal_embeddings is None or len(multimodal_embeddings) == 0:
             return inputs_embeds
+
+        placeholder_token_id = [self.config.image_token_id,
+                                self.config.video_token_id,
+                                self.config.audio_token_id]
+        is_multimodal = ms.numpy.isin(input_ids, placeholder_token_id)
 
         deepstack_input_embeds = None
         # TODO (ywang96): support overlapping modalitiy embeddings so that
@@ -1414,10 +1453,9 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
 
                 mm_position_idx += num_tokens
 
-            deepstack_input_embeds = mint.zeros_like(
-                inputs_embeds.view(inputs_embeds.shape[0], multiscale_len * inputs_embeds.shape[1])
-            )
-            deepstack_input_embeds = merge_multimodal_embeddings(
+            deepstack_input_embeds = inputs_embeds.new_zeros(
+                inputs_embeds.shape[0], multiscale_len * inputs_embeds.shape[1])
+            deepstack_input_embeds = _merge_multimodal_embeddings(
                 inputs_embeds=deepstack_input_embeds,
                 multimodal_embeddings=multimodal_embeddings_multiscale,
                 is_multimodal=is_vision,
@@ -1430,7 +1468,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             )
             self._set_deepstack_input_embeds(deepstack_input_embeds)
 
-        inputs_embeds = merge_multimodal_embeddings(
+        inputs_embeds = _merge_multimodal_embeddings(
             inputs_embeds=inputs_embeds,
             multimodal_embeddings=multimodal_embeddings,
             is_multimodal=is_multimodal,
@@ -1484,18 +1522,26 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
 
     def load_weights(self, weights: Iterable[tuple[str, ms.Tensor]]) -> set[str]:
         params_dict = self.get_params_dict()
+        loaded_param = set()
+        visual_load = set()
+        text_load = set()
         for name, weight in weights:
-            if "visual." in name:
-                self.visual.load_weights([(name, weight)], params_dict)
-            elif "language_model." in name:
-                self.language_model.load_weights([(name, weight)], params_dict)
+            if "thinker.visual." in name:
+                visual_load.update(
+                    self.visual.load_weights([(name, weight)], params_dict))
+            elif "thinker.model." in name:
+                text_load.update(
+                    self.model.load_weights([(name, weight)], params_dict))
             else:
                 # Handle other weights
                 if name in params_dict:
                     param = params_dict[name]
                     weight_loader = getattr(param, "weight_loader", default_weight_loader)
                     weight_loader(param, weight)
-        return set()
+                    loaded_param.add(name)
+        loaded_param.update(visual_load)
+        loaded_param.update(text_load)
+        return None #loaded_param talker not supported yet
 
     # def get_mrope_input_positions(
     #     self,
@@ -1828,14 +1874,14 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
                 mint.tile(mint.stack([hpos_ids, wpos_ids], dim=-1), (t, 1)))
         pos_ids = mint.cat(pos_ids, dim=0)
         max_grid_size = int(grid_thw[:, 1:].max().item())
-        rotary_pos_emb_full = self.rotary_pos_emb_total(max_grid_size)
+        rotary_pos_emb_full = self.rotary_pos_emb_full(max_grid_size)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
         return rotary_pos_emb
 
     def fast_pos_embed_interpolate(self, grid_thw: list[list[int]]) -> ms.Tensor:
-        num_grid_per_side = self.num_grid_per_side
-        m_size = self.spatial_merge_size
-        hidden_dim = self.pos_embed.embedding_dim
+        num_grid_per_side = self.visual.num_grid_per_side
+        m_size = self.visual.spatial_merge_size
+        hidden_dim = self.visual.pos_embed.embedding_dim
 
         outputs = []
         for t, h, w in grid_thw:
@@ -1880,9 +1926,9 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
 
             indices = mint.stack([idx00, idx01, idx10, idx11], dim=0).reshape(4, -1)
             weights = mint.stack([w00, w01, w10, w11], dim=0).reshape(4, -1, 1)
-            weights = weights.astype(self.dtype)
+            weights = weights.astype(self.visual.dtype)
 
-            embeds = self.pos_embed(indices)
+            embeds = self.visual.pos_embed(indices)
             weighted_embeds = embeds * weights
             p0, p1, p2, p3 = weighted_embeds.unbind(dim=0)
             combined = p0 + p1 + p2 + p3
@@ -1896,3 +1942,71 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             outputs.append(repeated)
 
         return mint.cat(outputs, dim=0)
+
+    def set_model_inputs(self,
+                         input_ids=None,
+                         position_ids=None,
+                         intermediate_tensors=None,
+                         inputs_embeds=None):
+        if input_ids is None:
+            dyn_input_ids = None
+        else:
+            dyn_input_ids = ms.Tensor(shape=[None] * input_ids.ndim,
+                                      dtype=mstype.int32)
+
+        if position_ids is None:
+            dyn_position_ids = None
+        else:
+            dyn_position_ids = ms.Tensor(shape=[None] * position_ids.ndim,
+                                         dtype=mstype.int32)
+
+        if inputs_embeds is None:
+            dyn_inputs_embeds = None
+        else:
+            dyn_inputs_embeds = ms.Tensor(shape=[None] * inputs_embeds.ndim,
+                                          dtype=inputs_embeds.dtype)
+
+        if intermediate_tensors is None:
+            dyn_intermediate_tensors = None
+        else:
+            dyn_intermediate_tensors = ms.Tensor(
+                shape=[None] * intermediate_tensors.ndim,
+                dtype=intermediate_tensors.dtype)
+
+        block_size = self.cache_config.block_size
+        num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
+        head_size = self.model_config.get_head_size()
+        kv_cache_shape = (None, block_size, num_kv_heads, head_size)
+
+        kv_cache_dtype = (self.model_config.dtype
+                          if self.cache_config.cache_dtype == "auto" else
+                          self.cache_config.cache_dtype)
+        if kv_cache_dtype in STR_DTYPE_TO_MS_DTYPE:
+            kv_cache_dtype = STR_DTYPE_TO_MS_DTYPE[kv_cache_dtype]
+
+        num_layers = self.model_config.get_num_layers(self.parallel_config)
+
+        dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
+        dyn_value_caches = mutable(
+            [dyn_value_cache for _ in range(num_layers)])
+
+        dyn_slot_mapping = Tensor(shape=[None], dtype=mstype.int32)
+        dynamic_attention_mask = Tensor(shape=[None, None],
+                                        dtype=self.model_config.dtype)
+        dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
+        dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
+        dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
+        dyn_deepstack_input_embeds = Tensor(shape=[None, None],
+                                            dtype=self.model_config.dtype)
+
+        self.ready_model.set_inputs(
+            dyn_input_ids, dyn_position_ids, dyn_key_caches,
+            dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
+            dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+            dyn_intermediate_tensors, dyn_inputs_embeds, dyn_deepstack_input_embeds)
+
+        dynamic_hidden_states = Tensor(shape=[None, None],
+                                       dtype=self.model_config.dtype)
+        self.ready_lm_head.set_inputs(dynamic_hidden_states)

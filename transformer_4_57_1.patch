@@ -1,0 +1,65 @@
+diff --git a/src/transformers/generation/__init__.py b/src/transformers/generation/__init__.py
+index 4fb3d32213..e41c6e4b53 100644
+--- a/src/transformers/generation/__init__.py
++++ b/src/transformers/generation/__init__.py
+@@ -30,8 +30,9 @@ _import_structure = {
+ }
+ 
+ try:
+-    if not is_torch_available():
+-        raise OptionalDependencyNotAvailable()
++    # if not is_torch_available():
++    #     raise OptionalDependencyNotAvailable()
++    ...
+ except OptionalDependencyNotAvailable:
+     pass
+ else:
+diff --git a/src/transformers/models/auto/image_processing_auto.py b/src/transformers/models/auto/image_processing_auto.py
+index 4b71712dfc..2c9cec58e3 100644
+--- a/src/transformers/models/auto/image_processing_auto.py
++++ b/src/transformers/models/auto/image_processing_auto.py
+@@ -49,7 +49,8 @@ from .configuration_auto import (
+ logger = logging.get_logger(__name__)
+ 
+ 
+-FORCE_FAST_IMAGE_PROCESSOR = ["Qwen2VLImageProcessor"]
++# FORCE_FAST_IMAGE_PROCESSOR = ["Qwen2VLImageProcessor"]
++FORCE_FAST_IMAGE_PROCESSOR = []
+ 
+ 
+ if TYPE_CHECKING:
+diff --git a/src/transformers/processing_utils.py b/src/transformers/processing_utils.py
+index 8b40b6535f..a892aaf0e2 100644
+--- a/src/transformers/processing_utils.py
++++ b/src/transformers/processing_utils.py
+@@ -531,7 +531,7 @@ class ProcessorMixin(PushToHubMixin):
+ 
+         # Check each arg is of the proper class (this will also catch a user initializing in the wrong order)
+         for attribute_name, arg in kwargs.items():
+-            self.check_argument_for_proper_class(attribute_name, arg)
++            # self.check_argument_for_proper_class(attribute_name, arg)
+             setattr(self, attribute_name, arg)
+ 
+     def __call__(
+@@ -1430,6 +1430,8 @@ class ProcessorMixin(PushToHubMixin):
+         args = []
+         for attribute_name in cls.attributes:
+             class_name = getattr(cls, f"{attribute_name}_class")
++            if class_name == "AutoVideoProcessor":
++                class_name = "AutoImageProcessor"
+             if isinstance(class_name, tuple):
+                 classes = tuple(cls.get_possibly_dynamic_module(n) if n is not None else None for n in class_name)
+                 if attribute_name == "image_processor":
+diff --git a/src/transformers/utils/import_utils.py b/src/transformers/utils/import_utils.py
+index 2bf0464dbf..1e709c77dd 100644
+--- a/src/transformers/utils/import_utils.py
++++ b/src/transformers/utils/import_utils.py
+@@ -2154,7 +2154,7 @@ class DummyObject(type):
+     def __getattribute__(cls, key):
+         if (key.startswith("_") and key != "_from_config") or key == "is_dummy" or key == "mro" or key == "call":
+             return super().__getattribute__(key)
+-        requires_backends(cls, cls._backends)
++        # requires_backends(cls, cls._backends)
+ 
+ 
+ def is_torch_fx_proxy(x):

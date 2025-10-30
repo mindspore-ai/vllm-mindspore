@@ -1,0 +1,57 @@
+From 22ea5d67f8f1ff13e27d4ea3fde3bc93b40b5327 Mon Sep 17 00:00:00 2001
+From: lvhaoyu <lvhaoyu@huawei.com>
+Date: Sat, 25 Oct 2025 10:55:46 +0800
+Subject: [PATCH] suit vllm 0.9.1 qwen3-omni
+
+---
+ vllm/entrypoints/chat_utils.py          | 6 ++++++
+ vllm/transformers_utils/configs/ovis.py | 2 +-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/vllm/entrypoints/chat_utils.py b/vllm/entrypoints/chat_utils.py
+index 95c806c22..b54649d5a 100644
+--- a/vllm/entrypoints/chat_utils.py
++++ b/vllm/entrypoints/chat_utils.py
+@@ -543,6 +543,8 @@ class BaseMultiModalItemTracker(ABC, Generic[_T]):
+                 return "<start_of_image>"
+             if model_type == "kimi_vl":
+                 return "<|media_start|>image<|media_content|><|media_pad|><|media_end|>" # noqa: E501
++            if model_type == "qwen3_omni_moe":
++                return "<|vision_start|><|image_pad|><|vision_end|>"
+ 
+             raise TypeError(f"Unknown {modality} model type: {model_type}")
+         elif modality == "audio":
+@@ -555,6 +557,8 @@ class BaseMultiModalItemTracker(ABC, Generic[_T]):
+                         f"<|audio_bos|><|AUDIO|><|audio_eos|>")
+             if model_type == "minicpmo":
+                 return "(<audio>./</audio>)"
++            if model_type == "qwen3_omni_moe":
++                return "<|audio_start|><|audio_pad|><|audio_end|>"
+             raise TypeError(f"Unknown model type: {model_type}")
+         elif modality == "video":
+             if model_type == "internvl_chat":
+@@ -568,6 +572,8 @@ class BaseMultiModalItemTracker(ABC, Generic[_T]):
+             if model_type.startswith("llava"):
+                 return self._cached_token_str(self._tokenizer,
+                                               hf_config.video_token_index)
++            if model_type == "qwen3_omni_moe":
++                return "<|vision_start|><|video_pad|><|vision_end|>"
+             raise TypeError(f"Unknown {modality} model type: {model_type}")
+         else:
+             raise TypeError(f"Unknown modality: {modality}")
+diff --git a/vllm/transformers_utils/configs/ovis.py b/vllm/transformers_utils/configs/ovis.py
+index c2728f0ed..db6050fac 100644
+--- a/vllm/transformers_utils/configs/ovis.py
++++ b/vllm/transformers_utils/configs/ovis.py
+@@ -73,7 +73,7 @@ IMAGE_TOKEN = "<image>"
+ IMAGE_ATOM_ID = -300
+ IMAGE_INDICATOR_IDS = [-301, -302, -303, -304, -305]
+ 
+-AutoConfig.register("aimv2", AIMv2Config)
++# AutoConfig.register("aimv2", AIMv2Config)
+ 
+ 
+ # ----------------------------------------------------------------------
+-- 
+2.25.1
+

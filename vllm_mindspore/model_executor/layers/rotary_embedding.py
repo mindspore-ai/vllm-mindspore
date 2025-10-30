@@ -29,6 +29,7 @@ from typing import Any, Optional, Union
 
 import mindspore
 import numpy as np
+import mindspore as ms
 from mindspore import Tensor, mint, nn, ops
 from mindspore.common import dtype as mstype
 from mindspore.ops.auto_generate.gen_ops_prim import SliceExt
@@ -36,7 +37,27 @@ from transformers import PretrainedConfig
 from vllm.config import get_current_vllm_config
 
 from vllm_mindspore.model_executor.utils import get_model_context
+from vllm_mindspore.model_executor.models.vision import (
+    get_llm_pos_ids_for_vision
+)
 
+def _get_feat_extract_output_lengths(input_lengths: ms.Tensor):
+    input_lengths_leave = input_lengths % 100
+    feat_lengths = (input_lengths_leave - 1) // 2 + 1
+    output_lengths = (
+        ((feat_lengths - 1) // 2 + 1 - 1) // 2 + 1 + (input_lengths // 100) * 13
+    )
+    return feat_lengths, output_lengths
+
+def apply_interleaved_rope(x: Tensor, mrope_section: list[int]) -> Tensor:
+    """Apply interleaved MRoPE to 3D rotary embeddings.
+    Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
+    interleaved [THTHWHTHW...TT], preserving frequency continuity.
+    """
+    x_t = x[0].clone()
+    x_t[..., 1 : mrope_section[1] * 3 : 3] = x[1, ..., 1 : mrope_section[1] * 3 : 3]
+    x_t[..., 2 : mrope_section[2] * 3 : 3] = x[2, ..., 2 : mrope_section[2] * 3 : 3]
+    return x_t
 
 def _apply_rotary_emb(
     x: Tensor,
@@ -270,6 +291,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         is_neox_style: bool,
         dtype: mindspore.Type,
         mrope_section: Optional[list[int]] = None,
+        mrope_interleaved: bool = False,
     ) -> None:
         # In Qwen2.5-VL, the maximum index value is related to the duration of
         # the input video. We enlarge max_position_embeddings to 4 times to get
@@ -281,6 +303,8 @@ class MRotaryEmbedding(RotaryEmbedding):
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
+
+        self.mrope_interleaved = mrope_interleaved
 
     def construct(
         self,
@@ -308,14 +332,18 @@ class MRotaryEmbedding(RotaryEmbedding):
         cos_sin = self.cos_sin_cache[positions]
         cos, sin = ops.chunk(cos_sin, 2, axis=-1)
         if positions.ndim == 2:
-            cos_l = mint.split(cos, self.mrope_section, dim=-1)
-            sin_l = mint.split(sin, self.mrope_section, dim=-1)
-            cos, sin = (), ()
-            for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
-                cos += (cos_l[i][i], )
-                sin += (sin_l[i][i], )
-            cos = mint.cat(cos, dim=-1)
-            sin = mint.cat(sin, dim=-1)
+            if self.mrope_interleaved:
+                cos = apply_interleaved_rope(cos, self.mrope_section)
+                sin = apply_interleaved_rope(sin, self.mrope_section)
+            else:
+                cos_l = mint.split(cos, self.mrope_section, dim=-1)
+                sin_l = mint.split(sin, self.mrope_section, dim=-1)
+                cos, sin = (), ()
+                for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
+                    cos += (cos_l[i][i], )
+                    sin += (sin_l[i][i], )
+                cos = mint.cat(cos, dim=-1)
+                sin = mint.cat(sin, dim=-1)
 
         query_shape = query.shape
         query = query.view(num_tokens, -1, self.head_size)
@@ -369,6 +397,21 @@ class MRotaryEmbedding(RotaryEmbedding):
         seq_len: Optional[int] = None,
     ) -> tuple[mindspore.Tensor, int]:
         """Get mrope input positions and delta value."""
+        from vllm.transformers_utils.config import thinker_uses_mrope
+        if thinker_uses_mrope(hf_config):
+            return cls._qwen3_omni_get_input_positions_tensor(
+                input_tokens=input_tokens,
+                hf_config=hf_config,
+                image_grid_thw=image_grid_thw,
+                video_grid_thw=video_grid_thw,
+                second_per_grid_ts=second_per_grid_ts,
+                context_len=context_len,
+                seq_len=seq_len,
+                # audio_feature_lengths=audio_feature_lengths,
+                # use_audio_in_video=use_audio_in_video,
+                audio_feature_lengths=None,
+                use_audio_in_video=False,
+            )
         return cls._vl_get_input_positions_tensor(
             input_tokens=input_tokens,
             hf_config=hf_config,
@@ -378,6 +421,314 @@ class MRotaryEmbedding(RotaryEmbedding):
             context_len=context_len,
             seq_len=seq_len,
         )
+
+    @classmethod
+    def _qwen3_omni_get_input_positions_tensor(
+        cls,
+        input_tokens: list[int],
+        hf_config: PretrainedConfig,
+        image_grid_thw: list[list[int]] | Tensor | None,
+        video_grid_thw: list[list[int]] | Tensor | None,
+        second_per_grid_ts: list[float] | None = None,
+        context_len: int = 0,
+        seq_len: int | None = None,
+        audio_feature_lengths: Tensor | None = None,
+        use_audio_in_video: bool = False,
+    ) -> tuple[Tensor, int]:
+        config = hf_config.thinker_config
+        if isinstance(image_grid_thw, list):
+            image_grid_thw = Tensor(image_grid_thw)
+        if isinstance(video_grid_thw, list):
+            video_grid_thw = Tensor(video_grid_thw)
+        input_ids = Tensor(input_tokens)
+        if input_ids is None or input_ids.ndim != 1:
+            raise ValueError("_omni3_get_input_positions_tensor expects 1D input_ids")
+
+        seq_len = input_ids.shape[0]
+        if audio_feature_lengths is not None and not isinstance(
+            audio_feature_lengths, Tensor
+        ):
+            audio_feature_lengths = Tensor(
+                audio_feature_lengths, dtype=ms.int64
+            )
+        if second_per_grid_ts is None:
+            if video_grid_thw is not None and video_grid_thw.numel() > 0:
+                second_per_grids = mint.ones(
+                    video_grid_thw.shape[0], dtype=ms.float32
+                )
+            else:
+                second_per_grids = Tensor([], dtype=ms.float32)
+        else:
+            second_per_grids = Tensor(second_per_grid_ts, dtype=ms.float32)
+
+        spatial_merge_size = config.vision_config.spatial_merge_size
+        image_token_id = config.image_token_id
+        video_token_id = config.video_token_id
+        audio_token_id = config.audio_token_id
+        vision_start_token_id = config.vision_start_token_id
+        audio_start_token_id = config.audio_start_token_id
+        position_id_per_seconds = config.position_id_per_seconds
+
+        vision_start_indices = ops.argwhere(
+            input_ids == vision_start_token_id
+        ).squeeze(1)
+        if vision_start_indices.numel() > 0:
+            vision_tokens = input_ids[vision_start_indices + 1]
+        else:
+            vision_tokens = mint.empty((0,), dtype=input_ids.dtype)
+        audio_nums = mint.sum(input_ids == audio_start_token_id)
+        image_nums = (vision_tokens == image_token_id).sum()
+        video_nums = (
+            (vision_tokens == audio_start_token_id).sum()
+            if use_audio_in_video
+            else (vision_tokens == video_token_id).sum()
+        )
+
+        llm_pos_ids_list: list[Tensor] = []
+        st = 0
+        image_idx = 0
+        video_idx = 0
+        audio_idx = 0
+        remain_images, remain_videos, remain_audios = image_nums, video_nums, audio_nums  # noqa: E501
+        multimodal_nums = (
+            image_nums + audio_nums
+            if use_audio_in_video
+            else image_nums + video_nums + audio_nums
+        )  # noqa: E501
+
+        for _ in range(multimodal_nums):
+            st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+            if (image_token_id in input_tokens or video_token_id in input_tokens) and (
+                remain_videos > 0 or remain_images > 0
+            ):
+                ed_vision_start = input_tokens.index(vision_start_token_id, st)
+            else:
+                ed_vision_start = len(input_tokens) + 1
+            if audio_token_id in input_tokens and remain_audios > 0:
+                ed_audio_start = input_tokens.index(audio_start_token_id, st)
+            else:
+                ed_audio_start = len(input_tokens) + 1
+            min_ed = min(ed_vision_start, ed_audio_start)
+
+            if min_ed == ed_audio_start:
+                text_len = min_ed - st
+                if text_len != 0:
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                    llm_pos_ids_list.append(
+                        mint.arange(text_len, dtype=ms.int64)
+                        .view(1, -1)
+                        .expand(3, -1)
+                        + st_idx
+                    )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                bos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(bos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                _, audio_len = _get_feat_extract_output_lengths(
+                    audio_feature_lengths[audio_idx]
+                )
+                llm_pos_ids = (
+                    mint.arange(audio_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                llm_pos_ids_list.append(llm_pos_ids)
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                eos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(eos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st += text_len + bos_len + audio_len + eos_len
+                audio_idx += 1
+                remain_audios -= 1
+            elif (
+                min_ed == ed_vision_start
+                and input_ids[ed_vision_start + 1] == image_token_id
+            ):
+                text_len = min_ed - st
+                if text_len != 0:
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                    llm_pos_ids_list.append(
+                        mint.arange(text_len, dtype=ms.int64)
+                        .view(1, -1)
+                        .expand(3, -1)
+                        + st_idx
+                    )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                bos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(bos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                grid_t = image_grid_thw[image_idx][0]
+                grid_hs = image_grid_thw[:, 1]
+                grid_ws = image_grid_thw[:, 2]
+                t_index = mint.arange(grid_t.item()) * position_id_per_seconds
+                llm_pos_ids = get_llm_pos_ids_for_vision(
+                    st_idx, image_idx, spatial_merge_size, t_index, grid_hs, grid_ws
+                )
+                image_len = image_grid_thw[image_idx].prod() // (spatial_merge_size**2)
+                llm_pos_ids_list.append(llm_pos_ids)
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                eos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(eos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st += text_len + bos_len + image_len + eos_len
+                image_idx += 1
+                remain_images -= 1
+            elif (
+                min_ed == ed_vision_start
+                and input_ids[ed_vision_start + 1] == video_token_id
+                and not use_audio_in_video
+            ):
+                text_len = min_ed - st
+                if text_len != 0:
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                    llm_pos_ids_list.append(
+                        mint.arange(text_len, dtype=ms.int64)
+                        .view(1, -1)
+                        .expand(3, -1)
+                        + st_idx
+                    )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                bos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(bos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                grid_t = video_grid_thw[video_idx][0]
+                grid_hs = video_grid_thw[:, 1]
+                grid_ws = video_grid_thw[:, 2]
+                t_index = (
+                    mint.arange(grid_t.item())
+                    * float(second_per_grids[video_idx].item())
+                    * position_id_per_seconds
+                )
+                llm_pos_ids = get_llm_pos_ids_for_vision(
+                    st_idx, video_idx, spatial_merge_size, t_index, grid_hs, grid_ws
+                )
+                video_len = video_grid_thw[video_idx].prod() // (spatial_merge_size**2)
+                llm_pos_ids_list.append(llm_pos_ids)
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                eos_len = 1
+                llm_pos_ids_list.append(
+                    mint.arange(eos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                st += text_len + bos_len + video_len + eos_len
+                video_idx += 1
+                remain_videos -= 1
+            elif (
+                min_ed == ed_vision_start
+                and ed_vision_start + 1 == ed_audio_start
+                and use_audio_in_video
+            ):
+                text_len = min_ed - st
+                if text_len != 0:
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                    llm_pos_ids_list.append(
+                        mint.arange(text_len, dtype=ms.int64)
+                        .view(1, -1)
+                        .expand(3, -1)
+                        + st_idx
+                    )
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                bos_len = 1
+                bos_block = (
+                    mint.arange(bos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                llm_pos_ids_list.append(bos_block)
+                llm_pos_ids_list.append(bos_block)
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                _, audio_len = _get_feat_extract_output_lengths(
+                    audio_feature_lengths[audio_idx]
+                )
+                audio_llm_pos_ids = (
+                    mint.arange(audio_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                grid_t = video_grid_thw[video_idx][0]
+                grid_hs = video_grid_thw[:, 1]
+                grid_ws = video_grid_thw[:, 2]
+                t_index = (
+                    mint.arange(grid_t.item())
+                    * float(second_per_grids[video_idx].item())
+                    * position_id_per_seconds
+                )
+                video_llm_pos_ids = get_llm_pos_ids_for_vision(
+                    st_idx, video_idx, spatial_merge_size, t_index, grid_hs, grid_ws
+                )
+                video_data_index, audio_data_index = 0, 0
+                while (
+                    video_data_index < video_llm_pos_ids.shape[-1]
+                    and audio_data_index < audio_llm_pos_ids.shape[-1]
+                ):
+                    if (
+                        video_llm_pos_ids[0][video_data_index]
+                        <= audio_llm_pos_ids[0][audio_data_index]
+                    ):
+                        llm_pos_ids_list.append(
+                            video_llm_pos_ids[
+                                :, video_data_index : video_data_index + 1
+                            ]
+                        )
+                        video_data_index += 1
+                    else:
+                        llm_pos_ids_list.append(
+                            audio_llm_pos_ids[
+                                :, audio_data_index : audio_data_index + 1
+                            ]
+                        )
+                        audio_data_index += 1
+                if video_data_index < video_llm_pos_ids.shape[-1]:
+                    llm_pos_ids_list.append(
+                        video_llm_pos_ids[
+                            :, video_data_index : video_llm_pos_ids.shape[-1]
+                        ]
+                    )
+                if audio_data_index < audio_llm_pos_ids.shape[-1]:
+                    llm_pos_ids_list.append(
+                        audio_llm_pos_ids[
+                            :, audio_data_index : audio_llm_pos_ids.shape[-1]
+                        ]
+                    )
+                video_len = video_grid_thw[video_idx].prod() // (spatial_merge_size**2)
+                st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+                eos_len = 1
+                eos_block = (
+                    mint.arange(eos_len, dtype=ms.int64).view(1, -1).expand(3, -1)
+                    + st_idx
+                )
+                llm_pos_ids_list.append(eos_block)
+                llm_pos_ids_list.append(eos_block)
+                st += text_len + bos_len * 2 + audio_len + video_len + eos_len * 2  # noqa: E501
+                audio_idx += 1
+                video_idx += 1
+                remain_videos -= 1
+                remain_audios -= 1
+
+        if st < len(input_tokens):
+            st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
+            text_len = len(input_tokens) - st
+            llm_pos_ids_list.append(
+                mint.arange(text_len.item(), dtype=ms.int64).view(1, -1).expand(3, -1)
+                + st_idx
+            )
+
+        llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
+        if llm_positions.shape[1] != seq_len:
+            raise RuntimeError("Position ids length mismatch with input ids length")
+
+        mrope_position_delta = llm_positions.max() + 1 - seq_len
+        return llm_positions, mrope_position_delta.item()
 
     @classmethod
     def _vl_get_input_positions_tensor(
@@ -801,26 +1152,38 @@ def get_rope(
                 original_max_position)
         elif scaling_type == "default":
             if "mrope_section" in rope_scaling:
-                if is_neox_style:
-                    rotary_emb = InferMRotaryEmbedding(
-                        head_size,
-                        rotary_dim,
-                        max_position,
-                        base,
-                        is_neox_style,
-                        dtype,
-                        mrope_section=rope_scaling["mrope_section"],
-                    )
-                else:
-                    rotary_emb = MRotaryEmbedding(
-                        head_size,
-                        rotary_dim,
-                        max_position,
-                        base,
-                        is_neox_style,
-                        dtype,
-                        mrope_section=rope_scaling["mrope_section"],
-                    )
+                # if is_neox_style:
+                #     rotary_emb = InferMRotaryEmbedding(
+                #         head_size,
+                #         rotary_dim,
+                #         max_position,
+                #         base,
+                #         is_neox_style,
+                #         dtype,
+                #         mrope_section=rope_scaling["mrope_section"],
+                #         mrope_interleaved=rope_scaling.get("mrope_interleaved", False),
+                #     )
+                # else:
+                #     rotary_emb = MRotaryEmbedding(
+                #         head_size,
+                #         rotary_dim,
+                #         max_position,
+                #         base,
+                #         is_neox_style,
+                #         dtype,
+                #         mrope_section=rope_scaling["mrope_section"],
+                #         mrope_interleaved=rope_scaling.get("mrope_interleaved", False),
+                #     )
+                rotary_emb = MRotaryEmbedding(
+                    head_size,
+                    rotary_dim,
+                    max_position,
+                    base,
+                    is_neox_style,
+                    dtype,
+                    mrope_section=rope_scaling["mrope_section"],
+                    mrope_interleaved=rope_scaling.get("mrope_interleaved", False),
+                )
             else:
                 raise NotImplementedError
         elif scaling_type == "yarn":

@@ -28,6 +28,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 from functools import partial
 
 from mindspore import Tensor, mint
+import mindspore as ms
 
 from transformers.models.qwen2_5_omni.configuration_qwen2_5_omni import (
     Qwen2_5OmniConfig,
@@ -109,7 +110,8 @@ class Qwen2_5OmniThinkerProcessingInfo(
     def get_hf_processor(self, **kwargs: object) -> Qwen2_5OmniProcessor:
         return self.ctx.get_hf_processor(
             Qwen2_5OmniProcessor,
-            use_fast=kwargs.pop("use_fast", True),
+            # use_fast=kwargs.pop("use_fast", True),
+            use_fast=False,
             **kwargs,
         )
 
@@ -444,6 +446,8 @@ class Qwen2_5OmniThinkerMultiModalProcessor(
         if ('input_audio_features' not in hf_inputs
                 and input_features is not None):
             if feature_attention_mask is not None:
+                input_features = ms.from_numpy(input_features)
+                feature_attention_mask = ms.from_numpy(feature_attention_mask)
                 input_features = input_features.permute(
                     0, 2, 1)[feature_attention_mask.bool()].permute(1, 0)
             hf_inputs['input_audio_features'] = input_features

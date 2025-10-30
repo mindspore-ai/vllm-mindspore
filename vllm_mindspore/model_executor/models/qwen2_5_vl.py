@@ -204,7 +204,8 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                use_fast=kwargs.get("use_fast")),
+                # use_fast=kwargs.get("use_fast")),
+                use_fast=False)
             **kwargs,
         )
 
@@ -428,7 +429,8 @@ class Qwen2_5_VLProcessingInfo(Qwen2VLProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                use_fast=kwargs.get("use_fast")),
+                # use_fast=kwargs.get("use_fast")),
+                use_fast=False)
             **kwargs,
         )
 
