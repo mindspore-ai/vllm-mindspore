@@ -459,16 +459,39 @@ vllm.v1.worker.gpu_input_batch.copy_slice = copy_slice
 vllm.v1.utils.CoreEngineActorManager.create_dp_placement_groups = staticmethod(
     create_dp_placement_groups)
 
+# === Beam Search / Sampler 增强 ===
+
+# 引入用于 beam search / logprob 的扩展函数
 from vllm_mindspore.model_executor.layers.sampler import (
     _apply_top_k_top_p,
     _apply_min_p,
     _random_sample,
+    _greedy_sample,
+    _get_ranks,
+    get_logprobs,
+    _get_prompt_logprob_if_needed,
+    _get_sampled_logprob_if_needed,
 )
-import vllm.model_executor.layers
 
+# 将增强的采样相关函数注入 vllm
 vllm.model_executor.layers.sampler._apply_top_k_top_p = _apply_top_k_top_p
 vllm.model_executor.layers.sampler._apply_min_p = _apply_min_p
 vllm.model_executor.layers.sampler._random_sample = _random_sample
+
+# 用于 beam search 的增强实现
+vllm.model_executor.layers.sampler._greedy_sample = _greedy_sample
+
+# logprob / ranking / result 构造函数（Beam Search 依赖）
+vllm.model_executor.layers.sampler.get_logprobs = get_logprobs
+vllm.model_executor.layers.sampler._get_ranks = _get_ranks
+
+# Result processing functions
+vllm.model_executor.layers.sampler._get_prompt_logprob_if_needed = _get_prompt_logprob_if_needed
+vllm.model_executor.layers.sampler._get_sampled_logprob_if_needed = _get_sampled_logprob_if_needed
+
+print("INFO: vLLM-MindSpore beam search and sampling enhancements initialized")
+
+# === 继续社区版原有的 patches（不变） ===
 
 from vllm_mindspore.v1.sample.ops.penalties import _convert_to_tensors
 import vllm.v1.sample.ops.penalties
