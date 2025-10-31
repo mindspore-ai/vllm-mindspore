@@ -1,2 +1,0 @@
-# MLIR Python bindings (these should be provided by the MLIR installation)
-# mlir-python-bindings>=14.0.0

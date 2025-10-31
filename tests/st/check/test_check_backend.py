@@ -38,6 +38,3 @@ def test_backend(pipeline, monkeypatch):
 
     assert torch.equal(opt_bar, bar), f"\nopt_bar={opt_bar}\nbar={bar}"
     print("The result is correct. 'mrt' backend has been installed successfully.")
-
-
-test_backend(False, None)

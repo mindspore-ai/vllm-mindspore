@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Run UT testcases
 
 set -e
@@ -14,24 +14,17 @@ BASE_PATH=$(
   cd "$(dirname "$0")"
   pwd
 )
-PROJECT_PATH=${BASE_PATH}/../../inferrt
+PROJECT_PATH=${BASE_PATH}/../..
 if [ $BUILD_PATH ]; then
   echo "BUILD_PATH = $BUILD_PATH"
 else
-  BUILD_PATH=$(find ${PROJECT_PATH}/build/lib.* -maxdepth 0 -type d | head -n1)/mrt
-  if [ -z "$BUILD_PATH" ]; then
-    echo "Error: failed to locate build dir in ${PROJECT_PATH}/build/lib.*" >&2
-    exit 1
-  fi
+  BUILD_PATH=${PROJECT_PATH}/build
   echo "BUILD_PATH = $BUILD_PATH"
 fi
-export LD_LIBRARY_PATH=${BUILD_PATH}/lib:$LD_LIBRARY_PATH
+
 if [ "$TEST_TYPE" = "cpp" ]; then
-    TEST_PATH=${BUILD_PATH}/bin/tests
-    TEST_CASES=""
-    for test_file in $(find "$TEST_PATH" -type f -name "run_*_test" -executable); do
-        TEST_CASES="$TEST_CASES $test_file"
-    done
+    TEST_PATH=${BUILD_PATH}/tests/ut/cpp
+    TEST_CASES=($(find "$TEST_PATH" -type f -name "run_*_test" -executable))
 else
     echo "Python UT testcases are not implemented yet, skipping."
     exit 0
@@ -41,7 +34,7 @@ set +e
 
 RET=0
 echo "===================================="
-for test_case in $TEST_CASES; do
+for test_case in "${TEST_CASES[@]}"; do
   echo "=== Running $test_case ==="
   $test_case
   status=$?

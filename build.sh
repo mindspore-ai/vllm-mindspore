@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+
 ##################################################
 # Process build options
 ##################################################
@@ -90,56 +91,118 @@ process_options()
 }
 
 process_options "$@"
+INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
 
-##################################################
-# Build third_party
-##################################################
-if [[ $INC_BUILD != 1 && $BUILD_OPT == 1 ]]; then
-    BUILD_DIR=$(pwd)/build
-    export LLVM_INSTALL_PREFIX="$BUILD_DIR/third_party/install/llvm"
-    export TORCHMLIR_INSTALL_PREFIX="$BUILD_DIR/third_party/install/torch_mlir"
-    bash "scripts/build_llvm.sh"
+if [[ $BUILD_TESTS == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DBUILD_TESTS=on"
 fi
 
-# Install build dependencies
-pip install -r requirements-build.txt
+if [[ $ENABLE_ASCEND == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_ASCEND=on"
+fi
+
+if [[ $ENABLE_CPU == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_CPU=on"
+fi
+
+if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_TORCH_FRONT=on"
+fi
+
+if [[ $ENABLE_GITEE == 1 ]]; then
+    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_GITEE=on"
+fi
 
 ##################################################
-# Build mopt
+# Prepare source and build directories
 ##################################################
-if [[ $BUILD_OPT == 1 ]]; then
-    pushd mopt
+CURRENT_PATH=$(pwd)
 
-    # Clean previous builds
-    if [[ $INC_BUILD != 1 ]]; then
-        rm -rf build dist
+INFERRT_PATH=$CURRENT_PATH
+BUILD_DIR=$CURRENT_PATH/build
+
+# Make sure the build directory exists
+make_sure_build_dir()
+{
+    if [ -d "$1" ]; then
+        echo "$1 already exists."
+    else
+        mkdir -p $1
     fi
 
-    # Build the wheel
-    python -m build --wheel --no-isolation
+    if [ ! -d "$1" ]; then
+        echo "error: $1 NOT exists."
+        return
+    fi
+}
+make_sure_build_dir $BUILD_DIR
 
-    popd
+# Try using ccache
+if type -P ccache &>/dev/null; then
+    echo "ccache found, using ccache for building."
+    export CCACHE_CMAKE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+else
+    echo "ccache not found, using default compiler."
+    export CCACHE_CMAKE_ARGS=""
+fi
+
+
+# Build mopt
+if [[ $BUILD_OPT == 1 ]]; then
+    # Build mlir
+    export LLVM_INSTALL_PREFIX="$BUILD_DIR/third_party/install/llvm"
+    export TORCHMLIR_INSTALL_PREFIX="$BUILD_DIR/third_party/install/torch_mlir"
+    if [[ $INC_BUILD != 1 ]]; then
+        bash "${CURRENT_PATH}/scripts/build_llvm.sh"
+    fi
+    export MLIR_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/mlir"
+    export LLVM_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/llvm"
+    MOPT_CMAKE_ARGS="-DENABLE_OPTIMIZER=on -DMLIR_DIR=${MLIR_DIR} -DLLVM_DIR=${LLVM_DIR}"
+else
+    MOPT_CMAKE_ARGS=""
 fi
 
 ##################################################
-# Build mrt
+# Make da & dapy execution and shared library
 ##################################################
-pushd inferrt
-
-# Clean previous builds
+cd $BUILD_DIR
 if [[ $INC_BUILD != 1 ]]; then
-    rm -rf build dist
+    # Clean previous build files except third_party
+    for dir in *; do
+        if [ "$dir" != "third_party" ]; then
+            rm -rf $dir
+        fi
+    done
+    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $MOPT_CMAKE_ARGS
 fi
+make -j ${BUILD_JOBS}
 
-# Build the wheel
-python -m build --wheel --no-isolation
-
-popd
 
 ##################################################
-# Gather generated wheel packages
+# Run essential test
 ##################################################
-mkdir -p output
-cp */dist/*.whl output/
+# Run inferrt test
+export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/dummy/libkernel_dummy.so
+export DART_KERNEL_LIB_NAME=Dummy
+export DUMMY_RUN="on"
+echo "=============================="
+echo "Run da execution test cases:"
+echo "# 1/2: ./da sample/fibonacci_20.da"
+$BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/fibonacci_20.da
+echo "# 2/2: ./da sample/da_llm_sample.da"
+$BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/da_llm_sample.da
+echo "=============================="
+
+cd $CURRENT_PATH
+
+# 1. Clean up previous build artifacts
+rm -rf output temp_build dist
+
+# 2. Execute Python packaging process
+# This will generate the wheel package in the dist directory
+python setup.py bdist_wheel
+
+# 3. Display build results
+# Show information about the generated wheel package
 echo "Build results:"
 ls -lh output/*.whl
