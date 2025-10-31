@@ -87,11 +87,7 @@ cmake -GNinja -B "${LLVM_BUILD_DIR}" \
 echo "Configured llvm."
 
 echo "Building llvm..."
-if [ -n "${BUILD_JOBS}" ]; then
-  cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
-else
-  cmake --build "${LLVM_BUILD_DIR}"
-fi
+cmake --build "${LLVM_BUILD_DIR}"
 echo "Built llvm: ${LLVM_BUILD_DIR}"
 
 echo "Installing llvm..."
@@ -119,11 +115,7 @@ cmake -GNinja -B "${TORCHMLIR_BUILD_DIR}" \
 echo "Configured torch_mlir."
 
 echo "Building torch_mlir..."
-if [ -n "${BUILD_JOBS}" ]; then
-  cmake --build "${TORCHMLIR_BUILD_DIR}" -j "${BUILD_JOBS}"
-else
-  cmake --build "${TORCHMLIR_BUILD_DIR}"
-fi
+cmake --build "${TORCHMLIR_BUILD_DIR}"
 echo "Built torch_mlir: ${TORCHMLIR_BUILD_DIR}"
 
 echo "Installing torch_mlir..."

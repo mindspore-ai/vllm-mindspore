@@ -37,13 +37,4 @@ if(ENABLE_ASCEND)
       ${HCCL}
       dl
     )
-
-  set_target_properties(hardware_ascend PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-  )
-
-  install(TARGETS hardware_ascend
-          LIBRARY DESTINATION lib
-          RUNTIME DESTINATION bin)
 endif()

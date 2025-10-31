@@ -4,8 +4,8 @@
 # Build files
 build/
 output/
-dist/
-*.egg-info/
+inferrt/src/pybind/pybind11-src/
+output/
 
 # Cmake files
 CMakeFiles/
@@ -40,4 +40,3 @@ Makefile
 
 # Third party libs
 .mrtlibs/
-third_party/
