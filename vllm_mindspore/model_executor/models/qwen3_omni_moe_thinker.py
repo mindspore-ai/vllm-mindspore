@@ -584,7 +584,6 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         deepstack_input_embeds: Optional[Mapping[str, Tensor]] = None,
-        freqs: Optional[Tensor] = None,
     ) -> ms.Tensor | IntermediateTensors:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
@@ -612,7 +611,7 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                 positions, hidden_states, key_caches[i - self.start_layer],
                 value_caches[i - self.start_layer], slot_mapping, attn_mask,
                 batch_valid_length, q_seq_lens, block_tables, residual,
-                None, None, None, None, freqs)
+                None, None, None, None)
 
             if deepstack_input_embeds is not None and i in range(self.deepstack_layers):
                 hidden_states = mint.add(hidden_states, deepstack_input_embeds[i])
@@ -1254,6 +1253,13 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         self.lm_head = self.language_model.lm_head
         self.common_preprocess(vllm_config, prefix)
 
+        self.model.embed_tokens._set_jit_graph_name("prefill")
+        self.model.embed_tokens.phase = "prefill"
+        dyn_input_ids = ms.Tensor(shape=[None], dtype=ms.int32)
+        self.model.embed_tokens.set_inputs(dyn_input_ids)
+        self.model.embed_tokens.construct = ms.jit(
+            function=self.model.embed_tokens, jit_level='O0')
+
         self.make_empty_intermediate_tensors = (
             self.language_model.make_empty_intermediate_tensors
         )
@@ -1502,8 +1508,6 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         else:
             deepstack_input_embeds = None
 
-
-        freqs = self.language_model.model.layers[0].self_attn.rotary_emb.get_freqs(positions)
         hidden_states = self.exec_model(
             input_ids=input_ids,
             positions=positions,
@@ -1511,7 +1515,6 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             inputs_embeds=inputs_embeds,
             # args for deepstack
             deepstack_input_embeds=deepstack_input_embeds,
-            freqs=freqs
         )
 
         if inputs_embeds is not None and get_pp_group().is_first_rank:
@@ -2006,13 +2009,12 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
         dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
                                             dtype=self.model_config.dtype)
-        dyn_freqs = Tensor(shape=[None, None], dtype=mstype.float32)
 
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches,
             dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
             dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
-            dyn_intermediate_tensors, dyn_inputs_embeds, dyn_deepstack_input_embeds, dyn_freqs)
+            dyn_intermediate_tensors, dyn_inputs_embeds, dyn_deepstack_input_embeds)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
