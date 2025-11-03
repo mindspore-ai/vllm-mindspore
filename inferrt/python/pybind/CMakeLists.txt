@@ -25,6 +25,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
 check_debug_log_out()
 
+# Link against pybind11 libraries
+execute_process(COMMAND python -c "import pybind11; print(pybind11.__path__[0])"
+OUTPUT_VARIABLE PYBIND11_INSTALL_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+set(CMAKE_PREFIX_PATH "${PYBIND11_INSTALL_PATH}")
 find_package(pybind11 CONFIG REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

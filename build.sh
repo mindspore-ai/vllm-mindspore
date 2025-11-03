@@ -101,8 +101,20 @@ if [[ $INC_BUILD != 1 && $BUILD_OPT == 1 ]]; then
     bash "scripts/build_llvm.sh"
 fi
 
+##################################################
 # Install build dependencies
-pip install -r requirements-build.txt
+##################################################
+python -c "import build" 2>/dev/null || {
+    echo "Installing Python build package..."
+    pip install build
+}
+
+# packaging>=24.2
+python -c "
+import packaging
+from packaging.version import parse
+assert parse(packaging.__version__) >= parse('24.2'), f'packaging {packaging.__version__} < 24.2'
+" 2>/dev/null || pip install "packaging>=24.2"
 
 ##################################################
 # Build mopt

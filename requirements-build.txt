@@ -1,6 +1,0 @@
-build
-setuptools
-packaging>=24.2
-wheel>=0.37.0
-cmake
-pybind11[global]
