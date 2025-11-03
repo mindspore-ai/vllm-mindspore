@@ -564,10 +564,11 @@ class Qwen3Omni_VisionTransformer(nn.Cell):
 
 
 class Qwen3MoeLLMModel(Qwen3MoeModel):
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "", deepstack_layers: int = 0):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
 
         self.deepstack_multiscale_layer_start = 1
+        self.deepstack_layers = deepstack_layers
 
     def construct(
         self,
@@ -583,6 +584,7 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[Tensor] = None,
         deepstack_input_embeds: Optional[Mapping[str, Tensor]] = None,
+        freqs: Optional[Tensor] = None,
     ) -> ms.Tensor | IntermediateTensors:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
@@ -610,15 +612,10 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                 positions, hidden_states, key_caches[i - self.start_layer],
                 value_caches[i - self.start_layer], slot_mapping, attn_mask,
                 batch_valid_length, q_seq_lens, block_tables, residual,
-                None, None, None, None)
+                None, None, None, None, freqs)
 
-            if deepstack_input_embeds is not None and i in range(
-                0, len(deepstack_input_embeds)
-            ):
-                hidden_states = (
-                    hidden_states
-                    + deepstack_input_embeds[f"deepstack_input_embeds_{i}"]
-                )
+            if deepstack_input_embeds is not None and i in range(self.deepstack_layers):
+                hidden_states = mint.add(hidden_states, deepstack_input_embeds[i])
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors(
@@ -629,14 +626,15 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
 
 
 class Qwen3MoeLLMForCausalLM(Qwen3MoeForCausalLM):
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "", deepstack_layers: int = 0):
         super(Qwen3MoeForCausalLM, self).__init__(vllm_config=vllm_config)
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
         self.config = config
         self.quant_config = quant_config
         self.model = Qwen3MoeLLMModel(
-            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "model")
+            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "model"),
+            deepstack_layers=deepstack_layers
         )
         self.lm_head = ParallelLMHead(
             config.vocab_size, config.hidden_size, quant_config=quant_config
@@ -1235,11 +1233,21 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         self.vision_config = thinker_config.vision_config
         self.quant_config = quant_config
 
+        self.use_deepstack = hasattr(
+            thinker_config.vision_config, "deepstack_visual_indexes"
+        )
+        self.deepstack_num_level = (
+            len(thinker_config.vision_config.deepstack_visual_indexes)
+            if self.use_deepstack
+            else 0
+        )
+
         self.language_model = Qwen3MoeLLMForCausalLM(
             vllm_config=vllm_config.with_hf_config(
                 thinker_config.text_config, architectures=["Qwen3MoeForCausalLM"]
             ),
             prefix=maybe_prefix(prefix, "language_model"),
+            deepstack_layers=self.deepstack_num_level
         )
         self.model = self.language_model.model
         self.text_config = thinker_config.text_config
@@ -1250,14 +1258,6 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             self.language_model.make_empty_intermediate_tensors
         )
 
-        self.use_deepstack = hasattr(
-            thinker_config.vision_config, "deepstack_visual_indexes"
-        )
-        self.deepstack_num_level = (
-            len(thinker_config.vision_config.deepstack_visual_indexes)
-            if self.use_deepstack
-            else 0
-        )
         # register buffer for deepstack
         self.deepstack_input_embeds = (
             [
@@ -1302,14 +1302,18 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
 
     def _get_deepstack_input_embeds(self, num_tokens: int) -> IntermediateTensors:
         # get deepstack_input_embeds from buffer, and clear the buffer
-        return IntermediateTensors(
-            {
-                f"deepstack_input_embeds_{idx}": self.deepstack_input_embeds[idx][
-                    :num_tokens
-                ]
-                for idx in range(self.deepstack_num_level)
-            }
-        )
+        # return IntermediateTensors(
+        #     {
+        #         f"deepstack_input_embeds_{idx}": self.deepstack_input_embeds[idx][
+        #             :num_tokens
+        #         ]
+        #         for idx in range(self.deepstack_num_level)
+        #     }
+        # )
+        deepstack_input_embeds = [self.deepstack_input_embeds[idx][:num_tokens] \
+                                  for idx in range(self.deepstack_num_level)]
+        deepstack_input_embeds = mint.stack(deepstack_input_embeds, dim=0)
+        return deepstack_input_embeds
 
     def _set_deepstack_input_embeds(self, deepstack_input_embeds: ms.Tensor) -> None:
         # set deepstack_input_embeds to buffer
@@ -1499,6 +1503,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             deepstack_input_embeds = None
 
 
+        freqs = self.language_model.model.layers[0].self_attn.rotary_emb.get_freqs(positions)
         hidden_states = self.exec_model(
             input_ids=input_ids,
             positions=positions,
@@ -1506,6 +1511,7 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
             inputs_embeds=inputs_embeds,
             # args for deepstack
             deepstack_input_embeds=deepstack_input_embeds,
+            freqs=freqs
         )
 
         if inputs_embeds is not None and get_pp_group().is_first_rank:
@@ -1998,14 +2004,15 @@ class Qwen3OmniMoeThinkerForConditionalGeneration(
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_deepstack_input_embeds = Tensor(shape=[None, None],
+        dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
                                             dtype=self.model_config.dtype)
+        dyn_freqs = Tensor(shape=[None, None], dtype=mstype.float32)
 
         self.ready_model.set_inputs(
             dyn_input_ids, dyn_position_ids, dyn_key_caches,
             dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
             dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
-            dyn_intermediate_tensors, dyn_inputs_embeds, dyn_deepstack_input_embeds)
+            dyn_intermediate_tensors, dyn_inputs_embeds, dyn_deepstack_input_embeds, dyn_freqs)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
