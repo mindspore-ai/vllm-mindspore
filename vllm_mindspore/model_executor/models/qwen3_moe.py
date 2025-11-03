@@ -243,6 +243,7 @@ class Qwen3MoeAttention(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
+        freqs: Optional[Tensor] = None
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
@@ -256,7 +257,7 @@ class Qwen3MoeAttention(nn.Cell):
                            self.head_dim)
         k_by_head = self.k_norm(k_by_head)
         k = k_by_head.view(k.shape)
-        q, k = self.rotary_emb(positions, q, k, batch_valid_length)
+        q, k = self.rotary_emb(positions, q, k, batch_valid_length, freqs)
         attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,
                                 attn_mask, batch_valid_length, q_seq_lens,
                                 block_tables)
@@ -331,6 +332,7 @@ class Qwen3MoeDecoderLayer(nn.Cell):
         dp_unpad_index: Optional[Tensor] = None,
         dp_pad_index_with_offset: Optional[Tensor] = None,
         dp_unpad_index_total_with_offset: Optional[Tensor] = None,
+        freqs: Optional[Tensor] = None
     ) -> Tensor:
         # Self Attention
         if residual is None:
@@ -342,7 +344,7 @@ class Qwen3MoeDecoderLayer(nn.Cell):
         hidden_states = self.self_attn(positions, hidden_states, key_cache,
                                        value_cache, slot_mapping, attn_mask,
                                        batch_valid_length, q_seq_lens,
-                                       block_tables)
+                                       block_tables, freqs)
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states, residual)

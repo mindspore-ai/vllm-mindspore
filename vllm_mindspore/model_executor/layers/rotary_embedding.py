@@ -299,6 +299,8 @@ class MRotaryEmbedding(RotaryEmbedding):
         self.cache_max_position_num = max_position_embeddings * 4
         super().__init__(head_size, rotary_dim, self.cache_max_position_num,
                          base, is_neox_style, dtype)
+        self.inv_freq = 1.0 / (base ** (mint.arange(
+            0, rotary_dim, 2, dtype=mstype.float32)[: (rotary_dim // 2)] / self.rotary_dim))
 
         self.mrope_section = mrope_section
         if self.mrope_section:
@@ -306,12 +308,39 @@ class MRotaryEmbedding(RotaryEmbedding):
 
         self.mrope_interleaved = mrope_interleaved
 
+    def get_freqs(self, position_ids):
+        inv_freq_expanded = self.inv_freq[None, :, None].float().expand(3, -1, 1).asnumpy()
+        position_ids = position_ids.float().asnumpy()
+        position_ids_expanded = position_ids[:, None, :]
+        freqs = (inv_freq_expanded @ position_ids_expanded).transpose(0, 2, 1)
+        freqs = self.apply_interleaved_mrope(freqs, self.mrope_section)
+        freqs = Tensor.from_numpy(freqs.astype(np.float32))
+        return freqs
+
+    def apply_interleaved_mrope(self, freqs, mrope_section):
+        """Apply interleaved MRoPE to 3D rotary embeddings.
+        Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
+        interleaved [THTHWHTHW...TT], preserving frequency continuity.
+        args:
+            x: (3, bs, seq_len, head_dim // 2)
+            mrope_section: (3,)
+        returns:
+            x_t: (bs, seq_len, head_dim // 2)
+        """
+        freqs_t = freqs[0]  # just overwrite the first dimension T
+        for dim, offset in enumerate((1, 2), start=1):  # H, W
+            length = mrope_section[dim] * 3
+            idx = slice(offset, length, 3) #难道说cos，sin也是不连续导致的
+            freqs_t[..., idx] = freqs[dim, ..., idx]
+        return freqs_t
+
     def construct(
         self,
         positions: mindspore.Tensor,
         query: mindspore.Tensor,
         key: mindspore.Tensor,
         batch_valid_length: Tensor = None,
+        freqs: mindspore.Tensor = None,
     ) -> tuple[mindspore.Tensor, mindspore.Tensor]:
         """
         Args:
@@ -328,22 +357,10 @@ class MRotaryEmbedding(RotaryEmbedding):
         # cos_sin: (3, 5120, rotary_dim) # noqa: ERA001
         # cos/sin: cat[(1, 5120, mrope_sec),...] -> (1, 5120, rotary_dim//2)
         ######################################################################
+        # emb = mint.cat((freqs, freqs), dim=-1).view(-1, self.rotary_dim)
         num_tokens = positions.shape[-1]
-        cos_sin = self.cos_sin_cache[positions]
-        cos, sin = ops.chunk(cos_sin, 2, axis=-1)
-        if positions.ndim == 2:
-            if self.mrope_interleaved:
-                cos = apply_interleaved_rope(cos, self.mrope_section)
-                sin = apply_interleaved_rope(sin, self.mrope_section)
-            else:
-                cos_l = mint.split(cos, self.mrope_section, dim=-1)
-                sin_l = mint.split(sin, self.mrope_section, dim=-1)
-                cos, sin = (), ()
-                for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
-                    cos += (cos_l[i][i], )
-                    sin += (sin_l[i][i], )
-                cos = mint.cat(cos, dim=-1)
-                sin = mint.cat(sin, dim=-1)
+        cos = freqs.cos()
+        sin = freqs.sin()
 
         query_shape = query.shape
         query = query.view(num_tokens, -1, self.head_size)
