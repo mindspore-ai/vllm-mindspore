@@ -19,10 +19,13 @@ set -euo pipefail
 
 readonly SCRIPT_DIR=$(cd "$(dirname "$0")"; pwd)
 readonly CONFIG_FILE="$SCRIPT_DIR/.jenkins/test/config/dependent_packages.yaml"
+readonly RELEASE_CONFIG_FILE="$SCRIPT_DIR/release_packages.yaml"
 readonly MF_DIR="$SCRIPT_DIR/mindformers"
 
-readonly PIP_TRUSTED_HOSTS="--trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com"
+readonly PIP_TRUSTED_HOSTS="--trusted-host repo.mindspore.cn --trusted-host mirrors.aliyun.com --trusted-host ms-release.obs.cn-north-4.myhuaweicloud.com"
 readonly PIP_INDEX="-i https://mirrors.aliyun.com/pypi/simple"
+
+export UV_HTTP_TIMEOUT=600
 
 FORCE_REINSTALL=false
 
@@ -57,6 +60,7 @@ log_package_url() {
 }
 
 pip_install() {
+    log "Installing $*"
     if [ "$FORCE_REINSTALL" = true ]; then
         uv pip install --system --no-cache-dir --force-reinstall $PIP_TRUSTED_HOSTS $PIP_INDEX "$@"
     else
@@ -65,27 +69,6 @@ pip_install() {
 }
 
 get_config() { python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG_FILE'))['$1'])" 2>/dev/null; }
-
-get_mindformers_commit() {
-    local mindformers_commit
-    
-    if [ -d ".git" ] && git submodule status tests/mindformers >/dev/null 2>&1; then
-        mindformers_commit=$(git submodule status tests/mindformers | awk '{print $1}' | sed 's/^-//')
-    else
-        if [ -z "${MINDFORMERS_COMMIT:-}" ]; then
-            log "Error: Script requires MINDFORMERS_COMMIT environment variable when running independently"
-            exit 1
-        fi
-        mindformers_commit="$MINDFORMERS_COMMIT"
-    fi
-    
-    if [ -z "$mindformers_commit" ]; then
-        log "Failed to get mindformers commit"
-        exit 1
-    fi
-    
-    echo "$mindformers_commit"
-}
 
 get_package_url() {
     local package="$1"
@@ -103,24 +86,30 @@ get_package_url() {
     echo "${base_url}${wheel_url}"
 }
 
-install_mindformers() {
-    log "Installing mindformers"
-    local commit_id=$(get_mindformers_commit)
-    
-    if [ "$FORCE_REINSTALL" = true ] && [ -d "$MF_DIR" ]; then
-        log "Force reinstall: removing existing mindformers directory"
-        rm -rf "$MF_DIR"
+get_obs_package_url() {
+    local package="$1"
+    local version="$2"
+    local arch="${3:-any}"
+    local base_url=$(grep -A 1 -w "${package}:" "$RELEASE_CONFIG_FILE" | tail -n 1 | xargs)
+
+    if [ -z "${base_url:-}" ]; then
+        local wheel_url=""
+    else
+        if [[ "$package" == "mindspore" ]]; then
+            local python_v="cp$(python3 --version 2>&1 | grep -oP 'Python \K\d+\.\d+' | tr -d .)"
+            local wheel_url="${base_url}/unified/${arch}/mindspore-${version}-${python_v}-${python_v}-linux_${arch}.whl"
+        elif [[ "$package" == "mindformers" ]]; then
+            local wheel_url="${base_url}/${arch}/mindformers-${version}-py3-none-${arch}.whl"
+        elif [[ "$package" == "msadapter" ]]; then
+            local wheel_url="${base_url}/${arch}/msadapter-${version}-py3-none-${arch}.whl"
+        elif [[ "$package" == "vllm" ]]; then
+            local wheel_url="${base_url}/${arch}/vllm-${version}.empty-py3-none-${arch}.whl"
+        else
+            local wheel_url=$(curl -k -s "$base_url" | sed -n 's/.*href="\([^"]*\.whl\)".*/\1/p' | grep -v sha256 | head -n 1)
+        fi
     fi
     
-    if [ ! -d "$MF_DIR" ]; then
-        git clone https://gitee.com/mindspore/mindformers.git "$MF_DIR"
-    fi
-    cd "$MF_DIR"
-    git checkout "$commit_id"
-    cd "$SCRIPT_DIR"
-    pip install $PIP_TRUSTED_HOSTS $PIP_INDEX -r mindformers/requirements.txt
-    
-    log "Using mindformers commit: $commit_id"
+    echo "${wheel_url}"
 }
 
 cleanup_package() {
@@ -172,6 +161,8 @@ main() {
         esac
     done
 
+    git config --global http.sslVerify false
+
     if [ "$FORCE_REINSTALL" = true ]; then
         log "WARNING: Force reinstall mode enabled - all packages will be reinstalled"
         log "This will remove existing mindformers directory and reinstall all dependencies"
@@ -179,35 +170,47 @@ main() {
 
     command -v uv &> /dev/null || pip install $PIP_TRUSTED_HOSTS $PIP_INDEX uv
 
-    [ ! -f "$CONFIG_FILE" ] && { echo "Config file not found: $CONFIG_FILE"; exit 1; }
+    [ ! -f "$RELEASE_CONFIG_FILE" ] && { echo "Config file not found: $RELEASE_CONFIG_FILE"; exit 1; }
     
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_package_url "mindspore" "unified/${ARCH}")
+    local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1" "${ARCH}")
     local msadapter_url=$(get_package_url "msadapter" "any")
-    local mindspore_gs_url=$(get_package_url "mindspore_gs" "any")
+    local mindformers_url=$(get_obs_package_url "mindformers" "1.7.0" "any")
     
+    if [ -z "${vllm_url:-}" ]; then
+        local vllm_url=$(get_package_url "vllm" "any")
+    fi
+    if [ -z "${mindspore_url:-}" ]; then
+        local mindspore_url=$(get_package_url "mindspore" "unified/${ARCH}")
+    fi
+    if [ -z "${msadapter_url:-}" ]; then
+        local msadapter_url=$(get_package_url "msadapter" "any")
+    fi
+    if [ -z "${mindformers_url:-}" ]; then
+        local mindformers_url=$(get_package_url "mindformers" "any")
+    fi
+
     log "Package URLs:"
     log_package_url "vLLM" "$vllm_url"
     log_package_url "MindSpore" "$mindspore_url"
+    log_package_url "mindformers" "$mindformers_url"
     log_package_url "msadapter" "$msadapter_url"
-    log_package_url "mindspore-gs" "$mindspore_gs_url"
 
     # WARNING: do not adjust sequence of installation steps
     cleanup_package msadapter
     cleanup_package vllm
     pip_install "$vllm_url"
     pip_install "$mindspore_url"
-    install_mindformers
-    pip_install "$mindspore_gs_url"
+    pip_install "$mindformers_url"
     pip_install "$msadapter_url"
 
     cleanup_cache
+
+    git config --global http.sslVerify true
     
     log "All dependencies installed successfully!"
     log ""
-    log "When using MindFormers backend, please configure environment variables manually:"
-    echo "  export PYTHONPATH=\"$MF_DIR/:\$PYTHONPATH\""
 }
 main "$@"
