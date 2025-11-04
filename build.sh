@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-
 ##################################################
 # Process build options
 ##################################################
@@ -91,118 +90,68 @@ process_options()
 }
 
 process_options "$@"
-INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} $DEBUG $DEBUG_LOG_OUT"
-
-if [[ $BUILD_TESTS == 1 ]]; then
-    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DBUILD_TESTS=on"
-fi
-
-if [[ $ENABLE_ASCEND == 1 ]]; then
-    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_ASCEND=on"
-fi
-
-if [[ $ENABLE_CPU == 1 ]]; then
-    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_CPU=on"
-fi
-
-if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
-    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_TORCH_FRONT=on"
-fi
-
-if [[ $ENABLE_GITEE == 1 ]]; then
-    INFERRT_CMAKE_ARGS="${INFERRT_CMAKE_ARGS} -DENABLE_GITEE=on"
-fi
 
 ##################################################
-# Prepare source and build directories
+# Build third_party
 ##################################################
-CURRENT_PATH=$(pwd)
-
-INFERRT_PATH=$CURRENT_PATH
-BUILD_DIR=$CURRENT_PATH/build
-
-# Make sure the build directory exists
-make_sure_build_dir()
-{
-    if [ -d "$1" ]; then
-        echo "$1 already exists."
-    else
-        mkdir -p $1
-    fi
-
-    if [ ! -d "$1" ]; then
-        echo "error: $1 NOT exists."
-        return
-    fi
-}
-make_sure_build_dir $BUILD_DIR
-
-# Try using ccache
-if type -P ccache &>/dev/null; then
-    echo "ccache found, using ccache for building."
-    export CCACHE_CMAKE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
-else
-    echo "ccache not found, using default compiler."
-    export CCACHE_CMAKE_ARGS=""
-fi
-
-
-# Build mopt
-if [[ $BUILD_OPT == 1 ]]; then
-    # Build mlir
+if [[ $INC_BUILD != 1 && $BUILD_OPT == 1 ]]; then
+    BUILD_DIR=$(pwd)/build
     export LLVM_INSTALL_PREFIX="$BUILD_DIR/third_party/install/llvm"
     export TORCHMLIR_INSTALL_PREFIX="$BUILD_DIR/third_party/install/torch_mlir"
+    bash "scripts/build_llvm.sh"
+fi
+
+##################################################
+# Install build dependencies
+##################################################
+python -c "import build" 2>/dev/null || {
+    echo "Installing Python build package..."
+    pip install build
+}
+
+# packaging>=24.2
+python -c "
+import packaging
+from packaging.version import parse
+assert parse(packaging.__version__) >= parse('24.2'), f'packaging {packaging.__version__} < 24.2'
+" 2>/dev/null || pip install "packaging>=24.2"
+
+##################################################
+# Build mopt
+##################################################
+if [[ $BUILD_OPT == 1 ]]; then
+    pushd mopt
+
+    # Clean previous builds
     if [[ $INC_BUILD != 1 ]]; then
-        bash "${CURRENT_PATH}/scripts/build_llvm.sh"
+        rm -rf build dist
     fi
-    export MLIR_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/mlir"
-    export LLVM_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/llvm"
-    MOPT_CMAKE_ARGS="-DENABLE_OPTIMIZER=on -DMLIR_DIR=${MLIR_DIR} -DLLVM_DIR=${LLVM_DIR}"
-else
-    MOPT_CMAKE_ARGS=""
+
+    # Build the wheel
+    python -m build --wheel --no-isolation
+
+    popd
 fi
 
 ##################################################
-# Make da & dapy execution and shared library
+# Build mrt
 ##################################################
-cd $BUILD_DIR
+pushd inferrt
+
+# Clean previous builds
 if [[ $INC_BUILD != 1 ]]; then
-    # Clean previous build files except third_party
-    for dir in *; do
-        if [ "$dir" != "third_party" ]; then
-            rm -rf $dir
-        fi
-    done
-    cmake $INFERRT_PATH $CCACHE_CMAKE_ARGS $INFERRT_CMAKE_ARGS $MOPT_CMAKE_ARGS
+    rm -rf build dist
 fi
-make -j ${BUILD_JOBS}
 
+# Build the wheel
+python -m build --wheel --no-isolation
+
+popd
 
 ##################################################
-# Run essential test
+# Gather generated wheel packages
 ##################################################
-# Run inferrt test
-export DART_KERNEL_LIB_PATH=$BUILD_DIR/inferrt/src/ops/dummy/libkernel_dummy.so
-export DART_KERNEL_LIB_NAME=Dummy
-export DUMMY_RUN="on"
-echo "=============================="
-echo "Run da execution test cases:"
-echo "# 1/2: ./da sample/fibonacci_20.da"
-$BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/fibonacci_20.da
-echo "# 2/2: ./da sample/da_llm_sample.da"
-$BUILD_DIR/inferrt/src/da $INFERRT_PATH/inferrt/src/lang/sample/da_llm_sample.da
-echo "=============================="
-
-cd $CURRENT_PATH
-
-# 1. Clean up previous build artifacts
-rm -rf output temp_build dist
-
-# 2. Execute Python packaging process
-# This will generate the wheel package in the dist directory
-python setup.py bdist_wheel
-
-# 3. Display build results
-# Show information about the generated wheel package
+mkdir -p output
+cp */dist/*.whl output/
 echo "Build results:"
 ls -lh output/*.whl
