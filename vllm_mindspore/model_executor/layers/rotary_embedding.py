@@ -432,6 +432,18 @@ class MRotaryEmbedding(RotaryEmbedding):
                 audio_feature_lengths=None,
                 use_audio_in_video=False,
             )
+        elif "qwen3_vl" in hf_config.model_type:
+            return cls._qwen3_vl_get_input_positions_tensor(
+                input_tokens=input_tokens,
+                hf_config=hf_config,
+                image_grid_thw=image_grid_thw,
+                video_grid_thw=video_grid_thw,
+                second_per_grid_ts=second_per_grid_ts,
+                context_len=context_len,
+                seq_len=seq_len,
+                audio_feature_lengths=None,
+                use_audio_in_video=False,
+            )
         return cls._vl_get_input_positions_tensor(
             input_tokens=input_tokens,
             hf_config=hf_config,
@@ -441,6 +453,116 @@ class MRotaryEmbedding(RotaryEmbedding):
             context_len=context_len,
             seq_len=seq_len,
         )
+
+    @classmethod
+    def _qwen3_vl_get_input_positions_tensor(
+        cls,
+        input_tokens: list[int],
+        hf_config: PretrainedConfig,
+        image_grid_thw: list[list[int]] | Tensor,
+        video_grid_thw: list[list[int]] | Tensor,
+        context_len: int = 0,
+        seq_len: int | None = None,
+        second_per_grid_ts: list[float] | None = None,
+        audio_feature_lengths: Tensor | None = None,
+        use_audio_in_video: bool = False,
+    ) -> tuple[Tensor, int]:
+        """Get mrope input positions and delta value."""
+
+        video_grid_thw = [[1, h, w] for t, h, w in video_grid_thw for _ in range(t)]
+
+        image_token_id = hf_config.image_token_id
+        video_token_id = hf_config.video_token_id
+        vision_start_token_id = hf_config.vision_start_token_id
+        spatial_merge_size = hf_config.vision_config.spatial_merge_size
+
+        input_tokens_tensor = ms.tensor(input_tokens)
+        vision_start_indices = ms.ops.argwhere(
+            input_tokens_tensor == vision_start_token_id
+        ).squeeze(1)
+        vision_tokens = input_tokens_tensor[vision_start_indices + 1]
+        image_nums = (vision_tokens == image_token_id).sum()
+        video_nums = (vision_tokens == video_token_id).sum()
+        llm_pos_ids_list: list = []
+
+        st = 0
+        remain_images, remain_videos = image_nums, video_nums
+
+        image_index, video_index = 0, 0
+        for _ in range(image_nums + video_nums):
+            if image_token_id in input_tokens and remain_images > 0:
+                ed_image = input_tokens.index(image_token_id, st)
+            else:
+                ed_image = len(input_tokens) + 1
+            if video_token_id in input_tokens and remain_videos > 0:
+                ed_video = input_tokens.index(video_token_id, st)
+            else:
+                ed_video = len(input_tokens) + 1
+            if ed_image < ed_video:
+                t, h, w = (
+                    image_grid_thw[image_index][0],
+                    image_grid_thw[image_index][1],
+                    image_grid_thw[image_index][2],
+                )
+                image_index += 1
+                remain_images -= 1
+                ed = ed_image
+            else:
+                t, h, w = (
+                    video_grid_thw[video_index][0],
+                    video_grid_thw[video_index][1],
+                    video_grid_thw[video_index][2],
+                )
+                video_index += 1
+                remain_videos -= 1
+                ed = ed_video
+
+            llm_grid_t, llm_grid_h, llm_grid_w = (
+                t,
+                h // spatial_merge_size,
+                w // spatial_merge_size,
+            )
+            text_len = ed - st
+
+            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+            llm_pos_ids_list.append(
+                mint.arange(text_len).view(1, -1).expand(3, -1) + st_idx
+            )
+
+            t_index = (
+                mint.arange(llm_grid_t)
+                .view(-1, 1)
+                .expand(-1, llm_grid_h * llm_grid_w)
+                .flatten()
+            )
+            h_index = (
+                mint.arange(llm_grid_h)
+                .view(1, -1, 1)
+                .expand(llm_grid_t, -1, llm_grid_w)
+                .flatten()
+            )
+            w_index = (
+                mint.arange(llm_grid_w)
+                .view(1, 1, -1)
+                .expand(llm_grid_t, llm_grid_h, -1)
+                .flatten()
+            )
+            llm_pos_ids_list.append(
+                mint.stack([t_index, h_index, w_index]) + text_len + st_idx
+            )
+            st = ed + llm_grid_t * llm_grid_h * llm_grid_w
+
+        if st < len(input_tokens):
+            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+            text_len = len(input_tokens) - st
+            llm_pos_ids_list.append(
+                mint.arange(text_len).view(1, -1).expand(3, -1) + st_idx
+            )
+
+        llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
+        mrope_position_delta = (llm_positions.max() + 1 - len(input_tokens)).item()
+        llm_positions = llm_positions[:, context_len:seq_len]
+        return llm_positions, mrope_position_delta
 
     @classmethod
     def _qwen3_omni_get_input_positions_tensor(
