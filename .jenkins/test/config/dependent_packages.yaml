@@ -4,6 +4,9 @@ mindspore:
 mindspore_gs:
   'https://repo.mindspore.cn/mindspore/golden-stick/version/202510/20251013/r1.3.0_20251013120007_58642969c8d2afbdbcb0d725a27117cd687bf936_newest/'
 
+mindformers:
+  'https://repo.mindspore.cn/mindspore/mindformers/version/202510/20251024/r1.7.0_20251024031508_69dc4a5cde5e4f7c3f8247f2d4574116661b0279_newest/'
+
 msadapter:
   'https://repo.mindspore.cn/mindspore/msadapter/version/202510/20251011/r0.3.0_20251011095813_951a8218d4c29785e48f304e720212b57056573e_newest/'
 
