@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# Adapted from
-# https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/qwen2_5_vl.py
-#
-# Copyright 2025 Huawei Technologites Co., Ltd
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+
 # Copyright 2025 The vLLM team.
 # Copyright 2025 The Qwen Team.
 # Copyright 2025 The HuggingFace Inc. team.
@@ -24,70 +22,89 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Inference-only Qwen3-VL model compatible with HuggingFace weights."""
-# type: ignore
-# isort:skip_file
+"""Inference-only Qwen3VL model compatible with HuggingFace weights."""
+
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from functools import partial
+from typing import Any, Optional
 
 import math
-import os
-from collections.abc import Iterable, Mapping, Sequence
-from functools import partial
-from typing import Callable, Literal, Optional, TypedDict, Union, Any
-
-import mindspore as ms
-import mindspore.mint as mint
+import numpy as np
+# import torch
+from mindspore import Parameter, Tensor, mint, nn, mutable
+from mindspore.common import dtype as mstype
 import mindspore.mint.nn.functional as F
-import mindspore.nn as nn
-import mindspore.ops as ops
-from mindspore import Tensor, Parameter, mutable
-from mindspore import dtype as mstype
+import mindspore as ms
+from mindspore import ops
 from mindspore.ops.operations.nn_ops import FlashAttentionScore
-from transformers.models.qwen2_5_vl import Qwen2_5_VLProcessor
-from transformers import BatchFeature
-from transformers.models.qwen2_vl import (Qwen2VLImageProcessor,
-                                          Qwen2VLProcessor)
-from transformers.models.qwen2_vl.configuration_qwen2_vl import (Qwen2VLConfig)
-from transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import (
-    Qwen2_5_VLConfig, Qwen2_5_VLVisionConfig)
-from transformers.models.qwen2_vl.image_processing_qwen2_vl import smart_resize
+import ms_custom_ops
+from packaging.version import Version
+from transformers import PretrainedConfig
+from transformers import __version__ as TRANSFORMERS_VERSION
+from transformers.feature_extraction_utils import BatchFeature
+
+from transformers import BatchFeature, PretrainedConfig
+from transformers.models.qwen2_vl import Qwen2VLImageProcessorFast
+from transformers.models.qwen2_vl.image_processing_qwen2_vl import (
+    smart_resize as image_smart_resize,
+)
+from transformers.models.qwen3_vl import Qwen3VLProcessor, Qwen3VLVideoProcessor
+from transformers.models.qwen3_vl.configuration_qwen3_vl import (
+    Qwen3VLConfig,
+    Qwen3VLVisionConfig,
+)
+from transformers.models.qwen3_vl.video_processing_qwen3_vl import (
+    smart_resize as video_smart_resize,
+)
+from transformers.video_utils import VideoMetadata
 from vllm.config import VllmConfig
 from vllm.distributed import get_pp_group, \
     get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank
 from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
-from vllm.config import get_current_vllm_config
 from vllm.model_executor import SamplingMetadata
-from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.multimodal.parse import (MultiModalDataItems)
+from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
+from vllm_mindspore.model_executor.layers.linear import (ColumnParallelLinear,
+                                               MergedColumnParallelLinear,
+                                               QKVParallelLinear,
+                                               RowParallelLinear)
+from vllm_mindspore.model_executor.layers.activation import SiluAndMul
+from vllm_mindspore.model_executor.model_loader.weight_utils import default_weight_loader
 from vllm.model_executor.models.module_mapping import MultiModelKeys
-from vllm_mindspore.model_executor.models.qwen3 import Qwen3ForCausalLM, Qwen3Model
-
 from vllm.multimodal import MULTIMODAL_REGISTRY
-from vllm.multimodal.inputs import (ImageItem, ModalityData,
-                                    MultiModalDataDict, MultiModalFieldConfig,
-                                    MultiModalKwargs, VideoItem)
-from vllm.multimodal.parse import (DictEmbeddingItems, ImageSize,
-                                   ModalityDataItems, MultiModalDataItems,
+from vllm.multimodal.inputs import (MultiModalKwargs,
+                                    MultiModalDataDict,
+                                    MultiModalFieldConfig)
+from vllm.multimodal.parse import (MultiModalDataItems,
                                    MultiModalDataParser)
-from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo, PromptReplacement,
-                                        PromptUpdate)
-from vllm.multimodal.profiling import BaseDummyInputsBuilder
+from vllm.multimodal.processing import (
+    BaseMultiModalProcessor,
+    PlaceholderFeaturesInfo,
+    PromptReplacement,
+    PromptUpdate,
+)
 from vllm.sequence import IntermediateTensors
 from vllm.transformers_utils.config import uses_mrope
-from vllm.transformers_utils.processor import (
-    cached_image_processor_from_config)
+from vllm.model_executor.models.utils import init_vllm_registered_model
+from vllm.config import get_current_vllm_config
+from vllm.multimodal.processing import (BaseMultiModalProcessor,
+                                        BaseProcessingInfo, PromptReplacement,
+                                        PromptUpdate, PromptUpdateDetails)
+from vllm.multimodal.profiling import BaseDummyInputsBuilder
+from vllm.transformers_utils.tokenizer import decode_tokens, encode_tokens
+from vllm.multimodal.parse import ImageSize
+from vllm_mindspore.model_executor.models.interfaces import (
+    MultiModalEmbeddings,
+    SupportsLoRA,
+    SupportsMultiModal,
+)
+from vllm.utils import is_list_of
 
-from vllm_mindspore.distributed.communication_op import \
-    AllGatherFromModelParallelRegion
-from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
-from vllm_mindspore.model_executor.layers.linear import ColumnParallelLinear, \
-    RowParallelLinear, QKVParallelLinear
-from vllm_mindspore.model_executor.layers.logits_processor import \
-    LogitsProcessor
-from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import \
-    ParallelLMHead
-from vllm_mindspore.model_executor.model_loader.weight_utils import \
-    default_weight_loader
+from vllm_mindspore.model_executor.models.utils import (WeightsMapper,
+    maybe_prefix, _merge_multimodal_embeddings)
+from vllm_mindspore.model_executor.models.model_base import NativeModel, \
+    AttentionWrapper
 from vllm_mindspore.model_executor.models.attention_mask import \
     MultiModalLowerTriangularMask
 from vllm_mindspore.model_executor.models.qwen2_5_vl import (
@@ -95,594 +112,42 @@ from vllm_mindspore.model_executor.models.qwen2_5_vl import (
     Qwen2_5_VisionAttention,
     Qwen2_5_VisionRotaryEmbedding,
     Qwen2_5_VLProcessingInfo,
+    Qwen2VLProcessingInfo,
+    Qwen2_5_VLVideoInputs,
+    Qwen2_5_VLImageInputs,
+    Qwen2_5_VLVideoPixelInputs,
+    Qwen2_5_VLVideoEmbeddingInputs,
+    Qwen2_5_VLImageEmbeddingInputs,
+    Qwen2_5_VLImagePixelInputs
 )
-from vllm_mindspore.model_executor.models.model_base import NativeModel, \
-    AttentionWrapper
-from vllm_mindspore.model_executor.models.qwen2 import Qwen2Model
-from vllm_mindspore.model_executor.models.utils import PPMissingLayer
-from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.model_executor.models.qwen2_audio import (
+    Qwen2AudioProcessingInfo,
+    Qwen2AudioInputs,
+)
+from vllm_mindspore.utils import is_310p
+from vllm_mindspore.model_executor.layers.logits_processor import (
+    LogitsProcessor)
+from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
+    ParallelLMHead)
+from vllm_mindspore.model_executor.models.vision import get_llm_pos_ids_for_vision
+
+
 from vllm_mindspore.model_executor.layers.rotary_embedding import _apply_rotary_emb
-from .interfaces import (MultiModalEmbeddings, SupportsMultiModal)
-from .utils import (WeightsMapper, maybe_prefix, _merge_multimodal_embeddings)
+from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE
+from vllm_mindspore.model_executor.models.qwen3 import (Qwen3Model,
+                                                        Qwen3ForCausalLM)
+
+from mindspore.common.api import _pynative_executor
+_pynative_executor.set_enable_grad(False)
+
 
 logger = init_logger(__name__)
 
-_ACTIVATION_REGISTRY = {"silu": F.silu}
 
+_ACTIVATION_REGISTRY = {"gelu_pytorch_tanh": mint.nn.GELU(approximate="tanh")}
 
-class Qwen2_5_VLImagePixelInputs(TypedDict):
-    type: Literal["pixel_values"]
-    pixel_values: ms.Tensor
-    """Shape:
-    `(num_patches, num_channels * patch_size * patch_size)`
-    """
-
-    image_grid_thw: ms.Tensor
-    """Shape: `(num_images, 3)`
-    This should be in `(grid_t, grid_h, grid_w)` format.
-    """
-
-
-class Qwen2_5_VLImageEmbeddingInputs(TypedDict):
-    type: Literal["image_embeds"]
-    image_embeds: ms.Tensor
-    """Supported types:
-    - list[`ms.Tensor`]: A list of tensors holding all images' features.
-        Each tensor holds an image's features.
-    - `ms.Tensor`: A tensor holding all images' features
-        (concatenation of all images' feature tensors).
-
-    Tensor shape: `(num_image_features, hidden_size)`
-    - `num_image_features` varies based on
-        the number and resolution of the images.
-    - `hidden_size` must match the hidden size of language model backbone.
-    """
-
-    image_grid_thw: ms.Tensor
-    """Shape: `(num_images, 3)`
-    This should be in `(grid_t, grid_h, grid_w)` format.
-    """
-
-
-class Qwen2_5_VLVideoPixelInputs(TypedDict):
-    type: Literal["pixel_values_videos"]
-    pixel_values_videos: ms.Tensor
-    """Shape:
-    `(num_patches,
-      num_channels * temporal_patch_size * patch_size * patch_size)`
-    """
-
-    video_grid_thw: ms.Tensor
-    """Shape: `(num_videos, 3)`
-
-    This should be in `(grid_t, grid_h, grid_w)` format.
-    """
-
-    second_per_grid_ts: ms.Tensor
-    """
-    The video time interval (in seconds) for each grid along the temporal 
-    dimension in the 3D position IDs. Returned when `videos` is not `None`.
-    """
-
-
-class Qwen2_5_VLVideoEmbeddingInputs(TypedDict):
-    type: Literal["video_embeds"]
-    video_embeds: ms.Tensor
-    """Supported types:
-    - list[`ms.Tensor`]: A list of tensors holding all videos' features.
-        Each tensor holds an video's features.
-    - `ms.Tensor`: A tensor holding all videos' features
-      (concatenation of all videos' feature tensors).
-
-    Tensor shape: `(num_image_features, hidden_size)`
-    - `num_image_features` varies based on
-        the number and resolution of the videos.
-    - `hidden_size` must match the hidden size of language model backbone.
-    """
-
-    video_grid_thw: ms.Tensor
-    """Shape: `(num_videos, 3)`
-    This should be in `(grid_t, grid_h, grid_w)` format.
-    """
-
-
-Qwen2_5_VLImageInputs = Union[Qwen2_5_VLImagePixelInputs,
-                              Qwen2_5_VLImageEmbeddingInputs]
-
-Qwen2_5_VLVideoInputs = Union[Qwen2_5_VLVideoPixelInputs,
-                              Qwen2_5_VLVideoEmbeddingInputs]
-
-# For profile run
-_MAX_FRAMES_PER_VIDEO = 16
-# === Vision Inputs === #
-
-
-class Qwen2VLProcessingInfo(BaseProcessingInfo):
-
-    def get_hf_config(self):
-        return self.ctx.get_hf_config(Qwen2VLConfig)
-
-    def get_hf_processor(
-        self,
-        *,
-        min_pixels: Optional[int] = None,
-        max_pixels: Optional[int] = None,
-        size: Optional[dict[str, int]] = None,
-        **kwargs: object,
-    ) -> Qwen2VLProcessor:
-        return self.ctx.get_hf_processor(
-            Qwen2VLProcessor,
-            image_processor=self.get_image_processor(
-                min_pixels=min_pixels,
-                max_pixels=max_pixels,
-                size=size,
-                # use_fast=kwargs.get("use_fast")),
-                use_fast=False)
-            **kwargs,
-        )
-
-    def _get_image_processor_kwargs(
-        self,
-        *,
-        min_pixels: Optional[int] = None,
-        max_pixels: Optional[int] = None,
-        size: Optional[dict[str, int]] = None,
-        **kwargs: object,
-    ):
-        mm_config = self.ctx.model_config.get_multimodal_config()
-        if mm_config.mm_processor_kwargs:
-            kwargs.update(mm_config.mm_processor_kwargs)
-
-        if min_pixels is not None:
-            kwargs["min_pixels"] = min_pixels
-
-            if size is None:
-                size = {"shortest_edge": min_pixels}
-            else:
-                size["shortest_edge"] = min_pixels
-
-        if max_pixels is not None:
-            kwargs["max_pixels"] = max_pixels
-
-            if size is None:
-                size = {"longest_edge": max_pixels}
-            else:
-                size["longest_edge"] = max_pixels
-
-        if size is not None:
-            kwargs["size"] = size
-
-        return kwargs
-
-    def get_image_processor(
-        self,
-        *,
-        min_pixels: Optional[int] = None,
-        max_pixels: Optional[int] = None,
-        size: Optional[dict[str, int]] = None,
-        **kwargs: object,
-    ) -> Qwen2VLImageProcessor:
-        return cached_image_processor_from_config(
-            self.ctx.model_config,
-            **self._get_image_processor_kwargs(min_pixels=min_pixels,
-                                               max_pixels=max_pixels,
-                                               size=size,
-                                               **kwargs),
-        )
-
-    def get_supported_mm_limits(self) -> Mapping[str, Optional[int]]:
-        return {"image": None, "video": None}
-
-    def _get_vision_info(
-        self,
-        *,
-        image_width: int,
-        image_height: int,
-        num_frames: int = 1,
-        do_resize: bool = True,
-        image_processor: Optional[Qwen2VLImageProcessor],
-    ) -> tuple[ImageSize, int]:
-        if image_processor is None:
-            image_processor = self.get_image_processor()
-
-        hf_config = self.get_hf_config()
-        vision_config = hf_config.vision_config
-        patch_size = vision_config.patch_size
-        merge_size = vision_config.spatial_merge_size
-        temporal_patch_size = vision_config.temporal_patch_size
-
-        if do_resize:
-            resized_height, resized_width = smart_resize(
-                height=image_height,
-                width=image_width,
-                factor=patch_size * merge_size,
-                min_pixels=image_processor.min_pixels,
-                max_pixels=image_processor.max_pixels,
-            )
-            preprocessed_size = ImageSize(width=resized_width,
-                                          height=resized_height)
-        else:
-            preprocessed_size = ImageSize(width=image_width,
-                                          height=image_height)
-
-        # NOTE: Frames are padded to be divisible by `temporal_patch_size`
-        # https://github.com/huggingface/transformers/blob/v4.48.3/src/transformers/models/qwen2_vl/image_processing_qwen2_vl.py#L294
-        padded_num_frames = num_frames + num_frames % temporal_patch_size
-
-        grid_t = max(padded_num_frames // temporal_patch_size, 1)
-        grid_h = preprocessed_size.height // patch_size
-        grid_w = preprocessed_size.width // patch_size
-
-        num_patches = grid_t * grid_h * grid_w
-        num_vision_tokens = num_patches // (merge_size**2)
-
-        return preprocessed_size, num_vision_tokens
-
-    def get_num_image_tokens(
-        self,
-        *,
-        image_width: int,
-        image_height: int,
-        image_processor: Optional[Qwen2VLImageProcessor],
-    ) -> int:
-        _, num_image_tokens = self._get_vision_info(
-            image_width=image_width,
-            image_height=image_height,
-            image_processor=image_processor,
-        )
-        return num_image_tokens
-
-    def get_num_video_tokens(
-        self,
-        *,
-        image_width: int,
-        image_height: int,
-        num_frames: int,
-        image_processor: Optional[Qwen2VLImageProcessor],
-    ) -> int:
-        _, num_video_tokens = self._get_vision_info(
-            image_width=image_width,
-            image_height=image_height,
-            num_frames=num_frames,
-            image_processor=image_processor,
-        )
-        return num_video_tokens
-
-    def get_image_size_with_most_features(self) -> ImageSize:
-        max_image_size, _ = self._get_vision_info(
-            image_width=9999999,
-            image_height=9999999,
-            image_processor=None,
-        )
-        return max_image_size
-
-    def get_max_image_tokens(self) -> int:
-        target_width, target_height = self.get_image_size_with_most_features()
-
-        return self.get_num_image_tokens(
-            image_width=target_width,
-            image_height=target_height,
-            image_processor=None,
-        )
-
-    def _get_max_video_frames(self, max_tokens: int) -> int:
-        target_width, target_height = self.get_image_size_with_most_features()
-
-        num_frames = 0
-
-        while True:
-            next_num_frames = num_frames + 1
-            next_max_tokens = self.get_num_video_tokens(
-                image_width=target_width,
-                image_height=target_height,
-                num_frames=next_num_frames,
-                image_processor=None,
-            )
-
-            if next_max_tokens > max_tokens:
-                break
-
-            num_frames = next_num_frames
-
-        return num_frames
-
-    def get_num_frames_with_most_features(
-        self,
-        seq_len: int,
-        mm_counts: Mapping[str, int],
-    ) -> int:
-        max_images = mm_counts.get("image", 0)
-        max_videos = mm_counts.get("video", 0)
-
-        max_image_tokens = self.get_max_image_tokens() * max_images
-        max_total_frames = self._get_max_video_frames(seq_len -
-                                                      max_image_tokens)
-        max_frames_per_video = min(max_total_frames // max(max_videos, 1),
-                                   _MAX_FRAMES_PER_VIDEO)
-
-        return max(max_frames_per_video, 1)
-
-    def get_max_video_tokens(
-        self,
-        seq_len: int,
-        mm_counts: Mapping[str, int],
-    ) -> int:
-        target_width, target_height = self.get_image_size_with_most_features()
-
-        return self.get_num_video_tokens(
-            image_width=target_width,
-            image_height=target_height,
-            num_frames=self.get_num_frames_with_most_features(
-                seq_len, mm_counts),
-            image_processor=None,
-        )
-
-
-class Qwen2_5_VLProcessingInfo(Qwen2VLProcessingInfo):
-
-    def get_hf_config(self):
-        return self.ctx.get_hf_config(Qwen2_5_VLConfig)
-
-    def get_hf_processor(
-        self,
-        *,
-        min_pixels: Optional[int] = None,
-        max_pixels: Optional[int] = None,
-        size: Optional[dict[str, int]] = None,
-        fps: Optional[Union[float, list[float]]] = None,
-        **kwargs: object,
-    ) -> Qwen2_5_VLProcessor:
-        if fps is not None:
-            kwargs["fps"] = fps
-
-        return self.ctx.get_hf_processor(
-            Qwen2_5_VLProcessor,
-            image_processor=self.get_image_processor(
-                min_pixels=min_pixels,
-                max_pixels=max_pixels,
-                size=size,
-                # use_fast=kwargs.get("use_fast")),
-                use_fast=False)
-            **kwargs,
-        )
-
-
-class Qwen2VLDummyInputsBuilder(BaseDummyInputsBuilder[Qwen2VLProcessingInfo]):
-
-    def get_dummy_text(self, mm_counts: Mapping[str, int]) -> str:
-        num_images = mm_counts.get("image", 0)
-        num_videos = mm_counts.get("video", 0)
-
-        hf_processor = self.info.get_hf_processor()
-        image_token: str = hf_processor.image_token
-        video_token: str = hf_processor.video_token
-
-        return image_token * num_images + video_token * num_videos
-
-    def get_dummy_mm_data(
-        self,
-        seq_len: int,
-        mm_counts: Mapping[str, int],
-    ) -> MultiModalDataDict:
-        num_images = mm_counts.get("image", 0)
-        num_videos = mm_counts.get("video", 0)
-
-        target_width, target_height = \
-            self.info.get_image_size_with_most_features()
-        target_num_frames = \
-            self.info.get_num_frames_with_most_features(seq_len, mm_counts)
-
-        return {
-            "image":
-            self._get_dummy_images(width=target_width,
-                                   height=target_height,
-                                   num_images=num_images),
-            "video":
-            self._get_dummy_videos(
-                width=target_width,
-                height=target_height,
-                num_frames=target_num_frames,
-                num_videos=num_videos,
-            )
-        }
-
-
-def _qwen2vl_field_config(hf_inputs: Mapping[str, ms.Tensor]):
-    image_grid_thw = hf_inputs.get("image_grid_thw", ms.mint.empty((0, 3)))
-    image_grid_sizes = image_grid_thw.prod(-1)
-
-    video_grid_thw = hf_inputs.get("video_grid_thw", ms.mint.empty((0, 3)))
-    video_grid_sizes = video_grid_thw.prod(-1)
-
-    return dict(
-        pixel_values=MultiModalFieldConfig.flat_from_sizes(
-            "image", image_grid_sizes),
-        image_embeds=MultiModalFieldConfig.flat_from_sizes(
-            "image", image_grid_sizes),
-        image_grid_thw=MultiModalFieldConfig.batched("image"),
-        pixel_values_videos=MultiModalFieldConfig.flat_from_sizes(
-            "video", video_grid_sizes),
-        video_embeds=MultiModalFieldConfig.flat_from_sizes(
-            "video", video_grid_sizes),
-        video_grid_thw=MultiModalFieldConfig.batched("video"),
-    )
-
-
-class Qwen2VLMultiModalDataParser(MultiModalDataParser):
-
-    def _parse_image_data(
-        self,
-        data: Union[dict[str, ms.Tensor], ModalityData[ImageItem]],
-    ) -> Optional[ModalityDataItems[Any, Any]]:
-        if isinstance(data, dict):
-            return DictEmbeddingItems(
-                data,
-                modality="image",
-                required_fields={"image_embeds", "image_grid_thw"},
-                fields_factory=_qwen2vl_field_config,
-            )
-
-        return super()._parse_image_data(data)
-
-    def _parse_video_data(
-        self,
-        data: Union[dict[str, ms.Tensor], ModalityData[VideoItem]],
-    ) -> Optional[ModalityDataItems[Any, Any]]:
-        if isinstance(data, dict):
-            return DictEmbeddingItems(
-                data,
-                modality="video",
-                required_fields={"video_embeds", "video_grid_thw"},
-                fields_factory=_qwen2vl_field_config,
-            )
-
-        return super()._parse_video_data(data)
-
-
-class Qwen2VLMultiModalProcessor(BaseMultiModalProcessor[Qwen2VLProcessingInfo]
-                                 ):
-
-    def _get_data_parser(self) -> MultiModalDataParser:
-        return Qwen2VLMultiModalDataParser()
-
-    def _call_hf_processor(
-        self,
-        prompt: str,
-        mm_data: Mapping[str, object],
-        mm_kwargs: Mapping[str, object],
-    ) -> BatchFeature:
-        return self.info.ctx.call_hf_processor(
-            self.info.get_hf_processor(**mm_kwargs),
-            dict(text=prompt, **mm_data),
-            self.info._get_image_processor_kwargs(**mm_kwargs),
-        )
-
-    def _get_prompt_updates(
-        self,
-        mm_items: MultiModalDataItems,
-        hf_processor_mm_kwargs: Mapping[str, Any],
-        out_mm_kwargs: MultiModalKwargs,
-    ) -> Sequence[PromptUpdate]:
-        hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
-        image_processor = self.info.get_image_processor(
-            **hf_processor_mm_kwargs)
-        tokenizer = self.info.get_tokenizer()
-        vocab = tokenizer.get_vocab()
-
-        placeholder = {
-            "image": vocab[hf_processor.image_token],
-            "video": vocab[hf_processor.video_token],
-        }
-
-        merge_length = image_processor.merge_size**2
-
-        def get_replacement_qwen2vl(item_idx: int, modality: str):
-            grid_thw = out_mm_kwargs[f"{modality}_grid_thw"][item_idx]
-            assert isinstance(grid_thw, ms.Tensor)
-
-            num_tokens = int(grid_thw.prod()) // merge_length
-            return [placeholder[modality]] * num_tokens
-
-        return [
-            PromptReplacement(
-                modality=modality,
-                target=[placeholder[modality]],
-                replacement=partial(get_replacement_qwen2vl,
-                                    modality=modality),
-            ) for modality in ("image", "video")
-        ]
-
-    def _get_mm_fields_config(
-        self,
-        hf_inputs: BatchFeature,
-        hf_processor_mm_kwargs: Mapping[str, object],
-    ) -> Mapping[str, MultiModalFieldConfig]:
-        return _qwen2vl_field_config(hf_inputs)
-
-
-class _Qwen2VLMultiModalProcessor(Qwen2VLMultiModalProcessor):
-
-    def _get_prompt_updates(
-        self,
-        mm_items: MultiModalDataItems,
-        hf_processor_mm_kwargs: Mapping[str, Any],
-        out_mm_kwargs: MultiModalKwargs,
-    ) -> list[PromptReplacement]:
-        hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
-        image_processor = self.info.get_image_processor(
-            **hf_processor_mm_kwargs)
-        tokenizer = self.info.get_tokenizer()
-        vocab = tokenizer.get_vocab()
-
-        placeholder = {
-            "image": vocab[hf_processor.image_token],
-            "video": vocab[hf_processor.video_token],
-        }
-
-        merge_length = image_processor.merge_size**2
-
-        def get_replacement_qwen2vl(item_idx: int, modality: str):
-            grid_thw = out_mm_kwargs[f"{modality}_grid_thw"][item_idx]
-            assert isinstance(grid_thw, ms.Tensor)
-
-            num_tokens = int(grid_thw.prod()) // merge_length
-            return [placeholder[modality]] * num_tokens
-
-        return [
-            PromptReplacement(
-                modality=modality,
-                target=[placeholder[modality]],
-                replacement=partial(get_replacement_qwen2vl,
-                                    modality=modality),
-            ) for modality in ("image", "video")
-        ]
-
-
-# === Vision Encoder === #
-
-
-class Qwen3_VisionMLP(nn.Cell):
-    def __init__(
-        self,
-        in_features: int,
-        hidden_features: int,
-        bias: bool = False,
-        act_fn: Callable[[ms.Tensor], ms.Tensor] = F.silu,
-        quant_config=None,
-        prefix: str = "",
-    ):
-        super().__init__()
-        self.linear_fc1 = ColumnParallelLinear(
-            in_features,
-            hidden_features,
-            bias=bias,
-            quant_config=quant_config,
-            return_bias=False,
-            prefix=f"{prefix}.linear_fc1",
-            params_dtype=ms.bfloat16
-        )
-        self.linear_fc2 = RowParallelLinear(
-            hidden_features,
-            in_features,
-            bias=bias,
-            quant_config=quant_config,
-            return_bias=False,
-            prefix=f"{prefix}.linear_fc2",
-            params_dtype=ms.bfloat16
-        )
-        self.act_fn = act_fn
-
-    def construct(self, x: ms.Tensor):
-        mlp_output = self.linear_fc2(self.act_fn(self.linear_fc1(x)))
-        return mlp_output
-
-
-def apply_rotary_pos_emb_flashatt(
-        q: ms.Tensor, k: ms.Tensor, cos: ms.Tensor,
-        sin: ms.Tensor) -> tuple[ms.Tensor, ms.Tensor]:
-    q_embed = ops.rotary_position_embedding(q.float(), cos, sin).type_as(q)
-    k_embed = ops.rotary_position_embedding(k.float(), cos, sin).type_as(k)
-    return q_embed, k_embed
+# Official recommended max pixels is 24576 * 32 * 32
+_MAX_FRAMES_PER_VIDEO = 24576
 
 
 class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
@@ -745,6 +210,67 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
         output, _ = self.proj(context_layer)
         return output
 
+class Qwen3_VisionPatchEmbed(nn.Cell):
+    def __init__(
+        self,
+        patch_size: int = 14,
+        temporal_patch_size: int = 2,
+        in_channels: int = 3,
+        hidden_size: int = 1152,
+    ) -> None:
+        super().__init__()
+        self.patch_size = patch_size
+        self.temporal_patch_size = temporal_patch_size
+        self.hidden_size = hidden_size
+        # self.dtype = get_current_vllm_config().model_config.dtype
+        self.dtype = ms.bfloat16
+
+        # Use Dense layer instead of Conv3d for MindSpore compatibility
+        self.proj = ms.nn.Dense(temporal_patch_size * patch_size * patch_size * in_channels,
+                                hidden_size,
+                                has_bias=True,
+                                dtype=self.dtype)
+
+    def construct(self, x: ms.Tensor) -> ms.Tensor:
+        x = self.proj(x)
+        return x
+
+
+class Qwen3_VisionMLP(nn.Cell):
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int,
+        bias: bool = False,
+        act_fn: Callable[[ms.Tensor], ms.Tensor] = F.silu,
+        quant_config=None,
+        prefix: str = "",
+    ):
+        super().__init__()
+        self.linear_fc1 = ColumnParallelLinear(
+            in_features,
+            hidden_features,
+            bias=bias,
+            quant_config=quant_config,
+            return_bias=False,
+            prefix=f"{prefix}.linear_fc1",
+            params_dtype=ms.bfloat16
+        )
+        self.linear_fc2 = RowParallelLinear(
+            hidden_features,
+            in_features,
+            bias=bias,
+            quant_config=quant_config,
+            return_bias=False,
+            prefix=f"{prefix}.linear_fc2",
+            params_dtype=ms.bfloat16
+        )
+        self.act_fn = act_fn
+
+    def construct(self, x: ms.Tensor):
+        mlp_output = self.linear_fc2(self.act_fn(self.linear_fc1(x)))
+        return mlp_output
+
 
 class Qwen3_VisionBlock(nn.Cell):
     def __init__(
@@ -796,32 +322,6 @@ class Qwen3_VisionBlock(nn.Cell):
         return x
 
 
-class Qwen3_VisionPatchEmbed(nn.Cell):
-    def __init__(
-        self,
-        patch_size: int = 14,
-        temporal_patch_size: int = 2,
-        in_channels: int = 3,
-        hidden_size: int = 1152,
-    ) -> None:
-        super().__init__()
-        self.patch_size = patch_size
-        self.temporal_patch_size = temporal_patch_size
-        self.hidden_size = hidden_size
-        # self.dtype = get_current_vllm_config().model_config.dtype
-        self.dtype = ms.bfloat16
-
-        # Use Dense layer instead of Conv3d for MindSpore compatibility
-        self.proj = ms.nn.Dense(temporal_patch_size * patch_size * patch_size * in_channels,
-                                hidden_size,
-                                has_bias=True,
-                                dtype=self.dtype)
-
-    def construct(self, x: ms.Tensor) -> ms.Tensor:
-        x = self.proj(x)
-        return x
-
-
 class Qwen3_VisionPatchMerger(nn.Cell):
     def __init__(
         self,
@@ -843,41 +343,32 @@ class Qwen3_VisionPatchMerger(nn.Cell):
         if norm_layer is None:
             norm_layer = partial(mint.nn.LayerNorm, eps=1e-6)
         self.use_postshuffle_norm = use_postshuffle_norm
-        self.ln_q = norm_layer(
-            self.hidden_size if use_postshuffle_norm else context_dim
+        self.norm = norm_layer(context_dim)
+        self.linear_fc1 = ColumnParallelLinear(
+            self.hidden_size,
+            self.hidden_size,
+            bias=True,
+            quant_config=quant_config,
+            prefix=f"{prefix}.linear_fc1",
         )
-        self.mlp = nn.CellList(
-            [
-                ColumnParallelLinear(
-                    self.hidden_size,
-                    self.hidden_size,
-                    bias=True,
-                    quant_config=quant_config,
-                    prefix=f"{prefix}.mlp.0",
-                    params_dtype=ms.bfloat16
-                ),
-                nn.GELU(),
-                RowParallelLinear(
-                    self.hidden_size,
-                    d_model,
-                    bias=True,
-                    quant_config=quant_config,
-                    prefix=f"{prefix}.mlp.2",
-                    params_dtype=ms.bfloat16
-                ),
-            ]
+        self.act_fn = nn.GELU()
+        self.linear_fc2 = RowParallelLinear(
+            self.hidden_size,
+            d_model,
+            bias=True,
+            quant_config=quant_config,
+            prefix=f"{prefix}.linear_fc2",
         )
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
         if self.use_postshuffle_norm:
-            x = self.ln_q(x.view(-1, self.hidden_size))
+            x = self.norm(x.view(-1, self.hidden_size))
         else:
-            x = self.ln_q(x).view(-1, self.hidden_size)
+            x = self.norm(x).view(-1, self.hidden_size)
 
-        mlp_fc1, mlp_act, mlp_fc2 = self.mlp
-        x_parallel, _ = mlp_fc1(x)
-        x_parallel = mlp_act(x_parallel)
-        out, _ = mlp_fc2(x_parallel)
+        x_parallel, _ = self.linear_fc1(x)
+        x_parallel = self.act_fn(x_parallel)
+        out, _ = self.linear_fc2(x_parallel)
         return out
 
 
@@ -893,16 +384,13 @@ class Qwen3_VisionTransformer(nn.Cell):
         self.vision_config = vision_config
         self.hidden_size = vision_config.hidden_size
         self.num_heads = vision_config.num_heads
-        self.image_size = vision_config.image_size
+        self.num_position_embeddings = vision_config.num_position_embeddings
         self.patch_size = vision_config.patch_size
         self.spatial_merge_size = vision_config.spatial_merge_size
         self.spatial_merge_unit = self.spatial_merge_size**2
         self.temporal_patch_size = vision_config.temporal_patch_size
-        self.num_grid_per_side = self.image_size // self.patch_size
-        self.apply_vit_abs_pos_embed = vision_config.apply_vit_abs_pos_embed
+        self.num_grid_per_side = int(self.num_position_embeddings**0.5)
         self.deepstack_visual_indexes = vision_config.deepstack_visual_indexes
-        # self.dtype = get_current_vllm_config().model_config.dtype
-        self.dtype = ms.bfloat16
 
         self.patch_embed = Qwen3_VisionPatchEmbed(
             patch_size=self.patch_size,
@@ -911,13 +399,7 @@ class Qwen3_VisionTransformer(nn.Cell):
             hidden_size=self.hidden_size,
         )
 
-        # vit pos embeding, TODO: spatial_patch_size vs patch_size
-        if self.apply_vit_abs_pos_embed:
-            self.pos_embed = mint.nn.Embedding(self.num_grid_per_side**2, self.hidden_size, dtype=self.dtype)
-        else:
-            self.pos_embed = Parameter(
-                mint.empty([1, self.num_grid_per_side**2, self.hidden_size], dtype=self.dtype)
-            )
+        self.pos_embed = mint.nn.Embedding(self.num_grid_per_side**2, self.hidden_size, dtype=self.dtype)
 
         norm_layer = partial(mint.nn.LayerNorm, eps=norm_eps)
         head_dim = self.hidden_size // self.num_heads
@@ -946,7 +428,7 @@ class Qwen3_VisionTransformer(nn.Cell):
             prefix=f"{prefix}.merger",
         )
         if self.deepstack_visual_indexes is not None:
-            self.merger_list = nn.CellList(
+            self.deepstack_merger_list = nn.CellList(
                 [
                     Qwen3_VisionPatchMerger(
                         d_model=vision_config.out_hidden_size,
@@ -955,15 +437,15 @@ class Qwen3_VisionTransformer(nn.Cell):
                         use_postshuffle_norm=True,
                         norm_layer=norm_layer,
                         quant_config=quant_config,
-                        prefix=f"{prefix}.merger_list.{layer_idx}",
+                        prefix=f"{prefix}.deepstack_merger_list.{layer_idx}",
                     )
                     for layer_idx in range(len(self.deepstack_visual_indexes))
                 ]
             )
 
-    # @property
-    # def dtype(self) -> ms.dtype:
-    #     return self.patch_embed.proj.weight.dtype
+    @property
+    def dtype(self) -> ms.dtype:
+        return self.patch_embed.proj.weight.dtype
 
     def construct(
         self,
@@ -976,8 +458,7 @@ class Qwen3_VisionTransformer(nn.Cell):
         hidden_states = x.astype(self.dtype)
         hidden_states = self.patch_embed(hidden_states)
 
-        if self.apply_vit_abs_pos_embed:
-            hidden_states = hidden_states + pos_embeds
+        hidden_states = hidden_states + pos_embeds
         # rotary_pos_emb = self.rot_pos_emb(grid_thw)
 
         # hidden_states = hidden_states.unsqueeze(1)
@@ -1010,7 +491,7 @@ class Qwen3_VisionTransformer(nn.Cell):
         if deepstack_visual_indexes is not None:
             processed_hidden_states_list = [hidden_states]
             for idx, x in enumerate(hidden_states_list):
-                x = self.merger_list[idx](x)
+                x = self.deepstack_merger_list[idx](x)
                 processed_hidden_states_list.append(x)
             # we cat the original visual features and deepstack features
             # along the feature dim
@@ -1071,10 +552,493 @@ class Qwen3_VisionTransformer(nn.Cell):
         )
 
 
-class Qwen3LLMModel(Qwen3Model):
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "", deepstack_layers: int = 0):
-        super().__init__(vllm_config=vllm_config, prefix=prefix)
+class Qwen3VLProcessingInfo(Qwen2VLProcessingInfo):
+    def get_hf_config(self):
+        return self.ctx.get_hf_config(Qwen3VLConfig)
 
+    def get_hf_processor(self, **kwargs: object) -> Qwen3VLProcessor:
+        return self.ctx.get_hf_processor(
+            Qwen3VLProcessor,
+            use_fast=False, #kwargs.pop("use_fast", True),
+            **kwargs,
+        )
+
+    def get_tokenizer(self):
+        return self.ctx.tokenizer
+
+    def get_image_processor(self, **kwargs: object): #-> Qwen2VLImageProcessorFast:
+        return self.get_hf_processor(**kwargs).image_processor
+
+    def get_video_processor(self, **kwargs: object): #-> Qwen3VLVideoProcessor:
+        return self.get_hf_processor(**kwargs).video_processor
+
+    def _get_vision_info(
+        self,
+        *,
+        image_width: int,
+        image_height: int,
+        num_frames: int = 2,
+        do_resize: bool = True,
+        image_processor = None,
+    ) -> tuple[ImageSize, int]:
+        if image_processor is None and num_frames > 1:
+            image_processor = self.get_video_processor()
+        elif image_processor is None:
+            image_processor = self.get_image_processor()
+
+        is_video = isinstance(image_processor, Qwen3VLVideoProcessor)
+
+        hf_config = self.get_hf_config()
+        vision_config = hf_config.vision_config
+        patch_size = vision_config.patch_size
+        merge_size = vision_config.spatial_merge_size
+        temporal_patch_size = vision_config.temporal_patch_size
+
+        if do_resize:
+            if is_video:
+                smart_resize = video_smart_resize
+                extra_kwargs = {
+                    "num_frames": num_frames,
+                    "temporal_factor": temporal_patch_size,
+                }
+            else:
+                smart_resize = image_smart_resize
+                extra_kwargs = {}
+            resized_height, resized_width = smart_resize(
+                height=image_height,
+                width=image_width,
+                factor=patch_size * merge_size,
+                min_pixels=image_processor.size["shortest_edge"],
+                max_pixels=image_processor.size["longest_edge"],
+                **extra_kwargs,
+            )
+            preprocessed_size = ImageSize(width=resized_width, height=resized_height)
+        else:
+            preprocessed_size = ImageSize(width=image_width, height=image_height)
+
+        padded_num_frames = num_frames + num_frames % temporal_patch_size
+
+        grid_t = max(padded_num_frames // temporal_patch_size, 1)
+        grid_h = preprocessed_size.height // patch_size
+        grid_w = preprocessed_size.width // patch_size
+
+        num_patches = grid_t * grid_h * grid_w
+        num_vision_tokens = num_patches // (merge_size**2)
+
+        return preprocessed_size, num_vision_tokens
+
+    def _get_max_video_frames(self, max_tokens: int, start_num_frames: int = 2) -> int:
+        return super()._get_max_video_frames(
+            max_tokens, # start_num_frames=start_num_frames
+        )
+
+    def get_num_frames_with_most_features(
+        self,
+        seq_len: int,
+        mm_counts: Mapping[str, int],
+    ) -> int:
+        return super().get_num_frames_with_most_features(
+            seq_len, mm_counts
+        )
+
+    def get_max_video_tokens(
+        self,
+        seq_len: int,
+        mm_counts: Mapping[str, int],
+    ) -> int:
+        target_width, target_height = self.get_image_size_with_most_features()
+        video_soft_tokens = self.get_num_video_tokens(
+            image_width=target_width,
+            image_height=target_height,
+            num_frames=self.get_num_frames_with_most_features(seq_len, mm_counts),
+            image_processor=None,
+        )
+
+        # NOTE: By default in Qwen3-VL, one video token is converted to
+        # "<{timestamp} seconds>" (on average 9.5 tokens) + vision_start_token + video_token + vision_end_token # noqa: E501
+        formatted_video_soft_tokens = video_soft_tokens * 12.5
+        return int(formatted_video_soft_tokens)
+
+    def _calculate_timestamps(
+        self, indices: list[int] | Tensor, video_fps: float, merge_size: int
+    ):
+        if not isinstance(indices, list):
+            indices = indices.tolist()
+        if len(indices) % merge_size != 0:
+            # don't update metadata's frames_indices directly
+            indices = indices + [indices[-1]] * (merge_size - len(indices) % merge_size)
+        timestamps = [idx / video_fps for idx in indices]
+        timestamps = [
+            (timestamps[i] + timestamps[i + merge_size - 1]) / 2
+            for i in range(0, len(timestamps), merge_size)
+        ]
+        return timestamps
+
+    def _get_video_second_idx(
+        self,
+        metadata: dict[str, Any],
+        out_item: MultiModalKwargs,
+        do_sample_frames: bool | None = None,
+        sampled_fps: float | None = None,
+    ) -> list[int]:
+        video_processor = self.get_video_processor()
+        merge_size = video_processor.merge_size
+        indices = metadata["frames_indices"]
+
+        # metadata["fps"] refers to the true fps of the input video.
+        video_fps = metadata["fps"]
+        if do_sample_frames is None:
+            do_sample_frames = metadata.get("do_sample_frames", False)
+
+        # If video frames are sampled in HF processor (instead of vLLM
+        # video loader), we need to re-calculate the indices from original
+        # metadata.
+        if do_sample_frames:
+            # here video_fps is the fps of the sampled video, and
+            # metadata["fps"] refers to the fps of the original video.
+            sampled_fps = sampled_fps if sampled_fps else video_processor.fps
+            total_num_frames = metadata["total_num_frames"]
+            num_frames = int(total_num_frames / metadata["fps"] * sampled_fps)
+            num_frames = min(
+                min(
+                    max(num_frames, video_processor.min_frames),
+                    video_processor.max_frames,
+                ),
+                total_num_frames,
+            )
+            indices = (
+                np.linspace(0, total_num_frames - 1, num_frames)
+                .round()
+                .astype(int)
+                .tolist()
+            )
+        timestamps = self._calculate_timestamps(indices, video_fps, merge_size)
+        return timestamps
+
+
+class Qwen3VLDummyInputsBuilder(BaseDummyInputsBuilder[Qwen3VLProcessingInfo]):
+    def get_dummy_text(self, mm_counts: Mapping[str, int]) -> str:
+        num_images = mm_counts.get("image", 0)
+        num_videos = mm_counts.get("video", 0)
+
+        image_token = "<|vision_start|><|image_pad|><|vision_end|>"
+        video_token = "<|vision_start|><|video_pad|><|vision_end|>"
+
+        return image_token * num_images + video_token * num_videos
+
+    def get_dummy_mm_data(
+        self,
+        seq_len: int,
+        mm_counts: Mapping[str, int],
+    ) -> MultiModalDataDict:
+        num_images = mm_counts.get("image", 0)
+        num_videos = mm_counts.get("video", 0)
+        # image_overrides = mm_options.get("image") if mm_options else None
+        # video_overrides = mm_options.get("video") if mm_options else None
+        image_overrides = None
+        video_overrides = None
+
+        target_width, target_height = self.info.get_image_size_with_most_features()
+        target_num_frames = self.info.get_num_frames_with_most_features(
+            seq_len, mm_counts
+        )
+
+        # if video_overrides:
+        #     # assert isinstance(video_overrides, VideoDummyOptions)
+        #     num_frames_override = video_overrides.num_frames
+        #     if num_frames_override:
+        #         if num_frames_override > target_num_frames:
+        #             logger.warning(
+        #                 "video.num_frames override (%d) exceeds model's "
+        #                 "maximum number of frames (%d), will be ignored",
+        #                 num_frames_override,
+        #                 target_num_frames,
+        #             )
+        #         if num_frames_override < 2:
+        #             logger.warning(
+        #                 "video.num_frames override (%d) cannot be less "
+        #                 "than 2, will be ignored",
+        #                 num_frames_override,
+        #             )
+        #         target_num_frames = min(target_num_frames, num_frames_override)
+        target_num_frames = max(target_num_frames, 2)
+
+        target_video_size, _ = self.info._get_vision_info(
+            image_width=target_width,
+            image_height=target_height,
+            num_frames=target_num_frames,
+            image_processor=self.info.get_video_processor(),
+        )
+        # NOTE: we need to do this check here since Qwen3-VL resizes video
+        # frames depending on how many frames there are.
+        width, height = target_video_size.width, target_video_size.height
+        # if video_overrides:
+        #     # assert isinstance(video_overrides, VideoDummyOptions)
+        #     width_override = video_overrides.width
+        #     if width_override:
+        #         if width_override > width:
+        #             logger.warning(
+        #                 "video.width override (%d) exceeds model's "
+        #                 "maximum width (%d), will be ignored",
+        #                 width_override,
+        #                 width,
+        #             )
+        #         width = min(width, width_override)
+        #     height_override = video_overrides.height
+        #     if height_override:
+        #         if height_override > height:
+        #             logger.warning(
+        #                 "video.height override (%d) exceeds model's "
+        #                 "maximum height (%d), will be ignored",
+        #                 height_override,
+        #                 height,
+        #             )
+        #         height = min(height, height_override)
+
+        return {
+            "image": self._get_dummy_images(
+                width=target_width,
+                height=target_height,
+                num_images=num_images,
+                # overrides=image_overrides,
+            ),
+            "video": self._get_dummy_videos(
+                width=width,
+                height=height,
+                num_frames=target_num_frames,
+                num_videos=num_videos,
+            ),
+        }
+
+    def _get_dummy_videos(
+        self,
+        *,
+        width: int,
+        height: int,
+        num_frames: int,
+        num_videos: int,
+    ):
+    # ) -> list[VideoItem]:
+        video = np.full((num_frames, width, height, 3), 255, dtype=np.uint8)
+        # video_items = []
+        # for i in range(num_videos):
+        #     video_metadata = {
+        #         "fps": 2.0,
+        #         "duration": num_frames / 2.0,
+        #         "total_num_frames": num_frames,
+        #         "frames_indices": [i for i in range(num_frames)],
+        #         "video_backend": "opencv",
+        #         "do_sample_frames": False,
+        #     }
+        #     video_item = (video.copy(), video_metadata)
+        #     video_items.append(video_item)
+        # return video_items
+        return [video] * num_videos
+
+
+class Qwen3VLMultiModalProcessor(BaseMultiModalProcessor[Qwen3VLProcessingInfo]):
+    def _get_data_parser(self) -> MultiModalDataParser:
+        # return MultiModalDataParser(video_needs_metadata=True)
+        return MultiModalDataParser()
+
+    def _call_hf_processor(
+        self,
+        prompt: str,
+        mm_data: Mapping[str, object],
+        mm_kwargs: Mapping[str, object],
+    ) -> BatchFeature:
+        mm_data = dict(mm_data)
+        processor = self.info.get_hf_processor(**mm_kwargs)
+
+        # Separate video processing from image processing. Because the videos
+        # are processed into serval image patches
+        if (
+            "videos" in mm_data
+            and isinstance(mm_data["videos"], list)
+            and len(mm_data["videos"]) > 0
+        ):
+            video_grid_thw_lst = []
+            pixel_values_videos_lst = []
+
+            for item_idx, item in enumerate(mm_data.pop("videos", [])):
+                video_array, metadata = item
+
+                # NOTE: @JJJYmmm new attr metadata.frames_indices indicates
+                # the sampled frames indices of pre-sampled videos, which is
+                # used to calculate the timestamps. Make sure that
+                # do_sample_frames in mm_kwargs is false for presampled videos.
+
+                # NOTE: a copy of is created to update do_sample_frames,
+                # otherwise mm_hash for the object will be incorrect.
+                video_mm_kwargs = dict(**mm_kwargs)
+                if "do_sample_frames" not in video_mm_kwargs:
+                    # qwen_vl_utils already has "do_sample_frames" in
+                    # mm_kwargs, don't overwrite it.
+                    video_mm_kwargs["do_sample_frames"] = metadata.get(
+                        "do_sample_frames", False
+                    )
+
+                metadata = VideoMetadata(
+                    **{k: metadata[k] for k in metadata if k != "do_sample_frames"}
+                )
+
+                video_mm_data = dict()
+                video_mm_data["videos"] = [[video_array]]
+                video_mm_data["video_metadata"] = [[metadata]]
+
+                video_outputs = super()._call_hf_processor(
+                    prompt="<|vision_start|><|video_pad|><|vision_end|>",
+                    mm_data=video_mm_data,
+                    mm_kwargs=video_mm_kwargs,
+                )
+                input_ids = video_outputs.pop("input_ids")
+                video_placeholder = processor.tokenizer.batch_decode(input_ids)[0]
+                prompt = prompt.replace(
+                    "<|vision_start|><|video_pad|><|vision_end|>",
+                    video_placeholder,
+                    1,
+                )
+
+                video_grid_thw_lst.append(video_outputs["video_grid_thw"])
+                pixel_values_videos_lst.append(video_outputs["pixel_values_videos"])
+            video_outputs = dict(
+                pixel_values_videos=mint.cat(pixel_values_videos_lst),
+                video_grid_thw=mint.cat(video_grid_thw_lst),
+            )
+        else:
+            video_outputs = dict()
+
+        processed_outputs = super()._call_hf_processor(
+            prompt=prompt,
+            mm_data=mm_data,
+            mm_kwargs=mm_kwargs,
+        )
+        combined_outputs = dict(
+            processed_outputs,
+            **video_outputs,
+        )
+        return BatchFeature(combined_outputs)
+
+    def _get_mm_fields_config(
+        self,
+        hf_inputs: BatchFeature,
+        hf_processor_mm_kwargs: Mapping[str, object],
+    ) -> Mapping[str, MultiModalFieldConfig]:
+        image_grid_thw = hf_inputs.get("image_grid_thw", mint.empty((0, 3)))
+        image_grid_sizes = image_grid_thw.prod(-1)
+
+        video_grid_thw = hf_inputs.get("video_grid_thw", mint.empty((0, 3)))
+        video_grid_sizes = video_grid_thw.prod(-1)
+
+        return dict(
+            pixel_values=MultiModalFieldConfig.flat_from_sizes(
+                "image", image_grid_sizes
+            ),
+            image_embeds=MultiModalFieldConfig.flat_from_sizes(
+                "image", image_grid_sizes
+            ),
+            image_grid_thw=MultiModalFieldConfig.batched("image"),
+            pixel_values_videos=MultiModalFieldConfig.flat_from_sizes(
+                "video", video_grid_sizes
+            ),
+            video_embeds=MultiModalFieldConfig.flat_from_sizes(
+                "video", video_grid_sizes
+            ),
+            video_grid_thw=MultiModalFieldConfig.batched("video"),
+        )
+
+    def _get_prompt_updates(
+        self,
+        mm_items: MultiModalDataItems,
+        hf_processor_mm_kwargs: Mapping[str, Any],
+        out_mm_kwargs: MultiModalKwargs,
+    ) -> Sequence[PromptUpdate]:
+        hf_processor = self.info.get_hf_processor(**hf_processor_mm_kwargs)
+        image_processor = self.info.get_image_processor(**hf_processor_mm_kwargs)
+        tokenizer = self.info.get_tokenizer()
+        hf_config = self.info.get_hf_config()
+
+        video_token_id = hf_config.video_token_id
+        vision_start_token_id = hf_config.vision_start_token_id
+        vision_end_token_id = hf_config.vision_end_token_id
+
+        merge_length = image_processor.merge_size**2
+
+        def get_image_replacement_qwen3vl(item_idx: int):
+            # out_item = out_mm_kwargs["image"][item_idx]
+            # grid_thw = out_item["image_grid_thw"].data
+            grid_thw = out_mm_kwargs["image_grid_thw"][item_idx]
+
+            assert isinstance(grid_thw, Tensor)
+
+            num_tokens = int(grid_thw.prod()) // merge_length
+            return [hf_processor.image_token_id] * num_tokens
+
+        def get_video_replacement_qwen3vl(item_idx: int):
+            # out_item = out_mm_kwargs["video"][item_idx]
+            # grid_thw = out_item["video_grid_thw"].data
+            grid_thw = out_mm_kwargs["video_grid_thw"][item_idx]
+
+            assert isinstance(grid_thw, Tensor)
+
+            video, metadata = mm_items["video"][item_idx]
+            do_sample_frames = hf_processor_mm_kwargs.get("do_sample_frames")
+            sampled_fps = hf_processor_mm_kwargs.get("fps")
+            if is_list_of(sampled_fps, float):
+                sampled_fps = sampled_fps[item_idx]
+            out_item = None
+            timestamps = self.info._get_video_second_idx(
+                metadata, out_item, do_sample_frames, sampled_fps
+            )
+
+            assert len(timestamps) == grid_thw[0], (
+                f"The timestamps length({len(timestamps)}) should be equal "
+                f"video length ({grid_thw[0]})."
+            )
+
+            frames_idx_token = [
+                tokenizer.encode(f"<{curr_time:.1f} seconds>", add_special_tokens=False)
+                for curr_time in timestamps
+            ]
+            num_tokens_per_frame = int(grid_thw[1:].prod()) // merge_length
+            placeholder = []
+            for frame_idx in frames_idx_token:
+                placeholder.extend(frame_idx)
+                placeholder.extend(
+                    [vision_start_token_id]
+                    + [video_token_id] * num_tokens_per_frame
+                    + [vision_end_token_id]
+                )
+            return PromptUpdateDetails.select_token_id(placeholder, video_token_id)
+
+        return [
+            PromptReplacement(
+                modality="image",
+                target=hf_processor.image_token,
+                replacement=get_image_replacement_qwen3vl,
+            ),
+            # NOTE: We match string on purpose since searching sequence of
+            # token ids takes more time.
+            PromptReplacement(
+                modality="video",
+                target="<|vision_start|><|video_pad|><|vision_end|>",
+                replacement=get_video_replacement_qwen3vl,
+            ),
+        ]
+
+
+class Qwen3LLMModel(Qwen3Model):
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "",
+                 deepstack_layers: int = 0):
+        super().__init__(vllm_config=vllm_config, prefix=prefix)
+        if not get_pp_group().is_first_rank:
+            assert self.start_layer >= len(
+                vllm_config.model_config.hf_config.vision_config.deepstack_visual_indexes
+            ), (
+                "start_layer should be greater than or equal to "
+                "len(deepstack_visual_indexes)"
+            )
+        self.deepstack_multiscale_layer_start = 1
         self.deepstack_layers = deepstack_layers
 
     def construct(
@@ -1102,29 +1066,16 @@ class Qwen3LLMModel(Qwen3Model):
             assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
             residual = intermediate_tensors["residual"]
-        # for layer_idx, layer in enumerate(
-        #     self.layers[self.start_layer : self.end_layer]
-        # ):
-        #     layer_idx = layer_idx + self.start_layer
 
-        #     hidden_states, residual = layer(
-        #         positions,
-        #         hidden_states,
-        #         residual,
-        #     )
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(
                 positions, hidden_states, key_caches[i - self.start_layer],
                 value_caches[i - self.start_layer], slot_mapping, attn_mask,
-                batch_valid_length, q_seq_lens, block_tables, residual,
-                None, None, None, None)
+                batch_valid_length, q_seq_lens, block_tables, residual)
 
             if deepstack_input_embeds is not None and i in range(self.deepstack_layers):
-                hidden_states = (
-                    hidden_states
-                    + deepstack_input_embeds[f"deepstack_input_embeds_{i}"]
-                )
+                hidden_states = mint.add(hidden_states, deepstack_input_embeds[i])
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors(
@@ -1137,12 +1088,16 @@ class Qwen3LLMModel(Qwen3Model):
 class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "", deepstack_layers: int = 0):
         super(Qwen3ForCausalLM, self).__init__(vllm_config=vllm_config)
-        config = vllm_config.model_config.hf_config
+        config = vllm_config.model_config.hf_config.text_config
         quant_config = vllm_config.quant_config
         self.config = config
         self.quant_config = quant_config
+
+        qwen3_config = vllm_config.with_hf_config(
+            config, architectures=["Qwen3ForCausalLM"])
+
         self.model = Qwen3LLMModel(
-            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "model"),
+            vllm_config=qwen3_config, prefix=maybe_prefix(prefix, "model"),
             deepstack_layers=deepstack_layers
         )
         self.lm_head = ParallelLMHead(
@@ -1156,65 +1111,15 @@ class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
         )
 
 
-class Qwen2_5_VLMultiModalProcessor(_Qwen2VLMultiModalProcessor):
-
-    def _get_mm_fields_config(
-        self,
-        hf_inputs,
-        hf_processor_mm_kwargs: Mapping[str, object],
-    ) -> Mapping[str, MultiModalFieldConfig]:
-        return dict(
-            **super()._get_mm_fields_config(hf_inputs, hf_processor_mm_kwargs),
-            second_per_grid_ts=MultiModalFieldConfig.batched("video"),
-        )
-
-
-class Qwen2_5_VLDummyInputsBuilder(
-        BaseDummyInputsBuilder[Qwen2VLProcessingInfo]):
-
-    def get_dummy_text(self, mm_counts: Mapping[str, int]) -> str:
-        num_images = mm_counts.get("image", 0)
-        num_videos = mm_counts.get("video", 0)
-
-        hf_processor = self.info.get_hf_processor()
-        image_token: str = hf_processor.image_token
-        video_token: str = hf_processor.video_token
-
-        return image_token * num_images + video_token * num_videos
-
-    def get_dummy_mm_data(
-        self,
-        seq_len: int,
-        mm_counts: Mapping[str, int],
-    ) -> MultiModalDataDict:
-        num_images = mm_counts.get("image", 0)
-        num_videos = mm_counts.get("video", 0)
-
-        target_width, target_height = \
-            self.info.get_image_size_with_most_features()
-        target_num_frames = \
-            self.info.get_num_frames_with_most_features(seq_len, mm_counts)
-
-        return {
-            "image":
-            self._get_dummy_images(width=target_width,
-                                   height=target_height,
-                                   num_images=num_images),
-            "video":
-            self._get_dummy_videos(
-                width=target_width,
-                height=target_height,
-                num_frames=target_num_frames,
-                num_videos=num_videos,
-            )
-        }
-
-
 @MULTIMODAL_REGISTRY.register_processor(
-    Qwen2_5_VLMultiModalProcessor,
-    info=Qwen2_5_VLProcessingInfo,
-    dummy_inputs=Qwen2_5_VLDummyInputsBuilder)
-class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
+    Qwen3VLMultiModalProcessor,
+    info=Qwen3VLProcessingInfo,
+    dummy_inputs=Qwen3VLDummyInputsBuilder,
+)
+class Qwen3VLForConditionalGeneration(
+    NativeModel,
+    SupportsMultiModal,
+):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -1226,88 +1131,72 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             "up_proj",
         ],
     }
-    # LoRA specific attributes
-    supported_lora_modules = [
-        # language model
-        "qkv_proj",
-        "o_proj",
-        "gate_up_proj",
-        "down_proj",  # Same name with vision encoder
-        # vision tower
-        "qkv",
-        "gate_proj",
-        "up_proj",
-        "attn.proj",  # Distinguish patch_embed.proj
-        "fc1",
-        "fc2",
-        # projector
-        "mlp.0",
-        "mlp.2"
-    ]
-
-    embedding_modules = {}  # type: ignore[var-annotated]
-    embedding_padding_modules = []  # type: ignore[var-annotated]
 
     # To ensure correct weight loading and mapping.
-    hf_to_vllm_mapper = WeightsMapper(orig_to_new_prefix={
-        "lm_head.": "language_model.lm_head.",
-        "model.": "language_model.model.",
-    })
+    hf_to_vllm_mapper = WeightsMapper(
+        orig_to_new_prefix={
+            "model.visual.": "visual.",
+            "lm_head.": "language_model.lm_head.",
+            "model.language_model.": "language_model.model.",
+        }
+    )
 
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    @classmethod
+    def get_placeholder_str(cls, modality: str, i: int) -> str | None:
+        if modality.startswith("image"):
+            return "<|vision_start|><|image_pad|><|vision_end|>"
+        if modality.startswith("video"):
+            return "<|vision_start|><|video_pad|><|vision_end|>"
+
+        raise ValueError("Only image or video modality is supported")
+
+    def __init__(self, *, vllm_config: VllmConfig, prefix: str = "model"):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
+
         config = vllm_config.model_config.hf_config
+        self.config = config
         quant_config = vllm_config.quant_config
         multimodal_config = vllm_config.model_config.multimodal_config
-
-        self.config = config
         self.multimodal_config = multimodal_config
 
+        self.vision_config = config.vision_config
         self.visual = Qwen3_VisionTransformer(
             config.vision_config,
             norm_eps=getattr(config, "rms_norm_eps", 1e-6),
             quant_config=quant_config,
             prefix=maybe_prefix(prefix, "visual"),
         )
-
-        # Now, in order to meet the requirements of vit ->aclnn fa and
-        # llm ->atb fa, the only way is to block atb's fa before entering
-        # vit and let it go through aclnn's fa, and after exiting vit,
-        # in the unset environment variable. If vit also follows pynative mode,
-        # the environment variables will not take effect. The solution is
-        # to use different primitives for different kernels in the backend.
-        self.visual.construct = ms.jit(function=self.visual, jit_level='O0')
         self.visual.set_model_inputs()
-        logger.info(
-            "PyNative is not available for vit, vit is always graph mode.")
+        self.visual.construct = ms.jit(function=self.visual, jit_level='O0')
 
-        self.use_deepstack = hasattr(
-            config.vision_config, "deepstack_visual_indexes"
-        )
-        self.deepstack_num_level = (
-            len(config.vision_config.deepstack_visual_indexes)
-            if self.use_deepstack
-            else 0
-        )
         self.language_model = Qwen3LLMForCausalLM(
-            vllm_config=vllm_config.with_hf_config(
-                config.text_config, architectures=["Qwen3ForCausalLM"]
-            ),
-            prefix=maybe_prefix(prefix, "language_model"),
-            deepstack_layers=self.deepstack_num_level
+            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "language_model")
         )
         self.model = self.language_model.model
         self.text_config = config.text_config
         self.lm_head = self.language_model.lm_head
         self.common_preprocess(vllm_config, prefix)
 
+        self.model.embed_tokens._set_jit_graph_name("prefill")
+        self.model.embed_tokens.phase = "prefill"
+        dyn_input_ids = ms.Tensor(shape=[None], dtype=ms.int32)
+        self.model.embed_tokens.set_inputs(dyn_input_ids)
+        self.model.embed_tokens.construct = ms.jit(
+            function=self.model.embed_tokens, jit_level='O0')
+
         self.make_empty_intermediate_tensors = (
             self.language_model.make_empty_intermediate_tensors
         )
 
+        self.use_deepstack = hasattr(config.vision_config, "deepstack_visual_indexes")
+        self.deepstack_num_level = (
+            len(config.vision_config.deepstack_visual_indexes)
+            if self.use_deepstack
+            else 0
+        )
         # register buffer for deepstack
-        self.deepstack_input_embeds = (
-            [
+        if self.use_deepstack and self.visual is not None:
+            self.deepstack_input_embeds = [
                 mint.zeros(
                     (vllm_config.scheduler_config.max_num_batched_tokens,
                     config.text_config.hidden_size),
@@ -1315,20 +1204,19 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
                 )
                 for _ in range(self.deepstack_num_level)
             ]
-            if self.use_deepstack
-            else None
-        )
+        else:
+            self.deepstack_input_embeds = None
         self.visual_dim = config.vision_config.out_hidden_size
         self.multiscale_dim = self.visual_dim * self.deepstack_num_level
         head_dim = (self.vision_config.hidden_size // 
-                   self.vision_config.num_heads)
+                    self.vision_config.num_heads)
         self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
 
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
-            "thinker.visual": self.visual,
-            "thinker.model": self.language_model.model,
-            "thinker.lm_head": self.language_model.lm_head
+            "model.visual": self.visual,
+            "model.language_model": self.language_model.model,
+            "lm_head": self.language_model.lm_head
         })
         self.casual_mask = MultiModalLowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -1346,14 +1234,10 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
 
     def _get_deepstack_input_embeds(self, num_tokens: int) -> IntermediateTensors:
         # get deepstack_input_embeds from buffer, and clear the buffer
-        return IntermediateTensors(
-            {
-                f"deepstack_input_embeds_{idx}": self.deepstack_input_embeds[idx][
-                    :num_tokens
-                ]
-                for idx in range(self.deepstack_num_level)
-            }
-        )
+        deepstack_input_embeds = [self.deepstack_input_embeds[idx][:num_tokens] \
+                                  for idx in range(self.deepstack_num_level)]
+        deepstack_input_embeds = mint.stack(deepstack_input_embeds, dim=0)
+        return deepstack_input_embeds
 
     def _set_deepstack_input_embeds(self, deepstack_input_embeds: ms.Tensor) -> None:
         # set deepstack_input_embeds to buffer
@@ -1374,13 +1258,170 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         # clear deepstack_input_embeds in buffer
         if num_tokens > 0:
             for idx in range(self.deepstack_num_level):
-                self.deepstack_input_embeds[idx][:num_tokens] = 0
+                self.deepstack_input_embeds[idx][:num_tokens].zero_()
+
+    def _validate_and_reshape_mm_tensor(
+        self, mm_input: object, name: str
+    ) -> Tensor:
+        if not isinstance(mm_input, (Tensor, list)):
+            raise ValueError(f"Incorrect type of {name}. Got type: {type(mm_input)}")
+        if isinstance(mm_input, Tensor):
+            if mm_input.ndim == 2:
+                return mm_input
+            if mm_input.ndim != 3:
+                raise ValueError(
+                    f"{name} should be 2D or batched 3D tensor. "
+                    f"Got ndim: {mm_input.ndim} "
+                    f"(shape={mm_input.shape})"
+                )
+            return mm_input.reshape(-1, mm_input.shape[-1])
+        else:
+            return mint.concat(mm_input)
+
+    def _parse_and_validate_image_input(
+        self, **kwargs: object
+    ) -> Qwen2_5_VLImageInputs | None:
+        pixel_values = kwargs.pop("pixel_values", None)
+        image_embeds = kwargs.pop("image_embeds", None)
+        image_grid_thw = kwargs.pop("image_grid_thw", None)
+
+        if pixel_values is None and image_embeds is None:
+            return None
+
+        if pixel_values is not None:
+            pixel_values = self._validate_and_reshape_mm_tensor(
+                pixel_values, "image pixel values"
+            )
+            image_grid_thw = self._validate_and_reshape_mm_tensor(
+                image_grid_thw, "image grid_thw"
+            )
+
+            if not isinstance(pixel_values, (Tensor, list)):
+                raise ValueError(
+                    "Incorrect type of image pixel values. "
+                    f"Got type: {type(pixel_values)}"
+                )
+
+            return Qwen2_5_VLImagePixelInputs(
+                type="pixel_values",
+                pixel_values=pixel_values,
+                image_grid_thw=image_grid_thw,
+            )
+
+        if image_embeds is not None:
+            image_embeds = self._validate_and_reshape_mm_tensor(
+                image_embeds, "image embeds"
+            )
+            image_grid_thw = self._validate_and_reshape_mm_tensor(
+                image_grid_thw, "image grid_thw"
+            )
+
+            if not isinstance(image_embeds, Tensor):
+                raise ValueError(
+                    "Incorrect type of image embeddings. "
+                    f"Got type: {type(image_embeds)}"
+                )
+            return Qwen2_5_VLImageEmbeddingInputs(
+                type="image_embeds",
+                image_embeds=image_embeds,
+                image_grid_thw=image_grid_thw,
+            )
+
+    def _parse_and_validate_video_input(
+        self, **kwargs: object
+    ) -> Qwen2_5_VLVideoInputs | None:
+        pixel_values_videos = kwargs.pop("pixel_values_videos", None)
+        video_embeds = kwargs.pop("video_embeds", None)
+        video_grid_thw = kwargs.pop("video_grid_thw", None)
+        second_per_grid_ts = kwargs.pop("second_per_grid_ts", None)
+
+        if pixel_values_videos is None and video_embeds is None:
+            return None
+
+        if pixel_values_videos is not None:
+            pixel_values_videos = self._validate_and_reshape_mm_tensor(
+                pixel_values_videos, "video pixel values"
+            )
+            video_grid_thw = self._validate_and_reshape_mm_tensor(
+                video_grid_thw, "video grid_thw"
+            )
+
+            return Qwen2_5_VLVideoPixelInputs(
+                type="pixel_values_videos",
+                pixel_values_videos=pixel_values_videos,
+                video_grid_thw=video_grid_thw,
+                second_per_grid_ts=second_per_grid_ts,
+            )
+
+        if video_embeds is not None:
+            video_embeds = self._validate_and_reshape_mm_tensor(
+                video_embeds, "video embeds"
+            )
+            video_grid_thw = self._validate_and_reshape_mm_tensor(
+                video_grid_thw, "video grid_thw"
+            )
+
+            if not isinstance(video_embeds, ms.Tensor):
+                raise ValueError(
+                    "Incorrect type of video embeddings. "
+                    f"Got type: {type(video_embeds)}"
+                )
+            return Qwen2_5_VLVideoEmbeddingInputs(
+                type="video_embeds",
+                video_embeds=video_embeds,
+                video_grid_thw=video_grid_thw,
+            )
+
+    def _process_image_input(
+        self, image_input
+    ) -> tuple[Tensor, ...]:
+        if image_input["type"] == "image_embeds":
+            return image_input["image_embeds"].type(self.visual.dtype)
+
+        grid_thw = image_input["image_grid_thw"]
+        assert grid_thw.ndim == 2
+
+        rotary_pos_emb = self.rot_pos_emb(grid_thw)
+        pos_emb = self.fast_pos_embed_interpolate(grid_thw.tolist())
+        pixel_values = image_input["pixel_values"].type(self.visual.dtype)
+        grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
+        grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
+        grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
+        batch_valid_length = mint.repeat_interleave(grid_thw_1 * grid_thw_2, grid_thw_0).astype(ms.int32)
+        image_embeds = self.visual(pixel_values, batch_valid_length, batch_valid_length,
+                                   rotary_pos_emb, pos_emb)
+        # Split concatenated embeddings for each image item.
+        merge_size = self.visual.spatial_merge_size
+        sizes = grid_thw.prod(-1) // merge_size // merge_size
+
+        return image_embeds.split(sizes.tolist())
+
+    def _process_video_input(
+        self, video_input: Qwen2_5_VLVideoInputs
+    ) -> tuple[Tensor, ...]:
+        if video_input["type"] == "video_embeds":
+            return video_input["video_embeds"].type(self.visual.dtype)
+
+        grid_thw = video_input["video_grid_thw"]
+        assert grid_thw.ndim == 2
+
+        rotary_pos_emb = self.rot_pos_emb(grid_thw)
+        pos_emb = self.fast_pos_embed_interpolate(grid_thw.tolist())
+        pixel_values = video_input["pixel_values"].type(self.visual.dtype)
+        grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
+        grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
+        grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
+        batch_valid_length = mint.repeat_interleave(grid_thw_1 * grid_thw_2, grid_thw_0).astype(ms.int32)
+        image_embeds = self.visual(pixel_values, batch_valid_length, batch_valid_length,
+                                   rotary_pos_emb, pos_emb)
+        # Split concatenated embeddings for each image item.
+        merge_size = self.visual.spatial_merge_size
+        sizes = grid_thw.prod(-1) // merge_size // merge_size
+
+        return image_embeds.split(sizes.tolist())
 
     def _parse_and_validate_multimodal_inputs(self, **kwargs: object) -> dict:
         mm_input_by_modality = {}
-
-        # Preserve the order of modalities if there are multiple of them
-        # from the order of kwargs.
         for input_key in kwargs:
             if (
                 input_key in ("pixel_values", "image_embeds")
@@ -1398,7 +1439,7 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
                 )
         return mm_input_by_modality
 
-    def get_language_model(self) -> nn.Cell:
+    def get_language_model(self):
         return self.language_model
 
     def get_multimodal_embeddings(
@@ -1406,11 +1447,11 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
     ) -> MultiModalEmbeddings | None:
         mm_input_by_modality = self._parse_and_validate_multimodal_inputs(**kwargs)
         if not mm_input_by_modality:
-            return []
+            return None
 
         # The result multimodal_embeddings is tuple of tensors, with each
         # tensor correspoending to a multimodal data item (image or video).
-        multimodal_embeddings: tuple[ms.Tensor, ...] = ()
+        multimodal_embeddings: tuple[Tensor, ...] = ()
 
         # NOTE: It is important to iterate over the keys in this dictionary
         # to preserve the order of the modalities.
@@ -1424,89 +1465,81 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
                 multimodal_embeddings += tuple(video_embeddings)
         return multimodal_embeddings
 
+    def _compute_deepstack_embeds(
+        self,
+        inputs_embeds: ms.Tensor,
+        multimodal_embeddings: MultiModalEmbeddings,
+        is_multimodal: ms.Tensor,
+    ) -> tuple[ms.Tensor, MultiModalEmbeddings]:
+        visual_lens = [len(x) for x in multimodal_embeddings]
+        multimodal_embeddings_cat = mint.cat(multimodal_embeddings, dim=0)
+
+        (
+            multimodal_embeddings_main,
+            multimodal_embeddings_multiscale,
+        ) = mint.split(
+            multimodal_embeddings_cat,
+            [self.visual_dim, self.multiscale_dim],
+            dim=-1,
+        )
+
+        multimodal_embeddings = mint.split(
+            multimodal_embeddings_main, visual_lens, dim=0
+        )
+        multimodal_embeddings_multiscale = mint.split(
+            multimodal_embeddings_multiscale, visual_lens, dim=0
+        )
+
+        deepstack_input_embeds = inputs_embeds.new_zeros(
+            inputs_embeds.shape[0], self.deepstack_num_level * inputs_embeds.shape[1]
+        )
+
+        deepstack_input_embeds = _merge_multimodal_embeddings(
+            inputs_embeds=deepstack_input_embeds,
+            multimodal_embeddings=multimodal_embeddings_multiscale,
+            is_multimodal=is_multimodal,
+        )
+        deepstack_input_embeds = deepstack_input_embeds.view(
+            inputs_embeds.shape[0], self.deepstack_num_level, self.visual_dim
+        )
+        deepstack_input_embeds = deepstack_input_embeds.permute(1, 0, 2)
+
+        return deepstack_input_embeds, multimodal_embeddings
+
     def get_input_embeddings(
         self,
         input_ids: ms.Tensor,
         multimodal_embeddings: MultiModalEmbeddings | None = None,
-        # *,
-        # is_multimodal: ms.Tensor | None = None,
-        # handle_oov_mm_token: bool = False,
     ) -> ms.Tensor:
-        # inputs_embeds = self._get_text_embeddings(
-        #     input_ids,
-        #     self.language_model.get_input_embeddings,
-        #     is_multimodal=is_multimodal,
-        #     handle_oov_mm_token=handle_oov_mm_token,
-        # )
         inputs_embeds = self.language_model.get_input_embeddings(input_ids)
 
         if multimodal_embeddings is None or len(multimodal_embeddings) == 0:
             return inputs_embeds
 
         placeholder_token_id = [self.config.image_token_id,
-                                self.config.video_token_id,
-                                self.config.audio_token_id]
+                                self.config.video_token_id]
         is_multimodal = ms.numpy.isin(input_ids, placeholder_token_id)
 
-        deepstack_input_embeds = None
-        # TODO (ywang96): support overlapping modalitiy embeddings so that
-        # `use_audio_in_video` will work on V1.
-        # split the feat dim to obtain multi-scale visual feature
-        has_vision_embeddings = [
-            embeddings.shape[-1] != self.config.text_config.hidden_size
-            for embeddings in multimodal_embeddings
-        ]
-        if self.visual.deepstack_visual_indexes is not None and any(
-            has_vision_embeddings
-        ):
-            multiscale_len = len(self.visual.deepstack_visual_indexes)
-            multimodal_embeddings_multiscale = []
-            is_vision = mint.zeros_like(is_multimodal)
-            mm_positions = mint.nonzero(is_multimodal, as_tuple=True)[0]
-            mm_position_idx = 0
-            for index, embeddings in enumerate(multimodal_embeddings):
-                num_tokens = embeddings.shape[0]
-                current_positions = mm_positions[
-                    mm_position_idx : mm_position_idx + num_tokens
-                ]
-
-                # Vision embeddings
-                if embeddings.shape[-1] != self.config.text_config.hidden_size:
-                    visual_dim = embeddings.shape[-1] // (multiscale_len + 1)
-                    multi_dim = visual_dim * multiscale_len
-                    embeddings_main, embeddings_multiscale = mint.split(
-                        embeddings, [visual_dim, multi_dim], dim=-1
-                    )
-                    multimodal_embeddings[index] = embeddings_main
-                    multimodal_embeddings_multiscale.append(embeddings_multiscale)
-                    is_vision[current_positions] = True
-
-                # Audio embeddings
-                else:
-                    is_vision[current_positions] = False
-
-                mm_position_idx += num_tokens
-
-            deepstack_input_embeds = inputs_embeds.new_zeros(
-                inputs_embeds.shape[0], multiscale_len * inputs_embeds.shape[1])
-            deepstack_input_embeds = _merge_multimodal_embeddings(
-                inputs_embeds=deepstack_input_embeds,
-                multimodal_embeddings=multimodal_embeddings_multiscale,
-                is_multimodal=is_vision,
+        if self.use_deepstack:
+            (
+                deepstack_input_embeds,
+                multimodal_embeddings,
+            ) = self._compute_deepstack_embeds(
+                inputs_embeds=inputs_embeds,
+                multimodal_embeddings=multimodal_embeddings,
+                is_multimodal=is_multimodal,
             )
-            deepstack_input_embeds = (
-                deepstack_input_embeds.view(
-                    inputs_embeds.shape[0], multiscale_len, visual_dim
-                )
-                .permute(1, 0, 2)
-            )
-            self._set_deepstack_input_embeds(deepstack_input_embeds)
+        else:
+            deepstack_input_embeds = None
 
         inputs_embeds = _merge_multimodal_embeddings(
             inputs_embeds=inputs_embeds,
             multimodal_embeddings=multimodal_embeddings,
             is_multimodal=is_multimodal,
         )
+
+        if deepstack_input_embeds is not None:
+            self._set_deepstack_input_embeds(deepstack_input_embeds)
 
         return inputs_embeds
 
@@ -1531,7 +1564,6 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             )
         else:
             deepstack_input_embeds = None
-
 
         hidden_states = self.exec_model(
             input_ids=input_ids,
@@ -1560,10 +1592,10 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         visual_load = set()
         text_load = set()
         for name, weight in weights:
-            if "thinker.visual." in name:
+            if "model.visual." in name:
                 visual_load.update(
                     self.visual.load_weights([(name, weight)], params_dict))
-            elif "thinker.model." in name:
+            elif "model.language_model." in name:
                 text_load.update(
                     self.model.load_weights([(name, weight)], params_dict))
             else:
@@ -1576,6 +1608,16 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         loaded_param.update(visual_load)
         loaded_param.update(text_load)
         return None #loaded_param talker not supported yet
+
+    def get_mm_mapping(self) -> MultiModelKeys:
+        """
+        Get the module prefix in multimodal models
+        """
+        return MultiModelKeys.from_string_field(
+            language_model="language_model",
+            connector="visual.merger",
+            tower_model="visual.",
+        )
 
     def rot_pos_emb(self, grid_thw: ms.Tensor) -> ms.Tensor:
         spatial_merge_size = self.vision_config.spatial_merge_size
@@ -1725,7 +1767,7 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        dyn_deepstack_input_embeds = Tensor(shape=[None, None],
+        dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
                                             dtype=self.model_config.dtype)
 
         self.ready_model.set_inputs(
@@ -1737,162 +1779,3 @@ class Qwen3_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
         self.ready_lm_head.set_inputs(dynamic_hidden_states)
-
-    def _validate_and_reshape_mm_tensor(self, mm_input: object,
-                                        name: str) -> ms.Tensor:
-        if not isinstance(mm_input, (ms.Tensor, list)):
-            raise ValueError(f"Incorrect type of {name}. "
-                             f"Got type: {type(mm_input)}")
-        if isinstance(mm_input, ms.Tensor):
-            if mm_input.ndim == 2:
-                return mm_input
-            if mm_input.ndim != 3:
-                raise ValueError(f"{name} should be 2D or batched 3D tensor. "
-                                 f"Got ndim: {mm_input.ndim} "
-                                 f"(shape={mm_input.shape})")
-            return mint.concat(list(mm_input))
-        else:
-            return mint.concat(mm_input)
-
-    def _parse_and_validate_image_input(
-            self, **kwargs: object) -> Optional[Qwen2_5_VLImageInputs]:
-        pixel_values = kwargs.pop("pixel_values", None)
-        image_embeds = kwargs.pop("image_embeds", None)
-        image_grid_thw = kwargs.pop("image_grid_thw", None)
-
-        if pixel_values is None and image_embeds is None:
-            return None
-
-        if pixel_values is not None:
-            pixel_values = self._validate_and_reshape_mm_tensor(
-                pixel_values, "image pixel values")
-            image_grid_thw = self._validate_and_reshape_mm_tensor(
-                image_grid_thw, "image grid_thw")
-
-            if not isinstance(pixel_values, (ms.Tensor, list)):
-                raise ValueError("Incorrect type of image pixel values. "
-                                 f"Got type: {type(pixel_values)}")
-
-            return Qwen2_5_VLImagePixelInputs(type="pixel_values",
-                                              pixel_values=pixel_values,
-                                              image_grid_thw=image_grid_thw)
-
-        if image_embeds is not None:
-            image_embeds = self._validate_and_reshape_mm_tensor(
-                image_embeds, "image embeds")
-            image_grid_thw = self._validate_and_reshape_mm_tensor(
-                image_grid_thw, "image grid_thw")
-
-            if not isinstance(image_embeds, ms.Tensor):
-                raise ValueError("Incorrect type of image embeddings. "
-                                 f"Got type: {type(image_embeds)}")
-            return Qwen2_5_VLImageEmbeddingInputs(
-                type="image_embeds",
-                image_embeds=image_embeds,
-                image_grid_thw=image_grid_thw)
-
-        return None
-
-    def _parse_and_validate_video_input(
-            self, **kwargs: object) -> Optional[Qwen2_5_VLVideoInputs]:
-        pixel_values_videos = kwargs.pop("pixel_values_videos", None)
-        video_embeds = kwargs.pop("video_embeds", None)
-        video_grid_thw = kwargs.pop("video_grid_thw", None)
-        second_per_grid_ts = kwargs.pop("second_per_grid_ts", None)
-
-        if pixel_values_videos is None and video_embeds is None:
-            return None
-
-        if pixel_values_videos is not None:
-            pixel_values_videos = self._validate_and_reshape_mm_tensor(
-                pixel_values_videos, "video pixel values")
-            video_grid_thw = self._validate_and_reshape_mm_tensor(
-                video_grid_thw, "video grid_thw")
-
-            return Qwen2_5_VLVideoPixelInputs(
-                type="pixel_values_videos",
-                pixel_values_videos=pixel_values_videos,
-                video_grid_thw=video_grid_thw,
-                second_per_grid_ts=second_per_grid_ts,
-            )
-
-        if video_embeds is not None:
-            video_embeds = self._validate_and_reshape_mm_tensor(
-                video_embeds, "video embeds")
-            video_grid_thw = self._validate_and_reshape_mm_tensor(
-                video_grid_thw, "video grid_thw")
-
-            if not isinstance(video_embeds, ms.Tensor):
-                raise ValueError("Incorrect type of video embeddings. "
-                                 f"Got type: {type(video_embeds)}")
-            return Qwen2_5_VLVideoEmbeddingInputs(
-                type="video_embeds",
-                video_embeds=video_embeds,
-                video_grid_thw=video_grid_thw)
-
-        return None
-
-    def _process_image_input(
-        self, image_input
-    ) -> tuple[Tensor, ...]:
-        if image_input["type"] == "image_embeds":
-            return image_input["image_embeds"].type(self.visual.dtype)
-
-        grid_thw = image_input["image_grid_thw"]
-        assert grid_thw.ndim == 2
-
-        rotary_pos_emb = self.rot_pos_emb(grid_thw)
-        pos_emb = self.fast_pos_embed_interpolate(grid_thw.tolist())
-        pixel_values = image_input["pixel_values"].type(self.visual.dtype)
-        grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
-        grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
-        grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
-        batch_valid_length = mint.repeat_interleave(grid_thw_1 * grid_thw_2, grid_thw_0).astype(ms.int32)
-        image_embeds = self.visual(pixel_values, batch_valid_length, batch_valid_length,
-                                   rotary_pos_emb, pos_emb)
-        # Split concatenated embeddings for each image item.
-        merge_size = self.visual.spatial_merge_size
-        sizes = grid_thw.prod(-1) // merge_size // merge_size
-
-        return image_embeds.split(sizes.tolist())
-
-    def _process_video_input(
-            self, video_input
-    ) -> tuple[Tensor, ...]:
-        if video_input["type"] == "video_embeds":
-            return video_input["video_embeds"].type(self.visual.dtype)
-
-        grid_thw = video_input["video_grid_thw"]
-        assert grid_thw.ndim == 2
-
-        rotary_pos_emb = self.rot_pos_emb(grid_thw)
-        pos_emb = self.fast_pos_embed_interpolate(grid_thw.tolist())
-        pixel_values = video_input["pixel_values_video"].type(self.visual.dtype)
-        grid_thw_1 = grid_thw.index_select(1, ms.Tensor([1])).reshape(-1)
-        grid_thw_2 = grid_thw.index_select(1, ms.Tensor([2])).reshape(-1)
-        grid_thw_0 = grid_thw.index_select(1, ms.Tensor([0])).reshape(-1)
-        batch_valid_length = mint.repeat_interleave(grid_thw_1 * grid_thw_2, grid_thw_0).astype(ms.int32)
-        video_embeds = self.visual(pixel_values, batch_valid_length, batch_valid_length,
-                                   rotary_pos_emb, pos_emb)
-        # Split concatenated embeddings for each image item.
-        merge_size = self.visual.spatial_merge_size
-        sizes = grid_thw.prod(-1) // merge_size // merge_size
-
-        return video_embeds.split(sizes.tolist())
-
-
-    def _parse_and_validate_multimodal_inputs(self, **kwargs: object) -> dict:
-        modalities = {}
-
-        # Preserve the order of modalities if there are multiple of them
-        # from the order of kwargs.
-        for input_key in kwargs:
-            if input_key in ("pixel_values",
-                             "image_embeds") and "images" not in modalities:
-                modalities["images"] = self._parse_and_validate_image_input(
-                    **kwargs)
-            if input_key in ("pixel_values_videos",
-                             "video_embeds") and "videos" not in modalities:
-                modalities["videos"] = self._parse_and_validate_video_input(
-                    **kwargs)
-        return modalities
