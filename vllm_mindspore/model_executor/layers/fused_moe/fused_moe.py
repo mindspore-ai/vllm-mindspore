@@ -31,7 +31,11 @@ from mindspore.ops.auto_generate import (GroupedMatmulV4, MoeDistributeCombine,
 from vllm.distributed.parallel_state import get_ep_group
 
 from vllm_mindspore.model_executor.layers.fused_moe.config import MoeMode
-from vllm_mindspore.utils import is_910b
+from vllm_mindspore.utils import is_310p, is_910b
+
+
+def softmax_score_function(x):
+    return mint.softmax(x, dim=-1, dtype=ms.float32)
 
 
 def fused_topk(
@@ -41,10 +45,15 @@ def fused_topk(
     renormalize: bool,
     indices_type=None,
 ) -> tuple[Tensor, Tensor]:
-    moe_topk_softmax = MoeGatingTopKSoftmax()
-    topk_weights, topk_ids, _ = moe_topk_softmax(gating_output, None, topk)
+    if is_310p():
+        scores = softmax_score_function(gating_output)
+        topk_weights, topk_ids = mint.topk(scores, k=topk, dim=-1)
+    else:
+        moe_topk_softmax = MoeGatingTopKSoftmax()
+        topk_weights, topk_ids, _ = moe_topk_softmax(gating_output, None, topk)
     if renormalize:
-        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
+        topk_weights = mint.div(
+            topk_weights, mint.add(mint.sum(topk_weights, -1, True), 1e-20))
 
     if indices_type is not None:
         topk_ids = topk_ids.to(indices_type)
@@ -171,7 +180,8 @@ class FusedExperts(nn.Cell):
         gate = self._gate_activation(gate, activation)
         hidden = mint.mul(hidden, gate)
         expert_output = self._group_matmul(hidden, w2, group_list)
-        expert_output = mint.nan_to_num(expert_output, 0, 0, 0)
+        if not is_310p():
+            expert_output = mint.nan_to_num(expert_output, 0, 0, 0)
         return expert_output
 
     def run_tp(self, hidden_states, w1, w2, topk_ids, topk_weights, activation,
