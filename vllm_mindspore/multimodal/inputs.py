@@ -157,7 +157,7 @@ def flat_reduce_data(self, batch: list[NestedTensors]) -> NestedTensors:
 
         if all(_expect_same_shape(elem) == first_shape for elem in batch):
             return mindspore.from_numpy(
-                np.concatenat([b.numpy() for b in batch], axis=self.dim))
+                np.concatenate([b.numpy() for b in batch], axis=self.dim))
 
     assert self.dim == 0, "dim == 0 is required for nested list"
     return [e for elem in batch for e in elem]
