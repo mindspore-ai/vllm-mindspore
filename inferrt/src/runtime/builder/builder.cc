@@ -159,8 +159,7 @@ void Builder::CreateOpRunners() {
       CHECK_IF_NULL(deviceContext);
       (void)deviceContexts_.emplace(device.type, deviceContext);
     }
-    void *stream = deviceContext->deviceResManager_->GetStream(0);
-
+    void *stream = deviceContext->deviceResManager_->GetCurrentStream();
     // TODO: need to support ascend stream creation and getting real dynamic shape info.  // NOLINT(readability/todo)
     (void)(opRunners_->emplace_back(node->op, node->inputs, node->output, std::move(operatorPtr), stream, device,
                                     true /*isDynamicShape*/));

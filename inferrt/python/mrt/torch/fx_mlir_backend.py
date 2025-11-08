@@ -32,7 +32,8 @@ from torch_mlir import fx
 from torch_mlir.compiler_utils import OutputType
 
 from mrt.ir import GraphExecutor, Node, Op
-from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch
+from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch, \
+    _set_device_context
 
 
 def _elemtype_to_torch_dtype(elem_ty) -> torch.dtype:
@@ -194,6 +195,7 @@ def _get_func_io(func_op) -> PyTuple[List[Any], List[Any]]:
     return inputs, outputs
 
 
+# pylint: disable=use-yield-from
 def _iter_ops_in_func(func_op):
     """Yield all operations in a func.func in block order."""
     for region in func_op.regions:
@@ -371,6 +373,7 @@ def apply_decompositions(
 
 def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     """FX backend entry point: decompose, import to StableHLO, and build executor."""
+    _set_device_context()
     get_collective_info_from_torch(gm)
 
     gm = apply_decompositions(gm, example_inputs)

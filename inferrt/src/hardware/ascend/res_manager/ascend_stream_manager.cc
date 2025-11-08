@@ -218,6 +218,10 @@ bool AscendStreamMng::SyncStream(size_t streamId) const {
   return SyncStream(stream);
 }
 
+void AscendStreamMng::SetCurrentStream(void *currentStream) { currentStream_ = currentStream; }
+
+void *AscendStreamMng::GetCurrentStream() const { return currentStream_; }
+
 bool AscendStreamMng::SyncStream(aclrtStream stream) const {
   CHECK_IF_NULL(stream);
   LOG_OUT << "Sync stream: " << stream;

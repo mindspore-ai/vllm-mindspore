@@ -22,7 +22,7 @@ if(ENABLE_ASCEND)
 
   include_directories(${TORCH_NPU_PATH}/include/)
   target_link_directories(_mrt_torch PRIVATE ${TORCH_NPU_PATH}/lib/)
-  target_link_libraries(_mrt_torch PUBLIC torch_npu)
+  target_link_libraries(_mrt_torch PUBLIC torch_npu hardware_abstract)
 endif()
 
 set_target_properties(_mrt_torch PROPERTIES

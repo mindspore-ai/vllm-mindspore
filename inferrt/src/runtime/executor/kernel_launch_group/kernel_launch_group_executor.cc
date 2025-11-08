@@ -71,12 +71,6 @@ void KernelLaunchGroupExecutor::Run(bool isDynamic) {
     ParallelDispatchKernels();
     FreeGraphCacheMemory();
   }
-
-  for (auto &deviceItem : deviceContexts_) {
-    const auto &resManager = deviceItem.second->deviceResManager_;
-    CHECK_IF_NULL(resManager);
-    resManager->SyncAllStreams();
-  }
 }
 
 void KernelLaunchGroupExecutor::Initialize() {
@@ -297,7 +291,8 @@ void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
 }
 
 void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
-  auto *defaultStream = deviceContext_->deviceResManager_->GetStream(0);
+  void *mainStream = deviceContext_->deviceResManager_->GetCurrentStream();
+  CHECK_IF_NULL(mainStream);
   const auto &serialLaunchKernels = *serialLaunchOps_;
   for (auto *opRunner : serialLaunchKernels) {
     CHECK_IF_NULL(opRunner);
@@ -311,16 +306,18 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
 
     const auto &eventArray = iter->second;
     auto &waitEvent = eventArray[0];
-    waitEvent->WaitEventWithoutReset(0);
+    waitEvent->set_wait_stream(mainStream);
+    waitEvent->WaitEventWithoutReset();
 
     // TODO: force resize. // NOLINT(readability/todo)
 
-    if (auto errNo = opRunner->Launch(defaultStream) != ops::SUCCESS) {
+    if (auto errNo = opRunner->Launch(mainStream) != ops::SUCCESS) {
       LOG_EXCEPTION << "Launch shape failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
     }
 
     auto &recordEvent = eventArray[1];
-    recordEvent->RecordEvent(0);
+    recordEvent->set_record_stream(mainStream);
+    recordEvent->RecordEvent();
   }
 }
 
@@ -328,7 +325,10 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
   LOG_OUT << "Begin parallel dispatch kernels";
 
   // Record a event to default stream to notify parallel launch kernels execute on other stream.
-  events_.front()->RecordEvent(0);
+  void *mainStream = deviceContext_->deviceResManager_->GetCurrentStream();
+  CHECK_IF_NULL(mainStream);
+  events_.front()->set_record_stream(mainStream);
+  events_.front()->RecordEvent();
 
   // Dispatch kernel which can parallel launch.
   for (size_t i = 0; i < parallelDispatchNum_; i++) {
@@ -345,7 +345,8 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
   }
 
   // The default stream need wait all parallel launch kernel execute finish.
-  events_.back()->WaitEventWithoutReset(0);
+  events_.back()->set_wait_stream(mainStream);
+  events_.back()->WaitEventWithoutReset();
   // Reset all event for reuse.
   for (auto &e : events_) {
     e->ResetEvent();

@@ -298,6 +298,12 @@ size_t AscendResManager::GetCurrentStreamId() const {
   return AscendStreamMng::GetInstance().current_stream();
 }
 
+void AscendResManager::SetCurrentStream(void *currentStream) {
+  AscendStreamMng::GetInstance().SetCurrentStream(currentStream);
+}
+
+void *AscendResManager::GetCurrentStream() const { return AscendStreamMng::GetInstance().GetCurrentStream(); }
+
 bool AscendResManager::QueryStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";
