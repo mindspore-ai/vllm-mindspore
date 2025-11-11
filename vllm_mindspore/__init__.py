@@ -106,15 +106,17 @@ from vllm_mindspore.utils import (
 )
 
 from vllm_mindspore.config import CacheDType, _CacheConfig, \
-    get_current_and_parent_class_attr_docs
+    get_current_and_parent_class_attr_docs, _SchedulerConfig
 
 vllm.config.CacheConfig = _CacheConfig
+vllm.config.SchedulerConfig = _SchedulerConfig
 vllm.config.CacheDType = CacheDType
 vllm.config.get_attr_docs = get_current_and_parent_class_attr_docs
 import vllm.engine.arg_utils
 
 vllm.engine.arg_utils.CacheDType = CacheDType
 vllm.engine.arg_utils.CacheConfig = _CacheConfig
+vllm.engine.arg_utils.SchedulerConfig = _SchedulerConfig
 vllm.engine.arg_utils.get_attr_docs = get_current_and_parent_class_attr_docs
 
 vllm.utils.make_tensor_with_pad = make_tensor_with_pad
@@ -429,6 +431,10 @@ from vllm_mindspore.forward_context import set_forward_context
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.set_forward_context = (
     set_forward_context)
+
+from vllm_mindspore.v1.worker.gpu_model_runner import capture_model
+
+vllm.v1.worker.gpu_model_runner.GPUModelRunner.capture_model = capture_model
 
 import vllm.v1.worker.block_table
 from vllm_mindspore.v1.worker.block_table import BlockTable
