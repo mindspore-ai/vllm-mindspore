@@ -29,15 +29,13 @@ from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.model_executor.layers.quantization.base_config import (
-    QuantizationConfig)
+    QuantizationConfig, QuantizeMethodBase, method_has_implemented_embedding)
+from vllm.model_executor.utils import set_weight_attrs
 
 from vllm_mindspore.distributed.communication_op import (
     ReduceFromModelParallelRegion)
-from vllm_mindspore.model_executor.layers.quantization.base_config import (
-    QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
-from vllm_mindspore.model_executor.utils import set_weight_attrs
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
 

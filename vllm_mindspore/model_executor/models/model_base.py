@@ -429,13 +429,13 @@ class NativeModel(MsModelBase):
             dtype=self.model_config.dtype,
             max_model_len=self.model_config.max_model_len)
         self.kv_caches = [
-            AttentionWrapper() for i in range(self.config.text_config.num_hidden_layers)
+            AttentionWrapper() for i in range(self.config.num_hidden_layers)
         ]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.config.text_config.num_hidden_layers):
+        for i in range(self.config.num_hidden_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 

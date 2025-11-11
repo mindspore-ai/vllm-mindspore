@@ -298,10 +298,9 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
     }
     # fa3 quant layer target_dtype is int8
     # no fa3 quant layer target_dtype is bfloat16
-    fa3_quant = self.vllm_config.quant_config.fa3_quant \
-                    if self.vllm_config.quant_config else False
-    fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
-                        if self.vllm_config.quant_config else set()
+    fa3_quant = getattr(self.vllm_config.quant_config, "fa3_quant", False)
+    fa3_quant_layer: set[int] = getattr(self.vllm_config.quant_config,
+                                        "fa3_quant_layer", set())
     kv_lora_rank = getattr(self.vllm_config.model_config.hf_text_config,
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
@@ -742,10 +741,9 @@ def wrapper_gpu_model_runner_execute_model(func):
 def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     block_size = self.vllm_config.cache_config.block_size
     use_mla = self.vllm_config.model_config.use_mla
-    fa3_quant = self.vllm_config.quant_config.fa3_quant \
-                    if self.vllm_config.quant_config else False
-    fa3_quant_layer = self.vllm_config.quant_config.fa3_quant_layer \
-                        if self.vllm_config.quant_config else set()
+    fa3_quant = getattr(self.vllm_config.quant_config, "fa3_quant", False)
+    fa3_quant_layer: set[int] = getattr(self.vllm_config.quant_config,
+                                        "fa3_quant_layer", set())
     kv_cache_spec: dict[str, KVCacheSpec] = {}
     attn_layers = get_layers_from_vllm_config(self.vllm_config,
                                               AttentionWrapper)

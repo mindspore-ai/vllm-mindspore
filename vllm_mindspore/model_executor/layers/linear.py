@@ -30,14 +30,14 @@ from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
                               split_tensor_along_last_dim)
+from vllm.model_executor.layers.quantization.base_config import (
+    QuantizationConfig, QuantizeMethodBase)
+from vllm.model_executor.utils import set_weight_attrs
 
 from vllm_mindspore.distributed.communication_op import (
     AllGatherFromModelParallelRegion, ReduceFromModelParallelRegion)
-from vllm_mindspore.model_executor.layers.quantization.base_config import (
-    QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
-from vllm_mindspore.model_executor.utils import set_weight_attrs
 
 WEIGHT_LOADER_V2_SUPPORTED = [
     "CompressedTensorsLinearMethod", "AWQMarlinLinearMethod",
@@ -440,9 +440,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             loaded_weight = split_loaded_weight(loaded_weight, output_dim,
                                                 start_idx, shard_size)
 
-            assert loaded_weight.shape == (shard_size, param.shape[1])
             param[shard_offset:shard_offset +
-                  shard_size, :] = ms.from_numpy(loaded_weight)
+                  shard_size] = ms.from_numpy(loaded_weight)
 
 
 class QKVParallelLinear(ColumnParallelLinear):
@@ -699,6 +698,9 @@ class RowParallelLinear(LinearBase):
         return output, output_bias
 
     def weight_loader(self, param, loaded_weight):
+        if param.name.endswith("bias") and (self.tp_rank > 0
+                                            or self.skip_bias_add):
+            return
         tp_rank = get_tensor_model_parallel_rank()
         input_dim = getattr(param, "input_dim", None)
         shard_size = self.input_size_per_partition

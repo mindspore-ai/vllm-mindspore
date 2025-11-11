@@ -399,17 +399,23 @@ class Qwen2Model(nn.Cell):
                 name = name.replace(weight_name, param_name)
                 if name in params_dict:
                     param = params_dict[name]
+                    if not getattr(param, "weight_loader", None):
+                        continue
                     weight_loader = param.weight_loader
                     weight_loader(param, loaded_weight, shard_id)
                     loaded_params.add(name)
                     break
             else:
+                name = name.replace("output_layer", "lm_head")
                 if name in params_dict:
                     param = params_dict[name]
                     weight_loader = getattr(param, "weight_loader",
                                             default_weight_loader)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
+
+        network_unload = set(params_dict.keys()) - loaded_params
+        print(f"These params are not loaded in the network: {network_unload}")
 
         return loaded_params
 

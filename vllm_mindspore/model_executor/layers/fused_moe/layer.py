@@ -31,15 +31,13 @@ from vllm.distributed import (get_dp_group, get_ep_group,
                               get_tp_group)
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization.base_config import (
-    QuantizationConfig)
+    QuantizationConfig, QuantizeMethodBase)
 from vllm.model_executor.utils import set_weight_attrs
 
 from vllm_mindspore.model_executor.layers.fused_moe.config import (
     FusedMoEConfig, FusedMoEParallelConfig, MoeMode)
 from vllm_mindspore.model_executor.layers.fused_moe.fused_moe import (
     FusedExperts, fused_topk, grouped_topk)
-from vllm_mindspore.model_executor.layers.quantization.base_config import (
-    QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
 
