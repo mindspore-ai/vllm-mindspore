@@ -7,59 +7,59 @@
 # The rules are applied from top to bottom, and the last matching rule will take effect.
 
 # If the file in PR does not match rule, the default maintainer erpim will be designated to conduct code review.
-* @erpim
-.* @erpim
+* @zhengzuohe
+.* @zhengzuohe
 
 # The maintainers of vllm_mindspore/.
-/vllm_mindspore/ @erpim @tronzhang
-/vllm_mindspore/attention/ @erpim @wang_shaocong
-/vllm_mindspore/distributed/ @zlq2020 @tronzhang
-/vllm_mindspore/engine/ @zlq2020 @tronzhang
-/vllm_mindspore/entrypoints/ @panshaowu @zlq2020
-/vllm_mindspore/executor/ @zlq2020 @tronzhang
-/vllm_mindspore/inputs/ @zlq2020 @tronzhang
-/vllm_mindspore/lora/ @erpim @wang_shaocong
-/vllm_mindspore/model_executor/ @zlq2020 @tronzhang
-/vllm_mindspore/model_executor/layers/ @zlq2020 @tronzhang
-/vllm_mindspore/model_executor/layers/quantization/ @erpim @hangangqiang
-/vllm_mindspore/model_executor/model_loader/ @zlq2020 @tronzhang
-/vllm_mindspore/model_executor/models/ @erpim @wang_shaocong
-/vllm_mindspore/model_executor/models/mf_models/ @erpim @wang_shaocong
-/vllm_mindspore/model_executor/models/mindone_models/ @erpim @wang_shaocong
-/vllm_mindspore/multimodal/ @erpim @wang_shaocong
-/vllm_mindspore/platforms/ @zlq2020 @tronzhang
-/vllm_mindspore/v1/ @zlq2020 @tronzhang
-/vllm_mindspore/v1/attention/ @erpim @wang_shaocong
-/vllm_mindspore/v1/attention/backends/ @erpim @wang_shaocong
-/vllm_mindspore/v1/core/ @zlq2020 @r1chardf1d0
-/vllm_mindspore/v1/engine/ @zlq2020 @tronzhang
-/vllm_mindspore/v1/executor/ @zlq2020 @tronzhang
-/vllm_mindspore/v1/sample/ @zlq2020 @erpim
-/vllm_mindspore/v1/worker/ @zlq2020 @r1chardf1d0
-/vllm_mindspore/worker/ @zlq2020 @tronzhang
+/vllm_mindspore/ @zhengzuohe
+/vllm_mindspore/attention/ @zhengzuohe
+/vllm_mindspore/distributed/ @zhengzuohe
+/vllm_mindspore/engine/ @zhengzuohe
+/vllm_mindspore/entrypoints/ @zhengzuohe
+/vllm_mindspore/executor/ @zhengzuohe
+/vllm_mindspore/inputs/ @zhengzuohe
+/vllm_mindspore/lora/ @zhengzuohe
+/vllm_mindspore/model_executor/ @zhengzuohe
+/vllm_mindspore/model_executor/layers/ @zhengzuohe
+/vllm_mindspore/model_executor/layers/quantization/ @zhengzuohe
+/vllm_mindspore/model_executor/model_loader/ @zhengzuohe
+/vllm_mindspore/model_executor/models/ @zhengzuohe
+/vllm_mindspore/model_executor/models/mf_models/ @zhengzuohe
+/vllm_mindspore/model_executor/models/mindone_models/ @zhengzuohe
+/vllm_mindspore/multimodal/ @zhengzuohe
+/vllm_mindspore/platforms/ @zhengzuohe
+/vllm_mindspore/v1/ @zhengzuohe
+/vllm_mindspore/v1/attention/ @zhengzuohe
+/vllm_mindspore/v1/attention/backends/ @zhengzuohe
+/vllm_mindspore/v1/core/ @zhengzuohe
+/vllm_mindspore/v1/engine/ @zhengzuohe
+/vllm_mindspore/v1/executor/ @zhengzuohe
+/vllm_mindspore/v1/sample/ @zhengzuohe
+/vllm_mindspore/v1/worker/ @zhengzuohe
+/vllm_mindspore/worker/ @zhengzuohe
 
 # The maintainers of tests/.
-/tests/ @erpim @wang_shaocong
+/tests/ @zhengzuohe
 
 # The maintainers of examples/.
-/examples/ @panshaowu
+/examples/ @zhengzuohe
 
 # The maintainers of dashboard/.
-/dashboard/ @r1chardf1d0
+/dashboard/ @zhengzuohe
 
 # The maintainers of csrc/.
-/csrc/ @dayschan
+/csrc/ @zhengzuohe
 
 # The maintainers of codecheck_toolkits/.
-/codecheck_toolkits/ @erpim
+/codecheck_toolkits/ @zhengzuohe
 
 # The maintainers of .gitee/.
-/.gitee/ @TrHan
+/.gitee/ @zhengzuohe
 
 # The maintainers of other code directories.
-/requirements.txt  @tronzhang
-/setup.py  @tronzhang
-/install_depend_pkgs.sh @tronzhang
-/build_image.sh @tronzhang
-/Dockerfile @tronzhang
-/LICENSE @tronzhang
+/requirements.txt  @zhengzuohe
+/setup.py  @zhengzuohe
+/install_depend_pkgs.sh @zhengzuohe
+/build_image.sh @zhengzuohe
+/Dockerfile @zhengzuohe
+/LICENSE @zhengzuohe
