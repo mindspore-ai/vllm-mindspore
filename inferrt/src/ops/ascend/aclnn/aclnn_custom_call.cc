@@ -14,23 +14,10 @@
  * limitations under the License.
  */
 
-#include "ops/operator.h"
+#include "ops/ascend/aclnn/aclnn_custom_call.h"
 
 namespace mrt {
 namespace ops {
-
-OpsErrorCode Operator::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  ir::VisitAllTensors(output, [](const ir::TensorPtr &tensor) {
-    if (tensor->HasSymbolicShape()) {
-      tensor->EvalSymbolicShape();
-    }
-    if (tensor->HasDynamicShape()) {
-      LOG_EXCEPTION << "Tensor shape still unknown before launch: " << tensor;
-    }
-  });
-  LOG_OUT << "Operator output shape inferred: " << *output;
-  return SUCCESS;
-}
-
+MRT_REG_OP(custom_call, AclnnCustomCall, Ascend);
 }  // namespace ops
 }  // namespace mrt

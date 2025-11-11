@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
+#include "ops/ascend/aclnn/utils/opapi_lib_loader.h"
+#include <unistd.h>
 #include <string>
 #include <mutex>
 #include <shared_mutex>
 #include <vector>
 #include <unordered_map>
+#include <fstream>
+#include <sstream>
+#include <cstdlib>
 
-#include "ops/ascend/aclnn/utils/opapi_lib_loader.h"
 #include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
 
 namespace mrt {
@@ -63,9 +67,34 @@ void LoadOpApiLib() {
   if (isLoaded) {
     return;
   }
+  auto customPaths = GetEnv("ASCEND_CUSTOM_OPP_PATH");
+  std::vector<std::string> customPathVec;
+  if (!customPaths.empty()) {
+    LOG_OUT << "ASCEND_CUSTOM_OPP_PATH: " << customPaths;
+
+    std::stringstream ss(customPaths);
+    std::string path;
+    while (std::getline(ss, path, ':')) {
+      if (path.empty()) continue;
+
+      const std::string libPath = path + kNameCustOpApiLib;
+      if (access(libPath.c_str(), F_OK) == 0) {
+        customPathVec.push_back(libPath);
+      }
+    }
+  }
+
   const std::string ascendPath = device::ascend::GetAscendPath();
   const std::vector<std::string> dependLibs = {"libdummy_tls.so", "libnnopbase.so"};
   std::unique_lock<std::shared_mutex> writeLock(rwOpApiMutex);
+  for (const auto &customLibPath : customPathVec) {
+    auto customHandler = GetOpApiLibHandler(customLibPath);
+    if (customHandler != nullptr) {
+      LOG_OUT << "Load cust open api lib " << customLibPath << " success";
+      (void)libHandlers.emplace(customHandler, customLibPath);
+    }
+  }
+
   for (const auto &depLib : dependLibs) {
     (void)GetOpApiLibHandler(ascendPath + "lib64/" + depLib);
   }

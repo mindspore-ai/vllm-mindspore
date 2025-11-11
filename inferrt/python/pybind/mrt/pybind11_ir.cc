@@ -17,6 +17,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <sstream>
+#include <vector>
+#include <string>
 
 #include "runtime/executor/executor.h"
 #include "ir/graph.h"
