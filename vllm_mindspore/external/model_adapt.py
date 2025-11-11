@@ -18,6 +18,7 @@ from typing import Any, Optional, Union
 import copy
 
 import torch
+import torch_npu
 import mindspore as ms
 import vllm.envs as envs
 from mindspore import Tensor, mutable, nn
@@ -30,8 +31,6 @@ from vllm.attention.layer import Attention
 from vllm.distributed.parallel_state import get_world_group
 from vllm.distributed import get_dp_group, get_ep_group
 
-from omni.layers.attention.backend.attention import AscendAttentionState
-
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.utils import (convert_pin,
@@ -39,7 +38,7 @@ from vllm_mindspore.model_executor.models.utils import (convert_pin,
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.external.tensor_convert import (tensor_torch2ms,
-    get_ms_dtype)
+    tensor_ms2torch, get_ms_dtype)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.external.utils import init_ms_distributed
 from vllm_mindspore.model_executor.models.interfaces import (
@@ -118,6 +117,9 @@ class MLAAttentionWrapper(AttentionWrapper):
 class MsModelAdapter(NativeModel):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
+        if not envs.VLLM_USE_V1:
+            raise NotImplementedError("Unsupport V0")
+
         config = vllm_config.model_config.hf_config
         lora_config = vllm_config.lora_config
         self.config = config
@@ -221,22 +223,18 @@ class MsModelAdapter(NativeModel):
                 input_ids, positions)
         elif isinstance(attn_metadata, dict) and '1' in attn_metadata:
             attn_metadata = attn_metadata['1']
+
         key_cache, value_cache = self.get_kvcache()
-        if not envs.VLLM_USE_V1:
-            raise NotImplementedError("Unsupport V0")
+
+        # only for V1
+        if is_warm_up is True:
+            is_prefill = attn_metadata.max_context_lens == 0
+            query_lens_np = attn_metadata.q_seq_lens_np
+            seq_lens_np = attn_metadata.seq_lens_np
         else:
-            # V1
-            if is_warm_up is True:
-                is_prefill = attn_metadata.max_context_lens == 0
-                query_lens_np = attn_metadata.q_seq_lens_np
-                seq_lens_np = attn_metadata.seq_lens_np
-            else:
-                if attn_metadata.attn_state == AscendAttentionState.PrefillNoCache:
-                    is_prefill = True
-                else:
-                    is_prefill = False
-                query_lens_np = attn_metadata.query_lens.cpu().numpy()
-                seq_lens_np = attn_metadata.seq_lens.cpu().numpy()
+            is_prefill = attn_metadata.attn_state == 0  # PrefillNoCache
+            query_lens_np = attn_metadata.query_lens.cpu().numpy()
+            seq_lens_np = attn_metadata.seq_lens.cpu().numpy()
 
         if input_ids is not None:
             input_ids = input_ids.astype(ms.int32)
@@ -248,11 +246,11 @@ class MsModelAdapter(NativeModel):
         model_inputs = {}
         model_inputs["input_ids"] = convert_pin(input_ids)
         model_inputs["batch_valid_length"] = convert_pin(
-            ms.from_numpy(seq_lens_np).astype(mstype.int32))
-        model_inputs["block_tables"] = tensor_torch2ms(
-            attn_metadata.block_tables)
-        model_inputs["slot_mapping"] = tensor_torch2ms(
-            attn_metadata.slot_mapping).astype(mstype.int32)
+            ms.Tensor(seq_lens_np, dtype=ms.int32))
+        model_inputs["block_tables"] = convert_pin(tensor_torch2ms(
+            attn_metadata.block_tables))
+        model_inputs["slot_mapping"] = convert_pin(tensor_torch2ms(
+            attn_metadata.slot_mapping).astype(mstype.int32))
         model_inputs["positions"] = convert_pin(position_ids)
         model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
         model_inputs["attn_mask"] = convert_pin(attention_mask)
@@ -292,8 +290,6 @@ class MsModelAdapter(NativeModel):
                 i)] = self.kv_caches[i]
     
     def convert_logits(self, logits):
-
-        # logits = tensor_ms2torch(logits).npu()
-        logits = torch.tensor(logits.astype(mstype.float32).asnumpy(),
-                              dtype=torch.bfloat16).npu()
+        logits = tensor_ms2torch(logits)
+        torch_npu.npu.synchronize()
         return logits
