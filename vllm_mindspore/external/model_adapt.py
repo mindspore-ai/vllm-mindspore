@@ -28,6 +28,7 @@ from vllm.forward_context import get_forward_context
 from vllm.sequence import IntermediateTensors
 from vllm.attention.layer import Attention
 from vllm.distributed.parallel_state import get_world_group
+from vllm.distributed import get_dp_group, get_ep_group
 
 from omni.layers.attention.backend.attention import AscendAttentionState
 
@@ -41,7 +42,8 @@ from vllm_mindspore.external.tensor_convert import (tensor_torch2ms,
     get_ms_dtype)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.external.utils import init_ms_distributed
-
+from vllm_mindspore.model_executor.models.interfaces import (
+    is_mixture_of_experts, supports_moe_dp_tp)
 
 class AttentionWrapper(Attention):
     def __init__(self):
@@ -154,6 +156,9 @@ class MsModelAdapter(NativeModel):
         self.ms_key_caches = []
         self.ms_value_caches = []
 
+        if is_mixture_of_experts(self):
+            self.init_moe_params(vllm_config)
+
         self.rank = torch.distributed.get_rank()
         self.local_rank = get_world_group().local_rank
 
@@ -257,6 +262,15 @@ class MsModelAdapter(NativeModel):
         model_inputs["intermediate_tensors"] = intermediate_tensors
         model_inputs["inputs_embeds"] = inputs_embeds
 
+        if supports_moe_dp_tp(self):
+            dp_unpad_index, dp_pad_index, dp_pad_index_total_with_offset, \
+            dp_unpad_index_total_with_offset = self.prepare_moe_dp_tp_inputs()
+            model_inputs["dp_unpad_index"] = dp_unpad_index
+            model_inputs["dp_pad_index"] = dp_pad_index
+            model_inputs["dp_pad_index_total_with_offset"] = \
+                dp_pad_index_total_with_offset
+            model_inputs["dp_unpad_index_total_with_offset"] = \
+                dp_unpad_index_total_with_offset
         return model_inputs, is_prefill
 
     def common_preprocess(self, vllm_config, prefix=""):

@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 import numpy as np
 import vllm.envs as envs
-from mindspore import Parameter, Tensor, from_numpy, mint, nn, ops
+from mindspore import Parameter, Tensor, mint, nn, ops
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (get_dp_group, get_ep_group,
                               get_tensor_model_parallel_world_size,
@@ -32,8 +32,9 @@ from vllm.distributed import (get_dp_group, get_ep_group,
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig)
-from vllm.model_executor.utils import set_weight_attrs
 
+from vllm_mindspore.distributed.communication_op import (get_dp_group_name,
+                                                         ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.layers.fused_moe.config import (
     FusedMoEConfig, FusedMoEParallelConfig, MoeMode)
 from vllm_mindspore.model_executor.layers.fused_moe.fused_moe import (
@@ -42,6 +43,9 @@ from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     split_loaded_weight)
+from vllm_mindspore.model_executor.models.native_common import get_ms_tensor
+from vllm_mindspore.model_executor.utils import (set_weight_attrs,
+                                                 get_model_context)
 
 logger = init_logger(__name__)
 
@@ -265,7 +269,7 @@ class FusedMoE(nn.Cell):
                                       "is not supported yet")
 
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = get_model_context("model_dtype")
         self.params_dtype = params_dtype
 
         vllm_config = get_current_vllm_config()
@@ -377,12 +381,9 @@ class FusedMoE(nn.Cell):
         self.quant_method.create_weights(layer=self, **moe_quant_params)
 
         # Initialize some communication ops and group.
-        self.dp_group = get_dp_group().device_group._name
-        self.ep_group = get_ep_group().device_group._name
+        self.dp_group = get_dp_group_name()
 
-        self.tp_world_size = get_tensor_model_parallel_world_size()
-        self.tp_group = get_tp_group().device_group._name
-        self.all_reduce_from_tp_group = ops.AllReduce(group=self.tp_group)
+        self.all_reduce_from_tp_group = ReduceFromModelParallelRegion()
 
         if (self.pure_tp or self.tp_ep) and self.dp_size > 1:
             self.all_gather_from_dp_group = ops.AllGather(group=self.dp_group)
@@ -450,9 +451,9 @@ class FusedMoE(nn.Cell):
                                             shard_size * tp_rank, shard_size)
 
         if is_param_transpose:
-            loaded_weight = from_numpy(loaded_weight.swapaxes(-1, -2))
+            loaded_weight = get_ms_tensor(loaded_weight.swapaxes(-1, -2))
         else:
-            loaded_weight = from_numpy(loaded_weight)
+            loaded_weight = get_ms_tensor(loaded_weight)
 
         # Narrow parameter and load.
         # w1, gate_proj: Load into first logical weight of w13.
@@ -492,17 +493,17 @@ class FusedMoE(nn.Cell):
                                                 shard_size)
 
             if is_param_transpose:
-                loaded_weight = from_numpy(loaded_weight.swapaxes(-1, -2))
+                loaded_weight = loaded_weight.swapaxes(-1, -2)
             else:
-                loaded_weight = from_numpy(loaded_weight)
-            param[expert_id] = loaded_weight
+                loaded_weight = loaded_weight
+            param[expert_id] = get_ms_tensor(loaded_weight)
         # w2, down_proj: Load into only logical weight of w2.
         else:
             if is_param_transpose:
-                loaded_weight = from_numpy(loaded_weight.swapaxes(-1, -2))
+                loaded_weight = loaded_weight.swapaxes(-1, -2)
             else:
-                loaded_weight = from_numpy(loaded_weight)
-            param.set_data(loaded_weight)
+                loaded_weight = loaded_weight
+            param.set_data(get_ms_tensor(loaded_weight))
 
     def _load_single_value(self, param: Parameter, loaded_weight: Tensor,
                            expert_id: int):
@@ -510,10 +511,10 @@ class FusedMoE(nn.Cell):
             if hasattr(param, "is_transposed") else False
         loaded_weight = loaded_weight[:]
         if is_param_transpose:
-            loaded_weight = from_numpy(loaded_weight.swapaxes(-1, -2))
+            loaded_weight = loaded_weight.swapaxes(-1, -2)
         else:
-            loaded_weight = from_numpy(loaded_weight)
-        param[expert_id] = from_numpy(loaded_weight)
+            loaded_weight = loaded_weight
+        param[expert_id] = get_ms_tensor(loaded_weight)
 
     def _load_g_idx(self, shard_id: str, param: Parameter, shard_dim: int,
                     loaded_weight: Tensor, tp_rank: int, expert_id: int):
@@ -530,10 +531,10 @@ class FusedMoE(nn.Cell):
                 if hasattr(param, "is_transposed") else False
             loaded_weight = loaded_weight[:]
             if is_param_transpose:
-                loaded_weight = from_numpy(loaded_weight.swapaxes(-1, -2))
+                loaded_weight = loaded_weight.swapaxes(-1, -2)
             else:
-                loaded_weight = from_numpy(loaded_weight)
-            param[expert_id] = from_numpy(loaded_weight)
+                loaded_weight = loaded_weight
+            param[expert_id] = get_ms_tensor(loaded_weight)
 
     def _map_global_expert_id_to_local_expert_id(self, expert_id: int) -> int:
         if self.expert_map is None:

@@ -33,6 +33,10 @@ def register_model():
         "Qwen3ForCausalLM",
         "vllm_mindspore.model_executor.models.qwen3:Qwen3ForCausalLM")
 
+    ModelRegistry.register_model(
+        "Qwen3MoeForCausalLM",
+        "vllm_mindspore.model_executor.models.qwen3_moe:Qwen3MoeForCausalLM")
+
 
 def init_env():
     defact_env = {

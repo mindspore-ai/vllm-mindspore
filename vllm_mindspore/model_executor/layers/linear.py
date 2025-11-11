@@ -224,7 +224,7 @@ class ReplicatedLinear(LinearBase):
             f"Tried to load weights of size {loaded_weight.size()}"
             f"to a parameter of size {param.size()}")
 
-        param.set_data(ms.from_numpy(loaded_weight))
+        param.set_data(get_ms_tensor(loaded_weight))
 
     def construct(
             self,
@@ -538,7 +538,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                     loaded_weight, output_dim, start_idx, shard_size)
                 loaded_weight_list.append(loaded_weight_shard)
 
-            loaded_weight = ms.from_numpy(np.concatenate(loaded_weight_list))
+            loaded_weight = get_ms_tensor(np.concatenate(loaded_weight_list))
 
             assert loaded_weight.shape == param.shape
             param.set_data(loaded_weight)

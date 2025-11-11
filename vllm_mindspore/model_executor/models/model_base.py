@@ -391,24 +391,25 @@ class NativeModel(MsModelBase):
         self.decode_graph = None
 
         if is_mixture_of_experts(self):
-            custom_ep_size = \
-                vllm_config.additional_config.get("expert_parallel", 1) \
+            self.init_moe_params(vllm_config)
+
+    def init_moe_params(self, vllm_config):
+        custom_ep_size = \
+            vllm_config.additional_config.get("expert_parallel", 1) \
                 if vllm_config.additional_config is not None else 1
-            pure_ep = self.parallel_config.enable_expert_parallel and \
-                (get_ep_group().world_size // int(custom_ep_size)) == 1
-            if get_dp_group().world_size > 1 and not pure_ep:
-                if not supports_moe_dp_tp(self):
-                    raise ValueError(
-                        "The MoE Model do not support Data Parallel mix with "
-                        "Tensor Parallel. If want to use MoE with DP + TP, "
-                        "please implement `supports_moe_dp_tp` in models.")
-                self.moe_dp_need_pad = True
-                self.dp_group = get_dp_group().device_group._name
-                self.dp_cpu_group = get_dp_group().cpu_group._name
-                self.dp_world_size = get_dp_group().world_size
-                self.dp_rank = get_dp_group().rank_in_group
-            else:
-                self.moe_dp_need_pad = False
+        pure_ep = self.parallel_config.enable_expert_parallel and \
+                  (get_ep_group().world_size // int(custom_ep_size)) == 1
+        if get_dp_group().world_size > 1 and not pure_ep:
+            if not supports_moe_dp_tp(self):
+                raise ValueError(
+                    "The MoE Model do not support Data Parallel mix with "
+                    "Tensor Parallel. If want to use MoE with DP + TP, "
+                    "please implement `supports_moe_dp_tp` in models.")
+            self.moe_dp_need_pad = True
+            self.dp_world_size = get_dp_group().world_size
+            self.dp_rank = get_dp_group().rank_in_group
+        else:
+            self.moe_dp_need_pad = False
 
     @property
     def ready_model(self) -> nn.Cell:
