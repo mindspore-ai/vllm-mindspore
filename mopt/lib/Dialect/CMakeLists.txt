@@ -1,5 +1,6 @@
 add_mlir_dialect_library(MLIRMrtDialect
   MrtDialect.cc
+  Mrt.cc
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/mopt

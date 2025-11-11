@@ -19,21 +19,34 @@ import numpy as np
 from mrt.torch.fx_mlir_backend import backend
 
 
-def foo(x, y):
-    return torch.matmul(x, y)
+def foo(x):
+    """Reshape a 2x3 tensor to 3x2"""
+    return x.reshape(3, 2)
 
 
 opt_foo = torch.compile(foo, backend=backend)
 
 
-def run(shape1, shape2):
-    x_np = np.random.randn(*shape1).astype(np.float32)
-    y_np = np.random.randn(*shape2).astype(np.float32)
-    expect = np.matmul(x_np, y_np)
-    out = opt_foo(torch.tensor(x_np), torch.tensor(y_np))
-    assert np.allclose(out, expect, 1e-3, 1e-3), f"\nout={out}\nexpect={expect}"
+def run(input_shape, output_shape):
+    """Test reshape operation"""
+    x_np = np.random.randn(*input_shape).astype(np.float32)
+    x_tensor = torch.tensor(x_np)
+    
+    # Expected result using numpy
+    expect = x_np.reshape(output_shape)
+    
+    # Result from compiled backend
+    out = opt_foo(x_tensor)
+    
+    print(f"Input shape: {input_shape}")
+    print(f"Output shape: {out.shape}")
+    print(f"Expected shape: {output_shape}")
+    
+    assert out.shape == output_shape, f"Shape mismatch: {out.shape} vs {output_shape}"
+    assert np.allclose(out.numpy(), expect, 1e-5, 1e-5), f"\nout={out}\nexpect={expect}"
 
 
-run((2, 2), (2, 4))
+# Test reshape from 2x3 to 3x2
+run((2, 3), (3, 2))
 
 print("The result is correct. 'mrt' backend has been installed successfully.")

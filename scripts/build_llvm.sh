@@ -62,70 +62,50 @@ STABLEHLO_ZIP="${TEMP_ARCHIVES_DIR}/stablehlo-c28d55e91b4a5daaff18a33ce7e9bbd0f1
 download "${STABLEHLO_URL}" "${STABLEHLO_ZIP}"
 extract_zip_to_dir "${STABLEHLO_ZIP}" "${STABLEHLO_DIR}"
 
-#------------ build llvm
-LLVM_BUILD_DIR="${PROJECT_DIR}/build/third_party/build/llvm"
-LLVM_INSTALL_PREFIX="${LLVM_INSTALL_PREFIX:-${LLVM_BUILD_DIR}/install}"
+# Apply patches to torch-mlir
+echo "Applying patches to torch-mlir..."
+TORCHMLIR_PATCH_DIR="${PROJECT_DIR}/third_party/patch/torch-mlir"
+if [ -d "${TORCHMLIR_PATCH_DIR}" ]; then
+  # Apply patches in order: [0-9][0-9][0-9]-*.patch
+  for patch_file in "${TORCHMLIR_PATCH_DIR}"/[0-9][0-9][0-9]-*.patch; do
+    if [ -f "${patch_file}" ]; then
+      echo "  Applying patch: $(basename ${patch_file})"
+      patch -p1 -d "${TORCHMLIR_DIR}" < "${patch_file}"
+    fi
+  done
+  echo "Patches applied successfully."
+else
+  echo "  No patches found, skipping."
+fi
+
+#------------ build llvm with torch_mlir in-tree
+LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-${PROJECT_DIR}/build/third_party/build/llvm}"
 
 cd "${PROJECT_DIR}"
-echo "Configuring llvm..."
+echo "Configuring LLVM with torch-mlir in-tree..."
 cmake -GNinja -B "${LLVM_BUILD_DIR}" \
     ${CCACHE_CMAKE_ARGS} \
     -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=ON \
-    -DMLIR_BUILD_MLIR_C_DYLIB=ON \
     -DPython3_FIND_VIRTUALENV=ONLY \
-    -DLLVM_ENABLE_PROJECTS="mlir" \
-    -DLLVM_ENABLE_RTTI=ON \
+    -DLLVM_ENABLE_PROJECTS=mlir \
+    -DLLVM_EXTERNAL_PROJECTS="torch-mlir" \
+    -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="${TORCHMLIR_DIR}" \
     -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
     -DLLVM_TARGETS_TO_BUILD=host \
-    -DLLVM_BUILD_UTILS=ON \
-    -DLLVM_INSTALL_UTILS=ON \
-    -DCMAKE_INSTALL_PREFIX="${LLVM_INSTALL_PREFIX}" \
-    -DCMAKE_BUILD_RPATH="${LLVM_BUILD_DIR}/lib" \
-    -DCMAKE_INSTALL_RPATH="\$ORIGIN/../lib" \
+    -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON \
     third_party/llvm-project/llvm
-echo "Configured llvm."
+echo "Configured LLVM with torch-mlir."
 
-echo "Building llvm..."
+echo "Building LLVM and torch-mlir..."
 if [ -n "${BUILD_JOBS}" ]; then
   cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
 else
   cmake --build "${LLVM_BUILD_DIR}"
 fi
-echo "Built llvm: ${LLVM_BUILD_DIR}"
+echo "Built LLVM and torch-mlir: ${LLVM_BUILD_DIR}"
 
-echo "Installing llvm..."
-cmake --install "${LLVM_BUILD_DIR}"
-echo "Installed llvm: ${LLVM_INSTALL_PREFIX}"
-
-#------------ build torch_mlir
-TORCHMLIR_BUILD_DIR="${PROJECT_DIR}/build/third_party/build/torch_mlir"
-TORCHMLIR_INSTALL_PREFIX="${TORCHMLIR_INSTALL_PREFIX:-${TORCHMLIR_BUILD_DIR}/install}"
-
-echo "Configuring torch_mlir..."
-cmake -GNinja -B "${TORCHMLIR_BUILD_DIR}" \
-    ${CCACHE_CMAKE_ARGS} \
-    -DMLIR_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/mlir" \
-    -DLLVM_DIR="${LLVM_INSTALL_PREFIX}/lib/cmake/llvm" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DPython3_FIND_VIRTUALENV=ONLY \
-    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DLLVM_TARGETS_TO_BUILD=host \
-    -DTORCH_MLIR_ENABLE_TESTS=OFF \
-    -DCMAKE_INSTALL_PREFIX="${TORCHMLIR_INSTALL_PREFIX}" \
-    -DCMAKE_BUILD_RPATH="${TORCHMLIR_INSTALL_PREFIX}/lib" \
-    -DTORCH_MLIR_INSTALL_USE_SYMLINKS=OFF \
-    third_party/torch-mlir
-echo "Configured torch_mlir."
-
-echo "Building torch_mlir..."
-if [ -n "${BUILD_JOBS}" ]; then
-  cmake --build "${TORCHMLIR_BUILD_DIR}" -j "${BUILD_JOBS}"
-else
-  cmake --build "${TORCHMLIR_BUILD_DIR}"
-fi
-echo "Built torch_mlir: ${TORCHMLIR_BUILD_DIR}"
-
-echo "Installing torch_mlir..."
-cmake --install "${TORCHMLIR_BUILD_DIR}"
-echo "Installed torch_mlir: ${TORCHMLIR_BUILD_DIR}"
+echo ""
+echo "=========================================="
+echo "LLVM and torch-mlir build completed"
+echo "=========================================="
+echo "LLVM build directory: ${LLVM_BUILD_DIR}"

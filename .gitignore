@@ -40,7 +40,8 @@ Makefile
 
 # Third party libs
 .mrtlibs/
-third_party/
+third_party/torch-mlir
+third_party/llvm-project
 
 # Codegen files
 inferrt/src/ops/ascend/aclnn/auto_gen/

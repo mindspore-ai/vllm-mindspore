@@ -27,5 +27,6 @@ if torch_npu_path:
 
 # pylint: disable=wrong-import-position
 from mrt.torch.fx_backend import backend
+from mrt.torch.fx_mlir_backend import backend as fx_mlir_backend
 
-__all__ = ['backend']
+__all__ = ['backend', 'fx_mlir_backend']

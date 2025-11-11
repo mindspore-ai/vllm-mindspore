@@ -15,25 +15,8 @@
  */
 
 #include "mopt-c/Dialects.h"
-#include "mopt-c/Passes.h"
-#include "mlir-c/IR.h"
-#include "mlir/Bindings/Python/PybindAdaptors.h"
-#include "mlir/CAPI/IR.h"
-#include "mlir/IR/DialectRegistry.h"
 
-PYBIND11_MODULE(_mopt, m) {
-  mlirRegisterMoptPasses();
+#include "mopt/Dialect/Mrt/MrtDialect.h"
+#include "mlir/CAPI/Registration.h"
 
-  m.doc() = "mopt python bindings";
-
-  m.def(
-    "register_mrt_dialect",
-    [](MlirContext context, bool load) {
-      MlirDialectHandle handle = mlirGetDialectHandle__mrt__();
-      mlirDialectHandleRegisterDialect(handle, context);
-      if (load) {
-        mlirDialectHandleLoadDialect(handle, context);
-      }
-    },
-    py::arg("context"), py::arg("load") = true, "Register MRT dialect");
-}
+MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Mrt, mrt, mrt::MrtDialect)

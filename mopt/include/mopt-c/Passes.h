@@ -14,22 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef MOPT_C_REGISTRATION_H
-#define MOPT_C_REGISTRATION_H
+#ifndef MOPT_C_PASSES_H
+#define MOPT_C_PASSES_H
 
-#include "mlir-c/Support.h"
 #include "mlir-c/IR.h"
+#include "mlir-c/Support.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-MLIR_CAPI_EXPORTED void moptRegisterAllDialects(MlirContext context);
-
-MLIR_CAPI_EXPORTED void moptRegisterAllPasses(void);
+/// Register all MRT passes.
+MLIR_CAPI_EXPORTED void mlirRegisterMoptPasses();
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // MOPT_C_REGISTRATION_H
+#endif  // MOPT_C_PASSES_H
