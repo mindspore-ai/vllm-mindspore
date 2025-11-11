@@ -155,8 +155,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &,
-                                              const ir::ValuePtr &))&GraphExecutor::AddOpNode,
+    std::bind((ir::NodePtr(GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &, const ir::ValuePtr &)) &
+                GraphExecutor::AddOpNode,
               this, std::placeholders::_1, std::placeholders::_2, nullptr);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
@@ -321,7 +321,11 @@ void GraphExecutor::DumpGraph() {
       std::cout << ", ";
     }
   }
-  std::cout << ") {" << std::endl;
+  std::cout << ")" << std::endl;
+  for (size_t i = 0; i < graph_->parameters.size(); ++i) {
+    std::cout << std::setw(10) << "// " << paramPrefix << i << " = " << graph_->parameters[i]->output << std::endl;
+  }
+  std::cout << "{" << std::endl;
 
   for (size_t i = 0; i < graph_->nodes.size(); ++i) {
     (void)nodeNumMap_.emplace(graph_->nodes[i], i);

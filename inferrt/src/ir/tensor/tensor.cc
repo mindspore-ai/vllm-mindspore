@@ -25,6 +25,7 @@
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
 #include "ir/symbolic/symbolic.h"
+#include "ir/tensor/format.h"
 
 namespace mrt {
 namespace ir {
@@ -231,7 +232,8 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   } else {
     os << "null";
   }
-  os << "])";
+  os << "]";
+  os << ", format=" << FormatEnumToStr(tensor.Format()) << ")";
   return os;
 }
 }  // namespace ir

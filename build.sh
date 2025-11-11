@@ -94,7 +94,7 @@ process_options "$@"
 ##################################################
 # Build third_party
 ##################################################
-if [[ $INC_BUILD != 1 && $BUILD_OPT == 1 ]]; then
+if [[ $INC_BUILD != 1 && $ENABLE_ASCEND == 1 ]]; then
     BUILD_DIR=$(pwd)/build
     export LLVM_INSTALL_PREFIX="$BUILD_DIR/third_party/install/llvm"
     export TORCHMLIR_INSTALL_PREFIX="$BUILD_DIR/third_party/install/torch_mlir"
@@ -131,6 +131,11 @@ if [[ $BUILD_OPT == 1 ]]; then
     python -m build --wheel --no-isolation
 
     popd
+fi
+
+# Generate ops code
+if [[ $ENABLE_ASCEND == 1 ]]; then
+    bash "scripts/gen_code.sh"
 fi
 
 ##################################################

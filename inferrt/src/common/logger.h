@@ -19,6 +19,7 @@
 
 #include <string>
 #include <iomanip>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -31,6 +32,19 @@ static inline std::string GetTime() {
   ss << (lt.tm_year + 1900) << '-' << (lt.tm_mon + 1) << '-' << std::setfill('0') << std::setw(2) << lt.tm_mday << ' '
      << std::setw(2) << lt.tm_hour << ':' << std::setw(2) << lt.tm_min << ':' << std::setw(2) << lt.tm_sec;
   return ss.str();
+}
+
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const std::vector<T> &vec) noexcept {
+  os << "{";
+  for (size_t i = 0; i < vec.size(); ++i) {
+    if (i > 0) {
+      os << ", ";
+    }
+    os << std::to_string(vec[i]);
+  }
+  os << "}";
+  return os;
 }
 
 class Cout {

@@ -24,10 +24,22 @@ from torch.fx.node import Node
 from torch.fx.graph_module import GraphModule
 from torch.utils._sympy.functions import FloorDiv
 
+from mrt.config import config
 from mrt.ir import GraphExecutor, Op, SymbolicVar, SymbolicConst, SymbolicExpr
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch, \
     _set_device_context
 
+
+def _init_mrt_config():
+    """Initialize the mrt configs."""
+    try:
+        import torch_npu # pylint: disable=import-outside-toplevel
+        config.ascend_op_precision_conf.set_is_allow_matmul_hf32(torch_npu.npu.matmul.allow_hf32)
+        # pylint: disable=protected-access
+        acl_precision_mode = torch_npu._C._npu_getOption("ACL_PRECISION_MODE")
+        config.ascend_op_precision_conf.set_acl_precision_mode(acl_precision_mode.decode())
+    except ImportError:
+        print("torch_npu is not installed, using default mrt configs.")
 
 # pylint: disable=bad-continuation
 def _convert_sympy_expr_to_symbolic_expr(
@@ -107,7 +119,10 @@ _OP_MAP = {
     torch.nn.functional.silu: Op.silu,
     torch.nn.functional.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
+    # torch.ops.npu functions
+    torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
     # operator functions
+    operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
     operator.sub: Op.sub,
     operator.mul: Op.mul,
@@ -188,6 +203,9 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     and returns a callable that executes the compiled graph.
     """
     gm.print_readable()
+    print("======================fx graph======================")
+    print(gm.graph)
+    _init_mrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     env: Dict[Node, Any] = {}
@@ -278,12 +296,15 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             if isinstance(fx_param_value, torch.Tensor):
                 update_tensor_data(mrt_param_node.output.to_tensor(), input_value)
             elif isinstance(fx_param_value, torch.SymInt):
+                mrt_param_node.output = from_torch(int(input_value))
                 expr = fx_param_value.node.expr
                 if expr in symbol_map:
                     symbol_map[expr].set_value(int(input_value))
             else:
                 mrt_param_node.output = from_torch(input_value)
 
+        print("Running graph:")
+        executor.dump_graph()
         result = executor.run()
         return to_torch(result)
 

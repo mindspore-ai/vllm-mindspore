@@ -13,21 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "symbol_utils.h"
+#include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
 #include <string>
-#include "acl_base_symbol.h"
-#include "acl_compiler_symbol.h"
-#include "acl_mdl_symbol.h"
-#include "acl_op_symbol.h"
-#include "acl_rt_allocator_symbol.h"
-#include "acl_rt_symbol.h"
-#include "acl_symbol.h"
-#include "acl_tdt_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_base_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_compiler_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_mdl_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_op_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_rt_allocator_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_tdt_symbol.h"
 
 namespace mrt::device::ascend {
 
 static bool loadAscendApi = false;
 static bool loadSimulationApi = false;
+static const char *socVersion = nullptr;
 
 void *GetLibHandler(const std::string &libPath, bool ifGlobal) {
   void *handler = nullptr;
@@ -56,6 +57,14 @@ std::string GetAscendPath() {
                  "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
   }
   return pathTmp.substr(0, pos) + kLatest + "/";
+}
+
+const char *GetAscendSocVersion() {
+  if (socVersion != nullptr) {
+    return socVersion;
+  }
+  socVersion = CALL_ASCEND_API(aclrtGetSocName);
+  return socVersion;
 }
 
 void LoadAscendApiSymbols() {

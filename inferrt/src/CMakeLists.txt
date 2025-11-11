@@ -30,6 +30,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # add_compile_options(-fPIC)
 
 # Add compiler, ir, runtime and kernels directories
 add_subdirectory(common)
+add_subdirectory(config)
 add_subdirectory(hardware)
 add_subdirectory(ir)
 add_subdirectory(lang)
@@ -37,7 +38,7 @@ add_subdirectory(ops)
 add_subdirectory(optimize)
 add_subdirectory(runtime)
 
-set(OBJECTS mrt_common hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
+set(OBJECTS mrt_common mrt_config hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
     vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
 
 # Create da execution file

@@ -107,7 +107,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
 
   py::class_<ir::Node, ir::NodePtr>(m, "Node").def_property(
     "output", [](const ir::NodePtr &node) { return node->output; },
-    [](ir::NodePtr &node, const ir::ValuePtr &value) { node->output = value; });
+    [](ir::NodePtr &node, ir::Value &value) { *(node->output) = std::move(value); });
 
   py::class_<GraphExecutor>(m, "GraphExecutor")
     .def(py::init<>())

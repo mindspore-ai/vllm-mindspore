@@ -1,0 +1,38 @@
+{% import "common.j2" as common %}
+{{ common.license }}
+{% set upper_case_op_name = op_name|to_upper_case %}
+{% set capitalize_op_name = op_name|to_capitalize_case -%}
+#include <vector>
+
+#include "ops/ascend/aclnn/auto_gen/{{ op_name|to_snake_case }}.h"
+#include "ops/op_register.h"
+
+{% set params %}
+{% for arg in args %}, input[kIndex{{ loop.index0 }}]{{ arg|arg_wrapper }}{% endfor %}{{ result|output_wrapper }}
+{%- endset -%}
+
+{% set output_tuple %}
+{% if result|length > 1 +%}  auto& output_tuple = output->ToTuple();{% endif %}
+{%- endset -%}
+
+namespace mrt {
+namespace ops {
+OpsErrorCode Aclnn{{ capitalize_op_name }}::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                     size_t *workspaceSize) {
+  LOG_OUT << "Begin CalcWorkspace for op [{{ op_name }}]";
+{{ output_tuple }}
+  executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize){{ params }});
+  return SUCCESS;
+}
+
+OpsErrorCode Aclnn{{ capitalize_op_name }}::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                              ir::Value *output, void *stream) {
+  LOG_OUT << "Begin Launch op [{{ op_name }}]";
+{{ output_tuple }}
+  executor_->Launch(workspace, workspaceSize, stream{{ params }});
+  return SUCCESS;
+}
+
+MRT_REG_OP({{ op_name|to_snake_case }}, Aclnn{{ capitalize_op_name }}, Ascend);
+}  // namespace ops
+}  // namespace mrt

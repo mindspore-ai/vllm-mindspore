@@ -14,21 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_ASCEND_ACLNN_ACLNN_MUL_H__
-#define __OPS_ASCEND_ACLNN_ACLNN_MUL_H__
+#ifndef __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__
+#define __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__
 
-#include <vector>
-#include <memory>
-
-#include "ops/op_base/op_mul.h"
+#include "ops/operator.h"
 #include "ops/ascend/aclnn/utils/aclnn_executor.h"
 
 namespace mrt {
 namespace ops {
-class AclnnMul : public OpMul {
+class AclnnMatul : public Operator {
  public:
-  AclnnMul() { executor_ = std::make_unique<AclnnExecutor>("aclnnMul"); }
-  ~AclnnMul() override = default;
+  AclnnMatul() { executor_ = std::make_unique<AclnnExecutor>("aclnnMatmul"); }
+  ~AclnnMatul() override = default;
 
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize) override;
@@ -37,7 +34,9 @@ class AclnnMul : public OpMul {
 
  private:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};
+  int8_t cubeMathType_;
 };
+
 }  // namespace ops
 }  // namespace mrt
-#endif  // __OPS_ASCEND_ACLNN_ACLNN_MUL_H__
+#endif  // __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__

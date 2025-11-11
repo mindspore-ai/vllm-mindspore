@@ -49,6 +49,7 @@ endif()
 set(TOP_DIR "${PROJECT_SOURCE_DIR}/..")
 include(${TOP_DIR}/cmake/utils.cmake)
 include(${TOP_DIR}/cmake/securec.cmake)
+include(${TOP_DIR}/cmake/torch_npu.cmake)
 
 # Include directories
 include_directories(include)

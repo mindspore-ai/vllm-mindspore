@@ -49,8 +49,9 @@ class CMakeBuild(build_ext):
                 continue
 
             if cmake_arg is None:
-                # Direct passthrough for flags without -D prefix
-                cmake_args.append(env_value)
+                # Split space-separated flags and append each individually
+                for item in env_value.lstrip().split():
+                    cmake_args.append(item)
             elif env_value == "1":
                 # Enable CMake option when environment variable is "1"
                 cmake_args.append(f"-D{cmake_arg}")
@@ -71,6 +72,7 @@ class CMakeBuild(build_ext):
 
         # Add environment-based arguments
         cmake_args.extend(self._get_cmake_args_from_env())
+        print("cmake_args:", cmake_args)
 
         # Configure with CMake
         subprocess.check_call(

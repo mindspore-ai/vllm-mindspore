@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <cstdint>
 #include <vector>
+#include "ops/ascend/aclnn/utils/hash_buf.h"
 
 #include "ops/ascend/aclnn/utils/aclnn_hash.h"
 
@@ -27,10 +29,16 @@ void GatherHash(const ir::TensorPtr &tensor) {
     return;
   }
 
-  // shape
+  // view shape
   const auto &shape = tensor->Shape();
   if (!shape.empty()) {
-    MemcpyToBuf(shape.data(), tensor->Dim() * sizeof(int64_t));
+    MemcpyToBuf(shape.data(), static_cast<int64_t>(tensor->Dim() * sizeof(int64_t)));
+  }
+
+  // storage shape
+  const auto &storageShape = tensor->StorageShape();
+  if (!storageShape.empty()) {
+    MemcpyToBuf(storageShape.data(), static_cast<int64_t>(storageShape.size() * sizeof(int64_t)));
   }
 
   // dtype
@@ -40,7 +48,7 @@ void GatherHash(const ir::TensorPtr &tensor) {
   // strides
   const auto &strides = tensor->Strides();
   if (!strides.empty()) {
-    MemcpyToBuf(strides.data(), strides.size() * sizeof(int64_t));
+    MemcpyToBuf(strides.data(), static_cast<int64_t>(strides.size() * sizeof(int64_t)));
   }
 
   // offset

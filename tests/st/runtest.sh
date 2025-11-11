@@ -25,7 +25,7 @@ TEST_PATH=${PROJECT_PATH}/tests/st
 GREEN=$(tput setaf 2)
 RESET=$(tput sgr0)
 echo "${GREEN}=============== Finding Test Files ===============${RESET}"
-mapfile -t TEST_FILES < <(find "$TEST_PATH" -name test_*.py -type f | xargs -r grep -l 'arg_mark' | xargs -r grep -l "$TEST_PLAT" | xargs -r grep -l 'level0' | tee /dev/tty)
+mapfile -t TEST_FILES < <(find "$TEST_PATH" -name "test_*.py" -type f | xargs -r grep -l 'arg_mark' | xargs -r grep -l "$TEST_PLAT" | xargs -r grep -l 'level0' | tee /dev/tty)
 echo "${GREEN}=============== Found ${#TEST_FILES[@]} Test Files ===============${RESET}"
 
 echo "${GREEN}=============== Collecting Test Cases ===============${RESET}"

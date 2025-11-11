@@ -45,8 +45,30 @@ class Mrt_Attr<string name, string attrMnemonic> : AttrDef<Mrt_Dialect, name> {
   let mnemonic = attrMnemonic;
 }
 
+//===----------------------------------------------------------------------===//
+// Supported argument/result types for operations:
+//   Tensor          --> AnyRankedTensor
+//   Optional Tensor --> MrtOptTensor
+//   Tensor List     --> MrtTensorList
+//   Integer         --> I64Attr / I64ArrayAttr
+//   Boolean         --> BoolAttr / BoolArrayAttr
+//   Float           --> F32Attr / F32ArrayAttr
+//   Double          --> F64Attr / F64ArrayAttr
+//   String          --> StrAttr / StrArrayAttr
+//===----------------------------------------------------------------------===//
+
+// Optional tensor type
+def MrtOptTensor : Optional<AnyRankedTensor>;
+
+// Tensor list type
+def MrtTensorList : Variadic<AnyRankedTensor>;
+
+// Base class for all MRT dialect operations.
 class Mrt_Op<string mnemonic, list<Trait> traits = []> : 
     Op<Mrt_Dialect, mnemonic, traits> {
+  // Whether generate aclnn launch code.
+  // When set to '1', the aclnn launch code will be auto generated.
+  bit generated = 0;
 }
 
 def Mrt_TensorType : Mrt_Type<"Tensor", "tensor"> {
@@ -104,7 +126,7 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   let arguments = (ins
     AnyRankedTensor:$input,
     AnyRankedTensor:$kernel,
-    Optional<AnyRankedTensor>:$bias,
+    MrtOptTensor:$bias,
     I64ArrayAttr:$strides,
     I64ArrayAttr:$padding,
     I64ArrayAttr:$dilation,
@@ -127,18 +149,13 @@ def Mrt_MatmulOp : Mrt_Op<"matmul", [Pure]> {
   
   let arguments = (ins
     AnyRankedTensor:$lhs,
-    AnyRankedTensor:$rhs,
-    Optional<AnyRankedTensor>:$bias,
-    BoolAttr:$transpose_a,
-    BoolAttr:$transpose_b,
-    BoolAttr:$has_bias
+    AnyRankedTensor:$rhs
   );
   
   let results = (outs AnyRankedTensor:$result);
   
   let assemblyFormat = [{
-    $lhs `,` $rhs (`,` $bias^)? 
-    attr-dict `:` functional-type(operands, results)
+    $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
   }];
 }
 
@@ -257,7 +274,7 @@ def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
   }];
   
   let arguments = (ins
-    Variadic<AnyRankedTensor>:$inputs,
+    MrtTensorList:$inputs,
     I64Attr:$axis
   );
   
@@ -280,11 +297,63 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
     I64ArrayAttr:$split_sizes
   );
   
-  let results = (outs Variadic<AnyRankedTensor>:$results);
+  let results = (outs MrtTensorList:$results);
   
   let assemblyFormat = [{
     $input `along` `axis` $axis attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_MulOp : Mrt_Op<"mul", [Pure]> { 
+  let summary = "Multiplication operation";
+  let description = [{
+    Element-wise multiplication of two tensors.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$lhs,
+    AnyRankedTensor:$rhs
+  );
+
+  let results = (outs AnyRankedTensor:$result);
+
+  let assemblyFormat = [{
+    $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
+def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3"> {
+  let summary = "aclnnMoeInitRoutingV3";
+  let description = [{
+    Operation for initializing Moe (Mixture of Experts) routing V3 using aclnn backend.
+    Accepts input tensor, expert indices, scale/offset (optional), and configuration arguments.
+    Produces expanded tensors for X, row indices, the expert token count or cumsum, and scale.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$x,
+    AnyRankedTensor:$expertIdx,
+    AnyRankedTensor:$scaleOptional,
+    AnyRankedTensor:$offsetOptional,
+    I64Attr:$activeNum,
+    I64Attr:$expertCapacity,
+    I64Attr:$expertNum,
+    I64Attr:$dropPadMode,
+    I64Attr:$expertTokensNumType,
+    BoolAttr:$expertTokensNumFlag,
+    I64Attr:$quantMode,
+    I64ArrayAttr:$activeExpertRangeOptional,
+    I64Attr:$rowIdxType
+  );
+
+  let results = (outs
+    AnyRankedTensor:$expandedXOut,
+    AnyRankedTensor:$expandedRowIdxOut,
+    AnyRankedTensor:$expertTokensCountOrCumsumOut,
+    AnyRankedTensor:$expandedScaleOut
+  );
 }
 
 #endif // MRT_DIALECT_MRT_OPS_TD
