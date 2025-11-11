@@ -14,27 +14,7 @@
  * limitations under the License.
  */
 
-#include "mlir/CAPI/IR.h"
-#include "mlir/CAPI/Support.h"
+#include "mopt-c/Passes.h"
+#include "mopt/Passes.h"
 
-#include "mopt-c/Registration.h"
-#include "mopt/Dialect/Mrt/MrtDialect.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void moptRegisterAllDialects(MlirContext context) {
-  mlir::DialectRegistry registry;
-  registry.insert<mrt::MrtDialect>();
-  unwrap(context)->appendDialectRegistry(registry);
-  unwrap(context)->loadAllAvailableDialects();
-}
-
-void moptRegisterAllPasses(void) {
-  // Register passes when they are implemented
-}
-
-#ifdef __cplusplus
-}
-#endif
+void mlirRegisterMoptPasses() { mlir::registerMoptPasses(); }

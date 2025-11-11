@@ -1,23 +1,20 @@
-add_mlir_public_c_api_library(MoptCAPI
-  Dialects.cc
-  Passes.cc
-
-  ADDITIONAL_HEADER_DIRS
-  ${PROJECT_SOURCE_DIR}/include/mopt-c/
+add_mlir_library(MoptPasses
+  ReshapeConversionPass.cc
 
   DEPENDS
   MoptPassIncGen
 
   LINK_LIBS PUBLIC
+  MLIRPass
   MLIRIR
-  MLIRSupport
+  MLIRTransformUtils
+  MLIRRewrite
+  MLIRArithDialect
   MLIRMrtDialect
-  MoptPasses
 )
 
 # Add include directories
-target_include_directories(MoptCAPI PUBLIC
+target_include_directories(MoptPasses PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
 )
-

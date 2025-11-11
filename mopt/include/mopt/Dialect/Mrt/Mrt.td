@@ -253,18 +253,21 @@ def Mrt_ReshapeOp : Mrt_Op<"reshape", [Pure]> {
   let summary = "Reshape operation";
   let description = [{
     Reshapes input tensor to the specified shape.
+    Takes two operands: input tensor and shape tensor.
   }];
   
   let arguments = (ins
     AnyRankedTensor:$input,
-    I64ArrayAttr:$shape
+    RankedTensorOf<[I64]>:$shape
   );
   
   let results = (outs AnyRankedTensor:$result);
   
   let assemblyFormat = [{
-    $input `to` $shape attr-dict `:` functional-type(operands, results)
+    $input `,` $shape attr-dict `:` functional-type(operands, results)
   }];
+
+  let hasVerifier = 1;
 }
 
 def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {

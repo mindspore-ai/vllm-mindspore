@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""MRT MLIR Python bindings."""
+"""
+mopt - MLIR Optimization Tools
 
-# pylint: disable=relative-beyond-top-level
-from .._mrt_ops_gen import *
+This package provides MLIR-based optimization tools and dialect support.
+"""
+
+# Version info
+__version__ = '0.1.0'
+
+from mopt._mlir_libs._mopt import *
