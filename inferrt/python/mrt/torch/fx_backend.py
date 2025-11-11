@@ -20,11 +20,12 @@ from functools import reduce
 from typing import List, Dict, Any
 import sympy
 import torch
-from torch.fx.node import Node
+from torch._ops import OpOverloadPacket
+from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
 from torch.utils._sympy.functions import FloorDiv
 
-from mrt.config import config
+from mrt import config
 from mrt.ir import GraphExecutor, Op, SymbolicVar, SymbolicConst, SymbolicExpr
 from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch, \
     set_device_context
@@ -34,10 +35,10 @@ def _init_mrt_config():
     """Initialize the mrt configs."""
     try:
         import torch_npu # pylint: disable=import-outside-toplevel
-        config.ascend_op_precision_conf.set_is_allow_matmul_hf32(torch_npu.npu.matmul.allow_hf32)
+        config.ascend.op_precision.set_is_allow_matmul_hf32(torch_npu.npu.matmul.allow_hf32)
         # pylint: disable=protected-access
         acl_precision_mode = torch_npu._C._npu_getOption("ACL_PRECISION_MODE")
-        config.ascend_op_precision_conf.set_acl_precision_mode(acl_precision_mode.decode())
+        config.ascend.op_precision.set_acl_precision_mode(acl_precision_mode.decode())
     except ImportError:
         print("torch_npu is not installed, using default mrt configs.")
 
@@ -200,6 +201,39 @@ def _get_op(target):
     return None
 
 
+def _flatten_args(op: Op, node: Node) ->List[Argument]:
+    """
+    Flatten the arguments of a given FX node into a flat list of Argument objects.
+
+    Args:
+        op (Op): The mrt operation enumeration.
+        node (Node): The FX node whose arguments should be flattened.
+
+    Returns:
+        List[Argument]: A flat list of all Argument objects in the node's arguments, preserving order.
+    """
+    flat_args = list(node.args)
+    # for custom op
+    if op == Op.custom_call:
+        op_name = node.target.__name__
+        flat_args = [op_name] + flat_args
+        return flat_args
+    kwargs = node.kwargs
+    if not kwargs:
+        return flat_args
+    if not isinstance(node.target, OpOverloadPacket):
+        raise RuntimeError(f"Unsupported node target for keyword only args: {node.target}")
+    schemas = node.target._schemas
+    if len(schemas) != 1:
+        raise RuntimeError("Currently, do not support op overload")
+    schema = next(iter(schemas.values()))
+    for argument in schema.arguments:
+        if not argument.kwarg_only:
+            continue
+        flat_args.append(kwargs[argument.name])
+    return flat_args
+
+
 def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
     """
     Map torch.fx node arguments to GraphExecutor nodes.
@@ -281,12 +315,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 if op is None:
                     raise NotImplementedError(f"Unsupported op: {node.target}")
 
-                input_args = node.args
-                if op == Op.custom_call:
-                    op_name = node.target.__name__
-                    input_args = (op_name,) + node.args
-                input_nodes = _map_args(input_args, env, executor)
-
+                flat_node_args = _flatten_args(op, node)
+                input_nodes = _map_args(flat_node_args, env, executor)
                 hook_func = get_arg_mapping_hook(op)
                 if hook_func is not None:
                     input_nodes = hook_func(node, input_nodes, executor)
@@ -337,8 +367,6 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             else:
                 mrt_param_node.output = from_torch(input_value)
 
-        print("Running graph:")
-        executor.dump_graph()
         result = executor.run()
         return to_torch(result)
 

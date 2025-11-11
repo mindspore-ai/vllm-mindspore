@@ -24,7 +24,6 @@ namespace mrt {
 namespace ops {
 OpsErrorCode AclnnMatul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                        size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [matmul]";
   cubeMathType_ = GetCubeMathType();
   executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[kIndex0]->ToTensor(),
                               input[kIndex1]->ToTensor(), output->ToTensor(), cubeMathType_);
@@ -33,7 +32,6 @@ OpsErrorCode AclnnMatul::CalcWorkspace(const std::vector<const ir::Value *> &inp
 
 OpsErrorCode AclnnMatul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                 ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch op [matmul]";
   executor_->Launch(workspace, workspaceSize, stream, input[kIndex0]->ToTensor(), input[kIndex1]->ToTensor(),
                     output->ToTensor(), cubeMathType_);
   return SUCCESS;

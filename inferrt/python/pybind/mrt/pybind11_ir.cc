@@ -117,8 +117,8 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<const ir::TensorPtr &>())
     .def(py::init<float>())
     .def(py::init<double>())
-    .def(py::init<int64_t>())
     .def(py::init<bool>())
+    .def(py::init<int64_t>())
     .def(py::init<std::string>())
     .def(py::init<const ir::TuplePtr &>())
     .def("is_tensor", &ir::Value::IsTensor)
@@ -144,7 +144,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
 
   py::class_<ir::Node, ir::NodePtr>(m, "Node").def_property(
     "output", [](const ir::NodePtr &node) { return node->output; },
-    [](ir::NodePtr &node, ir::Value &value) { *(node->output) = std::move(value); });
+    [](ir::NodePtr &node, const ir::Value &value) { *(node->output) = value; });
 
   py::class_<GraphExecutor>(m, "GraphExecutor")
     .def(py::init<>())
