@@ -30,12 +30,18 @@ def compile_or_warm_up_model(self) -> None:
     # Since prefill is done previously, we do decode here.
     default_max_num_reqs = 1  # For MindSpore, we only do one more decode here.
 
+    # capture decode aclgraph
+    if not self.model_config.enforce_eager:
+        self.model_runner.capture_model()
+
     if hasattr(self.model_runner.model, 'has_chunked_warmup') \
             and not self.model_runner.model.has_chunked_warmup:
         logger.info("Warmup for chunked graph.")
         self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
 
     # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
+    # Only pp_last_rank requires _dummy_sampler_run,
+    # and only pp_last_rank can _dummy_sampler_run.
     if get_pp_group().is_last_rank:
         self.model_runner._dummy_sampler_run(
             self.model_runner._dummy_run(num_tokens=default_max_num_reqs))

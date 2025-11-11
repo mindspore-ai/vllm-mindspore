@@ -22,6 +22,7 @@ import socket
 import threading
 import time
 from collections import Counter
+from dataclasses import field
 from typing import Any, Literal, Optional, Union
 
 import msgspec
@@ -31,8 +32,9 @@ from pydantic.dataclasses import dataclass
 from transformers import PretrainedConfig
 from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
 from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CacheConfig,
-                         CompilationConfig, CompilationLevel, VllmConfig,
-                         _find_dtype, _resolve_auto_dtype, get_attr_docs)
+                         CompilationConfig, CompilationLevel, SchedulerConfig,
+                         VllmConfig, _find_dtype, _resolve_auto_dtype,
+                         get_attr_docs)
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
@@ -98,14 +100,15 @@ def vllm_config_post_init(self):
         self.compilation_config.cudagraph_num_of_warmups = 1
         self.compilation_config.pass_config.enable_fusion = False
         self.compilation_config.pass_config.enable_noop = False
-        # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda
-        # graph, which means the model inputs will be padded to cuda graph
-        # acceptable size, but it is not for mindspore.
-        # So here set to CompilationLevel.DYNAMO_AS_IS.
-        self.compilation_config.level = CompilationLevel.DYNAMO_AS_IS
         # Set a small compile_sizes for warmup. '20' is not in
         # 'cudagraph_capture_sizes'. So the warmup can be run.
         self.compilation_config.compile_sizes = [20]
+
+        if self.compilation_config.level == CompilationLevel.NO_COMPILATION:
+            logger.warning_once(
+                "vllm-mindspore do not support no_compliation, "
+                "set to dynamo_as_is instead.")
+            self.compilation_config.level = CompilationLevel.DYNAMO_AS_IS
 
     self._set_cudagraph_sizes()
 
@@ -463,3 +466,17 @@ class _CacheConfig(CacheConfig):
     """Data type for kv cache storage. If "auto", will use model data type.
     CUDA 11.8+ supports fp8 (=fp8_e4m3) and fp8_e5m2. ROCm (AMD GPU) supports
     fp8 (=fp8_e4m3)."""
+
+
+@dataclass
+class _SchedulerConfig(SchedulerConfig):
+    '''Scheduler configuration'''
+
+    cuda_graph_sizes: list[int] = field(default_factory=lambda: [128])
+    """Cuda graph capture sizes, default is 128.
+    vllm-mindspore use aclgraph, current aclgraph has graph number limit,
+    so the capture size default is 128, uses cannot set to large
+    1. if one value is provided, then the capture list would follow the
+    pattern: [1, 2, 4] + [i for i in range(8, cuda_graph_sizes + 1, 8)]
+    2. more than one value (e.g. 1 2 128) is provided, then the capture list
+    will follow the provided list."""

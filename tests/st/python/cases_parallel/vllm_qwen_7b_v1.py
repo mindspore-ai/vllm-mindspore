@@ -43,7 +43,7 @@ import vllm_mindspore  # noqa: F401, E402
 from vllm import LLM, SamplingParams  # noqa: E402
 
 
-def run_vllm_qwen(enforce_eager=False):
+def run_vllm_qwen(enforce_eager=False, enable_aclgraph=False):
     """
     run qwen2.5 7B
     """
@@ -54,6 +54,10 @@ def run_vllm_qwen(enforce_eager=False):
         " \n文本：我认为这次假期还可以。 \n情感：<｜Assistant｜>\n",
     ]
 
+    compilation_level = 1
+    if enable_aclgraph:
+        compilation_level = 3
+
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=10, top_k=1)
 
@@ -62,7 +66,8 @@ def run_vllm_qwen(enforce_eager=False):
         model="/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Instruct",
         gpu_memory_utilization=0.9,
         enforce_eager=enforce_eager,
-        tensor_parallel_size=2)
+        tensor_parallel_size=2,
+        compilation_config=compilation_level)
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
@@ -89,4 +94,13 @@ def test_qwen_enforce_eager():
     """
     Test qwen2.5 7B using ENFORCE_EAGER.
     """
+    import vllm_mindspore
     run_vllm_qwen(enforce_eager=True)
+
+
+def test_qwen_aclgraph():
+    """
+    Test qwen2.5 7B using aclgraph.
+    """
+    import vllm_mindspore
+    run_vllm_qwen(enforce_eager=False, enable_aclgraph=True)

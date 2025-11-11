@@ -25,10 +25,14 @@ from typing import Optional, Union
 import mindspore as ms
 from mindspore import Tensor, mint, nn, ops
 from vllm import envs
+from vllm.config import CompilationLevel
+from vllm.logger import init_logger
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.multimodal.inputs import NestedTensors
 from vllm_mindspore.utils import get_valid_dtype, is_310p
+
+logger = init_logger(__name__)
 
 WeightsMapping = Mapping[str, Optional[str]]
 """If a key maps to a value of `None`, the corresponding weight is ignored."""
@@ -288,6 +292,17 @@ def is_use_ringmla(vllm_config, mf_config=None):
     """
     Determine whether MLA model uses RingMLA
     """
+    enable_aclgraph = \
+        vllm_config.compilation_config.level == CompilationLevel.PIECEWISE
+
+    if enable_aclgraph:
+        # current mla use shape which is cpu kernels
+        # not support in aclgraph
+        logger.warning("%s%s%s", "mla is disabled by aclgraph, ",
+                       "because current aclgraph not support mla, ",
+                       "please use -O 1 to use mla")
+        return False
+
     try:
         import ms_custom_ops  # noqa: F401
     except ModuleNotFoundError:

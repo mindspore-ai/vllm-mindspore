@@ -25,7 +25,7 @@ from mindspore import Tensor, mutable, ops
 from mindspore.common.api import _no_grad as no_grad
 from mindspore.nn.utils import no_init_parameters
 from vllm import envs
-from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.config import CompilationLevel, VllmConfig, get_current_vllm_config
 from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
@@ -54,6 +54,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.lm_head_graph = None
         self.is_eager_mode = vllm_config.model_config.enforce_eager
 
+        self.enable_aclgraph = \
+            vllm_config.compilation_config.level == CompilationLevel.PIECEWISE
+
         mf_config = gen_mf_config(vllm_config)
         mf_config.load_checkpoint = self.get_model_path()
         mf_config.pretrained_model_dir = self.get_model_path()
@@ -66,7 +69,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         build_mf_context(self.mf_config)
         mf_par_ctx = build_parallel_context(self.mf_config)
         mf_par_ctx.init_communication()
-        if self.mla_config:
+        if self.mla_config and not self.enable_aclgraph:
             self._set_runtime_kernel_launch_group()
 
         self.network, self.lm_head = self._create_network()
@@ -393,8 +396,9 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             hidden_states = self.network(**model_inputs)
             _set_network_flags(False, False)
             self.has_prefill_warmup = True
-            self.has_chunked_warmup = (not self.use_ringmla
-                                       or is_ringmla_chunked)
+            self.has_chunked_warmup = (
+                not self.use_ringmla
+                or is_ringmla_chunked) or self.enable_aclgraph
         else:
             hidden_states = self.network(**model_inputs)
 
@@ -409,6 +413,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         with no_init_parameters():  # Delay initialization
             network: PreTrainedModel = AutoModel.from_config(self.mf_config)
             network.model.return_hidden_states = True
+        if self.enable_aclgraph:
+            network.model.move_lens_to_cpu = False
         if get_pp_group().is_last_rank:
             return network, network.model.output_layer
         return network, None

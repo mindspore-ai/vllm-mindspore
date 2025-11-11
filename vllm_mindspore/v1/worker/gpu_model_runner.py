@@ -18,6 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 import traceback
 from typing import Any, Optional
 
@@ -27,7 +28,9 @@ import torch
 from mindspore import Generator as msGenerator
 from mindspore import Tensor, mint, mutable
 from vllm.attention import AttentionType
-from vllm.config import get_layers_from_vllm_config
+from vllm.config import CompilationLevel, get_layers_from_vllm_config
+from vllm.distributed.parallel_state import get_pp_group
+from vllm.forward_context import set_forward_context
 from vllm.logger import init_logger
 from vllm.sampling_params import SamplingType
 from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
@@ -36,6 +39,7 @@ from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
 from vllm.v1.utils import bind_kv_cache
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
+from vllm.v1.worker.gpu_model_runner import GPUModelRunner
 from vllm.v1.worker.utils import initialize_kv_cache_for_kv_sharing
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (
@@ -57,6 +61,29 @@ def _prepare_inputs(
     assert total_num_scheduled_tokens > 0
     num_reqs = self.input_batch.num_reqs
     assert num_reqs > 0
+
+    aclgraph_pad_size = -1
+
+    if not hasattr(self, "use_cuda_graph_config"):
+        # the first time call _prepare_inputs, no use_cuda_graph_config attr
+        # record original use_cuda_graph to use_cuda_graph_config
+        self.use_cuda_graph_config = self.use_cuda_graph
+
+    if self.use_cuda_graph_config:
+        # enable cuda graph
+        # check if is pure decode case
+        if total_num_scheduled_tokens == num_reqs:
+            self.use_cuda_graph = True
+        else:
+            self.use_cuda_graph = False
+    else:
+        self.use_cuda_graph = False
+
+    if (self.use_cuda_graph
+            and total_num_scheduled_tokens <= self.cudagraph_batch_sizes[-1]):
+        pad_num_tokens = self.vllm_config.pad_for_cudagraph(
+            total_num_scheduled_tokens)
+        aclgraph_pad_size = pad_num_tokens - num_reqs
 
     # OPTIMIZATION: Start copying the block table first.
     # This way, we can overlap the copy with the following CPU operations.
@@ -179,6 +206,7 @@ def _prepare_inputs(
                 num_actual_tokens=total_num_scheduled_tokens,
                 max_query_len=max_num_scheduled_tokens,
                 common_prefix_len=common_prefix_len,
+                aclgraph_pad_size=aclgraph_pad_size,
             ))
         for layer_name in kv_cache_group_spec.layer_names:
             attn_metadata[layer_name] = attn_metadata_i
@@ -879,3 +907,149 @@ def get_dp_padding(self, num_tokens: int):
     # padded based on `num_tokens_across_dp`, while the model only accepts
     # inputs with actual shape.
     return 0, None
+
+
+def _aclgraph_capture_dummy_run(
+    self: GPUModelRunner,
+    num_tokens: int,
+    skip_attn: bool = True,
+):
+    # Padding for DP
+    num_pad, num_tokens_across_dp = self.get_dp_padding(num_tokens=num_tokens)
+    num_tokens += num_pad
+
+    # Set num_scheduled_tokens based on num_tokens and max_num_seqs
+    # for dummy run with LoRA so that the num_reqs collectively
+    # has num_tokens in total.
+
+    assert num_tokens <= self.scheduler_config.max_num_batched_tokens
+    max_num_reqs = self.scheduler_config.max_num_seqs
+    num_reqs = min(num_tokens, max_num_reqs)
+    min_tokens_per_seq = num_tokens // num_reqs
+    num_scheduled_tokens_list = [min_tokens_per_seq] * num_reqs
+    num_scheduled_tokens_list[-1] += num_tokens % num_reqs
+    assert sum(num_scheduled_tokens_list) == num_tokens
+    assert len(num_scheduled_tokens_list) == num_reqs
+    num_scheduled_tokens = np.array(num_scheduled_tokens_list, dtype=np.int32)
+    if skip_attn:
+        attn_metadata: Optional[dict[str, Any]] = None
+    else:
+        # Make sure max_model_len is used at the graph capture time.
+        self.seq_lens_np[:num_reqs] = self.max_model_len
+        self.seq_lens_np[num_reqs:] = 0
+        self.seq_lens[:num_reqs].copy_(self.seq_lens_cpu[:num_reqs],
+                                       non_blocking=True)
+
+        attn_metadata = {}
+
+        # Prepare the attention memdata for each KV cache group and make layers
+        # in the same group share the same metadata.
+        for kv_cache_group_id, kv_cache_group_spec in enumerate(
+                self.kv_cache_config.kv_cache_groups):
+            # Prepare for cascade attention if enable & beneficial.
+            common_prefix_len = 0
+            attn_metadata_i = (
+                self.attn_metadata_builders[kv_cache_group_id].build(
+                    num_reqs=num_reqs,
+                    num_actual_tokens=num_tokens,
+                    max_query_len=num_tokens,
+                    common_prefix_len=common_prefix_len,
+                    aclgraph_pad_size=0,
+                ))
+            # disable prefill by set max_context_len != 0
+            attn_metadata_i.max_context_lens = 1
+            for layer_name in kv_cache_group_spec.layer_names:
+                attn_metadata[layer_name] = attn_metadata_i
+
+    with self.maybe_dummy_run_with_lora(
+            self.lora_config, num_scheduled_tokens=num_scheduled_tokens):
+        model = self.model
+        input_ids = self.input_ids[:num_tokens]
+        inputs_embeds = None
+        positions = self.positions[:num_tokens]
+
+        if get_pp_group().is_first_rank:
+            intermediate_tensors = None
+        else:
+            if self.intermediate_tensors is None:
+                self.intermediate_tensors = (
+                    self.model.make_empty_intermediate_tensors(
+                        batch_size=self.max_num_tokens,
+                        dtype=self.model_config.dtype,
+                        device=self.device))
+            intermediate_tensors = self.sync_and_slice_intermediate_tensors(
+                num_tokens, None, False)
+
+        with self.maybe_randomize_inputs(input_ids), set_forward_context(
+                attn_metadata,
+                self.vllm_config,
+                num_tokens=num_tokens,
+                num_tokens_across_dp=num_tokens_across_dp):
+            outputs = model(
+                input_ids=input_ids,
+                positions=positions,
+                intermediate_tensors=intermediate_tensors,
+                inputs_embeds=inputs_embeds,
+            )
+        hidden_states = outputs
+
+    logit_indices = np.cumsum(num_scheduled_tokens) - 1
+    return hidden_states[logit_indices]
+
+
+def capture_model(self: GPUModelRunner) -> None:
+    # this is a trick in vllm-mindspore, vllm-mindspore do not want to
+    # instead GPUModelRunner.execute_model. vllm-mindspore will add
+    # use_cuda_graph_config to save real config use_cuda_graph.
+    # In GPUModelRunner._prepare_inputs, it will dynamic change
+    # use_cuda_graph according to model infer case, eg. only th
+    # pure decode case will enable use_cuda_graph
+    use_cuda_graph = False
+    if hasattr(self, "use_cuda_graph_config"):
+        use_cuda_graph = self.use_cuda_graph_config
+    else:
+        use_cuda_graph = self.use_cuda_graph
+
+    if not use_cuda_graph:
+        logger.warning(
+            "Skipping acl graph capture. Please add "
+            "-O %s to use aclgraph", CompilationLevel.PIECEWISE)
+        return
+
+    start_time = time.perf_counter()
+    start_free_gpu_memory = torch.cuda.mem_get_info()[0]
+
+    # Trigger aclgraph capture for specific shapes
+    # Capture the large shapes first so that the smaller shapes
+    # can reuse the memory poll allocated for the large shapes.
+
+    # vllm-mindspore use full graph to capture aclgraph
+    # set the skip_attn to False
+    skip_attn = False
+
+    # because aclgraph limit, check the capture size
+    max_capture_graph_size = 19
+    if len(self.cudagraph_batch_sizes) > max_capture_graph_size:
+        logger.warning(
+            "Capture size is too much for aclgraph capture,"
+            "capture %d instead", max_capture_graph_size)
+        self.cudagraph_batch_sizes = self.cudagraph_batch_sizes[:
+                                                                max_capture_graph_size]
+
+    # enable mindspore graph capture
+    ms.set_kernel_launch_capture(True,
+                                 op_capture_skip=["moveto", "custom_mla"])
+    for num_tokens in reversed(self.cudagraph_batch_sizes):
+        for _ in range(
+                self.vllm_config.compilation_config.cudagraph_num_of_warmups):
+            _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
+        _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
+
+    end_time = time.perf_counter()
+    end_free_gpu_memory = torch.cuda.mem_get_info()[0]
+    elapsed_time = end_time - start_time
+    cuda_graph_size = start_free_gpu_memory - end_free_gpu_memory
+    logger.info("Graph capturing finished in %.0f secs, took %.2f GiB",
+                elapsed_time, cuda_graph_size / (1 << 30))
+
+    # disable mindspore graph capture (captured graphs replay still work)
