@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
 from typing import Any, Optional
 
 import mindspore
 import numpy as np
+import regex as re
 from mindspore import Parameter, Tensor, mint
 from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
@@ -29,7 +29,7 @@ from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.linear import (
     LinearBase, LinearMethodBase, UnquantizedLinearMethod)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
-from vllm_mindspore.utils import is_310p
+from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
 from .attention import BaseKVCacheMethod, KVCacheInt8Method
 from .base_config import QuantizationConfig, QuantizeMethodBase
@@ -324,6 +324,8 @@ class A8W8LinearMethod(LinearMethodBase):
         layer.insert_param_to_cell("input_offset", input_offset)
 
     def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
+        if is_310p():
+            set_weight_format_to_nz(layer.weight)
         input_offset = np.array([0])
         params_dtype = layer.params_dtype
         layer.input_offset = Parameter(Tensor(input_offset,
@@ -498,6 +500,8 @@ class A8W8DYNLinearMethod(LinearMethodBase):
         layer.insert_param_to_cell("smooth_scale", smooth_scale)
 
     def process_weights_after_loading(self, layer: mindspore.nn.Cell) -> None:
+        if is_310p():
+            set_weight_format_to_nz(layer.weight)
         if self.is_2d_smooth_scale:
             smooth_scale = layer.smooth_scale.asnumpy().reshape(1, -1)
             layer.smooth_scale = Parameter(Tensor(smooth_scale,

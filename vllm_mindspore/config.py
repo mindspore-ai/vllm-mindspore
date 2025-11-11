@@ -248,7 +248,7 @@ def _get_and_verify_dtype(
         raise ValueError(f"Unknown dtype: {dtype}")
 
     if torch_dtype == torch.bfloat16 and is_310p():
-        torch_dtype = torch.float16
+        raise ValueError("For 310p, bfloat16 type is not support")
 
     if torch_dtype != config_dtype:
         if torch_dtype == torch.float32:

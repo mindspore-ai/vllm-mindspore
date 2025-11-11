@@ -26,13 +26,16 @@ from mindspore import mutable, mint
 
 from typing import List
 from vllm.logger import init_logger
-from vllm_mindspore.utils import MsKVCache, get_valid_dtype
+from vllm_mindspore.utils import MsKVCache, get_valid_dtype, create_kv_cache
 
 logger = init_logger(__name__)
 
 
 def create_block(shape, dtype, name=None, device=None):
-    blocks = mint.empty(shape, dtype=dtype, device=device)
+    if device == "CPU":
+        blocks = mint.empty(shape, dtype=dtype, device=device)
+    else:
+        blocks = create_kv_cache(shape, dtype)
     return blocks
 
 
