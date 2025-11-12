@@ -434,11 +434,36 @@ if TORCH_NPU_INSTALLED:
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
+def _convert_operator_to_torch_op(op):
+    """Convert python operator to torch operator."""
+    operator_map = {
+        operator.add: torch.add,
+        operator.sub: torch.sub,
+        operator.mul: torch.mul,
+        operator.truediv: torch.div,
+        operator.eq: torch.eq,
+        operator.ne: torch.ne,
+        operator.lt: torch.lt,
+        operator.le: torch.le,
+        operator.gt: torch.gt,
+        operator.ge: torch.ge,
+        operator.matmul: torch.matmul,
+        operator.neg: torch.neg,
+        operator.and_: torch.bitwise_and,
+        operator.invert: torch.bitwise_not,
+        operator.mod: torch.remainder,
+        operator.floordiv: torch.floor_divide,
+    }
+    if op in operator_map:
+        return operator_map[op]
+    return op
 
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
     if isinstance(target, str):
-        return _OP_MAP.get(target)
+        op = _OP_MAP.get(target)
+        if op is not None:
+            return op
     if callable(target):
         op = _OP_MAP.get(target)
         if op is not None:
@@ -452,14 +477,10 @@ def _get_op(target):
 
         if isinstance(target, torch._ops.OpOverloadPacket):
             node_module = target.__module__
-            if not node_module.startswith(
-                "torch._ops.aten"
-            ) and not node_module.startswith("torch._ops.prims"):
-                # mrt_dvm namespace -> dvm_call
-                if node_module.startswith("torch._ops.mrt_dvm"):
-                    return Op.dvm_call
-                return Op.custom_call
-    return None
+            if node_module.startswith("torch._ops.mrt_dvm"):
+                return Op.dvm_call
+
+    return Op.custom_call
 
 
 def _argument_to_real_value(value_type, value, arg_len):
@@ -476,7 +497,9 @@ def _argument_to_real_value(value_type, value, arg_len):
     if isinstance(value_type, torch.OptionalType):
         return _argument_to_real_value(value_type.getElementType(), value, arg_len)
     if isinstance(value_type, torch.ListType):
-        if isinstance(value, list):
+        if isinstance(value, torch.fx.node.Node):
+            return value
+        if isinstance(value, (list, tuple)):
             return value
         if value is None:
             return value
@@ -541,23 +564,22 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
             ops_ns = getattr(torch.ops, ns)
             if hasattr(ops_ns, target):
                 op_target = getattr(ops_ns, target)
-                return [
-                    getattr(op_target, overload)._schema
-                    for overload in op_target.overloads()
-                ]
-        return None
+                return (op_target._qualified_op_name,
+                        [getattr(op_target, overload)._schema for overload in op_target.overloads()])
+        return None, None
 
     if isinstance(target, OpOverload):
-        return [target._schema]
+        return target._schema.name, [target._schema]
 
     if isinstance(target, OpOverloadPacket):
-        return [getattr(target, overload)._schema for overload in target.overloads()]
+        return (target._qualified_op_name,
+                [getattr(target, overload)._schema for overload in target.overloads()])
 
     aten_fn = torch.jit._builtins._find_builtin(target)
     if aten_fn is not None:
-        return torch._C._jit_get_schemas_for_operator(aten_fn)
+        return aten_fn, torch._C._jit_get_schemas_for_operator(aten_fn)
 
-    return None
+    return None, None
 
 
 def _flatten_args(op: Op, node: Node) -> List[Argument]:
@@ -572,9 +594,10 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
         List[Argument]: A flat list of all Argument objects in the node's arguments, preserving order.
     """
     flat_args = []
-    schemas = _get_op_schemas(node.target)
+    torch_op = _convert_operator_to_torch_op(node.target)
+    op_name, schemas = _get_op_schemas(torch_op)
     if not schemas:
-        return list(node.args) + list(node.kwargs.values())
+        return None, list(node.args) + list(node.kwargs.values())
     found = False
     for schema in schemas:
         flat_args, found = _create_args(schema, node)
@@ -583,7 +606,7 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     if not found:
         err_msg = f"Failed to find a valid schema for {node.target} with arguments {node.args} and kwargs {node.kwargs}"
         raise ValueError(err_msg)
-    return flat_args
+    return op_name, flat_args
 
 
 def _map_args(
@@ -643,10 +666,12 @@ def _handle_get_attr_node(node, gm, executor, env):
 
 def _prepare_call_args(op, node, executor, env, sym_mgr):
     """Prepare arguments for call_function/call_method nodes."""
-    flat_node_args = _flatten_args(op, node)
+    op_name, flat_node_args = _flatten_args(op, node)
 
     if op == Op.custom_call:
-        op_name = node.target.__name__
+        if not op_name:
+            raise ValueError(f"Custom op name is empty for node {node}")
+        op_name = op_name.replace("::", ".")
         flat_node_args = [op_name] + flat_node_args
     elif op == Op.dvm_call:
         op_name = node.target.__name__
@@ -674,7 +699,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
 
     ops_hook = get_ops_mapping_hook(op)
     if ops_hook is not None:
-        flat_node_args = _flatten_args(op, node)
+        _, flat_node_args = _flatten_args(op, node)
         op = ops_hook(op, node, flat_node_args, executor)
 
     input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)

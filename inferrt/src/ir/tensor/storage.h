@@ -31,6 +31,8 @@ namespace mrt {
 namespace device {
 class DeviceResManager;
 }
+
+using DeleterFn = std::function<void(void *)>;
 class MRT_EXPORT Allocator {
  public:
   Allocator() = delete;
@@ -98,6 +100,19 @@ class MRT_EXPORT Storage : public RefCounted {
     data_ = data;
   }
 
+  void SetDataPtrFromAten(void *data, const DeleterFn &deleter) {
+    CHECK_IF_FAIL(ownsData_);
+    if (data_) {
+      FreeMemory();  // free old memory
+    }
+    data_ = data;
+    deleter_ = deleter;
+    fromAten_ = true;
+    ownsData_ = true;
+  }
+
+  DeleterFn GetDeleter() const { return deleter_; }
+
   void Resize(size_t sizeBytes);
 
   /**
@@ -137,6 +152,9 @@ class MRT_EXPORT Storage : public RefCounted {
   Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
   bool ownsData_;            ///< Whether the storage can own data.
+
+  bool fromAten_{false};         ///< Whether the storage is from aten.
+  DeleterFn deleter_ = nullptr;  ///< Deleter function pointer for external memory management.
 };
 
 using StoragePtr = IntrusivePtr<Storage>;

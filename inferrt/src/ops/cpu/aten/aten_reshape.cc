@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "ops/cpu/aten/aten_reshape.h"
-#include "ops/cpu/aten/utils/aten_convert.h"
+#include "ops/utils/aten_convert.h"
 #include "ops/op_register.h"
 
 namespace mrt {

@@ -35,6 +35,7 @@ function(check_debug_log_out)
 endfunction()
 
 if(ENABLE_TORCH_FRONT)
+  add_compile_definitions(ENABLE_TORCH_FRONT)
   execute_process(COMMAND python -c "import torch; print(torch.compiled_with_cxx11_abi())"
   OUTPUT_VARIABLE PYTORCH_CXX11_ABI_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 

@@ -16,6 +16,9 @@
 
 #include "ops/op_base/op_custom_call.h"
 #include "ops/custom_op_register.h"
+#ifdef ENABLE_TORCH_FRONT
+#include "ops/op_base/op_torch_call.h"
+#endif
 
 namespace mrt {
 namespace ops {
@@ -24,10 +27,19 @@ constexpr size_t kRealInputIndex = 1;
 void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   CHECK_IF_NULL(inputs[kInputIOpNameIndex]);
   opName_ = inputs[kInputIOpNameIndex]->ToString();
-  operatorPtr_ = CreateCustomOperator(opName_);
-  if (operatorPtr_ == nullptr) {
-    LOG_EXCEPTION << "Create custom operator for: " << opName_ << " failed, please register it.";
+  size_t pos = opName_.find(".");
+  if (pos == std::string::npos) {
+    LOG_EXCEPTION << "Invalid op name: " << opName_ << ". Op name must be in the format of ns::op_name.";
   }
+  std::string opName = opName_.substr(pos + 1);
+  operatorPtr_ = CreateCustomOperator(opName);
+#ifdef ENABLE_TORCH_FRONT
+  if (operatorPtr_ == nullptr) {
+    LOG_OUT << "Custom op " << opName_ << " not registered. Try to create operator from torch.";
+    operatorPtr_ = std::make_shared<OpTorchCall>(opName_);
+  }
+#endif
+  CHECK_IF_NULL(operatorPtr_);
   operatorPtr_->Init(inputs, output);
   auto inputSize = inputs.size() - kRealInputIndex;
   input_.resize(inputSize, nullptr);

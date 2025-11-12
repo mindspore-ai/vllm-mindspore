@@ -70,6 +70,19 @@ void Storage::FreeMemory() {
                      "reference memory passed in from external sources.";
   }
 
+  // Free memory from at::Tensor
+  if (fromAten_) {
+    if (deleter_ == nullptr) {
+      LOG_EXCEPTION << "Deleter function is null, can not free memory from aten.";
+    }
+    deleter_(nullptr);
+    deleter_ = nullptr;
+    data_ = nullptr;
+    fromAten_ = false;
+    ownsData_ = false;
+    return;
+  }
+
   CHECK_IF_NULL(data_);
   alloc_.Free(data_);
   data_ = nullptr;
