@@ -44,6 +44,7 @@ from collections.abc import Iterable
 from typing import Any, Optional, Union
 
 from mindspore import Tensor, nn
+from mindspore.nn.utils import no_init_parameters
 from transformers import Qwen3Config
 from vllm.attention import AttentionType
 from vllm.config import CacheConfig, VllmConfig
@@ -283,18 +284,21 @@ class Qwen3ForCausalLM(NativeModel):
         self.lora_config = lora_config
 
         self.quant_config = quant_config
-        self.model = Qwen3Model(vllm_config=vllm_config,
-                                prefix=maybe_prefix(prefix, "model"))
+
+        with no_init_parameters():
+            self.model = Qwen3Model(vllm_config=vllm_config,
+                                    prefix=maybe_prefix(prefix, "model"))
 
         if get_pp_group().is_last_rank:
             if config.tie_word_embeddings:
                 self.lm_head = self.model.embed_tokens
             else:
-                self.lm_head = ParallelLMHead(config.vocab_size,
-                                              config.hidden_size,
-                                              quant_config=quant_config,
-                                              prefix=maybe_prefix(
-                                                  prefix, "lm_head"))
+                with no_init_parameters():
+                    self.lm_head = ParallelLMHead(config.vocab_size,
+                                                  config.hidden_size,
+                                                  quant_config=quant_config,
+                                                  prefix=maybe_prefix(
+                                                      prefix, "lm_head"))
         else:
             self.lm_head = PPMissingLayer()
 
