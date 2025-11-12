@@ -43,9 +43,19 @@ def _get_cuda_graph_pad_size(self,
     return -1
 
 
+def profile_run(self) -> None:
+    max_num_batched_tokens = \
+        self.scheduler_config.max_num_batched_tokens
+    max_num_seqs = self.scheduler_config.max_num_seqs
+    self._dummy_run(max_num_batched_tokens, max_num_seqs)
+    if self.lora_config:
+        self._dummy_run(max_num_batched_tokens, max_num_seqs, True)
+
+
 def _dummy_run(self,
                max_num_batched_tokens: int,
-               max_num_seqs: int = 1) -> None:
+               max_num_seqs: int = 1,
+               use_lora: bool = False) -> None:
     with self.set_in_profile_run():
         # Enable top-k sampling to reflect the accurate memory usage.
         sampling_params = \
@@ -57,7 +67,7 @@ def _dummy_run(self,
         # passed in, which contains a lora from the lora warmup path.
         dummy_lora_requests: List[LoRARequest] = []
         dummy_lora_requests_per_seq: List[LoRARequest] = []
-        if self.lora_config:
+        if use_lora:
             assert self.lora_manager is not None
             with self.lora_manager.dummy_lora_cache():
                 for idx in range(self.lora_config.max_loras):
@@ -164,7 +174,7 @@ def _dummy_run(self,
 
         self.execute_model(model_input, kv_caches, intermediate_tensors)
         torch.cuda.synchronize()
-        if self.lora_config:
+        if use_lora:
             # Remove dummy loras.
             assert self.lora_manager is not None
             self.remove_all_loras()

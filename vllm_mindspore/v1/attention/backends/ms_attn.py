@@ -183,6 +183,36 @@ class MsAttentionMetadataBuilder:
         self.block_table = block_table
 
     def reorder_batch(self, input_batch, scheduler_output) -> bool:
+        if len(input_batch.lora_id_to_request_ids):
+            req_lora_ids = {}
+            lora_ids = []
+            # sort by lora_id
+            for lora_id, requests in input_batch.lora_id_to_request_ids.items(
+            ):
+                for request in requests:
+                    req_lora_ids[request] = lora_id
+            for req_id in input_batch._req_ids:
+                if req_id not in req_lora_ids:
+                    lora_ids.append(-1)
+                else:
+                    lora_ids.append(req_lora_ids[req_id])
+            self.is_sort = not np.all(
+                np.array(lora_ids[:-1]) <= np.array(lora_ids[1:]))
+            if self.is_sort:
+                lora_id_sort = np.argsort(lora_ids)
+                cur_req_index = list(range(len(input_batch._req_ids)))
+                req_nums = len(cur_req_index)
+
+                for i in range(req_nums):
+                    while cur_req_index[i] != lora_id_sort[i]:
+                        for j in range(i + 1, req_nums):
+                            if cur_req_index[j] == lora_id_sort[i]:
+                                cur_req_index[i], cur_req_index[
+                                    j] = cur_req_index[j], cur_req_index[i]
+                                # swap inputs information of the two requests
+                                input_batch.swap_states(i, j)
+                                break
+                return True
         return False
 
     def build(self, num_reqs: int, num_actual_tokens: int, max_query_len: int,

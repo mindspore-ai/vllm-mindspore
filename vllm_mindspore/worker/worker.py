@@ -18,10 +18,12 @@
 import math
 import os
 import subprocess
+from typing import List
 
 import psutil
 import torch
 from vllm.logger import init_logger
+from vllm.lora.request import LoRARequest
 from vllm.model_executor import set_random_seed
 from vllm.sampling_params import SamplingParams
 from vllm.sequence import SequenceGroupMetadata
@@ -165,7 +167,8 @@ def _prepare_input_for_warmup(model_config,
                               model_runner,
                               cache_engine,
                               is_prefill,
-                              is_mtp_model=False):
+                              is_mtp_model=False,
+                              use_lora=False):
     bs = 1
     seq_len = model_runner.scheduler_config.max_num_batched_tokens \
         if is_prefill else 1
@@ -174,6 +177,19 @@ def _prepare_input_for_warmup(model_config,
     block_tables_num = [
         i for i in range(math.ceil(seq_len / cache_engine.block_size))
     ]
+
+    dummy_lora_requests: List[LoRARequest] = []
+    if use_lora:
+        assert model_runner.lora_manager is not None
+        LORA_WARMUP_RANK = 8
+        dummy_lora_request = LoRARequest(
+            lora_name="warmup_for_decode",
+            lora_int_id=1,
+            lora_path="/not/a/real/path",
+        )
+        model_runner.lora_manager.add_dummy_lora(dummy_lora_request,
+                                                 rank=LORA_WARMUP_RANK)
+        dummy_lora_requests = dummy_lora_request
 
     # adapter multi modal warm up
     seq_data = dummy_data.seq_data
@@ -187,7 +203,7 @@ def _prepare_input_for_warmup(model_config,
             seq_data={idx: seq_data},
             sampling_params=SamplingParams(),
             block_tables={idx: block_tables_num},
-            lora_request=None,
+            lora_request=dummy_lora_requests if use_lora else None,
             multi_modal_data=None,
             multi_modal_placeholders=None,
         ) for idx in range(bs)
@@ -235,6 +251,16 @@ def _warm_up_model(self) -> None:
             previous_hidden_states=previous_hidden_states)
 
     torch.cuda.synchronize()
+
+    if self.vllm_config.lora_config is not None:
+        # warmup for lora decode
+        model_input, _ = _prepare_input_for_warmup(self.model_config,
+                                                   self.model_runner,
+                                                   self.cache_engine[0], False,
+                                                   False, True)
+        self.model_runner.execute_model(model_input, kv_cache, None)
+        self.model_runner.remove_all_loras()
+        torch.cuda.synchronize()
 
     # Reset the seed to ensure that the random state is not affected by
     # the model initialization and profiling.

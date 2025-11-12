@@ -22,6 +22,8 @@
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.logger import init_logger
 
+from vllm_mindspore.model_executor.utils import set_model_context
+
 logger = init_logger(__name__)
 
 
@@ -41,3 +43,22 @@ def compile_or_warm_up_model(self) -> None:
             self.model_runner._dummy_run(num_tokens=default_max_num_reqs))
     else:
         self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
+
+    # Compile graph and warm up for base model when using lora.
+    # Optimize the mixed execution of LoRA and the base model by avoiding
+    # redundant graph recompilation, thus improving first-inference latency.
+    if self.model_runner.lora_config is not None:
+        set_model_context("no_lora", True)
+        self.model_runner.model.has_prefill_warmup = False
+        if get_pp_group().is_last_rank:
+            # prefill for base model
+            self.model_runner._dummy_sampler_run(
+                self.model_runner._dummy_run(num_tokens=default_max_num_reqs))
+            # decode for base model
+            self.model_runner._dummy_sampler_run(
+                self.model_runner._dummy_run(num_tokens=default_max_num_reqs))
+        else:
+            # prefill for base model
+            self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
+            # decode for base model
+            self.model_runner._dummy_run(num_tokens=default_max_num_reqs)
