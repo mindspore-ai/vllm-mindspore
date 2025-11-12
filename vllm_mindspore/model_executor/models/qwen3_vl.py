@@ -1097,7 +1097,7 @@ class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
             config, architectures=["Qwen3ForCausalLM"])
 
         self.model = Qwen3LLMModel(
-            vllm_config=qwen3_config, prefix=maybe_prefix(prefix, "model"),
+            vllm_config=qwen3_config, prefix=prefix,
             deepstack_layers=deepstack_layers
         )
         self.lm_head = ParallelLMHead(

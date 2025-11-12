@@ -414,9 +414,6 @@ class Qwen2Model(nn.Cell):
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
 
-        network_unload = set(params_dict.keys()) - loaded_params
-        print(f"These params are not loaded in the network: {network_unload}")
-
         return loaded_params
 
 
