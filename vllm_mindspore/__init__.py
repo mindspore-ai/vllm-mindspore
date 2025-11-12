@@ -167,6 +167,8 @@ from vllm_mindspore.model_executor.models.registry import (
     MindSporeModelRegistry,
     _SUBPROCESS_COMMAND,
 )
+from vllm_mindspore.model_executor.layers.quantization import (
+    get_quantization_config)
 
 vllm.config.ModelRegistry = MindSporeModelRegistry
 
@@ -176,7 +178,7 @@ vllm.model_executor.models.ModelRegistry = MindSporeModelRegistry
 vllm.model_executor.models.registry._SUBPROCESS_COMMAND = _SUBPROCESS_COMMAND
 
 from vllm_mindspore.model_executor.model_loader.utils import (
-    get_ms_model_architecture, )
+    get_ms_model_architecture, ms_device_loading_context)
 
 # To patching the get_model_architecture, should import it first.
 from vllm.model_executor.model_loader import get_model_architecture  # noqa F401
@@ -187,6 +189,8 @@ vllm.model_executor.model_loader.utils.get_model_architecture = (
     get_ms_model_architecture)
 vllm.model_executor.model_loader.default_loader.get_model_architecture = (
     get_ms_model_architecture)
+vllm.model_executor.model_loader.utils.device_loading_context = (
+    ms_device_loading_context)
 
 from vllm_mindspore.model_executor.sampling_metadata import SamplingTensors
 
@@ -216,6 +220,8 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
 
 vllm.model_executor.model_loader.default_loader.safetensors_weights_iterator = (
     safetensors_weights_iterator)
+vllm.model_executor.model_loader.weight_utils.get_quantization_config = (
+    get_quantization_config)
 
 from vllm_mindspore.worker.worker import (_warm_up_model,
                                           wrapper_worker_bind_cpu)
@@ -282,14 +288,11 @@ vllm.executor.ray_distributed_executor.initialize_ray_cluster = (
 vllm.v1.utils.CoreEngineActorManager.__init__ = core_engine_actor_manager_init
 
 from .config import (_verify_quantization, _verify_args, vllm_config_post_init,
-                     vllm_config_get_quantization_config, model_post_init,
-                     _get_and_verify_dtype, stateless_init_dp_group,
-                     has_unfinished_dp)
+                     model_post_init, _get_and_verify_dtype,
+                     stateless_init_dp_group, has_unfinished_dp)
 
 vllm.config.ModelConfig._verify_quantization = _verify_quantization
 vllm.config.VllmConfig.__post_init__ = vllm_config_post_init
-vllm.config.VllmConfig._get_quantization_config = staticmethod(
-    vllm_config_get_quantization_config)
 vllm.config.SchedulerConfig._verify_args = _verify_args
 vllm.config.CompilationConfig.model_post_init = model_post_init
 vllm.config._get_and_verify_dtype = _get_and_verify_dtype

@@ -31,11 +31,11 @@ from mindspore.ops.operations.nn_ops import (FlashAttentionScore,
                                              PromptFlashAttention)
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig
-
-from vllm_mindspore.model_executor.layers.quantization.base_config import (
+from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
-from vllm_mindspore.model_executor.utils import (get_model_context,
-                                                 set_weight_attrs)
+from vllm.model_executor.utils import set_weight_attrs
+
+from vllm_mindspore.model_executor.utils import get_model_context
 from vllm_mindspore.utils import is_310p
 
 
