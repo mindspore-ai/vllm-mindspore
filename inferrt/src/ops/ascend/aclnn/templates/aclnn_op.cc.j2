@@ -8,7 +8,7 @@
 #include "ops/op_register.h"
 
 {% set params %}
-{% for arg in args %}, input[kIndex{{ loop.index0 }}]{{ arg|arg_wrapper }}{% endfor %}{{ result|output_wrapper }}
+{{ args|arg_wrapper }}{{ result|output_wrapper }}
 {%- endset -%}
 
 {% set output_tuple %}
