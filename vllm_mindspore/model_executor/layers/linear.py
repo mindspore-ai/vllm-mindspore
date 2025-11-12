@@ -37,7 +37,7 @@ from vllm_mindspore.distributed.communication_op import (
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
-    split_loaded_weight)
+    convert_loaded_weight, split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
@@ -216,7 +216,7 @@ class ReplicatedLinear(LinearBase):
             self.bias = None
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor):
-        loaded_weight = loaded_weight[:]
+        loaded_weight = convert_loaded_weight(loaded_weight)
         if len(loaded_weight.shape) == 0:
             loaded_weight = loaded_weight.reshape(1)
 

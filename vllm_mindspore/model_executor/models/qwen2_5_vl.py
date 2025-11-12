@@ -90,6 +90,8 @@ from vllm_mindspore.model_executor.models.model_base import NativeModel, \
     AttentionWrapper
 from vllm_mindspore.model_executor.models.qwen2 import Qwen2Model
 from vllm_mindspore.model_executor.models.utils import PPMissingLayer
+from vllm_mindspore.model_executor.model_loader.weight_utils import \
+    convert_loaded_weight
 from .interfaces import (SupportsMultiModal)
 from .utils import (WeightsMapper, maybe_prefix, merge_multimodal_embeddings)
 
@@ -1059,7 +1061,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         for name, loaded_weight in weights:
             param = params_dict[name]
             if name == "visual.patch_embed.proj.weight":
-                loaded_weight = loaded_weight[:]
+                loaded_weight = convert_loaded_weight(loaded_weight)
                 loaded_weight = loaded_weight.reshape(loaded_weight.shape[0],
                                                       -1)
                 param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))

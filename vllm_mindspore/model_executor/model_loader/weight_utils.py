@@ -31,6 +31,14 @@ from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
 from vllm_mindspore.utils import cast_weight_for_310p, is_310p
 
 
+def convert_loaded_weight(loaded_weight):
+    """Get all loaded_weight value and dtype conversion on 310p"""
+    loaded_weight = loaded_weight[:]
+    if is_310p():
+        loaded_weight = cast_weight_for_310p(loaded_weight)
+    return loaded_weight
+
+
 def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
     """
     Read numpy slice data based on axis and slice range.
@@ -40,9 +48,7 @@ def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
     :shard_size: end slice index
     """
     if shard_dim is None:
-        loaded_weight = loaded_weight[:]
-        if is_310p():
-            loaded_weight = cast_weight_for_310p(loaded_weight)
+        loaded_weight = convert_loaded_weight(loaded_weight)
         return loaded_weight
 
     end_idx = start_idx + shard_size
@@ -83,7 +89,7 @@ def safetensors_weights_iterator(
 
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
-    loaded_weight = loaded_weight[:]
+    loaded_weight = convert_loaded_weight(loaded_weight)
     if is_310p():
         loaded_weight = cast_weight_for_310p(loaded_weight)
     param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))

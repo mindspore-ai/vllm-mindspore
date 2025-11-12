@@ -37,7 +37,7 @@ from vllm_mindspore.distributed.communication_op import (
 from vllm_mindspore.model_executor.layers.quantization.base_config import (
     QuantizeMethodBase, method_has_implemented_embedding)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
-    split_loaded_weight)
+    convert_loaded_weight, split_loaded_weight)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
@@ -347,7 +347,7 @@ class VocabParallelEmbedding(nn.Cell):
         # If parameter does not have output dim, then it should
         # be copied onto all gpus (e.g. g_idx for act_order gptq).
         if output_dim is None:
-            loaded_weight = loaded_weight[:]
+            loaded_weight = convert_loaded_weight(loaded_weight)
             assert param.data.shape == loaded_weight.shape
             if param.data.shape != loaded_weight.shape:
                 raise ValueError(
