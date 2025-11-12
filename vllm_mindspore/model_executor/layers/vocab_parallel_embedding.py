@@ -25,6 +25,7 @@ from typing import Optional
 import mindspore as ms
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore.common.dtype import typing
+from mindspore.common.initializer import initializer
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
@@ -50,9 +51,9 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
                        output_partition_sizes: list[int], input_size: int,
                        output_size: int, params_dtype, **extra_weight_attrs):
         """Create weights for embedding layer."""
-        weight = Parameter(mint.zeros(
-            (sum(output_partition_sizes), input_size_per_partition),
-            dtype=params_dtype),
+        weight_shape = (int(sum(output_partition_sizes)),
+                        int(input_size_per_partition))
+        weight = Parameter(initializer("zeros", weight_shape, params_dtype),
                            requires_grad=False)
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
         layer.insert_param_to_cell("weight", weight)
@@ -340,6 +341,7 @@ class VocabParallelEmbedding(nn.Cell):
         return output
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor):
+        param.init_data()
         output_dim = getattr(param, "output_dim", None)
         get_tensor_model_parallel_rank()
         # If parameter does not have output dim, then it should

@@ -26,6 +26,7 @@ import mindspore as ms
 import numpy as np
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression.typing import Type as MSDtype
+from mindspore.common.initializer import initializer
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (divide, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
@@ -92,14 +93,10 @@ class UnquantizedLinearMethod(LinearMethodBase):
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
                        output_partition_sizes: list[int], input_size: int,
                        output_size: int, params_dtype, **extra_weight_attrs):
-        weight = Parameter(
-            mint.zeros(
-                (int(sum(output_partition_sizes)),
-                 int(input_size_per_partition)),
-                dtype=params_dtype,
-            ),
-            requires_grad=False,
-        )
+        weight_shape = (int(sum(output_partition_sizes)),
+                        int(input_size_per_partition))
+        weight = Parameter(initializer("zeros", weight_shape, params_dtype),
+                           requires_grad=False)
         self.input_size_per_partition = int(input_size_per_partition)
         self.output_size_per_partition = int(sum(output_partition_sizes))
         set_weight_attrs(weight, {"input_dim": 1, "output_dim": 0})
@@ -227,6 +224,7 @@ class ReplicatedLinear(LinearBase):
             f"Tried to load weights of size {loaded_weight.size()}"
             f"to a parameter of size {param.size()}")
 
+        param.init_data()
         param.set_data(ms.from_numpy(loaded_weight))
 
     def construct(
@@ -354,6 +352,7 @@ class ColumnParallelLinear(LinearBase):
         return output, output_bias
 
     def weight_loader(self, param, loaded_weight):
+        param.init_data()
         tp_rank = get_tensor_model_parallel_rank()
         output_dim = getattr(param, "output_dim", None)
         shard_size = self.output_size_per_partition
@@ -421,6 +420,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                       param,
                       loaded_weight,
                       loaded_shard_id: Optional[int] = None):
+        param.init_data()
         output_dim = getattr(param, "output_dim", None)
         tp_rank = get_tensor_model_parallel_rank()
         tp_size = get_tensor_model_parallel_world_size()
@@ -529,6 +529,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                       param,
                       loaded_weight,
                       loaded_shard_id: Optional[str] = None):
+        param.init_data()
         output_dim = getattr(param, "output_dim", None)
         tp_rank = get_tensor_model_parallel_rank()
 
@@ -704,6 +705,7 @@ class RowParallelLinear(LinearBase):
         return output, output_bias
 
     def weight_loader(self, param, loaded_weight):
+        param.init_data()
         tp_rank = get_tensor_model_parallel_rank()
         input_dim = getattr(param, "input_dim", None)
         shard_size = self.input_size_per_partition

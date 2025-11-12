@@ -30,6 +30,7 @@ from collections.abc import Iterable
 from typing import Any, Optional, Union
 
 from mindspore import Parameter, Tensor, nn
+from mindspore.nn.utils import no_init_parameters
 from transformers import PretrainedConfig
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
@@ -530,11 +531,12 @@ class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts):
         quant_config = vllm_config.quant_config
         self.config = config
         self.quant_config = quant_config
-        self.model = Qwen3MoeModel(vllm_config=vllm_config,
-                                   prefix=maybe_prefix(prefix, "model"))
-        self.lm_head = ParallelLMHead(config.vocab_size,
-                                      config.hidden_size,
-                                      quant_config=quant_config)
+        with no_init_parameters():
+            self.model = Qwen3MoeModel(vllm_config=vllm_config,
+                                       prefix=maybe_prefix(prefix, "model"))
+            self.lm_head = ParallelLMHead(config.vocab_size,
+                                          config.hidden_size,
+                                          quant_config=quant_config)
         if self.config.tie_word_embeddings:
             self.lm_head.weight = self.model.embed_tokens.weight
         self.logits_processor = LogitsProcessor(config.vocab_size)
