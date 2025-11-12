@@ -1,3 +1,3 @@
 add_subdirectory(Dialect)
-add_subdirectory(pass)
+add_subdirectory(Conversion)
 add_subdirectory(CAPI)

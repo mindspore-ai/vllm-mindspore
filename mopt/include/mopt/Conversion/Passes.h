@@ -14,25 +14,38 @@
  * limitations under the License.
  */
 
-#ifndef MOPT_PASSES_H
-#define MOPT_PASSES_H
+#ifndef MOPT_CONVERSION_PASSES_H
+#define MOPT_CONVERSION_PASSES_H
 
-#include <memory>
 #include "mlir/Pass/Pass.h"
 
 namespace mlir {
 
-/// Create individual passes
-std::unique_ptr<Pass> createConvertReshapeToMRTPass();
+// Forward declarations
+class Pass;
+
+//===----------------------------------------------------------------------===//
+// Pass declarations
+//===----------------------------------------------------------------------===//
+
+#define GEN_PASS_DECL
+#include "mopt/Conversion/Passes.h.inc"
+
+//===----------------------------------------------------------------------===//
+// Pass creators
+//===----------------------------------------------------------------------===//
+
+/// Create a pass to convert StableHLO operations to MRT dialect operations.
+std::unique_ptr<Pass> createConvertStablehloToMRTPass();
 
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//
 
-/// Generate the code for registering passes.
+/// Generate the code for registering conversion passes.
 #define GEN_PASS_REGISTRATION
-#include "mopt/Passes.h.inc"
+#include "mopt/Conversion/Passes.h.inc"  // NOLINT(build/include)
 
 }  // namespace mlir
 
-#endif  // MOPT_PASSES_H
+#endif  // MOPT_CONVERSION_PASSES_H

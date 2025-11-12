@@ -6,13 +6,13 @@ add_mlir_public_c_api_library(MoptCAPI
   ${PROJECT_SOURCE_DIR}/include/mopt-c/
 
   DEPENDS
-  MoptPassIncGen
+  MoptConversionPassIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR
   MLIRSupport
   MLIRMrtDialect
-  MoptPasses
+  MoptConversionStablehloToMrt
 )
 
 # Add include directories
