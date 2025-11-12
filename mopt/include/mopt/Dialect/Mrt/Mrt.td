@@ -359,4 +359,50 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3"> {
   );
 }
 
+def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm"> {
+  let summary = "aclnnAddRmsNorm";
+  let description = [{
+    Operation for fused Add and RmsNorm computation.
+    Accepts two input tensors for addition, a gamma scaling factor tensor, and epsilon value for numerical stability.
+    Produces normalized output tensor, the standard deviation, and the intermediate addition result.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$x1,
+    AnyRankedTensor:$x2,
+    AnyRankedTensor:$gamma,
+    F32Attr:$epsilon
+  );
+
+  let results = (outs
+    AnyRankedTensor:$yOut,
+    AnyRankedTensor:$rstdOut,
+    AnyRankedTensor:$xOut
+  );
+
+  let generated = 1;
+}
+
+def Mrt_RmsNormOp : Mrt_Op<"rms_norm"> {
+  let summary = "aclnnRmsNorm";
+  let description = [{
+    Operation for RmsNorm computation.
+    Accepts input tensor, gamma scaling factor, and epsilon value for numerical stability.
+    Produces normalized output tensor and reciprocal of standard deviation.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$x,
+    AnyRankedTensor:$gamma,
+    F32Attr:$epsilon
+  );
+
+  let results = (outs
+    AnyRankedTensor:$yOut,
+    AnyRankedTensor:$rstdOut
+  );
+
+  let generated = 1;
+}
+
 #endif // MRT_DIALECT_MRT_OPS_TD
