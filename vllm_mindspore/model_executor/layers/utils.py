@@ -36,6 +36,23 @@ def get_token_bin_counts_and_mask(
     return bin_counts, mask
 
 
+def get_repetition_penalties_mask(
+    prompt_tokens: ms.Tensor,
+    output_tokens: ms.Tensor,
+    vocab_size: int,
+    num_seqs: int,
+) -> ms.Tensor:
+    # Compute the bin counts for the tokens.
+    # vocab_size + 1 for padding.
+    bin_counts = ms.mint.zeros((num_seqs, vocab_size + 1), dtype=ms.int64)
+    bin_counts.scatter_add_(1, prompt_tokens, ms.mint.ones_like(prompt_tokens))
+    bin_counts.scatter_add_(1, output_tokens, ms.mint.ones_like(output_tokens))
+    bin_counts = bin_counts[:, :vocab_size]
+    mask = bin_counts > 0
+
+    return mask
+
+
 def apply_penalties(logits: ms.Tensor, prompt_tokens_tensor: ms.Tensor,
                     output_tokens_tensor: ms.Tensor,
                     presence_penalties: ms.Tensor,
@@ -57,26 +74,34 @@ def apply_penalties(logits: ms.Tensor, prompt_tokens_tensor: ms.Tensor,
     if logits.numel() <= 0:
         return logits
     num_seqs, vocab_size = logits.shape
-    _, prompt_mask = get_token_bin_counts_and_mask(prompt_tokens_tensor,
-                                                   vocab_size, num_seqs)
-    output_bin_counts, output_mask = get_token_bin_counts_and_mask(
-        output_tokens_tensor, vocab_size, num_seqs)
 
-    # use 'broadcast_to' to replace 'tensor.repeat' to improve performance
-    # when tensor shape is (num,seqs, 1), then 'tensor.repeat(1, vocab_size)'
-    # is equal to 'broadcast_to(tensor, (num_seqs, vocab_size))'
-    repetition_penalties = ms.mint.broadcast_to(
-        repetition_penalties.unsqueeze(dim=1), (num_seqs, vocab_size))
+    if repetition_penalties is not None:
+        mask = get_repetition_penalties_mask(
+            prompt_tokens_tensor,
+            output_tokens_tensor,
+            vocab_size,
+            num_seqs,
+        )
+        # use 'broadcast_to' to replace 'tensor.repeat' to improve performance
+        # when tensor shape is (num,seqs, 1), 'tensor.repeat(1, vocab_size)'
+        # is equal to 'broadcast_to(tensor, (num_seqs, vocab_size))'
+        repetition_penalties = ms.mint.broadcast_to(
+            repetition_penalties.unsqueeze(dim=1), (num_seqs, vocab_size))
 
-    # use out of place computation instead of inplace setitem to improve
-    # performance 'tensor[tensor > 0]' will result in setitem, which is slow.
-    mask = prompt_mask | output_mask
-    logits = ms.mint.where(mask & (logits > 0), logits / repetition_penalties,
-                           logits)
-    logits = ms.mint.where(mask & (logits <= 0), logits * repetition_penalties,
-                           logits)
+        # use out of place computation instead of inplace setitem to improve
+        # performance 'tensor[tensor > 0]' will result in setitem,
+        # which is slow.
+        logits = ms.mint.where(mask & (logits > 0),
+                               logits / repetition_penalties, logits)
+        logits = ms.mint.where(mask & (logits <= 0),
+                               logits * repetition_penalties, logits)
     # We follow the definition in OpenAI API.
-    # Refer to https://platform.openai.com/docs/api-reference/parameter-details
-    logits -= frequency_penalties.unsqueeze(dim=1) * output_bin_counts
-    logits -= presence_penalties.unsqueeze(dim=1) * output_mask
+    # Refer to https://platform.openai.com/docs/api-reference/parameter-details\
+    if frequency_penalties is not None or presence_penalties is not None:
+        output_bin_counts, output_mask = get_token_bin_counts_and_mask(
+            output_tokens_tensor, vocab_size, num_seqs)
+        if frequency_penalties is not None:
+            logits -= frequency_penalties.unsqueeze(dim=1) * output_bin_counts
+        if presence_penalties is not None:
+            logits -= presence_penalties.unsqueeze(dim=1) * output_mask
     return logits
