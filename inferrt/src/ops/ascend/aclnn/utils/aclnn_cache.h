@@ -119,9 +119,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const T &value, size_t *
 
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TensorPtr &tensor, size_t *irIndex,
                        size_t *tensorIndex) {
-  if (tensor != nullptr) {
-    cacheEntry->UpdateTensorAddr(irIndex, tensorIndex, nullptr, tensor->DataPtr());
-  }
+  cacheEntry->UpdateTensorAddr(irIndex, tensorIndex, nullptr, tensor->DataPtr());
   ++(*irIndex);
   ++(*tensorIndex);
 }
