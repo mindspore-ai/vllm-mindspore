@@ -98,8 +98,20 @@ PROJECT_DIR=$(pwd)
 BUILD_DIR="${PROJECT_DIR}/build"
 export LLVM_BUILD_DIR="${BUILD_DIR}/third_party/build/llvm"
 
-if [[ $INC_BUILD != 1 && ($BUILD_OPT == 1 || $ENABLE_ASCEND == 1) ]]; then
+if [[ $BUILD_OPT == 1 || $ENABLE_ASCEND == 1 ]]; then
     echo "LLVM_BUILD_DIR: ${LLVM_BUILD_DIR}"
+    if [[ $INC_BUILD != 1 ]]; then
+        echo "Building LLVM and MLIR"
+        bash "scripts/build_llvm.sh"
+    fi
+    export LLVM_DIR="${LLVM_BUILD_DIR}/lib/cmake/llvm"
+    export MLIR_DIR="${LLVM_BUILD_DIR}/lib/cmake/mlir"
+    echo "  LLVM_DIR: ${LLVM_DIR}"
+    echo "  MLIR_DIR: ${MLIR_DIR}"
+    if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
+        export TORCH_MLIR_BUILD_DIR="${LLVM_BUILD_DIR}/tools/torch-mlir"
+        echo "  TORCH_MLIR_BUILD_DIR: ${TORCH_MLIR_BUILD_DIR}"
+    fi
 fi
 
 ##################################################
@@ -128,13 +140,7 @@ if [[ $BUILD_OPT == 1 ]]; then
         rm -rf build dist
     fi
 
-    export LLVM_DIR="${LLVM_BUILD_DIR}/lib/cmake/llvm"
-    export MLIR_DIR="${LLVM_BUILD_DIR}/lib/cmake/mlir"
     echo "Building mopt with LLVM from: ${LLVM_BUILD_DIR}"
-    echo "  LLVM_DIR: ${LLVM_DIR}"
-    echo "  MLIR_DIR: ${MLIR_DIR}"
-    echo "  ENABLE_TORCH_FRONT: ${ENABLE_TORCH_FRONT}"
-
     # Build the wheel
     python -m build --wheel --no-isolation
 

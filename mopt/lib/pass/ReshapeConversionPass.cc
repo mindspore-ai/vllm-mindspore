@@ -30,13 +30,13 @@ using mlir::dyn_cast;
 using mlir::failed;
 using mlir::failure;
 using mlir::LogicalResult;
-using mlir::MatchAnyOpTypeTag;
 using mlir::MLIRContext;
 using mlir::ModuleOp;
 using mlir::Operation;
 using mlir::OperationPass;
 using mlir::Pass;
 using mlir::PassWrapper;
+using mlir::Pattern;
 using mlir::PatternRewriter;
 using mlir::RankedTensorType;
 using mlir::RewritePattern;
@@ -56,7 +56,7 @@ namespace {
 // - One output tensor result
 // - The output shape can be determined from the result type
 struct ReshapeOpConversion : public RewritePattern {
-  explicit ReshapeOpConversion(MLIRContext *context) : RewritePattern(MatchAnyOpTypeTag(), 1, context) {}
+  explicit ReshapeOpConversion(MLIRContext *context) : RewritePattern(Pattern::MatchAnyOpTypeTag(), 1, context) {}
 
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     // Check if this is a reshape operation

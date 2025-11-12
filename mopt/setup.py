@@ -62,19 +62,18 @@ class CMakeBuild(build_ext):
         # Package torch_mlir as a top-level package
         # (parallel to mopt in site-packages)
         # torch_mlir is generated during compilation, package from build path
-        build_dir = Path(__file__).parent.parent / "build"
-        torch_mlir_path = (build_dir / "third_party" / "build" / "llvm" /
-                          "tools" / "torch-mlir" / "python_packages" /
-                          "torch_mlir" / "torch_mlir")
-
-        if torch_mlir_path.is_dir():
-            torch_mlir_dst = Path(self.build_lib) / "torch_mlir"
-            if torch_mlir_dst.exists():
-                shutil.rmtree(torch_mlir_dst)
-            shutil.copytree(torch_mlir_path, torch_mlir_dst)
-            print(f"Packaged torch_mlir from {torch_mlir_path}")
-        else:
-            print(f"Warning: torch_mlir not found at {torch_mlir_path}")
+        torch_mlir_build_dir = os.environ.get("TORCH_MLIR_BUILD_DIR")
+        if torch_mlir_build_dir:
+            torch_mlir_path = (Path(torch_mlir_build_dir) / "python_packages" /
+                              "torch_mlir" / "torch_mlir")
+            if torch_mlir_path.is_dir():
+                torch_mlir_dst = Path(self.build_lib) / "torch_mlir"
+                if torch_mlir_dst.exists():
+                    shutil.rmtree(torch_mlir_dst)
+                shutil.copytree(torch_mlir_path, torch_mlir_dst)
+                print(f"Packaged torch_mlir from {torch_mlir_path}")
+            else:
+                print(f"Warning: torch_mlir not found at {torch_mlir_path}")
 
 
 class BuildPyWithExt(build_py):
