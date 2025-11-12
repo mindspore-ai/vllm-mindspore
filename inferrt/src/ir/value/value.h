@@ -194,13 +194,6 @@ class DA_API Value : public RefCounted {
    */
   enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple };
 
-  /**
-   * @brief Tag string representation.
-   * @param tag Input tag enumeration.
-   * @return String representation of the tag enumeration.
-   */
-  friend std::string TagToString(Tag tag);
-
   const Tag tag_;  ///< The tag indicating the type of the value.
   union {
     TensorPtr tensor_;

@@ -21,12 +21,6 @@
 
 namespace mrt {
 namespace ir {
-std::string TagToString(Value::Tag tag) {
-  const std::string kTagStrings[] = {
-    "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple",
-  };
-  return kTagStrings[static_cast<size_t>(tag)];
-}
 
 Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}
 Value::Value(float v) : tag_(Tag::Float), float_(v) {}
@@ -88,10 +82,9 @@ Value &Value::operator=(Value &&other) noexcept {
   return *this;
 }
 
-#define CHECK_TAG(expected)                                                                  \
-  if (tag_ != expected) {                                                                    \
-    LOG_EXCEPTION << "Bad Value access, value: " << *this << ", type: " << TagToString(tag_) \
-                  << ", expected type: " << TagToString(expected);                           \
+#define CHECK_TAG(expected)                                \
+  if (tag_ != expected) {                                  \
+    LOG_EXCEPTION << "Bad Value access, value: " << *this; \
   }
 
 const TensorPtr &Value::ToTensor() const {

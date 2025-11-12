@@ -338,8 +338,8 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3"> {
   let arguments = (ins
     AnyRankedTensor:$x,
     AnyRankedTensor:$expertIdx,
-    MrtOptTensor:$scaleOptional,
-    MrtOptTensor:$offsetOptional,
+    AnyRankedTensor:$scaleOptional,
+    AnyRankedTensor:$offsetOptional,
     I64Attr:$activeNum,
     I64Attr:$expertCapacity,
     I64Attr:$expertNum,
@@ -357,8 +357,6 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3"> {
     AnyRankedTensor:$expertTokensCountOrCumsumOut,
     AnyRankedTensor:$expandedScaleOut
   );
-
-  let generated = 1;
 }
 
 #endif // MRT_DIALECT_MRT_OPS_TD
