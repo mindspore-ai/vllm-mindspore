@@ -27,7 +27,7 @@ from vllm.utils import cdiv
 from vllm.v1.kv_cache_interface import FullAttentionSpec
 
 
-@dataclass
+@dataclass(frozen=True)
 class MLAQuantFullAttentionSpec(FullAttentionSpec):
 
     fa3_quant: bool = False
@@ -90,5 +90,6 @@ class MLAQuantFullAttentionSpec(FullAttentionSpec):
         """
         merge_specs = copy.deepcopy(specs[0])
         if not all(spec.type_id == specs[0].type_id for spec in specs[1:]):
-            merge_specs.diff_page_size_merge = True
+            # TODO: merge_specs.diff_page_size_merge
+            pass
         return merge_specs

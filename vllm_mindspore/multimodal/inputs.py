@@ -28,8 +28,8 @@ import numpy as np
 import torch
 from vllm.multimodal import MultiModalKwargs
 from vllm.multimodal.inputs import (BaseMultiModalField, BatchedTensorInputs,
-                                    JSONTree, is_list_of, json_map_leaves,
-                                    nested_tensors_equal)
+                                    is_list_of, nested_tensors_equal)
+from vllm.utils.jsontree import JSONTree, json_map_leaves
 
 NestedTensors = Union[
     list["NestedTensors"],

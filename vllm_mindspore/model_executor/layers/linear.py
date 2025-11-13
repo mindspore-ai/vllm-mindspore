@@ -136,7 +136,7 @@ class LinearBase(nn.Cell):
         output_size: int,
         skip_bias_add: bool = False,
         params_dtype: Optional[MSDtype] = None,
-        quant_config: Optional[QuantizationConfig] = None,
+        quant_config=None,
         prefix: str = "",
         *,
         return_bias: Optional[bool] = True,
@@ -150,8 +150,7 @@ class LinearBase(nn.Cell):
             params_dtype = get_current_vllm_config().model_config.dtype
         self.params_dtype = params_dtype
         if quant_config is None:
-            self.quant_method: Optional[
-                QuantizeMethodBase] = UnquantizedLinearMethod()
+            self.quant_method = UnquantizedLinearMethod()
         else:
             self.quant_method = quant_config.get_quant_method(self,
                                                               prefix=prefix)

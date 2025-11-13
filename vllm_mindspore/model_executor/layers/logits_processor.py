@@ -27,7 +27,7 @@ from mindspore import Tensor, mint, nn
 from vllm.config import current_platform
 from vllm.distributed import (tensor_model_parallel_all_gather,
                               tensor_model_parallel_gather)
-from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.v1.sample.metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)

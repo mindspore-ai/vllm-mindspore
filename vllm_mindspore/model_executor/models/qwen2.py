@@ -43,9 +43,8 @@ from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA
 from vllm.sequence import IntermediateTensors
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 
-from vllm_mindspore.attention import Attention
+from vllm_mindspore.v1.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import (
@@ -486,8 +485,6 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
     def compute_logits(
         self,
         hidden_states: Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states)
         return logits

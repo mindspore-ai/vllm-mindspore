@@ -22,9 +22,12 @@ from typing import TYPE_CHECKING
 
 import mindspore as ms
 import numpy as np
+import torch
 from mindspore import Tensor
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
+
+from vllm_mindspore.model_executor.models.utils import convert_pin
 
 if TYPE_CHECKING:
     from ray.util.placement_group import PlacementGroup
@@ -127,3 +130,42 @@ def create_dp_placement_groups(
                 placement_groups.append(pg)
                 local_dp_ranks.append(i)
     return placement_groups, local_dp_ranks
+
+
+class CpuGpuBuffer:
+    """Buffer to easily copy tensors between CPU and GPU."""
+
+    def __init__(
+        self,
+        *size,
+        dtype,
+        device,
+        pin_memory: bool,
+        with_numpy: bool = True,
+    ) -> None:
+        self.cpu = torch.zeros(*size,
+                               dtype=dtype,
+                               device="cpu",
+                               pin_memory=pin_memory)
+        # vllm-mindspore begin
+        self.cpu = convert_pin(self.cpu)
+        # vllm-mindspore end
+        self.gpu = self.cpu.to(device)
+        self.np: np.ndarray
+        # To keep type hints simple (avoiding generics and subclasses), we
+        # only conditionally create the numpy array attribute. This can cause
+        # AttributeError if `self.np` is accessed when `with_numpy=False`.
+        if with_numpy:
+            if dtype == torch.bfloat16:
+                raise ValueError(
+                    "Bfloat16 torch tensors cannot be directly cast to a "
+                    "numpy array, so call CpuGpuBuffer with with_numpy=False")
+            self.np = self.cpu.numpy()
+
+    def copy_to_gpu(self, n=None) -> torch.Tensor:
+        if n is None:
+            return self.gpu.copy_(self.cpu, non_blocking=True)
+        # vllm-mindspore begin
+        return self.gpu[:n].copy_(ms.from_numpy(self.np[:n]),
+                                  non_blocking=True)
+        # vllm-mindspore end

@@ -64,9 +64,9 @@ def test_mf_qwen_7b_chunk_prefill():
             "is easily accessible from Beijing and offers a glimpse into the "
             "strategic genius and resilience of ancient China.",
             "answer":
-            " The city's blend of traditional and modern elements, "
-            "from the bustling markets to the cutting-edge technology, "
-            "makes it a unique and fascinating place to explore. In summary"
+            " The city's blend of traditional and modern architecture, "
+            "bustling markets, and vibrant street life make it a unique "
+            "and fascinating destination. In addition, the city's rich"
         },
         {
             "prompt":

@@ -30,7 +30,6 @@ from vllm.distributed.parallel_state import get_dp_group, get_pp_group
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces import SupportsPP
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.models.attention_mask import (
@@ -305,9 +304,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             is_prefill = attn_metadata.max_context_lens == 0
             is_ringmla_chunked = \
                 self.use_ringmla and not is_prefill and \
-                bool((attn_metadata.context_lens - \
-                      attn_metadata.num_prompt_tokens).min() < 0 or
-                      attn_metadata.q_seq_lens_np.max() > 1)
+                bool(attn_metadata.q_seq_lens_np.max() > 1)
             query_lens_np = attn_metadata.q_seq_lens_np
             seq_lens_np = attn_metadata.seq_lens_np
             context_lens_tensor = attn_metadata.context_lens
@@ -422,30 +419,15 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         logger.info("........ Enable kernel_launch_group ........")
         if cls._set_launch_group:
             return
-        thread_num = 4
-        kernel_group_num = 16
-        ms.runtime.set_kernel_launch_group(thread_num=thread_num,
-                                           kernel_group_num=kernel_group_num)
+        # TODO(WYD):
+        # Deepseek has problem with pinned memory.
+        # Disable kernel_launch_group temporarily.
         cls._set_launch_group = True
 
     def compute_logits(
         self,
         hidden_states: Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        if sampling_metadata is not None:
-            selected_token_indices = sampling_metadata.selected_token_indices
-            if (selected_token_indices is not None
-                    and selected_token_indices.numel() <= 0):
-                logits = ms.mint.zeros(
-                    (0, self.model_config.hf_config.vocab_size),
-                    dtype=self.model_config.dtype)
-                return logits
-            else:
-                hidden_states = hidden_states.reshape(
-                    (-1, hidden_states.shape[-1]))
-                hidden_states = hidden_states.index_select(
-                    0, selected_token_indices)
         if is_310p():
             # To get better performance in 310p, the lm head should run
             # in O0 mode to avoid transdata, 910 keep the original process.

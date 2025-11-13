@@ -21,7 +21,6 @@
 
 import mindspore as ms
 from mindspore import mint
-from vllm.model_executor.sampling_metadata import SequenceGroupToSample
 
 # (num_token_ids, num_parent_ids) per sequence group.
 SampleResultType = list[tuple[list[int], list[int]]]
@@ -72,47 +71,3 @@ def _apply_min_p(
     logits = logits.masked_fill_(tokens_to_remove, -float("inf"))
 
     return logits
-
-
-def _random_sample(
-    selected_seq_groups: list[SequenceGroupToSample],
-    random_samples: ms.Tensor,
-) -> SampleResultType:
-    """Run random sampling on a given samples.
-
-    Args:
-        selected_seq_groups: A list of sequence groups batched.
-        random_samples: (num_selected_samples,) A tensor of samples. The
-            length of samples could be smaller than selected_seq_groups if
-            seq_group.do_sample is False.
-    Returns:
-        Tuple of (next_token_ids, parent_ids). The length of returned list is
-        same as the length of selected_seq_groups. If the corresponding
-        seq_group has do_sample=False, tuple contains ([], [])
-    """
-    # Find the maximum n value of the prompt phase requests.
-    sample_idx = 0
-    results: SampleResultType = []
-    random_samples = random_samples.asnumpy()
-    for seq_group in selected_seq_groups:
-        if not seq_group.do_sample:
-            results.append(([], []))
-            continue
-
-        seq_ids = seq_group.seq_ids
-        sampling_params = seq_group.sampling_params
-        is_prompt = seq_group.is_prompt
-        num_parent_seqs = len(seq_ids)
-        if is_prompt:
-            # Prompt phase.
-            parent_ids = [0] * sampling_params.n
-            next_token_ids = random_samples[
-                sample_idx, :sampling_params.n].tolist()
-        else:
-            # Generation phase.
-            parent_ids = list(range(num_parent_seqs))
-            next_token_ids = random_samples[sample_idx:sample_idx +
-                                            num_parent_seqs, 0].tolist()
-        results.append((next_token_ids, parent_ids))
-        sample_idx += num_parent_seqs
-    return results

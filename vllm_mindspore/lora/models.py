@@ -25,7 +25,7 @@ from typing import Optional, Union
 import mindspore as ms
 import safetensors.torch
 from mindspore import mint
-from vllm.lora.lora import LoRALayerWeights
+from vllm.lora.lora_weights import LoRALayerWeights
 from vllm.lora.peft_helper import PEFTHelper
 from vllm.lora.utils import is_regex_target_modules, parse_fine_tuned_lora_name
 from vllm.model_executor.model_loader.tensorizer import TensorizerConfig
@@ -113,10 +113,7 @@ def from_lora_tensors(
     for lora in loras.values():
         lora.optimize()
 
-    return cls(lora_model_id,
-               peft_helper.r,
-               loras,
-               scaling_factor=peft_helper.vllm_long_context_scaling_factor)
+    return cls(lora_model_id, peft_helper.r, loras)
 
 
 @classmethod  #type:ignore
@@ -249,3 +246,8 @@ def from_local_checkpoint(
         embedding_modules=embedding_modules,
         embedding_padding_modules=embedding_padding_modules,
         weights_mapper=weights_mapper)
+
+
+def is_moe_model(model):
+    # should adapt when lora support moe
+    return False

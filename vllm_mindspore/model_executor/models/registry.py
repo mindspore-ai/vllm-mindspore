@@ -15,11 +15,18 @@
 # limitations under the License.
 
 import sys
-from typing import Union
+from typing import Optional, Union
 
+import torch.nn as nn
+import transformers
+from vllm.config import ModelConfig
 from vllm.logger import init_logger
-from vllm.model_executor.models.registry import (_LazyRegisteredModel,
-                                                 _ModelRegistry, _run)
+from vllm.model_executor.models.registry import (_TRANSFORMERS_BACKEND_MODELS,
+                                                 _LazyRegisteredModel,
+                                                 _ModelInfo, _ModelRegistry,
+                                                 _run)
+from vllm.transformers_utils.dynamic_module import (
+    try_get_class_from_dynamic_module)
 
 from vllm_mindspore.utils import (is_mindformers_model_backend,
                                   is_mindone_model_backend,
@@ -145,7 +152,66 @@ _SUBPROCESS_COMMAND = [
 ]
 
 
-def _normalize_archs(
+def _try_resolve_transformers(
+    self,
+    architecture: str,
+    model_config: ModelConfig,
+) -> Optional[str]:
+    if architecture in _TRANSFORMERS_BACKEND_MODELS:
+        return architecture
+
+    auto_map: dict[str, str] = getattr(model_config.hf_config, "auto_map",
+                                       None) or dict()
+
+    # Make sure that config class is always initialized before model class,
+    # otherwise the model class won't be able to access the config class,
+    # the expected auto_map should have correct order like:
+    # Eg. "auto_map": {
+    #     Eg. "AutoConfig": "<your-repo-name>--<config-name>",
+    #     Eg. "AutoModel": "<your-repo-name>--<config-name>",
+    #     Eg. "AutoModelFor<Task>": "<your-repo-name>--<config-name>",
+    # },
+    for prefix in ("AutoConfig", "AutoModel"):
+        for name, module in auto_map.items():
+            if name.startswith(prefix):
+                try_get_class_from_dynamic_module(
+                    module,
+                    model_config.model,
+                    revision=model_config.revision,
+                    warn_on_fail=False,
+                )
+
+    model_module = getattr(transformers, architecture, None)
+
+    if model_module is None:
+        for name, module in auto_map.items():
+            if name.startswith("AutoModel"):
+                model_module = try_get_class_from_dynamic_module(
+                    module,
+                    model_config.model,
+                    revision=model_config.revision,
+                    warn_on_fail=True,
+                )
+                if model_module is not None:
+                    break
+        else:
+            if model_config.model_impl != "transformers":
+                return None
+
+            raise ValueError(
+                f"Cannot find model module. {architecture!r} is not a "
+                "registered model in the Transformers library (only "
+                "relevant if the model is meant to be in Transformers) "
+                "and 'AutoModel' is not present in the model config's "
+                "'auto_map' (relevant if the model is custom).")
+
+    # vllm-ms: Bypass backend compatibility checks to
+    # circumvent PyTorch validation.
+
+    return model_config._get_transformers_backend_cls()
+
+
+def _normalize_arch(
     self,
     architectures: Union[str, list[str]],
 ) -> list[str]:
@@ -167,6 +233,110 @@ def _normalize_archs(
         normalized_arch.append("TransformersForCausalLM")
 
     return normalized_arch
+
+
+def inspect_model_cls(
+    self,
+    architectures: Union[str, list[str]],
+    model_config: ModelConfig,
+) -> tuple[_ModelInfo, str]:
+    if isinstance(architectures, str):
+        architectures = [architectures]
+    if not architectures:
+        raise ValueError("No model architectures are specified")
+
+    # Require transformers impl
+    if model_config.model_impl == "transformers":
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_info = self._try_inspect_model_cls(arch)
+            if model_info is not None:
+                return (model_info, arch)
+    elif model_config.model_impl == "terratorch":
+        model_info = self._try_inspect_model_cls("Terratorch")
+        return (model_info, "Terratorch")
+
+    # Fallback to transformers impl (after resolving convert_type)
+    if (all(arch not in self.models for arch in architectures)
+            and model_config.model_impl == "auto"
+            and getattr(model_config, "convert_type", "none") == "none"):
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_info = self._try_inspect_model_cls(arch)
+            if model_info is not None:
+                return (model_info, arch)
+
+    # vllm-ms: Modify the architecture normalization process in vLLM
+    # to ensure that the MindFormers backend is added to the architecture.
+    normalized_arch = self._normalize_arch(architectures)
+    for arch in normalized_arch:
+        model_info = self._try_inspect_model_cls(arch)
+        if model_info is not None:
+            return (model_info, arch)
+
+    # Fallback to transformers impl (before resolving runner_type)
+    if (all(arch not in self.models for arch in architectures)
+            and model_config.model_impl == "auto"):
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_info = self._try_inspect_model_cls(arch)
+            if model_info is not None:
+                return (model_info, arch)
+
+    return self._raise_for_unsupported(architectures)
+
+
+def resolve_model_cls(
+    self,
+    architectures: Union[str, list[str]],
+    model_config: ModelConfig,
+) -> tuple[type[nn.Module], str]:
+    if isinstance(architectures, str):
+        architectures = [architectures]
+    if not architectures:
+        raise ValueError("No model architectures are specified")
+
+    # Require transformers impl
+    if model_config.model_impl == "transformers":
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_cls = self._try_load_model_cls(arch)
+            if model_cls is not None:
+                return (model_cls, arch)
+    elif model_config.model_impl == "terratorch":
+        arch = "Terratorch"
+        model_cls = self._try_load_model_cls(arch)
+        if model_cls is not None:
+            return (model_cls, arch)
+
+    # Fallback to transformers impl (after resolving convert_type)
+    if (all(arch not in self.models for arch in architectures)
+            and model_config.model_impl == "auto"
+            and getattr(model_config, "convert_type", "none") == "none"):
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_cls = self._try_load_model_cls(arch)
+            if model_cls is not None:
+                return (model_cls, arch)
+
+    # vllm-ms: Modify the architecture normalization process in vLLM
+    # to ensure that the MindFormers backend is added to the architecture.
+    normalized_arch = self._normalize_arch(architectures)
+    for arch in normalized_arch:
+        model_cls = self._try_load_model_cls(arch)
+        if model_cls is not None:
+            return (model_cls, arch)
+
+    # Fallback to transformers impl (before resolving runner_type)
+    if (all(arch not in self.models for arch in architectures)
+            and model_config.model_impl == "auto"):
+        arch = self._try_resolve_transformers(architectures[0], model_config)
+        if arch is not None:
+            model_cls = self._try_load_model_cls(arch)
+            if model_cls is not None:
+                return (model_cls, arch)
+
+    return self._raise_for_unsupported(architectures)
 
 
 if __name__ == "__main__":

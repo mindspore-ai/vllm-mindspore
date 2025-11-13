@@ -83,8 +83,13 @@ def topk_topp_sampler_forward_native(
     p: Optional[torch.Tensor],
 ) -> torch.Tensor:
     logits = apply_top_k_top_p_ms(logits, k, p)
+    logits_to_return = None
+    if self.logprobs_mode == "processed_logits":
+        logits_to_return = logits
+    elif self.logprobs_mode == "processed_logprobs":
+        logits_to_return = logits.log_softmax(dim=-1, dtype=torch.float32)
     probs = logits.softmax(dim=-1, dtype=torch.float32)
-    return random_sample(probs, generators)
+    return random_sample(probs, generators), logits_to_return
 
 
 def apply_top_k_top_p(

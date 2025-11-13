@@ -8,4 +8,4 @@ msadapter:
   'https://repo.mindspore.cn/mindspore/msadapter/version/202510/20251011/r0.3.0_20251011095813_951a8218d4c29785e48f304e720212b57056573e_newest/'
 
 vllm:
-  'https://repo.mindspore.cn/mirrors/vllm/version/202507/20250715/v0.9.1/'
+  'https://repo.mindspore.cn/mirrors/vllm/version/202511/20251113/v0.11.0/'

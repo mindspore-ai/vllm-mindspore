@@ -35,6 +35,7 @@ from vllm.v1.spec_decode.metrics import SpecDecodingStats
 logger = init_logger(__name__)
 
 
+# TODO: check if 0.11.0 need
 def update_from_output(
     self,
     scheduler_output: SchedulerOutput,

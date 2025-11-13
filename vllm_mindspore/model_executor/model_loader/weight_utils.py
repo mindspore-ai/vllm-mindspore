@@ -56,6 +56,7 @@ def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
 def safetensors_weights_iterator(
     hf_weights_files: list[str],
     use_tqdm_on_load: bool,
+    safetensors_load_strategy: str = "lazy",
 ) -> Generator[tuple[str, Any], None, None]:
     """Iterate over the weights in the model safetensor files."""
     for st_file in tqdm(

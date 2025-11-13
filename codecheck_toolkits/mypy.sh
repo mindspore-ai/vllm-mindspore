@@ -14,12 +14,9 @@ run_mypy() {
 
 run_mypy
 run_mypy tests/st
-run_mypy vllm_mindspore/attention
 run_mypy vllm_mindspore/distributed
-run_mypy vllm_mindspore/engine
 run_mypy vllm_mindspore/executor
 run_mypy vllm_mindspore/inputs
 run_mypy vllm_mindspore/lora
 run_mypy vllm_mindspore/model_executor
-run_mypy vllm_mindspore/worker
 run_mypy vllm_mindspore/v1

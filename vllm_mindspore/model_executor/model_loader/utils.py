@@ -189,7 +189,8 @@ def get_ms_model_architecture(
         if not is_vllm_supported(architectures):
             resolve_mindone_transformers_arch(model_config, architectures)
 
-    model_cls, arch = MindSporeModelRegistry.resolve_model_cls(architectures)
+    model_cls, arch = MindSporeModelRegistry.resolve_model_cls(
+        architectures, model_config)
     if model_config.task == "embed":
         raise RecursionError("MindSpore unsupported embed model task now!")
     elif model_config.task == "classify":

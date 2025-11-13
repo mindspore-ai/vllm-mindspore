@@ -15,11 +15,11 @@
 # limitations under the License.
 """Unified interface for LoRA layers in vllm-mindspore."""
 
-from vllm.lora.fully_sharded_layers import (
-    ColumnParallelLinearWithShardedLoRA,
-    MergedColumnParallelLinearWithShardedLoRA,
-    MergedQKVParallelLinearWithShardedLoRA, QKVParallelLinearWithShardedLoRA,
-    RowParallelLinearWithShardedLoRA)
+from vllm.lora.layers import (ColumnParallelLinearWithShardedLoRA,
+                              MergedColumnParallelLinearWithShardedLoRA,
+                              MergedQKVParallelLinearWithShardedLoRA,
+                              QKVParallelLinearWithShardedLoRA,
+                              RowParallelLinearWithShardedLoRA)
 
 # yapf conflicts with isort for this block
 # yapf: disable  # noqa: ERA001

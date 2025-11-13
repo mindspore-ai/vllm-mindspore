@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import torch
 import vllm.envs as envs
 from vllm.logger import init_logger
-from vllm.platforms.interface import Platform, PlatformEnum, _Backend
+from vllm.platforms.interface import Platform, PlatformEnum
 
 if TYPE_CHECKING:
     from vllm.config import ModelConfig, VllmConfig
@@ -42,6 +42,7 @@ class AscendPlatform(Platform):
     device_type: str = "cuda"  # To use cuda worker, executor...
     simple_compile_backend: str = "npu"
     ray_device_key: str = "NPU"
+    dist_backend: str = "hccl"
     device_control_env_var: str = "ASCEND_RT_VISIBLE_DEVICES"
 
     @classmethod
@@ -67,22 +68,23 @@ class AscendPlatform(Platform):
         return True
 
     @classmethod
+    def set_device(cls, device: torch.device) -> None:
+        """
+        Set the device for the current platform.
+        """
+        torch.cuda.set_device(device)
+
+    @classmethod
+    def check_if_supports_dtype(cls, torch_dtype: torch.dtype):
+        pass
+
+    @classmethod
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
         parallel_config = vllm_config.parallel_config
-        scheduler_config = vllm_config.scheduler_config
         model_config = vllm_config.model_config
 
         if parallel_config.worker_cls == "auto":
-            if scheduler_config.is_multi_step:
-                if envs.VLLM_USE_V1:
-                    raise NotImplementedError(
-                        "Multi-step scheduling is not supported (and not "
-                        "needed) on vLLM V1. Please launch without "
-                        "--num-scheduler-steps.")
-                else:
-                    parallel_config.worker_cls = \
-                        "vllm.worker.multi_step_worker.MultiStepWorker"
-            elif vllm_config.speculative_config:
+            if vllm_config.speculative_config:
                 if envs.VLLM_USE_V1:
                     parallel_config.worker_cls = \
                             "vllm.v1.worker.gpu_worker.Worker"
@@ -118,25 +120,12 @@ class AscendPlatform(Platform):
 
     @classmethod
     def get_attn_backend_cls(cls, selected_backend, head_size, dtype,
-                             kv_cache_dtype, block_size, use_v1, use_mla):
+                             kv_cache_dtype, block_size, use_v1, use_mla,
+                             has_sink, use_sparse):
         """Get the attention backend class of a device."""
-        if use_v1:
-            if use_mla:
-                return "vllm_mindspore.v1.attention.backends.ms_attn.MLABackend"  # noqa E501
-            return "vllm_mindspore.v1.attention.backends.ms_attn.MsAttentionBackend"  # noqa E501
         if use_mla:
-            logger.info("Using MindSpore MLA backend.")
-            return "vllm_mindspore.attention.backends.ms_attn.MLABackend"
-
-        if selected_backend == _Backend.FLASH_ATTN or selected_backend is None:
-            logger.info("Using MindSpore Attention backend.")
-            return "vllm_mindspore.attention.backends.ms_attn.MsAttentionBackend"  # noqa E501
-
-        raise ValueError(
-            f"Invalid attention backend {str(selected_backend)} "
-            f"for vLLM-MindSpore with head_size: {str(head_size)}, "
-            f"dtype: {str(dtype)}, kv_cache_dtype: {str(kv_cache_dtype)}, "
-            "block_size: {str(block_size)}.")
+            return "vllm_mindspore.v1.attention.backends.ms_attn.MLABackend"  # noqa E501
+        return "vllm_mindspore.v1.attention.backends.ms_attn.MsAttentionBackend"  # noqa E501
 
     @classmethod
     def get_current_memory_usage(cls,

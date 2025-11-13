@@ -35,10 +35,8 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
-from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
 from vllm_mindspore.model_executor.layers.fused_moe import FusedMoE
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
@@ -58,6 +56,7 @@ from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     extract_layer_index, is_pp_missing_parameter,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+from vllm_mindspore.v1.attention import Attention
 
 logger = init_logger(__name__)
 
@@ -559,10 +558,8 @@ class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts):
     def compute_logits(
         self,
         hidden_states: Tensor,
-        sampling_metadata: SamplingMetadata,
     ) -> Optional[Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states)
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

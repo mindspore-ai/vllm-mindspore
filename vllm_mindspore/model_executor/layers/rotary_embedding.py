@@ -364,7 +364,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         hf_config: PretrainedConfig,
         image_grid_thw: Union[list[list[int]], mindspore.Tensor],
         video_grid_thw: Union[list[list[int]], mindspore.Tensor],
-        second_per_grid_ts: Optional[list[float]] = None,
+        second_per_grid_ts=None,
         context_len: int = 0,
         seq_len: Optional[int] = None,
     ) -> tuple[mindspore.Tensor, int]:

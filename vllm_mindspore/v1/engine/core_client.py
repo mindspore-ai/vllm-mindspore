@@ -22,7 +22,7 @@ from typing import Optional
 
 from vllm.v1.engine import (EngineCoreOutputs, EngineCoreRequest,
                             EngineCoreRequestType)
-from vllm.v1.utils import CoreEngine
+from vllm.v1.engine.utils import CoreEngine
 
 
 class MsCoreEngine(CoreEngine):

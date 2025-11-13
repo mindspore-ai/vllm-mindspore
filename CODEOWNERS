@@ -12,9 +12,7 @@
 
 # The maintainers of vllm_mindspore/.
 /vllm_mindspore/ @erpim @tronzhang
-/vllm_mindspore/attention/ @erpim @wang_shaocong
 /vllm_mindspore/distributed/ @zlq2020 @tronzhang
-/vllm_mindspore/engine/ @zlq2020 @tronzhang
 /vllm_mindspore/entrypoints/ @panshaowu @zlq2020
 /vllm_mindspore/executor/ @zlq2020 @tronzhang
 /vllm_mindspore/inputs/ @zlq2020 @tronzhang
@@ -36,7 +34,6 @@
 /vllm_mindspore/v1/executor/ @zlq2020 @tronzhang
 /vllm_mindspore/v1/sample/ @zlq2020 @erpim
 /vllm_mindspore/v1/worker/ @zlq2020 @r1chardf1d0
-/vllm_mindspore/worker/ @zlq2020 @tronzhang
 
 # The maintainers of tests/.
 /tests/ @erpim @wang_shaocong

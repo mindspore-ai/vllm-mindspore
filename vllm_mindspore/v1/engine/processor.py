@@ -5,16 +5,12 @@
 # Functions are adapted from
 # https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/v1/engine/processor.py
 
-from typing import Optional
-
-from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams
 
 
 def v1_process_validate_sampling_params(
     self,
     params: SamplingParams,
-    lora_request: Optional[LoRARequest],
 ) -> None:
 
     model_config = self.vllm_config.model_config
@@ -36,8 +32,7 @@ def v1_process_validate_sampling_params(
         return
     if not params.allowed_token_ids:
         raise ValueError("allowed_token_ids is not None and empty!")
-    tokenizer = self.tokenizer.get_lora_tokenizer(lora_request)
-    vocab_size = len(tokenizer)
+    vocab_size = len(self.tokenizer)
     if not all(0 <= tid < vocab_size for tid in params.allowed_token_ids):
         raise ValueError("allowed_token_ids contains out-of-vocab token id!")
 

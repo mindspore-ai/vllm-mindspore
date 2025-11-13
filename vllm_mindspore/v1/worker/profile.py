@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 
+import vllm.envs as envs
 from mindspore import Profiler
 from mindspore.profiler import ProfilerActivity, ProfilerLevel
 from mindspore.profiler.common.profiler_context import ProfilerContext
@@ -39,13 +40,18 @@ def shell_analyse(path):
 
 class AdapterProfiler:
 
-    def __init__(self, path):
+    def __init__(self,
+                 path,
+                 activities,
+                 profiler_level=ProfilerLevel.Level1,
+                 mstx=False):
         self.profiler = Profiler(
-            profiler_level=ProfilerLevel.Level1,
-            activities=[ProfilerActivity.CPU, ProfilerActivity.NPU],
-            with_stack=True,
+            profiler_level=profiler_level,
+            activities=activities,
+            with_stack=envs.VLLM_TORCH_PROFILER_WITH_STACK,
             output_path=path,
-            start_profile=False)
+            start_profile=False,
+            mstx=mstx)
 
     def start(self):
         self.profiler.start()
@@ -99,7 +105,9 @@ def wrapper_worker_init_device(fun):
         if profile_output_path:
             logger.info("Profiling enabled. Traces will be saved to: %s",
                         profile_output_path)
-            self.profiler = AdapterProfiler(profile_output_path)
+            self.profiler = AdapterProfiler(
+                profile_output_path,
+                [ProfilerActivity.CPU, ProfilerActivity.NPU])
         else:
             self.profiler = None
 
