@@ -31,13 +31,10 @@ class CMakeBuild(build_ext):
         """Build C++ extensions using CMake."""
         Path(self.build_temp).mkdir(parents=True, exist_ok=True)
 
-        llvm_dir = os.environ.get("LLVM_DIR")
-        mlir_dir = os.environ.get("MLIR_DIR")
-
-        cmake_args = [
-            f"-DMLIR_DIR={mlir_dir}",
-            f"-DLLVM_DIR={llvm_dir}",
-        ]
+        cmake_args = []
+        cmake_args.append(f"-DLLVM_DIR={os.environ['LLVM_DIR']}")
+        cmake_args.append(f"-DMLIR_DIR={os.environ['MLIR_DIR']}")
+        cmake_args.append(f"-DSTABLEHLO_SOURCE_DIR={os.environ['STABLEHLO_SOURCE_DIR']}")
 
         subprocess.check_call(
             [

@@ -3,12 +3,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LLVM_DIR="${PROJECT_DIR}/build/third_party/build/llvm"
 
 # Find llvm-tblgen executable
 LLVM_TBLGEN=""
-if [ -f "${LLVM_DIR}/bin/llvm-tblgen" ]; then
-    LLVM_TBLGEN="${LLVM_DIR}/bin/llvm-tblgen"
+if [ -f "${LLVM_BUILD_DIR}/bin/llvm-tblgen" ]; then
+    LLVM_TBLGEN="${LLVM_BUILD_DIR}/bin/llvm-tblgen"
 elif command -v llvm-tblgen >/dev/null 2>&1; then
     LLVM_TBLGEN="llvm-tblgen"
 else
@@ -18,7 +17,7 @@ fi
 
 # Set up include paths for tablegen files
 INCLUDE_PATHS=(
-    "-I${PROJECT_DIR}/third_party/llvm-project/mlir/include"
+    "-I${LLVM_SOURCE_DIR}/mlir/include"
 )
 
 # Input and output files

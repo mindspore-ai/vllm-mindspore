@@ -1,111 +1,58 @@
 #!/bin/bash
+##################################################
+# LLVM Build Script
+# Required env vars: BUILD_JOBS, INC_BUILD
+# Exports : LLVM_SOURCE_DIR, LLVM_BUILD_DIR, LLVM_DIR, MLIR_DIR, TORCH_MLIR_BUILD_DIR, STABLEHLO_SOURCE_DIR.
+##################################################
 
-PROJECT_DIR="${PROJECT_DIR:-${PWD}}"
+_LLVM_ENV="${BUILD_DIR}/llvm_env.sh"
 
-if [ "X${ENABLE_GITEE}" == "X1" ]; then
-  LLVM_URL="https://gitee.com/mirrors/LLVM/repository/archive/d16b21b17d13ecd88a068bb803df43e53d3b04ba.zip"
-  TORCHMLIR_URL="https://gitee.com/mirrors_llvm/torch-mlir/repository/archive/7e7af670802d99cacdaf26e6e37249d544e4896e.zip"
-  STABLEHLO_URL="https://gitee.com/magicor/stablehlo/repository/archive/c28d55e91b4a5daaff18a33ce7e9bbd0f171256a.zip"
-else
-  LLVM_URL="https://github.com/llvm/llvm-project/archive/d16b21b17d13ecd88a068bb803df43e53d3b04ba.zip"
-  TORCHMLIR_URL="https://github.com/llvm/torch-mlir/archive/7e7af670802d99cacdaf26e6e37249d544e4896e.zip"
-  STABLEHLO_URL="https://github.com/openxla/stablehlo/archive/c28d55e91b4a5daaff18a33ce7e9bbd0f171256a.zip"
-fi
+# Create temporary build directory for cmake
+_TEMP_BUILD="${BUILD_DIR}/llvm_build_temp"
 
-TEMP_ARCHIVES_DIR="${PROJECT_DIR}/build/third_party/archives"
-mkdir -p "${TEMP_ARCHIVES_DIR}"
-
-download() {
-  local url="$1"
-  local out="$2"
-  if [ -f "${out}" ] && [ -s "${out}" ]; then
-    # TODO(dayschan): check hash value of archive file
-    echo "Skip download, found existing archive: ${out}"
+if [[ $INC_BUILD == 1 ]] && [[ -f "${_LLVM_ENV}" ]]; then
+    echo "Reused persisted LLVM environment ${_LLVM_ENV}"
+    source "${_LLVM_ENV}"
     return
-  fi
-  wget --no-check-certificate -O "${out}" "${url}"
-}
-
-extract_zip_to_dir() {
-  local zip_file="$1"
-  local dest_dir="$2"
-  rm -rf "${dest_dir}"
-  mkdir -p "${dest_dir}"
-  local work_dir
-  work_dir="$(mktemp -d "${TEMP_ARCHIVES_DIR}/unzip.XXXXXX")"
-  unzip -q "${zip_file}" -d "${work_dir}"
-  local top_dir
-  top_dir="$(find "${work_dir}" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-  if [ -z "${top_dir}" ]; then
-    echo "Error: failed to locate top dir in ${zip_file}" >&2
-    exit 1
-  fi
-  shopt -s dotglob
-  mv "${top_dir}/"* "${dest_dir}/"
-  shopt -u dotglob
-  rm -rf "${work_dir}"
-}
-
-LLVM_DIR="${PROJECT_DIR}/third_party/llvm-project"
-TORCHMLIR_DIR="${PROJECT_DIR}/third_party/torch-mlir"
-STABLEHLO_DIR="${TORCHMLIR_DIR}/externals/stablehlo"
-
-LLVM_ZIP="${TEMP_ARCHIVES_DIR}/llvm-project-d16b21b17d13ecd88a068bb803df43e53d3b04ba.zip"
-download "${LLVM_URL}" "${LLVM_ZIP}"
-extract_zip_to_dir "${LLVM_ZIP}" "${LLVM_DIR}"
-
-TORCHMLIR_ZIP="${TEMP_ARCHIVES_DIR}/torch-mlir-7e7af670802d99cacdaf26e6e37249d544e4896e.zip"
-download "${TORCHMLIR_URL}" "${TORCHMLIR_ZIP}"
-extract_zip_to_dir "${TORCHMLIR_ZIP}" "${TORCHMLIR_DIR}"
-
-STABLEHLO_ZIP="${TEMP_ARCHIVES_DIR}/stablehlo-c28d55e91b4a5daaff18a33ce7e9bbd0f171256a.zip"
-download "${STABLEHLO_URL}" "${STABLEHLO_ZIP}"
-extract_zip_to_dir "${STABLEHLO_ZIP}" "${STABLEHLO_DIR}"
-
-# Apply patches to torch-mlir
-echo "Applying patches to torch-mlir..."
-TORCHMLIR_PATCH_DIR="${PROJECT_DIR}/third_party/patch/torch-mlir"
-if [ -d "${TORCHMLIR_PATCH_DIR}" ]; then
-  # Apply patches in order: [0-9][0-9][0-9]-*.patch
-  for patch_file in "${TORCHMLIR_PATCH_DIR}"/[0-9][0-9][0-9]-*.patch; do
-    if [ -f "${patch_file}" ]; then
-      echo "  Applying patch: $(basename ${patch_file})"
-      patch -p1 -d "${TORCHMLIR_DIR}" < "${patch_file}"
-    fi
-  done
-  echo "Patches applied successfully."
-else
-  echo "  No patches found, skipping."
 fi
 
-#------------ build llvm with torch_mlir in-tree
-LLVM_BUILD_DIR="${LLVM_BUILD_DIR:-${PROJECT_DIR}/build/third_party/build/llvm}"
+mkdir -p "${_TEMP_BUILD}"
+# Create minimal CMakeLists.txt to trigger cmake/llvm.cmake
+cat > "${_TEMP_BUILD}/CMakeLists.txt" << 'EOF'
+cmake_minimum_required(VERSION 3.20)
+project(llvm_builder NONE)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/llvm.cmake)
+EOF
 
+cd "${_TEMP_BUILD}"
+cmake .
+
+# Source the generated environment file
+if [[ -f "${_TEMP_BUILD}/set_env.sh" ]]; then
+    echo "Saved LLVM environment variables to ${_LLVM_ENV}"
+    cp "${_TEMP_BUILD}/set_env.sh" "${_LLVM_ENV}"
+    source "${_LLVM_ENV}"
+fi
+
+# Clean up temporary directory (return to project root first)
 cd "${PROJECT_DIR}"
-echo "Configuring LLVM with torch-mlir in-tree..."
-cmake -GNinja -B "${LLVM_BUILD_DIR}" \
-    ${CCACHE_CMAKE_ARGS} \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DPython3_FIND_VIRTUALENV=ONLY \
-    -DLLVM_ENABLE_PROJECTS=mlir \
-    -DLLVM_EXTERNAL_PROJECTS="torch-mlir" \
-    -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="${TORCHMLIR_DIR}" \
-    -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
-    -DLLVM_TARGETS_TO_BUILD=host \
-    -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON \
-    third_party/llvm-project/llvm
-echo "Configured LLVM with torch-mlir."
+rm -rf "${_TEMP_BUILD}"
 
-echo "Building LLVM and torch-mlir..."
-if [ -n "${BUILD_JOBS}" ]; then
-  cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
-else
-  cmake --build "${LLVM_BUILD_DIR}"
+if [[ $INC_BUILD != 1 ]]; then
+    echo "Configuring LLVM (source: ${LLVM_SOURCE_DIR})"
+    cmake -G Ninja -B "${LLVM_BUILD_DIR}" \
+            ${CCACHE_CMAKE_ARGS} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPython3_FIND_VIRTUALENV=ONLY \
+            -DLLVM_ENABLE_PROJECTS=mlir \
+            -DLLVM_EXTERNAL_PROJECTS=torch-mlir \
+            -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="${TORCHMLIR_SOURCE_DIR}" \
+            -DSTABLEHLO_EXTERNAL_DIR="${STABLEHLO_SOURCE_DIR}" \
+            -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
+            -DLLVM_TARGETS_TO_BUILD=host \
+            -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON \
+            "${LLVM_SOURCE_DIR}/llvm"
 fi
-echo "Built LLVM and torch-mlir: ${LLVM_BUILD_DIR}"
+echo "Building LLVM and Torch-MLIR (${BUILD_JOBS} jobs)..."
+cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
 
-echo ""
-echo "=========================================="
-echo "LLVM and torch-mlir build completed"
-echo "=========================================="
-echo "LLVM build directory: ${LLVM_BUILD_DIR}"

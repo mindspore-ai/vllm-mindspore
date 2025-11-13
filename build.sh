@@ -91,27 +91,30 @@ process_options()
 
 process_options "$@"
 
+export PROJECT_DIR=$(pwd)
+export BUILD_DIR="${PROJECT_DIR}/build"
+
 ##################################################
 # Build third_party
 ##################################################
-PROJECT_DIR=$(pwd)
-BUILD_DIR="${PROJECT_DIR}/build"
-export LLVM_BUILD_DIR="${BUILD_DIR}/third_party/build/llvm"
-
 if [[ $BUILD_OPT == 1 || $ENABLE_ASCEND == 1 ]]; then
-    echo "LLVM_BUILD_DIR: ${LLVM_BUILD_DIR}"
-    if [[ $INC_BUILD != 1 ]]; then
-        echo "Building LLVM and MLIR"
-        bash "scripts/build_llvm.sh"
+    source "${PROJECT_DIR}/scripts/build_llvm.sh"
+
+    # LLVM_DIR is now available from build_llvm.sh (via cmake)
+    if [ -z "${LLVM_DIR}" ]; then
+        echo "Error: LLVM_DIR not set after building LLVM"
+        exit 1
     fi
-    export LLVM_DIR="${LLVM_BUILD_DIR}/lib/cmake/llvm"
-    export MLIR_DIR="${LLVM_BUILD_DIR}/lib/cmake/mlir"
+
+    echo "=========================================="
+    echo "LLVM configuration:"
+    echo "  LLVM_SOURCE_DIR: ${LLVM_SOURCE_DIR}"
+    echo "  LLVM_BUILD_DIR: ${LLVM_BUILD_DIR}"
     echo "  LLVM_DIR: ${LLVM_DIR}"
     echo "  MLIR_DIR: ${MLIR_DIR}"
-    if [[ $ENABLE_TORCH_FRONT == 1 ]]; then
-        export TORCH_MLIR_BUILD_DIR="${LLVM_BUILD_DIR}/tools/torch-mlir"
-        echo "  TORCH_MLIR_BUILD_DIR: ${TORCH_MLIR_BUILD_DIR}"
-    fi
+    echo "  STABLEHLO_SOURCE_DIR: ${STABLEHLO_SOURCE_DIR}"
+    echo "  TORCH_MLIR_BUILD_DIR: ${TORCH_MLIR_BUILD_DIR}"
+    echo "=========================================="
 fi
 
 ##################################################
@@ -172,5 +175,7 @@ popd
 ##################################################
 mkdir -p output
 cp */dist/*.whl output/
+rm -rf mopt/dist
+rm -rf inferrt/dist
 echo "Build results:"
 ls -lh output/*.whl

@@ -38,14 +38,34 @@ find_package(MLIR REQUIRED CONFIG)
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
 
+# Some upstream packages only populate *_CMAKE_DIR when building in-tree.
+# Fall back to the config directories we just located to make sure module lookups work.
+if(NOT MLIR_CMAKE_DIR)
+  set(MLIR_CMAKE_DIR "${MLIR_DIR}")
+endif()
+if(NOT LLVM_CMAKE_DIR)
+  set(LLVM_CMAKE_DIR "${LLVM_DIR}")
+endif()
+
 # Set CMAKE_MODULE_PATH early, as StableHLO also needs these modules
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 
 # ===========================================================================
-# StableHLO Integration - Using independent cmake configuration file
+# StableHLO Integration (build alongside mopt)
 # ===========================================================================
-include(${PROJECT_SOURCE_DIR}/../cmake/stablehlo.cmake)
+set(STABLEHLO_SOURCE_DIR "${STABLEHLO_SOURCE_DIR}" CACHE PATH "Path to StableHLO sources")
+
+message(STATUS "Using StableHLO source: ${STABLEHLO_SOURCE_DIR}")
+
+set(STABLEHLO_BUILD_EMBEDDED ON CACHE BOOL "Build StableHLO as embedded" FORCE)
+set(STABLEHLO_ENABLE_BINDINGS_PYTHON ON CACHE BOOL "Enable Python bindings" FORCE)
+set(STABLEHLO_ENABLE_STRICT_BUILD OFF CACHE BOOL "Disable strict build" FORCE)
+
+add_subdirectory(${STABLEHLO_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/stablehlo EXCLUDE_FROM_ALL)
+
+include_directories("${STABLEHLO_SOURCE_DIR}")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/stablehlo")
 
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
