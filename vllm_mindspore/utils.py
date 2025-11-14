@@ -118,6 +118,7 @@ def cast_weight_for_310p(loaded_weight):
 def set_weight_format_to_nz(param):
     cast_weight = ms.ops.auto_generate.format_cast(param, FORMAT_TYPE['nz'])
     param.set_data(cast_weight)
+    ms.runtime.empty_cache()
 
 
 def get_valid_dtype(dtype):

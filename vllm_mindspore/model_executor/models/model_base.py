@@ -419,14 +419,12 @@ class NativeModel(MsModelBase):
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
             max_model_len=self.model_config.max_model_len)
-        self.kv_caches = [
-            AttentionWrapper() for i in range(self.config.num_hidden_layers)
-        ]
+        self.kv_caches = [AttentionWrapper() for i in range(self.num_layers)]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
             raise ValueError(f"Duplicate layer name: {prefix}")
-        for i in range(self.config.num_hidden_layers):
+        for i in range(self.num_layers):
             compilation_config.static_forward_context[str(
                 i)] = self.kv_caches[i]
 
@@ -454,11 +452,16 @@ class NativeModel(MsModelBase):
                                           dtype=inputs_embeds.dtype)
 
         if intermediate_tensors is None:
-            dyn_intermediate_tensors = None
+            dyn_intermediate_hidden_states = None
+            dyn_intermediate_residual = None
         else:
-            dyn_intermediate_tensors = ms.Tensor(
-                shape=[None] * intermediate_tensors.ndim,
-                dtype=intermediate_tensors.dtype)
+            dyn_input_ids = None
+            dyn_intermediate_hidden_states = ms.Tensor(
+                shape=[None] * intermediate_tensors["hidden_states"].ndim,
+                dtype=intermediate_tensors["hidden_states"].dtype)
+            dyn_intermediate_residual = ms.Tensor(
+                shape=[None] * intermediate_tensors["residual"].ndim,
+                dtype=intermediate_tensors["residual"].dtype)
 
         block_size = self.cache_config.block_size
         num_kv_heads = self.model_config.get_num_kv_heads(self.parallel_config)
@@ -494,8 +497,8 @@ class NativeModel(MsModelBase):
         set_inputs_args = [
             dyn_input_ids, dyn_position_ids, dyn_key_caches, dyn_value_caches,
             dyn_slot_mapping, dynamic_attention_mask, dyn_batch_valid_length,
-            dyn_q_seq_lens, dyn_block_tables, dyn_intermediate_tensors,
-            dyn_inputs_embeds
+            dyn_q_seq_lens, dyn_block_tables, dyn_intermediate_hidden_states,
+            dyn_intermediate_residual, dyn_inputs_embeds
         ]
         # Add MoE-specific parameters if available
         if moe_params := self._get_moe_input_params():
@@ -621,7 +624,16 @@ class NativeModel(MsModelBase):
         new_model_inputs["key_caches"] = model_inputs["key_cache"]
         new_model_inputs["value_caches"] = model_inputs["value_cache"]
         # for multimodal model
-        new_model_inputs["intermediate_tensors"] = intermediate_tensors
+        if intermediate_tensors is not None:
+            new_model_inputs["input_ids"] = None
+            new_model_inputs[
+                "intermediate_hidden_states"] = intermediate_tensors[
+                    "hidden_states"]
+            new_model_inputs["intermediate_residual"] = intermediate_tensors[
+                "residual"]
+        else:
+            new_model_inputs["intermediate_hidden_states"] = None
+            new_model_inputs["intermediate_residual"] = None
         new_model_inputs["inputs_embeds"] = inputs_embeds
 
         if supports_moe_dp_tp(self):

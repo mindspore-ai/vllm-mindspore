@@ -26,6 +26,7 @@ import traceback
 from typing import Any
 
 import psutil
+from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
 
 from vllm_mindspore.utils import is_310p
@@ -37,7 +38,6 @@ def compile_or_warm_up_model(self) -> None:
     # MindSpore does not support cuda graph. No need to warm up the model.
     # Since prefill is done previously, we do decode here.
     max_num_reqs = 1
-    # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
 
     # If ringmla is enabled, chunked warmup process is additionally executed.
     if hasattr(self.model_runner.model, "has_chunked_warmup") \
@@ -58,10 +58,14 @@ def compile_or_warm_up_model(self) -> None:
             num_tokens=max_num_reqs,
             skip_eplb=True,
         )
-    if self.model_runner.is_pooling_model:
-        self.model_runner._dummy_pooler_run(hidden_states)
-    else:
-        self.model_runner._dummy_sampler_run(hidden_states=last_hidden_states)
+
+    # Only pp_last_rank has lm_head, which is required by _dummy_sampler_run.
+    if get_pp_group().is_last_rank:
+        if self.model_runner.is_pooling_model:
+            self.model_runner._dummy_pooler_run(hidden_states)
+        else:
+            self.model_runner._dummy_sampler_run(
+                hidden_states=last_hidden_states)
 
 
 def execute_command(cmd_list):

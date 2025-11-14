@@ -354,7 +354,8 @@ class MiniCPMModel(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
     ) -> Union[Tensor, IntermediateTensors]:
         if get_pp_group().is_first_rank:
@@ -364,9 +365,8 @@ class MiniCPMModel(nn.Cell):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]

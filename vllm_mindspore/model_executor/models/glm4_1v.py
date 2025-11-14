@@ -47,11 +47,12 @@ from transformers.models.glm4v.video_processing_glm4v import (
     Glm4vVideoProcessor)
 from transformers.video_utils import VideoMetadata
 from vllm.config import VllmConfig, get_current_vllm_config
-from vllm.distributed import (get_tensor_model_parallel_rank,
+from vllm.distributed import (get_pp_group, get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size)
 from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
@@ -1152,7 +1153,8 @@ class Glm4vMultiModalProcessor(BaseMultiModalProcessor[Glm4vProcessingInfo]):
     info=Glm4vProcessingInfo,
     dummy_inputs=Glm4vDummyInputsBuilder,
 )
-class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal):
+class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal,
+                                    SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -1527,12 +1529,14 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal):
                 input_ids = None
 
         # use self.exec_model to run native model with some inputs prepare
-        hidden_states = self.exec_model(
-            input_ids=input_ids,
-            positions=positions,
-            intermediate_tensors=intermediate_tensors,
-            inputs_embeds=inputs_embeds,
-        )
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def compute_logits(

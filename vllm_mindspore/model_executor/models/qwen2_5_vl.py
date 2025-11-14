@@ -48,12 +48,13 @@ from transformers.models.qwen2_vl.configuration_qwen2_vl import (Qwen2VLConfig)
 from transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import (
     Qwen2_5_VLConfig, Qwen2_5_VLVisionConfig)
 from transformers.models.qwen2_vl.image_processing_qwen2_vl import smart_resize
-from vllm.config import VllmConfig
+from vllm.config import get_current_vllm_config, VllmConfig
 from vllm.distributed import get_pp_group, \
     get_tensor_model_parallel_world_size, get_tensor_model_parallel_rank
 from vllm.distributed import utils as dist_utils
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.models import SupportsPP
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 
 from vllm.multimodal import MULTIMODAL_REGISTRY
@@ -635,20 +636,17 @@ class Qwen2_5_VisionMLP(nn.Cell):
                                               hidden_features,
                                               bias=bias,
                                               quant_config=quant_config,
-                                              prefix=f"{prefix}.gate_proj",
-                                              params_dtype=ms.bfloat16)
+                                              prefix=f"{prefix}.gate_proj")
         self.up_proj = ColumnParallelLinear(in_features,
                                             hidden_features,
                                             bias=bias,
                                             quant_config=quant_config,
-                                            prefix=f"{prefix}.up_proj",
-                                            params_dtype=ms.bfloat16)
+                                            prefix=f"{prefix}.up_proj")
         self.down_proj = RowParallelLinear(hidden_features,
                                            in_features,
                                            bias=bias,
                                            quant_config=quant_config,
-                                           prefix=f"{prefix}.down_proj",
-                                           params_dtype=ms.bfloat16)
+                                           prefix=f"{prefix}.down_proj")
         self.act_fn = act_fn
 
     def construct(self, x: ms.Tensor):
@@ -793,10 +791,11 @@ class Qwen2_5_VisionBlock(nn.Cell):
         prefix: str = "",
     ) -> None:
         super().__init__()
+        self.weight_dtype = get_current_vllm_config().model_config.dtype
         if norm_layer is None:
             norm_layer = partial(mint.nn.LayerNorm,
                                  eps=1e-6,
-                                 dtype=ms.bfloat16)
+                                 dtype=self.weight_dtype)
         self.norm1 = norm_layer(dim)
         self.norm2 = norm_layer(dim)
         self.attn = Qwen2_5_VisionAttention(embed_dim=dim,
@@ -834,13 +833,13 @@ class Qwen2_5_VisionPatchEmbed(nn.Cell):
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.hidden_size = hidden_size
-        self.dtype = ms.bfloat16
+        self.weight_dtype = get_current_vllm_config().model_config.dtype
 
         self.proj = nn.Dense(temporal_patch_size * patch_size * patch_size *
                              in_channels,
                              self.hidden_size,
                              has_bias=False,
-                             dtype=self.dtype)
+                             dtype=self.weight_dtype)
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
         x = self.proj(x)  # B Ph*Pw C_out
@@ -859,11 +858,12 @@ class Qwen2_5_VisionPatchMerger(nn.Cell):
         prefix: str = "",
     ) -> None:
         super().__init__()
+        self.weight_dtype = get_current_vllm_config().model_config.dtype
         self.hidden_size = context_dim * (spatial_merge_size**2)
         if norm_layer is None:
             norm_layer = partial(mint.nn.LayerNorm,
                                  eps=1e-6,
-                                 dtype=ms.bfloat16)
+                                 dtype=self.weight_dtype)
         self.ln_q = norm_layer(context_dim)
         self.mlp = nn.CellList([
             ColumnParallelLinear(self.hidden_size,
@@ -871,14 +871,14 @@ class Qwen2_5_VisionPatchMerger(nn.Cell):
                                  bias=True,
                                  quant_config=quant_config,
                                  prefix=f"{prefix}.mlp.0",
-                                 params_dtype=ms.bfloat16),
+                                 params_dtype=self.weight_dtype),
             nn.GELU(),
             RowParallelLinear(self.hidden_size,
                               d_model,
                               bias=True,
                               quant_config=quant_config,
                               prefix=f"{prefix}.mlp.2",
-                              params_dtype=ms.bfloat16),
+                              params_dtype=self.weight_dtype),
         ])
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
@@ -933,6 +933,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         temporal_patch_size = vision_config.temporal_patch_size
         in_channels = vision_config.in_channels
         depth = vision_config.depth
+        self.weight_dtype = get_current_vllm_config().model_config.dtype
         self.hidden_size = vision_config.hidden_size
         self.num_heads = vision_config.num_heads
 
@@ -950,7 +951,9 @@ class Qwen2_5_VisionTransformer(nn.Cell):
             hidden_size=self.hidden_size,
         )
 
-        norm_layer = partial(RMSNorm, eps=norm_eps, params_dtype=ms.bfloat16)
+        norm_layer = partial(RMSNorm,
+                             eps=norm_eps,
+                             params_dtype=self.weight_dtype)
         head_dim = self.hidden_size // self.num_heads
         self.rotary_pos_emb = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
 
@@ -977,7 +980,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         self.rank_id = get_rank()
 
     def set_model_inputs(self):
-        dyn_x = ms.Tensor(shape=[None, None], dtype=self.dtype)
+        dyn_x = ms.Tensor(shape=[None, None], dtype=self.weight_dtype)
         dyn_rotary_pos_emb = ms.Tensor(shape=[None, None],
                                        dtype=mstype.float32)
         dyn_window_index = ms.Tensor(shape=[None], dtype=mstype.int64)
@@ -1004,7 +1007,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         cu_window_seqlens: ms.Tensor,
         grid_thw: ms.Tensor,
     ) -> ms.Tensor:
-        hidden_states = x.to(dtype=self.dtype)
+        hidden_states = x.to(dtype=self.weight_dtype)
         hidden_states = self.patch_embed(hidden_states)
 
         seq_len, _ = hidden_states.shape
@@ -1121,7 +1124,8 @@ class Qwen2_5_VLDummyInputsBuilder(
     Qwen2_5_VLMultiModalProcessor,
     info=Qwen2_5_VLProcessingInfo,
     dummy_inputs=Qwen2_5_VLDummyInputsBuilder)
-class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
+class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
+                                         SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -1177,6 +1181,7 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         multimodal_config = vllm_config.model_config.multimodal_config
 
         self.config = config
+        self.weight_dtype = get_current_vllm_config().model_config.dtype
         self.multimodal_config = multimodal_config
 
         self.visual = Qwen2_5_VisionTransformer(
@@ -1206,7 +1211,7 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
                                               config.hidden_size,
-                                              params_dtype=ms.bfloat16,
+                                              params_dtype=self.weight_dtype,
                                               quant_config=quant_config,
                                               prefix=maybe_prefix(
                                                   prefix, "lm_head"))
@@ -1224,6 +1229,8 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         self.num_heads = config.vision_config.num_heads
         head_dim = self.hidden_size // self.num_heads
         self.rotary_pos_emb = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
+        self.make_empty_intermediate_tensors = (
+            self.model.make_empty_intermediate_tensors)
 
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
@@ -1421,9 +1428,11 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         assert grid_thw.ndim == 2
 
         if image_input["type"] == "image_embeds":
-            image_embeds = image_input["image_embeds"].type(self.visual.dtype)
+            image_embeds = image_input["image_embeds"].type(
+                self.visual.weight_dtype)
         else:
-            pixel_values = image_input["pixel_values"].type(self.visual.dtype)
+            pixel_values = image_input["pixel_values"].type(
+                self.visual.weight_dtype)
             os.environ[
                 "MS_DISABLE_INTERNAL_KERNELS_LIST"] = "FlashAttentionScore"
             # compute position embedding
@@ -1450,10 +1459,11 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
         assert grid_thw.ndim == 2
 
         if video_input["type"] == "video_embeds":
-            video_embeds = video_input["video_embeds"].type(self.visual.dtype)
+            video_embeds = video_input["video_embeds"].type(
+                self.visual.weight_dtype)
         else:
             pixel_values_videos = video_input["pixel_values_videos"].type(
-                self.visual.dtype)
+                self.visual.weight_dtype)
             os.environ[
                 "MS_DISABLE_INTERNAL_KERNELS_LIST"] = "FlashAttentionScore"
             rotary_pos_emb = self.rot_pos_emb(grid_thw)
@@ -1581,8 +1591,15 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal):
                     image_input=image_input,
                     video_input=video_input)
                 input_ids = None
-        hidden_states = self.exec_model(input_ids, positions,
-                                        intermediate_tensors, inputs_embeds)
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def compute_logits(

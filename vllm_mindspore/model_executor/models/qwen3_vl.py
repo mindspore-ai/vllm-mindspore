@@ -48,6 +48,7 @@ from transformers.video_utils import VideoMetadata
 from vllm.config import VllmConfig, get_current_vllm_config
 from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
+from vllm.model_executor.models import SupportsPP
 from vllm.model_executor.models.module_mapping import MultiModelKeys
 from vllm.multimodal import MULTIMODAL_REGISTRY
 from vllm.multimodal.inputs import (MultiModalDataDict, MultiModalFieldConfig,
@@ -87,7 +88,7 @@ from vllm_mindspore.model_executor.models.qwen2_5_vl import (
 from vllm_mindspore.model_executor.models.qwen3 import (Qwen3ForCausalLM,
                                                         Qwen3Model)
 from vllm_mindspore.model_executor.models.utils import (
-    WeightsMapper, _merge_multimodal_embeddings, maybe_prefix)
+    PPMissingLayer, WeightsMapper, _merge_multimodal_embeddings, maybe_prefix)
 from vllm_mindspore.utils import is_310p
 
 try:
@@ -976,10 +977,11 @@ class Qwen3LLMModel(Qwen3Model):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
         deepstack_input_embeds: Optional[Mapping[str, Tensor]] = None,
-    ) -> ms.Tensor | IntermediateTensors:
+    ) -> tuple[Tensor, Tensor]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -987,9 +989,8 @@ class Qwen3LLMModel(Qwen3Model):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
@@ -1004,14 +1005,9 @@ class Qwen3LLMModel(Qwen3Model):
                     self.deepstack_layers):
                 hidden_states = mint.add(hidden_states,
                                          deepstack_input_embeds[i])
-
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        if get_pp_group().is_last_rank:
+            hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
 
 class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
@@ -1034,9 +1030,12 @@ class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
         self.model = Qwen3LLMModel(vllm_config=vllm_config,
                                    prefix=prefix,
                                    deepstack_layers=deepstack_layers)
-        self.lm_head = ParallelLMHead(config.vocab_size,
-                                      config.hidden_size,
-                                      quant_config=quant_config)
+        if get_pp_group().is_last_rank:
+            self.lm_head = ParallelLMHead(config.vocab_size,
+                                          config.hidden_size,
+                                          quant_config=quant_config)
+        else:
+            self.lm_head = PPMissingLayer()
         if self.config.tie_word_embeddings and not is_310p():
             self.lm_head.weight = self.model.embed_tokens.weight
         self.logits_processor = LogitsProcessor(config.vocab_size)
@@ -1049,10 +1048,8 @@ class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
     info=Qwen3VLProcessingInfo,
     dummy_inputs=Qwen3VLDummyInputsBuilder,
 )
-class Qwen3VLForConditionalGeneration(
-        NativeModel,
-        SupportsMultiModal,
-):
+class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
+                                      SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -1488,7 +1485,7 @@ class Qwen3VLForConditionalGeneration(
         else:
             deepstack_input_embeds = None
 
-        hidden_states = self.exec_model(
+        hidden_states, residual = self.exec_model(
             input_ids=input_ids,
             positions=positions,
             intermediate_tensors=intermediate_tensors,
@@ -1500,6 +1497,11 @@ class Qwen3VLForConditionalGeneration(
         if inputs_embeds is not None and get_pp_group().is_first_rank:
             self._clear_deepstack_input_embeds(inputs_embeds.shape[0])
 
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def compute_logits(
@@ -1725,6 +1727,9 @@ class Qwen3VLForConditionalGeneration(
         
         Returns a list containing dyn_deepstack_input_embeds tensor.
         """
-        dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
-                                            dtype=self.model_config.dtype)
+        if get_pp_group().is_first_rank:
+            dyn_deepstack_input_embeds = Tensor(shape=[None, None, None],
+                                                dtype=self.model_config.dtype)
+        else:
+            dyn_deepstack_input_embeds = None
         return [dyn_deepstack_input_embeds]
