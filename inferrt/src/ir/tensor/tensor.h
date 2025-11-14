@@ -230,7 +230,7 @@ class Tensor : public RefCounted {
   std::vector<int64_t> shape_;                   ///< The dimensions of the tensor.
   std::vector<SymbolicExprPtr> symbolicShape_;   ///< The symbolic dimensions of the tensor.
   std::vector<int64_t> strides_;                 ///< The strides of the tensor.
-  MemoryFormat memoryFormat_{FORMAT_UNDEFINED};  ///< The memory format of the tensor.
+  MemoryFormat memoryFormat_{FORMAT_ND};         ///< The memory format of the tensor.
   int64_t numel_ = 0;                            ///< The total number of elements.
   StoragePtr storage_{nullptr};                  ///< The underlying storage.
   std::vector<int64_t> storageShape_;            ///< The underlying storage shape of the tensor.

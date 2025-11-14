@@ -35,7 +35,7 @@ if [ $EXIT_CODE != 0 ]; then
     echo "$COLLECT_OUTPUT"
     exit $EXIT_CODE
 fi
-mapfile -t TEST_CASES < <(echo "$COLLECT_OUTPUT" | grep -E 'test_.*\.py::' | sort | tee /dev/tty)
+mapfile -t TEST_CASES < <(echo "$COLLECT_OUTPUT" | grep -E 'test_.*\.py::' | sed 's/\[.*//' | sort -u | tee /dev/tty)
 
 TOTAL_COUNT=${#TEST_CASES[@]}
 FAILED_COUNT=0

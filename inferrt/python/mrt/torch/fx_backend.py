@@ -121,6 +121,8 @@ _OP_MAP = {
     torch.nn.functional.layer_norm: Op.norm,
     # torch.ops.npu functions
     torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
+    torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
+    torch.ops.npu.npu_rms_norm: Op.rms_norm,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
