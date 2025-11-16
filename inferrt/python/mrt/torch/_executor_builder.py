@@ -33,13 +33,13 @@ from mrt.torch.utils import from_torch, to_torch, update_tensor_data
 
 def _elemtype_to_torch_dtype(elem_ty) -> torch.dtype:
     """Convert MLIR element type to torch.dtype.
-    
+
     Args:
         elem_ty: MLIR element type object or string.
-        
+
     Returns:
         Corresponding torch.dtype.
-        
+
     Raises:
         NotImplementedError: If element type is not supported.
     """
@@ -69,10 +69,10 @@ def _elemtype_to_torch_dtype(elem_ty) -> torch.dtype:
 
 def _ranked_tensor_type_to_shape_dtype(tensor_ty):
     """Extract shape and dtype from MLIR RankedTensorType.
-    
+
     Args:
         tensor_ty: MLIR RankedTensorType object.
-        
+
     Returns:
         (shape: List[int], dtype: torch.dtype) tuple.
     """
@@ -103,11 +103,11 @@ def _ranked_tensor_type_to_shape_dtype(tensor_ty):
 
 def _ranked_tensor_type_to_dummy(tensor_ty, is_fake: bool) -> torch.Tensor:
     """Create FakeTensor or empty Tensor with the same shape/dtype.
-    
+
     Args:
         tensor_ty: MLIR RankedTensorType object.
         is_fake: Whether to create FakeTensor.
-        
+
     Returns:
         torch.Tensor instance.
     """
@@ -122,24 +122,200 @@ def _ranked_tensor_type_to_dummy(tensor_ty, is_fake: bool) -> torch.Tensor:
 
 def _is_constant_op(op_name: str) -> bool:
     """Check if an operation is a constant operation.
-    
+
     Common constant operations include:
     - arith.constant (standard MLIR arithmetic dialect constant)
-    - std.constant (standard dialect constant, deprecated)
-    - mrt.constant (MRT dialect constant, if any)
-    
+    - mrt.constant.* (MRT constant creation operations that create constant values)
+
     Args:
         op_name: Operation name (e.g. "arith.constant").
-        
+
     Returns:
         True if constant operation, False otherwise.
     """
     constant_ops = {
         "arith.constant",
         "std.constant",
-        "mrt.constant",
     }
+    # Check if it's a mrt.constant.* operation (constant creation operations)
+    if op_name.startswith("mrt.constant."):
+        return True
     return op_name in constant_ops
+
+
+def _get_raw_value_from_attr(value_attr):
+    """Extract raw value from value_attr.
+
+    Args:
+        value_attr: MLIR attribute object.
+
+    Returns:
+        Raw value (Python object).
+
+    Raises:
+        ValueError: If unable to extract value.
+    """
+    if hasattr(value_attr, "value"):
+        return value_attr.value
+
+    if hasattr(value_attr, "to_array"):
+        array = value_attr.to_array()
+        return torch.from_numpy(array)
+
+    # Try to parse from string representation
+    value_str = str(value_attr)
+    try:
+        raw_value = ast.literal_eval(value_str)
+        return raw_value
+    except (ValueError, SyntaxError):
+        # If parsing fails, try to extract from string format
+        if "[" in value_str and "]" in value_str:
+            start = value_str.index("[")
+            end = value_str.rindex("]") + 1
+            raw_value = ast.literal_eval(value_str[start:end])
+            return raw_value
+        return value_str
+
+
+def _create_tensor_from_mrt_constant_type(op_name: str, raw_value):
+    """Create torch.Tensor from mrt.constant type.
+
+    Args:
+        op_name: Operation name (e.g. "mrt.constant.i64").
+        raw_value: Raw value.
+
+    Returns:
+        torch.Tensor or raw value (for string type).
+    """
+    # Scalar types
+    if op_name == "mrt.constant.i64":
+        return torch.tensor(raw_value, dtype=torch.int64)
+    if op_name == "mrt.constant.f32":
+        return torch.tensor(raw_value, dtype=torch.float32)
+    if op_name == "mrt.constant.f64":
+        return torch.tensor(raw_value, dtype=torch.float64)
+    if op_name == "mrt.constant.boolean":
+        return torch.tensor(raw_value, dtype=torch.bool)
+    if op_name == "mrt.constant.string":
+        return raw_value  # String values returned as-is
+
+    # Array types
+    if op_name == "mrt.constant.i64_array":
+        if isinstance(raw_value, (list, tuple)):
+            return torch.tensor(raw_value, dtype=torch.int64)
+        return torch.tensor([raw_value], dtype=torch.int64)
+    if op_name == "mrt.constant.f32_array":
+        if isinstance(raw_value, (list, tuple)):
+            return torch.tensor(raw_value, dtype=torch.float32)
+        return torch.tensor([raw_value], dtype=torch.float32)
+    if op_name == "mrt.constant.f64_array":
+        if isinstance(raw_value, (list, tuple)):
+            return torch.tensor(raw_value, dtype=torch.float64)
+        return torch.tensor([raw_value], dtype=torch.float64)
+    if op_name == "mrt.constant.boolean_array":
+        if isinstance(raw_value, (list, tuple)):
+            return torch.tensor(raw_value, dtype=torch.bool)
+        return torch.tensor([raw_value], dtype=torch.bool)
+
+    # Fallback: try to convert to tensor
+    return torch.tensor(raw_value)
+
+
+def _extract_mrt_constant_value(op, op_name: str):
+    """Extract constant value from mrt.constant.* operation.
+
+    Args:
+        op: MLIR Operation object (mrt.constant.* operation).
+        op_name: Operation name.
+
+    Returns:
+        Constant value (Python object or torch.Tensor).
+
+    Raises:
+        ValueError: If unable to extract constant value.
+    """
+    if not hasattr(op, "attributes") or "value" not in op.attributes:
+        raise ValueError(f"mrt.constant operation missing 'value' attribute: {op}")
+
+    value_attr = op.attributes["value"]
+    raw_value = _get_raw_value_from_attr(value_attr)
+    return _create_tensor_from_mrt_constant_type(op_name, raw_value)
+
+
+def _parse_dense_string(value_str: str, attr_type):
+    """Parse dense<...> format string.
+
+    Args:
+        value_str: String containing dense<...> format.
+        attr_type: MLIR attribute type object.
+
+    Returns:
+        torch.Tensor.
+    """
+    start = value_str.index("dense<") + 6
+    end = value_str.index(">", start)
+    content = value_str[start:end].strip()
+
+    type_str = str(attr_type)
+    elem_type = (attr_type.element_type if hasattr(attr_type, 'element_type')
+                 else type_str)
+    dtype = _elemtype_to_torch_dtype(elem_type)
+
+    if content.startswith("[") and content.endswith("]"):
+        values = ast.literal_eval(content)
+        if not isinstance(values, (list, tuple)):
+            values = [values]
+        return torch.tensor(values, dtype=dtype)
+
+    value = ast.literal_eval(content)
+    return torch.tensor(value, dtype=dtype)
+
+
+def _extract_standard_constant_value(op):
+    """Extract constant value from standard constant operation (arith.constant).
+
+    Args:
+        op: MLIR Operation object (standard constant operation).
+
+    Returns:
+        Constant value (Python object or torch.Tensor).
+
+    Raises:
+        ValueError: If unable to extract constant value.
+    """
+    if not hasattr(op, "attributes") or "value" not in op.attributes:
+        raise ValueError(f"Constant operation missing 'value' attribute: {op}")
+
+    value_attr = op.attributes["value"]
+
+    if hasattr(value_attr, "value"):
+        return value_attr.value
+
+    if hasattr(value_attr, "type"):
+        attr_type = value_attr.type
+
+        if hasattr(value_attr, "to_array"):
+            array = value_attr.to_array()
+            return torch.from_numpy(array)
+
+        value_str = str(value_attr)
+
+        if "dense<" in value_str:
+            return _parse_dense_string(value_str, attr_type)
+
+        if "unit" in value_str:
+            return None
+
+        try:
+            parsed_value = ast.literal_eval(value_str)
+            return torch.tensor(parsed_value)
+        except (ValueError, SyntaxError):
+            pass
+
+    raise ValueError(
+        f"Unable to extract value from constant operation. "
+        f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}"
+    )
 
 
 def _extract_constant_value(op):
@@ -161,58 +337,21 @@ def _extract_constant_value(op):
         For `%cst = arith.constant dense<[3, 2]> : tensor<2xi64>`
         Returns torch.tensor([3, 2], dtype=torch.int64)
     """
-    # Get 'value' attribute (standard attribute for arith.constant)
-    if not hasattr(op, "attributes") or "value" not in op.attributes:
-        raise ValueError(f"Constant operation missing 'value' attribute: {op}")
-
-    value_attr = op.attributes["value"]
+    # Get operation name (consistent with how it's retrieved in build_executor_from_mlir_module)
+    op_name = getattr(op, "name", "") or getattr(op, "OPERATION_NAME", "")
 
     try:
-        if hasattr(value_attr, "value"):
-            return value_attr.value
+        # Handle mrt.constant.* operations
+        if op_name.startswith("mrt.constant."):
+            return _extract_mrt_constant_value(op, op_name)
 
-        if hasattr(value_attr, "type"):
-            attr_type = value_attr.type
-
-            if hasattr(value_attr, "to_array"):
-                array = value_attr.to_array()
-                return torch.from_numpy(array)
-
-            value_str = str(value_attr)
-
-            if "dense<" in value_str:
-                start = value_str.index("dense<") + 6
-                end = value_str.index(">", start)
-                content = value_str[start:end].strip()
-
-                type_str = str(attr_type)
-                elem_type = (attr_type.element_type if hasattr(attr_type, 'element_type')
-                            else type_str)
-                dtype = _elemtype_to_torch_dtype(elem_type)
-
-                if content.startswith("[") and content.endswith("]"):
-                    values = ast.literal_eval(content)
-                    if not isinstance(values, (list, tuple)):
-                        values = [values]
-                    return torch.tensor(values, dtype=dtype)
-                value = ast.literal_eval(content)
-                return torch.tensor(value, dtype=dtype)
-
-            if "unit" in value_str:
-                return None
-
-            try:
-                parsed_value = ast.literal_eval(value_str)
-                return torch.tensor(parsed_value)
-            except (ValueError, SyntaxError):
-                pass
-
-        raise ValueError(
-            f"Unable to extract value from constant operation. "
-            f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}"
-        )
+        # Handle standard constant operations (arith.constant, std.constant)
+        return _extract_standard_constant_value(op)
 
     except Exception as e:
+        value_attr = None
+        if hasattr(op, "attributes") and "value" in op.attributes:
+            value_attr = op.attributes["value"]
         raise ValueError(
             f"Error extracting constant value: {e}\n"
             f"Operation: {op}\n"
@@ -224,20 +363,20 @@ def _extract_constant_value(op):
 
 def _map_mrt_op_name_to_runtime_op(name: str) -> Op:
     """Map MRT dialect operator name to GraphExecutor Op.
-    
+
     Operators in MRT dialect have one-to-one correspondence with GraphExecutor
     supported Ops. This function parses operator name (removes dialect prefix)
     and looks up corresponding Op enum directly.
-    
+
     Args:
         name: MLIR operator name (dialect.op format, e.g. "mrt.add").
-        
+
     Returns:
         Corresponding Op enum value.
-        
+
     Raises:
         NotImplementedError: If operator is not supported.
-    
+
     Example:
         >>> _map_mrt_op_name_to_runtime_op("mrt.add")  # returns Op.add
         >>> _map_mrt_op_name_to_runtime_op("mrt.matmul")  # returns Op.matmul

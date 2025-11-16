@@ -18,20 +18,12 @@
 #include "mlir/IR/Types.h"
 
 using mlir::LogicalResult;
-using mlir::RankedTensorType;
 using mlir::success;
 
 namespace mrt {
 LogicalResult ReshapeOp::verify() {
-  auto shapeTy = getShape().getType().dyn_cast<RankedTensorType>();
-  if (!shapeTy) {
-    return emitOpError("expects shape to be a ranked tensor of i64");
-  }
-  if (shapeTy.getRank() != 1) {
-    return emitOpError("expects shape tensor to be rank-1");
-  }
-  if (!shapeTy.getElementType().isInteger(64)) {
-    return emitOpError("expects shape tensor element type to be i64");
+  if (!mlir::isa<I64ArrayType>(getShape().getType())) {
+    return emitOpError("expects shape to be a mrt.i64_array type");
   }
   return success();
 }

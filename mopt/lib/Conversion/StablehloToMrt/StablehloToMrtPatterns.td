@@ -37,19 +37,12 @@ def ConvertLogisticOpPattern : Pat<
   (Mrt_SigmoidOp $input)
 >;
 
-// Convert stablehlo.dot to mrt.matmul (for 2D tensors)
+// Convert stablehlo.dot to mrt.matmul
 // Note: This is a simplified pattern. For more complex cases with rank checks,
 // you'll still need C++ patterns
 def ConvertDotOpPattern : Pat<
   (StableHLO_DotOp:$res $lhs, $rhs, $precision_config),
   (Mrt_MatmulOp $lhs, $rhs),
-  [(AnyRankedTensor $res)]
->;
-
-// Convert stablehlo.concatenate to mrt.concat
-def ConvertConcatenateOpPattern : Pat<
-  (StableHLO_ConcatenateOp:$res $inputs, $dimension),
-  (Mrt_ConcatOp $inputs, $dimension),
   [(AnyRankedTensor $res)]
 >;
 

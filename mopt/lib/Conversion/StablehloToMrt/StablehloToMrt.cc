@@ -63,11 +63,39 @@ namespace {
 // Helper functions
 //===----------------------------------------------------------------------===//
 
-// Create a constant tensor from shape values
-Value createShapeTensor(PatternRewriter &rewriter, mlir::Location loc, ArrayRef<int64_t> shape) {
-  auto shapeType = RankedTensorType::get({static_cast<int64_t>(shape.size())}, rewriter.getI64Type());
-  auto shapeAttr = rewriter.getI64TensorAttr(shape);
-  return rewriter.create<ConstantOp>(loc, shapeType, shapeAttr);
+// Create an i64 array value from shape values
+Value createI64ArrayValue(PatternRewriter &rewriter, mlir::Location loc, ArrayRef<int64_t> values) {
+  auto arrayAttr = rewriter.getI64ArrayAttr(values);
+  auto arrayType = mrt::I64ArrayType::get(rewriter.getContext());
+  return rewriter.create<mrt::CreateI64ArrayOp>(loc, arrayType, arrayAttr);
+}
+
+// Create an i64 value
+Value createI64Value(PatternRewriter &rewriter, mlir::Location loc, int64_t value) {
+  auto intAttr = rewriter.getI64IntegerAttr(value);
+  auto intType = mrt::I64Type::get(rewriter.getContext());
+  return rewriter.create<mrt::CreateI64Op>(loc, intType, intAttr);
+}
+
+// Create a boolean value
+Value createBooleanValue(PatternRewriter &rewriter, mlir::Location loc, bool value) {
+  auto boolAttr = rewriter.getBoolAttr(value);
+  auto boolType = mrt::BooleanType::get(rewriter.getContext());
+  return rewriter.create<mrt::CreateBooleanOp>(loc, boolType, boolAttr);
+}
+
+// Create a f32 value
+Value createF32Value(PatternRewriter &rewriter, mlir::Location loc, float value) {
+  auto floatAttr = rewriter.getF32FloatAttr(value);
+  auto f32Type = mrt::F32Type::get(rewriter.getContext());
+  return rewriter.create<mrt::CreateF32Op>(loc, f32Type, floatAttr);
+}
+
+// Create a f64 value
+Value createF64Value(PatternRewriter &rewriter, mlir::Location loc, double value) {
+  auto floatAttr = rewriter.getF64FloatAttr(value);
+  auto f64Type = mrt::F64Type::get(rewriter.getContext());
+  return rewriter.create<mrt::CreateF64Op>(loc, f64Type, floatAttr);
 }
 
 //===----------------------------------------------------------------------===//
@@ -87,20 +115,40 @@ struct ConvertReshapeOp : public RewritePattern {
       return failure();
     }
 
-    // Create shape tensor
+    // Create shape array
     SmallVector<int64_t> shape(resultType.getShape().begin(), resultType.getShape().end());
-    auto shapeTensor = createShapeTensor(rewriter, op->getLoc(), shape);
+    auto shapeArray = createI64ArrayValue(rewriter, op->getLoc(), shape);
 
     // Create mrt.reshape
-    auto newOp = rewriter.create<mrt::ReshapeOp>(op->getLoc(), resultType, reshapeOp.getOperand(), shapeTensor);
+    auto newOp = rewriter.create<mrt::ReshapeOp>(op->getLoc(), resultType, reshapeOp.getOperand(), shapeArray);
 
     rewriter.replaceOp(op, newOp.getResult());
     return success();
   }
 };
 
-// Note: Simple one-to-one patterns (mul, logistic, dot, concatenate) are now
-// defined in StablehloToMrtPatterns.td using DRR (Declarative Rewrite Rules)
+// Convert stablehlo.concatenate to mrt.concat
+struct ConvertConcatenateOp : public RewritePattern {
+  explicit ConvertConcatenateOp(MLIRContext *context)
+      : RewritePattern(mlir::stablehlo::ConcatenateOp::getOperationName(), 1, context) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    auto concatOp = cast<mlir::stablehlo::ConcatenateOp>(op);
+
+    // Create axis value from dimension attribute
+    int64_t dimension = concatOp.getDimension();
+    auto axisValue = createI64Value(rewriter, op->getLoc(), dimension);
+
+    // Create mrt.concat
+    auto newOp =
+      rewriter.create<mrt::ConcatOp>(op->getLoc(), concatOp.getResult().getType(), concatOp.getOperands(), axisValue);
+
+    rewriter.replaceOp(op, newOp.getResult());
+    return success();
+  }
+};
+
+// Note: Simple one-to-one patterns are now defined in StablehloToMrtPatterns.td using DRR (Declarative Rewrite Rules)
 
 // Convert stablehlo.batch_norm_inference to mrt.batch_norm
 struct ConvertBatchNormInferenceOp : public RewritePattern {
@@ -110,16 +158,20 @@ struct ConvertBatchNormInferenceOp : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     auto bnOp = cast<mlir::stablehlo::BatchNormInferenceOp>(op);
 
+    // Create epsilon and is_training values
+    // Use f32 for epsilon as it's typically a float value
+    auto epsilon = createF32Value(rewriter, op->getLoc(), bnOp.getEpsilon().convertToFloat());
+    auto isTraining = createBooleanValue(rewriter, op->getLoc(), false);  // false for inference
+
     // Create mrt.batch_norm
-    auto newOp =
-      rewriter.create<mrt::BatchNormOp>(op->getLoc(), bnOp.getResult().getType(),
-                                        bnOp.getOperand(),                                             // input
-                                        bnOp.getScale(),                                               // scale
-                                        bnOp.getOffset(),                                              // offset
-                                        bnOp.getMean(),                                                // mean
-                                        bnOp.getVariance(),                                            // variance
-                                        rewriter.getF32FloatAttr(bnOp.getEpsilon().convertToFloat()),  // epsilon
-                                        rewriter.getBoolAttr(false));  // is_training = false for inference
+    auto newOp = rewriter.create<mrt::BatchNormOp>(op->getLoc(), bnOp.getResult().getType(),
+                                                   bnOp.getOperand(),   // input
+                                                   bnOp.getScale(),     // scale
+                                                   bnOp.getOffset(),    // offset
+                                                   bnOp.getMean(),      // mean
+                                                   bnOp.getVariance(),  // variance
+                                                   epsilon,             // epsilon
+                                                   isTraining);         // is_training
 
     rewriter.replaceOp(op, newOp.getResult());
     return success();
@@ -225,15 +277,21 @@ struct ConvertConvolutionOp : public RewritePattern {
       dilation.assign(spatialDims, 1);
     }
 
+    // Create operand values
+    auto stridesValue = createI64ArrayValue(rewriter, op->getLoc(), strides);
+    auto paddingValue = createI64ArrayValue(rewriter, op->getLoc(), paddingVec);
+    auto dilationValue = createI64ArrayValue(rewriter, op->getLoc(), dilation);
+    auto hasBiasValue = createBooleanValue(rewriter, op->getLoc(), false);
+
     // Create mrt.conv (without bias for now)
     auto newOp = rewriter.create<mrt::ConvOp>(op->getLoc(), convOp.getResult().getType(),
-                                              convOp.getLhs(),                       // input
-                                              convOp.getRhs(),                       // kernel
-                                              Value(),                               // bias (empty)
-                                              rewriter.getI64ArrayAttr(strides),     // strides
-                                              rewriter.getI64ArrayAttr(paddingVec),  // padding
-                                              rewriter.getI64ArrayAttr(dilation),    // dilation
-                                              rewriter.getBoolAttr(false));          // has_bias
+                                              convOp.getLhs(),  // input
+                                              convOp.getRhs(),  // kernel
+                                              Value(),          // bias (empty)
+                                              stridesValue,     // strides
+                                              paddingValue,     // padding
+                                              dilationValue,    // dilation
+                                              hasBiasValue);    // has_bias
 
     rewriter.replaceOp(op, newOp.getResult());
     return success();
@@ -269,6 +327,7 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     patterns.add<ConvertBatchNormInferenceOp>(&context);
     patterns.add<ConvertMaximumToReluOp>(&context);
     patterns.add<ConvertConvolutionOp>(&context);
+    patterns.add<ConvertConcatenateOp>(&context);
 
     // Apply the patterns
     if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns)))) {

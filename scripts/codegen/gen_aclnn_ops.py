@@ -25,16 +25,17 @@ def _convert_type(input_type: str) -> str:
     """Convert mrt dialect type to mrt ir type."""
     types_map = {
         'AnyRankedTensor': '->ToTensor()',
-        'I64Attr': '->ToInt()',
-        'BoolAttr': '->ToBool()',
-        'F32Attr': '->ToFloat()',
-        'F64Attr': '->ToDouble()',
+        'Mrt_I64Type': '->ToInt()',
+        'Mrt_BooleanType': '->ToBool()',
+        'Mrt_F32Type': '->ToFloat()',
+        'Mrt_F64Type': '->ToDouble()',
+        'Mrt_StringType': '->ToString()',
     }
     tuple_types_set = {
-        'I64ArrayAttr',
-        'BoolArrayAttr',
-        'F32ArrayAttr',
-        'F64ArrayAttr',
+        'Mrt_I64ArrayType',
+        'Mrt_BooleanArrayType',
+        'Mrt_F32ArrayType',
+        'Mrt_F64ArrayType',
         'MrtTensorList',
     }
 
