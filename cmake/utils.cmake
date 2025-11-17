@@ -2,9 +2,16 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 if(DEFINED ENV{MRTLIBS_CACHE_PATH})
-    set(_MRT_LIB_CACHE  $ENV{MRTLIBS_CACHE_PATH})
+    set(_MRT_LIB_CACHE $ENV{MRTLIBS_CACHE_PATH})
 else()
-    set(_MRT_LIB_CACHE ${CMAKE_BINARY_DIR}/.mrtlib)
+    # NOTE:
+    #   Third-party packages downloaded by mrt_add_pkg must NOT live inside the
+    #   current build directory. LLVM/CMake explicitly warns when an exported
+    #   target's INTERFACE_INCLUDE_DIRECTORIES points into ${CMAKE_BINARY_DIR}
+    #   (e.g. "path is prefixed in the build directory"). To avoid that, the
+    #   default cache path is set to <top>/​.mrtlib when MRTLIBS_CACHE_PATH is
+    #   not provided.
+    set(_MRT_LIB_CACHE ${TOP_DIR}/.mrtlib)
 endif()
 message("MRT LIBS CACHE PATH:  ${_MRT_LIB_CACHE}")
 
@@ -226,6 +233,20 @@ function(mrt_add_pkg pkg_name)
 
     set(${pkg_name}_BASE_DIR ${_MRT_LIB_CACHE}/${pkg_name}_${PKG_VER}_${${pkg_name}_CONFIG_HASH})
     set(${pkg_name}_DIRPATH ${${pkg_name}_BASE_DIR} CACHE STRING INTERNAL)
+    set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR})
+    set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR} PARENT_SCOPE)
+
+    set(_mrt_pkg_cache_hit OFF)
+    if(NOT PKG_DIR AND EXISTS ${${pkg_name}_BASE_DIR}/options.txt)
+        set(_mrt_pkg_cache_hit ON)
+        message("Reuse cached ${pkg_name} from ${${pkg_name}_BASE_DIR}")
+
+        if(NOT PKG_HEAD_ONLY AND NOT PKG_CMAKE_OPTION AND NOT PKG_ONLY_MAKE AND NOT PKG_LIBS)
+            set(${pkg_name}_DIRPATH ${${pkg_name}_BASE_DIR} PARENT_SCOPE)
+            message("${pkg_name} source downloaded to: ${${pkg_name}_BASE_DIR}")
+            return()
+        endif()
+    endif()
 
     if(EXISTS ${${pkg_name}_BASE_DIR}/options.txt AND PKG_HEAD_ONLY)
         set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/${PKG_HEAD_ONLY} PARENT_SCOPE)
@@ -238,9 +259,6 @@ function(mrt_add_pkg pkg_name)
         endif()
         return()
     endif()
-
-    set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR})
-    set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR} PARENT_SCOPE)
 
     if(PKG_LIBS)
         __find_pkg_then_add_target(${pkg_name} ${PKG_EXE} ${PKG_LIB_PATH}
@@ -260,7 +278,7 @@ function(mrt_add_pkg pkg_name)
         endif()
     endif()
 
-    if(NOT PKG_DIR)
+    if(NOT PKG_DIR AND NOT _mrt_pkg_cache_hit)
         if(PKG_GIT_REPOSITORY)
             __download_pkg_with_git(${pkg_name} ${PKG_GIT_REPOSITORY} ${PKG_GIT_TAG} ${PKG_SHA256})
         else()
@@ -279,157 +297,167 @@ function(mrt_add_pkg pkg_name)
     else()
         set(${pkg_name}_SOURCE_DIR ${PKG_DIR})
     endif()
-    file(WRITE ${${pkg_name}_BASE_DIR}/options.txt ${${pkg_name}_CONFIG_TXT})
-    message("${pkg_name}_SOURCE_DIR : ${${pkg_name}_SOURCE_DIR}")
+    if(NOT _mrt_pkg_cache_hit)
+        file(WRITE ${${pkg_name}_BASE_DIR}/options.txt ${${pkg_name}_CONFIG_TXT})
+        message("${pkg_name}_SOURCE_DIR : ${${pkg_name}_SOURCE_DIR}")
 
-    foreach(_PATCH_FILE ${PKG_PATCHES})
-        get_filename_component(_PATCH_FILE_NAME ${_PATCH_FILE} NAME)
+        foreach(_PATCH_FILE ${PKG_PATCHES})
+            get_filename_component(_PATCH_FILE_NAME ${_PATCH_FILE} NAME)
 
-        # convert line-endings of patch file to UNIX LF
-        set(_LF_PATCH_FILE ${CMAKE_BINARY_DIR}/_mrt_patch/${_PATCH_FILE_NAME})
-        configure_file(${_PATCH_FILE} ${_LF_PATCH_FILE} NEWLINE_STYLE LF @ONLY)
+            # convert line-endings of patch file to UNIX LF
+            set(_LF_PATCH_FILE ${CMAKE_BINARY_DIR}/_mrt_patch/${_PATCH_FILE_NAME})
+            configure_file(${_PATCH_FILE} ${_LF_PATCH_FILE} NEWLINE_STYLE LF @ONLY)
 
-        # convert line-endings of source file to be patched to UNIX LF
-        file(READ ${_LF_PATCH_FILE} _LF_PATCH_CONTENT)
-        string(REGEX MATCHALL "diff --git a/[/A-Za-z0-9\.\-_]*" _PATCH_SOURCE_LIST "${_LF_PATCH_CONTENT}")
-        list(TRANSFORM _PATCH_SOURCE_LIST REPLACE "diff --git a/" "") # strip prefix of file path
+            # convert line-endings of source file to be patched to UNIX LF
+            file(READ ${_LF_PATCH_FILE} _LF_PATCH_CONTENT)
+            string(REGEX MATCHALL "diff --git a/[/A-Za-z0-9\.\-_]*" _PATCH_SOURCE_LIST "${_LF_PATCH_CONTENT}")
+            list(TRANSFORM _PATCH_SOURCE_LIST REPLACE "diff --git a/" "") # strip prefix of file path
 
-        foreach(_PATCH_SOURCE ${_PATCH_SOURCE_LIST})
-            if(EXISTS ${${pkg_name}_SOURCE_DIR}/${_PATCH_SOURCE})
-                execute_process(COMMAND bash -c "sed -i \'s@\\r@@g\' ${${pkg_name}_SOURCE_DIR}/${_PATCH_SOURCE}"
-                COMMAND_ECHO STDOUT)
+            foreach(_PATCH_SOURCE ${_PATCH_SOURCE_LIST})
+                if(EXISTS ${${pkg_name}_SOURCE_DIR}/${_PATCH_SOURCE})
+                    execute_process(COMMAND bash -c "sed -i \'s@\\r@@g\' ${${pkg_name}_SOURCE_DIR}/${_PATCH_SOURCE}"
+                    COMMAND_ECHO STDOUT)
+                endif()
+            endforeach()
+
+            # apply patch
+            message("patching ${${pkg_name}_SOURCE_DIR} -p1 < ${_LF_PATCH_FILE}")
+            execute_process(COMMAND ${Patch_EXECUTABLE} -p1 INPUT_FILE ${_LF_PATCH_FILE}
+                    WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}
+                    RESULT_VARIABLE Result)
+            if(NOT Result EQUAL "0")
+                message(FATAL_ERROR "Failed patch: ${_LF_PATCH_FILE}")
             endif()
         endforeach()
+        foreach(_SOURCE_DIR ${PKG_SOURCEMODULES})
+            file(GLOB ${pkg_name}_INSTALL_SOURCE ${${pkg_name}_SOURCE_DIR}/${_SOURCE_DIR}/*)
+            file(COPY ${${pkg_name}_INSTALL_SOURCE} DESTINATION ${${pkg_name}_BASE_DIR}/${_SOURCE_DIR}/)
+        endforeach()
 
-        # apply patch
-        message("patching ${${pkg_name}_SOURCE_DIR} -p1 < ${_LF_PATCH_FILE}")
-        execute_process(COMMAND ${Patch_EXECUTABLE} -p1 INPUT_FILE ${_LF_PATCH_FILE}
-                WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}
-                RESULT_VARIABLE Result)
-        if(NOT Result EQUAL "0")
-            message(FATAL_ERROR "Failed patch: ${_LF_PATCH_FILE}")
+        # If SOURCEMODULES is specified without build options, just download and return
+        if(NOT PKG_HEAD_ONLY AND NOT PKG_CMAKE_OPTION AND NOT PKG_ONLY_MAKE AND NOT PKG_LIBS)
+            set(${pkg_name}_DIRPATH ${${pkg_name}_BASE_DIR} PARENT_SCOPE)
+            message("${pkg_name} source downloaded to: ${${pkg_name}_BASE_DIR}")
+            return()
         endif()
-    endforeach()
-    foreach(_SOURCE_DIR ${PKG_SOURCEMODULES})
-        file(GLOB ${pkg_name}_INSTALL_SOURCE ${${pkg_name}_SOURCE_DIR}/${_SOURCE_DIR}/*)
-        file(COPY ${${pkg_name}_INSTALL_SOURCE} DESTINATION ${${pkg_name}_BASE_DIR}/${_SOURCE_DIR}/)
-    endforeach()
-    file(LOCK ${${pkg_name}_BASE_DIR} DIRECTORY GUARD FUNCTION RESULT_VARIABLE ${pkg_name}_LOCK_RET TIMEOUT 600)
-    if(NOT ${pkg_name}_LOCK_RET EQUAL "0")
-        message(FATAL_ERROR "error! when try lock ${${pkg_name}_BASE_DIR} : ${${pkg_name}_LOCK_RET}")
-    endif()
 
-    if(PKG_CUSTOM_CMAKE)
-        file(GLOB ${pkg_name}_cmake ${PKG_CUSTOM_CMAKE}/CMakeLists.txt)
-        file(COPY ${${pkg_name}_cmake} DESTINATION ${${pkg_name}_SOURCE_DIR})
-    endif()
+        file(LOCK ${${pkg_name}_BASE_DIR} DIRECTORY GUARD FUNCTION RESULT_VARIABLE ${pkg_name}_LOCK_RET TIMEOUT 600)
+        if(NOT ${pkg_name}_LOCK_RET EQUAL "0")
+            message(FATAL_ERROR "error! when try lock ${${pkg_name}_BASE_DIR} : ${${pkg_name}_LOCK_RET}")
+        endif()
 
-    if(${pkg_name}_SOURCE_DIR)
-        if(PKG_HEAD_ONLY)
-            file(GLOB ${pkg_name}_SOURCE_SUBDIRS ${${pkg_name}_SOURCE_DIR}/*)
-            file(COPY ${${pkg_name}_SOURCE_SUBDIRS} DESTINATION ${${pkg_name}_BASE_DIR})
-            set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/${PKG_HEAD_ONLY} PARENT_SCOPE)
-            if(NOT PKG_RELEASE)
-                add_library(${pkg_name} INTERFACE)
-                target_include_directories(${pkg_name} INTERFACE ${${pkg_name}_INC})
-            endif()
+        if(PKG_CUSTOM_CMAKE)
+            file(GLOB ${pkg_name}_cmake ${PKG_CUSTOM_CMAKE}/CMakeLists.txt)
+            file(COPY ${${pkg_name}_cmake} DESTINATION ${${pkg_name}_SOURCE_DIR})
+        endif()
 
-        elseif(PKG_ONLY_MAKE)
-            __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_CXXFLAGS} -j${THNUM}
-                    WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
-            set(PKG_INSTALL_INCS ${PKG_ONLY_MAKE_INCS})
-            set(PKG_INSTALL_LIBS ${PKG_ONLY_MAKE_LIBS})
-            file(GLOB ${pkg_name}_INSTALL_INCS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_INCS})
-            file(GLOB ${pkg_name}_INSTALL_LIBS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_LIBS})
-            file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_BASE_DIR}/include)
-            file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_BASE_DIR}/lib)
-
-        elseif(PKG_CMAKE_OPTION)
-            # in cmake
-            file(MAKE_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-            if(${pkg_name}_CFLAGS)
-                set(${pkg_name}_CMAKE_CFLAGS "-DCMAKE_C_FLAGS=${${pkg_name}_CFLAGS}")
-            endif()
-            if(${pkg_name}_CXXFLAGS)
-                set(${pkg_name}_CMAKE_CXXFLAGS "-DCMAKE_CXX_FLAGS=${${pkg_name}_CXXFLAGS}")
-            endif()
-
-            if(${pkg_name}_LDFLAGS)
-                if(${pkg_name}_USE_STATIC_LIBS)
-                    #set(${pkg_name}_CMAKE_LDFLAGS "-DCMAKE_STATIC_LINKER_FLAGS=${${pkg_name}_LDFLAGS}")
-                else()
-                    set(${pkg_name}_CMAKE_LDFLAGS "-DCMAKE_SHARED_LINKER_FLAGS=${${pkg_name}_LDFLAGS}")
+        if(${pkg_name}_SOURCE_DIR)
+            if(PKG_HEAD_ONLY)
+                file(GLOB ${pkg_name}_SOURCE_SUBDIRS ${${pkg_name}_SOURCE_DIR}/*)
+                file(COPY ${${pkg_name}_SOURCE_SUBDIRS} DESTINATION ${${pkg_name}_BASE_DIR})
+                set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/${PKG_HEAD_ONLY} PARENT_SCOPE)
+                if(NOT PKG_RELEASE)
+                    add_library(${pkg_name} INTERFACE)
+                    target_include_directories(${pkg_name} INTERFACE ${${pkg_name}_INC})
                 endif()
-            endif()
-            if(APPLE)
-                __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
-                        -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION}
-                        ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
-                        -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-                __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --target install --
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-            else()
-                __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
-                        -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION} -G ${CMAKE_GENERATOR}
-                    ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
-                    -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
-                    WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-                if(MSVC)
-                    set(CONFIG_TYPE Release)
-                    if(DEBUG_MODE)
-                        set(CONFIG_TYPE Debug)
-                    endif()
-                    __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --config ${CONFIG_TYPE} --target install --
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-                else()
-                    __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${THNUM}
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
-                endif()
-            endif()
-        else()
-            if(${pkg_name}_CFLAGS)
-                set(${pkg_name}_MAKE_CFLAGS "CFLAGS=${${pkg_name}_CFLAGS}")
-            endif()
-            if(${pkg_name}_CXXFLAGS)
-                set(${pkg_name}_MAKE_CXXFLAGS "CXXFLAGS=${${pkg_name}_CXXFLAGS}")
-            endif()
-            if(${pkg_name}_LDFLAGS)
-                set(${pkg_name}_MAKE_LDFLAGS "LDFLAGS=${${pkg_name}_LDFLAGS}")
-            endif()
-            # in configure && make
-            if(PKG_PRE_CONFIGURE_COMMAND)
-                __exec_cmd(COMMAND ${PKG_PRE_CONFIGURE_COMMAND}
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
-            endif()
 
-            if(PKG_CONFIGURE_COMMAND)
-                __exec_cmd(COMMAND ${PKG_CONFIGURE_COMMAND}
-                        ${${pkg_name}_MAKE_CFLAGS} ${${pkg_name}_MAKE_CXXFLAGS} ${${pkg_name}_MAKE_LDFLAGS}
-                        --prefix=${${pkg_name}_BASE_DIR}
+            elseif(PKG_ONLY_MAKE)
+                __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_CXXFLAGS} -j${THNUM}
                         WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
-            endif()
-            set(${pkg_name}_BUILD_OPTION ${PKG_BUILD_OPTION})
-            if(NOT PKG_CONFIGURE_COMMAND)
-                set(${pkg_name}_BUILD_OPTION ${${pkg_name}_BUILD_OPTION}
-                        ${${pkg_name}_MAKE_CFLAGS} ${${pkg_name}_MAKE_CXXFLAGS} ${${pkg_name}_MAKE_LDFLAGS})
-            endif()
-            # build
-            if(APPLE)
-                __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_BUILD_OPTION}
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
-            else()
-                __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_BUILD_OPTION} -j${THNUM}
-                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
-            endif()
-
-            if(PKG_INSTALL_INCS OR PKG_INSTALL_LIBS)
+                set(PKG_INSTALL_INCS ${PKG_ONLY_MAKE_INCS})
+                set(PKG_INSTALL_LIBS ${PKG_ONLY_MAKE_LIBS})
                 file(GLOB ${pkg_name}_INSTALL_INCS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_INCS})
                 file(GLOB ${pkg_name}_INSTALL_LIBS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_LIBS})
                 file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_BASE_DIR}/include)
                 file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_BASE_DIR}/lib)
+
+            elseif(PKG_CMAKE_OPTION)
+                # in cmake
+                file(MAKE_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                if(${pkg_name}_CFLAGS)
+                    set(${pkg_name}_CMAKE_CFLAGS "-DCMAKE_C_FLAGS=${${pkg_name}_CFLAGS}")
+                endif()
+                if(${pkg_name}_CXXFLAGS)
+                    set(${pkg_name}_CMAKE_CXXFLAGS "-DCMAKE_CXX_FLAGS=${${pkg_name}_CXXFLAGS}")
+                endif()
+
+                if(${pkg_name}_LDFLAGS)
+                    if(${pkg_name}_USE_STATIC_LIBS)
+                        #set(${pkg_name}_CMAKE_LDFLAGS "-DCMAKE_STATIC_LINKER_FLAGS=${${pkg_name}_LDFLAGS}")
+                    else()
+                        set(${pkg_name}_CMAKE_LDFLAGS "-DCMAKE_SHARED_LINKER_FLAGS=${${pkg_name}_LDFLAGS}")
+                    endif()
+                endif()
+                if(APPLE)
+                    __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
+                            -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION}
+                            ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
+                            -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                    __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --target install --
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                else()
+                    __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
+                            -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION} -G ${CMAKE_GENERATOR}
+                        ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
+                        -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
+                        WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                    if(MSVC)
+                        set(CONFIG_TYPE Release)
+                        if(DEBUG_MODE)
+                            set(CONFIG_TYPE Debug)
+                        endif()
+                        __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --config ${CONFIG_TYPE} --target install --
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                    else()
+                        __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --target install -- -j${THNUM}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
+                    endif()
+                endif()
             else()
-                __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} install WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                if(${pkg_name}_CFLAGS)
+                    set(${pkg_name}_MAKE_CFLAGS "CFLAGS=${${pkg_name}_CFLAGS}")
+                endif()
+                if(${pkg_name}_CXXFLAGS)
+                    set(${pkg_name}_MAKE_CXXFLAGS "CXXFLAGS=${${pkg_name}_CXXFLAGS}")
+                endif()
+                if(${pkg_name}_LDFLAGS)
+                    set(${pkg_name}_MAKE_LDFLAGS "LDFLAGS=${${pkg_name}_LDFLAGS}")
+                endif()
+                # in configure && make
+                if(PKG_PRE_CONFIGURE_COMMAND)
+                    __exec_cmd(COMMAND ${PKG_PRE_CONFIGURE_COMMAND}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                endif()
+
+                if(PKG_CONFIGURE_COMMAND)
+                    __exec_cmd(COMMAND ${PKG_CONFIGURE_COMMAND}
+                            ${${pkg_name}_MAKE_CFLAGS} ${${pkg_name}_MAKE_CXXFLAGS} ${${pkg_name}_MAKE_LDFLAGS}
+                            --prefix=${${pkg_name}_BASE_DIR}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                endif()
+                set(${pkg_name}_BUILD_OPTION ${PKG_BUILD_OPTION})
+                if(NOT PKG_CONFIGURE_COMMAND)
+                    set(${pkg_name}_BUILD_OPTION ${${pkg_name}_BUILD_OPTION}
+                            ${${pkg_name}_MAKE_CFLAGS} ${${pkg_name}_MAKE_CXXFLAGS} ${${pkg_name}_MAKE_LDFLAGS})
+                endif()
+                # build
+                if(APPLE)
+                    __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_BUILD_OPTION}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                else()
+                    __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} ${${pkg_name}_BUILD_OPTION} -j${THNUM}
+                            WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                endif()
+
+                if(PKG_INSTALL_INCS OR PKG_INSTALL_LIBS)
+                    file(GLOB ${pkg_name}_INSTALL_INCS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_INCS})
+                    file(GLOB ${pkg_name}_INSTALL_LIBS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_LIBS})
+                    file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_BASE_DIR}/include)
+                    file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_BASE_DIR}/lib)
+                else()
+                    __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} install WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
+                endif()
             endif()
         endif()
     endif()

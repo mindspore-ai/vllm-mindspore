@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b309e85c..a1234567 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -222,9 +222,16 @@ endif()
+ if (TORCH_MLIR_ENABLE_STABLEHLO)
+   set(STABLEHLO_BUILD_EMBEDDED ON)
+   set(STABLEHLO_ENABLE_BINDINGS_PYTHON ON)
+-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo
++  
++  # Allow external specification of stablehlo source directory
++  if(NOT STABLEHLO_EXTERNAL_DIR)
++    set(STABLEHLO_EXTERNAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo)
++  endif()
++  message(STATUS "Using StableHLO from: ${STABLEHLO_EXTERNAL_DIR}")
++  
++  add_subdirectory(${STABLEHLO_EXTERNAL_DIR}
+     ${CMAKE_CURRENT_BINARY_DIR}/stablehlo
+     EXCLUDE_FROM_ALL)
+-  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo)
++  include_directories(${STABLEHLO_EXTERNAL_DIR})
+ endif()
+

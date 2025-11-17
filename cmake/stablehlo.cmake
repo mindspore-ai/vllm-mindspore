@@ -1,45 +1,27 @@
 # ===========================================================================
-# StableHLO Integration Configuration - Independent Build Mode
+# StableHLO Source Download Module
 # ===========================================================================
-# Build StableHLO from source, completely isolated from torch_mlir
-# This ensures torch_mlir and mopt each have their own StableHLO instance,
-# avoiding global state conflicts
+# Downloads StableHLO source code via mrt_add_pkg so it can be reused by both
+# torch-mlir (as an external project) and mopt (for in-tree builds).
 # ===========================================================================
 
-message(STATUS "Configuring StableHLO integration (independent build)...")
-
-# StableHLO source path (reuse source downloaded by torch-mlir)
-set(STABLEHLO_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../third_party/torch-mlir/externals/stablehlo")
-
-# Verify source exists
-if(NOT EXISTS "${STABLEHLO_SOURCE_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR
-        "StableHLO source not found at: ${STABLEHLO_SOURCE_DIR}\n"
-        "Please ensure torch-mlir submodule is initialized with StableHLO sources.")
+if(NOT COMMAND mrt_add_pkg)
+    include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
 endif()
 
-message(STATUS "Using StableHLO source: ${STABLEHLO_SOURCE_DIR}")
+message(STATUS "Downloading StableHLO sources...")
 
-# StableHLO build options
-set(STABLEHLO_BUILD_EMBEDDED ON CACHE BOOL "Build StableHLO as embedded" FORCE)
-set(STABLEHLO_ENABLE_BINDINGS_PYTHON ON CACHE BOOL "Enable Python bindings" FORCE)
-set(STABLEHLO_ENABLE_STRICT_BUILD OFF CACHE BOOL "Disable strict build" FORCE)
+set(STABLEHLO_VERSION "0.17.0" CACHE INTERNAL "StableHLO version")
+set(STABLEHLO_COMMIT "c28d55e91b4a5daaff18a33ce7e9bbd0f171256a" CACHE INTERNAL "StableHLO commit hash")
+set(STABLEHLO_SHA256 "26270c26da86f97ec8f011e6c35c021a932fa1cde7ccc110dd9ae29f73dc814a")
+set(STABLEHLO_URL "https://gitee.com/dayschan/stablehlo/repository/archive/${STABLEHLO_COMMIT}.zip")
 
-# Add StableHLO subdirectory (compile from source)
-# Build in mopt's own build directory, completely independent of torch_mlir
-add_subdirectory(${STABLEHLO_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/stablehlo EXCLUDE_FROM_ALL)
+mrt_add_pkg(stablehlo
+    VER ${STABLEHLO_VERSION}
+    URL ${STABLEHLO_URL}
+    SHA256 ${STABLEHLO_SHA256}
+    SOURCEMODULES .
+    CUSTOM_SUBMODULE_INFO ${STABLEHLO_COMMIT}
+)
 
-# Verify critical targets are available
-if(NOT TARGET StablehloOps)
-    message(FATAL_ERROR "StablehloOps target not found. StableHLO compilation failed.")
-endif()
-if(NOT TARGET ChloOps)
-    message(FATAL_ERROR "ChloOps target not found. StableHLO compilation failed.")
-endif()
-
-# Add StableHLO header paths
-include_directories("${STABLEHLO_SOURCE_DIR}")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/stablehlo")
-
-message(STATUS "StableHLO will be built independently (not shared with torch_mlir)")
-message(STATUS "StableHLO configured successfully")
+message(STATUS "StableHLO source downloaded: ${STABLEHLO_SOURCE_DIR}")
