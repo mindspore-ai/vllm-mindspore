@@ -20,6 +20,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "ops/utils/op_constants.h"
 #include "common/visible.h"
