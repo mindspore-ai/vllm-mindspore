@@ -33,6 +33,7 @@ Makefile
 .vscode
 .idea
 .clangd
+.cursor
 
 # Python files
 *__pycache__*

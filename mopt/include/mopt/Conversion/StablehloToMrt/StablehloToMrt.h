@@ -14,10 +14,18 @@
  * limitations under the License.
  */
 
-#include "mopt-c/Passes.h"
-#include "mopt/Conversion/Passes.h"
+#ifndef MOPT_CONVERSION_STABLEHLO_TO_MRT_H
+#define MOPT_CONVERSION_STABLEHLO_TO_MRT_H
 
-void mlirRegisterMoptPasses() {
-  // Register all conversion passes
-  mlir::registerMoptConversionPasses();
-}
+#include <memory>
+
+namespace mlir {
+class Pass;
+
+/// Create a pass to convert StableHLO operations to MRT dialect operations.
+std::unique_ptr<Pass> createConvertStablehloToMRTPass();
+
+}  // namespace mlir
+
+#endif  // MOPT_CONVERSION_STABLEHLO_TO_MRT_H
+

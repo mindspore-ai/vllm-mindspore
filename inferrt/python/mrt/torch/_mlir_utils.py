@@ -27,7 +27,7 @@ def run_stablehlo_to_mrt_passes(mlir_module) -> None:
     """Convert StableHLO module to MRT dialect through pass pipeline."""
     from mopt.passmanager import PassManager
     with mlir_module.context:
-        pm = PassManager.parse("builtin.module(convert-reshape-to-mrt)")
+        pm = PassManager.parse("builtin.module(convert-stablehlo-to-mrt)")
         pm.run(mlir_module.operation)
 
 
