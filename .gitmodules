@@ -4,5 +4,5 @@
 	branch = r1.7.0
 [submodule "ms_custom_ops"]
 	path = ms_custom_ops
-	url = https://gitee.com/mindspore/akg.git
-	branch = ms_custom_ops
+	url = https://gitee.com/mindspore/ms_custom_ops.git
+	branch = vllm-ms-0.4.1
