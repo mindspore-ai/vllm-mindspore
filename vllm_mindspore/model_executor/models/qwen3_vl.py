@@ -1043,7 +1043,6 @@ class Qwen3LLMModel(Qwen3Model):
                 "start_layer should be greater than or equal to "
                 "len(deepstack_visual_indexes)"
             )
-        self.deepstack_multiscale_layer_start = 1
         self.deepstack_layers = deepstack_layers
 
     def construct(
@@ -1174,8 +1173,15 @@ class Qwen3VLForConditionalGeneration(
         self.visual.set_model_inputs()
         self.visual.construct = ms.jit(function=self.visual, jit_level='O0')
 
+        self.use_deepstack = hasattr(config.vision_config,
+                                     'deepstack_visual_indexes')
+        self.deepstack_num_level = len(
+            config.vision_config.deepstack_visual_indexes
+        ) if self.use_deepstack else 0
+
         self.language_model = Qwen3LLMForCausalLM(
-            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "language_model")
+            vllm_config=vllm_config, prefix=maybe_prefix(prefix, "language_model"),
+            deepstack_layers=self.deepstack_num_level
         )
         self.model = self.language_model.model
         self.text_config = config.text_config
@@ -1193,12 +1199,6 @@ class Qwen3VLForConditionalGeneration(
             self.language_model.make_empty_intermediate_tensors
         )
 
-        self.use_deepstack = hasattr(config.vision_config, "deepstack_visual_indexes")
-        self.deepstack_num_level = (
-            len(config.vision_config.deepstack_visual_indexes)
-            if self.use_deepstack
-            else 0
-        )
         # register buffer for deepstack
         if self.use_deepstack and self.visual is not None:
             self.deepstack_input_embeds = [
