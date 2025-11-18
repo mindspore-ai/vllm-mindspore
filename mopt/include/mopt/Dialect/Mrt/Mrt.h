@@ -26,11 +26,11 @@
 
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 
-#define GET_OP_CLASSES
-#include "mopt/Dialect/Mrt/Mrt.h.inc"
-
 #define GET_TYPEDEF_CLASSES
 #include "mopt/Dialect/Mrt/MrtTypes.h.inc"
+
+#define GET_OP_CLASSES
+#include "mopt/Dialect/Mrt/Mrt.h.inc"
 
 #define GET_ATTRDEF_CLASSES
 #include "mopt/Dialect/Mrt/MrtAttributes.h.inc"
