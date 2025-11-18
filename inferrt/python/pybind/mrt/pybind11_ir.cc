@@ -23,11 +23,15 @@
 #include "runtime/executor/executor.h"
 #include "ir/graph.h"
 #include "ir/value/value.h"
+#include "ir/tensor/tensor.h"
+#include "ir/common/dtype.h"
+#include "hardware/device.h"
 #include "ops/op_def/ops_name.h"
 #include "ir/symbolic/symbolic.h"
 
 namespace py = pybind11;
 namespace ir = mrt::ir;
+namespace hardware = mrt::hardware;
 using mrt::runtime::GraphExecutor;
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
@@ -40,6 +44,32 @@ PYBIND11_MODULE(_mrt_ir, m) {
 #include "ops/op_def/ops.list"
 #undef OP
     .export_values();
+
+  py::enum_<ir::DataType::Type>(m, "DataType")
+    .value("Unknown", ir::DataType::Type::Unknown)
+    .value("Float16", ir::DataType::Type::Float16)
+    .value("BFloat16", ir::DataType::Type::BFloat16)
+    .value("Float32", ir::DataType::Type::Float32)
+    .value("Float64", ir::DataType::Type::Float64)
+    .value("Complex64", ir::DataType::Type::Complex64)
+    .value("Int8", ir::DataType::Type::Int8)
+    .value("Int16", ir::DataType::Type::Int16)
+    .value("Int32", ir::DataType::Type::Int32)
+    .value("Int64", ir::DataType::Type::Int64)
+    .value("UInt8", ir::DataType::Type::UInt8)
+    .value("Bool", ir::DataType::Type::Bool)
+    .export_values();
+
+  py::enum_<hardware::DeviceType>(m, "DeviceType")
+    .value("CPU", hardware::DeviceType::CPU)
+    .value("NPU", hardware::DeviceType::NPU)
+    .export_values();
+
+  py::class_<hardware::Device>(m, "Device")
+    .def(py::init<hardware::DeviceType, hardware::DeviceIndex>(), py::arg("type") = hardware::DeviceType::CPU,
+         py::arg("index") = -1)
+    .def_readwrite("type", &hardware::Device::type)
+    .def_readwrite("index", &hardware::Device::index);
 
   py::class_<ir::SymbolicExpr, ir::SymbolicExprPtr>(m, "SymbolicExpr")
     .def("__repr__", &ir::SymbolicExpr::ToString)
@@ -55,6 +85,11 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<int64_t>(), py::arg("value"));
 
   py::class_<ir::Tensor, ir::TensorPtr>(m, "Tensor")
+    .def(py::init([](const std::vector<int64_t> &shape, ir::DataType::Type dtype_type, const hardware::Device &device) {
+           ir::DataType dtype(dtype_type);
+           return ir::MakeIntrusive<ir::Tensor>(shape, dtype, device);
+         }),
+         py::arg("shape"), py::arg("dtype"), py::arg("device") = hardware::Device(hardware::DeviceType::CPU, -1))
     .def_property("shape", py::overload_cast<>(&ir::Tensor::Shape, py::const_),
                   py::overload_cast<const std::vector<int64_t> &>(&ir::Tensor::SetShape))
     .def_property("symbolic_shape", &ir::Tensor::GetSymbolicShape, &ir::Tensor::SetSymbolicShape)

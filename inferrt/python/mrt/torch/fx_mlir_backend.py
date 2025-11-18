@@ -27,14 +27,20 @@ from torch._decomp import get_decompositions
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.func import functionalize
 
-from mrt.torch.utils import get_collective_info_from_torch, _set_device_context
+from mrt.torch.utils import (
+    get_collective_info_from_torch,
+    set_device_context,
+    from_torch,
+    to_torch,
+    update_tensor_data,
+)
 from mrt.torch._mlir_utils import (
     run_stablehlo_to_mrt_passes,
     mlir_module_to_text,
     parse_mlir_module_from_text,
 )
 from mrt.torch._decompositions import DEFAULT_DECOMPOSITIONS
-from mrt.torch._executor_builder import build_executor_from_mlir_module
+from mrt.torch._executor_builder import gen_executor_from_mlir_module
 
 
 def apply_decompositions(
@@ -80,7 +86,7 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     Environment Variables:
         MOPT_PRINT_IR: Set to 1 to print IR at each stage
     """
-    _set_device_context()
+    set_device_context()
 
     # pylint: disable=import-outside-toplevel
     # Reason: torch_mlir must be imported here to prevent default loading at module level
@@ -135,4 +141,49 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
         print(mlir_module)
         print()
 
-    return build_executor_from_mlir_module(mlir_module)
+    executor, placeholder_nodes = gen_executor_from_mlir_module(mlir_module)
+
+    if print_ir:
+        print("=" * 80)
+        print("Stage 6: Executor Graph")
+        print("=" * 80)
+        executor.dump_graph()
+        print()
+
+    executor.build()
+    return create_compiled_callable(executor, placeholder_nodes)
+
+
+def create_compiled_callable(executor, placeholder_nodes):
+    """Create a compiled callable from the executor."""
+    def compiled_callable(*new_inputs: torch.Tensor):
+        """Run compiled executor.
+
+        Args:
+            *new_inputs: New input tensors, count and types should match function parameters.
+
+        Returns:
+            Execution result (torch object).
+            - If original function has single return value: returns single tensor
+            - If original function has multiple return values: returns tuple
+            - If original function has no return value: returns None or empty tuple
+
+        Raises:
+            ValueError: If input count mismatch.
+        """
+        if len(new_inputs) != len(placeholder_nodes):
+            raise ValueError(
+                f"Expected {len(placeholder_nodes)} inputs, "
+                f"but received {len(new_inputs)}"
+            )
+
+        for i, p_node in enumerate(placeholder_nodes):
+            if p_node.output.is_tensor():
+                update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
+            else:
+                p_node.output = from_torch(new_inputs[i])
+
+        result = executor.run()
+        return to_torch(result)
+
+    return compiled_callable
