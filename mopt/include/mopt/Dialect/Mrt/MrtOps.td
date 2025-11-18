@@ -327,6 +327,25 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   let generated = 1;
 }
 
+def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
+  let summary = "aclnnScatterNdUpdate";
+  let description = [{
+    Operation for ScatterNDUpdate computation.
+    Accepts input, indices, updates tensors.
+    Return the updated input tensor as result, which is a in-place ops.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    AnyRankedTensor:$indices,
+    AnyRankedTensor:$updates
+  );
+
+  let results = (outs
+    AnyRankedTensor:$outs
+  );
+}
+
 def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   let summary = "Sigmoid activation function";
   let description = [{
@@ -340,6 +359,9 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
     $input attr-dict `:` functional-type(operands, results)
   }];
 }
+
+
+
 
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   let summary = "Softmax activation function";
@@ -376,5 +398,4 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
     $input `,` $axis `,` $split_sizes attr-dict `:` functional-type(operands, results)
   }];
 }
-
 #endif // MRT_DIALECT_MRT_OPS_TD
