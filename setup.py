@@ -126,34 +126,8 @@ class CustomBuildExt(build_ext):
     def build_extension(self, ext):
         if ext.name == "vllm_mindspore._C_ops":
             self.build_c_ops(ext)
-        elif ext.name == "vllm_mindspore.ms_custom_ops":
-            self.build_ms_custom_ops(ext)
         else:
             raise ValueError(f"Unknown extension name: {ext.name}")
-
-    def build_ms_custom_ops(self, ext):
-        # "vllm_mindspore.ms_custom_ops" --> "ms_custom_ops"
-        ext_dir = os.path.dirname(
-            os.path.realpath(self.get_ext_fullpath(ext.name)))
-        build_cmd = build_cmd = (
-            "git submodule update --init ms_custom_ops && "
-            "cd ms_custom_ops && "
-            "python setup.py build && "
-            f"cp -r build/*/ms_custom_ops {ext_dir}/..")
-        try:
-            logger.info("Running build ms_custom_ops commands:\n%s", build_cmd)
-            result = subprocess.run(build_cmd,
-                                    cwd=self.ROOT_DIR,
-                                    text=True,
-                                    shell=True,
-                                    capture_output=False)
-            if result.returncode != 0:
-                raise RuntimeError(
-                    "Build ms_custom_ops failed with exit code {}".format(
-                        result.returncode))
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError("Failed to build {}: {}".format(
-                "ms_custom_ops", e)) from e
 
     def build_c_ops(self, ext):
         # "vllm_mindspore._C_ops" --> "_C_ops"
@@ -217,8 +191,6 @@ def _get_ext_modules():
     if os.path.exists(_get_ascend_home_path()):
         # sources are specified in CMakeLists.txt
         ext_modules.append(Extension("vllm_mindspore._C_ops", sources=[]))
-        ext_modules.append(
-            Extension("vllm_mindspore.ms_custom_ops", sources=[]))
     return ext_modules
 
 
