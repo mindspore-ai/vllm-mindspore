@@ -48,6 +48,7 @@ class RMSNorm(nn.Cell):
                                 requires_grad=False)
         self.rms_norm = ops.RmsNorm(eps)
         self.eps = eps
+        self.add = ops.Add()
         self.add_rms_norm = AddRmsNorm()
 
     def construct(
@@ -56,8 +57,8 @@ class RMSNorm(nn.Cell):
         residual: Optional[Tensor] = None
     ) -> Union[Tensor, tuple[Tensor, Tensor]]:
         if residual is not None:
-            output, _, residual = self.add_rms_norm(x, residual, self.weight,
-                                                    self.eps)
+            residual = self.add(x, residual)
+            output = self.rms_norm(residual, self.weight)[0]
             return output, residual
         output = self.rms_norm(x, self.weight)[0]
         return output
