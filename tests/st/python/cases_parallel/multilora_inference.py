@@ -19,9 +19,12 @@ for offline inference.
 
 """
 import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python.utils import EnvVarManager, cleanup_subprocesses
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 import vllm_mindspore  # noqa: F401
 from typing import Optional
@@ -35,6 +38,7 @@ def teardown_function():
 
 
 env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -48,8 +52,6 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "1",
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
 
 
 def create_test_prompts(
@@ -109,10 +111,10 @@ def initialize_engine() -> LLMEngine:
     return LLMEngine.from_engine_args(engine_args)
 
 
+@patch.dict(os.environ, env_vars)
 def test_multilora_inference():
     """test function that sets up and runs the prompt processing."""
     engine = initialize_engine()
     lora_path = "/home/workspace/mindspore_dataset/weight/Qwen2.5-7B-Lora-Law"
     test_prompts = create_test_prompts(lora_path)
     process_requests(engine, test_prompts)
-    env_manager.unset_all()

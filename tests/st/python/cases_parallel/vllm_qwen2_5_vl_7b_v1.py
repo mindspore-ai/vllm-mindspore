@@ -15,21 +15,26 @@
 # limitations under the License.
 # ============================================================================
 """test mf qwen2.5 vl 7B."""
+import pytest
+from unittest.mock import patch
+
 import os
 
 import cv2
 import numpy as np
 from PIL import Image
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 from tests.st.python.cases_parallel.similarity import compare_distance
 from transformers import AutoProcessor
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -41,15 +46,17 @@ env_vars = {
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0",
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 
 PROMPT_TEMPLATE = (
     "<|im_start|>system\nYou are a helpful assistant.<|im_end|>"
     "\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
     "What is in the image?<|im_end|>\n"
+    "<|im_start|>assistant\n")
+
+PROMPT_TEMPLATE_2 = (
+    "<|im_start|>system\nYou are a helpful assistant.<|im_end|>"
+    "\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>"
+    "Is there anyone in the picture?<|im_end|>\n"
     "<|im_start|>assistant\n")
 
 video_path = "/home/workspace/mindspore_dataset/video_file/korean_eating.mp4"
@@ -62,6 +69,7 @@ def pil_image() -> Image.Image:
 
 
 def generate_llm_engine(enforce_eager=False, tensor_parallel_size=1):
+    from vllm import LLM
     # Create an LLM.
     llm = LLM(model=model_path,
               gpu_memory_utilization=0.9,
@@ -75,12 +83,21 @@ def generate_llm_engine(enforce_eager=False, tensor_parallel_size=1):
 
 
 def forward_and_check(llm):
-    inputs = [{
-        "prompt": PROMPT_TEMPLATE,
-        "multi_modal_data": {
-            "image": pil_image()
+    from vllm import SamplingParams
+    inputs = [
+        {
+            "prompt": PROMPT_TEMPLATE,
+            "multi_modal_data": {
+                "image": pil_image()
+            },
         },
-    }]
+        {
+            "prompt": PROMPT_TEMPLATE_2,
+            "multi_modal_data": {
+                "image": pil_image()
+            },
+        },
+    ]
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=128, top_k=1)
@@ -158,31 +175,33 @@ def prepare_text(processor: AutoProcessor, prompt: str):
     return text
 
 
+@patch.dict(os.environ, env_vars)
 def test_qwen2_5_vl_7b_v1():
     """
     test case qwen2.5 vl 7B
     """
+    import vllm_mindspore
 
     llm = generate_llm_engine(enforce_eager=False, tensor_parallel_size=2)
     forward_and_check(llm)
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_qwen2_5_vl_7b_v1_enforce_eager():
     """
     test case qwen2.5 vl 7B with eager mode
     """
+    import vllm_mindspore
 
     llm = generate_llm_engine(enforce_eager=True, tensor_parallel_size=1)
     forward_and_check(llm)
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 def test_qwen2_5_vl_7b_v1_video_infer():
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+
     frames = video_to_ndarrays(video_path, num_frames=10)
     print("frames shape", frames.shape)
 

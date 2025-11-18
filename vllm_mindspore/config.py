@@ -29,10 +29,11 @@ import torch
 import vllm.envs as envs
 from pydantic.dataclasses import dataclass
 from transformers import PretrainedConfig
-from vllm.compilation.inductor_pass import CallableInductorPass, InductorPass
-from vllm.config import (_STR_DTYPE_TO_TORCH_DTYPE, CacheConfig,
-                         CompilationConfig, CompilationLevel, VllmConfig,
-                         _find_dtype, _resolve_auto_dtype, get_attr_docs)
+from vllm.config import CacheConfig, VllmConfig, get_attr_docs
+from vllm.config.compilation import (CompilationConfig, CompilationLevel,
+                                     CUDAGraphMode)
+from vllm.config.model import (_STR_DTYPE_TO_TORCH_DTYPE, _find_dtype,
+                               _resolve_auto_dtype)
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
@@ -53,9 +54,6 @@ def vllm_config_get_quantization_config(model_config, load_config):
 def vllm_config_post_init(self):
     """Verify configs are valid & consistent with each other."""
     if self.model_config is not None:
-        self.model_config.verify_async_output_proc(self.parallel_config,
-                                                   self.speculative_config,
-                                                   self.device_config)
         self.model_config.verify_with_parallel_config(self.parallel_config)
 
     if self.cache_config is not None:
@@ -64,9 +62,6 @@ def vllm_config_post_init(self):
     if self.lora_config:
         self.lora_config.verify_with_cache_config(self.cache_config)
         self.lora_config.verify_with_model_config(self.model_config)
-        self.lora_config.verify_lora_support()
-    if self.prompt_adapter_config:
-        self.prompt_adapter_config.verify_with_model_config(self.model_config)
 
     if self.quant_config is None and \
         self.model_config is not None and self.load_config is not None:
@@ -93,19 +88,20 @@ def vllm_config_post_init(self):
         # FIXME(woosuk): Disable inductor to reduce the compilation time
         # and avoid any potential issues with the inductor.
         self.compilation_config.custom_ops = ["none"]
-        self.compilation_config.use_cudagraph = True
-        self.compilation_config.use_inductor = True
-        self.compilation_config.cudagraph_num_of_warmups = 1
+        self.compilation_config.use_cudagraph = False
+        self.compilation_config.use_inductor = False
+        self.compilation_config.cudagraph_num_of_warmups = 0
         self.compilation_config.pass_config.enable_fusion = False
         self.compilation_config.pass_config.enable_noop = False
         # When level is set to CompilationLevel.PIECEWISE, vllm will use cuda
         # graph, which means the model inputs will be padded to cuda graph
         # acceptable size, but it is not for mindspore.
         # So here set to CompilationLevel.DYNAMO_AS_IS.
-        self.compilation_config.level = CompilationLevel.DYNAMO_AS_IS
+        self.compilation_config.level = CompilationLevel.NO_COMPILATION
         # Set a small compile_sizes for warmup. '20' is not in
         # 'cudagraph_capture_sizes'. So the warmup can be run.
-        self.compilation_config.compile_sizes = [20]
+        self.compilation_config.compile_sizes = [0]
+    self.compilation_config.cudagraph_mode = CUDAGraphMode.NONE
 
     self._set_cudagraph_sizes()
 
@@ -194,22 +190,6 @@ def model_post_init(self, __context) -> None:
 
     if self.splitting_ops is None:
         self.splitting_ops = []
-
-    for k, v in self.inductor_passes.items():
-        if not isinstance(v, str):
-            assert callable(v), (
-                f"pass {k} should be callable or a qualified name")
-            self.inductor_compile_config[k] = v if isinstance(
-                v, InductorPass) else CallableInductorPass(v)
-            continue
-
-        # resolve function from qualified name
-        names = v.split(".")
-        module = ".".join(names[:-1])
-        func_name = names[-1]
-        func = __import__(module).__dict__[func_name]
-        self.inductor_compile_config[k] = func if isinstance(
-            func, InductorPass) else CallableInductorPass(func)
 
     self.enabled_custom_ops = Counter()
     self.disabled_custom_ops = Counter()

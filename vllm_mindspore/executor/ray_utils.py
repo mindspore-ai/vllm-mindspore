@@ -28,8 +28,8 @@ from vllm.executor.ray_utils import RayWorkerWrapper
 from vllm.logger import init_logger
 from vllm.utils import get_ip
 from vllm.v1.engine.core import DPEngineCoreActor
+from vllm.v1.engine.utils import CoreEngineActorManager, EngineZmqAddresses
 from vllm.v1.executor.abstract import Executor
-from vllm.v1.utils import CoreEngineActorManager, EngineZmqAddresses
 
 logger = init_logger(__name__)
 
@@ -183,15 +183,15 @@ def core_engine_actor_manager_init(
     executor_class: type[Executor],
     log_stats: bool,
     placement_groups=None,
-    local_dp_ranks: Optional[list[int]] = None,
+    local_dp_ranks=None,
 ):
     import copy
 
     import ray
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
-    self.local_engine_actors: list[ray.ActorHandle] = []
-    self.remote_engine_actors: list[ray.ActorHandle] = []
+    self.local_engine_actors = []
+    self.remote_engine_actors = []
     dp_size = vllm_config.parallel_config.data_parallel_size
     local_engine_count = \
         vllm_config.parallel_config.data_parallel_size_local

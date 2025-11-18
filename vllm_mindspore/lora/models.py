@@ -25,7 +25,7 @@ from typing import Optional, Union
 import mindspore as ms
 import safetensors.torch
 from mindspore import mint
-from vllm.lora.lora import LoRALayerWeights
+from vllm.lora.lora_weights import LoRALayerWeights
 from vllm.lora.peft_helper import PEFTHelper
 from vllm.lora.utils import is_regex_target_modules, parse_fine_tuned_lora_name
 from vllm.model_executor.model_loader.tensorizer import TensorizerConfig
@@ -77,7 +77,8 @@ def from_lora_tensors(
                 if embeddings_module:
                     lora_embeddings_tensor = embeddings[
                         embedding_modules[embeddings_module]]
-                    if pin_memory:
+                    if pin_memory and \
+                            lora_embeddings_tensor._ms_device == "CPU":
                         lora_embeddings_tensor = (
                             lora_embeddings_tensor.pin_memory())
             loras[module_name] = LoRALayerWeights.from_config(
@@ -87,12 +88,12 @@ def from_lora_tensors(
             # vllm-mindspore remove tensor device
             loras[module_name].bias = tensor.to(dtype=dtype).t()
             bias = tensor.to(dtype=dtype).t()
-            if pin_memory:
+            if pin_memory and bias._ms_device == "CPU":
                 bias = bias.pin_memory()
             loras[module_name].bias = bias
         elif is_lora_a:
             loras[module_name].lora_a = tensor.to(dtype=dtype).t()
-            if pin_memory:
+            if pin_memory and loras[module_name].lora_a._ms_device == "CPU":
                 loras[module_name].lora_a = loras[
                     module_name].lora_a.pin_memory()
         else:
@@ -105,17 +106,14 @@ def from_lora_tensors(
                 addition = target_embedding_padding - lora_b.shape[1]
                 loras[module_name].lora_b = mint.nn.functional.pad(
                     lora_b, (0, addition))
-            if pin_memory:
+            if pin_memory and loras[module_name].lora_b._ms_device == "CPU":
                 loras[module_name].lora_b = loras[
                     module_name].lora_b.pin_memory()
 
     for lora in loras.values():
         lora.optimize()
 
-    return cls(lora_model_id,
-               peft_helper.r,
-               loras,
-               scaling_factor=peft_helper.vllm_long_context_scaling_factor)
+    return cls(lora_model_id, peft_helper.r, loras)
 
 
 @classmethod  #type:ignore
@@ -248,3 +246,8 @@ def from_local_checkpoint(
         embedding_modules=embedding_modules,
         embedding_padding_modules=embedding_padding_modules,
         weights_mapper=weights_mapper)
+
+
+def is_moe_model(model):
+    # should adapt when lora support moe
+    return False

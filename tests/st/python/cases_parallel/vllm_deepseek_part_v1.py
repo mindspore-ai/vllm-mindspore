@@ -14,16 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test mf deepseek r1."""
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -36,16 +41,15 @@ env_vars = {
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
+@patch.dict(os.environ, env_vars)
 def test_deepseek_r1():
     """
     test case deepseek r1 w8a8
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -60,10 +64,13 @@ def test_deepseek_r1():
     llm = LLM(
         model="/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8",
         trust_remote_code=True,
-        gpu_memory_utilization=0.9,
+        gpu_memory_utilization=0.8,
+        # Reduce gpu_memory_utilization because new memory will be allocated
+        # during the warm-up stage, otherwise, it may cause OOM.
         tensor_parallel_size=2,
         max_model_len=4096,
-        quantization='ascend')
+        quantization='ascend',
+        block_size=16)
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)
@@ -74,6 +81,3 @@ def test_deepseek_r1():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text in except_list
-
-    # unset env
-    env_manager.unset_all()

@@ -14,16 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test mf telechat2 7b."""
+import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -69,8 +74,7 @@ def run_mf_telechat2_7b_network():
         assert generated_text == except_list[i]
 
 
+@patch.dict(os.environ, env_vars)
 def test_mf_telechat2_7b():
     """Test telechat2_7b."""
-    env_manager.setup_ai_environment(env_vars)
     run_mf_telechat2_7b_network()
-    env_manager.unset_all()

@@ -38,8 +38,8 @@ from vllm.config import CacheConfig, ModelConfig, ParallelConfig, VllmConfig
 from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
+from vllm.v1.sample.metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
@@ -542,8 +542,8 @@ class TransformersForCausalLM(MindONEModelBase):
                         q_seq_lens, block_tables)
 
         # for dummy_attention_metadata
-        if is_prefill and not self.set_flags:  #type: ignore
-            self.set_flags = True
+        if is_prefill and not self.has_prefill_warmup:  #type: ignore
+            self.has_prefill_warmup = True
 
         set_model_context("is_prefill", is_prefill)
 

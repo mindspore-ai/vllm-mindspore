@@ -165,6 +165,8 @@ class InferRotaryEmbedding(nn.Cell):
         self.is_neox_style = is_neox_style
         self.dtype = dtype
         self.freqs_cos, self.freqs_sin = self._compute_cos_sin_cache()
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
 
     def _compute_inv_freq(self, base: Union[int, float]) -> Tensor:
         """
@@ -196,8 +198,10 @@ class InferRotaryEmbedding(nn.Cell):
         batch_valid_length: Tensor,
         offsets: Optional[Tensor] = None,
     ) -> tuple[Tensor, Tensor]:
-        query = query.contiguous()
-        key = key.contiguous()
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
+
         if get_model_context("is_prefill"):
             return self.rotary_embedding_op(query, key, self.freqs_cos,
                                             self.freqs_sin, batch_valid_length)
@@ -353,18 +357,40 @@ class MRotaryEmbedding(RotaryEmbedding):
 
         return llm_positions.tolist(), mrope_position_delta
 
-    @staticmethod
+    @classmethod
     def get_input_positions_tensor(
+        cls,
         input_tokens: list[int],
         hf_config: PretrainedConfig,
         image_grid_thw: Union[list[list[int]], mindspore.Tensor],
         video_grid_thw: Union[list[list[int]], mindspore.Tensor],
-        second_per_grid_ts: Optional[list[float]] = None,
+        second_per_grid_ts=None,
         context_len: int = 0,
         seq_len: Optional[int] = None,
     ) -> tuple[mindspore.Tensor, int]:
         """Get mrope input positions and delta value."""
+        return cls._vl_get_input_positions_tensor(
+            input_tokens=input_tokens,
+            hf_config=hf_config,
+            image_grid_thw=image_grid_thw,
+            video_grid_thw=video_grid_thw,
+            second_per_grid_ts=second_per_grid_ts,
+            context_len=context_len,
+            seq_len=seq_len,
+        )
 
+    @classmethod
+    def _vl_get_input_positions_tensor(
+        cls,
+        input_tokens: list[int],
+        hf_config: PretrainedConfig,
+        image_grid_thw: Union[list[list[int]], Tensor],
+        video_grid_thw: Union[list[list[int]], Tensor],
+        second_per_grid_ts: list[float],
+        context_len: int = 0,
+        seq_len: Optional[int] = None,
+    ) -> tuple[Tensor, int]:
+        """Get mrope input positions and delta value."""
         image_token_id = hf_config.image_token_id
         video_token_id = hf_config.video_token_id
         vision_start_token_id = hf_config.vision_start_token_id
@@ -520,6 +546,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         super().__init__(head_size, rotary_dim, self.cache_max_position_num,
                          base, is_neox_style, dtype)
 
+        self.is_eager_mode = (
+            get_current_vllm_config().model_config.enforce_eager)
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
@@ -601,9 +629,9 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             positions = positions.flatten()
             freqs_cos = self.freqs_cos.index_select(0, positions)
             freqs_sin = self.freqs_sin.index_select(0, positions)
-
-        query = query.contiguous()
-        key = key.contiguous()
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
         return self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
                                         batch_valid_length)
 
@@ -773,15 +801,26 @@ def get_rope(
                 original_max_position)
         elif scaling_type == "default":
             if "mrope_section" in rope_scaling:
-                rotary_emb = InferMRotaryEmbedding(
-                    head_size,
-                    rotary_dim,
-                    max_position,
-                    base,
-                    is_neox_style,
-                    dtype,
-                    mrope_section=rope_scaling["mrope_section"],
-                )
+                if is_neox_style:
+                    rotary_emb = InferMRotaryEmbedding(
+                        head_size,
+                        rotary_dim,
+                        max_position,
+                        base,
+                        is_neox_style,
+                        dtype,
+                        mrope_section=rope_scaling["mrope_section"],
+                    )
+                else:
+                    rotary_emb = MRotaryEmbedding(
+                        head_size,
+                        rotary_dim,
+                        max_position,
+                        base,
+                        is_neox_style,
+                        dtype,
+                        mrope_section=rope_scaling["mrope_section"],
+                    )
             else:
                 raise NotImplementedError
         elif scaling_type == "yarn":

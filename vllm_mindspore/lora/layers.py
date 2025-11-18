@@ -20,13 +20,11 @@
 """Layers for Multi-LoRA."""
 
 import math
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Union, cast
 
 import mindspore as ms
 from mindspore import mint
 from transformers import PretrainedConfig
-from vllm.adapter_commons.layers import AdapterMapping
 from vllm.config import LoRAConfig
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
@@ -83,11 +81,6 @@ def _not_fully_sharded_can_replace(can_replace):
         return can_replace(*args, **kwargs) and condition
 
     return dec
-
-
-@dataclass
-class LoRAMapping(AdapterMapping):
-    is_prefill: bool = False
 
 
 # vllm-mindspore Inherits ms.nn.Cell

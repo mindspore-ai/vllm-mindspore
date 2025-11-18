@@ -26,6 +26,8 @@ import numpy as np
 from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
                                               AttentionMetadata, AttentionType)
 from vllm.logger import init_logger
+from vllm.v1.attention.backends.utils import (AttentionCGSupport,
+                                              CommonAttentionMetadata)
 
 logger = init_logger(__name__)
 
@@ -60,6 +62,7 @@ class MsAttentionBackend(AttentionBackend):
         block_size: int,
         num_kv_heads: int,
         head_size: int,
+        cache_dtype_str: str = "auto",
     ) -> tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
@@ -94,6 +97,7 @@ class MLABackend(AttentionBackend):
         block_size: int,
         num_kv_heads: int,
         head_size: int,
+        cache_dtype_str: str = "auto",
     ) -> tuple[int, ...]:
         if block_size % 16 != 0:
             raise ValueError("Block size must be a multiple of 16.")
@@ -129,13 +133,11 @@ class MsAttentionMetadata:
     max_context_lens: int
     # add by vllm-mindspore end
 
-    query_start_loc: ms.Tensor
+    num_actual_tokens: int
+    max_query_len: int
     max_seq_len: int
     seq_lens: ms.Tensor
     slot_mapping: ms.Tensor
-
-    num_prompt_tokens: ms.Tensor
-    # For cascade attention.
 
     # For logging.
     num_input_tokens: int = 0  # Number of tokens including padding.
@@ -177,62 +179,82 @@ class MsAttentionImpl(AttentionImpl):
 
 
 class MsAttentionMetadataBuilder:
+    cudagraph_support = AttentionCGSupport.NEVER
+    reorder_batch_threshold = None
 
-    def __init__(self, runner, kv_cache_spec, block_table):
-        self.runner = runner
-        self.block_table = block_table
+    def __init__(self, kv_cache_spec, layer_names, vllm_config, device):
+        self.kv_cache_spec = kv_cache_spec
+        self.layer_names = layer_names
+        self.vllm_config = vllm_config
+        self.device = device
+        self.model_config = vllm_config.model_config
+        self.parallel_config = vllm_config.parallel_config
+        self.cache_config = vllm_config.cache_config
+        self.compilation_config = vllm_config.compilation_config
+
+        self.num_heads_q = self.model_config.get_num_attention_heads(
+            self.parallel_config)
+        self.num_heads_kv = self.model_config.get_num_kv_heads(
+            self.parallel_config)
+        self.kv_cache_dtype = kv_cache_spec.dtype
+        self.headdim = self.model_config.get_head_size()
+        self.block_size = kv_cache_spec.block_size
+
+        self.max_num_splits = 0  # No upper bound on the number of splits.
+        self.aot_schedule = False
+
+        self.use_full_cuda_graph = False
+
+        # Sliding window size to be used with the AOT scheduler will be
+        # populated on first build() call.
+        self.aot_sliding_window: Optional[tuple[int, int]] = None
 
     def reorder_batch(self, input_batch, scheduler_output) -> bool:
         return False
 
-    def build(self, num_reqs: int, num_actual_tokens: int, max_query_len: int,
-              common_prefix_len: int):
-        # do not manually call 'tensor.move_to("Ascend", blocking=False)' here,
-        # because it will cause a certain amount of host time.
-        query_start_loc = ms.from_numpy(
-            self.runner.query_start_loc_np[:num_reqs + 1])
-        max_context_lens = self.runner.input_batch.num_computed_tokens_cpu[:
-                                                                           num_reqs].max(
-                                                                           )
-        num_prompt_tokens = ms.from_numpy(
-            self.runner.input_batch.num_prompt_tokens[:num_reqs])
-        slot_mapping = ms.from_numpy(
-            self.block_table.slot_mapping_np[:num_actual_tokens])
-        seq_lens_np = self.runner.seq_lens_np[:num_reqs]
-        max_seq_len = seq_lens_np.max()
-        seq_lens = ms.from_numpy(seq_lens_np)
-        context_lens = ms.from_numpy(
-            self.runner.input_batch.num_computed_tokens_cpu[:num_reqs])
+    def build(self,
+              common_prefix_len: int,
+              common_attn_metadata,
+              fast_build: bool = False):
+        """
+        fast_build disables AOT scheduling, used when there will be few 
+        iterations i.e. spec-decode
+        """
+        num_actual_tokens = common_attn_metadata.num_actual_tokens
+        max_query_len = common_attn_metadata.max_query_len
+        max_seq_len = common_attn_metadata.max_seq_len
+        seq_lens = common_attn_metadata.seq_lens
+        block_table_tensor = common_attn_metadata.block_table_tensor
+        slot_mapping = ms.from_numpy(common_attn_metadata.slot_mapping_np)
 
-        q_seq_lens_np = np.diff(self.runner.query_start_loc_np[:num_reqs + 1])
+        seq_lens_np = common_attn_metadata.seq_lens_np
+        num_computed_tokens_np = common_attn_metadata.num_computed_tokens_np
+        max_context_lens = num_computed_tokens_np.max()
+        context_lens = ms.from_numpy(num_computed_tokens_np)
+
+        q_seq_lens_np = common_attn_metadata.q_seq_lens_np
 
         attn_metadata = MsAttentionMetadata(
+            num_actual_tokens=num_actual_tokens,
+            max_query_len=max_query_len,
+            max_seq_len=max_seq_len,
             seq_lens=seq_lens,
             seq_lens_np=seq_lens_np,
-            block_tables=(self.block_table.get_device_tensor()[:num_reqs]),
-            slot_mapping=slot_mapping,
             q_seq_lens_np=q_seq_lens_np,
-            max_seq_len=max_seq_len,
             context_lens=context_lens,
             max_context_lens=max_context_lens,
-            query_start_loc=query_start_loc,
-            num_prompt_tokens=num_prompt_tokens)
+            block_tables=block_table_tensor,
+            slot_mapping=slot_mapping,
+        )
         return attn_metadata
 
 
 FlashAttentionMetadata = MsAttentionMetadata
 
 
-# only for 0.9.1 vllm/v1/spec_decode/eagle.py
 @dataclass
-class CommonAttentionMetadata:
-    """
-    Attention metadata attributes that can be shared by layers in different KV
-    cache groups and thus having different block table.
-    """
-
-    query_start_loc: ms.Tensor
-    """(batch_size + 1,), the start location of each request in query Tensor"""
-    seq_lens: ms.Tensor
-    """(batch_size,), the length of each request including both computed tokens
-    and newly scheduled tokens"""
+class MsCommonAttentionMetadata(CommonAttentionMetadata):
+    q_seq_lens_np: np.ndarray = None
+    seq_lens_np: np.ndarray = None
+    num_computed_tokens_np: np.ndarray = None
+    slot_mapping_np: np.ndarray = None

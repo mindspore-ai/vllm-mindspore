@@ -25,22 +25,29 @@ import vllm.envs as envs
 from mindspore import Tensor, mutable, nn
 from mindspore.common import dtype as mstype
 from vllm.attention.backends.abstract import AttentionType
+from vllm.attention.selector import get_attn_backend
 from vllm.config import VllmConfig, get_current_vllm_config
+from vllm.distributed import get_dp_group, get_ep_group
 from vllm.forward_context import get_forward_context
-from vllm.model_executor.sampling_metadata import SamplingMetadata
+from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.sequence import IntermediateTensors
+from vllm.v1.sample.metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
-from vllm_mindspore.model_executor.models.utils import is_use_ringmla
+from vllm_mindspore.model_executor.models.interfaces import (
+    is_mixture_of_experts, supports_moe_dp_tp)
+from vllm_mindspore.model_executor.models.utils import (convert_pin,
+                                                        is_use_ringmla)
 from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import STR_DTYPE_TO_MS_DTYPE, create_kv_cache
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
 
 
-class AttentionWrapper:
+class AttentionWrapper(AttentionLayerBase):
 
     def __init__(self):
+        super().__init__()
         vllm_config = get_current_vllm_config()
         block_size = vllm_config.cache_config.block_size
         num_kv_heads = vllm_config.model_config.get_num_kv_heads(
@@ -63,6 +70,15 @@ class AttentionWrapper:
         self.block_size = block_size
         self.sliding_window = None
         self.kv_sharing_target_layer_name = None
+        self.attn_backend = get_attn_backend(head_size,
+                                             vllm_config.model_config.dtype,
+                                             vllm_config.model_config.dtype,
+                                             block_size, False,
+                                             vllm_config.model_config.use_mla,
+                                             False)
+
+    def get_attn_backend(self):
+        return self.attn_backend
 
 
 class MLAAttentionWrapper(AttentionWrapper):
@@ -89,21 +105,14 @@ class MLAAttentionWrapper(AttentionWrapper):
                                        'qk_rope_head_dim', 0)
             # k_shape, r_shape used for mla_op
             if fa3_quant:
-                # num_block is set to 1 because setting it to 0,
-                # format_cast ops may not recycle device memory
-                k_shape = [1, *(self.kv_shape[1:-2]), kv_lora_rank]
-                r_shape = [1, *(self.kv_shape[1:-2]), qk_rope_head_dim]
-                # Currently, transdata has a bug and ms.jit must be added.
-                # Later, ms.jit will be removed.
-                import ms_custom_ops
-                self.kv_cache = [(ms.jit(ms_custom_ops.trans_data)(
+                k_shape = [*(self.kv_shape[0:-2]), kv_lora_rank]
+                r_shape = [*(self.kv_shape[0:-2]), qk_rope_head_dim]
+                self.kv_cache = [(
                     ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
-                    transdata_type=1), ms.jit(ms_custom_ops.trans_data)(
-                        ms.mint.zeros(r_shape,
-                                      dtype=vllm_config.model_config.dtype),
-                        transdata_type=1)) for _ in range(
-                            vllm_config.parallel_config.pipeline_parallel_size)
-                                 ]
+                    ms.mint.zeros(r_shape,
+                                  dtype=vllm_config.model_config.dtype),
+                ) for _ in range(
+                    vllm_config.parallel_config.pipeline_parallel_size)]
             else:
                 k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
@@ -138,13 +147,12 @@ class MsModelBase:
             vllm_config.scheduler_config.enable_chunked_prefill)
         self.enable_prefix_caching = (
             vllm_config.cache_config.enable_prefix_caching)
-        self.is_multi_step = vllm_config.scheduler_config.is_multi_step
-        self.is_multi_step_chunked_prefill = (self.is_multi_step
-                                              and self.enable_chunked_prefill)
         self.num_layers = self.model_config.get_num_layers(
             self.parallel_config)
 
-        self.set_flags: bool = False
+        self.use_ringmla: bool = False
+        self.has_prefill_warmup: bool = False
+        self.has_chunked_warmup: bool = not self.use_ringmla
         self.kv_caches: list[Any] = []
         self.casual_mask = LowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -295,13 +303,15 @@ class MsModelBase:
         seq_lengths = ms.Tensor([input_len], dtype=ms.int32)
         q_seq_lens_np = np.array([input_len], dtype=np.int32)
         seq_lens_np = np.array([input_len], dtype=np.int32)
-        context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not \
-                            self.set_flags else ms.Tensor([1], dtype=ms.int32)
-
+        # context len is 0 for prefill, and 1 for chunked and decode.
+        context_lens_tensor = ms.Tensor([0], dtype=ms.int32) if not (
+            self.has_prefill_warmup) else ms.Tensor([1], dtype=ms.int32)
         block_tables = ms.Tensor([[0]], dtype=ms.int32)
         slot_mapping = [-1 for _ in range(input_len)]
         slot_mapping = ms.Tensor(slot_mapping, dtype=ms.int32)
         return MsAttentionMetadata(
+            num_actual_tokens=input_len,
+            max_query_len=input_len,
             max_seq_len=max_seq_len,
             seq_lens=seq_lengths,
             seq_lens_np=seq_lens_np,
@@ -311,9 +321,8 @@ class MsModelBase:
             context_lens=context_lens_tensor,
             # To enforce prefill and decode are both complied in warmup process.
             # So set max_context_lens to 0 for prefill and 1 for decode.
-            max_context_lens=0 if not self.set_flags else 1,
-            query_start_loc=None,
-            num_prompt_tokens=seq_lengths)
+            max_context_lens=0 if not self.has_prefill_warmup else 1,
+        )
 
     def prepare_base_inputs(self, input_ids, positions):
         attn_metadata = get_forward_context().attn_metadata
@@ -359,13 +368,14 @@ class MsModelBase:
             is_prefill, position_ids, query_lens_np, seq_lens_np)
 
         model_inputs = {}
-        model_inputs["input_ids"] = input_ids
-        model_inputs["batch_valid_length"] = ms.from_numpy(seq_lens_np)
-        model_inputs["block_tables"] = attn_metadata.block_tables
-        model_inputs["slot_mapping"] = attn_metadata.slot_mapping
-        model_inputs["position_ids"] = position_ids
-        model_inputs["q_seq_lens"] = q_seq_lens
-        model_inputs["attention_mask"] = attention_mask
+        model_inputs["input_ids"] = convert_pin(input_ids)
+        model_inputs["batch_valid_length"] = convert_pin(
+            ms.from_numpy(seq_lens_np))
+        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
+        model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        model_inputs["position_ids"] = convert_pin(position_ids)
+        model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
+        model_inputs["attention_mask"] = convert_pin(attention_mask)
         model_inputs["key_cache"] = key_cache
         model_inputs["value_cache"] = value_cache
 
@@ -383,6 +393,27 @@ class NativeModel(MsModelBase):
         self.is_eager_mode = vllm_config.model_config.enforce_eager
         self.prefill_graph = None
         self.decode_graph = None
+
+        if is_mixture_of_experts(self):
+            ep_size = get_ep_group().world_size
+            custom_ep_size = \
+                vllm_config.additional_config.get("expert_parallel", ep_size) \
+                if vllm_config.additional_config is not None else ep_size
+            pure_ep = self.parallel_config.enable_expert_parallel and \
+                (ep_size // int(custom_ep_size)) == 1
+            if get_dp_group().world_size > 1 and not pure_ep:
+                if not supports_moe_dp_tp(self):
+                    raise ValueError(
+                        "The MoE Model do not support Data Parallel mix with "
+                        "Tensor Parallel. If want to use MoE with DP + TP, "
+                        "please implement `supports_moe_dp_tp` in models.")
+                self.moe_dp_need_pad = True
+                self.dp_group = get_dp_group().device_group._name
+                self.dp_cpu_group = get_dp_group().cpu_group._name
+                self.dp_world_size = get_dp_group().world_size
+                self.dp_rank = get_dp_group().rank_in_group
+            else:
+                self.moe_dp_need_pad = False
 
     @property
     def ready_model(self) -> nn.Cell:
@@ -468,16 +499,86 @@ class NativeModel(MsModelBase):
         dyn_batch_valid_length = Tensor(shape=[None], dtype=mstype.int32)
         dyn_q_seq_lens = Tensor(shape=[None], dtype=mstype.int32)
         dyn_block_tables = Tensor(shape=[None, None], dtype=mstype.int32)
-        self.ready_model.set_inputs(dyn_input_ids, dyn_position_ids,
-                                    dyn_key_caches, dyn_value_caches,
-                                    dyn_slot_mapping, dynamic_attention_mask,
-                                    dyn_batch_valid_length, dyn_q_seq_lens,
-                                    dyn_block_tables, dyn_intermediate_tensors,
-                                    dyn_inputs_embeds)
+
+        if supports_moe_dp_tp(self):
+            dyn_dp_pad_index = (Tensor(shape=[None], dtype=mstype.int32)
+                                if self.moe_dp_need_pad else None)
+            dyn_dp_unpad_index = (Tensor(shape=[None], dtype=mstype.int32)
+                                  if self.moe_dp_need_pad else None)
+            dyn_dp_pad_index_with_offset = (Tensor(shape=[None],
+                                                   dtype=mstype.int32)
+                                            if self.moe_dp_need_pad else None)
+            dyn_dp_unpad_index_total_with_offset = (Tensor(
+                shape=[None], dtype=mstype.int32) if self.moe_dp_need_pad else
+                                                    None)
+            self.ready_model.set_inputs(
+                dyn_input_ids, dyn_position_ids, dyn_key_caches,
+                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
+                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+                dyn_intermediate_tensors, dyn_inputs_embeds, dyn_dp_pad_index,
+                dyn_dp_unpad_index, dyn_dp_pad_index_with_offset,
+                dyn_dp_unpad_index_total_with_offset)
+        else:
+            self.ready_model.set_inputs(
+                dyn_input_ids, dyn_position_ids, dyn_key_caches,
+                dyn_value_caches, dyn_slot_mapping, dynamic_attention_mask,
+                dyn_batch_valid_length, dyn_q_seq_lens, dyn_block_tables,
+                dyn_intermediate_tensors, dyn_inputs_embeds)
 
         dynamic_hidden_states = Tensor(shape=[None, None],
                                        dtype=self.model_config.dtype)
         self.ready_lm_head.set_inputs(dynamic_hidden_states)
+
+    def prepare_moe_dp_tp_inputs(self):
+        """
+        prepare moe padding indices to support moe dp + tp.
+        """
+        if self.moe_dp_need_pad:
+            dp_meta = get_forward_context().dp_metadata
+            token_num_total_cumsum = dp_meta.cu_tokens_across_dp_cpu
+            max_token_num = dp_meta.max_tokens_across_dp_cpu
+            token_num_total_cumsum = token_num_total_cumsum.numpy()
+            max_token_num = max_token_num.numpy()
+
+            token_num_total = np.diff(token_num_total_cumsum, prepend=0)
+            total_pad_num = max_token_num - token_num_total
+            this_pad_num = total_pad_num[self.dp_rank]
+
+            dp_unpad_index = np.arange(token_num_total[self.dp_rank])
+            dp_pad_index = np.pad(dp_unpad_index, (0, this_pad_num))
+
+            dp_pad_index_total_with_offset = [
+                np.pad(
+                    np.arange(
+                        0 if rank == 0 else token_num_total_cumsum[rank - 1],
+                        token_num_total_cumsum[rank]),
+                    (0, total_pad_num[rank]))
+                for rank in range(self.dp_world_size)
+            ]
+            dp_pad_index_total_with_offset = \
+                np.concatenate(dp_pad_index_total_with_offset, axis=0)
+
+            dp_unpad_index_total_with_offset = [
+                np.arange(token_num_total[rank]) + rank * max_token_num
+                for rank in range(self.dp_world_size)
+            ]
+            dp_unpad_index_total_with_offset = \
+                np.concatenate(dp_unpad_index_total_with_offset, axis=0)
+
+            dp_unpad_index = ms.from_numpy(dp_unpad_index.astype(np.int32))
+            dp_pad_index = ms.from_numpy(dp_pad_index.astype(np.int32))
+            dp_pad_index_total_with_offset = ms.from_numpy(
+                dp_pad_index_total_with_offset.astype(np.int32))
+            dp_unpad_index_total_with_offset = ms.from_numpy(
+                dp_unpad_index_total_with_offset.astype(np.int32))
+        else:
+            dp_unpad_index = None
+            dp_pad_index = None
+            dp_pad_index_total_with_offset = None
+            dp_unpad_index_total_with_offset = None
+
+        return (dp_unpad_index, dp_pad_index, dp_pad_index_total_with_offset,
+                dp_unpad_index_total_with_offset)
 
     def prepare_inputs(self, input_ids, positions, intermediate_tensors,
                        inputs_embeds):
@@ -499,6 +600,16 @@ class NativeModel(MsModelBase):
         new_model_inputs["intermediate_tensors"] = intermediate_tensors
         new_model_inputs["inputs_embeds"] = inputs_embeds
 
+        if supports_moe_dp_tp(self):
+            dp_unpad_index, dp_pad_index, dp_pad_index_total_with_offset, \
+            dp_unpad_index_total_with_offset = self.prepare_moe_dp_tp_inputs()
+            new_model_inputs["dp_unpad_index"] = dp_unpad_index
+            new_model_inputs["dp_pad_index"] = dp_pad_index
+            new_model_inputs["dp_pad_index_total_with_offset"] = \
+                dp_pad_index_total_with_offset
+            new_model_inputs["dp_unpad_index_total_with_offset"] = \
+                dp_unpad_index_total_with_offset
+
         return new_model_inputs, is_prefill
 
     def exec_model(self,
@@ -512,8 +623,8 @@ class NativeModel(MsModelBase):
                                                        inputs_embeds)
 
         # for dummy_attention_metadata
-        if is_prefill and not self.set_flags:
-            self.set_flags = True
+        if is_prefill and not self.has_prefill_warmup:
+            self.has_prefill_warmup = True
 
         # eager mode
         if self.is_eager_mode:

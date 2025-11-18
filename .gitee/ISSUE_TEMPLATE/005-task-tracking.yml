@@ -1,0 +1,40 @@
+name: 🧭 Task Tracking
+description: Task tracking for non-Feature, non-Bugfix changes such as refactoring, version-bumping, or tooling updates, as well as cleanly decoupled code derived from Feature.
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: textarea
+    attributes:
+      label: 背景与目标描述｜Background and goal description
+      description: The motivation of the task.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: 父任务｜Parent task
+      description: Derived from which task.
+      placeholder: 父任务issue编号：#xxxxxx，如无父任务则本项不填
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: 前置依赖的任务｜Prerequisite tasks
+      description: Prerequisite tasks, can have multiple dependencies.
+      placeholder: 例如：#ICH1AN
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: 子工作项（分解）｜Subtasks (breakdown)
+      description: List concrete sub-tasks as a checklist.
+      placeholder: |-
+        例如：
+        - [ ] 设计方案评审（含接口与兼容性）
+        - [ ] 关键模块实现（A/B/C）
+        - [ ] 单元测试与集成测试
+        - [ ] 文档与示例更新
+        - [ ] 性能与稳定性验证
+    validations:
+      required: true

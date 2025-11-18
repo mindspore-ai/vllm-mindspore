@@ -21,7 +21,10 @@
 
 # type: ignore
 # isort: skip_file
+import pytest
+from unittest.mock import patch
 
+import os
 import multiprocessing
 import random
 import time
@@ -32,11 +35,18 @@ import vllm_mindspore
 import torch.distributed as dist
 from vllm.distributed.device_communicators.shm_broadcast import MessageQueue
 from vllm.utils import get_ip, get_open_port, get_distributed_init_method
-from tests.st.python import utils
+
+from tests.st.python.test_ds_online import env_vars
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
+
+
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 
 
 def get_arrays(n: int, seed: int = 0) -> list[np.ndarray]:
@@ -141,5 +151,6 @@ def worker_fn():
             print("StatelessProcessGroup passed the test!")
 
 
+@patch.dict(os.environ, env_vars)
 def test_shm_broadcast():
     distributed_run(worker_fn, 4)

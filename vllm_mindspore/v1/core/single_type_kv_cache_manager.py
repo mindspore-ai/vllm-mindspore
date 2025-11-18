@@ -18,11 +18,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
+
 from vllm.v1.core.block_pool import BlockPool
 from vllm.v1.core.kv_cache_utils import BlockHash, KVCacheBlock
 from vllm.v1.core.single_type_kv_cache_manager import (
-    FullAttentionManager, SingleTypeKVCacheManager, SlidingWindowManager)
-from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
+    FullAttentionManager, MLAAttentionSpec, SingleTypeKVCacheManager,
+    SlidingWindowManager)
+from vllm.v1.kv_cache_interface import (ChunkedLocalAttentionSpec,
+                                        FullAttentionSpec, KVCacheSpec,
                                         SlidingWindowSpec)
 
 from vllm_mindspore.v1.kv_cache_interface import MLAQuantFullAttentionSpec
@@ -37,15 +41,21 @@ def find_longest_cache_hit(
     block_pool: BlockPool,
     kv_cache_spec: KVCacheSpec,
     use_eagle: bool,
+    dcp_world_size: int = 1,
 ) -> tuple[list[KVCacheBlock], ...]:
-    assert isinstance(
-        kv_cache_spec, (FullAttentionSpec, MLAQuantFullAttentionSpec)), (
-            "FullAttentionManager can only be used for full attention "
-            "or mla quant full attention groups")
+    assert isinstance(kv_cache_spec,
+        (FullAttentionSpec,
+         ChunkedLocalAttentionSpec,
+         MLAQuantFullAttentionSpec)
+    ), "FullAttentionManager can only be used for full attention " \
+        "and chunked local attention groups"
     computed_blocks: tuple[list[KVCacheBlock], ...] = tuple(
         [] for _ in range(len(kv_cache_group_ids)))
-    max_num_blocks = max_length // kv_cache_spec.block_size
-    for i, block_hash in zip(range(max_num_blocks), block_hashes):
+    block_size = kv_cache_spec.block_size
+    if dcp_world_size > 1:
+        block_size *= dcp_world_size
+    max_num_blocks = max_length // block_size
+    for block_hash in itertools.islice(block_hashes, max_num_blocks):
         # block_hashes is a chain of block hashes. If a block hash is not
         # in the cached_block_hash_to_id, the following block hashes are
         # not computed yet for sure.
@@ -65,4 +75,5 @@ spec_manager_map: dict[type[KVCacheSpec], type[SingleTypeKVCacheManager]] = {
     FullAttentionSpec: FullAttentionManager,
     MLAQuantFullAttentionSpec: FullAttentionManager,
     SlidingWindowSpec: SlidingWindowManager,
+    MLAAttentionSpec: FullAttentionManager,
 }

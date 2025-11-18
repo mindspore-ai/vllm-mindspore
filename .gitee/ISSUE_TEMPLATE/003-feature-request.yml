@@ -1,0 +1,60 @@
+name: 🚀 Feature request
+description: Submit a proposal/request for a new MindSpore feature
+title: "[Feature]: "
+labels: ["feature"]
+
+body:
+- type: textarea
+  attributes:
+    label: 🚀 背景描述｜Background
+    description: |
+      请清晰简洁地描述该特性提案，并说明动机。该需求是否与具体问题相关？例如：*“我在做 X，希望 Y 成为可能”*。若与其他 Gitee 问题相关，请在此附上链接。<br>
+      A clear and concise description of the feature proposal. Please outline the motivation for the proposal. Is your feature request related to a specific problem? e.g., *"I'm working on X and would like Y to be possible"*. If this is related to another Gitee issue, please link here too.
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: 特性设计｜Feature design
+    description: |
+      请描述你考虑过的所有方案或特性（如有），如果是大颗粒特性或架构重构，请提交设计文档到[Design Documents](https://gitee.com/mindspore/vllm-mindspore/wikis)目录下。<br>
+      A description of any alternative solutions or features you've considered, if any. If this is a large feature or an architectural refactor, please submit a design document under the [Design Documents](https://gitee.com/mindspore/vllm-mindspore/wikis) directory.
+    placeholder: |-
+      示例｜Example:
+      - [ ] 预期规格：包括但不限于精度、性能、适用的硬件规格等
+            Expected specs: including but not limited to accuracy, performance, applicable hardware, etc.
+      - [ ] 设计思路：当前方案的考量，是否有不同方案的对比等
+            Design ideas: considerations of the current approach, comparisons with alternatives, etc.
+      - [ ] 特性约束：特性使用所需的环境变量等约束，是否与其他特性兼容或冲突等
+            Feature constraints: required env vars and other constraints, compatibility/conflicts with other features, etc.
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: 涉及到的对外API｜External API changes involved
+    description: |
+      描述该特性是否会有对外API的增加与变更情况的发生，以及变更可能会造成的周边影响。<br>
+      Describe whether this feature adds/changes public APIs and the potential ripple effects.
+- type: textarea
+  attributes:
+    label: 与其他模块的相关性描述｜Relation with other modules
+    description: |
+      描述与其他模块存在的可能关联性，以方便补充对应的场景验证。<br>
+      Describe potential associations with other modules to facilitate scenario validation.
+- type: textarea
+  attributes:
+    label: 测试设计与测试计划｜Test design and plan
+    description: |
+      详细描述如何开展测试验证，以保证该特性的能力得到充分的验证，包括但不限于功能、性能、可靠性、安全等。<br>
+      Describe in detail how to validate this feature to ensure sufficient coverage, including but not limited to functionality, performance, reliability, and security.
+  validations:
+    required: true
+- type: textarea
+  attributes:
+    label: 其他信息｜Other information
+    description: |
+      添加例如辅助信息、测试验证场景等内容。<br>
+      Add auxiliary information, test scenarios, etc.
+- type: markdown
+  attributes:
+    value: >
+      Thanks for contributing 🎉!

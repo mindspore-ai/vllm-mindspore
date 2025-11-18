@@ -57,13 +57,11 @@ line-length = 80
 "vllm_mindspore/version.py" = ["F401"]
 "vllm_mindspore/_version.py" = ["ALL"]
 # Python 3.8 typing - skip V0 code
-"vllm_mindspore/attention/**/*.py" = ["UP006", "UP035"]
 "vllm_mindspore/core/**/*.py" = ["UP006", "UP035"]
-"vllm_mindspore/engine/**/*.py" = ["UP006", "UP035"]
 "vllm_mindspore/executor/**/*.py" = ["UP006", "UP035"]
 "vllm_mindspore/prompt_adapter/**/*.py" = ["UP006", "UP035"]
 "vllm_mindspore/spec_decode/**/*.py" = ["UP006", "UP035"]
-"vllm_mindspore/worker/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/v1/worker/**/*.py" = ["UP006", "UP035"]
 # Python 3.8 typing - skip utils for ROCm
 "vllm_mindspore/utils.py" = ["UP006", "UP035"]
 "vllm_mindspore/__init__.py" = ["E402"]
@@ -115,23 +113,14 @@ follow_imports = "silent"
 # move the directory here and remove it from tools/mypy.sh
 files = [
     "vllm_mindspore/*.py",
-    "vllm_mindspore/adapter_commons",
-    "vllm_mindspore/assets",
     "vllm_mindspore/entrypoints",
-    "vllm_mindspore/core",
     "vllm_mindspore/inputs",
-    "vllm_mindspore/logging_utils",
     "vllm_mindspore/multimodal",
     "vllm_mindspore/platforms",
-    "vllm_mindspore/transformers_utils",
-    "vllm_mindspore/triton_utils",
-    "vllm_mindspore/usage",
 ]
 # TODO(woosuk): Include the code from Megatron and HuggingFace.
 exclude = [
     "vllm_mindspore/model_executor/parallel_utils/|vllm_mindspore/model_executor/models/",
-    # Ignore triton kernels in ops.
-    'vllm_mindspore/attention/ops/.*\.py$'
 ]
 
 [tool.codespell]

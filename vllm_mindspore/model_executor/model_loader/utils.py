@@ -19,6 +19,8 @@
 # limitations under the License.
 """ utils for load model """
 
+import os
+
 from mindspore import nn
 from vllm.config import ModelConfig, ModelImpl
 from vllm.model_executor.model_loader.utils import logger
@@ -140,6 +142,14 @@ def resolve_mix_backend_architecture(model_config, architectures):
             if "mf_model" in m.module_name:
                 logger.info('"%s" run as "%s" with MindFormers backend.', arch,
                             architectures[i])
+                if os.getenv("MINDFORMERS_MODEL_CONFIG", None):
+                    raise ValueError(
+                        "MINDFORMERS_MODEL_CONFIG is not supported, "
+                        "please unset MINDFORMERS_MODEL_CONFIG. "
+                        "For usage of vllm_mindspore, refer to "
+                        "https://www.mindspore.cn/vllm_mindspore/"
+                        "docs/zh-CN/master/getting_started/"
+                        "quick_start/quick_start.html")
             else:
                 logger.info('"%s" run as "%s" with Native backend.', arch,
                             architectures[i])
@@ -179,7 +189,8 @@ def get_ms_model_architecture(
         if not is_vllm_supported(architectures):
             resolve_mindone_transformers_arch(model_config, architectures)
 
-    model_cls, arch = MindSporeModelRegistry.resolve_model_cls(architectures)
+    model_cls, arch = MindSporeModelRegistry.resolve_model_cls(
+        architectures, model_config)
     if model_config.task == "embed":
         raise RecursionError("MindSpore unsupported embed model task now!")
     elif model_config.task == "classify":

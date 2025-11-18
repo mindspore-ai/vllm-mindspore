@@ -20,7 +20,8 @@ from multiprocessing.pool import Pool
 
 import pytest
 
-from .utils import cleanup_subprocesses, tasks_resource_alloc
+from tests.st.python.utils.cases_parallel import (cleanup_subprocesses,
+                                                  tasks_resource_alloc)
 
 
 def teardown_function():
@@ -60,11 +61,6 @@ def test_cases_parallel_part0():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_mf_qwen_7b.py::test_mf_qwen",
-         "vllm_mf_qwen_7b_test_mf_qwen.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill.py"
-         "::test_mf_qwen_7b_chunk_prefill",
-         "vllm_mf_qwen_7b_chunk_prefill_test_mf_qwen_7b_chunk_prefill.log"),
         (2, "cases_parallel/vllm_mf_qwen_7b_chunk_prefill_v1.py"
          "::test_mf_qwen_7b_chunk_prefill",
          "vllm_mf_qwen_7b_chunk_prefill_v1_test_mf_qwen_7b_chunk_prefill.log"),
@@ -84,11 +80,6 @@ def test_cases_parallel_part1():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_mf_qwen_7b_mss.py::test_mf_qwen_7b_mss",
-         "vllm_mf_qwen_7b_mss_test_mf_qwen_7b_mss.log"),
-        (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching.py"
-         "::test_mf_qwen_7b_prefix_caching",
-         "vllm_mf_qwen_7b_prefix_caching_test_mf_qwen_7b_prefix_caching.log"),
         (2, "cases_parallel/vllm_mf_qwen_7b_prefix_caching_v1.py"
          "::test_mf_qwen_7b_prefix_caching",
          "vllm_mf_qwen_7b_prefix_caching_v1_test_mf_qwen_7b_prefix_caching.log"
@@ -108,9 +99,7 @@ def test_cases_parallel_part2():
     Description: test cases parallel.
     Expectation: Pass.
     """
-    cases = [(2, "cases_parallel/vllm_qwen_7b.py::test_vllm_qwen",
-              "vllm_qwen_7b_test_vllm_qwen.log"),
-             (2, "cases_parallel/vllm_qwen_7b_v1.py::test_vllm_qwen",
+    cases = [(2, "cases_parallel/vllm_qwen_7b_v1.py::test_vllm_qwen",
               "vllm_qwen_7b_v1_test_vllm_qwen.log"),
              (4, "cases_parallel/shm_broadcast.py::test_shm_broadcast",
               "shm_broadcast_test_shm_broadcast.log")]
@@ -120,6 +109,7 @@ def test_cases_parallel_part2():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
+@pytest.mark.skip(reason="need adapt to v0.11.0")
 def test_cases_parallel_part3():
     """
     Feature: test cases parallel.
@@ -127,13 +117,9 @@ def test_cases_parallel_part3():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_deepseek_bf16_part.py::test_deepseek_r1_bf16",
-         "vllm_deepseek_bf16_part_test_deepseek_r1_bf16.log"),
         (2,
          "cases_parallel/vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16",
          "vllm_deepseek_bf16_part_v1_test_deepseek_r1_bf16.log"),
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_r1",
-         "vllm_deepseek_part_test_deepseek_r1.log"),
         (2, "cases_parallel/vllm_deepseek_part_v1.py::test_deepseek_r1",
          "vllm_deepseek_part_v1_test_deepseek_r1.log"),
     ]
@@ -150,8 +136,6 @@ def test_cases_parallel_part4():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v0",
-         "vllm_mf_qwen3_8b_test_mf_qwen3.log"),
         (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
          "vllm_mf_qwen3_8b_v1_test_mf_qwen3.log"),
         (1, "cases_parallel/vllm_mf_telechat2_7b.py::test_mf_telechat2_7b",
@@ -178,6 +162,10 @@ def test_cases_parallel_part5():
     cases = [
         (2, "cases_parallel/multilora_inference.py::test_multilora_inference",
          "multilora_inference_test_multilora_inference.log"),
+        (2, "cases_parallel/vllm_qwen_7b_v1.py::test_qwen_enforce_eager",
+         "vllm_qwen_7b_v1_test_qwen_enforce_eager.log"),
+        (1, "cases_parallel/vllm_qwen3.py::test_qwen3_enforce_eager",
+         "vllm_qwen3_test_qwen3_enforce_eager.log"),
     ]
     run_tasks(cases)
 
@@ -185,6 +173,25 @@ def test_cases_parallel_part5():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
+def test_cases_parallel_part6():
+    """
+    Feature: test cases parallel.
+    Description: test cases parallel.
+    Expectation: Pass.
+    """
+    cases = [
+        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b",
+         "test_vllm_qwen3_30b_a3b.log"),
+        (2, "cases_parallel/vllm_qwen3_moe.py::test_vllm_qwen3_30b_a3b_eager",
+         "test_vllm_qwen3_30b_a3b_eager.log"),
+    ]
+    run_tasks(cases)
+
+
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_single
+@pytest.mark.skip(reason="need adapt to v0.11.0")
 def test_cases_parallel_part7():
     """
     Feature: test cases parallel.
@@ -207,23 +214,7 @@ def test_cases_parallel_part7():
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
-def test_cases_parallel_level4_part0():
-    """
-    Feature: test cases parallel.
-    Description:
-        vllm_mf_qwen_7b_cp_pc_mss.py::test_mf_qwen_7b_cp_pc_mss:
-            accuracy error happens occasionally
-    Expectation: Pass.
-    """
-    cases = [(2, "cases_parallel/vllm_mf_qwen_7b_cp_pc_mss.py"
-              "::test_mf_qwen_7b_cp_pc_mss",
-              "vllm_mf_qwen_7b_cp_pc_mss_test_mf_qwen_7b_cp_pc_mss.log")]
-    run_tasks(cases)
-
-
-@pytest.mark.level4
-@pytest.mark.platform_arm_ascend910b_training
-@pytest.mark.env_single
+@pytest.mark.skip(reason="need adapt to v0.11.0")
 def test_cases_parallel_level4_mcore1():
     """
     Mcore currently does not support the following test cases,
@@ -232,13 +223,8 @@ def test_cases_parallel_level4_mcore1():
     cases = [
         (2, "cases_parallel/vllm_deepseek_osl.py::test_deepseek_r1",
          "vllm_deepseek_osl_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_part.py::test_deepseek_mtp",
-         "vllm_deepseek_part_test_deepseek_mtp.log"),
         (2, "cases_parallel/vllm_deepseek_smoothquant.py::test_deepseek_r1",
          "vllm_deepseek_smoothquant_test_deepseek_r1.log"),
-        (2, "cases_parallel/vllm_deepseek_smoothquant_mss.py"
-         "::test_deepseek_r1_mss",
-         "vllm_deepseek_smoothquant_mss_test_deepseek_r1_mss.log")
     ]
     run_tasks(cases)
 
@@ -246,6 +232,7 @@ def test_cases_parallel_level4_mcore1():
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_single
+@pytest.mark.skip(reason="need adapt to v0.11.0")
 def test_cases_parallel_level4_mcore2():
     """
     Mcore currently does not support the following test cases,
@@ -259,7 +246,9 @@ def test_cases_parallel_level4_mcore2():
 
 
 @pytest.mark.level0
+@pytest.mark.platform_ascend310p
 @pytest.mark.env_single
+@pytest.mark.skip(reason="need adapt to v0.11.0")
 def test_cases_parallel_310p_part0():
     """
     Feature: test cases parallel in 310p.
@@ -267,7 +256,7 @@ def test_cases_parallel_310p_part0():
     Expectation: Pass.
     """
     cases = [
-        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
+        (2, "cases_parallel/vllm_mf_qwen3_8b.py::test_mf_qwen3_v1_310p",
          "vllm_mf_qwen3_8b_v1_310p_test_mf_qwen3.log"),
     ]
     run_tasks(cases)

@@ -14,16 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test mf qwen3."""
+import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -71,17 +76,16 @@ def run_mf_qwen3_networt():
         assert generated_text == except_list[i]
 
 
-def test_mf_qwen3_v0():
-    """Test qwen3 8B using V0 LLMEngine."""
-    env_vars["VLLM_USE_V1"] = "0"
-    env_manager.setup_ai_environment(env_vars)
-    run_mf_qwen3_networt()
-    env_manager.unset_all()
-
-
+@patch.dict(os.environ, {**env_vars, "VLLM_USE_V1": "1"})
 def test_mf_qwen3_v1():
     """Test qwen3 8B using V0 LLMEngine."""
-    env_vars["VLLM_USE_V1"] = "1"
-    env_manager.setup_ai_environment(env_vars)
     run_mf_qwen3_networt()
-    env_manager.unset_all()
+
+
+@patch.dict(os.environ, {
+    **env_vars, "VLLM_USE_V1": "1",
+    "MS_ENABLE_INTERNAL_BOOST": "off"
+})
+def test_mf_qwen3_v1_310p():
+    """Test qwen3 8B using V1 LLMEngine in 310p."""
+    run_mf_qwen3_networt()

@@ -64,9 +64,17 @@ vllm-mindspore serve Qwen/Qwen3-8B
 
 请查看[快速体验](https://www.mindspore.cn/vllm_mindspore/docs/zh-CN/master/getting_started/quick_start/quick_start.html)和[安装指南](https://www.mindspore.cn/vllm_mindspore/docs/zh-CN/master/getting_started/installation/installation.html)了解更多。
 
+## 镜像构建
+
+可使用以下命令构建vLLM-MindSpore插件的配套Docker镜像，通过参数-a选择相应的NPU类型进行构建，`device_type`表示设备类型，`910b` 为Atlas A2系列，`310p` 为Atlas 300I Pro/Duo和Atlas 300V Pro系列，默认为 `910b`：
+
+```bash
+bash build_image.sh -a device_type
+```
+
 ## 贡献
 
-请参考 [CONTRIBUTING](https://www.mindspore.cn/vllm_mindspore/docs/zh-CN/master/developer_guide/contributing.html) 文档了解更多关于开发环境搭建、功能测试以及 PR 提交规范的信息。
+请参考 [CONTRIBUTING](https://gitee.com/mindspore/vllm-mindspore/blob/master/CONTRIBUTING_CN.md) 文档了解更多关于开发环境搭建、功能测试以及 PR 提交规范的信息。
 
 我们欢迎并重视任何形式的贡献与合作，请通过[Issue](https://gitee.com/mindspore/vllm-mindspore/issues)来告知我们您遇到的任何Bug，或提交您的特性需求、改进建议、技术方案。
 

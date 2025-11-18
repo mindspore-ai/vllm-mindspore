@@ -16,23 +16,24 @@
 
 # isort:skip_file
 """test vllm mix parallel."""
+import pytest
+from unittest.mock import patch
 import os
 from multiprocessing import Process, Queue
 
-import pytest
-
-from . import utils
-from .utils import cleanup_subprocesses
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
     cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
-    "vLLM_MODEL_BACKEND": "MindFormers",
+    "VLLM_MS_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
     "MS_ENABLE_TRACE_MEMORY": "off",
     "HCCL_OP_EXPANSION_MODE": "AIV",
@@ -45,10 +46,6 @@ env_vars = {
     "HCCL_IF_BASE_PORT": "60000",
     "LCAL_COMM_ID": "127.0.0.1:10068"
 }
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
-from vllm.utils import get_open_port  # noqa: E402
 
 ds_model_path = "/home/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8"
 common_ds_prompt = ("You are a helpful assistant.<｜User｜>将文本分类为中性、"
@@ -66,6 +63,7 @@ quant_type = 'ascend'
 def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
             dp_master_port, prompts, expect_list, result_q, model_path,
             quantization):
+    from vllm import LLM, SamplingParams
     dp_master_ip = "127.0.0.1"
 
     os.environ["VLLM_DP_RANK"] = str(global_dp_rank)
@@ -90,8 +88,10 @@ def dp_func(dp_size, local_dp_rank, global_dp_rank, tp_size, ep_size,
                                      max_tokens=3)
 
     # Create an LLM.
+    gpu_memory_utilization = 0.7 if model_path == ds_model_path else 0.9
     llm = LLM(model=model_path,
               tensor_parallel_size=tp_size,
+              gpu_memory_utilization=gpu_memory_utilization,
               max_model_len=4096,
               max_num_batched_tokens=8,
               max_num_seqs=8,
@@ -116,6 +116,8 @@ def exec_model_with_dp(dp_size,
                        expect_list,
                        model_path,
                        quantization=None):
+    from vllm.utils import get_open_port
+
     node_size = 1
     node_rank = 0
     dp_master_port = get_open_port()
@@ -149,9 +151,6 @@ def exec_model_with_dp(dp_size,
         result = result and result_q.get()
     assert result
 
-    # unset env
-    env_manager.unset_all()
-
 
 def exec_model_without_dp(tp_size,
                           ep_size,
@@ -159,6 +158,7 @@ def exec_model_without_dp(tp_size,
                           expect_list,
                           model_path,
                           quantization=None):
+    from vllm import LLM, SamplingParams
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0,
                                      max_tokens=3,
@@ -186,10 +186,8 @@ def exec_model_without_dp(tp_size,
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == expect_list[i]
 
-    # unset env
-    env_manager.unset_all()
 
-
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -197,6 +195,8 @@ def test_vllm_qwen3_moe_30b_dp4_tp2_ep4():
     """
     test case qwen3_moe_30B with DP4TP2EP4
     """
+    import vllm_mindspore
+
     dp_size = 4
     tp_size = 2
     ep_size = 4
@@ -207,13 +207,16 @@ def test_vllm_qwen3_moe_30b_dp4_tp2_ep4():
                        qwen_model_path)
 
 
-@pytest.mark.level0
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
 def test_deepseek_r1_dp4_tp2_ep4():
     """
     test case deepseek r1 w8a8 dp4 tp2 ep4
     """
+    import vllm_mindspore
+
     dp_size = 4
     tp_size = 2
     ep_size = 4
@@ -228,10 +231,13 @@ def test_deepseek_r1_dp4_tp2_ep4():
     reason=
     "Currently does not support relevant communication fusion operators in 910b"
 )
+@patch.dict(os.environ, env_vars)
 def test_deepseek_r1_dp8_tp1_ep8():
     """
     test case deepseek r1 w8a8 Dp8 tp1 ep8
     """
+    import vllm_mindspore
+
     dp_size = 8
     tp_size = 1
     ep_size = 8
@@ -242,6 +248,7 @@ def test_deepseek_r1_dp8_tp1_ep8():
                        ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -249,6 +256,8 @@ def test_deepseek_r1_dp2_tp4_ep1():
     """
     test case deepseek r1 w8a8 dp2 tp4 ep1
     """
+    import vllm_mindspore
+
     dp_size = 2
     tp_size = 4
     ep_size = 1
@@ -259,6 +268,7 @@ def test_deepseek_r1_dp2_tp4_ep1():
                        ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.skip(
     reason=
     "Currently does not support relevant communication fusion operators in 910b"
@@ -267,6 +277,8 @@ def test_deepseek_r1_dp4_tp2_ep8():
     """
     test case deepseek r1 w8a8 dp4 tp2 ep8
     """
+    import vllm_mindspore
+
     dp_size = 4
     tp_size = 2
     ep_size = 8
@@ -277,6 +289,7 @@ def test_deepseek_r1_dp4_tp2_ep8():
                        ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -284,6 +297,8 @@ def test_deepseek_r1_dp8_tp1_ep1():
     """
     test case deepseek r1 w8a8 dp8 tp1 ep1
     """
+    import vllm_mindspore
+
     dp_size = 8
     tp_size = 1
     ep_size = 1
@@ -294,6 +309,7 @@ def test_deepseek_r1_dp8_tp1_ep1():
                        ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -301,6 +317,8 @@ def test_deepseek_r1_dp8_tp1_ep4():
     """
     test case deepseek r1 w8a8 dp8 tp1 ep4
     """
+    import vllm_mindspore
+
     dp_size = 8
     tp_size = 1
     ep_size = 4
@@ -311,6 +329,7 @@ def test_deepseek_r1_dp8_tp1_ep4():
                        ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -318,6 +337,8 @@ def test_deepseek_r1_tp8_ep8():
     """
     test case deepseek r1 w8a8 tp8 ep8
     """
+    import vllm_mindspore
+
     tp_size = 8
     ep_size = 8
     # Sample prompts.
@@ -327,6 +348,7 @@ def test_deepseek_r1_tp8_ep8():
                           ds_model_path, quant_type)
 
 
+@patch.dict(os.environ, env_vars)
 @pytest.mark.level4
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.allcards
@@ -334,6 +356,8 @@ def test_deepseek_r1_tp8_ep4():
     """
     test case deepseek r1 w8a8 tp8 ep4
     """
+    import vllm_mindspore
+
     tp_size = 8
     ep_size = 4
     # Sample prompts.
@@ -341,3 +365,42 @@ def test_deepseek_r1_tp8_ep4():
     expect_list = [common_ds_expect_result]
     exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
                           ds_model_path, quant_type)
+
+
+@patch.dict(os.environ, {**env_vars, "VLLM_MS_MODEL_BACKEND": "Native"})
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_vllm_native_qwen3_moe_30b_dp4_tp2_ep4():
+    """
+    test case qwen3_moe_30B with DP4TP2EP4
+    """
+    import vllm_mindspore
+
+    dp_size = 4
+    tp_size = 2
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_qwen_prompt] * 4
+    expect_list = [common_qwen_expect_result] * 4
+    exec_model_with_dp(dp_size, tp_size, ep_size, prompts, expect_list,
+                       qwen_model_path)
+
+
+@patch.dict(os.environ, {**env_vars, "VLLM_MS_MODEL_BACKEND": "Native"})
+@pytest.mark.level4
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.allcards
+def test_vllm_native_qwen3_moe_30b_tp8_ep4():
+    """
+    test case qwen3_moe_30B with TP8EP4
+    """
+    import vllm_mindspore
+
+    tp_size = 8
+    ep_size = 4
+    # Sample prompts.
+    prompts = [common_qwen_prompt]
+    expect_list = [common_qwen_expect_result]
+    exec_model_without_dp(tp_size, ep_size, prompts, expect_list,
+                          qwen_model_path, quant_type)

@@ -14,22 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
 from typing import Any, Optional
 
 import mindspore
 import numpy as np
+import regex as re
 from mindspore import Parameter, Tensor, mint
 from mindspore.common.initializer import initializer
 from mindspore.ops.auto_generate import (DynamicQuantExt, GroupedMatmul,
                                          GroupedMatmulV4, QuantBatchMatmul)
 from mindspore.ops.operations._infer_ops import QuantV2
 
-from vllm_mindspore.attention import Attention
 from vllm_mindspore.model_executor.layers.linear import (
     LinearBase, LinearMethodBase, UnquantizedLinearMethod)
 from vllm_mindspore.model_executor.utils import set_weight_attrs
 from vllm_mindspore.utils import is_310p
+from vllm_mindspore.v1.attention import Attention
 
 from .attention import BaseKVCacheMethod, KVCacheInt8Method
 from .base_config import QuantizationConfig, QuantizeMethodBase

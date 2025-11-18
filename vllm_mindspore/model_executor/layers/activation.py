@@ -18,7 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mindspore import mint, nn
+from mindspore import mint, nn, ops
 
 
 class SiluAndMul(nn.Cell):
@@ -33,8 +33,9 @@ class SiluAndMul(nn.Cell):
 
     def __init__(self) -> None:
         super().__init__()
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(self, x):
         d = x.shape[-1] // 2
-        gate, hidden = mint.split(x, [d, d], dim=-1)
-        return mint.mul(hidden, mint.nn.functional.silu(gate.contiguous()))
+        gate, hidden = self.split(x, [d, d], dim=-1)
+        return mint.mul(hidden, mint.nn.functional.silu(gate))

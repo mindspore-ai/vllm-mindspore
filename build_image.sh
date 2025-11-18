@@ -16,19 +16,80 @@
 # limitations under the License.
 
 set -euo pipefail
+TARGET="910b"
+ARCH=$(uname -m)
+
+build_usage() {
+    echo "Usage: $0 [-a 910b|310p]"
+    exit 1
+}
+
+while getopts "a:h" opt; do
+    case $opt in
+        a)
+            if [[ "$OPTARG" == "910b" || "$OPTARG" == "310p" ]]; then
+                TARGET="$OPTARG"
+            else
+                echo "Error: -a must be '910b' or '310p', got '$OPTARG'" >&2
+                exit 1
+            fi
+            ;;
+        h)
+            build_usage
+            ;;
+        \?|:)
+            build_usage
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+if [ $# -gt 0 ]; then
+    echo "Error: invalid input $@"
+    build_usage
+fi
 
 readonly IMAGE_TAG="vllm_ms_$(date +%Y%m%d)"
-ARCH=$([ "$(uname -m)" = "x86_64" ] && echo "x86_64" || echo "aarch64")
 
 log() {
-    echo "========= $*"
+    echo "===== Build image for ${TARGET} ==== $*"
+}
+
+CANN_TOOLKIT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-toolkit_8.1.RC1_linux-${ARCH}.run
+CANN_KERNELS_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-kernels-${TARGET}_8.1.RC1_linux-${ARCH}.run
+CANN_NNRT_URL=https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.1.RC1/Ascend-cann-nnrt_8.1.RC1_linux-${ARCH}.run
+
+add_verbose() {
+    if docker build -h 2>&1 | grep -q "\-\-progress"; then
+        build_args="--no-cache --progress=plain"
+    else
+        build_args="--no-cache"
+    fi
+}
+
+build_args=""
+
+get_run_opts() {
+    while getopts ":vh" opt; do
+        case $opt in
+            v)
+                add_verbose
+                ;;
+            h)
+                echo "Usage: bash build_image.sh [-v]"
+                echo "    verbose: print docker build logs in details"
+                exit 0
+                ;;
+        esac
+    done
 }
 
 main() {
     log "Starting Docker image build process"
     
-    log "Step 1: Building base environment for $ARCH"
-    docker image inspect base_env >/dev/null 2>&1 || docker build --build-arg TARGETARCH=$ARCH -t base_env -f Dockerfile .
+    log "Step 1: Building base environment"
+
+    docker image inspect base_env >/dev/null 2>&1 || docker build -t base_env -f Dockerfile . ${build_args}
     
     log "Step 2: Building final image with install script"
     
@@ -39,13 +100,31 @@ main() {
     cat > Dockerfile.tmp << EOF
 FROM base_env
 
+RUN set -ex && \\
+    cd /root && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_TOOLKIT_URL} -O Ascend-cann-toolkit.run --no-check-certificate && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_KERNELS_URL} -O Ascend-cann-kernels-${TARGET}.run --no-check-certificate && \\
+    wget --header="Referer: https://www.hiascend.com/" ${CANN_NNRT_URL} -O Ascend-cann-nnrt.run --no-check-certificate
+
+RUN set -ex && \\
+    cd /root && \\
+    chmod a+x *.run && \\
+    bash /root/Ascend-cann-toolkit.run --install -q && \\
+    bash /root/Ascend-cann-kernels-${TARGET}.run --install -q && \\
+    bash Ascend-cann-nnrt.run --install -q && \\
+    rm /root/*.run
+
 COPY install_depend_pkgs.sh /workspace/
 COPY .jenkins/test/config/dependent_packages.yaml /workspace/.jenkins/test/config/
+ADD ./ /workspace/vllm_mindspore
 
 ARG MINDFORMERS_COMMIT=$mindformers_commit
-RUN chmod +x /workspace/install_depend_pkgs.sh && \\
-    cd /workspace && \\
-    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT ./install_depend_pkgs.sh
+RUN chmod +x /workspace/vllm_mindspore/install_depend_pkgs.sh && \\
+    cd /workspace/vllm_mindspore && \\
+    MINDFORMERS_COMMIT=\$MINDFORMERS_COMMIT AUTO_BUILD=1 ./install_depend_pkgs.sh
+
+RUN cd /workspace/vllm_mindspore && \\
+    pip install .
 
 ENV PYTHONPATH="/workspace/mindformers/:\$PYTHONPATH"
 WORKDIR /workspace
@@ -53,7 +132,7 @@ WORKDIR /workspace
 CMD ["bash"]
 EOF
     
-    docker build -f Dockerfile.tmp -t "$IMAGE_TAG" . || { 
+    docker build -f Dockerfile.tmp -t "$IMAGE_TAG" . ${build_args}|| { 
         echo "Failed to build final image"
         rm -f Dockerfile.tmp
         exit 1
@@ -62,5 +141,7 @@ EOF
     
     log "Build completed: $IMAGE_TAG"
 }
+
+get_run_opts "$@"
 
 main "$@"

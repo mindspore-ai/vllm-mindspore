@@ -22,7 +22,7 @@ import pytest
 from vllm_mindspore import _custom_ops as custom_ops
 import torch
 
-from .utils import cleanup_subprocesses
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
 
 
 def teardown_function():

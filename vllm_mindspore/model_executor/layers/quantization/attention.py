@@ -50,7 +50,7 @@ class BaseKVCacheMethod(QuantizeMethodBase):
     :param quant_config: the appropriate QuantizationConfig
     """
 
-    def __init__(self, quant_config: QuantizationConfig = None):
+    def __init__(self, quant_config=None):
         self.quant_config = quant_config
 
     def create_weights(self,

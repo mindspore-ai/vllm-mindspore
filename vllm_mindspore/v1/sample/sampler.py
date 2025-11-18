@@ -25,6 +25,7 @@ def apply_temperature(
     self,
     logits: torch.Tensor,
     temp: torch.Tensor,
+    all_random: bool,
 ) -> torch.Tensor:
     # logits.div_ will cause some error right now.
     # So we use logits = logits.div instead of logits.div_.

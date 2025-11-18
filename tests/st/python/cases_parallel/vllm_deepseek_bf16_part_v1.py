@@ -14,16 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test mf deepseek r1."""
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -36,17 +40,15 @@ env_vars = {
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
     "ATB_LLM_LCOC_ENABLE": "0"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
+@patch.dict(os.environ, env_vars)
 def test_deepseek_r1_bf16():
     """
     test case deepseek r1 bf16
     """
-
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     # Sample prompts.
     prompts = [
         "You are a helpful assistant.<｜User｜>将文本分类为中性、负面或正面。"
@@ -73,6 +75,3 @@ def test_deepseek_r1_bf16():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
-
-    # unset env
-    env_manager.unset_all()

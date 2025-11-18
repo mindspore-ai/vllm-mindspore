@@ -17,16 +17,21 @@
 
 # type: ignore
 # isort: skip_file
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -40,16 +45,15 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "0"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 
 
+@patch.dict(os.environ, env_vars)
 def test_deepseek_r1():
     """
     test case deepseek r1 w8a8
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -76,6 +80,3 @@ def test_deepseek_r1():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert "博物院" in generated_text
-
-    # unset env
-    env_manager.unset_all()

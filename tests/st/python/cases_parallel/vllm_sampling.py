@@ -14,16 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """test vllm sampling."""
+import pytest
+from unittest.mock import patch
 
 import os
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
 
 
 def teardown_function():
-    utils.cleanup_subprocesses()
+    cleanup_subprocesses()
 
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -37,16 +41,15 @@ env_vars = {
     "VLLM_USE_V1": "1",
     "VLLM_MS_MODEL_BACKEND": "Native"
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
-import vllm_mindspore  # noqa: F401, E402
-from vllm import LLM, SamplingParams  # noqa: E402
 
 
+@patch.dict(os.environ, env_vars)
 def test_vllm_sampling_n_logprobs():
     """
     parameter n and logprobs test case
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = ["介绍一下北京。"]
@@ -75,5 +78,3 @@ def test_vllm_sampling_n_logprobs():
                 for sample_logprob in seq.logprobs
             ])
         assert len(output.outputs) == 2
-    # unset env
-    env_manager.unset_all()

@@ -16,13 +16,19 @@
 
 # isort:skip_file
 """test vllm llama3."""
+import pytest
+from unittest.mock import patch
+
 import os
 
-from tests.st.python import utils
+from tests.st.python.utils.cases_parallel import cleanup_subprocesses
+from tests.st.python.utils.env_var_manager import EnvVarManager
+
 import vllm_mindspore
 from vllm import LLM, SamplingParams
 
-env_manager = utils.EnvVarManager()
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "ASCEND_CUSTOM_PATH": os.path.expandvars("$ASCEND_HOME_PATH/../"),
@@ -36,10 +42,9 @@ env_vars = {
     "ATB_LLM_LCOC_ENABLE": "0",
     "VLLM_USE_V1": "1",
 }
-# set env
-env_manager.setup_ai_environment(env_vars)
 
 
+@patch.dict(os.environ, env_vars)
 def test_vllm_llama3_8b():
     """
     test case llama3.1 8B
@@ -73,6 +78,3 @@ def test_vllm_llama3_8b():
         generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
         assert generated_text == except_list[i]
-
-    # unset env
-    env_manager.unset_all()
