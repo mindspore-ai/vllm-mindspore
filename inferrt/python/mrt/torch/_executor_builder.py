@@ -19,368 +19,80 @@ executable GraphExecutor instances. Operators in MRT dialect have one-to-one
 correspondence with GraphExecutor supported operators.
 """
 
-import ast
 from typing import Any, Dict, List, Optional
 
-import torch
-from torch._subclasses.fake_tensor import FakeTensorMode
-
-from mrt.ir import GraphExecutor, Node, Op
-from mrt.torch.utils import from_torch, to_torch, update_tensor_data
+from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple
+from mrt._mrt_ir import DataType
 
 
 # ===== MLIR Type Conversion Utilities =====
 
-def _elemtype_to_torch_dtype(elem_ty) -> torch.dtype:
-    """Convert MLIR element type to torch.dtype.
-
-    Args:
-        elem_ty: MLIR element type object or string.
-
-    Returns:
-        Corresponding torch.dtype.
-
-    Raises:
-        NotImplementedError: If element type is not supported.
-    """
-    s = str(elem_ty)
+def _mlir_elemtype_to_datatype(elem_ty) -> DataType:
+    """Convert MLIR element type to DataType enum."""
     dtype_map = {
-        "f32": torch.float32,
-        "tensor<f32>": torch.float32,
-        "f16": torch.float16,
-        "bf16": torch.bfloat16,
-        "i64": torch.int64,
-        "si64": torch.int64,
-        "i32": torch.int32,
-        "si32": torch.int32,
-        "i16": torch.int16,
-        "si16": torch.int16,
-        "i8": torch.int8,
-        "si8": torch.int8,
-        "ui8": torch.uint8,
-        "uint8": torch.uint8,
+        "f32": DataType.Float32,
+        "f16": DataType.Float16,
+        "bf16": DataType.BFloat16,
+        "i64": DataType.Int64,
+        "si64": DataType.Int64,
+        "i32": DataType.Int32,
+        "si32": DataType.Int32,
+        "i16": DataType.Int16,
+        "si16": DataType.Int16,
+        "i8": DataType.Int8,
+        "si8": DataType.Int8,
+        "ui8": DataType.UInt8,
+        "uint8": DataType.UInt8,
     }
+    dtype_str = str(elem_ty)
+    if dtype_str in dtype_map:
+        return dtype_map[dtype_str]
 
-    if s in dtype_map:
-        return dtype_map[s]
+    raise NotImplementedError(f"Unsupported dtype: {dtype_str!r}")
 
-    raise NotImplementedError(f"Unsupported element type: {elem_ty!r}")
-
-
-def _ranked_tensor_type_to_shape_dtype(tensor_ty):
-    """Extract shape and dtype from MLIR RankedTensorType.
-
-    Args:
-        tensor_ty: MLIR RankedTensorType object.
-
-    Returns:
-        (shape: List[int], dtype: torch.dtype) tuple.
-    """
-    try:
-        shape = list(tensor_ty.shape)  # type: ignore[attr-defined]
-        elem_ty = tensor_ty.element_type  # type: ignore[attr-defined]
-    except AttributeError as e:
-        # Fallback: parse from string (e.g. 'tensor<?xf32>' or 'tensor<2x3xf32>')
-        ts = str(tensor_ty)
-        if not (ts.startswith("tensor<") and ts.endswith(">")):
-            raise ValueError(f"Unrecognized tensor type text format: {ts}") from e
-
-        core = ts[len("tensor<"): -1]
-        dims, et = core.rsplit("x", 1)
-        elem_ty = et
-        shape = []
-        for d in dims.split("x"):
-            if d == "?":
-                shape.append(-1)
-            else:
-                shape.append(int(d))
-
-    # Convert potential MLIR symbolic dimensions to -1
-    shape = [int(d) if isinstance(d, int) else -1 for d in shape]
-    dtype = _elemtype_to_torch_dtype(elem_ty)
-    return shape, dtype
-
-
-def _ranked_tensor_type_to_dummy(tensor_ty, is_fake: bool) -> torch.Tensor:
-    """Create FakeTensor or empty Tensor with the same shape/dtype.
-
-    Args:
-        tensor_ty: MLIR RankedTensorType object.
-        is_fake: Whether to create FakeTensor.
-
-    Returns:
-        torch.Tensor instance.
-    """
-    shape, dtype = _ranked_tensor_type_to_shape_dtype(tensor_ty)
-    if is_fake:
-        fake_mode = FakeTensorMode()
-        return fake_mode.from_tensor(torch.empty(shape, dtype=dtype))
-    return torch.empty(shape, dtype=dtype)
+def _create_tensor_value_from_mlir(mlir_tensor) -> Value:
+    """Create Tensor Value from MLIR RankedTensorType."""
+    shape = [int(d) if isinstance(d, int) else -1 for d in mlir_tensor.shape]
+    dtype_enum = _mlir_elemtype_to_datatype(mlir_tensor.element_type)
+    tensor = Tensor(shape, dtype_enum)
+    return Value(tensor)
 
 
 # ===== Constant Operation Handling =====
 
 def _is_constant_op(op_name: str) -> bool:
-    """Check if an operation is a constant operation.
+    """Check if an operation is a constant operation."""
+    return op_name in ("arith.constant", "std.constant") or op_name.startswith("mrt.constant.")
 
-    Common constant operations include:
-    - arith.constant (standard MLIR arithmetic dialect constant)
-    - mrt.constant.* (MRT constant creation operations that create constant values)
-
-    Args:
-        op_name: Operation name (e.g. "arith.constant").
-
-    Returns:
-        True if constant operation, False otherwise.
-    """
-    constant_ops = {
-        "arith.constant",
-        "std.constant",
-    }
-    # Check if it's a mrt.constant.* operation (constant creation operations)
-    if op_name.startswith("mrt.constant."):
-        return True
-    return op_name in constant_ops
-
-
-def _get_raw_value_from_attr(value_attr):
-    """Extract raw value from value_attr.
-
-    Args:
-        value_attr: MLIR attribute object.
-
-    Returns:
-        Raw value (Python object).
-
-    Raises:
-        ValueError: If unable to extract value.
-    """
+def _get_value_from_attr(value_attr):
+    """Extract raw value from value_attr."""
     if hasattr(value_attr, "value"):
-        return value_attr.value
+        return Value(value_attr.value)
+    return Value(Tuple([_get_value_from_attr(item) for item in value_attr]))
 
-    if hasattr(value_attr, "to_array"):
-        array = value_attr.to_array()
-        return torch.from_numpy(array)
-
-    # Try to parse from string representation
-    value_str = str(value_attr)
-    try:
-        raw_value = ast.literal_eval(value_str)
-        return raw_value
-    except (ValueError, SyntaxError):
-        # If parsing fails, try to extract from string format
-        if "[" in value_str and "]" in value_str:
-            start = value_str.index("[")
-            end = value_str.rindex("]") + 1
-            raw_value = ast.literal_eval(value_str[start:end])
-            return raw_value
-        return value_str
-
-
-def _create_tensor_from_mrt_constant_type(op_name: str, raw_value):
-    """Create torch.Tensor from mrt.constant type.
-
-    Args:
-        op_name: Operation name (e.g. "mrt.constant.i64").
-        raw_value: Raw value.
-
-    Returns:
-        torch.Tensor or raw value (for string type).
-    """
-    # Scalar types
-    if op_name == "mrt.constant.i64":
-        return torch.tensor(raw_value, dtype=torch.int64)
-    if op_name == "mrt.constant.f32":
-        return torch.tensor(raw_value, dtype=torch.float32)
-    if op_name == "mrt.constant.f64":
-        return torch.tensor(raw_value, dtype=torch.float64)
-    if op_name == "mrt.constant.boolean":
-        return torch.tensor(raw_value, dtype=torch.bool)
-    if op_name == "mrt.constant.string":
-        return raw_value  # String values returned as-is
-
-    # Array types
-    if op_name == "mrt.constant.i64_array":
-        if isinstance(raw_value, (list, tuple)):
-            return torch.tensor(raw_value, dtype=torch.int64)
-        return torch.tensor([raw_value], dtype=torch.int64)
-    if op_name == "mrt.constant.f32_array":
-        if isinstance(raw_value, (list, tuple)):
-            return torch.tensor(raw_value, dtype=torch.float32)
-        return torch.tensor([raw_value], dtype=torch.float32)
-    if op_name == "mrt.constant.f64_array":
-        if isinstance(raw_value, (list, tuple)):
-            return torch.tensor(raw_value, dtype=torch.float64)
-        return torch.tensor([raw_value], dtype=torch.float64)
-    if op_name == "mrt.constant.boolean_array":
-        if isinstance(raw_value, (list, tuple)):
-            return torch.tensor(raw_value, dtype=torch.bool)
-        return torch.tensor([raw_value], dtype=torch.bool)
-
-    # Fallback: try to convert to tensor
-    return torch.tensor(raw_value)
-
-
-def _extract_mrt_constant_value(op, op_name: str):
-    """Extract constant value from mrt.constant.* operation.
-
-    Args:
-        op: MLIR Operation object (mrt.constant.* operation).
-        op_name: Operation name.
-
-    Returns:
-        Constant value (Python object or torch.Tensor).
-
-    Raises:
-        ValueError: If unable to extract constant value.
-    """
+def _extract_mrt_constant_value(op):
+    """Extract constant value from mrt.constant.* operation."""
     if not hasattr(op, "attributes") or "value" not in op.attributes:
         raise ValueError(f"mrt.constant operation missing 'value' attribute: {op}")
 
     value_attr = op.attributes["value"]
-    raw_value = _get_raw_value_from_attr(value_attr)
-    return _create_tensor_from_mrt_constant_type(op_name, raw_value)
-
-
-def _parse_dense_string(value_str: str, attr_type):
-    """Parse dense<...> format string.
-
-    Args:
-        value_str: String containing dense<...> format.
-        attr_type: MLIR attribute type object.
-
-    Returns:
-        torch.Tensor.
-    """
-    start = value_str.index("dense<") + 6
-    end = value_str.index(">", start)
-    content = value_str[start:end].strip()
-
-    type_str = str(attr_type)
-    elem_type = (attr_type.element_type if hasattr(attr_type, 'element_type')
-                 else type_str)
-    dtype = _elemtype_to_torch_dtype(elem_type)
-
-    if content.startswith("[") and content.endswith("]"):
-        values = ast.literal_eval(content)
-        if not isinstance(values, (list, tuple)):
-            values = [values]
-        return torch.tensor(values, dtype=dtype)
-
-    value = ast.literal_eval(content)
-    return torch.tensor(value, dtype=dtype)
-
-
-def _extract_standard_constant_value(op):
-    """Extract constant value from standard constant operation (arith.constant).
-
-    Args:
-        op: MLIR Operation object (standard constant operation).
-
-    Returns:
-        Constant value (Python object or torch.Tensor).
-
-    Raises:
-        ValueError: If unable to extract constant value.
-    """
-    if not hasattr(op, "attributes") or "value" not in op.attributes:
-        raise ValueError(f"Constant operation missing 'value' attribute: {op}")
-
-    value_attr = op.attributes["value"]
-
-    if hasattr(value_attr, "value"):
-        return value_attr.value
-
-    if hasattr(value_attr, "type"):
-        attr_type = value_attr.type
-
-        if hasattr(value_attr, "to_array"):
-            array = value_attr.to_array()
-            return torch.from_numpy(array)
-
-        value_str = str(value_attr)
-
-        if "dense<" in value_str:
-            return _parse_dense_string(value_str, attr_type)
-
-        if "unit" in value_str:
-            return None
-
-        try:
-            parsed_value = ast.literal_eval(value_str)
-            return torch.tensor(parsed_value)
-        except (ValueError, SyntaxError):
-            pass
-
-    raise ValueError(
-        f"Unable to extract value from constant operation. "
-        f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}"
-    )
-
+    try:
+        return _get_value_from_attr(value_attr)
+    except Exception as e:
+        raise ValueError(f"Unable to extract value from constant operation. "
+                         f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}") from e
 
 def _extract_constant_value(op):
-    """Extract constant value from constant operation.
-
-    This function parses MLIR constant operation attributes, extracts constant
-    value and converts it to Python/Torch object.
-
-    Args:
-        op: MLIR Operation object (constant operation).
-
-    Returns:
-        Constant value (Python object or torch.Tensor).
-
-    Raises:
-        ValueError: If unable to extract constant value.
-
-    Example:
-        For `%cst = arith.constant dense<[3, 2]> : tensor<2xi64>`
-        Returns torch.tensor([3, 2], dtype=torch.int64)
-    """
-    # Get operation name (consistent with how it's retrieved in build_executor_from_mlir_module)
+    """Extract constant value from constant operation."""
     op_name = getattr(op, "name", "") or getattr(op, "OPERATION_NAME", "")
-
-    try:
-        # Handle mrt.constant.* operations
-        if op_name.startswith("mrt.constant."):
-            return _extract_mrt_constant_value(op, op_name)
-
-        # Handle standard constant operations (arith.constant, std.constant)
-        return _extract_standard_constant_value(op)
-
-    except Exception as e:
-        value_attr = None
-        if hasattr(op, "attributes") and "value" in op.attributes:
-            value_attr = op.attributes["value"]
-        raise ValueError(
-            f"Error extracting constant value: {e}\n"
-            f"Operation: {op}\n"
-            f"Value attribute: {value_attr}"
-        ) from e
-
+    if op_name.startswith("mrt.constant."):
+        return _extract_mrt_constant_value(op)
+    raise NotImplementedError(f"Constant operation {op_name} is not supported: {op}")
 
 # ===== MRT Dialect Operator Mapping =====
 
-def _map_mrt_op_name_to_runtime_op(name: str) -> Op:
-    """Map MRT dialect operator name to GraphExecutor Op.
-
-    Operators in MRT dialect have one-to-one correspondence with GraphExecutor
-    supported Ops. This function parses operator name (removes dialect prefix)
-    and looks up corresponding Op enum directly.
-
-    Args:
-        name: MLIR operator name (dialect.op format, e.g. "mrt.add").
-
-    Returns:
-        Corresponding Op enum value.
-
-    Raises:
-        NotImplementedError: If operator is not supported.
-
-    Example:
-        >>> _map_mrt_op_name_to_runtime_op("mrt.add")  # returns Op.add
-        >>> _map_mrt_op_name_to_runtime_op("mrt.matmul")  # returns Op.matmul
-    """
+def _map_op_name_to_runtime_op(name: str) -> Op:
+    """Map MRT dialect operator name to GraphExecutor Op."""
     # Extract operator name from full name (remove dialect prefix)
     # e.g.: "mrt.add" -> "add"
     if "." in name:
@@ -407,49 +119,30 @@ def _top_module_op(module) -> Any:
 
 
 def _get_func_io(func_op):
-    """Return function input parameters (block arguments) and return value operands.
-
-    Args:
-        func_op: func.func Operation.
-
-    Returns:
-        (inputs: List[Any], outputs: List[Any]) tuple.
-    """
+    """Return function input parameters and return value operands."""
     if not func_op.regions:
         raise ValueError("func.func has no regions")
 
     entry_block = func_op.regions[0].blocks[0]
     inputs = list(entry_block.arguments)
 
-    # Find func.return
-    ret_op = None
-    for op in entry_block.operations:
-        if getattr(op, "name", "") == "func.return":
-            ret_op = op
-            break
-
-    if ret_op is None:
-        # Traverse all blocks
+    def _find_return_op(func_op):
         for region in func_op.regions:
             for blk in region.blocks:
                 for op in blk.operations:
                     if getattr(op, "name", "") == "func.return":
-                        ret_op = op
-                        break
-                if ret_op:
-                    break
-            if ret_op:
-                break
+                        return op
+        return None
 
+    ret_op = _find_return_op(func_op)
     if ret_op is None:
         raise ValueError("func.return not found in function body")
-
     outputs = list(ret_op.operands)
     return inputs, outputs
 
 
 def _iter_ops_in_func(func_op):
-    """Traverse all operations in func.func in block order."""
+    """Traverse all operations in func.func."""
     for region in func_op.regions:
         for blk in region.blocks:
             yield from blk.operations
@@ -468,16 +161,16 @@ def _func_candidates(mlir_module) -> List[Any]:
 
 
 def _func_name_from_attr(func_op) -> Optional[str]:
-    """Extract function symbol name from attributes (if exists)."""
+    """Extract function symbol name from attributes."""
     if hasattr(func_op, "attributes") and "sym_name" in func_op.attributes:
         val = str(func_op.attributes["sym_name"])
         # Usually printed in '"main"' format
         return val.strip('"')
     return None
 
-
-def _pick_default_func(candidates: List[Any]) -> Optional[Any]:
-    """Select default function, preferring 'main' or 'forward'."""
+def _get_func_op(mlir_module):
+    """Find func.func operation by name or select default."""
+    candidates = _func_candidates(mlir_module)
     if not candidates:
         return None
     if len(candidates) == 1:
@@ -488,38 +181,24 @@ def _pick_default_func(candidates: List[Any]) -> Optional[Any]:
             return f
     return candidates[0]
 
-
-def _get_func_op(mlir_module, func_name: Optional[str] = None):
-    """Find func.func operation by optional name, otherwise select default function."""
-    candidates = _func_candidates(mlir_module)
-    if func_name is None:
-        return _pick_default_func(candidates)
-
-    for f in candidates:
-        name = _func_name_from_attr(f)
-        if name == func_name:
-            return f
-        # Some bindings preserve quotes in str(); tolerate exact quoted form
-        if name is None and hasattr(f, "attributes") and "sym_name" in f.attributes:
-            if str(f.attributes["sym_name"]) == f'"{func_name}"':
-                return f
-    return None
-
-
 # ===== Main Builder Function =====
 
-def build_executor_from_mlir_module(
-    mlir_module,
-    func_name: Optional[str] = None
-):
+_GLOBAL_GRAPH_ID = 0
+
+def _next_unique_graph_id():
+    global _GLOBAL_GRAPH_ID
+    _GLOBAL_GRAPH_ID += 1
+    return _GLOBAL_GRAPH_ID
+
+def gen_executor_from_mlir_module(mlir_module):
     """Build callable GraphExecutor from MLIR module (MRT dialect).
 
     This function assumes MLIR module is already converted to MRT dialect, where
     operators have one-to-one correspondence with GraphExecutor's Op.
 
     Workflow:
-    1. Find target func.func (defaults to 'main' or 'forward')
-    2. Create GraphExecutor instance
+    1. Find target func.func
+    2. Create GraphExecutor instance with unique name
     3. Create value nodes for function parameters and add as parameters
     4. Traverse all operations in function:
        - Map MRT dialect operators to Op
@@ -529,31 +208,21 @@ def build_executor_from_mlir_module(
 
     Args:
         mlir_module: MLIR Module object containing MRT dialect.
-        func_name: Optional function name to select specific function.
-                  If None, selects 'main', 'forward', or first function.
 
     Returns:
-        A callable object accepting torch.Tensor inputs and returning torch objects.
+        A tuple of (GraphExecutor, placeholder_nodes) for building executable graph.
 
     Raises:
-        ValueError: If specified function not found.
-        NotImplementedError: If unsupported operator encountered.
-
-    Example:
-        >>> mlir_module = parse_mlir_module_from_text(mrt_dialect_text)
-        >>> executor_fn = build_executor_from_mlir_module(mlir_module)
-        >>> result = executor_fn(input_tensor1, input_tensor2)
+        ValueError: If func.func not found in MLIR module.
+        NotImplementedError: If unsupported operation encountered or operation has multiple results.
     """
     # Find target function
-    func_op = _get_func_op(mlir_module, func_name)
+    func_op = _get_func_op(mlir_module)
     if func_op is None:
-        raise ValueError(
-            f"func.func @{func_name if func_name else 'default'} not found"
-        )
+        raise ValueError("func.func not found in MLIR module")
 
     # Create GraphExecutor
-    graph_name = func_name if func_name else "mrt_graph_exec"
-    executor = GraphExecutor(graph_name)
+    executor = GraphExecutor(f"mrt_graph_{_next_unique_graph_id()}")
 
     # Environment: MLIR Value -> GraphExecutor Node mapping
     env: Dict[Any, Node] = {}
@@ -564,9 +233,8 @@ def build_executor_from_mlir_module(
     # Create value node for each function parameter
     input_nodes: List[Node] = []
     for arg in func_inputs:
-        arg_ty = getattr(arg, "type")
-        dummy = _ranked_tensor_type_to_dummy(arg_ty, is_fake=False)
-        val_node = executor.add_value_node(from_torch(dummy))
+        tensor_value = _create_tensor_value_from_mlir(arg.type)
+        val_node = executor.add_value_node(tensor_value)
         env[arg] = val_node
         input_nodes.append(val_node)
 
@@ -575,8 +243,7 @@ def build_executor_from_mlir_module(
             executor.add_parameter(val_node)
 
         for op in _iter_ops_in_func(func_op):
-            op_name = getattr(op, "name", "")
-
+            op_name = op.name
             if op_name == "func.return":
                 continue
 
@@ -588,11 +255,11 @@ def build_executor_from_mlir_module(
                         f"Constant operation {op_name} has {len(results)} results; "
                         f"currently only single-result supported"
                     )
-                val_node = executor.add_value_node(from_torch(constant_value))
+                val_node = executor.add_value_node(constant_value)
                 env[results[0]] = val_node
                 continue
 
-            runtime_op = _map_mrt_op_name_to_runtime_op(op_name)
+            runtime_op = _map_op_name_to_runtime_op(op_name)
 
             input_nodes_for_op: List[Node] = []
             for operand in op.operands:
@@ -607,59 +274,17 @@ def build_executor_from_mlir_module(
                     f"currently only single-result operators supported"
                 )
 
-            out_ty = results[0].type
-            out_dummy = _ranked_tensor_type_to_dummy(out_ty, is_fake=True)
-
-            node = executor.add_op_node(runtime_op, input_nodes_for_op, from_torch(out_dummy))
+            out_tensor_value = _create_tensor_value_from_mlir(results[0].type)
+            node = executor.add_op_node(runtime_op, input_nodes_for_op, out_tensor_value)
             env[results[0]] = node
 
-        if len(func_outputs) == 0:
-            executor.set_return()
-        elif len(func_outputs) == 1:
+        if len(func_outputs) > 0:
             return_nodes = [env[v] for v in func_outputs]
             executor.make_tuple(return_nodes)
-            executor.set_return()
-        else:
-            return_nodes = [env[v] for v in func_outputs]
-            executor.make_tuple(return_nodes)
-            executor.set_return()
-
-    executor.dump_graph()
-    executor.build()
+        executor.set_return()
 
     placeholder_nodes = [env[arg] for arg in func_inputs]
-
-    def compiled_callable(*new_inputs: torch.Tensor):
-        """Run compiled executor.
-
-        Args:
-            *new_inputs: New input tensors, count and types should match function parameters.
-
-        Returns:
-            Execution result (torch object).
-            - If original function has single return value: returns single tensor
-            - If original function has multiple return values: returns tuple
-            - If original function has no return value: returns None or empty tuple
-
-        Raises:
-            ValueError: If input count mismatch.
-        """
-        if len(new_inputs) != len(placeholder_nodes):
-            raise ValueError(
-                f"Expected {len(placeholder_nodes)} inputs, "
-                f"but received {len(new_inputs)}"
-            )
-
-        for i, p_node in enumerate(placeholder_nodes):
-            if p_node.output.is_tensor():
-                update_tensor_data(p_node.output.to_tensor(), new_inputs[i])
-            else:
-                p_node.output = from_torch(new_inputs[i])
-
-        result = executor.run()
-        return to_torch(result)
-
-    return compiled_callable
+    return executor, placeholder_nodes
 
 
 # ===== Additional Helper Functions =====

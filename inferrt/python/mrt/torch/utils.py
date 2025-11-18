@@ -130,5 +130,5 @@ def to_torch(value: Value) -> Any:
 def update_tensor_data(tensor: Tensor, torch_tensor: torch.Tensor):
     _mrt_torch.update_tensor_data(tensor, torch_tensor)
 
-def _set_device_context():
+def set_device_context():
     _mrt_torch.set_device_context()
