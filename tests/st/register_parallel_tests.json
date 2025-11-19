@@ -73,6 +73,10 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/quantization/test_vllm_deepseek_w8a8faquant.py::test_deepseek_r1",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/distributed/test_shm_broadcast.py::test_shm_broadcast",
       "card_num": 4
     },

@@ -18,17 +18,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from vllm.v1.core.single_type_kv_cache_manager import (
-    FullAttentionManager, MLAAttentionSpec, SingleTypeKVCacheManager,
-    SlidingWindowManager)
-from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheSpec,
-                                        SlidingWindowSpec)
+from vllm.v1.core.single_type_kv_cache_manager import (FullAttentionManager,
+                                                       spec_manager_map)
 
 from vllm_mindspore.v1.kv_cache_interface import MLAQuantFullAttentionSpec
 
-spec_manager_map: dict[type[KVCacheSpec], type[SingleTypeKVCacheManager]] = {
-    FullAttentionSpec: FullAttentionManager,
-    MLAQuantFullAttentionSpec: FullAttentionManager,
-    SlidingWindowSpec: SlidingWindowManager,
-    MLAAttentionSpec: FullAttentionManager,
+_spec_manager_map = {
+    **spec_manager_map, MLAQuantFullAttentionSpec: FullAttentionManager
 }

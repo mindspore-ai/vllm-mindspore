@@ -44,7 +44,8 @@ from vllm.v1.attention.backends.utils import (CommonAttentionMetadata,
                                               split_attn_metadata)
 from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
                                         KVCacheSpec, MLAAttentionSpec,
-                                        SlidingWindowSpec)
+                                        SlidingWindowSpec,
+                                        UniformTypeKVCacheSpecs)
 from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.spec_decode.eagle import EagleProposer
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
@@ -534,11 +535,11 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
     """
     kv_caches: dict[str, tuple] = {}
 
-    layer_to_group_info = {
-        layer_name: (i, group.kv_cache_spec)
-        for i, group in enumerate(kv_cache_config.kv_cache_groups)
-        for layer_name in group.layer_names
-    }
+    assert len(kv_cache_config.kv_cache_groups) == 1
+    assert isinstance(kv_cache_config.kv_cache_groups[0].kv_cache_spec,
+                      UniformTypeKVCacheSpecs)
+    per_layer_specs = kv_cache_config.kv_cache_groups[
+        0].kv_cache_spec.kv_cache_specs
     # fa3 quant layer target_dtype is int8
     # no fa3 quant layer target_dtype is bfloat16
     fa3_quant = getattr(self.vllm_config.quant_config, "fa3_quant", False)
@@ -548,17 +549,14 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
                            'kv_lora_rank', 0)
     qk_rope_head_dim = getattr(self.vllm_config.model_config.hf_text_config,
                                'qk_rope_head_dim', 0)
-
     for kv_cache_tensor in kv_cache_config.kv_cache_tensors:
         if not kv_cache_tensor.shared_by:
             continue
         rep_layer_name = kv_cache_tensor.shared_by[0]
-        _, kv_cache_spec = layer_to_group_info[rep_layer_name]
-
+        kv_cache_spec = per_layer_specs[rep_layer_name]
         is_fa3_quant_layer = fa3_quant and int(rep_layer_name) \
             in fa3_quant_layer
-        num_blocks = kv_cache_tensor.size // kv_cache_spec.get_page_size(
-            is_fa3_quant_layer)
+        num_blocks = kv_cache_tensor.size // kv_cache_spec.page_size_bytes
         block_size = kv_cache_spec.block_size
 
         kv_cache_layer = []
@@ -588,7 +586,7 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
 
         ms.runtime.empty_cache()
 
-    all_layers = set(layer_to_group_info.keys())
+    all_layers = set(per_layer_specs.keys())
     if all_layers != set(kv_caches.keys()):
         raise RuntimeError("Some layers were not initialized")
 
