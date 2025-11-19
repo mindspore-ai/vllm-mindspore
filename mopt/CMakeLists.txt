@@ -52,20 +52,41 @@ list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 
 # ===========================================================================
-# StableHLO Integration (build alongside mopt)
+# Torch-MLIR Integration (build alongside mopt)
 # ===========================================================================
+# Note: StableHLO will be compiled by Torch-MLIR, not separately by mopt.
+# This avoids duplicate compilation and ensures consistent stablehlo versions.
+include(MLIRDetectPythonEnv)
+mlir_configure_python_dev_packages()
+
+set(TORCHMLIR_SOURCE_DIR "${TORCHMLIR_SOURCE_DIR}" CACHE PATH "Path to Torch-MLIR sources")
 set(STABLEHLO_SOURCE_DIR "${STABLEHLO_SOURCE_DIR}" CACHE PATH "Path to StableHLO sources")
 
+message(STATUS "Using Torch-MLIR source: ${TORCHMLIR_SOURCE_DIR}")
 message(STATUS "Using StableHLO source: ${STABLEHLO_SOURCE_DIR}")
 
-set(STABLEHLO_BUILD_EMBEDDED ON CACHE BOOL "Build StableHLO as embedded" FORCE)
-set(STABLEHLO_ENABLE_BINDINGS_PYTHON ON CACHE BOOL "Enable Python bindings" FORCE)
-set(STABLEHLO_ENABLE_STRICT_BUILD OFF CACHE BOOL "Disable strict build" FORCE)
+# Enable position-independent code for embedded torch-mlir build
+# This is required when static libraries are linked into shared libraries
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-add_subdirectory(${STABLEHLO_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/stablehlo EXCLUDE_FROM_ALL)
+# Configure Torch-MLIR to compile StableHLO
+# StableHLO will be compiled by Torch-MLIR and available through its Python extensions
+set(TORCH_MLIR_BUILD_EMBEDDED ON CACHE BOOL "Build Torch-MLIR as embedded" FORCE)
+set(TORCH_MLIR_ENABLE_BINDINGS_PYTHON ON CACHE BOOL "Enable Python bindings" FORCE)
+set(TORCH_MLIR_ENABLE_STABLEHLO ON CACHE BOOL "Enable StableHLO support (compiled by Torch-MLIR)" FORCE)
+set(STABLEHLO_EXTERNAL_DIR "${STABLEHLO_SOURCE_DIR}" CACHE PATH "Path to external StableHLO sources")
+set(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS OFF CACHE BOOL "Disable PyTorch extensions" FORCE)
+set(TORCH_MLIR_ENABLE_REFBACKEND OFF CACHE BOOL "Disable RefBackend" FORCE)
+set(TORCH_MLIR_ENABLE_LTC OFF CACHE BOOL "Disable LTC" FORCE)
+set(TORCH_MLIR_ENABLE_JIT_IR_IMPORTER OFF CACHE BOOL "Disable JIT IR Importer" FORCE)
 
+add_subdirectory(${TORCHMLIR_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/torch-mlir EXCLUDE_FROM_ALL)
+
+include_directories("${TORCHMLIR_SOURCE_DIR}/include")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/torch-mlir/include")
+# StableHLO headers (compiled by Torch-MLIR)
 include_directories("${STABLEHLO_SOURCE_DIR}")
-include_directories("${CMAKE_CURRENT_BINARY_DIR}/stablehlo")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/torch-mlir/stablehlo")
 
 set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
 set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)

@@ -35,6 +35,7 @@ class CMakeBuild(build_ext):
         cmake_args.append(f"-DLLVM_DIR={os.environ['LLVM_DIR']}")
         cmake_args.append(f"-DMLIR_DIR={os.environ['MLIR_DIR']}")
         cmake_args.append(f"-DSTABLEHLO_SOURCE_DIR={os.environ['STABLEHLO_SOURCE_DIR']}")
+        cmake_args.append(f"-DTORCHMLIR_SOURCE_DIR={os.environ['TORCHMLIR_SOURCE_DIR']}")
 
         subprocess.check_call(
             [
@@ -59,7 +60,7 @@ class CMakeBuild(build_ext):
         # Package torch_mlir as a top-level package
         # (parallel to mopt in site-packages)
         # torch_mlir is generated during compilation, package from build path
-        torch_mlir_build_dir = os.environ.get("TORCH_MLIR_BUILD_DIR")
+        torch_mlir_build_dir = os.environ.get("TORCHMLIR_BUILD_DIR")
         if torch_mlir_build_dir:
             torch_mlir_path = (Path(torch_mlir_build_dir) / "python_packages" /
                               "torch_mlir" / "torch_mlir")

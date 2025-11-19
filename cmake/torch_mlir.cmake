@@ -30,6 +30,7 @@ mrt_add_pkg(torch_mlir
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/001-build-isolate-symbols.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/002-build-external-stablehlo.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/003-build-remove-tests.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/004-build-embedded.patch
 )
 
 message(STATUS "Torch-MLIR source downloaded: ${torch_mlir_DIRPATH}")

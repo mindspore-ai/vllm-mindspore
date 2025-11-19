@@ -2,7 +2,7 @@
 ##################################################
 # LLVM Build Script
 # Required env vars: BUILD_JOBS, INC_BUILD
-# Exports : LLVM_SOURCE_DIR, LLVM_BUILD_DIR, LLVM_DIR, MLIR_DIR, TORCH_MLIR_BUILD_DIR, STABLEHLO_SOURCE_DIR.
+# Exports : LLVM_SOURCE_DIR, LLVM_BUILD_DIR, LLVM_DIR, MLIR_DIR, TORCHMLIR_SOURCE_DIR, TORCHMLIR_BUILD_DIR, STABLEHLO_SOURCE_DIR.
 ##################################################
 
 _LLVM_ENV="${BUILD_DIR}/llvm_env.sh"

@@ -18,6 +18,14 @@ add_llvm_executable(mopt-opt
   MoptConversionPassIncGen
 )
 
+# Add Torch-MLIR libraries (compiled by Torch-MLIR)
+list(APPEND LIBS
+  TorchMLIRInitAll
+  TorchMLIRTorchDialect
+  TorchMLIRTorchConversionDialect
+  TorchMLIRTMTensorDialect
+)
+
 llvm_update_compile_flags(mopt-opt)
 target_link_libraries(mopt-opt PRIVATE ${LIBS})
 

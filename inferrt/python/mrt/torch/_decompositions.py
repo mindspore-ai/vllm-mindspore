@@ -18,6 +18,9 @@ providing:
 
 from typing import Sequence, Union
 import torch
+from torch._decomp import get_decompositions
+from torch.fx.experimental.proxy_tensor import make_fx
+from torch.func import functionalize
 
 # pylint: disable=protected-access
 
@@ -73,6 +76,16 @@ def _get_default_decomposition_ops() -> DecompositionOpsList:
         aten.upsample_bilinear2d.vec,
     ]
 
+def apply_decompositions(gm: torch.fx.GraphModule, example_inputs):
+    """Apply operator decompositions to a GraphModule if requested.
 
-# Some older APIs still use an op list instead of a table.
-DEFAULT_DECOMPOSITIONS: DecompositionOpsList = _get_default_decomposition_ops()
+    Note:
+        The torch._ops types are part of PyTorch's operator registry surface.
+        We suppress Pylint's protected-access warning for the type annotation.
+    """
+    decompositions = get_decompositions(_get_default_decomposition_ops())
+    gm = make_fx(
+        functionalize(gm),
+        decomposition_table=decompositions,
+    )(*example_inputs)
+    return gm

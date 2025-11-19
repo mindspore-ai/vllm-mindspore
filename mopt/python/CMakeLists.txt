@@ -48,23 +48,15 @@ set(_mopt_capi_libs
   MLIRCAPIRegisterEverything
 )
 
-# StableHLO library configuration - use independently compiled targets
-# StableHLO compiled via add_subdirectory, targets automatically available
-if(TARGET StablehloOps)
-  message(STATUS "StableHLO targets available (independently built)")
-  set(MOPT_HAS_STABLEHLO_REGISTER TRUE)
-
-  # Add only core StableHLO libraries
-  list(APPEND _mopt_private_libs
-    StablehloOps
-    ChloOps
-    VhloOps
-    StablehloBase
-  )
-else()
-  message(STATUS "StableHLO targets not found")
-  set(MOPT_HAS_STABLEHLO_REGISTER FALSE)
-endif()
+# StableHLO library configuration
+# StableHLO is compiled by Torch-MLIR (TORCH_MLIR_ENABLE_STABLEHLO=ON)
+# Add core StableHLO libraries from Torch-MLIR build
+list(APPEND _mopt_private_libs
+  StablehloOps
+  ChloOps
+  VhloOps
+  StablehloBase
+)
 
 # StableHLO registered via Python extension, no need to define MOPT_ENABLE_STABLEHLO in C++
 
@@ -87,31 +79,22 @@ set(_source_components
     MoptPythonExtension
 )
 
-# Add StableHLO Python extensions (if compiled from source)
+# Add StableHLO Python extensions (compiled by Torch-MLIR)
 # This includes StableHLO CAPI in MoptAggregateCAPI
-if(TARGET StablehloPythonExtensions.Main)
-  message(STATUS "Found StablehloPythonExtensions, adding to mopt package")
-  list(APPEND _source_components
-    StablehloPythonSources
-    StablehloPythonExtensions
-  )
-endif()
+list(APPEND _source_components
+  StablehloPythonSources
+  StablehloPythonExtensions
+  ChloPythonSources
+  ChloPythonExtensions
+  VhloPythonSources
+  VhloPythonExtensions
+)
 
-if(TARGET ChloPythonExtensions.Main)
-  message(STATUS "Found ChloPythonExtensions, adding to mopt package")
-  list(APPEND _source_components
-    ChloPythonSources
-    ChloPythonExtensions
-  )
-endif()
-
-if(TARGET VhloPythonExtensions.Main)
-  message(STATUS "Found VhloPythonExtensions, adding to mopt package")
-  list(APPEND _source_components
-    VhloPythonSources
-    VhloPythonExtensions
-  )
-endif()
+# Add Torch-MLIR Python extensions
+list(APPEND _source_components
+  TorchMLIRPythonSources
+  TorchMLIRPythonExtensions
+)
 
 # Aggregate CAPI library
 add_mlir_python_common_capi_library(MoptAggregateCAPI
@@ -124,7 +107,7 @@ add_mlir_python_common_capi_library(MoptAggregateCAPI
     MoptCAPI
 )
 
-# Critical fix: hide all static library symbols to avoid conflicts with other MLIR Python bindings (e.g. torch_mlir)
+# Hide all static library symbols to avoid conflicts with other MLIR Python bindings
 target_link_options(MoptAggregateCAPI PRIVATE
   $<$<PLATFORM_ID:Linux>:LINKER:--exclude-libs,ALL>
 )
