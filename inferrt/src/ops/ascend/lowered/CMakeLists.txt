@@ -17,6 +17,5 @@ target_link_libraries(ops_ascend_lowered PRIVATE
 #Install library
 install(TARGETS ops_ascend_lowered LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(FILES
-    kernel_spec.h lowered_kernel_executor.h auto_lowered_op.h
-    mlir_compiler.h lowered_op_helper.h
+    lowered_op_helper.h
     DESTINATION include/ops/ascend/lowered)

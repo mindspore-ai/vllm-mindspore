@@ -50,25 +50,36 @@ LoweredKernelCacheEntry::~LoweredKernelCacheEntry() {
 // LoweredKernelExecutor Implementation
 // ============================================================
 
-LoweredKernelExecutor::LoweredKernelExecutor(const std::string &specId)
-    : specId_(specId), spec_(nullptr), currentEntry_(nullptr) {
-  // Look up kernel spec from registry
-  spec_ = KernelRegistry::Instance().Lookup(specId);
+LoweredKernelExecutor::LoweredKernelExecutor(const KernelSpec *spec)
+    : spec_(spec), cacheDir_(""), keepIntermediateFiles_(false), currentEntry_(nullptr) {
   if (spec_ == nullptr) {
-    LOG_EXCEPTION << "Kernel spec not found: " << specId;
+    LOG_EXCEPTION << "KernelSpec pointer is null";
   }
 
-  LOG_OUT << "LoweredKernelExecutor created for spec: " << specId;
+  // Read keepIntermediateFiles from environment variable
+  const char *keepFilesEnv = std::getenv("MRT_LOWERED_MLIR_KEEP_FILES");
+  if (keepFilesEnv != nullptr && (std::string(keepFilesEnv) == "1" || std::string(keepFilesEnv) == "true")) {
+    keepIntermediateFiles_ = true;
+  }
 }
 
 LoweredKernelExecutor::~LoweredKernelExecutor() {
-  // Cache entries will be cleaned up automatically via unique_ptr
+  if (!cacheDir_.empty()) {
+    if (keepIntermediateFiles_) {
+      LOG_OUT << "Keeping compilation cache directory for debugging: " << cacheDir_;
+    } else {
+      std::string rmCmd = "rm -rf " + cacheDir_;
+      int ret = system(rmCmd.c_str());
+      (void)ret;
+      LOG_OUT << "Cleaned up cache directory: " << cacheDir_;
+    }
+  }
 }
 
 std::string LoweredKernelExecutor::GenerateCacheKey(const std::vector<const ir::Value *> &inputs,
                                                     const ir::Value *output) const {
   std::ostringstream oss;
-  oss << specId_ << "|inp:" << inputs.size() << "|";
+  oss << spec_->id << "|inp:" << inputs.size() << "|";
 
   // Add input shapes with explicit null markers
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -120,38 +131,37 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
   // Get mutable spec pointer for potential compilation
   KernelSpec *mutableSpec = const_cast<KernelSpec *>(spec_);
 
-  // Lock to prevent race condition during compilation
-  {
-    std::lock_guard<std::mutex> lock(mutableSpec->compilationMutex_);
+  // Check if we need to compile MLIR first
+  if (mutableSpec->NeedsCompilation()) {
+    LOG_OUT << "Kernel needs compilation from MLIR";
 
-    // Check if we need to compile MLIR first
-    if (mutableSpec->NeedsCompilation()) {
-      LOG_OUT << "Kernel needs compilation from MLIR";
+    // Prepare compilation request
+    MlirCompiler::CompileRequest request = MlirCompiler::internal::InitializeDefaultRequest();
+    request.mlirText = mutableSpec->mlirText;
+    request.keepIntermediateFiles = keepIntermediateFiles_;
 
-      if (mutableSpec->compiler == nullptr) {
-        LOG_ERROR << "No compiler callback provided for MLIR-based kernel";
-        return nullptr;
-      }
-
-      // Call compiler callback
-      std::string outputSoPath, entryName, tilingPrefix;
-      bool compileSuccess = mutableSpec->compiler(mutableSpec->mlirText, outputSoPath, entryName, tilingPrefix);
-
-      if (!compileSuccess) {
-        LOG_ERROR << "MLIR compilation failed for spec: " << mutableSpec->id;
-        return nullptr;
-      }
-
-      // Update spec with compiled results
-      mutableSpec->kernelLibPath = outputSoPath;
-      mutableSpec->entry = entryName;
-      mutableSpec->tilingPrefix = tilingPrefix;
-
-      LOG_OUT << "MLIR compilation successful:";
-      LOG_OUT << "  - .so path: " << outputSoPath;
-      LOG_OUT << "  - entry: " << entryName;
-      LOG_OUT << "  - tiling prefix: " << tilingPrefix;
+    // Compile MLIR to .so
+    MlirCompiler::CompileResult result = MlirCompiler::CompileFromText(request);
+    if (!result.success) {
+      LOG_ERROR << "MLIR compilation failed: " << result.errorMessage;
+      return nullptr;
     }
+
+    // Store cache directory in executor for cleanup (only once)
+    cacheDir_ = result.cacheDir;
+
+    // Update spec with compiled results (including id from entryName)
+    mutableSpec->kernelLibPath = result.soPath;
+    mutableSpec->entry = result.entryName;
+    mutableSpec->id = result.entryName;  // Set operator name from compiled entry
+
+    LOG_OUT << "MLIR compilation successful:";
+    LOG_OUT << "  - operator: " << mutableSpec->id;
+    LOG_OUT << "  - cache dir: " << result.cacheDir;
+    LOG_OUT << "  - .so path: " << result.soPath;
+    LOG_OUT << "  - entry: " << result.entryName;
+  } else {
+    LOG_OUT << "Kernel already compiled, using cached binary: " << mutableSpec->kernelLibPath;
   }
 
   // Check if spec is ready to load
@@ -183,10 +193,9 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
   // For dynamic shape kernels, load tiling functions
   if (mutableSpec->IsDynamicShape()) {
     // Load tiling size function
-    std::string tilingSizeFuncName = mutableSpec->tilingPrefix + "_get_tiling_struct_size_function";
+    std::string tilingSizeFuncName = mutableSpec->entry + "_get_tiling_struct_size_function";
     using GetTilingSizeRawFunc = int64_t (*)();
-    auto *getTilingSizeRaw =
-      reinterpret_cast<GetTilingSizeRawFunc>(dlsym(entry->dlHandle, tilingSizeFuncName.c_str()));
+    auto *getTilingSizeRaw = reinterpret_cast<GetTilingSizeRawFunc>(dlsym(entry->dlHandle, tilingSizeFuncName.c_str()));
     if (getTilingSizeRaw == nullptr) {
       LOG_OUT << "Tiling size function not found: " << tilingSizeFuncName << ", assuming no tiling needed";
     } else {
@@ -195,7 +204,7 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
     }
 
     // Load tiling function
-    std::string tilingFuncName = mutableSpec->tilingPrefix + "_tiling_function";
+    std::string tilingFuncName = mutableSpec->entry + "_tiling_function";
     using TilingRawFunc = void (*)(void **);
     auto *tilingRaw = reinterpret_cast<TilingRawFunc>(dlsym(entry->dlHandle, tilingFuncName.c_str()));
     if (tilingRaw == nullptr) {
@@ -209,8 +218,8 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
   return entry;
 }
 
-int LoweredKernelExecutor::ComputeTiling(LoweredKernelCacheEntry *entry, const std::vector<const ir::Value *> &inputs,
-                                         const ir::Value *output) {
+int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &inputs, const ir::Value *output,
+                                         LoweredKernelCacheEntry *entry) {
   if (entry == nullptr) {
     LOG_ERROR << "Cache entry is null";
     return -1;
@@ -247,7 +256,7 @@ int LoweredKernelExecutor::ComputeTiling(LoweredKernelCacheEntry *entry, const s
     if (tensor != nullptr) {
       void *devicePtr = tensor->DataPtr();
       const auto &shape = tensor->Shape();
-      AddMemrefArgs(tilingArgs, devicePtr, shape);
+      AddMemrefArgs(devicePtr, shape, &tilingArgs);
     }
   }
 
@@ -256,7 +265,7 @@ int LoweredKernelExecutor::ComputeTiling(LoweredKernelCacheEntry *entry, const s
   if (outputTensor != nullptr) {
     void *devicePtr = outputTensor->DataPtr();
     const auto &shape = outputTensor->Shape();
-    AddMemrefArgs(tilingArgs, devicePtr, shape);
+    AddMemrefArgs(devicePtr, shape, &tilingArgs);
   }
 
   // Add tiling arguments
@@ -313,7 +322,7 @@ int LoweredKernelExecutor::ComputeTiling(LoweredKernelCacheEntry *entry, const s
   return 0;
 }
 
-void LoweredKernelExecutor::AddMemrefArgs(std::vector<void *> &args, void *ptr, const std::vector<int64_t> &shape) {
+void LoweredKernelExecutor::AddMemrefArgs(void *ptr, const std::vector<int64_t> &shape, std::vector<void *> *args) {
   // MLIR memref lowering to LLVM IR for N-D tensor:
   // struct { T* allocated_ptr, T* aligned_ptr, int64_t offset,
   //          int64_t sizes[N], int64_t strides[N] }
@@ -322,13 +331,13 @@ void LoweredKernelExecutor::AddMemrefArgs(std::vector<void *> &args, void *ptr, 
   size_t rank = shape.size();
 
   // Add allocated_ptr and aligned_ptr
-  args.push_back(ptr);
-  args.push_back(ptr);
-  args.push_back(reinterpret_cast<void *>(offset));
+  args->push_back(ptr);
+  args->push_back(ptr);
+  args->push_back(reinterpret_cast<void *>(offset));
 
   // Add sizes (dimensions)
   for (size_t i = 0; i < rank; ++i) {
-    args.push_back(reinterpret_cast<void *>(shape[i]));
+    args->push_back(reinterpret_cast<void *>(shape[i]));
   }
 
   // Calculate and add strides (row-major layout)
@@ -338,27 +347,27 @@ void LoweredKernelExecutor::AddMemrefArgs(std::vector<void *> &args, void *ptr, 
     for (size_t j = i + 1; j < rank; ++j) {
       stride *= shape[j];
     }
-    args.push_back(reinterpret_cast<void *>(stride));
+    args->push_back(reinterpret_cast<void *>(stride));
   }
 }
 
-void LoweredKernelExecutor::AddTilingArgs(std::vector<void *> &args, const LoweredKernelCacheEntry *entry) {
+void LoweredKernelExecutor::AddTilingArgs(const LoweredKernelCacheEntry *entry, std::vector<void *> *args) {
   if (entry == nullptr || entry->tilingStructSize <= 0) {
     return;
   }
 
   int64_t offset = 0;
-  args.push_back(const_cast<int64_t *>(&entry->tilingKey));
-  args.push_back(entry->dTilingData);
-  args.push_back(entry->dTilingData);
-  args.push_back(reinterpret_cast<void *>(offset));
-  args.push_back(reinterpret_cast<void *>(entry->tilingStructSize));
-  args.push_back(reinterpret_cast<void *>(1));
+  args->push_back(const_cast<int64_t *>(&entry->tilingKey));
+  args->push_back(entry->dTilingData);
+  args->push_back(entry->dTilingData);
+  args->push_back(reinterpret_cast<void *>(offset));
+  args->push_back(reinterpret_cast<void *>(entry->tilingStructSize));
+  args->push_back(reinterpret_cast<void *>(1));
 }
 
-void LoweredKernelExecutor::BuildKernelArgs(std::vector<void *> &args, const std::vector<const ir::Value *> &inputs,
-                                            const ir::Value *output, const LoweredKernelCacheEntry *entry) {
-  args.clear();
+void LoweredKernelExecutor::BuildKernelArgs(const std::vector<const ir::Value *> &inputs, const ir::Value *output,
+                                            const LoweredKernelCacheEntry *entry, std::vector<void *> *args) {
+  args->clear();
 
   // For dynamic shape kernels, use memref + tiling args
   // For static shape kernels, just use raw pointers
@@ -372,9 +381,9 @@ void LoweredKernelExecutor::BuildKernelArgs(std::vector<void *> &args, const std
 
       if (useMemref) {
         const auto &shape = tensor->Shape();
-        AddMemrefArgs(args, devicePtr, shape);
+        AddMemrefArgs(devicePtr, shape, args);
       } else {
-        args.push_back(devicePtr);
+        args->push_back(devicePtr);
       }
     }
   }
@@ -386,15 +395,15 @@ void LoweredKernelExecutor::BuildKernelArgs(std::vector<void *> &args, const std
 
     if (useMemref) {
       const auto &shape = outputTensor->Shape();
-      AddMemrefArgs(args, devicePtr, shape);
+      AddMemrefArgs(devicePtr, shape, args);
     } else {
-      args.push_back(devicePtr);
+      args->push_back(devicePtr);
     }
   }
 
   // Add tiling arguments for dynamic shape
   if (useMemref && entry != nullptr) {
-    AddTilingArgs(args, entry);
+    AddTilingArgs(entry, args);
   }
 }
 
@@ -409,15 +418,12 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
   std::string cacheKey = GenerateCacheKey(inputs, output);
 
   // Check cache
-  {
-    std::lock_guard<std::mutex> lock(cacheMutex_);
-    auto it = cache_.find(cacheKey);
-    if (it != cache_.end()) {
-      LOG_OUT << "Cache hit for key: " << cacheKey;
-      currentEntry_ = it->second.get();
-      *workspaceSize = currentEntry_->workspaceSize;
-      return 0;
-    }
+  auto it = cache_.find(cacheKey);
+  if (it != cache_.end()) {
+    LOG_OUT << "Cache hit for key: " << cacheKey;
+    currentEntry_ = it->second.get();
+    *workspaceSize = currentEntry_->workspaceSize;
+    return 0;
   }
 
   LOG_OUT << "Cache miss for key: " << cacheKey;
@@ -431,7 +437,7 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
 
   // Compute tiling for dynamic shape kernels
   if (spec_->IsDynamicShape()) {
-    int ret = ComputeTiling(entry.get(), inputs, output);
+    int ret = ComputeTiling(inputs, output, entry.get());
     if (ret != 0) {
       LOG_ERROR << "Failed to compute tiling";
       return ret;
@@ -443,11 +449,8 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
   }
 
   // Cache the entry
-  {
-    std::lock_guard<std::mutex> lock(cacheMutex_);
-    cache_[cacheKey] = std::move(entry);
-    currentEntry_ = cache_[cacheKey].get();
-  }
+  cache_[cacheKey] = std::move(entry);
+  currentEntry_ = cache_[cacheKey].get();
 
   *workspaceSize = currentEntry_->workspaceSize;
   LOG_OUT << "Workspace size: " << *workspaceSize;
@@ -458,12 +461,11 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
 int LoweredKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *stream,
                                   const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   // Use currentEntry_ from GetWorkspaceSize, or look up cache
-  LoweredKernelCacheEntry* entry = currentEntry_;
+  LoweredKernelCacheEntry *entry = currentEntry_;
 
   if (entry == nullptr) {
     // Try to find in cache
     std::string cacheKey = GenerateCacheKey(inputs, output);
-    std::lock_guard<std::mutex> lock(cacheMutex_);
     auto it = cache_.find(cacheKey);
     if (it != cache_.end()) {
       entry = it->second.get();
@@ -480,7 +482,7 @@ int LoweredKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *s
 
   // Build kernel arguments
   std::vector<void *> kernelArgs;
-  BuildKernelArgs(kernelArgs, inputs, output, entry);
+  BuildKernelArgs(inputs, output, entry, &kernelArgs);
 
   LOG_OUT << "Launching kernel with " << kernelArgs.size() << " args, blockDim=" << entry->blockDim;
 

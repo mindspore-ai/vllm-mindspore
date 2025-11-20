@@ -38,6 +38,9 @@ std::unique_ptr<Pass> createSetTensorDevice();
 /// Create a pass to convert RankedTensorType to Mrt_TensorType.
 std::unique_ptr<Pass> createConvertRankedTensorToMrtTensorPass();
 
+/// Create a pass to annotate Linalg functions with hacc attributes.
+std::unique_ptr<Pass> createAnnotateLinalgForHaccPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

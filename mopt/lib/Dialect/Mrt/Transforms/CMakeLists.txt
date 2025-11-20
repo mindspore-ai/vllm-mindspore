@@ -1,6 +1,7 @@
 add_mlir_dialect_library(MLIRMrtTransforms
   SetTensorDevice.cc
   ConvertRankedTensorToMrtTensor.cc
+  AnnotateForHaccPass.cc
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/mopt
@@ -10,6 +11,8 @@ add_mlir_dialect_library(MLIRMrtTransforms
 
   LINK_LIBS PUBLIC
   MLIRFuncDialect
+  MLIRLinalgDialect
+  MLIRAsmParser
   MLIRIR
   MLIRPass
   MLIRSupport

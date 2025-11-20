@@ -67,4 +67,31 @@ def ConvertRankedTensorToMrtTensor : Pass<"convert-ranked-tensor-to-mrt-tensor",
   ];
 }
 
+//===----------------------------------------------------------------------===//
+// AnnotateLinalgForHacc pass
+//===----------------------------------------------------------------------===//
+
+def AnnotateLinalgForHacc : Pass<"annotate-linalg-for-hacc", "::mlir::ModuleOp"> {
+  let summary = "Annotate Linalg functions with hacc attributes";
+
+  let description = [{
+    This pass adds hacc.entry and hacc.function_kind attributes to functions
+    containing Linalg operations, preparing them for BiSheng IR compilation.
+
+    For each function containing Linalg operations:
+    - Adds hacc.entry (UnitAttr) to mark it as an entry point
+    - Adds hacc.function_kind = "#hacc.function_kind<HOST>" (StringAttr)
+
+    Functions without Linalg operations are left unchanged.
+    Already annotated functions are skipped to maintain idempotency.
+  }];
+
+  let constructor = "mlir::createAnnotateLinalgForHaccPass()";
+
+  let dependentDialects = [
+    "::mlir::func::FuncDialect",
+    "::mlir::linalg::LinalgDialect"
+  ];
+}
+
 #endif // MOPT_DIALECT_MRT_TRANSFORMS_PASSES

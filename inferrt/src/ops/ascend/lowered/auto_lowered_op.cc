@@ -15,13 +15,19 @@
  */
 
 #include "ops/ascend/lowered/auto_lowered_op.h"
+#include "ops/ascend/lowered/kernel_spec.h"
 #include "common/logger.h"
 
 namespace mrt::ops {
 
-AutoLoweredOp::AutoLoweredOp(const std::string &specId) : specId_(specId), executor_(nullptr) {
-  executor_ = std::make_unique<LoweredKernelExecutor>(specId);
-  LOG_OUT << "AutoLoweredOp created for spec: " << specId;
+AutoLoweredOp::AutoLoweredOp(const std::string &mlirText) : spec_(nullptr), executor_(nullptr) {
+  // Create KernelSpec with MLIR text (id will be set from entry name after compilation)
+  spec_ = std::make_unique<KernelSpec>(mlirText);
+
+  // Create executor with the owned spec
+  executor_ = std::make_unique<LoweredKernelExecutor>(spec_.get());
+
+  LOG_OUT << "AutoLoweredOp created with MLIR text";
 }
 
 OpsErrorCode AutoLoweredOp::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,

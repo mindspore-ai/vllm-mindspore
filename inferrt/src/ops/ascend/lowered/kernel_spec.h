@@ -20,7 +20,6 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
-#include <mutex>
 #include <functional>
 
 #include "common/visible.h"
@@ -28,43 +27,24 @@
 namespace mrt::ops {
 
 /**
- * @brief Compiler callback function signature
- *
- * Compiles MLIR text to a .so file and returns the .so path.
- * @param mlirText MLIR text content
- * @param outputSoPath Output path for compiled .so file (suggested, can be modified)
- * @param entryName Output entry function name (will be filled by compiler)
- * @param tilingPrefix Output tiling function prefix (will be filled by compiler)
- * @return true on success, false on failure
- */
-using MlirCompilerCallback = std::function<bool(const std::string &mlirText, std::string &outputSoPath,
-                                                std::string &entryName, std::string &tilingPrefix)>;
-
-/**
  * @brief Kernel specification describing how to load and execute a lowered kernel
  *
- * This struct contains all necessary metadata to load a lowered kernel compiled
- * from MLIR IR and execute it via Host API.
+ * Pure data structure containing all necessary metadata to load a lowered kernel
+ * compiled from MLIR IR and execute it via Host API.
  *
- * Supports dynamic compilation: mlirText is compiled on first use, with caching
- * based on MLIR text hash to avoid recompilation.
+ * Compilation is managed by LoweredKernelExecutor, not by this struct.
  */
 struct KernelSpec {
   std::string id;  // Unique identifier for this kernel spec (e.g., "bias_add")
 
   // --- Dynamic MLIR compilation mode ---
-  std::string mlirText;          // MLIR text to compile
-  MlirCompilerCallback compiler;  // Compiler callback for MLIR → .so
+  std::string mlirText;  // MLIR text to compile (if not empty, requires compilation)
 
   // --- Compiled kernel metadata (populated after compilation) ---
   std::string kernelLibPath;  // Path to the compiled kernel .so file
-  std::string entry;            // Host API function entry point name
-  std::string tilingPrefix;    // Prefix for tiling-related functions (for dynamic shape)
+  std::string entry;          // Host API function entry point name (also used as tiling function prefix)
 
-  mutable std::mutex compilationMutex_;  // Protect compilation state in multithreaded environment
-
-  KernelSpec(const std::string &id_, const std::string &mlirText_);
-
+  explicit KernelSpec(const std::string &mlirText_) : id("pending"), mlirText(mlirText_) {}
   /**
    * @brief Check if this spec needs compilation
    * @return true if kernel hasn't been compiled yet
@@ -116,58 +96,6 @@ struct KernelSpec {
     }
     return false;
   }
-};
-
-/**
- * @brief Registry for managing kernel specifications
- *
- * This singleton class maintains a registry of all custom kernel specifications.
- * It allows registering new kernels and looking up their specifications by ID.
- *
- * Thread-safe for concurrent registration and lookup.
- */
-class KernelRegistry {
- public:
-  /**
-   * @brief Get the singleton instance
-   * @return Reference to the global KernelRegistry instance
-   */
-  static KernelRegistry &Instance();
-
-  /**
-   * @brief Register a kernel specification
-   * @param specId Unique identifier for the kernel
-   * @param mlirText MLIR text for the kernel
-   * @return true if registration successful, false if specId already exists
-   */
-  bool Register(const std::string &specId, const std::string &mlirText);
-
-  /**
-   * @brief Look up a kernel specification by ID
-   * @param specId Identifier to look up
-   * @return Pointer to KernelSpec if found, nullptr otherwise
-   */
-  const KernelSpec *Lookup(const std::string &specId) const;
-
-  /**
-   * @brief Check if a kernel spec is registered
-   * @param specId Identifier to check
-   * @return true if registered, false otherwise
-   */
-  bool Contains(const std::string &specId) const;
-
-  // Disable copy and move
-  KernelRegistry(const KernelRegistry &) = delete;
-  KernelRegistry &operator=(const KernelRegistry &) = delete;
-  KernelRegistry(KernelRegistry &&) = delete;
-  KernelRegistry &operator=(KernelRegistry &&) = delete;
-
- private:
-  KernelRegistry() = default;
-  ~KernelRegistry() = default;
-
-  mutable std::mutex mutex_;
-  std::unordered_map<std::string, KernelSpec> specs_;
 };
 
 }  // namespace mrt::ops
