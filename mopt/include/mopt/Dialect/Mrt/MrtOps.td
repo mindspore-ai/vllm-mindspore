@@ -163,6 +163,32 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   let generated = 1;
 }
 
+def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
+  let summary = "moe calc for input do Softmax, and do topK selection";
+  let description = [{
+    Performs a Softmax and TopK on input tensors.
+  }];
+  
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtOptTensor:$finished,
+    Mrt_I64Type:$k
+  );
+  
+  let results = (outs 
+    MrtAnyTensor:$y,
+    MrtAnyTensor:$expert_idx,
+    MrtAnyTensor:$row_idx
+  );
+  
+  let assemblyFormat = [{
+    $x (`,` $finished^)? `,` $k
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let summary = "aclnnMoeInitRoutingV3";
   let description = [{
