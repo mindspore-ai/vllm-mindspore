@@ -57,6 +57,34 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
   let generated = 1;
 }
 
+
+def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
+  let summary = "aclnnApplyRotaryPosEmb";
+  let description = [{
+    Operation for rope computation.
+    Accepts query, key, cos, sin  tensor, and layout string for rope calculation.
+    Produces the result after rope.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$query,
+    MrtAnyTensor:$key,
+    MrtAnyTensor:$cos,
+    MrtAnyTensor:$sin,
+    Mrt_I64Type:$layout
+  );
+
+  let results = (outs
+    MrtAnyTensor:$fake_query_out,
+    MrtAnyTensor:$fake_key_out
+  );
+
+  let assemblyFormat = [{
+    $query `,` $key `,` $cos `,` $sin `,` $layout
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
   let summary = "Batch normalization operation";
   let description = [{
@@ -453,5 +481,4 @@ def Mrt_SwiGluOp : Mrt_Op<"swi_glu"> {
 
   let generated = 1;
 }
-
 #endif // MRT_DIALECT_MRT_OPS_TD
