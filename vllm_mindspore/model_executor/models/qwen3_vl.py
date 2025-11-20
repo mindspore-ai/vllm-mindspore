@@ -171,29 +171,19 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
                   self.num_attention_heads_per_partition * self.head_dim), -1)
 
         # q/k reshape to BSND
-        # q = q.reshape(1, seq_length, self.num_attention_heads_per_partition,
-        #               self.hidden_size_per_attention_head)
-        # k = k.reshape(1, seq_length, self.num_attention_heads_per_partition,
-        #               self.hidden_size_per_attention_head)
-        # q = q.reshape(seq_length, self.num_attention_heads_per_partition,
-        #               self.hidden_size_per_attention_head)
-        # k = k.reshape(seq_length, self.num_attention_heads_per_partition,
-        #               self.hidden_size_per_attention_head)
         q = q.reshape(seq_length, 
                       self.num_attention_heads_per_partition*self.hidden_size_per_attention_head)
         k = k.reshape(seq_length, 
                       self.num_attention_heads_per_partition*self.hidden_size_per_attention_head)
 
         cos, sin = position_embeddings
-        origin_dtype = q.dtype
-        # q, k = ms_custom_ops.apply_rotary_pos_emb_ext(q.astype(ms.float32),
-        #                                               k.astype(ms.float32),
-        #                                               cos, sin, "BSND", "half")
-        # q = _apply_rotary_emb(q, cos, sin, True)
-        # k = _apply_rotary_emb(k, cos, sin, True)
-        q, k = ms_custom_ops.rope(q, k, cos, sin, batch_valid_length, 2, 1)
+        cos = mint.cat((cos, cos), dim=-1)
+        sin = mint.cat((sin, sin), dim=-1)
+
+        q, k = ms_custom_ops.rope(q, k, cos, sin, batch_valid_length, 2, 0)
 
         # q/k reshape to TH
+        origin_dtype = q.dtype
         q = q.astype(origin_dtype)
         k = k.astype(origin_dtype)
         q = q.reshape(seq_length, self.num_attention_heads_per_partition * self.hidden_size_per_attention_head)
