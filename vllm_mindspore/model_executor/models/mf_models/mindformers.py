@@ -367,8 +367,14 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             model_inputs["hidden_states"] = convert_pin(
                 kwargs["previous_hidden_states"])
 
-        self.network.phase = "prefill" if is_prefill else \
-            "chunked" if is_ringmla_chunked else "increment"
+        if self.model_config.hf_config.model_type != "deepseek_mtp":
+            self.network.phase = "prefill" if is_prefill else \
+                "chunked" if is_ringmla_chunked else "increment"
+        else:
+            # mtp model does not support mla/ringmla ops
+            # the phase of mtp model and base model should be different
+            self.network.phase = "prefill" if is_prefill else "decode"
+
         if (not self.set_flags or not self.set_chunked_flags
                 or self.is_eager_mode):
             self.set_flags = True
