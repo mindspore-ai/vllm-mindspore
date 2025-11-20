@@ -23,6 +23,7 @@
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Matchers.h"
+#include "llvm/ADT/APFloat.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
@@ -53,6 +54,7 @@ using mlir::success;
 using mlir::Type;
 using mlir::Value;
 using mlir::arith::ConstantOp;
+using llvm::APFloat;
 
 namespace {
 
@@ -195,7 +197,7 @@ struct ConvertMaximumToReluOp : public RewritePattern {
     if (auto constOp = maxOp.getRhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
       if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
         if (denseAttr.isSplat()) {
-          auto splatValue = denseAttr.getSplatValue<mlir::APFloat>();
+          auto splatValue = denseAttr.getSplatValue<llvm::APFloat>();
           if (splatValue.isZero()) {
             input = maxOp.getLhs();
             isRelu = true;
@@ -209,7 +211,7 @@ struct ConvertMaximumToReluOp : public RewritePattern {
       if (auto constOp = maxOp.getLhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
         if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
           if (denseAttr.isSplat()) {
-            auto splatValue = denseAttr.getSplatValue<mlir::APFloat>();
+            auto splatValue = denseAttr.getSplatValue<llvm::APFloat>();
             if (splatValue.isZero()) {
               input = maxOp.getRhs();
               isRelu = true;

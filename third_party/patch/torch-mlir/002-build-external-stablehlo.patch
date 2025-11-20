@@ -1,23 +1,22 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index b309e85c..a1234567 100644
+index 5413da9d..4d2313b2 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -222,9 +222,16 @@ endif()
- if (TORCH_MLIR_ENABLE_STABLEHLO)
-   set(STABLEHLO_BUILD_EMBEDDED ON)
+@@ -255,10 +255,15 @@ if (TORCH_MLIR_ENABLE_STABLEHLO AND NOT TORCH_MLIR_USE_EXTERNAL_STABLEHLO)
    set(STABLEHLO_ENABLE_BINDINGS_PYTHON ON)
+   message(STATUS "Using LLVM_ENABLE_DEBUGLOC_COVERAGE_TRACKING in: ${LLVM_ENABLE_DEBUGLOC_COVERAGE_TRACKING}")
+   set(LLVM_ENABLE_DEBUGLOC_COVERAGE_TRACKING "DISABLED")
 -  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo
-+  
 +  # Allow external specification of stablehlo source directory
-+  if(NOT STABLEHLO_EXTERNAL_DIR)
-+    set(STABLEHLO_EXTERNAL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo)
++  if(NOT USE_STABLEHLO_SOURCE_DIR)
++    set(USE_STABLEHLO_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo)
 +  endif()
-+  message(STATUS "Using StableHLO from: ${STABLEHLO_EXTERNAL_DIR}")
-+  
-+  add_subdirectory(${STABLEHLO_EXTERNAL_DIR}
++  message(STATUS "Using StableHLO from: ${USE_STABLEHLO_SOURCE_DIR}")
++  add_subdirectory(${USE_STABLEHLO_SOURCE_DIR}
      ${CMAKE_CURRENT_BINARY_DIR}/stablehlo
      EXCLUDE_FROM_ALL)
 -  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/externals/stablehlo)
-+  include_directories(${STABLEHLO_EXTERNAL_DIR})
++  include_directories(${USE_STABLEHLO_SOURCE_DIR})
  endif()
-
+ 
+ #-------------------------------------------------------------------------------

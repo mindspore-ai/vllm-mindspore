@@ -1,0 +1,40 @@
+diff --git a/stablehlo/integrations/python/CMakeLists.txt b/stablehlo/integrations/python/CMakeLists.txt
+index 0574b97..d8ef0e3 100644
+--- a/stablehlo/integrations/python/CMakeLists.txt
++++ b/stablehlo/integrations/python/CMakeLists.txt
+@@ -91,9 +91,32 @@ declare_mlir_dialect_python_bindings(
+ ################################################################################
+ 
+ ## The following options are used specifically for compiling nanobind codebase.
+-add_compile_options(-Wno-error=cast-qual -Wno-error=nested-anon-types
+-  -Wno-error=extra-semi -Wno-error=zero-length-array
+-  -Wno-error=covered-switch-default)
++## These are Clang-specific options, so we need to check compiler support.
++include(CheckCXXCompilerFlag)
++set(NANOBIND_WARNING_FLAGS)
++check_cxx_compiler_flag(-Wno-error=cast-qual CXX_SUPPORTS_CAST_QUAL)
++if(CXX_SUPPORTS_CAST_QUAL)
++  list(APPEND NANOBIND_WARNING_FLAGS -Wno-error=cast-qual)
++endif()
++check_cxx_compiler_flag(-Wno-error=nested-anon-types CXX_SUPPORTS_NESTED_ANON_TYPES)
++if(CXX_SUPPORTS_NESTED_ANON_TYPES)
++  list(APPEND NANOBIND_WARNING_FLAGS -Wno-error=nested-anon-types)
++endif()
++check_cxx_compiler_flag(-Wno-error=extra-semi CXX_SUPPORTS_EXTRA_SEMI)
++if(CXX_SUPPORTS_EXTRA_SEMI)
++  list(APPEND NANOBIND_WARNING_FLAGS -Wno-error=extra-semi)
++endif()
++check_cxx_compiler_flag(-Wno-error=zero-length-array CXX_SUPPORTS_ZERO_LENGTH_ARRAY)
++if(CXX_SUPPORTS_ZERO_LENGTH_ARRAY)
++  list(APPEND NANOBIND_WARNING_FLAGS -Wno-error=zero-length-array)
++endif()
++check_cxx_compiler_flag(-Wno-error=covered-switch-default CXX_SUPPORTS_COVERED_SWITCH_DEFAULT)
++if(CXX_SUPPORTS_COVERED_SWITCH_DEFAULT)
++  list(APPEND NANOBIND_WARNING_FLAGS -Wno-error=covered-switch-default)
++endif()
++if(NANOBIND_WARNING_FLAGS)
++  add_compile_options(${NANOBIND_WARNING_FLAGS})
++endif()
+ 
+ declare_mlir_python_sources(CheckPythonExtensions)
+ declare_mlir_python_extension(CheckPythonExtensions.Main

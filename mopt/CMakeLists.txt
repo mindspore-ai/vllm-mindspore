@@ -51,11 +51,16 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 
+set(TOP_DIR "${PROJECT_SOURCE_DIR}/..")
+
 # ===========================================================================
 # Torch-MLIR Integration (build alongside mopt)
 # ===========================================================================
 # Note: StableHLO will be compiled by Torch-MLIR, not separately by mopt.
 # This avoids duplicate compilation and ensures consistent stablehlo versions.
+
+include(${TOP_DIR}/cmake/stablehlo.cmake)
+
 include(MLIRDetectPythonEnv)
 mlir_configure_python_dev_packages()
 
@@ -74,7 +79,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(TORCH_MLIR_BUILD_EMBEDDED ON CACHE BOOL "Build Torch-MLIR as embedded" FORCE)
 set(TORCH_MLIR_ENABLE_BINDINGS_PYTHON ON CACHE BOOL "Enable Python bindings" FORCE)
 set(TORCH_MLIR_ENABLE_STABLEHLO ON CACHE BOOL "Enable StableHLO support (compiled by Torch-MLIR)" FORCE)
-set(STABLEHLO_EXTERNAL_DIR "${STABLEHLO_SOURCE_DIR}" CACHE PATH "Path to external StableHLO sources")
+set(USE_STABLEHLO_SOURCE_DIR "${STABLEHLO_SOURCE_DIR}" CACHE PATH "Path to external StableHLO sources" FORCE)
 set(TORCH_MLIR_ENABLE_PYTORCH_EXTENSIONS OFF CACHE BOOL "Disable PyTorch extensions" FORCE)
 set(TORCH_MLIR_ENABLE_REFBACKEND OFF CACHE BOOL "Disable RefBackend" FORCE)
 set(TORCH_MLIR_ENABLE_LTC OFF CACHE BOOL "Disable LTC" FORCE)

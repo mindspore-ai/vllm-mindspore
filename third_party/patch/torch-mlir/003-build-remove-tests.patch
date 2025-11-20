@@ -2,7 +2,7 @@ diff --git a/CMakeLists.txt b/CMakeLists.txt
 index b309e85c..a1234567 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -167,9 +167,6 @@ add_subdirectory(include)
+@@ -197,9 +197,6 @@ add_subdirectory(include)
  add_subdirectory(lib)
  add_subdirectory(tools)
  
@@ -12,7 +12,7 @@ index b309e85c..a1234567 100644
  if(MLIR_ENABLE_BINDINGS_PYTHON)
    # If parent projects want to configure where to place the python packages,
    # respect that.
-@@ -178,8 +175,6 @@ if(MLIR_ENABLE_BINDINGS_PYTHON)
+@@ -208,8 +205,6 @@ if(MLIR_ENABLE_BINDINGS_PYTHON)
    endif()
  endif()
  
@@ -42,7 +42,7 @@ diff --git a/projects/pt1/python/CMakeLists.txt b/projects/pt1/python/CMakeLists
 index c86e8e52..d32119dc 100644
 --- a/projects/pt1/python/CMakeLists.txt
 +++ b/projects/pt1/python/CMakeLists.txt
-@@ -70,5 +70,3 @@ if(TORCH_MLIR_ENABLE_LTC)
+@@ -71,5 +71,3 @@ if(TORCH_MLIR_ENABLE_LTC)
      reference_lazy_backend
    )
  endif()
@@ -57,4 +57,3 @@ index 9eb5f85a..04fda6c3 100644
  
  add_lit_testsuites(TORCH_MLIR_PYTHON ${CMAKE_CURRENT_SOURCE_DIR} DEPENDS ${TEST_DEPENDS})
 -add_dependencies(check-torch-mlir-all check-torch-mlir-python)
-
