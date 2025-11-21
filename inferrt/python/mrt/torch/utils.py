@@ -98,6 +98,9 @@ def from_torch(obj: Any) -> Value:
         return Value(_mrt_torch.from_torch(obj))
     if isinstance(obj, (int, float, bool, str)):
         return Value(obj)
+    if isinstance(obj, torch.device):
+        device_str = str(obj).rsplit('.', maxsplit=1)[-1]
+        return Value(device_str)
     if isinstance(obj, torch.dtype):
         dtype_str = str(obj).rsplit('.', maxsplit=1)[-1] # "torch.float32" -> "float32"
         return Value(DataType.convert_str_to_int(dtype_str))

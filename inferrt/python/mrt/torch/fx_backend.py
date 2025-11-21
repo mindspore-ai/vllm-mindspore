@@ -101,6 +101,8 @@ _OP_MAP = {
     torch.rsqrt: Op.rsqrt,
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
+    torch.empty: Op.empty,
+    torch.zeros: Op.zeros,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,

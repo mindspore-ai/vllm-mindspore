@@ -212,6 +212,30 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   let generated = 1;
 }
 
+def Mrt_EmptyOp : Mrt_Op<"empty"> {
+  let summary = "";
+  let description = [{
+    Operation for empty ops.
+    Accept shape size.
+    Produces the device the same shape tensor.
+  }];
+
+  let arguments = (ins
+    Mrt_I64ArrayType:$size,
+    Mrt_I64Type:$dtype,
+    Mrt_StringType:$device
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut
+  );
+
+  let assemblyFormat = [{
+    $size `,` $dtype
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let summary = "moe calc for input do Softmax, and do topK selection";
   let description = [{
@@ -504,4 +528,29 @@ def Mrt_SwiGluOp : Mrt_Op<"swi_glu"> {
 
   let generated = 1;
 }
+
+def Mrt_ZerosOp : Mrt_Op<"zeros"> {
+  let summary = "aclnnInplaceZero";
+  let description = [{
+    Operation for zeros ops.
+    Accept shape size.
+    Produces the device the same shape tensor, the value in tensor has been set zero.
+  }];
+
+  let arguments = (ins
+    Mrt_I64ArrayType:$size,
+    Mrt_I64Type:$dtype,
+    Mrt_StringType:$device
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut
+  );
+
+  let assemblyFormat = [{
+    $size `,` $dtype
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 #endif // MRT_DIALECT_MRT_OPS_TD
