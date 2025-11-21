@@ -34,6 +34,7 @@
 
 // External dialect registrations
 #include "stablehlo/dialect/Register.h"
+#include "torch-mlir/InitAll.h"
 
 // Mopt project specific includes
 #include "mopt/Dialect/Mrt/Mrt.h"
@@ -48,6 +49,8 @@ constexpr int kMoptOptMinorVersion = 0;
 void initializeDialectRegistry(mlir::DialectRegistry &registry) {
   mlir::registerAllDialects(registry);
   mlir::stablehlo::registerAllDialects(registry);
+  mlir::torch::registerAllDialects(registry);
+  mlir::torch::registerAllExtensions(registry);
   registry.insert<mrt::MrtDialect>();
 }
 }  // namespace
@@ -55,6 +58,9 @@ void initializeDialectRegistry(mlir::DialectRegistry &registry) {
 int main(int argc, char **argv) {
   // Initialize all standard MLIR passes
   mlir::registerAllPasses();
+
+  // Register Torch-MLIR passes
+  mlir::torch::registerAllPasses();
 
   // Register custom conversion passes for Mopt
   mlir::registerMoptConversionPasses();

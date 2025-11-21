@@ -113,7 +113,8 @@ if [[ $BUILD_OPT == 1 || $ENABLE_ASCEND == 1 ]]; then
     echo "  LLVM_DIR: ${LLVM_DIR}"
     echo "  MLIR_DIR: ${MLIR_DIR}"
     echo "  STABLEHLO_SOURCE_DIR: ${STABLEHLO_SOURCE_DIR}"
-    echo "  TORCH_MLIR_BUILD_DIR: ${TORCH_MLIR_BUILD_DIR}"
+    echo "  TORCHMLIR_SOURCE_DIR: ${TORCHMLIR_SOURCE_DIR}"
+    echo "  TORCHMLIR_BUILD_DIR: ${TORCHMLIR_BUILD_DIR}"
     echo "=========================================="
 fi
 
@@ -137,11 +138,6 @@ assert parse(packaging.__version__) >= parse('24.2'), f'packaging {packaging.__v
 ##################################################
 if [[ $BUILD_OPT == 1 ]]; then
     pushd mopt
-
-    # Clean previous builds
-    if [[ $INC_BUILD != 1 ]]; then
-        rm -rf build dist
-    fi
 
     echo "Building mopt with LLVM from: ${LLVM_BUILD_DIR}"
     # Build the wheel
