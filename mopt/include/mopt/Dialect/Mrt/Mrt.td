@@ -727,4 +727,24 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm"> {
   let generated = 1;
 }
 
+def Mrt_EmbeddingOp : Mrt_Op<"embedding"> {
+  let summary = "aclnnEmbedding";
+  let description = [{
+    Operation for embedding computation.
+    Accepts weight, indices tensor.
+    Produces embedding output.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$weight,
+    AnyRankedTensor:$indices
+  );
+
+  let results = (outs
+    AnyRankedTensor:$out
+  );
+
+  let generated = 1;
+}
+
 #endif // MRT_DIALECT_MRT_OPS_TD

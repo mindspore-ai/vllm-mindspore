@@ -77,6 +77,21 @@ def _convert_sympy_expr_to_symbolic_expr(
 
 _GLOBAL_GRAPH_ID = 0
 
+_ARG_MAPPING_HOOKS = {}
+
+def register_arg_mapping_hook(op, hook_func):
+    _ARG_MAPPING_HOOKS[op] = hook_func
+
+def  get_arg_mapping_hook(op):
+    return _ARG_MAPPING_HOOKS.get(op)
+
+# pylint: disable=unused-argument
+def embedding_hook(node, input_nodes, executor):
+    """swap the first and second param position."""
+    return [input_nodes[1], input_nodes[0]]
+
+def _init_arg_mapping_hooks():
+    register_arg_mapping_hook(Op.embedding, embedding_hook)
 
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
@@ -119,6 +134,7 @@ _OP_MAP = {
     torch.nn.functional.silu: Op.silu,
     torch.nn.functional.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
+    torch.nn.functional.embedding: Op.embedding,
     # torch.ops.npu functions
     torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
     torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
@@ -213,6 +229,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
+    _init_arg_mapping_hooks()
     _init_mrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
@@ -269,6 +286,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                     op_name = node.target.__name__
                     input_args = (op_name,) + node.args
                 input_nodes = _map_args(input_args, env, executor)
+
+                hook_func = get_arg_mapping_hook(op)
+                if hook_func is not None:
+                    input_nodes = hook_func(node, input_nodes, executor)
+                    print(f"Applied arg mapping hook for {op}, new input nodes:{input_nodes}")
                 example_value = node.meta.get("example_value", None)
                 output_value = from_torch(example_value)
                 _create_symbolic_shape_if_needed(example_value, output_value)
