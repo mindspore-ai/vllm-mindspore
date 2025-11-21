@@ -123,6 +123,17 @@ class DA_API Operator {
    *         otherwise returns false.
    */
   virtual bool NeedUpdateOutputShapeAfterLaunch() const { return false; }
+
+  /**
+   * @brief Get pairs of output and input indices that reference the same tensor.
+   * This method returns a vector of pairs where each pair contains an output index
+   * and an input index that share the same tensor data. This is used for operations
+   * that can reuse input tensors as outputs (in-place operations).
+   *
+   * @return Vector of pairs, where each pair consists of (output index, input index)
+   *         that reference the same tensor. Returns empty vector by default.
+   */
+  virtual std::vector<std::pair<uint32_t, uint32_t>> GetOutputInputRefPairs() const { return {}; }
 };
 }  // namespace ops
 }  // namespace mrt

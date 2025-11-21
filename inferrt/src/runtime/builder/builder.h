@@ -58,12 +58,14 @@ class DA_API Builder {
 
  protected:
   /**
-   * @brief Records storage free points to optimize memory management.
+   * @brief Sets up operation runners for the computational graph.
    *
-   * This method analyzes the computational graph to determine when storages
-   * are no longer needed and can be freed to optimize memory usage.
+   * This method orchestrates the setup process by creating operation runners,
+   * updating reference node output values, and recording storage free points.
+   * It serves as the main entry point for preparing all operations in the graph
+   * for execution.
    */
-  void RecordStorageFreePoint();
+  void SetupOpRunners();
 
   /**
    * @brief Creates operation runners for all nodes in the graph.
@@ -74,6 +76,24 @@ class DA_API Builder {
    */
   void CreateOpRunners();
 
+  /**
+   * @brief Updates output values for reference nodes in the graph.
+   *
+   * This method processes nodes that reference input tensors and ensures their
+   * output values are properly updated to reflect the current state of the
+   * referenced data. This is essential for maintaining data consistency
+   * across the computational graph.
+   */
+  void UpdateRefNodeOutputValue();
+
+  /**
+   * @brief Records storage free points to optimize memory management.
+   *
+   * This method analyzes the computational graph to determine when storages
+   * are no longer needed and can be freed to optimize memory usage.
+   */
+  void RecordStorageFreePoint();
+
   // The graph that the executor will run.
   ir::GraphPtr graph_{nullptr};
 
@@ -82,6 +102,7 @@ class DA_API Builder {
 
   // The storages that can be safely freed once the last consumer node is done.
   std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToFree_;
+  std::unordered_map<ir::Node *, OpRunner *> nodeToOpRunner_;
   std::map<hardware::DeviceType, device::DeviceContext *> deviceContexts_{};
 };
 }  // namespace runtime

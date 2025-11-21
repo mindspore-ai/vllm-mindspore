@@ -27,7 +27,7 @@ file(GLOB_RECURSE STORAGE_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
         "../../src/hardware/cpu/*.cc"
         )
 add_library(STORAGE_STATIC STATIC ${STORAGE_SRC_FILES})
-target_link_libraries(STORAGE_STATIC mrt_common)
+target_link_libraries(STORAGE_STATIC mrt_common mrt::securec)
 
 add_executable(run_storage_cpu_test ./ir/storage_cpu_test.cc)
 target_link_libraries(run_storage_cpu_test

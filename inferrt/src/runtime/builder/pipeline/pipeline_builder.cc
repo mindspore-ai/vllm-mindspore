@@ -23,8 +23,7 @@ PipelineBuilder::PipelineBuilder(const ir::GraphPtr &graph) : Builder(graph) {}
 
 std::unique_ptr<Executor> PipelineBuilder::BuildExecutor() {
   LOG_OUT << "Begin build pipeline executor.";
-  RecordStorageFreePoint();
-  CreateOpRunners();
+  SetupOpRunners();
 
   auto pipelineExecutor = std::make_unique<PipelineExecutor>(opRunners_, deviceContexts_);
   pipelineExecutor->Initialize();

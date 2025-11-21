@@ -55,6 +55,22 @@ void AclrtLaunchCallback(void *userData) {
   (*callbackFunc)();
   delete callbackFunc;
 }
+
+aclrtMemcpyKind CopyTypeToAclType(CopyType copyType) {
+  switch (copyType) {
+    case CopyType::H2D:
+      return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_DEVICE;
+    case CopyType::D2H:
+      return aclrtMemcpyKind::ACL_MEMCPY_DEVICE_TO_HOST;
+    case CopyType::D2D:
+      return aclrtMemcpyKind::ACL_MEMCPY_DEVICE_TO_DEVICE;
+    case CopyType::H2H:
+      return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_HOST;
+    default:
+      LOG_EXCEPTION << "Invalid copy type:" << static_cast<int>(copyType);
+      return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_HOST;
+  }
+}
 }  // namespace
 
 void AscendResManager::Initialize() {
@@ -460,6 +476,25 @@ void AscendResManager::ResetStreamAndCtx() const {
   AscendStreamMng::GetInstance().DestroyAllStreams();
   AscendHalManager::GetInstance().ResetContext(deviceId_);
   AscendStreamMng::GetInstance().CreateDefaultStream();
+}
+
+bool AscendResManager::AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const {
+  CHECK_IF_NULL(stream);
+  auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, size, src, size, CopyTypeToAclType(kind), stream);
+  if (ret != ACL_SUCCESS) {
+    LOG_ERROR << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    return false;
+  }
+  return true;
+}
+
+bool AscendResManager::SyncCopy(void *dst, const void *src, uint64_t size, CopyType kind) const {
+  auto ret = CALL_ASCEND_API(aclrtMemcpy, dst, size, src, size, CopyTypeToAclType(kind));
+  if (ret != ACL_SUCCESS) {
+    LOG_ERROR << "Call aclrtMemcpy failed, ret:" << static_cast<int>(ret);
+    return false;
+  }
+  return true;
 }
 
 bool AscendResManager::MemcpyDeviceToDevice(void *dst, size_t dst_size, const void *src, size_t src_size,

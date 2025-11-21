@@ -19,6 +19,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include "include/securec.h"
 
 namespace mrt {
 namespace device {
@@ -45,6 +46,22 @@ void CPUResManager::FreePartMemorys(const std::vector<void *> &freeAddrs, const 
                                     const std::vector<size_t> &keepAddrSizes) const {
   LOG_OUT << "Unimplemented interface.";
   return;
+}
+
+bool CPUResManager::AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const {
+  LOG_ERROR << "Not support async copy for CPU platform";
+  return false;
+}
+
+bool CPUResManager::SyncCopy(void *dst, const void *src, uint64_t size, CopyType kind) const {
+  CHECK_IF_NULL(dst);
+  CHECK_IF_NULL(src);
+  auto ret = memcpy_s(dst, size, src, size);
+  if (ret != EOK) {
+    LOG_ERROR << "Call memcpy_s failed, ret:" << ret;
+    return false;
+  }
+  return true;
 }
 
 namespace {

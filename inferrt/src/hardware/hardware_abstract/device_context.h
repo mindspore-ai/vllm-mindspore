@@ -54,6 +54,8 @@ struct MRT_EXPORT DeviceContextKey {
 
 MRT_EXPORT DeviceContextKey DeviceToDeviceContextKey(hardware::Device device);
 
+enum class CopyType : uint8_t { H2D = 0, D2H = 1, D2D = 2, H2H = 3 };
+
 class DeviceResManager;
 class KernelExecutor;
 
@@ -265,6 +267,9 @@ class MRT_EXPORT DeviceResManager {
     callbackFunc();
     return true;
   }
+
+  virtual bool AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const { return true; }
+  virtual bool SyncCopy(void *dst, const void *src, uint64_t size, CopyType kind) const { return true; }
 
  protected:
   DeviceContext *deviceContext_{nullptr};

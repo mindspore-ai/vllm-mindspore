@@ -251,8 +251,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     symbolic_shape_manager = SymbolicShapeManager()
     env: Dict[Node, Any] = {}
 
-    set_device_context()
     get_collective_info_from_torch(gm)
+    set_device_context()
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
