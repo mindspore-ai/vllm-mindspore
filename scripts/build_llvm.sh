@@ -2,7 +2,7 @@
 ##################################################
 # LLVM Build Script
 # Required env vars: BUILD_JOBS, INC_BUILD
-# Exports : LLVM_SOURCE_DIR, LLVM_BUILD_DIR, LLVM_DIR, MLIR_DIR, TORCHMLIR_SOURCE_DIR, TORCHMLIR_BUILD_DIR, STABLEHLO_SOURCE_DIR.
+# Exports : LLVM_SOURCE_DIR, LLVM_BUILD_DIR, LLVM_DIR, MLIR_DIR, TORCHMLIR_SOURCE_DIR, TORCHMLIR_BUILD_DIR.
 ##################################################
 
 _LLVM_ENV="${BUILD_DIR}/llvm_env.sh"
@@ -44,10 +44,11 @@ if [[ $INC_BUILD != 1 ]]; then
             ${CCACHE_CMAKE_ARGS} \
             -DCMAKE_BUILD_TYPE=Release \
             -DPython3_FIND_VIRTUALENV=ONLY \
+            -DPython_FIND_VIRTUALENV=ONLY \
             -DLLVM_ENABLE_PROJECTS=mlir \
             -DLLVM_EXTERNAL_PROJECTS=torch-mlir \
             -DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR="${TORCHMLIR_SOURCE_DIR}" \
-            -DSTABLEHLO_EXTERNAL_DIR="${STABLEHLO_SOURCE_DIR}" \
+            -DTORCH_MLIR_ENABLE_STABLEHLO=OFF \
             -DMLIR_ENABLE_BINDINGS_PYTHON=ON \
             -DLLVM_TARGETS_TO_BUILD=host \
             -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON \
@@ -55,4 +56,3 @@ if [[ $INC_BUILD != 1 ]]; then
 fi
 echo "Building LLVM and Torch-MLIR (${BUILD_JOBS} jobs)..."
 cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
-

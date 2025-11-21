@@ -1,7 +1,7 @@
 # =========================================================================
 # LLVM Source Download (no build)
 # =========================================================================
-# This file only downloads LLVM/torch-mlir/stablehlo sources and records the
+# This file only downloads LLVM/torch-mlir sources and records the
 # relevant paths for the shell script to perform the actual build.
 # =========================================================================
 
@@ -15,19 +15,17 @@ if(NOT COMMAND mrt_add_pkg)
     include(${CMAKE_CURRENT_LIST_DIR}/utils.cmake)
 endif()
 
-set(LLVM_VERSION "19.1.0" CACHE INTERNAL "LLVM version")
-set(LLVM_COMMIT "d16b21b17d13ecd88a068bb803df43e53d3b04ba" CACHE INTERNAL "LLVM commit hash")
-set(LLVM_SHA256 "6434ad20a37ba2bc7626863cf2c9a4c3b025019ed7ffc366e6cd66c3f81d89fb")
+set(LLVM_VERSION "2025.10.28" CACHE INTERNAL "LLVM daily version")
+set(LLVM_COMMIT "41f65666f6378bba7266be7c662c70074f04ed75" CACHE INTERNAL "LLVM commit hash")
+set(LLVM_SHA256 "c69994a402c480c64ba8b266a5c2a00a7216a2ad5b6f40b5c6cb5cece15c0f94")
 set(LLVM_URL "https://gitee.com/mirrors/LLVM/repository/archive/${LLVM_COMMIT}.zip")
-
-include(${CMAKE_CURRENT_LIST_DIR}/stablehlo.cmake)
 
 include(${CMAKE_CURRENT_LIST_DIR}/torch_mlir.cmake)
 
 # Include dependent source paths in llvm_project hash
-# This ensures llvm_project path changes when torch_mlir or stablehlo change
+# This ensures llvm_project path changes when torch_mlir change
 # LLVM_COMMIT is already in LLVM_URL which participates in hash calculation
-set(LLVM_SUBMODULE_INFO "${torch_mlir_DIRPATH}-${stablehlo_DIRPATH}")
+set(LLVM_SUBMODULE_INFO "${torch_mlir_DIRPATH}")
 
 mrt_add_pkg(llvm_project
     VER ${LLVM_VERSION}
@@ -40,7 +38,7 @@ mrt_add_pkg(llvm_project
 set(LLVM_SOURCE_DIR "${llvm_project_DIRPATH}")
 
 # Build directory is inside source directory
-# Since llvm_project path already includes all dependency info (LLVM commit, torch_mlir hash, stablehlo hash),
+# Since llvm_project path already includes all dependency info (LLVM commit, torch_mlir hash),
 # the build directory will automatically be unique for different source configurations
 set(LLVM_BUILD_DIR "${LLVM_SOURCE_DIR}/_build")
 
@@ -53,6 +51,5 @@ file(APPEND ${ENV_FILE} "export LLVM_SOURCE_DIR=\"${LLVM_SOURCE_DIR}\"\n")
 file(APPEND ${ENV_FILE} "export LLVM_BUILD_DIR=\"${LLVM_BUILD_DIR}\"\n")
 file(APPEND ${ENV_FILE} "export LLVM_DIR=\"${LLVM_BUILD_DIR}/lib/cmake/llvm\"\n")
 file(APPEND ${ENV_FILE} "export MLIR_DIR=\"${LLVM_BUILD_DIR}/lib/cmake/mlir\"\n")
-file(APPEND ${ENV_FILE} "export STABLEHLO_SOURCE_DIR=\"${stablehlo_DIRPATH}\"\n")
 file(APPEND ${ENV_FILE} "export TORCHMLIR_SOURCE_DIR=\"${torch_mlir_DIRPATH}\"\n")
 file(APPEND ${ENV_FILE} "export TORCHMLIR_BUILD_DIR=\"${LLVM_BUILD_DIR}/tools/torch-mlir\"\n")

@@ -34,7 +34,6 @@ class CMakeBuild(build_ext):
         cmake_args = []
         cmake_args.append(f"-DLLVM_DIR={os.environ['LLVM_DIR']}")
         cmake_args.append(f"-DMLIR_DIR={os.environ['MLIR_DIR']}")
-        cmake_args.append(f"-DSTABLEHLO_SOURCE_DIR={os.environ['STABLEHLO_SOURCE_DIR']}")
         cmake_args.append(f"-DTORCHMLIR_SOURCE_DIR={os.environ['TORCHMLIR_SOURCE_DIR']}")
 
         subprocess.check_call(

@@ -10,6 +10,7 @@
 - packaging>=24.2
 - wheel>=0.34.2
 - pybind11
+- nanobind >= 2.9
 
 更多依赖详见`requirements_ascend.txt`，构建生成的whl包将输出到`output`目录。
 

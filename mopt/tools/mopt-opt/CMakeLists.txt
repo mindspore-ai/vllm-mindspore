@@ -5,6 +5,8 @@ set(LIBS
   ${dialect_libs}
   ${conversion_libs}
   MLIROptLib
+  MLIRRegisterAllDialects
+  MLIRRegisterAllPasses
   MLIRMrtDialect
   MoptConversionStablehloToMrt
   StablehloRegister

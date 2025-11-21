@@ -18,6 +18,7 @@ add_mlir_conversion_library(MoptConversionStablehloToMrt
   MLIRIR
   MLIRPass
   MLIRRewrite
+  MLIRSupport
   MLIRTransformUtils
   MLIRMrtDialect
   StablehloOps

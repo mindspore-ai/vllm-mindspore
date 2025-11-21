@@ -33,7 +33,7 @@ def ConvertMulOpPattern : Pat<
 
 // Convert stablehlo.logistic to mrt.sigmoid
 def ConvertLogisticOpPattern : Pat<
-  (StableHLO_LogisticOp $input),
+  (StableHLO_LogisticOp $input, $precision_config),
   (Mrt_SigmoidOp $input)
 >;
 

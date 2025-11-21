@@ -2,7 +2,7 @@ diff --git a/python/CMakeLists.txt b/python/CMakeLists.txt
 index 4fbd8561..6ee97a05 100644
 --- a/python/CMakeLists.txt
 +++ b/python/CMakeLists.txt
-@@ -114,6 +114,9 @@ add_mlir_python_common_capi_library(TorchMLIRAggregateCAPI
+@@ -115,6 +115,9 @@ add_mlir_python_common_capi_library(TorchMLIRAggregateCAPI
    DECLARED_SOURCES ${_source_components}
  )
  
@@ -12,4 +12,3 @@ index 4fbd8561..6ee97a05 100644
  add_mlir_python_modules(TorchMLIRPythonModules
    ROOT_PREFIX "${TORCH_MLIR_PYTHON_PACKAGES_DIR}/torch_mlir/torch_mlir"
    INSTALL_PREFIX "python_packages/torch_mlir/torch_mlir"
-

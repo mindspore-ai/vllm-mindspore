@@ -107,6 +107,44 @@ add_mlir_python_common_capi_library(MoptAggregateCAPI
     MoptCAPI
 )
 
+# Ensure StableHLO and Torch-MLIR Python bindings are built before MoptAggregateCAPI
+# These Python bindings are generated in torch-mlir build directory
+# Add dependencies for all Python binding targets and extensions
+foreach(target_name
+    # StableHLO Python bindings
+    StablehloPythonSources.Dialects.stablehlo.ops_gen
+    StablehloPythonSources.Dialects.chlo.ops_gen
+    StablehloPythonSources.Dialects.check.ops_gen
+    StablehloPythonSources.Dialects.vhlo.ops_gen
+    StablehloPythonSources.Dialects.stablehlo
+    StablehloPythonSources.Dialects.chlo
+    StablehloPythonSources.Dialects.check
+    StablehloPythonSources.Dialects.vhlo
+    StablehloPythonSources.Dialects
+    StablehloPythonSources
+    StablehloPythonExtensions
+    ChloPythonSources.Dialects.chlo.ops_gen
+    ChloPythonSources.Dialects.chlo
+    ChloPythonSources.Dialects
+    ChloPythonSources
+    ChloPythonExtensions
+    VhloPythonSources.Dialects.vhlo.ops_gen
+    VhloPythonSources.Dialects.vhlo
+    VhloPythonSources.Dialects
+    VhloPythonSources
+    VhloPythonExtensions
+    # Torch-MLIR Python bindings
+    TorchMLIRPythonSources.Dialects.torch.ops_gen
+    TorchMLIRPythonSources.Dialects.torch
+    TorchMLIRPythonSources.Dialects
+    TorchMLIRPythonSources
+    TorchMLIRPythonExtensions
+)
+  if(TARGET ${target_name})
+    add_dependencies(MoptAggregateCAPI ${target_name})
+  endif()
+endforeach()
+
 # Hide all static library symbols to avoid conflicts with other MLIR Python bindings
 target_link_options(MoptAggregateCAPI PRIVATE
   $<$<PLATFORM_ID:Linux>:LINKER:--exclude-libs,ALL>
