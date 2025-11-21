@@ -15,26 +15,37 @@
  */
 
 #include "runtime/executor/op_runner.h"
+#include "common/logger.h"
+#include "ops/op_def/ops_name.h"
 
 namespace mrt {
 namespace runtime {
 ops::OpsErrorCode OpRunner::InferShape() {
   if (isDynamicShape_) {
+    LOG_OUT << "Begin InferShape for op[" << ops::ToStr(opName_) << "], inputs=" << input_;
     return operator_->InferShape(input_, output_);
   }
 
   return ops::SUCCESS;
 }
 
-ops::OpsErrorCode OpRunner::CalcWorkspace() { return operator_->CalcWorkspace(input_, output_, &workspaceSize_); }
+ops::OpsErrorCode OpRunner::CalcWorkspace() {
+  LOG_OUT << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
+          << ", workspaceSize=" << workspaceSize_;
+  return operator_->CalcWorkspace(input_, output_, &workspaceSize_);
+}
 
 ops::OpsErrorCode OpRunner::Launch() {
+  LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
+          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream_;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream_);
   return ret;
 }
 
 ops::OpsErrorCode OpRunner::Launch(void *stream) {
   CHECK_IF_NULL(stream);
+  LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
+          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
   return ret;
 }

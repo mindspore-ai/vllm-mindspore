@@ -669,6 +669,8 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3"> {
     $activeExpertRangeOptional `,` $rowIdxType
     attr-dict `:` functional-type(operands, results)
   }];
+
+  let generated = 1;
 }
 
 def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm"> {

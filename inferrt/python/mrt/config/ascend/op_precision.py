@@ -12,18 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Mrt global configurations."""
+"""Ascend op precision config"""
 
 from mrt._mrt_config import OpPrecisionConf
 
-
-class _ConfigManager:
-    """_ConfigManager includes all the global mrt configurations."""
-
-    def __init__(self):
-        self.ascend_op_precision_conf = OpPrecisionConf.Instance()
-
-
-config = _ConfigManager()
-
-__all__ = ["config"]
+__all__ = ['OpPrecisionConf']

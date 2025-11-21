@@ -91,8 +91,14 @@ class AclnnOpsGenerator(CodeGenerator):
 
     def _arg_wrapper(self, args: list) -> str:
         """Wrapper for arguments."""
-        arg_type = args[0].get('def')
-        return _convert_type(arg_type)
+        ret = ''
+        for idx, arg in enumerate(args):
+            arg_type = arg[0].get('def')
+            if arg_type == 'MrtOptTensor':
+                ret += ''.join(f", input[kIndex{idx}]->IsTensor() ? input[kIndex{idx}]->ToTensor() : nullptr")
+            else:
+                ret += ''.join(f", input[kIndex{idx}]{_convert_type(arg_type)}")
+        return ret
 
     def _output_wrapper(self, result: list) -> str:
         """Wrapper for results."""

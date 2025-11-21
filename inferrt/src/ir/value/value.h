@@ -153,6 +153,12 @@ class DA_API Value : public RefCounted {
    * @param other The Value to move from.
    */
   Value &operator=(Value &&other) noexcept;
+  /**
+   * @brief Assignment operator.
+   * @param other The Value to assign from.
+   * @throw runtime exception if the tag is different.
+   */
+  Value &operator=(const Value &other);
 
   /** @name Type checkers */
   ///@{
@@ -193,6 +199,13 @@ class DA_API Value : public RefCounted {
    * @brief Enumeration of the possible types a Value can hold.
    */
   enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple };
+
+  /**
+   * @brief Tag string representation.
+   * @param tag Input tag enumeration.
+   * @return String representation of the tag enumeration.
+   */
+  friend const char *TagToString(Tag tag);
 
   const Tag tag_;  ///< The tag indicating the type of the value.
   union {

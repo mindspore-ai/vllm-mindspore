@@ -21,6 +21,11 @@
 
 namespace mrt {
 namespace ir {
+constexpr const char *kTagStrings[] = {
+  "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple",
+};
+
+const char *TagToString(Value::Tag tag) { return kTagStrings[static_cast<size_t>(tag)]; }
 
 Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}
 Value::Value(float v) : tag_(Tag::Float), float_(v) {}
@@ -82,9 +87,45 @@ Value &Value::operator=(Value &&other) noexcept {
   return *this;
 }
 
-#define CHECK_TAG(expected)                                \
-  if (tag_ != expected) {                                  \
-    LOG_EXCEPTION << "Bad Value access, value: " << *this; \
+Value &Value::operator=(const Value &other) {
+  if (this != &other) {
+    if (tag_ != other.tag_) {
+      LOG_EXCEPTION << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
+                    << ", other tag: " << TagToString(other.tag_);
+    }
+    switch (tag_) {
+      case Tag::Tensor:
+        tensor_ = other.tensor_;
+        break;
+      case Tag::Float:
+        float_ = other.float_;
+        break;
+      case Tag::Double:
+        double_ = other.double_;
+        break;
+      case Tag::Int:
+        int_ = other.int_;
+        break;
+      case Tag::Bool:
+        bool_ = other.bool_;
+        break;
+      case Tag::String:
+        string_ = other.string_;
+        break;
+      case Tag::Tuple:
+        tuple_ = other.tuple_;
+        break;
+      case Tag::None:
+        break;
+    }
+  }
+  return *this;
+}
+
+#define CHECK_TAG(expected)                                                                  \
+  if (tag_ != expected) {                                                                    \
+    LOG_EXCEPTION << "Bad Value access, value: " << *this << ", type: " << TagToString(tag_) \
+                  << ", expected type: " << TagToString(expected);                           \
   }
 
 const TensorPtr &Value::ToTensor() const {
@@ -144,9 +185,9 @@ std::ostream &operator<<(std::ostream &os, const ValuePtr &value) {
 }
 
 std::ostream &operator<<(std::ostream &os, const std::vector<const Value *> &values) {
-  os << "std::vector{";
+  os << "{";
   for (size_t i = 0; i < values.size(); ++i) {
-    os << values[i];
+    os << *(values[i]);
     if (i < values.size() - 1) {
       os << ", ";
     }

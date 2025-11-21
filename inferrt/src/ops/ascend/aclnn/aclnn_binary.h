@@ -38,14 +38,12 @@ class AclnnBinaryOpBase : public Operator {
 
  protected:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};
-  std::string name_;
 };
 
 #define DefineBinaryOp(op_name, aclnn_opname)                    \
   class Aclnn##op_name : public AclnnBinaryOpBase {              \
    public:                                                       \
     Aclnn##op_name() {                                           \
-      name_ = #op_name;                                          \
       executor_ = std::make_unique<AclnnExecutor>(aclnn_opname); \
     }                                                            \
     ~Aclnn##op_name() override = default;                        \
