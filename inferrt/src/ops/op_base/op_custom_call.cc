@@ -36,6 +36,14 @@ void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   }
 }
 
+OpsErrorCode OpCustomCall::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
+  if (operatorPtr_ == nullptr) {
+    LOG_ERROR << "operatorPtr_ is null in OpCustomCall::InferShape";
+    return UNKNOWN_ERROR;
+  }
+  return operatorPtr_->InferShape(input_, output);
+}
+
 OpsErrorCode OpCustomCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
   return operatorPtr_->CalcWorkspace(input_, output, workspaceSize);

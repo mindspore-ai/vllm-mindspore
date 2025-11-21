@@ -12,3 +12,4 @@ link_directories(${ASCEND_PATH}/latest/lib64/)
 
 add_subdirectory(aclnn)
 add_subdirectory(hccl)
+add_subdirectory(lowered)
