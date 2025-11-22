@@ -45,7 +45,17 @@ PYBIND11_MODULE(_mrt_ir, m) {
 #undef OP
     .export_values();
 
-  py::enum_<ir::DataType::Type>(m, "DataType")
+  py::class_<ir::DataType> DataType(m, "DataType");
+  DataType.def(py::init<ir::DataType::Type>())
+    .def_readwrite("value", &ir::DataType::value)
+    .def_static("from_string", ir::DataType::FromString, py::arg("dtype_str"),
+                "Convert a dtype string to a DataType object.")
+    .def_static(
+      "convert_str_to_int",
+      [](const std::string &dtype_str) { return static_cast<int>(ir::DataType::FromString(dtype_str).value); },
+      py::arg("dtype_str"), "Convert a dtype string to an integer of enum DataType.Type");
+
+  py::enum_<ir::DataType::Type>(DataType, "Type")
     .value("Unknown", ir::DataType::Type::Unknown)
     .value("Float16", ir::DataType::Type::Float16)
     .value("BFloat16", ir::DataType::Type::BFloat16)
@@ -85,8 +95,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<int64_t>(), py::arg("value"));
 
   py::class_<ir::Tensor, ir::TensorPtr>(m, "Tensor")
-    .def(py::init([](const std::vector<int64_t> &shape, ir::DataType::Type dtype_type, const hardware::Device &device) {
-           ir::DataType dtype(dtype_type);
+    .def(py::init([](const std::vector<int64_t> &shape, const ir::DataType &dtype, const hardware::Device &device) {
            return ir::MakeIntrusive<ir::Tensor>(shape, dtype, device);
          }),
          py::arg("shape"), py::arg("dtype"), py::arg("device") = hardware::Device(hardware::DeviceType::CPU, -1))

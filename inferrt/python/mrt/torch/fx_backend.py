@@ -167,6 +167,7 @@ _OP_MAP = {
     "gt": Op.gt,
     "ge": Op.ge,
     "relu": Op.relu,
+    "to": Op.cast,
     "sigmoid": Op.sigmoid,
     "reshape": Op.reshape,
     "transpose": Op.transpose,

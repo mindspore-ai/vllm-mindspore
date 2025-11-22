@@ -26,6 +26,7 @@ from mrt._mrt_ir import (
     SymbolicVar,
     SymbolicConst,
     SymbolicExpr,
+    DataType,
 )
 
 
@@ -112,4 +113,5 @@ __all__ = [
     "SymbolicVar",
     "SymbolicConst",
     "SymbolicExpr",
+    "DataType",
 ]

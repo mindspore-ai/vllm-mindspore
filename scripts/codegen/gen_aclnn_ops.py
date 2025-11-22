@@ -95,9 +95,11 @@ class AclnnOpsGenerator(CodeGenerator):
         for idx, arg in enumerate(args):
             arg_type = arg[0].get('def')
             if arg_type == 'MrtOptTensor':
-                ret += ''.join(f", input[kIndex{idx}]->IsTensor() ? input[kIndex{idx}]->ToTensor() : nullptr")
+                ret += f", input[kIndex{idx}]->IsTensor() ? input[kIndex{idx}]->ToTensor() : nullptr"
+            elif arg_type == 'Mrt_DtypeType':
+                ret += f", static_cast<mrt::ir::DataType::Type>(input[kIndex{idx}]->ToInt())"
             else:
-                ret += ''.join(f", input[kIndex{idx}]{_convert_type(arg_type)}")
+                ret += f", input[kIndex{idx}]{_convert_type(arg_type)}"
         return ret
 
     def _output_wrapper(self, result: list) -> str:

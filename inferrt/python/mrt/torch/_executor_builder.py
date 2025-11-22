@@ -21,40 +21,16 @@ correspondence with GraphExecutor supported operators.
 
 from typing import Any, Dict, List, Optional
 
-from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple
-from mrt._mrt_ir import DataType
+from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple, DataType
 
 
 # ===== MLIR Type Conversion Utilities =====
 
-def _mlir_elemtype_to_datatype(elem_ty) -> DataType:
-    """Convert MLIR element type to DataType enum."""
-    dtype_map = {
-        "f32": DataType.Float32,
-        "f16": DataType.Float16,
-        "bf16": DataType.BFloat16,
-        "i64": DataType.Int64,
-        "si64": DataType.Int64,
-        "i32": DataType.Int32,
-        "si32": DataType.Int32,
-        "i16": DataType.Int16,
-        "si16": DataType.Int16,
-        "i8": DataType.Int8,
-        "si8": DataType.Int8,
-        "ui8": DataType.UInt8,
-        "uint8": DataType.UInt8,
-    }
-    dtype_str = str(elem_ty)
-    if dtype_str in dtype_map:
-        return dtype_map[dtype_str]
-
-    raise NotImplementedError(f"Unsupported dtype: {dtype_str!r}")
-
 def _create_tensor_value_from_mlir(mlir_tensor) -> Value:
     """Create Tensor Value from MLIR RankedTensorType."""
     shape = [int(d) if isinstance(d, int) else -1 for d in mlir_tensor.shape]
-    dtype_enum = _mlir_elemtype_to_datatype(mlir_tensor.element_type)
-    tensor = Tensor(shape, dtype_enum)
+    data_type = DataType.from_string(str(mlir_tensor.element_type))
+    tensor = Tensor(shape, data_type)
     return Value(tensor)
 
 
@@ -75,8 +51,12 @@ def _extract_mrt_constant_value(op):
     if not hasattr(op, "attributes") or "value" not in op.attributes:
         raise ValueError(f"mrt.constant operation missing 'value' attribute: {op}")
 
+    op_name = getattr(op, "name", "") or getattr(op, "OPERATION_NAME", "")
     value_attr = op.attributes["value"]
     try:
+        if op_name == "mrt.constant.dtype":
+            # Special handling for mrt.constant.dtype: extract type and convert to string value
+            return Value(DataType.convert_str_to_int(str(value_attr.value)))
         return _get_value_from_attr(value_attr)
     except Exception as e:
         raise ValueError(f"Unable to extract value from constant operation. "

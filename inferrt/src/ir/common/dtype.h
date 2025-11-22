@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <stdexcept>
 
 namespace mrt {
@@ -133,6 +134,34 @@ struct DataType {
       default:
         throw std::runtime_error("Unsupported data type");
     }
+  }
+
+  /**
+   * @brief Converts a string to the corresponding DataType.
+   * @param str The string representation of the data type.
+   * @return The corresponding DataType.
+   * @throws std::runtime_error if the string does not correspond to a valid type.
+   */
+  static DataType FromString(const std::string &str) {
+    static const std::unordered_map<std::string, Type> kStringToTypeMap = {
+      {"float16", Float16},     {"f16", Float16},                     // float16
+      {"bfloat16", BFloat16},   {"bf16", BFloat16},                   // bfloat16
+      {"float32", Float32},     {"f32", Float32},                     // float32
+      {"float64", Float64},     {"f64", Float64},                     // float64
+      {"complex64", Complex64}, {"c64", Complex64},                   // complex64
+      {"int8", Int8},           {"i8", Int8},       {"si8", Int8},    // int8
+      {"int16", Int16},         {"i16", Int16},     {"si16", Int16},  // int16
+      {"int32", Int32},         {"i32", Int32},     {"si32", Int32},  // int32
+      {"int64", Int64},         {"i64", Int64},     {"si64", Int64},  // int64
+      {"uint8", UInt8},         {"ui8", UInt8},                       // uint8
+      {"bool", Bool},                                                 // bool
+      {"unknown", Unknown},                                           // unknown
+    };
+    auto it = kStringToTypeMap.find(str);
+    if (it != kStringToTypeMap.end()) {
+      return DataType(it->second);
+    }
+    throw std::runtime_error("Unsupported data type string: " + str);
   }
 };
 
