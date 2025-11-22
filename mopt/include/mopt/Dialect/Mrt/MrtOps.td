@@ -363,7 +363,7 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let generated = 1;
 }
 
-def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
+def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOperandSegments]> {
   let summary = "aclnnMoeInitRoutingV3";
   let description = [{
     Operation for initializing Moe (Mixture of Experts) routing V3 using aclnn backend.
@@ -374,8 +374,8 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let arguments = (ins
     MrtAnyTensor:$x,
     MrtAnyTensor:$expertIdx,
-    MrtAnyTensor:$scaleOptional,
-    MrtAnyTensor:$offsetOptional,
+    Optional<MrtAnyTensor>:$scaleOptional,
+    Optional<MrtAnyTensor>:$offsetOptional,
     Mrt_I64Type:$activeNum,
     Mrt_I64Type:$expertCapacity,
     Mrt_I64Type:$expertNum,
@@ -395,7 +395,7 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   );
 
   let assemblyFormat = [{
-    $x `,` $expertIdx `,` $scaleOptional `,` $offsetOptional `,`
+    $x `,` $expertIdx (`,` $scaleOptional^)? (`,` $offsetOptional^)? `,`
     $activeNum `,` $expertCapacity `,` $expertNum `,` $dropPadMode `,`
     $expertTokensNumType `,` $expertTokensNumFlag `,` $quantMode `,`
     $activeExpertRangeOptional `,` $rowIdxType

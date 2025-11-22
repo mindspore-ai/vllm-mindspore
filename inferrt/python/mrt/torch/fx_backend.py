@@ -73,10 +73,15 @@ def floor_div_hook(node, input_nodes, executor):
     div_mode = 2
     return [input_nodes[0], input_nodes[1], div_mode]
 
+# pylint: disable=unused-argument
+def long_hook(node, input_nodes, executor):
+    """add long."""
+    return [input_nodes[0],  torch.int64]
 
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
+    register_arg_mapping_hook("long", long_hook)
 
 
 def _next_unique_graph_id():
@@ -172,6 +177,7 @@ _OP_MAP = {
     "rsqrt": Op.rsqrt,
     "view": Op.reshape,  # view is often used like reshape
     "copy_": Op.copy,
+    "long": Op.cast,
 }
 
 
