@@ -17,6 +17,7 @@
 #ifndef INFERRT_SRC_HARDWARE_DEVICE_EVENT_H
 #define INFERRT_SRC_HARDWARE_DEVICE_EVENT_H
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 #include "common/visible.h"

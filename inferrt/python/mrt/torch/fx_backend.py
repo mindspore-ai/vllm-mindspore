@@ -100,7 +100,17 @@ def long_hook(node, input_nodes, executor):
     """add long."""
     return [input_nodes[0],  torch.int64]
 
+# pylint: disable=unused-argument
+def permute_hook(node, input_nodes, executor):
+    """transpose dims"""
+    dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
+    dim_inx[input_nodes[1]] = input_nodes[2]
+    dim_inx[input_nodes[2]] = input_nodes[1]
+
+    return [input_nodes[0],  dim_inx]
+
 def _init_arg_mapping_hooks():
+    register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
@@ -128,7 +138,7 @@ _OP_MAP = {
     torch.ge: Op.ge,
     torch.matmul: Op.matmul,
     torch.reshape: Op.reshape,
-    torch.transpose: Op.transpose,
+    torch.transpose: Op.permute,
     torch.cat: Op.concat,
     torch.neg: Op.neg,
     torch.square: Op.square,
@@ -193,7 +203,7 @@ _OP_MAP = {
     "to": Op.cast,
     "sigmoid": Op.sigmoid,
     "reshape": Op.reshape,
-    "transpose": Op.transpose,
+    "transpose": Op.permute,
     "neg": Op.neg,
     "square": Op.square,
     "rsqrt": Op.rsqrt,
