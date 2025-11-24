@@ -75,7 +75,9 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("__repr__", &ir::SymbolicExpr::ToString)
     .def("__add__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a + b; })
     .def("__mul__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a * b; })
-    .def("__floordiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a / b; });
+    .def("__truediv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a / b; })
+    .def("__floordiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::FloorDiv(a, b); })
+    .def("__ceildiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::CeilDiv(a, b); });
 
   py::class_<ir::SymbolicVar, ir::SymbolicExpr, ir::IntrusivePtr<ir::SymbolicVar>>(m, "SymbolicVar")
     .def(py::init<const std::string &>(), py::arg("name"))

@@ -16,83 +16,61 @@
 A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 """
 import operator
-from functools import reduce
 from typing import List, Dict, Any
-import sympy
 import torch
 from torch._ops import OpOverloadPacket
 from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
-from torch.utils._sympy.functions import FloorDiv
 
 from mrt import config
-from mrt.ir import GraphExecutor, Op, SymbolicVar, SymbolicConst, SymbolicExpr
-from mrt.torch.utils import from_torch, to_torch, update_tensor_data, get_collective_info_from_torch, \
-    set_device_context
+from mrt.ir import GraphExecutor, Op
+from mrt.torch.symbolic_shape import SymbolicShapeManager
+from mrt.torch.utils import (
+    from_torch,
+    to_torch,
+    update_tensor_data,
+    get_collective_info_from_torch,
+    set_device_context,
+)
 
 
 def _init_mrt_config():
     """Initialize the mrt configs."""
     try:
-        import torch_npu # pylint: disable=import-outside-toplevel
-        config.ascend.op_precision.set_is_allow_matmul_hf32(torch_npu.npu.matmul.allow_hf32)
+        import torch_npu  # pylint: disable=import-outside-toplevel
+
+        config.ascend.op_precision.set_is_allow_matmul_hf32(
+            torch_npu.npu.matmul.allow_hf32
+        )
         # pylint: disable=protected-access
         acl_precision_mode = torch_npu._C._npu_getOption("ACL_PRECISION_MODE")
         config.ascend.op_precision.set_acl_precision_mode(acl_precision_mode.decode())
     except ImportError:
         print("torch_npu is not installed, using default mrt configs.")
 
-# pylint: disable=bad-continuation
-def _convert_sympy_expr_to_symbolic_expr(
-    expr: sympy.Expr, symbol_map: Dict[sympy.Symbol, SymbolicVar]
-) -> SymbolicExpr:
-    """Recursively convert a sympy expression to a SymbolicExpr."""
-    if expr.is_Symbol:
-        if expr not in symbol_map:
-            symbol_map[expr] = SymbolicVar(str(expr))
-        return symbol_map[expr]
-
-    if expr.is_Integer:
-        return SymbolicConst(int(expr))
-
-    if isinstance(expr, FloorDiv):
-        base_expr = _convert_sympy_expr_to_symbolic_expr(expr.base, symbol_map)
-        divisor_expr = _convert_sympy_expr_to_symbolic_expr(expr.divisor, symbol_map)
-        return base_expr // divisor_expr
-
-    # It's an expression with args
-    converted_args = [
-        _convert_sympy_expr_to_symbolic_expr(arg, symbol_map) for arg in expr.args
-    ]
-
-    if expr.is_Add:
-        return reduce(operator.add, converted_args)
-
-    if expr.is_Mul:
-        return reduce(operator.mul, converted_args)
-
-    raise NotImplementedError(
-        f"Unsupported sympy expression: {expr} (type: {type(expr)})"
-    )
-
 
 _GLOBAL_GRAPH_ID = 0
 
 _ARG_MAPPING_HOOKS = {}
 
+
 def register_arg_mapping_hook(op, hook_func):
     _ARG_MAPPING_HOOKS[op] = hook_func
 
-def  get_arg_mapping_hook(op):
+
+def get_arg_mapping_hook(op):
     return _ARG_MAPPING_HOOKS.get(op)
+
 
 # pylint: disable=unused-argument
 def embedding_hook(node, input_nodes, executor):
     """swap the first and second param position."""
     return [input_nodes[1], input_nodes[0]]
 
+
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.embedding, embedding_hook)
+
 
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
@@ -195,13 +173,14 @@ def _get_op(target):
 
         if isinstance(target, torch._ops.OpOverloadPacket):
             node_module = target.__module__
-            if not node_module.startswith("torch._ops.aten") and \
-               not node_module.startswith("torch._ops.prims"):
+            if not node_module.startswith(
+                "torch._ops.aten"
+            ) and not node_module.startswith("torch._ops.prims"):
                 return Op.custom_call
     return None
 
 
-def _flatten_args(op: Op, node: Node) ->List[Argument]:
+def _flatten_args(op: Op, node: Node) -> List[Argument]:
     """
     Flatten the arguments of a given FX node into a flat list of Argument objects.
 
@@ -222,7 +201,9 @@ def _flatten_args(op: Op, node: Node) ->List[Argument]:
     if not kwargs:
         return flat_args
     if not isinstance(node.target, OpOverloadPacket):
-        raise RuntimeError(f"Unsupported node target for keyword only args: {node.target}")
+        raise RuntimeError(
+            f"Unsupported node target for keyword only args: {node.target}"
+        )
     schemas = node.target._schemas
     if len(schemas) != 1:
         raise RuntimeError("Currently, do not support op overload")
@@ -267,23 +248,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     _init_mrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
+    symbolic_shape_manager = SymbolicShapeManager()
     env: Dict[Node, Any] = {}
-    symbol_map: Dict[sympy.Symbol, SymbolicVar] = {}
-
-    def _create_symbolic_shape_if_needed(example_value, output_value):
-        if isinstance(example_value, torch.Tensor) and any(
-            isinstance(d, torch.SymInt) for d in example_value.shape
-        ):
-            symbolic_shape = []
-            for dim in example_value.shape:
-                if isinstance(dim, torch.SymInt):
-                    expr = dim.node.expr
-                    symbolic_shape.append(
-                        _convert_sympy_expr_to_symbolic_expr(expr, symbol_map)
-                    )
-                else:
-                    symbolic_shape.append(SymbolicConst(int(dim)))
-            output_value.to_tensor().symbolic_shape = symbolic_shape
 
     set_device_context()
     get_collective_info_from_torch(gm)
@@ -292,7 +258,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
         if node.op == "placeholder":
             example_value = node.meta.get("example_value", None)
             output_value = from_torch(example_value)
-            _create_symbolic_shape_if_needed(example_value, output_value)
+            symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
             env[node] = executor.add_value_node(output_value)
 
     with executor:
@@ -320,10 +286,12 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 hook_func = get_arg_mapping_hook(op)
                 if hook_func is not None:
                     input_nodes = hook_func(node, input_nodes, executor)
-                    print(f"Applied arg mapping hook for {op}, new input nodes:{input_nodes}")
+                    print(
+                        f"Applied arg mapping hook for {op}, new input nodes:{input_nodes}"
+                    )
                 example_value = node.meta.get("example_value", None)
                 output_value = from_torch(example_value)
-                _create_symbolic_shape_if_needed(example_value, output_value)
+                symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
 
                 env[node] = executor.add_op_node(op, input_nodes, output_value)
 
@@ -362,8 +330,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             elif isinstance(fx_param_value, torch.SymInt):
                 mrt_param_node.output = from_torch(int(input_value))
                 expr = fx_param_value.node.expr
-                if expr in symbol_map:
-                    symbol_map[expr].set_value(int(input_value))
+                symbolic_shape_manager.set_symbolic_var(expr, int(input_value))
             else:
                 mrt_param_node.output = from_torch(input_value)
 
