@@ -37,7 +37,9 @@ class SymbolicExpr : public RefCounted {
     Symbol,
     Add,
     Mul,
-    Div,
+    TrueDiv,
+    FloorDiv,
+    CeilDiv,
   };
 
   explicit SymbolicExpr(Kind kind) : kind_(kind) {}
@@ -108,19 +110,39 @@ class SymbolicMul : public SymbolicBinaryOp {
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Mul; }
 };
 
-class SymbolicFloorDiv : public SymbolicBinaryOp {
+class SymbolicTrueDiv : public SymbolicBinaryOp {
  public:
-  SymbolicFloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::Div, lhs, rhs) {}
+  SymbolicTrueDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::TrueDiv, lhs, rhs) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return "(" + lhs_->ToString() + " / " + rhs_->ToString() + ")"; }
 
-  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Div; }
+  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::TrueDiv; }
+};
+
+class SymbolicFloorDiv : public SymbolicBinaryOp {
+ public:
+  SymbolicFloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::FloorDiv, lhs, rhs) {}
+  int64_t Evaluate() const override;
+  std::string ToString() const override { return "floor_div(" + lhs_->ToString() + ", " + rhs_->ToString() + ")"; }
+
+  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::FloorDiv; }
+};
+
+class SymbolicCeilDiv : public SymbolicBinaryOp {
+ public:
+  SymbolicCeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::CeilDiv, lhs, rhs) {}
+  int64_t Evaluate() const override;
+  std::string ToString() const override { return "ceil_div(" + lhs_->ToString() + ", " + rhs_->ToString() + ")"; }
+
+  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::CeilDiv; }
 };
 
 // A helper to create symbolic expressions
 SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
+SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
+SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 
 }  // namespace ir
 }  // namespace mrt

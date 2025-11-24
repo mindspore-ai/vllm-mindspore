@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-#include "ir/symbolic/symbolic.h"
+#include <cmath>
+
 #include "common/common.h"
+#include "ir/symbolic/symbolic.h"
 
 namespace mrt {
 namespace ir {
@@ -33,14 +35,25 @@ int64_t SymbolicFloorDiv::Evaluate() const {
   if (rhsVal == 0) {
     LOG_EXCEPTION << "Division by zero in symbolic expression.";
   }
-  int result = lhsVal / rhsVal;
-  // If the signs of a and b are different and there's a non-zero remainder,
-  // the C++ integer division rounds towards zero, which is not floor division.
-  // In this case, we need to subtract 1 to round down.
-  if ((lhsVal % rhsVal != 0) && ((lhsVal < 0) != (rhsVal < 0))) {
-    result--;
+  return static_cast<int64_t>(std::floor(static_cast<double>(lhsVal) / static_cast<double>(rhsVal)));
+}
+
+int64_t SymbolicCeilDiv::Evaluate() const {
+  auto lhsVal = lhs_->Evaluate();
+  auto rhsVal = rhs_->Evaluate();
+  if (rhsVal == 0) {
+    LOG_EXCEPTION << "Division by zero in symbolic expression.";
   }
-  return result;
+  return static_cast<int64_t>(std::ceil(static_cast<double>(lhsVal) / static_cast<double>(rhsVal)));
+}
+
+int64_t SymbolicTrueDiv::Evaluate() const {
+  auto lhsVal = lhs_->Evaluate();
+  auto rhsVal = rhs_->Evaluate();
+  if (rhsVal == 0) {
+    LOG_EXCEPTION << "Division by zero in symbolic expression.";
+  }
+  return static_cast<int64_t>(static_cast<double>(lhsVal) / static_cast<double>(rhsVal));
 }
 
 SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicAdd>(lhs, rhs); }
@@ -48,7 +61,15 @@ SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return Mak
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMul>(lhs, rhs); }
 
 SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
+  return MakeIntrusive<SymbolicTrueDiv>(lhs, rhs);
+}
+
+SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
   return MakeIntrusive<SymbolicFloorDiv>(lhs, rhs);
+}
+
+SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
+  return MakeIntrusive<SymbolicCeilDiv>(lhs, rhs);
 }
 
 }  // namespace ir
