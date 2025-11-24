@@ -39,6 +39,7 @@ from vllm.config import get_current_vllm_config
 from vllm_mindspore.model_executor.models.vision import (
     get_llm_pos_ids_for_vision)
 from vllm_mindspore.model_executor.utils import get_model_context
+from vllm_mindspore.utils import MS_DTYPE_TO_SIZE, is_310p
 
 
 def _get_feat_extract_output_lengths(input_lengths: ms.Tensor):
@@ -127,6 +128,7 @@ class RotaryEmbedding(nn.Cell):
         positions: Tensor,
         query: Tensor,
         key: Tensor,
+        batch_valid_length: Tensor,
         offsets: Optional[Tensor] = None,
     ) -> tuple[Tensor, Tensor]:
         """A PyTorch-native implementation of forward()."""
@@ -321,8 +323,31 @@ class MRotaryEmbedding(RotaryEmbedding):
             select_index[sec_cu[1]:sec_cu[2]] = w_sec
             self.rope_select_index = ms.from_numpy(select_index)
 
+        #TODO(lvhaoyu): move import ms_custom_ops to the top of the file
+        # after ms_custom_ops fix the issue that import ms_custom_ops
+        # at the top of the file will cause aclrtSetDevice failure.
+        try:
+            import ms_custom_ops
+            _ms_custom_ops_available = True
+        except ImportError:
+            _ms_custom_ops_available = False
+
         if self.is_neox_style and self.rotary_dim == self.head_size:
+            # not interleave mode and not partial rope dim
             self.rotary_embedding_op = ops.ApplyRotaryPosEmb(2)
+            self.rope_func = self._neox_style_and_full_rope
+        elif is_310p() and _ms_custom_ops_available \
+            and hasattr(ms_custom_ops, "apply_rotary_pos_emb_ms") \
+            and not is_neox_style \
+            and (((head_size - rotary_dim) *
+                MS_DTYPE_TO_SIZE[dtype]) % 32 == 0) \
+            and (((rotary_dim // 2) * MS_DTYPE_TO_SIZE[dtype]) % 32 == 0):
+            # if on 310 device and custom_ops available and interleave mode
+            self.rope_func = self._interleave_rope_310p
+            from ms_custom_ops import apply_rotary_pos_emb_ms
+            self.apply_rotary_pos_emb_ms = apply_rotary_pos_emb_ms
+        else:
+            self.rope_func = self._native_rope
 
     def apply_interleaved_rope(self, x: Tensor,
                                mrope_section: list[int]) -> Tensor:
@@ -345,6 +370,58 @@ class MRotaryEmbedding(RotaryEmbedding):
         x = mint.flatten(x, start_dim=1)
         x_t = mint.index_select(x, -1, self.rope_select_index)
         return x_t
+
+    def _neox_style_and_full_rope(self, query, key, cos, sin, num_tokens,
+                                  batch_valid_length):
+        """For neox style rope and rotary_dim == head_size."""
+        freqs_cos = mint.cat((cos, cos), dim=-1)
+        freqs_sin = mint.cat((sin, sin), dim=-1)
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
+        query, key = self.rotary_embedding_op(query, key, freqs_cos, freqs_sin,
+                                              batch_valid_length)
+        return query, key
+
+    def _native_rope(self, query, key, cos, sin, num_tokens,
+                     batch_valid_length):
+        """Naive implement, support all cases"""
+        query_shape = query.shape
+        query = query.view(num_tokens, -1, self.head_size)
+        key_shape = key.shape
+        key = key.view(num_tokens, -1, self.head_size)
+        query_rot = query[..., :self.rotary_dim]
+        query_pass = query[..., self.rotary_dim:]
+        query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
+        query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
+
+        key_rot = key[..., :self.rotary_dim]
+        key_pass = key[..., self.rotary_dim:]
+        key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
+        key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
+        return query, key
+
+    def _interleave_rope_310p(self, query, key, cos, sin, num_tokens,
+                              batch_valid_length):
+        """For 310p device and interleave mode.
+        Support rotary_dim < head_size"""
+        query_shape = query.shape
+        query = query.view(num_tokens, -1, self.head_size)
+        key_shape = key.shape
+        key = key.view(num_tokens, -1, self.head_size)
+        if self.is_eager_mode:
+            query = query.contiguous()
+            key = key.contiguous()
+        #TODO(lvhaoyu):change to directly call
+        # ms_custom_ops.apply_rotary_pos_emb_ms after ms_custom_ops fix the
+        # issue that import ms_custom_ops at the top of the file will cause
+        # aclrtSetDevice failure.
+        # apply_rotary_pos_emb_ms is a inplace-op, so no need
+        # to assign the output.
+        self.apply_rotary_pos_emb_ms(query, key, cos, sin, "BSH", "interleave")
+        query = query.view(query_shape)
+        key = key.view(key_shape)
+        return query, key
 
     def construct(
         self,
@@ -379,30 +456,9 @@ class MRotaryEmbedding(RotaryEmbedding):
                 cos = self.apply_no_interleaved_rope(cos, self.mrope_section)
                 sin = self.apply_no_interleaved_rope(sin, self.mrope_section)
 
-        if self.is_neox_style and self.rotary_dim == self.head_size:
-            freqs_cos = mint.cat((cos, cos), dim=-1)
-            freqs_sin = mint.cat((sin, sin), dim=-1)
-            if self.is_eager_mode:
-                query = query.contiguous()
-                key = key.contiguous()
-            query, key = self.rotary_embedding_op(query, key, freqs_cos,
-                                                  freqs_sin,
-                                                  batch_valid_length)
-            return query, key
+        query, key = self.rope_func(query, key, cos, sin, num_tokens,
+                                    batch_valid_length)
 
-        query_shape = query.shape
-        query = query.view(num_tokens, -1, self.head_size)
-        query_rot = query[..., :self.rotary_dim]
-        query_pass = query[..., self.rotary_dim:]
-        query_rot = _apply_rotary_emb(query_rot, cos, sin, self.is_neox_style)
-        query = mint.cat((query_rot, query_pass), dim=-1).view(query_shape)
-
-        key_shape = key.shape
-        key = key.view(num_tokens, -1, self.head_size)
-        key_rot = key[..., :self.rotary_dim]
-        key_pass = key[..., self.rotary_dim:]
-        key_rot = _apply_rotary_emb(key_rot, cos, sin, self.is_neox_style)
-        key = mint.cat((key_rot, key_pass), dim=-1).view(key_shape)
         return query, key
 
     @staticmethod

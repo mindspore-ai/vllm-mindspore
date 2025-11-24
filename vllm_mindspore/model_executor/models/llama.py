@@ -47,6 +47,7 @@ else:
     LlamaConfig = None
 
 from mindspore import Tensor, mint, nn
+from vllm.config import VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.sequence import IntermediateTensors
@@ -233,14 +234,16 @@ class LlamaAttention(nn.Cell):
 
 class LlamaDecoderLayer(nn.Cell):
 
-    def __init__(
-        self,
-        config: LlamaConfig,
-        cache_config=None,
-        quant_config=None,
-        prefix: str = "",
-    ):
+    def __init__(self,
+                 vllm_config: VllmConfig,
+                 prefix: str = "",
+                 config: Optional[LlamaConfig] = None) -> None:
         super().__init__()
+
+        config = config or vllm_config.model_config.hf_config
+        cache_config = vllm_config.cache_config
+        quant_config = vllm_config.quant_config
+
         self.hidden_size = config.hidden_size
         rope_theta = getattr(config, "rope_theta", 10000)
         rope_scaling = getattr(config, "rope_scaling", None)
@@ -339,7 +342,7 @@ class LlamaModel(nn.Cell):
         self.org_vocab_size = config.vocab_size
         quant_config = vllm_config.quant_config
         self.quant_config = quant_config
-        cache_config = vllm_config.cache_config
+        cache_config = vllm_config.cache_config  # noqa: F841
         lora_config = vllm_config.lora_config  # noqa: F841
 
         if get_pp_group().is_first_rank or (config.tie_word_embeddings
@@ -355,12 +358,7 @@ class LlamaModel(nn.Cell):
 
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
-            lambda prefix: layer_type(
-                config=config,
-                cache_config=cache_config,
-                quant_config=quant_config,
-                prefix=prefix,
-            ),
+            lambda prefix: layer_type(vllm_config=vllm_config, prefix=prefix),
             prefix=f"{prefix}.layers",
         )
 
