@@ -21,6 +21,7 @@
 #include "runtime/executor/executor.h"
 #include "ops/op_register.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
+#include "hardware/hardware_abstract/collective/collective_manager.h"
 
 namespace mrt {
 namespace runtime {
@@ -70,9 +71,21 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
 }  // namespace
 
 std::unique_ptr<Executor> Builder::BuildExecutor() {
-  RecordStorageFreePoint();
-  CreateOpRunners();
+  SetupOpRunners();
   return std::make_unique<Executor>(opRunners_, deviceContexts_);
+}
+
+void Builder::SetupOpRunners() {
+  CreateOpRunners();
+  UpdateRefNodeOutputValue();
+  RecordStorageFreePoint();
+}
+
+void Builder::UpdateRefNodeOutputValue() {
+  auto &opRunners = *opRunners_;
+  for (auto &opRunner : opRunners) {
+    opRunner.UpdateRefNodeOutputValue();
+  }
 }
 
 void Builder::RecordStorageFreePoint() {
@@ -131,6 +144,17 @@ void Builder::RecordStorageFreePoint() {
       }
     });
   }
+
+  for (auto &item : storagesToFree_) {
+    auto &node = item.first;
+    auto &storages = item.second;
+    auto iter = nodeToOpRunner_.find(node);
+    if (iter == nodeToOpRunner_.end()) {
+      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+    }
+    auto *opRunner = iter->second;
+    opRunner->SetStoragesToFree(std::move(storages));
+  }
 }
 
 void Builder::CreateOpRunners() {
@@ -160,19 +184,20 @@ void Builder::CreateOpRunners() {
     if (auto iter = deviceContexts_.find(device.type); iter != deviceContexts_.end()) {
       deviceContext = iter->second;
     } else {
-      device::DeviceContextKey deviceContextKey = device::DeviceToDeviceContextKey(device);
+      auto deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
+      device::DeviceContextKey deviceContextKey = {hardware::GetDeviceNameByType(device.type), deviceId};
       deviceContext = device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
       CHECK_IF_NULL(deviceContext);
       (void)deviceContexts_.emplace(device.type, deviceContext);
     }
     void *stream = deviceContext->deviceResManager_->GetCurrentStream();
+    if (device.type != hardware::DeviceType::CPU) {
+      CHECK_IF_NULL(stream);
+    }
     // TODO: need to support ascend stream creation and getting real dynamic shape info.  // NOLINT(readability/todo)
     (void)(opRunners_->emplace_back(node->op, node->inputs, node->output, std::move(operatorPtr), stream, device,
                                     true /*isDynamicShape*/));
-    auto iter = storagesToFree_.find(node.get());
-    if (iter != storagesToFree_.end()) {
-      opRunners_->back().SetStoragesToFree(std::move(iter->second));
-    }
+    nodeToOpRunner_.emplace(node.get(), &(opRunners_->back()));
   }
 }
 }  // namespace runtime

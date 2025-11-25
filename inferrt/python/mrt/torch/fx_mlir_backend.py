@@ -94,11 +94,8 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     Environment Variables:
         MOPT_PRINT_IR: Set to 1 to print IR at each stage
     """
-    # pylint: disable=import-outside-toplevel
-    # Reason: mopt must be imported here to prevent default loading at module level
-    set_device_context()
-
     get_collective_info_from_torch(gm)
+    set_device_context()
 
     _print_verbose("Stage 0: Original FX Graph", gm.graph)
 
@@ -115,6 +112,8 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     _print_verbose("Stage 3: Re-parsed MLIR Module (torch_mlir RAW, before passes)", mlir_module)
 
     # Step 4: Run pass pipeline to convert torch_mlir RAW to TORCH backend
+    # pylint: disable=import-outside-toplevel
+    # Reason: mopt must be imported here to prevent default loading at module level
     from mopt.passmanager import PassManager
     with mlir_module.context:
         pm = PassManager.parse("builtin.module(torchdynamo-export-to-torch-backend-pipeline)")

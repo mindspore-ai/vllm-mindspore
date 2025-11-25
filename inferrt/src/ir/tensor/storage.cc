@@ -33,9 +33,7 @@ void Allocator::Free(void *ptr) const { deviceResManager_->FreeMemory(ptr); }
 
 namespace ir {
 Storage::Storage(size_t sizeBytes, hardware::Device device)
-    : sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(true) {
-  Resize(sizeBytes_);
-}
+    : sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(true) {}
 
 Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
     : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(false) {}

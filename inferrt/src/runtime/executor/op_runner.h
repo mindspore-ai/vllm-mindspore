@@ -142,6 +142,8 @@ class OpRunner {
 
   const ir::Value *GetOutput() const { return output_; }
 
+  void UpdateRefNodeOutputValue();
+
  private:
   // Storages that should be freed after operator execution.
   std::vector<ir::Storage *> storagesToFree_;

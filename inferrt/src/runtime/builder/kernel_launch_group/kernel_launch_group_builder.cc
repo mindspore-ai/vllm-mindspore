@@ -25,8 +25,7 @@ KernelLaunchGroupBuilder::KernelLaunchGroupBuilder(const ir::GraphPtr &graph) : 
 
 std::unique_ptr<Executor> KernelLaunchGroupBuilder::BuildExecutor() {
   LOG_OUT << "Begin build kernel launch group executor.";
-  RecordStorageFreePoint();
-  CreateOpRunners();
+  SetupOpRunners();
 
   CheckGroupLaunchRequirements();
   PartitionKernelLaunchGroups();

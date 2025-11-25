@@ -53,13 +53,14 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
 void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
   ir::VisitAllTensors(output_, [&](const ir::TensorPtr &tensor) {
-    if (tensor->DataPtr()) {
+    const auto &storage = tensor->GetStorage();
+    if (storage->CheckOwnsData() && storage->Data() != nullptr) {
       LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
     }
     // For op output ref graph input tensor case.
-    bool need_alloc = tensor->GetStorage()->Data() == nullptr;
+    bool need_alloc = storage->Data() == nullptr;
     if (need_alloc) {
-      tensor->GetStorage()->AllocateMemory();
+      storage->AllocateMemory();
     }
   });
 
@@ -81,6 +82,44 @@ void OpRunner::FreeMemory() {
   if (workspace_) {
     alloc_.Free(workspace_);
     workspace_ = nullptr;
+  }
+}
+
+void OpRunner::UpdateRefNodeOutputValue() {
+  const std::vector<std::pair<uint32_t, uint32_t>> &refPairs = operator_->GetOutputInputRefPairs();
+  if (refPairs.empty()) {
+    return;
+  }
+  for (auto [outputIndex, inputIndex] : refPairs) {
+    LOG_OUT << "Update op[" << GetOpName() << "] output value, outputIndex: " << outputIndex
+            << ", inputIndex: " << inputIndex;
+    CHECK_IF_FAIL(inputIndex < input_.size());
+    auto &inputValue = input_[inputIndex];
+    CHECK_IF_NULL(inputValue);
+    CHECK_IF_FAIL(inputValue->IsTensor());
+    auto &inputTensor = inputValue->ToTensor();
+    CHECK_IF_NULL(inputTensor);
+
+    CHECK_IF_NULL(output_);
+    if (output_->IsTensor()) {
+      CHECK_IF_FAIL(outputIndex == 0);
+      auto &outputTensor = output_->ToTensor();
+      CHECK_IF_NULL(outputTensor);
+      outputTensor->SetStorage(inputTensor->GetStorage());
+    } else if (output_->IsTuple()) {
+      auto &outputTuple = output_->ToTuple();
+      CHECK_IF_FAIL(outputIndex < outputTuple->Size());
+      auto &output = (*outputTuple)[outputIndex];
+      CHECK_IF_NULL(output);
+      CHECK_IF_FAIL(output->IsTensor());
+      auto &outputTensor = output->ToTensor();
+      CHECK_IF_NULL(outputTensor);
+      outputTensor->SetStorage(inputTensor->GetStorage());
+    } else {
+      LOG_EXCEPTION << "The output type of operator " << GetOpName()
+                    << " is not supported to ref input. The output index: " << outputIndex
+                    << ", input index: " << inputIndex << ", output info: " << *output_;
+    }
   }
 }
 }  // namespace runtime

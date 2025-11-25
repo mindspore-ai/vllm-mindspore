@@ -40,6 +40,8 @@ class MRT_EXPORT CPUResManager : public DeviceResManager {
   void FreeMemory(void *ptr) const override;
   void FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
                        const std::vector<size_t> &keepAddrSizes) const override;
+  bool AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const override;
+  bool SyncCopy(void *dst, const void *src, uint64_t size, CopyType kind) const override;
 };
 }  // namespace cpu
 }  // namespace device
