@@ -8,7 +8,7 @@ msadapter:
   'https://repo.mindspore.cn/mindspore/msadapter/version/202510/20251011/r0.3.0_20251011095813_951a8218d4c29785e48f304e720212b57056573e_newest/'
 
 ms_custom_ops:
-  'https://repo.mindspore.cn/mindspore/ms_custom_ops/version/202511/20251119/vllm-ms-0.4.1_20251119143128_62995613e8a38a1ebd87d444356ae15bf7d2342d_newest/'
+  'https://repo.mindspore.cn/mindspore/ms_custom_ops/version/202511/20251122/vllm-ms-0.4.1_20251122154843_62995613e8a38a1ebd87d444356ae15bf7d2342d_newest/'
 
 mindone:
   'https://repo.mindspore.cn/mindspore-lab/mindone/version/202511/20251121/master_20251121092731_eb6a005897fb741075203b390cf7a74f2dd121a9_newest/'
