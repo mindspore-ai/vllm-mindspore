@@ -33,6 +33,27 @@ namespace mrt {
 namespace runtime {
 constexpr uint64_t kLFQueueCapacity = 8192;
 
+enum class TaskType : uint8_t { Wait = 0, Infer = 1, Launch = 2, BindDevice = 3, Other = 4 };
+
+struct AsyncTask {
+ public:
+  template <typename F>
+  AsyncTask(F &&func, TaskType type) : func_(std::forward<F>(func)), type_(type) {}
+  ~AsyncTask() = default;
+  AsyncTask(AsyncTask &&other) noexcept : func_(std::move(other.func_)), type_(other.type_) {}
+  AsyncTask &operator=(AsyncTask &&other) noexcept {
+    if (this != &other) {
+      func_ = std::move(other.func_);
+      type_ = other.type_;
+    }
+    return *this;
+  }
+  DISABLE_COPY_AND_ASSIGN(AsyncTask)
+
+  std::function<void()> func_;
+  TaskType type_;
+};
+
 // AsyncTaskQueue is a lock-free asynchronous queue that supports multiple producers and a single consumer. It
 // internally starts a thread to act as the consumer, allowing concurrent pushing of elements. The elements must be of a
 // type that can be constructed into an std::function<void()> object.
@@ -86,7 +107,7 @@ class AsyncTaskQueue {
   std::unique_ptr<std::thread> worker_;
   std::string name_;
 
-  LockFreeRingQueue<std::function<void()>, kLFQueueCapacity> tasksQueue_;
+  LockFreeRingQueue<AsyncTask, kLFQueueCapacity> tasksQueue_;
   bool init_{false};
   bool alive_{true};
 };

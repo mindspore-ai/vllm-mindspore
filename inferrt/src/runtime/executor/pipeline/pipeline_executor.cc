@@ -71,10 +71,10 @@ void PipelineExecutor::Run(bool isDynamic) {
         }
         opRunner.FreeMemory();
       };
-      launchQeueue->Push(std::move(launchTask));
+      launchQeueue->Push(std::move(launchTask), TaskType::Launch);
     };
 
-    inferQeueue->Push(std::move(inferTask));
+    inferQeueue->Push(std::move(inferTask), TaskType::Infer);
   }
 
   asyncTaskQueueManager.WaitAll();

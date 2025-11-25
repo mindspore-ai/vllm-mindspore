@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 #include "runtime/executor/pipeline/async_task_queue_manager.h"
+#include "runtime/utils/exception.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 
@@ -193,10 +194,10 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
         }
         opRunner.FreeMemory();
       };
-      launchQueue->Push(std::move(launchTask));
+      launchQueue->Push(std::move(launchTask), TaskType::Launch);
     };
 
-    inferQueue->Push(std::move(inferTask));
+    inferQueue->Push(std::move(inferTask), TaskType::Infer);
   }
 
   asyncTaskQueueManager.WaitAll();
@@ -334,7 +335,7 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
   for (size_t i = 0; i < parallelDispatchNum_; i++) {
     const auto &q = queues_[i];
     q->Continue();
-    q->Push([this, i]() { DispatchParallelLaunchKernels(i); });
+    q->Push([this, i]() { DispatchParallelLaunchKernels(i); }, TaskType::Other);
   }
 
   // Dispatch serial launch kernels: communication ops and the kernel need force resize.
@@ -343,6 +344,7 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
   for (auto &q : queues_) {
     q->Pause();
   }
+  MrtException::GetInstance().CheckException();
 
   // The default stream need wait all parallel launch kernel execute finish.
   events_.back()->set_wait_stream(mainStream);
