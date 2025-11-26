@@ -159,4 +159,20 @@ def Mrt_CreateStringOp : Mrt_Op<"constant.string", [Pure]> {
   let assemblyFormat = "$value attr-dict `:` type($result)";
 }
 
+// Create a dtype value from an attribute
+// The created value can be modified at runtime through other operations.
+def Mrt_CreateDtypeOp : Mrt_Op<"constant.dtype", [Pure]> {
+  let summary = "Create a dtype value from a type attribute";
+  let description = [{
+    Creates a value of Mrt_DtypeType from a type attribute.
+    The type attribute represents an element type (e.g., f32, i64) which is
+    stored directly in the Mrt_DtypeType and can be converted to DataType enum when needed.
+  }];
+
+  let arguments = (ins TypeAttr:$value);
+  let results = (outs Mrt_DtypeType:$result);
+
+  let assemblyFormat = "$value attr-dict `:` type($result)";
+}
+
 #endif // MRT_DIALECT_MRT_CONSTANT_OPS_TD

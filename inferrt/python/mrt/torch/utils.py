@@ -23,7 +23,7 @@ from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
 
 from mrt import _mrt_torch
-from mrt.ir import Value, Tensor, Tuple
+from mrt.ir import Value, Tensor, Tuple, DataType
 from mrt._mrt_collective import CollectiveManager
 
 # pylint: disable=protected-access
@@ -81,7 +81,6 @@ def get_collective_info_from_torch(gm: torch.fx.GraphModule):
                 if node.target in _DIST_OP_LIST:
                     _extract_and_setup_comm_groups(node.args)
 
-
 def from_torch(obj: Any) -> Value:
     '''
     Convert a torch object to mrt.ir.Value.
@@ -99,6 +98,9 @@ def from_torch(obj: Any) -> Value:
         return Value(_mrt_torch.from_torch(obj))
     if isinstance(obj, (int, float, bool, str)):
         return Value(obj)
+    if isinstance(obj, torch.dtype):
+        dtype_str = str(obj).rsplit('.', maxsplit=1)[-1] # "torch.float32" -> "float32"
+        return Value(DataType.convert_str_to_int(dtype_str))
     if obj is None:
         return Value()
     raise TypeError(f"Unsupported python type for conversion to mrt.ir.Value: {type(obj)}")

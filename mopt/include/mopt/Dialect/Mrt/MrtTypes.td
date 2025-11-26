@@ -226,4 +226,25 @@ def Mrt_BooleanArrayType : Mrt_Type<"BooleanArray", "boolean_array"> {
   let assemblyFormat = "";
 }
 
+// Dtype type (stores mlir::Type directly)
+// This type wraps a MLIR element type and is distinct from tensor types.
+// Use this type as an operand to pass data type values to operations like Cast.
+def Mrt_DtypeType : Mrt_Type<"Dtype", "dtype"> {
+  let summary = "Dtype type for MRT dialect";
+  let description = [{
+    Represents a data type value by storing a MLIR element type directly.
+    This type is used as an operand to pass data type values to operations like Cast.
+    The element type (e.g., f32, i64) is stored directly, which can be converted
+    to DataType enum when needed.
+  }];
+
+  let parameters = (ins
+    "mlir::Type":$elementType
+  );
+
+  let assemblyFormat = [{
+    `<` $elementType `>`
+  }];
+}
+
 #endif // MRT_DIALECT_MRT_TYPES_TD

@@ -81,6 +81,26 @@ def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
   }];
 }
 
+def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
+  let summary = "aclnnCast";
+  let description = [{
+    Casts a tensor to the specified data type.
+  }];
+
+  let arguments = (ins
+    AnyRankedTensor:$input,
+    Mrt_DtypeType:$dtype
+  );
+
+  let results = (outs AnyRankedTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dtype attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
   let summary = "Concatenation operation";
   let description = [{

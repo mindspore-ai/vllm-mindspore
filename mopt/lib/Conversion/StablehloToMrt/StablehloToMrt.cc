@@ -20,15 +20,18 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Matchers.h"
+#include "mlir/IR/Types.h"
 #include "llvm/ADT/APFloat.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 
+using llvm::APFloat;
 using mlir::applyPatternsAndFoldGreedily;
 using mlir::ArrayRef;
 using mlir::cast;
@@ -52,9 +55,9 @@ using mlir::SmallVector;
 using mlir::StringRef;
 using mlir::success;
 using mlir::Type;
+using mlir::TypeAttr;
 using mlir::Value;
 using mlir::arith::ConstantOp;
-using llvm::APFloat;
 
 namespace {
 
@@ -98,6 +101,13 @@ Value createF64Value(PatternRewriter &rewriter, mlir::Location loc, double value
   auto floatAttr = rewriter.getF64FloatAttr(value);
   auto f64Type = mrt::F64Type::get(rewriter.getContext());
   return rewriter.create<mrt::CreateF64Op>(loc, f64Type, floatAttr);
+}
+
+// Create a dtype value from element type
+Value createDtypeValue(PatternRewriter &rewriter, mlir::Location loc, Type elemType) {
+  auto typeAttr = TypeAttr::get(elemType);
+  auto dtypeType = mrt::DtypeType::get(rewriter.getContext(), elemType);
+  return rewriter.create<mrt::CreateDtypeOp>(loc, dtypeType, typeAttr);
 }
 
 //===----------------------------------------------------------------------===//
@@ -233,6 +243,30 @@ struct ConvertMaximumToReluOp : public RewritePattern {
   }
 };
 
+// Convert stablehlo.convert to mrt.cast
+struct ConvertConvertOp : public RewritePattern {
+  explicit ConvertConvertOp(MLIRContext *context)
+      : RewritePattern(mlir::stablehlo::ConvertOp::getOperationName(), 1, context) {}
+
+  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
+    auto convertOp = cast<mlir::stablehlo::ConvertOp>(op);
+
+    auto resultType = dyn_cast<ShapedType>(convertOp.getResult().getType());
+    if (!resultType || !resultType.hasRank()) {
+      return failure();
+    }
+
+    // Create dtype value from result element type
+    auto dtypeValue = createDtypeValue(rewriter, op->getLoc(), resultType.getElementType());
+
+    // Create mrt.cast
+    auto newOp = rewriter.create<mrt::CastOp>(op->getLoc(), resultType, convertOp.getOperand(), dtypeValue);
+
+    rewriter.replaceOp(op, newOp.getResult());
+    return success();
+  }
+};
+
 // Convert stablehlo.convolution to mrt.conv
 struct ConvertConvolutionOp : public RewritePattern {
   explicit ConvertConvolutionOp(MLIRContext *context)
@@ -330,6 +364,7 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     patterns.add<ConvertMaximumToReluOp>(&context);
     patterns.add<ConvertConvolutionOp>(&context);
     patterns.add<ConvertConcatenateOp>(&context);
+    patterns.add<ConvertConvertOp>(&context);
 
     // Apply the patterns
     if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns)))) {
