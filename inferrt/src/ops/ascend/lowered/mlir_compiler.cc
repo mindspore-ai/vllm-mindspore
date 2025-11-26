@@ -19,13 +19,15 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <openssl/sha.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/Support/SHA256.h"
 
 #include "common/logger.h"
 
@@ -106,12 +108,12 @@ void MlirCompiler::SetOptions(const CompileOptions &options) {
 }
 
 std::string MlirCompiler::ComputeHash(const std::string &mlirContent) const {
-  unsigned char hash[SHA256_DIGEST_LENGTH];
-  SHA256(reinterpret_cast<const unsigned char *>(mlirContent.c_str()), mlirContent.size(), hash);
+  auto hash = llvm::SHA256::hash(llvm::ArrayRef<uint8_t>(
+      reinterpret_cast<const uint8_t*>(mlirContent.data()), mlirContent.size()));
 
   std::ostringstream oss;
-  for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) {
-    oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+  for (auto byte : hash) {
+    oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
   }
 
   return oss.str();
