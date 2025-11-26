@@ -22,7 +22,13 @@ from typing import List, Dict, Any, Optional
 import torch
 import sympy
 
-from torch.utils._sympy.functions import FloorDiv, IntTrueDiv, CeilDiv
+from torch.utils._sympy.functions import (
+    FloorDiv,
+    IntTrueDiv,
+    CeilDiv,
+    FloorToInt,
+    CeilToInt,
+)
 from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr, Value
 
 
@@ -33,6 +39,13 @@ class SymbolicShapeManager:
     This class handles the conversion between sympy expressions and MRT symbolic expressions,
     and recursively processes nested tensor structures (lists, tuples) to create symbolic shapes.
     """
+
+    _SYMPY_EXPR_TO_SYMBOLIC_OP = {
+        sympy.Add: operator.add,
+        sympy.Mul: operator.mul,
+        FloorDiv: operator.floordiv,
+        CeilDiv: lambda a, b: a.__ceildiv__(b),
+    }
 
     def __init__(self):
         self._symbol_map: Dict[sympy.Symbol, SymbolicVar] = {}
@@ -58,31 +71,24 @@ class SymbolicShapeManager:
         if expr.is_Integer:
             return SymbolicConst(int(expr))
 
-        if isinstance(expr, IntTrueDiv):
-            base_expr = self.convert_sympy_expr_to_symbolic_expr(expr.base)
-            divisor_expr = self.convert_sympy_expr_to_symbolic_expr(expr.divisor)
-            return base_expr / divisor_expr
+        # Eliminate ops with float outputs
+        if isinstance(expr, FloorToInt) and isinstance(expr.args[0], IntTrueDiv):
+            return self.convert_sympy_expr_to_symbolic_expr(
+                FloorDiv(*expr.args[0].args)
+            )
 
-        if isinstance(expr, FloorDiv):
-            base_expr = self.convert_sympy_expr_to_symbolic_expr(expr.base)
-            divisor_expr = self.convert_sympy_expr_to_symbolic_expr(expr.divisor)
-            return base_expr // divisor_expr
+        if isinstance(expr, CeilToInt) and isinstance(expr.args[0], IntTrueDiv):
+            return self.convert_sympy_expr_to_symbolic_expr(CeilDiv(*expr.args[0].args))
 
-        if isinstance(expr, CeilDiv):
-            base_expr = self.convert_sympy_expr_to_symbolic_expr(expr.base)
-            divisor_expr = self.convert_sympy_expr_to_symbolic_expr(expr.divisor)
-            return base_expr.__ceildiv__(divisor_expr)
-
-        # It's an expression with args
-        converted_args = [
-            self.convert_sympy_expr_to_symbolic_expr(arg) for arg in expr.args
-        ]
-
-        if expr.is_Add:
-            return reduce(operator.add, converted_args)
-
-        if expr.is_Mul:
-            return reduce(operator.mul, converted_args)
+        # Convert basic symbolic ops
+        op = self._SYMPY_EXPR_TO_SYMBOLIC_OP.get(type(expr))
+        if op:
+            converted_args = [
+                self.convert_sympy_expr_to_symbolic_expr(arg) for arg in expr.args
+            ]
+            if isinstance(expr, (sympy.Add, sympy.Mul)):
+                return reduce(op, converted_args)
+            return op(*converted_args)
 
         raise NotImplementedError(
             f"Unsupported sympy expression: {expr} (type: {type(expr)})"
