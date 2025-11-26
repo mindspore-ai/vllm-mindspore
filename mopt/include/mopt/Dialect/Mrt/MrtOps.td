@@ -28,6 +28,28 @@ include "mopt/Dialect/Mrt/MrtTypes.td"
 // the file organized and easy to navigate.
 //===----------------------------------------------------------------------===//
 
+def Mrt_AddOp : Mrt_Op<"add", [Pure]> {
+  let summary = "aclnnAdd";
+  let description = [{
+    Element-wise addition of two tensors with an optional alpha scaling factor.
+    Computes: result = x + y * alpha
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$y,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $y `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
   let summary = "aclnnAddRmsNorm";
   let description = [{
@@ -56,7 +78,6 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
 
   let generated = 1;
 }
-
 
 def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   let summary = "aclnnApplyRotaryPosEmb";

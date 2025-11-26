@@ -47,5 +47,31 @@ aclDataType Convert(ir::DataType::Type dtype) {
   return ret;
 }
 
+template <typename T>
+aclScalar *CreateAclScalar(T val, aclDataType dtype) {
+  static const auto aclCreateScalar = GET_ACLNN_COMMON_META_FUNC(aclCreateScalar);
+  CHECK_IF_NULL(aclCreateScalar);
+  return aclCreateScalar(&val, dtype);
+}
+
+aclScalar *Convert(const ir::Value *value) {
+  if (value == nullptr) {
+    return nullptr;
+  }
+  if (value->IsInt()) {
+    return CreateAclScalar(value->ToInt(), ACL_INT64);
+  }
+  if (value->IsFloat()) {
+    return CreateAclScalar(value->ToFloat(), ACL_FLOAT);
+  }
+  if (value->IsDouble()) {
+    return CreateAclScalar(value->ToDouble(), ACL_DOUBLE);
+  }
+  if (value->IsBool()) {
+    return CreateAclScalar(value->ToBool(), ACL_BOOL);
+  }
+  LOG_EXCEPTION << "Invalid value: " << value;
+  return nullptr;
+}
 }  // namespace ops
 }  // namespace mrt

@@ -206,6 +206,10 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     kwargs = node.kwargs
     if not kwargs:
         return flat_args
+    # if kwargs has only one element, add the value to flat_args and return
+    if len(kwargs) == 1:
+        flat_args.append(list(kwargs.values())[0])
+        return flat_args
     if not isinstance(node.target, OpOverloadPacket):
         raise RuntimeError(
             f"Unsupported node target for keyword only args: {node.target}"

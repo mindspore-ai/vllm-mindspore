@@ -307,4 +307,27 @@ def Mrt_DtypeType : Mrt_Type<"Dtype", "dtype"> {
   }];
 }
 
+// Scalar type (stores mlir::Type for element type)
+// This type represents a single-element scalar value with a specific data type.
+// Use this type as an operand to pass scalar values of different types to operations.
+// For example, it can be used for the alpha parameter in Add operation.
+def Mrt_ScalarType : Mrt_Type<"Scalar", "scalar"> {
+  let summary = "Scalar type for MRT dialect";
+  let description = [{
+    Represents a single-element scalar value with a specific data type.
+    This type is used as an operand to pass scalar values of different types
+    (e.g., f32, f64, i64) to operations. The element type specifies the data type
+    of the scalar value. This type is distinct from tensor types and can be used
+    to pass scalar values like alpha parameter in Add operation.
+  }];
+
+  let parameters = (ins
+    "mlir::Type":$elementType
+  );
+
+  let assemblyFormat = [{
+    `<` $elementType `>`
+  }];
+}
+
 #endif // MRT_DIALECT_MRT_TYPES_TD

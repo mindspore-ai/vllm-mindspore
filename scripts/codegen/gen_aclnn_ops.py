@@ -30,6 +30,7 @@ def _convert_type(input_type: str) -> str:
         'Mrt_F32Type': '->ToFloat()',
         'Mrt_F64Type': '->ToDouble()',
         'Mrt_StringType': '->ToString()',
+        'Mrt_ScalarType': '',  # do nothing here, the ValuePtr will be converted to aclScalar
     }
     tuple_types_set = {
         'Mrt_I64ArrayType',
