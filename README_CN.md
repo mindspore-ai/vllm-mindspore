@@ -28,12 +28,6 @@ bash build.sh
 bash build.sh -b ascend
 ```
 
-#### 开启编译优化能力
-
-```bash
-bash build.sh -O
-```
-
 #### 并行构建
 
 ```bash
@@ -41,6 +35,12 @@ bash build.sh -j32
 ```
 
 设置并行构建任务数（默认为8），可显著提升构建速度。
+
+#### 开启编译优化能力
+
+```bash
+bash build.sh -O
+```
 
 #### UT构建
 
@@ -73,6 +73,12 @@ bash build.sh -h
 - 用例责任人需手动通过`os.system`等方式在Python脚本中管理多进程
 
 #### ST执行命令
+
+##### Default (both Ascend and CPU)
+
+```bash
+bash tests/st/runtest.sh
+```
 
 ##### Ascend
 
