@@ -30,6 +30,7 @@
 #include "llvm/Support/SHA256.h"
 
 #include "common/logger.h"
+#include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
 
 namespace mrt::ops {
 
@@ -266,10 +267,17 @@ bool MlirCompiler::ExecuteCommand(const std::string &command, std::string &outpu
 }
 
 bool MlirCompiler::RunBishengirCompile(const std::string &linalgFile, const std::string &outputSo) {
+  // Get SoC name from ACL interface
+  const char *socName = mrt::device::ascend::GetAscendSocVersion();
+  if (socName == nullptr) {
+    LOG_ERROR << "Failed to get SoC name from ACL";
+    return false;
+  }
+
   // Run bishengir-compile to generate .so from Linalg IR
   std::ostringstream cmd;
   cmd << options_.bishengirCompilePath << " " << linalgFile << " --enable-hfusion-compile=true"
-      << " --enable-hivm-compile=true" << " --enable-auto-multi-buffer=true" << " --target=Ascend910B4"
+      << " --enable-hivm-compile=true" << " --enable-auto-multi-buffer=true" << " --target=" << socName
       << " --enable-bin-relocation=false" << " -o " << outputSo;
 
   LOG_OUT << "Bishengir compile command: " << cmd.str();
