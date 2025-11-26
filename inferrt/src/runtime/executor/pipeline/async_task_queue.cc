@@ -15,6 +15,7 @@
  */
 
 #include "runtime/executor/pipeline/async_task_queue.h"
+#include "runtime/utils/exception.h"
 #include "common/common.h"
 
 namespace mrt {
@@ -48,15 +49,18 @@ void AsyncTaskQueue::WorkerLoop() {
     }
 
     try {
-      (*task)();
+      task->func_();
       tasksQueue_.Pop();
     } catch (const std::exception &e) {
+      MrtException::GetInstance().SetException();
       LOG_ERROR << "Run task failed and catch exception: " << e.what();
       while (!tasksQueue_.Empty()) {
+        auto *remainingTask = tasksQueue_.Front();
+        if (remainingTask != nullptr && remainingTask->type_ == TaskType::Wait) {
+          remainingTask->func_();
+        }
         tasksQueue_.Pop();
       }
-      alive_ = false;
-      break;
     }
   }
 }
@@ -77,7 +81,7 @@ void AsyncTaskQueue::BindDevice(const std::set<const device::DeviceContext *> &d
     std::for_each(deviceContexts.begin(), deviceContexts.end(),
                   [](const device::DeviceContext *item) { item->deviceResManager_->BindDeviceToCurrentThread(false); });
   };
-  Push(std::move(bind_device_task));
+  Push(std::move(bind_device_task), TaskType::BindDevice);
   Wait();
 }
 
@@ -91,7 +95,7 @@ void AsyncTaskQueue::Wait() {
 
   std::atomic<bool> atomicWaitFlag = false;
   auto waitTask = [&atomicWaitFlag]() { atomicWaitFlag = true; };
-  Push(std::move(waitTask));
+  Push(std::move(waitTask), TaskType::Wait);
 
   while (atomicWaitFlag == false) {
   }

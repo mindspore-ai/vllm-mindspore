@@ -16,6 +16,7 @@
 
 #include "runtime/executor/pipeline/async_task_queue_manager.h"
 #include <memory>
+#include "runtime/utils/exception.h"
 
 namespace mrt {
 namespace runtime {
@@ -46,6 +47,7 @@ void AsyncTaskQueueManager::ContinueAll() {
 void AsyncTaskQueueManager::WaitAll() {
   inferQueue_->Wait();
   launchQueue_->Wait();
+  MrtException::GetInstance().CheckException();
 }
 
 void AsyncTaskQueueManager::WorkerJoin() {
