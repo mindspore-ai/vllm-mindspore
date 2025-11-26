@@ -83,6 +83,7 @@ void AsyncTaskQueue::BindDevice(const std::set<const device::DeviceContext *> &d
   };
   Push(std::move(bind_device_task), TaskType::BindDevice);
   Wait();
+  MrtException::GetInstance().CheckException();
 }
 
 void AsyncTaskQueue::Wait() {
