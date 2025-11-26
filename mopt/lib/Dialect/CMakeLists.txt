@@ -15,3 +15,5 @@ add_mlir_dialect_library(MLIRMrtDialect
   MLIRInferTypeOpInterface
   MLIRSideEffectInterfaces
 )
+
+add_subdirectory(Mrt/Transforms)

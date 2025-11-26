@@ -19,9 +19,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
-include "mlir/IR/EnumAttr.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "mlir/IR/BuiltinAttributeInterfaces.td"
 
 def Mrt_Dialect : Dialect {
   let name = "mrt";
@@ -48,25 +46,5 @@ class Mrt_Op<string mnemonic, list<Trait> traits = []> :
   // When set to '1', the aclnn launch code will be auto generated.
   bit generated = 0;
 }
-
-//===----------------------------------------------------------------------===//
-// Supported argument/result types for operations:
-//   Tensor          --> AnyRankedTensor
-//   Optional Tensor --> MrtOptTensor
-//   Tensor List     --> MrtTensorList
-//   Integer         --> Mrt_I64Type (replaces I64Attr)
-//   Integer Array   --> Mrt_I64ArrayType (replaces I64ArrayAttr, for axis, strides, shape, etc.)
-//   Boolean         --> Mrt_BooleanType (replaces BoolAttr)
-//   Boolean Array   --> Mrt_BooleanArrayType (replaces BoolArrayAttr)
-//   Float           --> Mrt_F32Type or Mrt_F64Type (replaces F32Attr/F64Attr)
-//   Float Array     --> Mrt_F32ArrayType or Mrt_F64ArrayType (replaces F32ArrayAttr/F64ArrayAttr)
-//   String          --> Mrt_StringType (replaces StrAttr)
-//===----------------------------------------------------------------------===//
-
-// Optional tensor type
-def MrtOptTensor : Optional<AnyRankedTensor>;
-
-// Tensor list type
-def MrtTensorList : Variadic<AnyRankedTensor>;
 
 #endif // MRT_DIALECT_MRT_DIALECT_TD

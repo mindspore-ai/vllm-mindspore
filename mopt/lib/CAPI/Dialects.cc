@@ -17,6 +17,40 @@
 #include "mopt-c/Dialects.h"
 
 #include "mopt/Dialect/Mrt/MrtDialect.h"
+#include "mopt/Dialect/Mrt/Mrt.h"
 #include "mlir/CAPI/Registration.h"
+#include "mlir/CAPI/Wrap.h"
+#include "mlir-c/BuiltinAttributes.h"
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Mrt, mrt, mrt::MrtDialect)
+
+bool mlirTypeIsAMrtTensorType(MlirType type) { return llvm::isa<mrt::TensorType>(unwrap(type)); }
+
+MlirTypeID mlirMrtTensorTypeGetTypeID(void) { return wrap(mrt::TensorType::getTypeID()); }
+
+MlirType mlirMrtTensorTypeGetElementType(MlirType type) {
+  return wrap(mlir::cast<mrt::TensorType>(unwrap(type)).getElementType());
+}
+
+MlirAttribute mlirMrtTensorTypeGetShape(MlirType type) {
+  return wrap(mlir::cast<mrt::TensorType>(unwrap(type)).getShape());
+}
+
+MlirAttribute mlirMrtTensorTypeGetDevice(MlirType type) {
+  auto deviceAttr = mlir::cast<mrt::TensorType>(unwrap(type)).getDevice();
+  return deviceAttr ? wrap(deviceAttr) : mlirAttributeGetNull();
+}
+
+bool mlirAttributeIsAMrtDeviceAttr(MlirAttribute attr) { return llvm::isa<mrt::DeviceAttr>(unwrap(attr)); }
+
+MlirTypeID mlirMrtDeviceAttrGetTypeID(void) { return wrap(mrt::DeviceAttr::getTypeID()); }
+
+MlirAttribute mlirMrtDeviceAttrGetDeviceType(MlirAttribute attr) {
+  auto deviceAttr = mlir::cast<mrt::DeviceAttr>(unwrap(attr));
+  mlir::StringAttr typeAttr = deviceAttr.getDeviceType();
+  return wrap(mlir::cast<mlir::Attribute>(typeAttr));
+}
+
+MlirAttribute mlirMrtDeviceAttrGetIndex(MlirAttribute attr) {
+  return wrap(mlir::cast<mrt::DeviceAttr>(unwrap(attr)).getIndex());
+}

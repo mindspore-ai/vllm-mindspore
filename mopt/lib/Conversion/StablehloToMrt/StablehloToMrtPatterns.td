@@ -37,14 +37,4 @@ def ConvertLogisticOpPattern : Pat<
   (Mrt_SigmoidOp $input)
 >;
 
-// Convert stablehlo.dot to mrt.matmul
-// Note: This is a simplified pattern. For more complex cases with rank checks,
-// you'll still need C++ patterns
-def ConvertDotOpPattern : Pat<
-  (StableHLO_DotOp:$res $lhs, $rhs, $precision_config),
-  (Mrt_MatmulOp $lhs, $rhs),
-  [(AnyRankedTensor $res)]
->;
-
 #endif // STABLEHLO_TO_MRT_PATTERNS
-

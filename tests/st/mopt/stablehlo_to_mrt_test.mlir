@@ -17,14 +17,6 @@ func.func @test_multiply(%arg0: tensor<2x3xf32>, %arg1: tensor<2x3xf32>) -> tens
   return %0 : tensor<2x3xf32>
 }
 
-// Test dot (matmul) conversion
-// CHECK-LABEL: func.func @test_dot
-func.func @test_dot(%arg0: tensor<2x3xf32>, %arg1: tensor<3x4xf32>) -> tensor<2x4xf32> {
-  // CHECK: %[[RESULT:.*]] = mrt.matmul %arg0, %arg1 : (tensor<2x3xf32>, tensor<3x4xf32>) -> tensor<2x4xf32>
-  %0 = stablehlo.dot %arg0, %arg1 : (tensor<2x3xf32>, tensor<3x4xf32>) -> tensor<2x4xf32>
-  return %0 : tensor<2x4xf32>
-}
-
 // Test sigmoid (logistic) conversion
 // CHECK-LABEL: func.func @test_sigmoid
 func.func @test_sigmoid(%arg0: tensor<2x3xf32>) -> tensor<2x3xf32> {
@@ -165,4 +157,3 @@ func.func @test_pipeline(%arg0: tensor<2x3xf32>, %arg1: tensor<2x3xf32>) -> tens
   
   return %3 : tensor<2x3xf32>
 }
-

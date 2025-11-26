@@ -21,16 +21,30 @@ correspondence with GraphExecutor supported operators.
 
 from typing import Any, Dict, List, Optional
 
-from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple, DataType
+from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple, DataType, Device, DeviceType
 
 
 # ===== MLIR Type Conversion Utilities =====
 
+def _mlir_device_to_device(mlir_device) -> Device:
+    """Convert MLIR device to Device enum."""
+    if mlir_device is None:
+        return Device(DeviceType.CPU, -1)
+    mlir_device_type_map = {
+        "npu": DeviceType.NPU,
+        "cpu": DeviceType.CPU,
+    }
+    device_type = mlir_device_type_map.get(mlir_device.device_type)
+    if device_type is None:
+        raise NotImplementedError(f"Unsupported device: {mlir_device.device_type}")
+    return Device(device_type, mlir_device.index)
+
 def _create_tensor_value_from_mlir(mlir_tensor) -> Value:
-    """Create Tensor Value from MLIR RankedTensorType."""
+    """Create Tensor Value from MLIR MrtTensorType."""
     shape = [int(d) if isinstance(d, int) else -1 for d in mlir_tensor.shape]
     data_type = DataType.from_string(str(mlir_tensor.element_type))
-    tensor = Tensor(shape, data_type)
+    device = _mlir_device_to_device(mlir_tensor.device)
+    tensor = Tensor(shape, data_type, device)
     return Value(tensor)
 
 

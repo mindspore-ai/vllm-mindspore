@@ -25,6 +25,19 @@ extern "C" {
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Mrt, mrt);
 
+// Mrt TensorType CAPI
+MLIR_CAPI_EXPORTED bool mlirTypeIsAMrtTensorType(MlirType type);
+MLIR_CAPI_EXPORTED MlirTypeID mlirMrtTensorTypeGetTypeID(void);
+MLIR_CAPI_EXPORTED MlirType mlirMrtTensorTypeGetElementType(MlirType type);
+MLIR_CAPI_EXPORTED MlirAttribute mlirMrtTensorTypeGetShape(MlirType type);
+MLIR_CAPI_EXPORTED MlirAttribute mlirMrtTensorTypeGetDevice(MlirType type);
+
+// Mrt DeviceAttr CAPI
+MLIR_CAPI_EXPORTED bool mlirAttributeIsAMrtDeviceAttr(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirTypeID mlirMrtDeviceAttrGetTypeID(void);
+MLIR_CAPI_EXPORTED MlirAttribute mlirMrtDeviceAttrGetDeviceType(MlirAttribute attr);
+MLIR_CAPI_EXPORTED MlirAttribute mlirMrtDeviceAttrGetIndex(MlirAttribute attr);
+
 #ifdef __cplusplus
 }
 #endif

@@ -24,7 +24,7 @@ from code_generator import CodeGenerator
 def _convert_type(input_type: str) -> str:
     """Convert mrt dialect type to mrt ir type."""
     types_map = {
-        'AnyRankedTensor': '->ToTensor()',
+        'MrtAnyTensor': '->ToTensor()',
         'Mrt_I64Type': '->ToInt()',
         'Mrt_BooleanType': '->ToBool()',
         'Mrt_F32Type': '->ToFloat()',

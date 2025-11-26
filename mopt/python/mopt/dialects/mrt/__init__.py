@@ -16,3 +16,6 @@
 
 # pylint: disable=relative-beyond-top-level
 from .._mrt_ops_gen import *
+from ..._mlir_libs._mopt import DeviceAttr
+
+__all__ = ['DeviceAttr']

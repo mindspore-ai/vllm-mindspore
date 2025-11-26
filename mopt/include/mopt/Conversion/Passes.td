@@ -43,4 +43,3 @@ def ConvertStablehloToMRT : Pass<"convert-stablehlo-to-mrt", "::mlir::ModuleOp">
 }
 
 #endif // MOPT_CONVERSION_PASSES
-
