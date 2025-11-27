@@ -25,6 +25,7 @@ from typing import Callable, Optional
 import numpy as np
 import vllm.envs as envs
 from mindspore import Parameter, Tensor, from_numpy, mint, nn, ops
+from mindspore.common.initializer import initializer
 from vllm.config import get_current_vllm_config
 from vllm.distributed import (get_dp_group, get_ep_group,
                               get_tensor_model_parallel_world_size,
@@ -90,10 +91,10 @@ class UnquantizedFusedMoEMethod(FusedMoEMethodBase, nn.Cell):
                        params_dtype, **extra_weight_attrs):
         # Fused gate_up_proj (column parallel)
         # Transpose the weight to make it compatible with the GroupMatMul kernel
-        w13_weight = Parameter(mint.empty(num_experts,
-                                          hidden_size,
-                                          2 * intermediate_size_per_partition,
-                                          dtype=params_dtype),
+        weight_shape = (num_experts, hidden_size,
+                        2 * intermediate_size_per_partition)
+        w13_weight = Parameter(initializer("zeros", weight_shape,
+                                           params_dtype),
                                requires_grad=False)
         layer.insert_param_to_cell("w13_weight", w13_weight)
         set_weight_attrs(w13_weight, extra_weight_attrs)
@@ -101,10 +102,9 @@ class UnquantizedFusedMoEMethod(FusedMoEMethodBase, nn.Cell):
         set_weight_attrs(w13_weight, {"is_transposed": True})
 
         # down_proj (row parallel)
-        w2_weight = Parameter(mint.empty(num_experts,
-                                         intermediate_size_per_partition,
-                                         hidden_size,
-                                         dtype=params_dtype),
+        weight_shape = (num_experts, intermediate_size_per_partition,
+                        hidden_size)
+        w2_weight = Parameter(initializer("zeros", weight_shape, params_dtype),
                               requires_grad=False)
         layer.insert_param_to_cell("w2_weight", w2_weight)
         set_weight_attrs(w2_weight, extra_weight_attrs)
@@ -582,7 +582,7 @@ class FusedMoE(nn.Cell):
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor,
                       weight_name: str, shard_id: str, expert_id: int) -> None:
-
+        param.init_data()
         expert_id = self._map_global_expert_id_to_local_expert_id(expert_id)
         if expert_id == -1:
             return
