@@ -25,7 +25,9 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/Types.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/SmallVector.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
@@ -38,6 +40,7 @@ using mlir::cast;
 using mlir::dyn_cast;
 using mlir::failed;
 using mlir::failure;
+using mlir::isa;
 using mlir::LogicalResult;
 using mlir::MLIRContext;
 using mlir::ModuleOp;
@@ -122,17 +125,19 @@ struct ConvertReshapeOp : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     auto reshapeOp = cast<mlir::stablehlo::ReshapeOp>(op);
 
-    auto resultType = dyn_cast<ShapedType>(reshapeOp.getResult().getType());
-    if (!resultType || !resultType.hasRank()) {
+    // Get result type (can be RankedTensorType or Mrt_TensorType, both are accepted by MrtAnyTensor)
+    Type resultType = reshapeOp.getResult().getType();
+    auto shapedType = dyn_cast<ShapedType>(resultType);
+    if (!shapedType || !shapedType.hasRank()) {
       return failure();
     }
 
-    // Create shape array
-    SmallVector<int64_t> shape(resultType.getShape().begin(), resultType.getShape().end());
-    auto shapeArray = createI64ArrayValue(rewriter, op->getLoc(), shape);
+    // Get shape from ShapedType (works for both RankedTensorType and Mrt_TensorType)
+    auto shape = shapedType.getShape();
+    auto shapeValue = createI64ArrayValue(rewriter, op->getLoc(), shape);
 
-    // Create mrt.reshape
-    auto newOp = rewriter.create<mrt::ReshapeOp>(op->getLoc(), resultType, reshapeOp.getOperand(), shapeArray);
+    // Create mrt.reshape (type conversion will be handled by convert-ranked-tensor-to-mrt-tensor pass)
+    auto newOp = rewriter.create<mrt::ReshapeOp>(op->getLoc(), resultType, reshapeOp.getOperand(), shapeValue);
 
     rewriter.replaceOp(op, newOp.getResult());
     return success();
@@ -251,15 +256,18 @@ struct ConvertConvertOp : public RewritePattern {
   LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
     auto convertOp = cast<mlir::stablehlo::ConvertOp>(op);
 
-    auto resultType = dyn_cast<ShapedType>(convertOp.getResult().getType());
-    if (!resultType || !resultType.hasRank()) {
+    // Get result type (can be RankedTensorType or Mrt_TensorType, both are accepted by MrtAnyTensor)
+    Type resultType = convertOp.getResult().getType();
+    auto shapedType = dyn_cast<ShapedType>(resultType);
+    if (!shapedType || !shapedType.hasRank()) {
       return failure();
     }
 
-    // Create dtype value from result element type
-    auto dtypeValue = createDtypeValue(rewriter, op->getLoc(), resultType.getElementType());
+    // Get element type from ShapedType (works for both RankedTensorType and Mrt_TensorType)
+    auto elementType = shapedType.getElementType();
+    auto dtypeValue = createDtypeValue(rewriter, op->getLoc(), elementType);
 
-    // Create mrt.cast
+    // Create mrt.cast (type conversion will be handled by convert-ranked-tensor-to-mrt-tensor pass)
     auto newOp = rewriter.create<mrt::CastOp>(op->getLoc(), resultType, convertOp.getOperand(), dtypeValue);
 
     rewriter.replaceOp(op, newOp.getResult());
@@ -352,6 +360,8 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
   }
 
   void runOnOperation() override {
+    ModuleOp module = getOperation();
+
     MLIRContext &context = getContext();
     RewritePatternSet patterns(&context);
 
@@ -367,7 +377,7 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     patterns.add<ConvertConvertOp>(&context);
 
     // Apply the patterns
-    if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns)))) {
+    if (failed(applyPatternsAndFoldGreedily(module, std::move(patterns)))) {
       signalPassFailure();
     }
   }

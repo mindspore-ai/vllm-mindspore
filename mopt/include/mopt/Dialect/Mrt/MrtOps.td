@@ -37,16 +37,16 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$x1,
-    AnyRankedTensor:$x2,
-    AnyRankedTensor:$gamma,
+    MrtAnyTensor:$x1,
+    MrtAnyTensor:$x2,
+    MrtAnyTensor:$gamma,
     Mrt_F32Type:$epsilon
   );
 
   let results = (outs
-    AnyRankedTensor:$yOut,
-    AnyRankedTensor:$rstdOut,
-    AnyRankedTensor:$xOut
+    MrtAnyTensor:$yOut,
+    MrtAnyTensor:$rstdOut,
+    MrtAnyTensor:$xOut
   );
 
   let assemblyFormat = [{
@@ -64,16 +64,16 @@ def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
-    AnyRankedTensor:$scale,
-    AnyRankedTensor:$offset,
-    AnyRankedTensor:$mean,
-    AnyRankedTensor:$variance,
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$scale,
+    MrtAnyTensor:$offset,
+    MrtAnyTensor:$mean,
+    MrtAnyTensor:$variance,
     Mrt_F32Type:$epsilon,
     Mrt_BooleanType:$is_training
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $scale `,` $offset `,` $mean `,` $variance `,` $epsilon `,` $is_training
@@ -88,11 +88,11 @@ def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
+    MrtAnyTensor:$input,
     Mrt_DtypeType:$dtype
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $dtype attr-dict `:` functional-type(operands, results)
@@ -112,7 +112,7 @@ def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
     Mrt_I64Type:$axis
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $inputs `,` $axis attr-dict `:` functional-type(operands, results)
@@ -126,8 +126,8 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
-    AnyRankedTensor:$kernel,
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$kernel,
     MrtOptTensor:$bias,
     Mrt_I64ArrayType:$strides,
     Mrt_I64ArrayType:$padding,
@@ -135,7 +135,7 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
     Mrt_BooleanType:$has_bias
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $kernel (`,` $bias^)? `,` $strides `,` $padding `,` $dilation `,` $has_bias
@@ -152,33 +152,15 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$weight,
-    AnyRankedTensor:$indices
+    MrtAnyTensor:$weight,
+    MrtAnyTensor:$indices
   );
 
   let results = (outs
-    AnyRankedTensor:$out
+    MrtAnyTensor:$out
   );
 
   let generated = 1;
-}
-
-def Mrt_MatmulOp : Mrt_Op<"matmul", [Pure]> {
-  let summary = "Matrix multiplication operation";
-  let description = [{
-    Performs matrix multiplication on input tensors.
-  }];
-
-  let arguments = (ins
-    AnyRankedTensor:$lhs,
-    AnyRankedTensor:$rhs
-  );
-
-  let results = (outs AnyRankedTensor:$result);
-
-  let assemblyFormat = [{
-    $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
-  }];
 }
 
 def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
@@ -190,10 +172,10 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$x,
-    AnyRankedTensor:$expertIdx,
-    AnyRankedTensor:$scaleOptional,
-    AnyRankedTensor:$offsetOptional,
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$expertIdx,
+    MrtAnyTensor:$scaleOptional,
+    MrtAnyTensor:$offsetOptional,
     Mrt_I64Type:$activeNum,
     Mrt_I64Type:$expertCapacity,
     Mrt_I64Type:$expertNum,
@@ -206,10 +188,10 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   );
 
   let results = (outs
-    AnyRankedTensor:$expandedXOut,
-    AnyRankedTensor:$expandedRowIdxOut,
-    AnyRankedTensor:$expertTokensCountOrCumsumOut,
-    AnyRankedTensor:$expandedScaleOut
+    MrtAnyTensor:$expandedXOut,
+    MrtAnyTensor:$expandedRowIdxOut,
+    MrtAnyTensor:$expertTokensCountOrCumsumOut,
+    MrtAnyTensor:$expandedScaleOut
   );
 
   let assemblyFormat = [{
@@ -230,11 +212,11 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$lhs,
-    AnyRankedTensor:$rhs
+    MrtAnyTensor:$lhs,
+    MrtAnyTensor:$rhs
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
@@ -250,14 +232,14 @@ def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
+    MrtAnyTensor:$input,
     Mrt_I64ArrayType:$kernel_size,
     Mrt_I64ArrayType:$strides,
     Mrt_I64ArrayType:$padding,
     Mrt_StringType:$pool_type
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $kernel_size `,` $strides `,` $padding `,` $pool_type
@@ -271,8 +253,8 @@ def Mrt_ReluOp : Mrt_Op<"relu", [Pure]> {
     Applies the ReLU (Rectified Linear Unit) activation function.
   }];
 
-  let arguments = (ins AnyRankedTensor:$input);
-  let results = (outs AnyRankedTensor:$result);
+  let arguments = (ins MrtAnyTensor:$input);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input attr-dict `:` functional-type(operands, results)
@@ -287,11 +269,11 @@ def Mrt_ReshapeOp : Mrt_Op<"reshape", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
+    MrtAnyTensor:$input,
     Mrt_I64ArrayType:$shape
   );
 
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $shape attr-dict `:` functional-type(operands, results)
@@ -309,14 +291,14 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$x,
-    AnyRankedTensor:$gamma,
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$gamma,
     Mrt_F32Type:$epsilon
   );
 
   let results = (outs
-    AnyRankedTensor:$yOut,
-    AnyRankedTensor:$rstdOut
+    MrtAnyTensor:$yOut,
+    MrtAnyTensor:$rstdOut
   );
 
   let assemblyFormat = [{
@@ -336,13 +318,13 @@ def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
-    AnyRankedTensor:$indices,
-    AnyRankedTensor:$updates
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$indices,
+    MrtAnyTensor:$updates
   );
 
   let results = (outs
-    AnyRankedTensor:$outs
+    MrtAnyTensor:$outs
   );
 }
 
@@ -352,16 +334,13 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
     Applies the sigmoid activation function.
   }];
 
-  let arguments = (ins AnyRankedTensor:$input);
-  let results = (outs AnyRankedTensor:$result);
+  let arguments = (ins MrtAnyTensor:$input);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input attr-dict `:` functional-type(operands, results)
   }];
 }
-
-
-
 
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   let summary = "Softmax activation function";
@@ -370,10 +349,10 @@ def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
+    MrtAnyTensor:$input,
     Mrt_I64Type:$axis
   );
-  let results = (outs AnyRankedTensor:$result);
+  let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
     $input `,` $axis attr-dict `:` functional-type(operands, results)
@@ -387,7 +366,7 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
   }];
 
   let arguments = (ins
-    AnyRankedTensor:$input,
+    MrtAnyTensor:$input,
     Mrt_I64Type:$axis,
     Mrt_I64ArrayType:$split_sizes
   );

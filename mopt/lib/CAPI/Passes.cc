@@ -16,8 +16,11 @@
 
 #include "mopt-c/Passes.h"
 #include "mopt/Conversion/Passes.h"
+#include "mopt/Dialect/Mrt/Transforms/Passes.h"
 
 void mlirRegisterMoptPasses() {
   // Register all conversion passes
   mlir::registerMoptConversionPasses();
+  // Register all MRT transforms passes
+  mlir::registerMrtTransformsPasses();
 }

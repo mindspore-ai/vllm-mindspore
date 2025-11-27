@@ -18,22 +18,78 @@
 #define MRT_DIALECT_MRT_TYPES_TD
 
 include "mopt/Dialect/Mrt/MrtDialect.td"
+include "mlir/IR/AttrTypeBase.td"
+
+//===----------------------------------------------------------------------===//
+// Supported argument/result types for operations:
+//   Tensor          --> Mrt_TensorType
+//   Optional Tensor --> MrtOptTensor
+//   Tensor List     --> MrtTensorList
+//   Integer         --> Mrt_I64Type (replaces I64Attr)
+//   Integer Array   --> Mrt_I64ArrayType (replaces I64ArrayAttr, for axis, strides, shape, etc.)
+//   Boolean         --> Mrt_BooleanType (replaces BoolAttr)
+//   Boolean Array   --> Mrt_BooleanArrayType (replaces BoolArrayAttr)
+//   Float           --> Mrt_F32Type or Mrt_F64Type (replaces F32Attr/F64Attr)
+//   Float Array     --> Mrt_F32ArrayType or Mrt_F64ArrayType (replaces F32ArrayAttr/F64ArrayAttr)
+//   String          --> Mrt_StringType (replaces StrAttr)
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Device Attribute
+//===----------------------------------------------------------------------===//
+
+def Mrt_DeviceAttr : AttrDef<Mrt_Dialect, "Device"> {
+  let mnemonic = "device";
+  let summary = "Device attribute for MRT dialect";
+  let description = [{
+    Represents a device with type (e.g., "cpu", "npu") and index (signed integer).
+    The index is a signed integer indicating the device index.
+  }];
+
+  let parameters = (ins
+    "mlir::StringAttr":$device_type,
+    "mlir::IntegerAttr":$index
+  );
+
+  let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Tensor Types
+//===----------------------------------------------------------------------===//
 
 def Mrt_TensorType : Mrt_Type<"Tensor", "tensor"> {
   let summary = "Tensor type for MRT dialect";
   let description = [{
-    Represents a multi-dimensional array with optional shape information.
+    Represents a multi-dimensional array with shape, element type, and optional device information.
+    Device information includes device type (e.g., "cpu", "npu") and device index.
+    Format: mrt.tensor<elementTypexshape, device=...> (e.g., mrt.tensor<f32x2x3, device=<npu, 0>>)
   }];
 
   let parameters = (ins
-    OptionalParameter<"mlir::Type">:$elementType,
-    OptionalParameter<"mlir::DenseI64ArrayAttr">:$shape
+    "mlir::Type":$elementType,
+    "mlir::DenseI64ArrayAttr":$shape,
+    OptionalParameter<"mrt::DeviceAttr">:$device
   );
 
-  let assemblyFormat = [{
-    `<` $elementType (`x` $shape^)? `>`
-  }];
+  let hasCustomAssemblyFormat = 1;
 }
+
+
+// Type constraint that accepts both RankedTensorType and Mrt_TensorType
+// This allows operations to accept either standard MLIR RankedTensorType
+// or MRT dialect's TensorType, providing flexibility during conversion.
+def MrtAnyTensor : AnyTypeOf<[AnyRankedTensor, Mrt_TensorType]>;
+
+// Optional tensor type (uses MrtAnyTensor to accept both RankedTensorType and Mrt_TensorType)
+def MrtOptTensor : Optional<MrtAnyTensor>;
+
+// Tensor list type (uses MrtAnyTensor to accept both RankedTensorType and Mrt_TensorType)
+def MrtTensorList : Variadic<MrtAnyTensor>;
+
+//===----------------------------------------------------------------------===//
+// Scalar Types
+//===----------------------------------------------------------------------===//
 
 // 32-bit floating point scalar type (replaces F32Attr)
 // This type wraps a 32-bit floating point value and is distinct from tensor types.
@@ -139,6 +195,10 @@ def Mrt_StringType : Mrt_Type<"String", "string"> {
 
   let assemblyFormat = "";
 }
+
+//===----------------------------------------------------------------------===//
+// Array Types
+//===----------------------------------------------------------------------===//
 
 // 64-bit integer array type (replaces I64ArrayAttr)
 // This type represents a general-purpose array of int64 values and is distinct from tensor types.

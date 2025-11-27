@@ -97,48 +97,93 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     get_collective_info_from_torch(gm)
     set_device_context()
 
-    _print_verbose("Stage 0: Original FX Graph", gm.graph)
+    _print_verbose("Original FX Graph", gm.graph)
 
-    # Step 1: Apply decompositions to FX GraphModule
+    # Apply decompositions to FX GraphModule
     gm = apply_decompositions(gm, example_inputs)
-    _print_verbose("Stage 1: FX Graph After Decompositions", gm.graph)
+    _print_verbose("FX Graph After Decompositions", gm.graph)
 
-    # Step 2: Convert FX GraphModule to torch_mlir RAW module
+    # Convert FX GraphModule to torch_mlir RAW module
     torch_mlir_module = _convert_to_torch_mlir(gm)
-    _print_verbose("Stage 2: Torch-MLIR RAW Module", torch_mlir_module)
+    _print_verbose("Torch-MLIR RAW Module", torch_mlir_module)
 
-    # Step 3: Serialize torch_mlir module to IR text
+    # Serialize torch_mlir module to IR text
     mlir_module = _parse_mlir_module_from_text(str(torch_mlir_module))
-    _print_verbose("Stage 3: Re-parsed MLIR Module (torch_mlir RAW, before passes)", mlir_module)
+    _print_verbose("Re-parsed MLIR Module (torch_mlir RAW, before passes)", mlir_module)
 
-    # Step 4: Run pass pipeline to convert torch_mlir RAW to TORCH backend
+    # Run pass pipeline to convert torch_mlir RAW to TORCH backend
     # pylint: disable=import-outside-toplevel
     # Reason: mopt must be imported here to prevent default loading at module level
     from mopt.passmanager import PassManager
     with mlir_module.context:
         pm = PassManager.parse("builtin.module(torchdynamo-export-to-torch-backend-pipeline)")
         pm.run(mlir_module.operation)
-    _print_verbose("Stage 4: Torch Backend IR", mlir_module)
+    _print_verbose("Torch Backend IR", mlir_module)
 
-    # Step 5: Run pass pipeline to convert torch_mlir TORCH backend to StableHLO
+    # Run pass pipeline to convert torch_mlir TORCH backend to StableHLO
     with mlir_module.context:
         pm = PassManager.parse("builtin.module(torch-backend-to-stablehlo-backend-pipeline)")
         pm.run(mlir_module.operation)
-    _print_verbose("Stage 5: StableHLO MLIR Module", mlir_module)
+    _print_verbose("StableHLO MLIR Module", mlir_module)
 
-    # Step 6: Run pass to convert StableHLO to MRT dialect
+    # Run pass to convert StableHLO to MRT dialect
     with mlir_module.context:
         pm = PassManager.parse("builtin.module(convert-stablehlo-to-mrt)")
         pm.run(mlir_module.operation)
-    _print_verbose("Stage 6: MRT Dialect Module (after passes)", mlir_module)
+    _print_verbose("MRT Dialect Module (after passes)", mlir_module)
 
-    # Step 7: Build MRT dialect module into GraphExecutor
+    # Convert RankedTensorType to Mrt_TensorType
+    with mlir_module.context:
+        pm = PassManager.parse("builtin.module(convert-ranked-tensor-to-mrt-tensor)")
+        pm.run(mlir_module.operation)
+    _print_verbose("MLIR Module (after type conversion)", mlir_module)
+
+    # Extract device information from first example_input and run pass
+    # Use PassOptions to pass device info - all logic is handled in C++ pass
+    device_str = "cpu"
+    device_index = -1
+    if example_inputs and isinstance(example_inputs[0], torch.Tensor):
+        device_str = _get_device_string_from_torch_tensor(example_inputs[0])
+        device_index = getattr(example_inputs[0].device, "index", None)
+        if device_index is None:
+            device_index = -1
+
+    # Run pass with device information via PassOptions
+    with mlir_module.context:
+        # Pass device info through PassManager.parse() options
+        pm = PassManager.parse(
+            f"builtin.module(set-tensor-device{{device-type={device_str} device-index={device_index}}})"
+        )
+        pm.run(mlir_module.operation)
+    _print_verbose("MRT Dialect Module (after set-tensor-device pass)", mlir_module)
+
+    # Build MRT dialect module into GraphExecutor
     executor, placeholder_nodes = gen_executor_from_mlir_module(mlir_module)
-    _print_verbose("Stage 7: Executor Graph", dump_func=executor.dump_graph)
+    _print_verbose("Executor Graph", dump_func=executor.dump_graph)
 
-    # Step 8: Create compiled callable from GraphExecutor
+    # Create compiled callable from GraphExecutor
     executor.build()
     return _create_compiled_callable(executor, placeholder_nodes)
+
+
+def _get_device_string_from_torch_tensor(tensor: torch.Tensor) -> str:
+    """Extract device type string from torch tensor.
+
+    Args:
+        tensor: PyTorch tensor
+
+    Returns:
+        Device type string: "cpu" or "npu"
+    """
+    device = tensor.device
+    device_type_str = str(device.type)
+    if device_type_str == "cpu":
+        return "cpu"
+    if device_type_str in ("npu", "privateuse1"):
+        # torch.device('npu') uses PrivateUse1 device type
+        return "npu"
+    # Default to cpu for unknown device types
+    return "cpu"
 
 
 def _create_compiled_callable(executor, placeholder_nodes):

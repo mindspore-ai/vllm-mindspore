@@ -39,6 +39,7 @@
 // Mopt project specific includes
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Conversion/Passes.h"
+#include "mopt/Dialect/Mrt/Transforms/Passes.h"
 
 namespace {
 // Version information for mopt-opt tool
@@ -64,6 +65,9 @@ int main(int argc, char **argv) {
 
   // Register custom conversion passes for Mopt
   mlir::registerMoptConversionPasses();
+
+  // Register MRT transforms passes
+  mlir::registerMrtTransformsPasses();
 
   // Setup dialect registry with all required dialects
   mlir::DialectRegistry registry;

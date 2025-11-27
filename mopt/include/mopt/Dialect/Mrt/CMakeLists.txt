@@ -10,3 +10,6 @@ mlir_tablegen(MrtTypes.cpp.inc -gen-typedef-defs -typedefs-dialect=mrt)
 mlir_tablegen(MrtEnums.h.inc -gen-enum-decls)
 mlir_tablegen(MrtEnums.cpp.inc -gen-enum-defs)
 add_public_tablegen_target(MLIRMrtExtraIncGen)
+
+# Include Transforms subdirectory for pass generation
+add_subdirectory(Transforms)

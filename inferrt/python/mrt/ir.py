@@ -27,6 +27,8 @@ from mrt._mrt_ir import (
     SymbolicConst,
     SymbolicExpr,
     DataType,
+    Device,
+    DeviceType,
 )
 
 
@@ -114,4 +116,6 @@ __all__ = [
     "SymbolicConst",
     "SymbolicExpr",
     "DataType",
+    "Device",
+    "DeviceType",
 ]
