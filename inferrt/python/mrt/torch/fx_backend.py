@@ -122,6 +122,7 @@ _OP_MAP = {
     torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
     torch.ops.npu.npu_swiglu: Op.swi_glu,
     torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
+    torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
