@@ -120,6 +120,7 @@ _OP_MAP = {
     torch.ops.npu.npu_rms_norm: Op.rms_norm,
     torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
     torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
+    torch.ops.npu.npu_swiglu: Op.swi_glu,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,

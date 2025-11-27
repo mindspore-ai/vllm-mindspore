@@ -403,4 +403,29 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
     $input `,` $axis `,` $split_sizes attr-dict `:` functional-type(operands, results)
   }];
 }
+
+def Mrt_SwiGluOp : Mrt_Op<"swi_glu"> {
+  let summary = "aclnnSwiGlu";
+  let description = [{
+    Operation for swiglu computation.
+    Accepts x tensor and the split dim.
+    Produces swiglu output.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+  let assemblyFormat = [{
+    $x `,` $dim
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 #endif // MRT_DIALECT_MRT_OPS_TD
