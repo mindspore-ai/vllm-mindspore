@@ -38,6 +38,13 @@ fi
 cd "${PROJECT_DIR}"
 rm -rf "${_TEMP_BUILD}"
 
+# Check if build marker exists to skip configure and build process
+_BUILD_MARKER="${LLVM_BUILD_DIR}/.llvm_built"
+if [[ -f "${_BUILD_MARKER}" ]]; then
+    echo "LLVM already built, skipping configure and build process"
+    return
+fi
+
 if [[ $INC_BUILD != 1 ]]; then
     echo "Configuring LLVM (source: ${LLVM_SOURCE_DIR})"
     cmake -G Ninja -B "${LLVM_BUILD_DIR}" \
@@ -54,5 +61,13 @@ if [[ $INC_BUILD != 1 ]]; then
             -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON \
             "${LLVM_SOURCE_DIR}/llvm"
 fi
+
 echo "Building LLVM and Torch-MLIR (${BUILD_JOBS} jobs)..."
 cmake --build "${LLVM_BUILD_DIR}" -j "${BUILD_JOBS}"
+_BUILD_STATUS=$?
+
+# Create build marker file after successful build
+if [[ ${_BUILD_STATUS} -eq 0 ]]; then
+    touch "${_BUILD_MARKER}"
+    echo "Created build marker: ${_BUILD_MARKER}"
+fi

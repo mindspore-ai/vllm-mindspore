@@ -23,7 +23,6 @@ include "mlir/IR/AttrTypeBase.td"
 //===----------------------------------------------------------------------===//
 // Supported argument/result types for operations:
 //   Tensor          --> Mrt_TensorType
-//   Optional Tensor --> MrtOptTensor
 //   Tensor List     --> MrtTensorList
 //   Integer         --> Mrt_I64Type (replaces I64Attr)
 //   Integer Array   --> Mrt_I64ArrayType (replaces I64ArrayAttr, for axis, strides, shape, etc.)
@@ -80,9 +79,6 @@ def Mrt_TensorType : Mrt_Type<"Tensor", "tensor"> {
 // This allows operations to accept either standard MLIR RankedTensorType
 // or MRT dialect's TensorType, providing flexibility during conversion.
 def MrtAnyTensor : AnyTypeOf<[AnyRankedTensor, Mrt_TensorType]>;
-
-// Optional tensor type (uses MrtAnyTensor to accept both RankedTensorType and Mrt_TensorType)
-def MrtOptTensor : Optional<MrtAnyTensor>;
 
 // Tensor list type (uses MrtAnyTensor to accept both RankedTensorType and Mrt_TensorType)
 def MrtTensorList : Variadic<MrtAnyTensor>;

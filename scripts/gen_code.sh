@@ -3,6 +3,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BUILD_DIR="${PROJECT_DIR}/build"
+AUTO_GEN_DIR="${BUILD_DIR}/auto_gen"
+DIALECTS_JSON_DIR="${AUTO_GEN_DIR}/dialects_json"
 
 # Find llvm-tblgen executable
 LLVM_TBLGEN=""
@@ -22,13 +25,16 @@ INCLUDE_PATHS=(
 )
 
 # Input and output files
-# TODO: find .td file in directory
 INPUT_FILE="${PROJECT_DIR}/mopt/include/mopt/Dialect/Mrt/Mrt.td"
-OUTPUT_FILE="${PROJECT_DIR}/scripts/codegen/MrtDialect.json"
+OUTPUT_FILE="${DIALECTS_JSON_DIR}/MrtDialect.json"
+
+rm -rf "${AUTO_GEN_DIR}"
+
+mkdir -p "${DIALECTS_JSON_DIR}"
 
 echo "Using llvm-tblgen: ${LLVM_TBLGEN}"
-echo "Input file: ${INPUT_FILE}"
-echo "Output file: ${OUTPUT_FILE}"
+echo "Input td file: ${INPUT_FILE}"
+echo "Output json file: ${OUTPUT_FILE}"
 
 # Run llvm-tblgen to generate JSON
 echo "Generating JSON from tablegen file..."

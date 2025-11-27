@@ -177,7 +177,7 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   let arguments = (ins
     MrtAnyTensor:$input,
     MrtAnyTensor:$kernel,
-    MrtOptTensor:$bias,
+    Optional<MrtAnyTensor>:$bias,
     Mrt_I64ArrayType:$strides,
     Mrt_I64ArrayType:$padding,
     Mrt_I64ArrayType:$dilation,
@@ -220,7 +220,7 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   
   let arguments = (ins
     MrtAnyTensor:$x,
-    MrtOptTensor:$finished,
+    Optional<MrtAnyTensor>:$finished,
     Mrt_I64Type:$k
   );
   
@@ -280,30 +280,32 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let generated = 1;
 }
 
-def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute"> {
+def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOperandSegments]> {
   let summary = "aclnnMoeTokenUnpermute";
   let description = [{
     Operation for moe token unpermute computation.
-    Accepts permuted_tokens, sorted_indices and optional probs tensor, optional padded_mode, optional restore_shape.
+    Accepts permuted_tokens, sorted_indices and optional probs tensor, padded_mode, optional restore_shape.
     Produces unpermute_tokens as result.
   }];
 
   let arguments = (ins
     MrtAnyTensor:$permuted_tokens,
     MrtAnyTensor:$sorted_indices,
-    MrtOptTensor:$probs,
+    Optional<MrtAnyTensor>:$probs,
     Mrt_BooleanType:$padded_mode,
-    Mrt_I64ArrayType:$restore_shape
+    Optional<Mrt_I64ArrayType>:$restore_shape
   );
 
   let results = (outs
-    AnyRankedTensor:$Out
+    MrtAnyTensor:$Out
   );
 
   let assemblyFormat = [{
-    $permuted_tokens `,` $sorted_indices (`,` $probs^)? `,` $padded_mode `,` $restore_shape
+    $permuted_tokens `,` $sorted_indices (`,` $probs^)? `,` $padded_mode (`,` $restore_shape^)?
     attr-dict `:` functional-type(operands, results)
   }];
+
+  let generated = 1;
 }
 
 def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {

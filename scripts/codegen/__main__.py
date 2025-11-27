@@ -19,14 +19,18 @@ from json_utils import load_ops_def_from_json_files
 from gen_aclnn_ops import AclnnOpsGenerator
 
 
-def gen_aclnn_ops_launch(ops_defs):
+def gen_aclnn_ops_launch(ops_defs, optional_mapping):
     """Generate aclnn launch code"""
-    generator = AclnnOpsGenerator()
+    generator = AclnnOpsGenerator(optional_mapping)
     generator.generate(ops_defs)
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for codegen."""
     # Load operation definitions from json
-    ops_defs_info = load_ops_def_from_json_files(C.JSON_FILES_DIR)
+    ops_defs_info, optional_mapping = load_ops_def_from_json_files(C.JSON_FILES_DIR)
     # Generate aclnn ops launch code
-    gen_aclnn_ops_launch(ops_defs_info)
+    gen_aclnn_ops_launch(ops_defs_info, optional_mapping)
     print("generate ops code success")
+
+if __name__ == "__main__":
+    main()
