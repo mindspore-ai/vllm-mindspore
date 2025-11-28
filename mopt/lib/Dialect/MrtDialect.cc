@@ -82,34 +82,26 @@ void DeviceAttr::print(mlir::AsmPrinter &printer) const {
 }
 
 // Custom parser and printer for Mrt_TensorType
-// Format: mrt.tensor<elementTypexshape, device=...>
-// Example: mrt.tensor<f32x2x3, device=<npu, 0>>
+// Format: mrt.tensor<2x3xf32, device=...>
+// Example: mrt.tensor<2x3xf32, device=<npu, 0>>
 mlir::Type TensorType::parse(mlir::AsmParser &odsParser) {
+  llvm::SmallVector<int64_t, 4> shape;
   mlir::Type elementType;
-  mlir::DenseI64ArrayAttr shape;
   mrt::DeviceAttr device;
 
   if (odsParser.parseLess()) {
     return {};
   }
 
-  // Parse elementTypexshape (e.g., f32x2x3)
-  if (odsParser.parseType(elementType)) {
+  // Parse dimension list
+  if (odsParser.parseDimensionList(shape)) {
     return {};
   }
 
-  // Parse shape dimensions separated by 'x'
-  llvm::SmallVector<int64_t> shapeVec;
-  while (odsParser.parseOptionalKeyword("x").succeeded()) {
-    int64_t dim;
-    if (odsParser.parseInteger(dim)) {
-      return {};
-    }
-    shapeVec.push_back(dim);
+  // Parse element type
+  if (odsParser.parseType(elementType)) {
+    return {};
   }
-
-  // Create shape attribute
-  shape = mlir::DenseI64ArrayAttr::get(odsParser.getContext(), shapeVec);
 
   // Parse optional device
   if (odsParser.parseOptionalComma().succeeded()) {
@@ -131,19 +123,18 @@ mlir::Type TensorType::parse(mlir::AsmParser &odsParser) {
     return {};
   }
 
-  return mrt::TensorType::get(odsParser.getContext(), elementType, shape, device);
+  return mrt::TensorType::get(odsParser.getContext(), shape, elementType, device);
 }
 
 void TensorType::print(mlir::AsmPrinter &odsPrinter) const {
   odsPrinter << "<";
-  odsPrinter.printType(getElementType());
-
-  // Print shape as x2x3 format (shape is required, so always print)
-  auto shape = getShape();
-  auto shapeArray = shape.asArrayRef();
-  for (int64_t dim : shapeArray) {
-    odsPrinter << "x" << dim;
+  for (int64_t dim : getShape()) {
+    if (dim == mlir::ShapedType::kDynamic)
+      odsPrinter << "?x";
+    else
+      odsPrinter << dim << "x";
   }
+  odsPrinter.printType(getElementType());
 
   // Print optional device
   auto device = getDevice();
@@ -153,6 +144,64 @@ void TensorType::print(mlir::AsmPrinter &odsPrinter) const {
   }
 
   odsPrinter << ">";
+}
+
+bool TensorType::hasRank() const { return true; }
+
+mlir::ShapedType TensorType::cloneWith(std::optional<llvm::ArrayRef<int64_t>> shape, mlir::Type elementType) const {
+  return mlir::cast<mlir::ShapedType>(
+    get(elementType.getContext(), shape.value_or(getShape()), elementType, getDevice()));
+}
+
+//===----------------------------------------------------------------------===//
+// BindSymbolicShapeOp
+//===----------------------------------------------------------------------===//
+
+// mrt.bind_symbolic_shape %6, [%0, %1, %2], affine_map<()[s0, s1, s2] ->
+// (s0, s1 * 2 + s2, 3)> : !mrt.tensor<2x2x3xf32, device=<npu, 0>>
+mlir::ParseResult BindSymbolicShapeOp::parse(mlir::OpAsmParser &parser, mlir::OperationState &result) {
+  mlir::OpAsmParser::UnresolvedOperand operand;
+  llvm::SmallVector<mlir::OpAsmParser::UnresolvedOperand> shapeSymbols;
+  mlir::AffineMapAttr shapeExpressions;
+  mlir::Type operandType;
+
+  if (parser.parseOperand(operand) || parser.parseComma() || parser.parseLSquare() ||
+      parser.parseOperandList(shapeSymbols) || parser.parseRSquare() || parser.parseComma() ||
+      parser.parseAttribute(shapeExpressions, "shape_expressions", result.attributes) ||
+      parser.parseOptionalAttrDict(result.attributes) || parser.parseColonType(operandType)) {
+    return llvm::failure();
+  }
+
+  if (parser.resolveOperand(operand, operandType, result.operands) ||
+      parser.resolveOperands(shapeSymbols, parser.getBuilder().getType<I64Type>(), result.operands)) {
+    return llvm::failure();
+  }
+
+  return llvm::success();
+}
+
+// Use a custom printer here to avoid the AffineMap from getting hoisted
+// when printed. This makes it so the AffineMap is printed inline with the op.
+void BindSymbolicShapeOp::print(mlir::OpAsmPrinter &p) {
+  p << " " << getOperand() << ", [";
+  llvm::interleaveComma(getShapeSymbols(), p);
+  p << "], " << "affine_map<" << getShapeExpressions().getValue() << ">";
+  p.printOptionalAttrDict((*this)->getAttrs(),
+                          /*elidedAttrs=*/{"shape_expressions"});
+  p << " : " << getOperand().getType();
+}
+
+llvm::LogicalResult BindSymbolicShapeOp::verify() {
+  if (getShapeSymbols().empty()) return emitOpError() << "requires non-empty shapeSymbols";
+
+  for (auto symbol : getShapeSymbols()) {
+    mlir::Operation *definingOp = symbol.getDefiningOp();
+    if (!mlir::isa<SymbolicIntOp>(definingOp)) {
+      return emitOpError() << "shape symbol must be produced by a SymbolicIntOp";
+    }
+  }
+
+  return llvm::success();
 }
 }  // namespace mrt
 

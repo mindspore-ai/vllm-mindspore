@@ -21,10 +21,23 @@ correspondence with GraphExecutor supported operators.
 
 from typing import Any, Dict, List, Optional
 
-from mrt.ir import GraphExecutor, Node, Op, Tensor, Value, Tuple, DataType, Device, DeviceType
-
+import torch
+from mopt import ir
+from mrt.ir import (
+    GraphExecutor,
+    Node,
+    Op,
+    Tensor,
+    Value,
+    Tuple,
+    DataType,
+    Device,
+    DeviceType,
+)
+from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr
 
 # ===== MLIR Type Conversion Utilities =====
+
 
 def _mlir_device_to_device(mlir_device) -> Device:
     """Convert MLIR device to Device enum."""
@@ -39,26 +52,34 @@ def _mlir_device_to_device(mlir_device) -> Device:
         raise NotImplementedError(f"Unsupported device: {mlir_device.device_type}")
     return Device(device_type, mlir_device.index)
 
-def _create_tensor_value_from_mlir(mlir_tensor) -> Value:
-    """Create Tensor Value from MLIR MrtTensorType."""
-    shape = [int(d) if isinstance(d, int) else -1 for d in mlir_tensor.shape]
-    data_type = DataType.from_string(str(mlir_tensor.element_type))
-    device = _mlir_device_to_device(mlir_tensor.device)
+
+def _create_mrt_value_from_mlir_type(mlir_type) -> Value:
+    """Create MRT Value from MLIR Type."""
+    if str(mlir_type) == "!mrt.i64":
+        return Value(-1)
+    shape = [int(d) if int(d) >= 0 else -1 for d in mlir_type.shape]
+    data_type = DataType.from_string(str(mlir_type.element_type))
+    device = _mlir_device_to_device(mlir_type.device)
     tensor = Tensor(shape, data_type, device)
     return Value(tensor)
 
 
 # ===== Constant Operation Handling =====
 
+
 def _is_constant_op(op_name: str) -> bool:
     """Check if an operation is a constant operation."""
-    return op_name in ("arith.constant", "std.constant") or op_name.startswith("mrt.constant.")
+    return op_name in ("arith.constant", "std.constant") or op_name.startswith(
+        "mrt.constant."
+    )
+
 
 def _get_value_from_attr(value_attr):
     """Extract raw value from value_attr."""
     if hasattr(value_attr, "value"):
         return Value(value_attr.value)
     return Value(Tuple([_get_value_from_attr(item) for item in value_attr]))
+
 
 def _extract_mrt_constant_value(op):
     """Extract constant value from mrt.constant.* operation."""
@@ -73,8 +94,11 @@ def _extract_mrt_constant_value(op):
             return Value(DataType.convert_str_to_int(str(value_attr.value)))
         return _get_value_from_attr(value_attr)
     except Exception as e:
-        raise ValueError(f"Unable to extract value from constant operation. "
-                         f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}") from e
+        raise ValueError(
+            f"Unable to extract value from constant operation. "
+            f"Attribute type: {type(value_attr)}, Attribute value: {value_attr}"
+        ) from e
+
 
 def _extract_constant_value(op):
     """Extract constant value from constant operation."""
@@ -83,7 +107,9 @@ def _extract_constant_value(op):
         return _extract_mrt_constant_value(op)
     raise NotImplementedError(f"Constant operation {op_name} is not supported: {op}")
 
+
 # ===== MRT Dialect Operator Mapping =====
+
 
 def _map_op_name_to_runtime_op(name: str) -> Op:
     """Map MRT dialect operator name to GraphExecutor Op."""
@@ -100,12 +126,12 @@ def _map_op_name_to_runtime_op(name: str) -> Op:
 
     # If not found, raise error
     raise NotImplementedError(
-        f"Unsupported operator: {name} "
-        f"('{op_name}' not found in Op enum)"
+        f"Unsupported operator: {name} ('{op_name}' not found in Op enum)"
     )
 
 
 # ===== MLIR Module Traversal Utilities =====
+
 
 def _top_module_op(module) -> Any:
     """Return top-level Operation of MLIR Module."""
@@ -162,6 +188,7 @@ def _func_name_from_attr(func_op) -> Optional[str]:
         return val.strip('"')
     return None
 
+
 def _get_func_op(mlir_module):
     """Find func.func operation by name or select default."""
     candidates = _func_candidates(mlir_module)
@@ -175,16 +202,64 @@ def _get_func_op(mlir_module):
             return f
     return candidates[0]
 
+
 # ===== Main Builder Function =====
 
 _GLOBAL_GRAPH_ID = 0
+
 
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
     _GLOBAL_GRAPH_ID += 1
     return _GLOBAL_GRAPH_ID
 
-def gen_executor_from_mlir_module(mlir_module):
+
+def _convert_affine_expr(
+    expr: ir.AffineExpr, symbol_vals: List[SymbolicExpr]
+) -> List[SymbolicExpr]:
+    """Convert MLIR affine expression to SymbolicExpr."""
+    if ir.AffineSymbolExpr.isinstance(expr):
+        expr = ir.AffineSymbolExpr(expr)
+        return symbol_vals[expr.position]
+
+    if ir.AffineConstantExpr.isinstance(expr):
+        expr = ir.AffineConstantExpr(expr)
+        return SymbolicConst(expr.value)
+
+    if ir.AffineAddExpr.isinstance(expr):
+        expr = ir.AffineAddExpr(expr)
+        lhs = _convert_affine_expr(expr.lhs, symbol_vals)
+        rhs = _convert_affine_expr(expr.rhs, symbol_vals)
+        return lhs + rhs
+
+    if ir.AffineMulExpr.isinstance(expr):
+        expr = ir.AffineMulExpr(expr)
+        lhs = _convert_affine_expr(expr.lhs, symbol_vals)
+        rhs = _convert_affine_expr(expr.rhs, symbol_vals)
+        return lhs * rhs
+
+    if ir.AffineFloorDivExpr.isinstance(expr):
+        expr = ir.AffineFloorDivExpr(expr)
+        lhs = _convert_affine_expr(expr.lhs, symbol_vals)
+        rhs = _convert_affine_expr(expr.rhs, symbol_vals)
+        return lhs // rhs
+
+    if ir.AffineCeilDivExpr.isinstance(expr):
+        expr = ir.AffineCeilDivExpr(expr)
+        lhs = _convert_affine_expr(expr.lhs, symbol_vals)
+        rhs = _convert_affine_expr(expr.rhs, symbol_vals)
+        return lhs.__ceildiv__(rhs)
+
+    if ir.AffineModExpr.isinstance(expr):
+        expr = ir.AffineModExpr(expr)
+        lhs = _convert_affine_expr(expr.lhs, symbol_vals)
+        rhs = _convert_affine_expr(expr.rhs, symbol_vals)
+        return lhs % rhs
+
+    raise NotImplementedError(f"Unsupported affine expr: {expr},  type: {type(expr)}")
+
+
+def gen_executor_from_mlir_module(mlir_module, fake_inputs):
     """Build callable GraphExecutor from MLIR module (MRT dialect).
 
     This function assumes MLIR module is already converted to MRT dialect, where
@@ -221,14 +296,25 @@ def gen_executor_from_mlir_module(mlir_module):
     # Environment: MLIR Value -> GraphExecutor Node mapping
     env: Dict[Any, Node] = {}
 
+    # Symbol Map: Symbol Name -> SymbolicExpr mapping
+    symbol_map: Dict[str, SymbolicExpr] = {}
+
+    # Symbol Environment: MLIR Value -> SymbolicExpr mapping
+    symbol_env: Dict[Any, SymbolicExpr] = {}
+
     # Get function inputs and outputs
     func_inputs, func_outputs = _get_func_io(func_op)
 
     # Create value node for each function parameter
     input_nodes: List[Node] = []
-    for arg in func_inputs:
-        tensor_value = _create_tensor_value_from_mlir(arg.type)
-        val_node = executor.add_value_node(tensor_value)
+    for arg, fake_input in zip(func_inputs, fake_inputs):
+        if isinstance(fake_input, torch.SymInt):
+            sym_name = str(fake_input.node.expr)
+            symbol_map[sym_name] = SymbolicVar(sym_name)
+            mrt_value = Value(symbol_map[sym_name])
+        else:
+            mrt_value = _create_mrt_value_from_mlir_type(arg.type)
+        val_node = executor.add_value_node(mrt_value)
         env[arg] = val_node
         input_nodes.append(val_node)
 
@@ -239,6 +325,25 @@ def gen_executor_from_mlir_module(mlir_module):
         for op in _iter_ops_in_func(func_op):
             op_name = op.name
             if op_name == "func.return":
+                continue
+
+            if op_name == "mrt.symbolic_int":
+                sym_name = ir.StringAttr(op.attributes["symbol_name"]).value
+                symbol_env[op.result] = symbol_map[sym_name]
+                continue
+
+            if op_name == "mrt.bind_symbolic_shape":
+                target = op.operands[0]
+                shape_symbols = list(op.operands)[1:]
+                affine_map = ir.AffineMapAttr(op.attributes["shape_expressions"]).value
+
+                symbol_vals = [symbol_env[s] for s in shape_symbols]
+                symbolic_shape = [
+                    _convert_affine_expr(expr, symbol_vals)
+                    for expr in affine_map.results
+                ]
+
+                env[target].output.to_tensor().symbolic_shape = symbolic_shape
                 continue
 
             if _is_constant_op(op_name):
@@ -268,8 +373,8 @@ def gen_executor_from_mlir_module(mlir_module):
                     f"currently only single-result operators supported"
                 )
 
-            out_tensor_value = _create_tensor_value_from_mlir(results[0].type)
-            node = executor.add_op_node(runtime_op, input_nodes_for_op, out_tensor_value)
+            mrt_value = _create_mrt_value_from_mlir_type(results[0].type)
+            node = executor.add_op_node(runtime_op, input_nodes_for_op, mrt_value)
             env[results[0]] = node
 
         if len(func_outputs) > 0:
@@ -282,6 +387,7 @@ def gen_executor_from_mlir_module(mlir_module):
 
 
 # ===== Additional Helper Functions =====
+
 
 def print_mlir_module_structure(mlir_module):
     """Print MLIR module structure information (for debugging).

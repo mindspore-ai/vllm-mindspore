@@ -33,7 +33,10 @@ MlirType mlirMrtTensorTypeGetElementType(MlirType type) {
 }
 
 MlirAttribute mlirMrtTensorTypeGetShape(MlirType type) {
-  return wrap(mlir::cast<mrt::TensorType>(unwrap(type)).getShape());
+  auto tensorType = mlir::cast<mrt::TensorType>(unwrap(type));
+  auto shape = tensorType.getShape();
+  llvm::SmallVector<int64_t> shapeVec(shape.begin(), shape.end());
+  return wrap(mlir::DenseI64ArrayAttr::get(tensorType.getContext(), shapeVec));
 }
 
 MlirAttribute mlirMrtTensorTypeGetDevice(MlirType type) {

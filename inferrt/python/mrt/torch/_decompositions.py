@@ -28,6 +28,7 @@ DecompositionOpsList = Sequence[
     Union[torch._ops.OperatorBase, torch._ops.OpOverloadPacket]
 ]
 
+
 def _get_default_decomposition_ops() -> DecompositionOpsList:
     """Collects the default set of operator decompositions used by this module."""
     aten = torch.ops.aten
@@ -76,6 +77,26 @@ def _get_default_decomposition_ops() -> DecompositionOpsList:
         aten.upsample_bilinear2d.vec,
     ]
 
+
+def _contains_symint(example_inputs) -> bool:
+    """Check if any of the example inputs contains a torch.SymInt.
+
+    Args:
+        example_inputs: A sequence of example inputs to check.
+
+    Returns:
+        True if any input or its shape contains a torch.SymInt, False otherwise.
+    """
+    for arg in example_inputs:
+        if isinstance(arg, torch.SymInt):
+            return True
+        if isinstance(arg, torch.Tensor):
+            for s in arg.shape:
+                if isinstance(s, torch.SymInt):
+                    return True
+    return False
+
+
 def apply_decompositions(gm: torch.fx.GraphModule, example_inputs):
     """Apply operator decompositions to a GraphModule if requested.
 
@@ -84,6 +105,7 @@ def apply_decompositions(gm: torch.fx.GraphModule, example_inputs):
         We suppress Pylint's protected-access warning for the type annotation.
     """
     decompositions = get_decompositions(_get_default_decomposition_ops())
+
     gm = make_fx(
         functionalize(gm),
         decomposition_table=decompositions,

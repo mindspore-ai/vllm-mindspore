@@ -29,6 +29,7 @@
 #include "common/visible.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
+#include "ir/symbolic/symbolic.h"
 
 namespace mrt {
 namespace ir {
@@ -137,6 +138,11 @@ class DA_API Value : public RefCounted {
    * @param v The TuplePtr value.
    */
   explicit Value(const TuplePtr &v);
+  /**
+   * @brief Constructs a Value from a SymbolicExprPtr.
+   * @param v The SymbolicExprPtr value.
+   */
+  explicit Value(const SymbolicExprPtr &v);
 
   /**
    * @brief Destructor.
@@ -169,6 +175,7 @@ class DA_API Value : public RefCounted {
   bool IsBool() const { return tag_ == Tag::Bool; }
   bool IsString() const { return tag_ == Tag::String; }
   bool IsTuple() const { return tag_ == Tag::Tuple; }
+  bool IsSymbol() const { return tag_ == Tag::Symbol; }
   bool IsNone() const { return tag_ == Tag::None; }
   ///@}
 
@@ -184,6 +191,7 @@ class DA_API Value : public RefCounted {
   bool ToBool() const;
   const std::string &ToString() const;
   const TuplePtr &ToTuple() const;
+  const SymbolicExprPtr &ToSymbol() const;
   ///@}
 
   /**
@@ -198,7 +206,7 @@ class DA_API Value : public RefCounted {
   /**
    * @brief Enumeration of the possible types a Value can hold.
    */
-  enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple };
+  enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple, Symbol };
 
   /**
    * @brief Tag string representation.
@@ -216,6 +224,7 @@ class DA_API Value : public RefCounted {
     bool bool_;
     std::string string_;
     TuplePtr tuple_;
+    SymbolicExprPtr symbol_;
   };
 };
 

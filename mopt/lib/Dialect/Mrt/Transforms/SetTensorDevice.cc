@@ -73,21 +73,6 @@ mrt::DeviceAttr getDeviceFromFirstInput(Operation *op) {
   return nullptr;
 }
 
-// Create Mrt_TensorType from RankedTensorType with device
-Type createMrtTensorTypeWithDevice(MLIRContext *ctx, RankedTensorType rankedType, mrt::DeviceAttr device) {
-  mlir::Type elementType = rankedType.getElementType();
-  auto shapeVec = llvm::to_vector(rankedType.getShape());
-  mlir::DenseI64ArrayAttr shape = mlir::DenseI64ArrayAttr::get(ctx, shapeVec);
-  return mrt::TensorType::get(ctx, elementType, shape, device);
-}
-
-// Create Mrt_TensorType from existing Mrt_TensorType with device
-Type createMrtTensorTypeWithDeviceFromMrt(MLIRContext *ctx, mrt::TensorType tensorType, mrt::DeviceAttr device) {
-  auto elementType = tensorType.getElementType();
-  auto shape = tensorType.getShape();
-  return mrt::TensorType::get(ctx, elementType, shape, device);
-}
-
 }  // namespace
 
 namespace mlir {
@@ -133,10 +118,10 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
 
       if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(argType)) {
         if (!tensorType.getDevice()) {
-          newType = createMrtTensorTypeWithDeviceFromMrt(ctx, tensorType, defaultDevice);
+          newType = mrt::TensorType::get(ctx, tensorType.getShape(), tensorType.getElementType(), defaultDevice);
         }
       } else if (auto rankedType = mlir::dyn_cast<RankedTensorType>(argType)) {
-        newType = createMrtTensorTypeWithDevice(ctx, rankedType, defaultDevice);
+        newType = mrt::TensorType::get(ctx, rankedType.getShape(), rankedType.getElementType(), defaultDevice);
       }
 
       if (newType) {
@@ -230,11 +215,11 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
 
         if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(oldType)) {
           if (!tensorType.getDevice()) {
-            newType = createMrtTensorTypeWithDeviceFromMrt(ctx, tensorType, device);
+            newType = mrt::TensorType::get(ctx, tensorType.getShape(), tensorType.getElementType(), device);
             hasTypeChange = true;
           }
         } else if (auto rankedType = mlir::dyn_cast<RankedTensorType>(oldType)) {
-          newType = createMrtTensorTypeWithDevice(ctx, rankedType, device);
+          newType = mrt::TensorType::get(ctx, rankedType.getShape(), rankedType.getElementType(), device);
           hasTypeChange = true;
         }
 

@@ -48,7 +48,8 @@ class SymbolicShapeManager:
     }
 
     def __init__(self):
-        self._symbol_map: Dict[sympy.Symbol, SymbolicVar] = {}
+        # Map from symbol name (str) to SymbolicVar
+        self._symbol_map: Dict[str, SymbolicVar] = {}
 
     def convert_sympy_expr_to_symbolic_expr(self, expr: sympy.Expr) -> SymbolicExpr:
         """
@@ -64,9 +65,7 @@ class SymbolicShapeManager:
             NotImplementedError: If the expression type is not supported
         """
         if expr.is_Symbol:
-            if expr not in self._symbol_map:
-                self._symbol_map[expr] = SymbolicVar(str(expr))
-            return self._symbol_map[expr]
+            return self._symbol_map[str(expr)]
 
         if expr.is_Integer:
             return SymbolicConst(int(expr))
@@ -128,8 +127,12 @@ class SymbolicShapeManager:
             mrt_value: The corresponding MRT value (can be Tensor, Tuple, or nested structures)
             torch_value: The value from torch (can be Tensor, list, tuple, or nested structures)
         """
+        # Handle SymInt case
+        if isinstance(torch_value, torch.SymInt) and mrt_value.is_symbol():
+            self._symbol_map[str(torch_value.node.expr)] = mrt_value.to_symbol()
+
         # Handle tensor case
-        if isinstance(torch_value, torch.Tensor) and mrt_value.is_tensor():
+        elif isinstance(torch_value, torch.Tensor) and mrt_value.is_tensor():
             symbolic_shape = self.create_symbolic_shape_for_tensor(torch_value)
             if symbolic_shape is not None:
                 mrt_value.to_tensor().symbolic_shape = symbolic_shape
@@ -141,20 +144,3 @@ class SymbolicShapeManager:
                 return
             for i, torch_item in enumerate(torch_value):
                 self.bind_symbolic_shape(tuple_value[i], torch_item)
-
-    def set_symbolic_var(self, symbol: sympy.Symbol, value: int) -> bool:
-        """
-        Set the value for a symbolic variable.
-
-        Args:
-            symbol: The sympy symbol
-            value: The integer value to set
-
-        Returns:
-            True if the symbol was found and value was set, False otherwise
-        """
-        symbolic_var = self._symbol_map.get(symbol)
-        if symbolic_var is not None:
-            symbolic_var.set_value(value)
-            return True
-        return False

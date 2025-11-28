@@ -28,24 +28,29 @@ from mrt.torch.symbolic_shape import SymbolicShapeManager
 from mrt.torch.utils import (
     from_torch,
     to_torch,
-    update_tensor_data,
     get_collective_info_from_torch,
     set_device_context,
+    update_runtime_inputs,
 )
+
+try:
+    import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
+
+    TORCH_NPU_INSTALLED = True
+except ImportError:
+    TORCH_NPU_INSTALLED = False
 
 
 def _init_mrt_config():
     """Initialize the mrt configs."""
-    try:
-        import torch_npu  # pylint: disable=import-outside-toplevel
-
+    if TORCH_NPU_INSTALLED:
         config.ascend.op_precision.set_is_allow_matmul_hf32(
             torch_npu.npu.matmul.allow_hf32
         )
         # pylint: disable=protected-access
         acl_precision_mode = torch_npu._C._npu_getOption("ACL_PRECISION_MODE")
         config.ascend.op_precision.set_acl_precision_mode(acl_precision_mode.decode())
-    except ImportError:
+    else:
         print("torch_npu is not installed, using default mrt configs.")
 
 
@@ -167,15 +172,6 @@ _OP_MAP = {
     torch.nn.functional.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
     torch.nn.functional.embedding: Op.embedding,
-    # torch.ops.npu functions
-    torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
-    torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
-    torch.ops.npu.npu_rms_norm: Op.rms_norm,
-    torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
-    torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
-    torch.ops.npu.npu_swiglu: Op.swiglu,
-    torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
-    torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
@@ -218,6 +214,20 @@ _OP_MAP = {
     "copy_": Op.copy,
     "long": Op.cast,
 }
+
+if TORCH_NPU_INSTALLED:
+    _NPU_OP_MAP = {
+        # torch.ops.npu functions
+        torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
+        torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
+        torch.ops.npu.npu_rms_norm: Op.rms_norm,
+        torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
+        torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
+        torch.ops.npu.npu_swiglu: Op.swiglu,
+        torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
+        torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
+    }
+    _OP_MAP.update(_NPU_OP_MAP)
 
 
 def _get_op(target):
@@ -494,28 +504,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.dump_graph()
     executor.build()
 
-    fx_param_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
-    fx_param_values = [n.meta["example_value"] for n in fx_param_nodes]
-    mrt_param_nodes = [env[n] for n in fx_param_nodes]
+    mrt_param_nodes = [env[n] for n in gm.graph.nodes if n.op == "placeholder"]
 
     def compiled_callable(*inputs: torch.Tensor):
-        if len(inputs) != len(mrt_param_nodes):
-            raise ValueError(
-                f"Expected {len(mrt_param_nodes)} inputs, but got {len(inputs)}"
-            )
-
-        for fx_param_value, mrt_param_node, input_value in zip(
-            fx_param_values, mrt_param_nodes, inputs
-        ):
-            if isinstance(fx_param_value, torch.Tensor):
-                update_tensor_data(mrt_param_node.output.to_tensor(), input_value)
-            elif isinstance(fx_param_value, torch.SymInt):
-                mrt_param_node.output = from_torch(int(input_value))
-                expr = fx_param_value.node.expr
-                symbolic_shape_manager.set_symbolic_var(expr, int(input_value))
-            else:
-                mrt_param_node.output = from_torch(input_value)
-
+        update_runtime_inputs(mrt_param_nodes, inputs)
         result = executor.run()
         return to_torch(result)
 

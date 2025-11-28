@@ -56,6 +56,15 @@ int64_t SymbolicTrueDiv::Evaluate() const {
   return static_cast<int64_t>(static_cast<double>(lhsVal) / static_cast<double>(rhsVal));
 }
 
+int64_t SymbolicMod::Evaluate() const {
+  auto lhsVal = lhs_->Evaluate();
+  auto rhsVal = rhs_->Evaluate();
+  if (rhsVal == 0) {
+    LOG_EXCEPTION << "Modulo by zero in symbolic expression.";
+  }
+  return lhsVal % rhsVal;
+}
+
 SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicAdd>(lhs, rhs); }
 
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMul>(lhs, rhs); }
@@ -63,6 +72,8 @@ SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return Mak
 SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
   return MakeIntrusive<SymbolicTrueDiv>(lhs, rhs);
 }
+
+SymbolicExprPtr operator%(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMod>(lhs, rhs); }
 
 SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
   return MakeIntrusive<SymbolicFloorDiv>(lhs, rhs);

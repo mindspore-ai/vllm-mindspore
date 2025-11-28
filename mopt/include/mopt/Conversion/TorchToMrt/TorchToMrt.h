@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef MRT_DIALECT_MRT_TD
-#define MRT_DIALECT_MRT_TD
+#ifndef MOPT_CONVERSION_TORCH_TO_MRT_H
+#define MOPT_CONVERSION_TORCH_TO_MRT_H
 
-// Main entry point for MRT dialect definitions.
-// This file includes all dialect components organized into separate files.
-include "mopt/Dialect/Mrt/MrtDialect.td"
-include "mopt/Dialect/Mrt/MrtTypes.td"
-include "mopt/Dialect/Mrt/MrtConstantOps.td"
-include "mopt/Dialect/Mrt/MrtOps.td"
-include "mopt/Dialect/Mrt/MrtSymbolicOps.td"
+#include <memory>
 
-#endif // MRT_DIALECT_MRT_TD
+namespace mlir {
+class Pass;
+
+/// Create a pass to convert Torch operations to MRT dialect operations.
+std::unique_ptr<Pass> createConvertTorchToMRTPass();
+
+}  // namespace mlir
+
+#endif  // MOPT_CONVERSION_TORCH_TO_MRT_H

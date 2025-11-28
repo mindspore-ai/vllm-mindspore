@@ -22,7 +22,7 @@
 namespace mrt {
 namespace ir {
 constexpr const char *kTagStrings[] = {
-  "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple",
+  "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple", "Symbol",
 };
 
 const char *TagToString(Value::Tag tag) { return kTagStrings[static_cast<size_t>(tag)]; }
@@ -34,6 +34,7 @@ Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
 Value::Value(std::string &&v) : tag_(Tag::String) { new (&string_) std::string(std::move(v)); }
 Value::Value(const TuplePtr &v) : tag_(Tag::Tuple), tuple_(v) {}
+Value::Value(const SymbolicExprPtr &v) : tag_(Tag::Symbol), symbol_(v) {}
 
 Value::~Value() {
   switch (tag_) {
@@ -45,6 +46,9 @@ Value::~Value() {
       break;
     case Tag::Tuple:
       tuple_.~IntrusivePtr();
+      break;
+    case Tag::Symbol:
+      symbol_.~IntrusivePtr();
       break;
     default:
       break;
@@ -73,6 +77,9 @@ Value::Value(Value &&other) noexcept : tag_(other.tag_) {
       break;
     case Tag::Tuple:
       new (&tuple_) TuplePtr(std::move(other.tuple_));
+      break;
+    case Tag::Symbol:
+      new (&symbol_) SymbolicExprPtr(std::move(other.symbol_));
       break;
     case Tag::None:
       break;
@@ -115,6 +122,9 @@ Value &Value::operator=(const Value &other) {
       case Tag::Tuple:
         tuple_ = other.tuple_;
         break;
+      case Tag::Symbol:
+        symbol_ = other.symbol_;
+        break;
       case Tag::None:
         break;
     }
@@ -141,6 +151,9 @@ double Value::ToDouble() const {
   return double_;
 }
 int64_t Value::ToInt() const {
+  if (tag_ == Tag::Symbol) {
+    return symbol_->Evaluate();
+  }
   CHECK_TAG(Tag::Int);
   return int_;
 }
@@ -155,6 +168,10 @@ const std::string &Value::ToString() const {
 const TuplePtr &Value::ToTuple() const {
   CHECK_TAG(Tag::Tuple);
   return tuple_;
+}
+const SymbolicExprPtr &Value::ToSymbol() const {
+  CHECK_TAG(Tag::Symbol);
+  return symbol_;
 }
 
 std::ostream &operator<<(std::ostream &os, const TuplePtr &tuple) {
@@ -221,6 +238,9 @@ std::ostream &operator<<(std::ostream &os, const Value &value) {
       break;
     case Value::Tag::Tuple:
       os << value.ToTuple();
+      break;
+    case Value::Tag::Symbol:
+      os << value.ToSymbol()->ToString();
       break;
   }
   return os;

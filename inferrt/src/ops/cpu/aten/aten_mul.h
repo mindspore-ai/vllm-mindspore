@@ -14,15 +14,25 @@
  * limitations under the License.
  */
 
-#ifndef MRT_DIALECT_MRT_TD
-#define MRT_DIALECT_MRT_TD
+#ifndef __OPS_CPU_ATEN_ATEN_MUL_H__
+#define __OPS_CPU_ATEN_ATEN_MUL_H__
 
-// Main entry point for MRT dialect definitions.
-// This file includes all dialect components organized into separate files.
-include "mopt/Dialect/Mrt/MrtDialect.td"
-include "mopt/Dialect/Mrt/MrtTypes.td"
-include "mopt/Dialect/Mrt/MrtConstantOps.td"
-include "mopt/Dialect/Mrt/MrtOps.td"
-include "mopt/Dialect/Mrt/MrtSymbolicOps.td"
+#include <vector>
+#include <string>
 
-#endif // MRT_DIALECT_MRT_TD
+#include "ops/op_base/op_mul.h"
+
+namespace mrt {
+namespace ops {
+class AtenMul : public Operator {
+ public:
+  AtenMul() = default;
+  ~AtenMul() override = default;
+
+  OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                      ir::Value *output, void *stream) override;
+};
+}  // namespace ops
+}  // namespace mrt
+
+#endif  // __OPS_CPU_ATEN_ATEN_MUL_H__

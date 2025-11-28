@@ -14,6 +14,7 @@ add_mlir_public_c_api_library(MoptCAPI
   MLIRSupport
   MLIRMrtDialect
   MoptConversionStablehloToMrt
+  MoptConversionTorchToMrt
   MLIRMrtTransforms
 )
 
