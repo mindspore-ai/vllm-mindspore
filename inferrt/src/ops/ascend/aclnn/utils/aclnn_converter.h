@@ -37,6 +37,9 @@ namespace ops {
 // Convert dtype
 DA_API aclDataType Convert(ir::DataType::Type dtype);
 
+// Convert value to aclScalar
+DA_API aclScalar *Convert(const ir::Value *value);
+
 // Convert tensor
 inline aclTensor *Convert(const ir::TensorPtr &tensor) {
   static const auto aclCreateTensor = GET_ACLNN_COMMON_META_FUNC(aclCreateTensor);
