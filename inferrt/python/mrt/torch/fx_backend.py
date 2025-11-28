@@ -90,6 +90,12 @@ def embedding_hook(node, input_nodes, executor):
     return [input_nodes[1], input_nodes[0]]
 
 # pylint: disable=unused-argument
+def apply_rotary_pos_emb_hook(node, input_nodes, executor):
+    """add layout parameter."""
+    rope_layout_bsnd = 1
+    return [input_nodes[0], input_nodes[1], input_nodes[2], input_nodes[3], rope_layout_bsnd]
+
+# pylint: disable=unused-argument
 def floor_div_hook(node, input_nodes, executor):
     """add div mode parameter."""
     div_mode = 2
@@ -112,6 +118,7 @@ def permute_hook(node, input_nodes, executor):
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
+    register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
 
@@ -166,7 +173,7 @@ _OP_MAP = {
     torch.ops.npu.npu_rms_norm: Op.rms_norm,
     torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
     torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
-    torch.ops.npu.npu_swiglu: Op.swi_glu,
+    torch.ops.npu.npu_swiglu: Op.swiglu,
     torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
     torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
     # operator functions

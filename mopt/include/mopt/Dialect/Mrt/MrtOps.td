@@ -47,7 +47,7 @@ def Mrt_AddOp : Mrt_Op<"add", [Pure]> {
     $x `,` $y `,` $alpha attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnAdd";
 }
 
 def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
@@ -76,7 +76,7 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnAddRmsNorm";
 }
 
 def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
@@ -104,6 +104,9 @@ def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
     $query `,` $key `,` $cos `,` $sin `,` $layout
     attr-dict `:` functional-type(operands, results)
   }];
+
+  let genAclnnOp = "aclnnApplyRotaryPosEmb";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0), (IORef 1, 1));
 }
 
 def Mrt_BitwiseAndTensorOp : Mrt_Op<"bitwise_and_tensor", [Pure]> {
@@ -128,7 +131,7 @@ def Mrt_BitwiseAndTensorOp : Mrt_Op<"bitwise_and_tensor", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnBitwiseAndTensor";
 }
 
 def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
@@ -152,7 +155,7 @@ def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnBitwiseNot";
 }
 
 def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
@@ -196,28 +199,7 @@ def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
     $input `,` $dtype attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
-}
-
-def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {
-  let summary = "Tensor permutation operation";
-  let description = [{
-    Permutes the dimensions of a tensor according to the specified order.
-    Reorders the axes of the input tensor based on the permutation array.
-  }];
-
-  let arguments = (ins
-    MrtAnyTensor:$input,
-    Mrt_I64ArrayType:$perm
-  );
-
-  let results = (outs MrtAnyTensor:$output);
-
-  let assemblyFormat = [{
-    $input `,` $perm attr-dict `:` functional-type(operands, results)
-  }];
-
-  let generated = 1;
+  let genAclnnOp = "aclnnCast";
 }
 
 def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
@@ -284,7 +266,7 @@ def Mrt_DivOp : Mrt_Op<"div", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnDiv";
 }
 
 def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
@@ -311,7 +293,7 @@ def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnDivMod";
 }
 
 def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
@@ -331,7 +313,7 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
     MrtAnyTensor:$out
   );
 
-  let generated = 1;
+  let genAclnnOp = "aclnnEmbedding";
 }
 
 def Mrt_EmptyOp : Mrt_Op<"empty"> {
@@ -381,7 +363,7 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnMoeGatingTopKSoftmax";
 }
 
 def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOperandSegments]> {
@@ -423,7 +405,7 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOpera
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnMoeInitRoutingV3";
 }
 
 def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOperandSegments]> {
@@ -451,7 +433,7 @@ def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOper
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnMoeTokenUnpermute";
 }
 
 def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
@@ -471,7 +453,28 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
     $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnMul";
+}
+
+def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {
+  let summary = "Tensor permutation operation";
+  let description = [{
+    Permutes the dimensions of a tensor according to the specified order.
+    Reorders the axes of the input tensor based on the permutation array.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$perm
+  );
+
+  let results = (outs MrtAnyTensor:$output);
+
+  let assemblyFormat = [{
+    $input `,` $perm attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnPermute";
 }
 
 def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
@@ -508,6 +511,32 @@ def Mrt_ReluOp : Mrt_Op<"relu", [Pure]> {
   let assemblyFormat = [{
     $input attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
+  let summary = "aclnnRemainderTensorTensor";
+  let description = [{
+    Operation for element-wise remainder computation between two tensors.
+    Performs remainder operation on corresponding elements of input tensors.
+    Computes the remainder of division of elements in self tensor by elements in other tensor.
+    Both input tensors must have compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnRemainderTensorTensor";
 }
 
 def Mrt_ReshapeOp : Mrt_Op<"reshape", [Pure]> {
@@ -555,33 +584,7 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
-}
-
-def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
-  let summary = "aclnnRemainderTensorTensor";
-  let description = [{
-    Operation for element-wise remainder computation between two tensors.
-    Performs remainder operation on corresponding elements of input tensors.
-    Computes the remainder of division of elements in self tensor by elements in other tensor.
-    Both input tensors must have compatible shapes for broadcasting.
-  }];
-
-  let arguments = (ins
-    MrtAnyTensor:$self,
-    MrtAnyTensor:$other
-  );
-
-  let results = (outs
-    MrtAnyTensor:$out
-  );
-
-  let assemblyFormat = [{
-    $self `,` $other
-    attr-dict `:` functional-type(operands, results)
-  }];
-
-  let generated = 1;
+  let genAclnnOp = "aclnnRmsNorm";
 }
 
 def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
@@ -601,6 +604,9 @@ def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
   let results = (outs
     MrtAnyTensor:$outs
   );
+
+  let genAclnnOp = "aclnnScatterNdUpdate";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
 }
 
 def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
@@ -653,7 +659,7 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
   }];
 }
 
-def Mrt_SwiGluOp : Mrt_Op<"swi_glu"> {
+def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {
   let summary = "aclnnSwiGlu";
   let description = [{
     Operation for swiglu computation.
@@ -674,7 +680,7 @@ def Mrt_SwiGluOp : Mrt_Op<"swi_glu"> {
     attr-dict `:` functional-type(operands, results)
   }];
 
-  let generated = 1;
+  let genAclnnOp = "aclnnSwiGlu";
 }
 
 def Mrt_ZerosOp : Mrt_Op<"zeros"> {

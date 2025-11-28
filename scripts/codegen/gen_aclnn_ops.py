@@ -70,6 +70,7 @@ class AclnnOpsGenerator(CodeGenerator):
         # Filters for inputs and outputs processing of aclnn ops
         self.gen_env.filters['arg_wrapper'] = self._arg_wrapper
         self.gen_env.filters['output_wrapper'] = self._output_wrapper
+        self.gen_env.filters['is_output_in_ioref'] = self._is_output_in_ioref
 
     # pylint: disable=arguments-differ
     def generate(self, ops_defs: List[List[dict[str, Any]]]) -> None:
@@ -86,20 +87,31 @@ class AclnnOpsGenerator(CodeGenerator):
     def _generate_header(self, op_def: Dict[str, Any]) -> None:
         """Generate header for an aclnn op."""
         template = self.gen_env.get_template('aclnn_op.h.j2')
+        ioref_pairs = op_def.get('iorefPairs', [])
         template_data = {
             'op_name': op_def['opName'],
+            'gen_aclnn_op': op_def['genAclnnOp'],
+            'has_ioref': len(ioref_pairs) > 0,
         }
+        # Initialize _current_ioref_pairs for safety (though header template doesn't use output_wrapper)
+        self._current_ioref_pairs = ioref_pairs
         generated_str = template.render(**template_data)
         save_file(generated_str, self.output_dir, f"{self._to_snake_case(op_def['opName'])}.h")
 
     def _generate_source(self, op_def: Dict[str, Any]) -> None:
         """Generate source for an aclnn op."""
         template = self.gen_env.get_template('aclnn_op.cc.j2')
+        ioref_pairs = op_def.get('iorefPairs', [])
         template_data = {
             'op_name': op_def['opName'],
+            'gen_aclnn_op': op_def['genAclnnOp'],
             'args': op_def['arguments']['args'],
-            'result': op_def['results']['args']
+            'result': op_def['results']['args'],
+            'ioref_pairs': ioref_pairs,
+            'has_ioref': len(ioref_pairs) > 0,
         }
+        # Store ioref_pairs in the generator instance for use in filters
+        self._current_ioref_pairs = ioref_pairs
         generated_str = template.render(**template_data)
         save_file(generated_str, self.output_dir, f"{self._to_snake_case(op_def['opName'])}.cc")
 
@@ -111,11 +123,31 @@ class AclnnOpsGenerator(CodeGenerator):
         return ret
 
     def _output_wrapper(self, result: list) -> str:
-        """Wrapper for results."""
+        """Wrapper for results. Skips outputs that are in IORef."""
+        # Get IORef pairs from instance variable (set in _generate_source)
+        ioref_pairs = getattr(self, '_current_ioref_pairs', [])
+
+        # Build a set of output indices that are in IORef
+        ioref_output_indices = {pair[0] for pair in ioref_pairs}
+
         if len(result) > 1:
             ret = ''
             for idx, result_item in enumerate(result):
+                # Skip outputs that are in IORef
+                if idx in ioref_output_indices:
+                    continue
                 result_item_type = result_item[0].get('def')
                 ret += ", " + _convert_type(f"(*output_tuple)[{idx}]", result_item_type)
             return ret
+
+        # Single output case
+        if 0 in ioref_output_indices:
+            # Output 0 is in IORef, skip it
+            return ""
         return ", " + _convert_type("output", result[0][0].get('def'))
+
+    def _is_output_in_ioref(self, output_idx: int, ioref_pairs: list) -> bool:
+        """Check if an output index is in IORef pairs."""
+        if not ioref_pairs:
+            return False
+        return output_idx in {pair[0] for pair in ioref_pairs}

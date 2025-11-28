@@ -12,13 +12,17 @@
 {%- endset -%}
 
 {% set output_tuple %}
-{% if result|length > 1 +%}  auto& output_tuple = output->ToTuple();{% endif %}
+{% if result|length > 1 +%}
+  auto& output_tuple = output->ToTuple();
+  LOG_OUT << "The output_tuple is " << output_tuple;
+{% endif %}
 {%- endset -%}
 
 namespace mrt {
 namespace ops {
 OpsErrorCode Aclnn{{ capitalize_op_name }}::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                      size_t *workspaceSize) {
+  LOG_OUT << "Begin CalcWorkspace for op [{{ op_name }}]";
 {{ output_tuple }}
   executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize){{ params }});
   return SUCCESS;
@@ -26,10 +30,16 @@ OpsErrorCode Aclnn{{ capitalize_op_name }}::CalcWorkspace(const std::vector<cons
 
 OpsErrorCode Aclnn{{ capitalize_op_name }}::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                               ir::Value *output, void *stream) {
+  LOG_OUT << "Begin Launch for op [{{ op_name }}]";
 {{ output_tuple }}
   executor_->Launch(workspace, workspaceSize, stream{{ params }});
   return SUCCESS;
 }
+{% if has_ioref %}
+std::vector<std::pair<uint32_t, uint32_t>> Aclnn{{ capitalize_op_name }}::GetOutputInputRefPairs() const {
+  return { {% for pair in ioref_pairs %}{{ '{' }}{{ pair[0] }}, {{ pair[1] }}{{ '}' }}{% if not loop.last %}, {% endif %}{% endfor %} };
+}
+{% endif %}
 
 MRT_REG_OP({{ op_name|to_snake_case }}, Aclnn{{ capitalize_op_name }}, Ascend);
 }  // namespace ops

@@ -41,19 +41,55 @@ def _parse_optional_mapping(json_data: Dict[str, Any]) -> Dict[str, str]:
     return optional_mapping
 
 
+def _parse_ioref_config(gen_acl_cfg: Dict[str, Any]) -> List[tuple[int, int]]:
+    """
+    Parse IORef configuration from genAclnnCfg.
+
+    Args:
+        gen_acl_cfg: The genAclnnCfg dictionary from JSON
+
+    Returns:
+        A list of tuples (output_index, input_index) representing IORef pairs.
+    """
+    if gen_acl_cfg is None:
+        return []
+
+    ioref_pairs = []
+    # genAclnnCfg structure: (AclnnConfig (IORef out0, in0), (IORef out1, in1), ...)
+    # The args field contains a list of IORef entries
+    args = gen_acl_cfg.get('args', [])
+    for arg in args:
+        if arg[0] is None:
+            continue
+        ioref_dag = arg[0]
+        if ioref_dag.get('operator', {}).get('def') == 'IORef':
+            ioref_args = ioref_dag.get('args', [])
+            if len(ioref_args) >= 2:
+                output_idx = ioref_args[0][0]
+                input_idx = ioref_args[1][0]
+                ioref_pairs.append((output_idx, input_idx))
+    return ioref_pairs
+
+
 def _parse_ops_def(json_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Parse the operation definitions from the JSON data."""
     ret = []
     for op in json_data['!instanceof']['Op']:
         ori_op_def = json_data[op]
-        # Skip generate
-        if ori_op_def['generated'] == 0:
+        # Skip if genAclnnOp is null or not present
+        gen_acl_op = ori_op_def.get('genAclnnOp')
+        if not gen_acl_op:
             continue
-        # Currently, only the opName, arguments, and results are needed.
+        # Parse IORef configuration
+        gen_acl_cfg = ori_op_def.get('genAclnnCfg')
+        ioref_pairs = _parse_ioref_config(gen_acl_cfg)
+        # Build op definition with genAclnnOp, arguments, results, and IORef pairs
         op_def = {
             'opName': ori_op_def['opName'],
+            'genAclnnOp': gen_acl_op,
             'arguments': ori_op_def['arguments'],
             'results': ori_op_def['results'],
+            'iorefPairs': ioref_pairs,
         }
         ret.append(op_def)
     return ret
