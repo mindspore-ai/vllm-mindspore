@@ -16,9 +16,9 @@
 A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 """
 import operator
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import torch
-from torch._ops import OpOverloadPacket
+from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
 
@@ -186,6 +186,26 @@ def _get_op(target):
     return None
 
 
+def _get_op_schemas(
+    target: OpOverload | OpOverloadPacket,
+) -> Optional[List[torch._C.FunctionSchema]]:
+    """
+    Retrieve torch schema(s) for a given op target. Returns None if unavailable.
+    """
+
+    if isinstance(target, OpOverload):
+        return [target._schema]
+
+    if isinstance(target, OpOverloadPacket):
+        return [getattr(target, overload)._schema for overload in target.overloads()]
+
+    aten_fn = torch.jit._builtins._find_builtin(target)
+    if aten_fn is not None:
+        return torch._C._jit_get_schemas_for_operator(aten_fn)
+
+    return None
+
+
 def _flatten_args(op: Op, node: Node) -> List[Argument]:
     """
     Flatten the arguments of a given FX node into a flat list of Argument objects.
@@ -210,18 +230,17 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     if len(kwargs) == 1:
         flat_args.append(list(kwargs.values())[0])
         return flat_args
-    if not isinstance(node.target, OpOverloadPacket):
-        raise RuntimeError(
-            f"Unsupported node target for keyword only args: {node.target}"
-        )
-    schemas = node.target._schemas
+    schemas = _get_op_schemas(node.target)
+    if not schemas:
+        raise RuntimeError(f"Cannot resolve schemas for op: {node.target}")
     if len(schemas) != 1:
         raise RuntimeError("Currently, do not support op overload")
-    schema = next(iter(schemas.values()))
+    schema = next(iter(schemas))
     for argument in schema.arguments:
         if not argument.kwarg_only:
             continue
-        flat_args.append(kwargs[argument.name])
+        if argument.name in kwargs:
+            flat_args.append(kwargs[argument.name])
     return flat_args
 
 
