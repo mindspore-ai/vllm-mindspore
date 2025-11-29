@@ -123,6 +123,9 @@ inline aclFloatArray *Convert(const std::vector<float> &floatList) {
 }
 
 inline void *Convert(const ir::TuplePtr &tuple) {
+  if (tuple == nullptr) {
+    return nullptr;
+  }
   if (tuple->Size() == 0) {
     LOG_OUT << "tuple is empty";
     return nullptr;

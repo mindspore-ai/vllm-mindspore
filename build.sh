@@ -146,7 +146,7 @@ if [[ $BUILD_OPT == 1 ]]; then
 fi
 
 # Generate ops code
-if [[ $ENABLE_ASCEND == 1 ]]; then
+if [[ $ENABLE_ASCEND == 1 && $INC_BUILD != 1 ]]; then
     bash "scripts/gen_code.sh"
 fi
 

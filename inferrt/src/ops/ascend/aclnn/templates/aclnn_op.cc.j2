@@ -4,7 +4,7 @@
 {% set capitalize_op_name = op_name|to_capitalize_case -%}
 #include <vector>
 
-#include "ops/ascend/aclnn/auto_gen/{{ op_name|to_snake_case }}.h"
+#include "ops/ascend/aclnn/{{ op_name|to_snake_case }}.h"
 #include "ops/op_register.h"
 
 {% set params %}

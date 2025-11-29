@@ -18,8 +18,10 @@ from os import path
 
 
 PROJECT_DIR = path.dirname(path.dirname(path.dirname(path.abspath(__file__))))
-JSON_FILES_DIR = path.join(PROJECT_DIR, "scripts/codegen")
-COMMON_TEMPLATES_DIR = path.join(PROJECT_DIR, "scripts/codegen/templates")
-OPS_DIR = path.join(PROJECT_DIR, "inferrt/src/ops")
-ACLNN_OPS_AUTO_GEN_DIR = path.join(OPS_DIR, "ascend/aclnn/auto_gen")
-ACLNN_OPS_TEMPLATES_DIR = path.join(OPS_DIR, "ascend/aclnn/templates")
+BUILD_DIR = path.join(PROJECT_DIR, "build")
+AUTO_GEN_DIR = path.join(BUILD_DIR, "auto_gen")
+JSON_FILES_DIR = path.join(AUTO_GEN_DIR, "dialects_json")
+COMMON_TEMPLATES_DIR = path.join(PROJECT_DIR, "scripts", "codegen", "templates")
+OPS_DIR = path.join(PROJECT_DIR, "inferrt", "src", "ops")
+ACLNN_OPS_AUTO_GEN_DIR = path.join(AUTO_GEN_DIR, "ops", "ascend", "aclnn")
+ACLNN_OPS_TEMPLATES_DIR = path.join(OPS_DIR, "ascend", "aclnn", "templates")

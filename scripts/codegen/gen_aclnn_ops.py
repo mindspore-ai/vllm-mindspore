@@ -21,38 +21,51 @@ import constants as C
 from code_generator import CodeGenerator
 
 
-def _convert_type(input_type: str) -> str:
+def _convert_type(obj, obj_type, optional_mapping: Dict[str, str] = None) -> str:
     """Convert mrt dialect type to mrt ir type."""
-    types_map = {
-        'MrtAnyTensor': '->ToTensor()',
-        'Mrt_I64Type': '->ToInt()',
-        'Mrt_BooleanType': '->ToBool()',
-        'Mrt_F32Type': '->ToFloat()',
-        'Mrt_F64Type': '->ToDouble()',
-        'Mrt_StringType': '->ToString()',
-        'Mrt_ScalarType': '',  # do nothing here, the ValuePtr will be converted to aclScalar
-    }
-    tuple_types_set = {
-        'Mrt_I64ArrayType',
-        'Mrt_BooleanArrayType',
-        'Mrt_F32ArrayType',
-        'Mrt_F64ArrayType',
-        'MrtTensorList',
-    }
+    if obj_type == 'Mrt_ScalarType':
+        # the ValuePtr will be converted to aclScalar
+        return obj
 
-    if input_type in types_map:
-        return types_map[input_type]
-    if input_type not in tuple_types_set:
-        raise ValueError(f"Invalid argument type: {input_type}")
-    return '->ToTuple()'
+    pure_types_map = {
+        'Mrt_DtypeType': f'static_cast<mrt::ir::DataType::Type>({obj}->ToInt())',
+        'Mrt_I64Type': f'{obj}->ToInt()',
+        'Mrt_BooleanType': f'{obj}->ToBool()',
+        'Mrt_F32Type': f'{obj}->ToFloat()',
+        'Mrt_F64Type': f'{obj}->ToDouble()',
+        'Mrt_StringType': f'{obj}->ToString()',
+    }
+    if obj_type in pure_types_map:
+        return pure_types_map[obj_type]
+
+    ptr_types_map = {
+        'MrtAnyTensor': (f'{obj}->ToTensor()', f'{obj}->IsTensor()'),
+        'Mrt_I64ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+        'Mrt_BooleanArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+        'Mrt_F32ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+        'Mrt_F64ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+        'MrtTensorList' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+    }
+    if obj_type in ptr_types_map:
+        return ptr_types_map[obj_type][0]
+    if optional_mapping is not None and obj_type in optional_mapping and optional_mapping[obj_type] in ptr_types_map:
+        v = ptr_types_map[optional_mapping[obj_type]]
+        return f'{v[1]} ? {v[0]} : nullptr'
+    raise ValueError(f"Invalid argument type: {obj_type}")
 
 class AclnnOpsGenerator(CodeGenerator):
     """Generator for Aclnn ops launch code."""
-    def __init__(self):
+    def __init__(self, optional_mapping: Dict[str, str] = None):
         """
         Initialize the generator.
+
+        Args:
+            optional_mapping: Dictionary mapping anonymous Optional types to their baseType.def values.
         """
         super().__init__([C.COMMON_TEMPLATES_DIR, C.ACLNN_OPS_TEMPLATES_DIR], C.ACLNN_OPS_AUTO_GEN_DIR)
+
+        # Store optional mapping for resolving anonymous types
+        self.optional_mapping = optional_mapping or {}
 
         # Filters for inputs and outputs processing of aclnn ops
         self.gen_env.filters['arg_wrapper'] = self._arg_wrapper
@@ -94,13 +107,7 @@ class AclnnOpsGenerator(CodeGenerator):
         """Wrapper for arguments."""
         ret = ''
         for idx, arg in enumerate(args):
-            arg_type = arg[0].get('def')
-            if arg_type == 'MrtOptTensor':
-                ret += f", input[kIndex{idx}]->IsTensor() ? input[kIndex{idx}]->ToTensor() : nullptr"
-            elif arg_type == 'Mrt_DtypeType':
-                ret += f", static_cast<mrt::ir::DataType::Type>(input[kIndex{idx}]->ToInt())"
-            else:
-                ret += f", input[kIndex{idx}]{_convert_type(arg_type)}"
+            ret += ", " + _convert_type(f"input[{idx}]", arg[0].get('def'), self.optional_mapping)
         return ret
 
     def _output_wrapper(self, result: list) -> str:
@@ -109,6 +116,6 @@ class AclnnOpsGenerator(CodeGenerator):
             ret = ''
             for idx, result_item in enumerate(result):
                 result_item_type = result_item[0].get('def')
-                ret += ''.join(f", (*output_tuple)[kIndex{idx}]{_convert_type(result_item_type)}")
+                ret += ", " + _convert_type(f"(*output_tuple)[{idx}]", result_item_type)
             return ret
-        return ''.join(f", output{_convert_type(result[0][0].get('def'))}")
+        return ", " + _convert_type("output", result[0][0].get('def'))
