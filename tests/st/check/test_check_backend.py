@@ -21,6 +21,7 @@ def test_backend(pipeline, monkeypatch):
     Description: Test torch.compile with MRT backend when MRT_ENABLE_PIPELINE is enabled/disabled
     Expectation: Compiled function produces same results as original function in both pipeline modes
     """
+    print("===================")
     if pipeline:
         monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
