@@ -6,6 +6,7 @@ Note: Disabling NPU backends to prevent torch_npu related import errors
 os.environ["USE_NPU"] = "0"
 os.environ["USE_ASCEND"] = "0"
 os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 import torch
 import pytest
 from mrt.torch import backend
