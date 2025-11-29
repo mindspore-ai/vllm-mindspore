@@ -21,11 +21,13 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <cstring>
 
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
 #include "ir/symbolic/symbolic.h"
 #include "ir/tensor/format.h"
+#include "ir/common/intrusive_ptr.h"
 
 namespace mrt {
 namespace ir {
@@ -150,6 +152,28 @@ void Tensor::SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape) {
   }
   ComputeStrides();
   numel_ = CalculateNumel(shape_, true);
+}
+
+TensorPtr Tensor::ShallowClone() const {
+  // Shallow copy: create new tensor sharing the same storage (view)
+  // The Tensor constructor with StoragePtr takes the StoragePtr by value,
+  // which calls IntrusivePtr's copy constructor. This only increments the
+  // reference count of the Storage object, it does NOT create a new Storage.
+  // Therefore, the cloned tensor shares the same underlying storage as the original.
+  auto clonedTensor = MakeIntrusive<Tensor>(storage_, shape_, dtype_);
+
+  // Copy all metadata
+  clonedTensor->SetStrides(strides_);
+  clonedTensor->SetFormat(memoryFormat_);
+  clonedTensor->SetStorageShape(storageShape_);
+  clonedTensor->SetStorageOffset(storageOffset_);
+  clonedTensor->SetSymbolicShape(symbolicShape_);
+
+  // Verify that the cloned tensor shares the same storage
+  // (This is a sanity check - the storage pointers should be the same)
+  CHECK_IF_FAIL(clonedTensor->GetStorage().get() == storage_.get());
+
+  return clonedTensor;
 }
 
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {

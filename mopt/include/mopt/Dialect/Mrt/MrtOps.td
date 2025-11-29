@@ -484,6 +484,30 @@ def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
   let genAclnnOp = "aclnnLeTensor";
 }
 
+def Mrt_LinearOp : Mrt_Op<"linear", [Pure]> {
+  let summary = "dense";
+  let description = [{
+    Operation for linear computation.
+    Accepts weight, indices tensor.
+    Produces embedding output.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$weight,
+    Optional<MrtAnyTensor>:$bias
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $x `,` $weight (`,` $bias^)?
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_LtOp : Mrt_Op<"lt", [Pure]> {
   let summary = "Element-wise less-than comparison";
   let description = [{
