@@ -67,9 +67,16 @@ def embedding_hook(node, input_nodes, executor):
     """swap the first and second param position."""
     return [input_nodes[1], input_nodes[0]]
 
+# pylint: disable=unused-argument
+def floor_div_hook(node, input_nodes, executor):
+    """add div mode parameter."""
+    div_mode = 2
+    return [input_nodes[0], input_nodes[1], div_mode]
+
 
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.embedding, embedding_hook)
+    register_arg_mapping_hook(operator.floordiv, floor_div_hook)
 
 
 def _next_unique_graph_id():
@@ -139,6 +146,10 @@ _OP_MAP = {
     operator.ge: Op.ge,
     operator.matmul: Op.matmul,
     operator.neg: Op.neg,
+    operator.and_: Op.bitwise_and_tensor,
+    operator.invert: Op.bitwise_not,
+    operator.mod: Op.remainder_tensor_tensor,
+    operator.floordiv: Op.div_mod,
     # tensor methods (as strings)
     "size": Op.shape,
     "add": Op.add,
@@ -374,13 +385,15 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 if op == Op.custom_call:
                     op_name = node.target.__name__
                     flat_node_args = [op_name] + flat_node_args
-                input_nodes = _map_args(flat_node_args, env, executor)
                 hook_func = get_arg_mapping_hook(op)
+                if hook_func is None:
+                    hook_func = get_arg_mapping_hook(node.target)
                 if hook_func is not None:
-                    input_nodes = hook_func(node, input_nodes, executor)
+                    flat_node_args = hook_func(node, flat_node_args, executor)
                     print(
-                        f"Applied arg mapping hook for {op}, new input nodes:{input_nodes}"
+                        f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}"
                     )
+                input_nodes = _map_args(flat_node_args, env, executor)
                 example_value = node.meta.get("example_value", None)
                 output_value = from_torch(example_value)
                 symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
