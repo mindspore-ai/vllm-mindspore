@@ -42,6 +42,11 @@ DeepSeek-R1-W8A8:
   description: "DeepSeek-R1-W8A8, modify the 'num_hidden_layers' to 4 based on the default quantilization configuration"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8"
 
+MindSpore-Lab-DeepSeek-R1-0528-gs-A8W4:
+  description: "DeepSeek-R1-A8W4, modify the 'num_hidden_layers' to 4 based on the default quantization configuration.
+                The whole model is obtained from https://modelers.cn/models/MindSpore-Lab/DeepSeek-R1-0528-gs-A8W4"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/MindSpore-Lab-DeepSeek-R1-0528-gs-A8W4"
+
 DeepSeek-R1-MTP:
   description: "DeepSeek-R1 with MTP, Perform the following modifications based on default quantilization configuration:
                 1. Modify the 'num_hidden_layers' to 4
