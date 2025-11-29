@@ -106,6 +106,55 @@ def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   }];
 }
 
+def Mrt_BitwiseAndTensorOp : Mrt_Op<"bitwise_and_tensor", [Pure]> {
+  let summary = "aclnnBitwiseAndTensor";
+  let description = [{
+    Operation for element-wise bitwise AND computation between two tensors.
+    Performs bitwise AND operation on corresponding elements of input tensors.
+    Both input tensors must have the same data type and compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
+def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
+  let summary = "aclnnBitwiseNot";
+  let description = [{
+    Operation for element-wise bitwise NOT computation on a tensor.
+    Performs bitwise NOT operation on each element of the input tensor.
+    The input tensor must have integer data type.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
   let summary = "Batch normalization operation";
   let description = [{
@@ -190,6 +239,58 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
     $input `,` $kernel (`,` $bias^)? `,` $strides `,` $padding `,` $dilation `,` $has_bias
     attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_DivOp : Mrt_Op<"div", [Pure]> {
+  let summary = "aclnnDiv";
+  let description = [{
+    Operation for element-wise division of two tensors.
+    Performs division of corresponding elements of input tensors.
+    Both input tensors must have compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
+def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
+  let summary = "aclnnDivMod";
+  let description = [{
+    Operation for element-wise division and modulus computation between two tensors.
+    Performs division and modulus operations on corresponding elements of input tensors.
+    The mode parameter controls the rounding behavior for integer division.
+    Both input tensors must have compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other,
+    Mrt_I64Type:$mode
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other `,` $mode
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
 }
 
 def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
@@ -430,6 +531,32 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
 
   let assemblyFormat = [{
     $x `,` $gamma `,` $epsilon
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
+def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
+  let summary = "aclnnRemainderTensorTensor";
+  let description = [{
+    Operation for element-wise remainder computation between two tensors.
+    Performs remainder operation on corresponding elements of input tensors.
+    Computes the remainder of division of elements in self tensor by elements in other tensor.
+    Both input tensors must have compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
     attr-dict `:` functional-type(operands, results)
   }];
 
