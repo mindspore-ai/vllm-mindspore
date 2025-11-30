@@ -3,8 +3,10 @@
 # mlir_tablegen(TorchToMrtPatterns.cpp.inc -gen-rewriters)
 # add_public_tablegen_target(MoptTorchToMrtPatternsIncGen)
 
+file(GLOB TORCH_TO_MRT_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+
 add_mlir_conversion_library(MoptConversionTorchToMrt
-  TorchToMrt.cc
+  ${TORCH_TO_MRT_SRC}
 
   ADDITIONAL_HEADER_DIRS
   ${CMAKE_CURRENT_BINARY_DIR}

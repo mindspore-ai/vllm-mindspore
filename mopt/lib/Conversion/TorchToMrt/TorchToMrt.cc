@@ -18,35 +18,39 @@
 
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
-#include "mlir/IR/BuiltinOps.h"
 
 namespace {
 
+// Populate Torch-specific type conversions to MRT types
+void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter, mlir::MLIRContext *ctx) {
+  converter.addConversion([ctx](mlir::torch::Torch::ValueTensorType type) -> mlir::Type {
+    if (auto builtinType = mlir::dyn_cast<mlir::RankedTensorType>(type.toBuiltinTensor())) {
+      return mrt::TensorType::get(ctx, builtinType.getShape(), builtinType.getElementType(), nullptr);
+    }
+    return type;
+  });
+
+  converter.addConversion([ctx](mlir::torch::Torch::IntType type) -> mlir::Type {
+    return mrt::I64Type::get(ctx);
+  });
+}
+
+// TypeConverter for Torch to MRT conversion
 class TorchToMrtTypeConverter : public mlir::TypeConverter {
  public:
   explicit TorchToMrtTypeConverter(mlir::MLIRContext *ctx) {
-    addConversion([](mlir::Type type) { return type; });  // Default identity
-
-    addConversion([ctx](mlir::torch::Torch::ValueTensorType type) -> mlir::Type {
-      if (auto builtinType = mlir::dyn_cast<mlir::RankedTensorType>(type.toBuiltinTensor())) {
-        return mrt::TensorType::get(ctx, builtinType.getShape(), builtinType.getElementType(), nullptr);
-      }
-      return type;
-    });
-
-    addConversion([ctx](mlir::RankedTensorType type) -> mlir::Type {
-      return mrt::TensorType::get(ctx, type.getShape(), type.getElementType(), nullptr);
-    });
-
-    addConversion([ctx](mlir::torch::Torch::IntType type) -> mlir::Type { return mrt::I64Type::get(ctx); });
+    addConversion([](mlir::Type type) { return type; });
+    mrt::populateMrtTypeConversions(*this, ctx);
+    populateTorchToMrtTypeConversions(*this, ctx);
   }
 };
 

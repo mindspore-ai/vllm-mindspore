@@ -1,0 +1,16 @@
+diff --git a/lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp b/lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp
+index 187d2341..fccf7a4a 100644
+--- a/lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp
++++ b/lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp
+@@ -265,7 +265,10 @@ void TorchMatchSpecializedBackendOp::populateSpecializedConversions(
+       });
+ }
+ 
+-bool isSpecializedOperation(Torch::OperatorOp op) { return true; }
++// All OperatorOps are considered legal and passed through without conversion.
++// This allows custom backend ops (e.g., torch.npu.*) to be handled by
++// downstream passes.
++bool isSpecializedOperation(Torch::OperatorOp op) { return false; }
+ } // namespace
+ 
+ // Reduce Ops without value semantics but the corresponding without trailing

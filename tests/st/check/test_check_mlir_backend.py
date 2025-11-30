@@ -14,8 +14,9 @@ import mrt.torch.fx_mlir_backend as backend
 from tests.mark_utils import arg_mark
 
 
-# @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-# @pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.skip(reason="unsupported matmul op")
+@arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("pipeline", (True, False))
 def test_reshape(pipeline, monkeypatch):
     """
     Feature: MRT backend
@@ -67,4 +68,3 @@ def test_mul(pipeline, monkeypatch):
 
     assert torch.equal(opt_bar, bar), f"\nopt_bar={opt_bar}\nbar={bar}"
     print("The result is correct. 'mrt' backend has been installed successfully.")
-

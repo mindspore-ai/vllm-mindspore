@@ -82,12 +82,13 @@ def Mrt_TensorType : Mrt_Type<"Tensor", "tensor", [ShapedTypeInterface]> {
   let hasCustomAssemblyFormat = 1;
 }
 
-// Type constraint that accepts both RankedTensorType and Mrt_TensorType
-// This allows operations to accept either standard MLIR RankedTensorType
-// or MRT dialect's TensorType, providing flexibility during conversion.
-def MrtAnyTensor : AnyTypeOf<[AnyRankedTensor, Mrt_TensorType]>;
 
-// Tensor list type (uses MrtAnyTensor to accept both RankedTensorType and Mrt_TensorType)
+// Tensor type constraint for MRT dialect operations
+def MrtAnyTensor : Type<CPred<"::llvm::isa<::mrt::TensorType>($_self)">,
+                        "MRT tensor type",
+                        "::mrt::TensorType">;
+
+// Tensor list type for Mrt dialect operations
 def MrtTensorList : Variadic<MrtAnyTensor>;
 
 //===----------------------------------------------------------------------===//

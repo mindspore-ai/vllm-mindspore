@@ -174,12 +174,6 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
         pm.run(mlir_module.operation)
     _print_verbose("MRT Dialect Module (after passes)", mlir_module)
 
-    # Convert RankedTensorType to Mrt_TensorType
-    with mlir_module.context:
-        pm = PassManager.parse("builtin.module(convert-ranked-tensor-to-mrt-tensor)")
-        pm.run(mlir_module.operation)
-    _print_verbose("MLIR Module (after type conversion)", mlir_module)
-
     # Extract device information from first example_input and run pass
     # Use PassOptions to pass device info - all logic is handled in C++ pass
     device_str = "cpu"

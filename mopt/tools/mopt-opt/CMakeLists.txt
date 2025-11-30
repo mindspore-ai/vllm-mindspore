@@ -32,4 +32,3 @@ llvm_update_compile_flags(mopt-opt)
 target_link_libraries(mopt-opt PRIVATE ${LIBS})
 
 mlir_check_all_link_libraries(mopt-opt)
-

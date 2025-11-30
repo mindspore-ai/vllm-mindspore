@@ -87,6 +87,24 @@ Torch-MLIR 默认从 `externals/stablehlo` 目录构建 StableHLO。但在某些
 - `CMakeLists.txt`
 - `python/CMakeLists.txt`
 
+### 005-skip-operator-op-check.patch
+
+**描述：**
+跳过 `ReduceOpVariantsPass` 对 `OperatorOp` 的非法检查，允许自定义后端算子（如 `torch.npu.*`）直接通过。
+
+**问题：**
+在 `torchdynamo-export-to-torch-backend-pipeline` 中，`ReduceOpVariantsPass` 会将所有 `torch.operator` 类型的 op 标记为非法。这导致自定义后端算子无法通过该 pass，即使使用 `backend-legal-ops` 参数也无效，因为该参数未被 `ReduceOpVariantsPass` 使用。
+
+**解决方案：**
+
+- 修改 `isSpecializedOperation` 函数，使其始终返回 `false`
+- 这样所有 `OperatorOp` 都被视为合法，可以直接通过该 pass
+- 自定义算子将由下游 pass 处理（如 `convert-torch-to-mrt` 等）
+
+**修改的文件：**
+
+- `lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp`
+
 ## 应用顺序
 
 这些补丁应按数字顺序应用（001 → 002 → ...）。

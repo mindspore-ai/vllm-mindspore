@@ -40,8 +40,6 @@ using mlir::MLIRContext;
 using mlir::ModuleOp;
 using mlir::OpBuilder;
 using mlir::Operation;
-using mlir::OperationPass;
-using mlir::RankedTensorType;
 using mlir::Type;
 using mlir::Value;
 
@@ -58,17 +56,6 @@ mrt::DeviceAttr createDeviceAttr(MLIRContext *ctx, const std::string &deviceType
 mrt::DeviceAttr getDeviceFromType(Type type) {
   if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(type)) {
     return tensorType.getDevice();
-  }
-  return nullptr;
-}
-
-// Get device from first input tensor that has device info
-mrt::DeviceAttr getDeviceFromFirstInput(Operation *op) {
-  for (auto operand : op->getOperands()) {
-    auto device = getDeviceFromType(operand.getType());
-    if (device) {
-      return device;
-    }
   }
   return nullptr;
 }
@@ -114,25 +101,13 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
 
     for (auto arg : funcArgs) {
       Type argType = arg.getType();
-      Type newType = nullptr;
 
       if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(argType)) {
         if (!tensorType.getDevice()) {
-          newType = mrt::TensorType::get(ctx, tensorType.getShape(), tensorType.getElementType(), defaultDevice);
+          auto newType = mrt::TensorType::get(ctx, tensorType.getShape(), tensorType.getElementType(), defaultDevice);
+          arg.setType(newType);
         }
-      } else if (auto rankedType = mlir::dyn_cast<RankedTensorType>(argType)) {
-        newType = mrt::TensorType::get(ctx, rankedType.getShape(), rankedType.getElementType(), defaultDevice);
-      }
-
-      if (newType) {
-        valueToDevice[arg] = defaultDevice;
-        arg.setType(newType);
-        continue;
-      }
-
-      auto device = getDeviceFromType(argType);
-      if (device) {
-        valueToDevice[arg] = device;
+        valueToDevice[arg] = tensorType.getDevice() ? tensorType.getDevice() : defaultDevice;
       } else {
         valueToDevice[arg] = defaultDevice;
       }
@@ -179,13 +154,10 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
       for (auto result : op->getResults()) {
         valueToDevice[result] = device;
 
-        Type type = result.getType();
-        if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(type)) {
+        if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(result.getType())) {
           if (!tensorType.getDevice()) {
             needsUpdate = true;
           }
-        } else if (mlir::isa<RankedTensorType>(type)) {
-          needsUpdate = true;
         }
       }
 
@@ -218,9 +190,6 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
             newType = mrt::TensorType::get(ctx, tensorType.getShape(), tensorType.getElementType(), device);
             hasTypeChange = true;
           }
-        } else if (auto rankedType = mlir::dyn_cast<RankedTensorType>(oldType)) {
-          newType = mrt::TensorType::get(ctx, rankedType.getShape(), rankedType.getElementType(), device);
-          hasTypeChange = true;
         }
 
         newResultTypes.push_back(newType);
