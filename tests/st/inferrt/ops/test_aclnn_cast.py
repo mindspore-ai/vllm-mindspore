@@ -31,6 +31,14 @@ def get_op_func_compiled():
         return x.to(dtype)
     return torch.compile(custom_op_func, backend=backend)
 
+def long_op_func(input_tensor):
+    return input_tensor.long()
+
+def get_long_op_func_compiled():
+    def custom_op_func(input_tensor):
+        return input_tensor.long()
+    return torch.compile(custom_op_func, backend=backend)
+
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
@@ -89,6 +97,29 @@ def test_cast_shapes(pipeline, monkeypatch, shape):
 
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("shape", [
+    (1,),
+    (64, 10),
+    (32, 3, 3),
+    (256, 2048, 7, 7),
+])
+def test_cast_long_shapes(pipeline, monkeypatch, shape):
+    """
+    Feature: Test aclnn cast
+    Description: Test aclnn cast with different shapes
+    Expectation: The result is correct
+    """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+    cpu_input = torch.randn(shape, dtype=torch.float32)
+    npu_input = cpu_input.npu()
+
+    cpu_output = long_op_func(cpu_input)
+    op_func_compiled = get_long_op_func_compiled()
+    npu_output = op_func_compiled(npu_input).detach().cpu()
+    AssertRtolEqual(cpu_output, npu_output)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
@@ -128,3 +159,4 @@ def test_cast_int_to_float(pipeline, monkeypatch):
     npu_output = op_func_compiled(npu_input, torch.float32).detach().cpu()
 
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
+
