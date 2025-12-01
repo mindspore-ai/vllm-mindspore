@@ -37,12 +37,9 @@ class MRT_EXPORT LoweredOpHelper {
   /**
    * @brief Create an operator from MLIR text
    *
-   * This function handles all internal complexity:
-   * - Uses mlir_text hash as unique identifier (auto caching)
-   * - Registers kernel spec to KernelRegistry
-   * - Creates and returns AutoLoweredOp instance
-   *
-   * Same mlir_text will reuse cached compiled kernel automatically.
+   * This function:
+   * - Creates an AutoLoweredOp instance with the given MLIR text
+   * - Each op instance owns its KernelSpec and cache independently
    *
    * @param mlir_text MLIR code as string
    * @return Unique pointer to Operator instance, or nullptr on failure

@@ -25,16 +25,16 @@ include "mlir/Pass/PassBase.td"
 
 def ConvertStablehloToMRT : Pass<"convert-stablehlo-to-mrt", "::mlir::ModuleOp"> {
   let summary = "Convert StableHLO operations to MRT dialect operations";
-  
+
   let description = [{
     This pass converts StableHLO dialect operations to the MRT dialect.
     It uses pattern rewriting to match StableHLO operations and
     replace them with equivalent MRT operations, including proper attribute
     mapping and type conversion.
   }];
-  
+
   let constructor = "mlir::createConvertStablehloToMRTPass()";
-  
+
   let dependentDialects = [
     "::mlir::stablehlo::StablehloDialect",
     "::mrt::MrtDialect",

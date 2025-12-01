@@ -22,7 +22,6 @@
 #include <memory>
 #include <unordered_map>
 #include <functional>
-#include <mutex>
 
 #include "ops/ascend/lowered/kernel_spec.h"
 #include "ir/graph.h"
@@ -62,16 +61,16 @@ class LoweredKernelCacheEntry {
   LoweredKernelCacheEntry(LoweredKernelCacheEntry &&) = default;
   LoweredKernelCacheEntry &operator=(LoweredKernelCacheEntry &&) = default;
 
-  void *dlHandle = nullptr;              // dlopen handle
+  void *dlHandle = nullptr;             // dlopen handle
   HostApiFunction hostApiFunc;          // Host API function pointer
   GetTilingSizeFunction getTilingSize;  // Tiling size function (optional)
-  TilingFunction tilingFunc;             // Tiling function (optional)
+  TilingFunction tilingFunc;            // Tiling function (optional)
 
   uint32_t blockDim = 0;            // Cached block dimension
   size_t workspaceSize = 0;         // Cached workspace size
-  int64_t tilingStructSize = 0;    // Size of tiling data structure
+  int64_t tilingStructSize = 0;     // Size of tiling data structure
   std::vector<int64_t> tilingData;  // Cached tiling data (host-side)
-  void *dTilingData = nullptr;     // Device-side tiling data buffer
+  void *dTilingData = nullptr;      // Device-side tiling data buffer
   int64_t tilingKey = 0;            // Tiling key for this entry
 };
 
@@ -93,9 +92,9 @@ class LoweredKernelExecutor {
  public:
   /**
    * @brief Construct an executor for a specific kernel
-   * @param specId Kernel specification ID (registered in KernelRegistry)
+   * @param spec Pointer to KernelSpec (non-owning, must outlive this executor)
    */
-  explicit LoweredKernelExecutor(const std::string &specId);
+  explicit LoweredKernelExecutor(const KernelSpec *spec);
 
   ~LoweredKernelExecutor();
 
@@ -150,45 +149,48 @@ class LoweredKernelExecutor {
   /**
    * @brief Compute tiling parameters for dynamic shape kernels
    *
-   * @param entry Cache entry to store tiling results
    * @param inputs Input values
    * @param output Output value
+   * @param entry Cache entry to store tiling results
    * @return 0 on success, error code otherwise
    */
-  int ComputeTiling(LoweredKernelCacheEntry *entry, const std::vector<const ir::Value *> &inputs,
-                    const ir::Value *output);
+  int ComputeTiling(const std::vector<const ir::Value *> &inputs, const ir::Value *output,
+                    LoweredKernelCacheEntry *entry);
 
   /**
    * @brief Build kernel arguments (memref structures + tiling)
-   * @param args Output: vector of argument pointers
    * @param inputs Input values
    * @param output Output value
    * @param entry Cache entry (may contain tiling data)
+   * @param args Output: vector of argument pointers
    */
-  void BuildKernelArgs(std::vector<void *> &args, const std::vector<const ir::Value *> &inputs, const ir::Value *output,
-                       const LoweredKernelCacheEntry *entry);
+  void BuildKernelArgs(const std::vector<const ir::Value *> &inputs, const ir::Value *output,
+                       const LoweredKernelCacheEntry *entry, std::vector<void *> *args);
 
   /**
    * @brief Add memref arguments for N-dimensional tensor
    * Format: {allocated_ptr, aligned_ptr, offset, sizes[N], strides[N]}
-   * @param args Output argument vector
    * @param ptr Device pointer to tensor data
    * @param shape Tensor shape (dimensions)
+   * @param args Output argument vector
    */
-  void AddMemrefArgs(std::vector<void *> &args, void *ptr, const std::vector<int64_t> &shape);
+  void AddMemrefArgs(void *ptr, const std::vector<int64_t> &shape, std::vector<void *> *args);
 
   /**
    * @brief Add tiling arguments to kernel args
+   * @param entry Cache entry (may contain tiling data)
+   * @param args Output argument vector
    */
-  void AddTilingArgs(std::vector<void *> &args, const LoweredKernelCacheEntry *entry);
+  void AddTilingArgs(const LoweredKernelCacheEntry *entry, std::vector<void *> *args);
 
-  std::string specId_;     // Kernel specification ID
-  const KernelSpec *spec_;  // Cached spec pointer
+  const KernelSpec *spec_;  // Non-owning pointer to spec
 
-  mutable std::mutex cacheMutex_;                               // Protects cache access
+  std::string cacheDir_;           // Cache directory for compiled kernel (for cleanup)
+  bool keepIntermediateFiles_;     // Whether to keep intermediate files for debugging
+
   std::unordered_map<std::string, LoweredCacheEntryPtr> cache_;  // Cache by shape+config key
 
-  LoweredKernelCacheEntry* currentEntry_;  // Current cache entry for Launch reuse (non-owning)
+  LoweredKernelCacheEntry *currentEntry_;  // Current cache entry for Launch reuse (non-owning)
 };
 
 }  // namespace mrt::ops

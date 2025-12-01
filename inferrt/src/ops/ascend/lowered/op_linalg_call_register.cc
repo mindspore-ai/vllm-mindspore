@@ -14,25 +14,12 @@
  * limitations under the License.
  */
 
-#include "ops/ascend/lowered/lowered_op_helper.h"
+#include "ops/op_base/op_linalg_call.h"
+#include "ops/op_register.h"
 
-#include "common/logger.h"
-#include "ops/ascend/lowered/auto_lowered_op.h"
-
-namespace mrt::ops {
-
-std::unique_ptr<Operator> LoweredOpHelper::CreateFromMlirText(const std::string &mlir_text) {
-  if (mlir_text.empty()) {
-    LOG_ERROR << "MLIR text is empty";
-    return nullptr;
-  }
-
-  try {
-    return std::make_unique<AutoLoweredOp>(mlir_text);
-  } catch (const std::exception &e) {
-    LOG_ERROR << "Failed to create AutoLoweredOp: " << e.what();
-    return nullptr;
-  }
-}
-
-}  // namespace mrt::ops
+namespace mrt {
+namespace ops {
+// Register linalg_call operator for Ascend platform
+MRT_REG_OP(linalg_call, OpLinalgCall, Ascend);
+}  // namespace ops
+}  // namespace mrt

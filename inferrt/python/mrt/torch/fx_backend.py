@@ -53,6 +53,28 @@ _GLOBAL_GRAPH_ID = 0
 
 _ARG_MAPPING_HOOKS = {}
 
+# Registry for linalg ops: maps op_name -> mlir_text
+# TODO(lmy) this temporary interface will be removed when mrt backend is ready.
+_LINALG_OP_REGISTRY = {}
+
+
+def register_linalg_op(op_name: str, mlir_text: str):
+    """Register a linalg op with its MLIR text.
+    this temporary interface will be removed when mrt backend is ready.
+
+    Args:
+        op_name: The operator name (e.g., "linalg_add")
+        mlir_text: The Linalg MLIR text with hacc annotations
+    """
+    _LINALG_OP_REGISTRY[op_name] = mlir_text
+
+
+def get_linalg_mlir(op_name: str) -> str:
+    """Get MLIR text for a registered linalg op.
+    this temporary interface will be removed when mrt backend is ready.
+    """
+    return _LINALG_OP_REGISTRY.get(op_name)
+
 
 def register_arg_mapping_hook(op, hook_func):
     _ARG_MAPPING_HOOKS[op] = hook_func
@@ -195,6 +217,10 @@ def _get_op(target):
             if not node_module.startswith(
                 "torch._ops.aten"
             ) and not node_module.startswith("torch._ops.prims"):
+                # mrt_linalg namespace -> linalg_call, mrt namespace -> custom_call
+                # TODO(lmy) this temporary interface will be removed when mrt backend is ready.
+                if node_module.startswith("torch._ops.mrt_linalg"):
+                    return Op.linalg_call
                 return Op.custom_call
     return None
 
@@ -334,6 +360,72 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
     return [_map_arg(arg) for arg in args]
 
 
+def _handle_placeholder_node(node, executor, symbolic_shape_manager, env):
+    """Handle placeholder node processing."""
+    example_value = node.meta.get("example_value", None)
+    output_value = from_torch(example_value)
+    symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
+    env[node] = executor.add_value_node(output_value)
+
+
+def _handle_get_attr_node(node, gm, executor, env):
+    """Handle get_attr node processing."""
+    target = node.target
+    assert isinstance(target, str)
+
+    attr_val = gm
+    for part in target.split("."):
+        attr_val = getattr(attr_val, part)
+
+    env[node] = executor.add_value_node(from_torch(attr_val))
+
+
+def _prepare_call_args(op, node, executor, env):
+    """Prepare arguments for call_function/call_method nodes."""
+    flat_node_args = _flatten_args(op, node)
+
+    if op == Op.custom_call:
+        op_name = node.target.__name__
+        flat_node_args = [op_name] + flat_node_args
+    elif op == Op.linalg_call:
+        op_name = node.target.__name__
+        mlir_text = get_linalg_mlir(op_name)
+        if mlir_text is None:
+            raise RuntimeError(
+                f"MLIR not registered for linalg op '{op_name}'. "
+                f"Use register_linalg_op('{op_name}', mlir_text) first."
+            )
+        flat_node_args = [mlir_text] + flat_node_args
+
+    hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
+    if hook_func is not None:
+        flat_node_args = hook_func(node, flat_node_args, executor)
+        print(f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}")
+
+    return _map_args(flat_node_args, env, executor)
+
+
+def _handle_call_node(node, executor, symbolic_shape_manager, env):
+    """Handle call_function/call_method node processing."""
+    op = _get_op(node.target)
+    if op is None:
+        raise NotImplementedError(f"Unsupported op: {node.target}")
+
+    input_nodes = _prepare_call_args(op, node, executor, env)
+    example_value = node.meta.get("example_value", None)
+    output_value = from_torch(example_value)
+    symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
+
+    env[node] = executor.add_op_node(op, input_nodes, output_value)
+
+
+def _handle_output_node(node, executor, env):
+    """Handle output node processing."""
+    input_nodes = _map_args(node.args, env, executor)
+    env[node] = input_nodes[0]
+    executor.set_return()
+
+
 # pylint: disable=bad-continuation
 # pylint: disable=unused-argument
 def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
@@ -356,60 +448,22 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
 
     for node in gm.graph.nodes:
         if node.op == "placeholder":
-            example_value = node.meta.get("example_value", None)
-            output_value = from_torch(example_value)
-            symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
-            env[node] = executor.add_value_node(output_value)
+            _handle_placeholder_node(node, executor, symbolic_shape_manager, env)
 
     with executor:
         for node in gm.graph.nodes:
             if node.op == "placeholder":
                 executor.add_parameter(env[node])
-
             elif node.op == "get_attr":
-                target = node.target
-                assert isinstance(target, str)
-
-                attr_val = gm
-                for part in target.split("."):
-                    attr_val = getattr(attr_val, part)
-
-                env[node] = executor.add_value_node(from_torch(attr_val))
-
+                _handle_get_attr_node(node, gm, executor, env)
             elif node.op in ("call_function", "call_method"):
-                op = _get_op(node.target)
-                if op is None:
-                    raise NotImplementedError(f"Unsupported op: {node.target}")
-
-                flat_node_args = _flatten_args(op, node)
-                if op == Op.custom_call:
-                    op_name = node.target.__name__
-                    flat_node_args = [op_name] + flat_node_args
-                hook_func = get_arg_mapping_hook(op)
-                if hook_func is None:
-                    hook_func = get_arg_mapping_hook(node.target)
-                if hook_func is not None:
-                    flat_node_args = hook_func(node, flat_node_args, executor)
-                    print(
-                        f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}"
-                    )
-                input_nodes = _map_args(flat_node_args, env, executor)
-                example_value = node.meta.get("example_value", None)
-                output_value = from_torch(example_value)
-                symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
-
-                env[node] = executor.add_op_node(op, input_nodes, output_value)
-
+                _handle_call_node(node, executor, symbolic_shape_manager, env)
             elif node.op == "call_module":
                 raise NotImplementedError(
                     "call_module is not supported in this simple backend."
                 )
-
             elif node.op == "output":
-                input_nodes = _map_args(node.args, env, executor)
-                env[node] = input_nodes[0]
-                executor.set_return()
-
+                _handle_output_node(node, executor, env)
             else:
                 raise NotImplementedError(f"Unsupported node op: {node.op}")
 

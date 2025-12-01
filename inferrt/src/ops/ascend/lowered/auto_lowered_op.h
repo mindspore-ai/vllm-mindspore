@@ -26,13 +26,17 @@
 #include "ops/ascend/lowered/lowered_kernel_executor.h"
 
 namespace mrt::ops {
+
+// Forward declaration
+struct KernelSpec;
+
 class AutoLoweredOp : public Operator {
  public:
   /**
-   * @brief Construct with kernel specification ID
-   * @param specId Kernel spec ID registered in KernelRegistry
+   * @brief Construct with MLIR text
+   * @param mlirText MLIR code to compile and execute
    */
-  explicit AutoLoweredOp(const std::string &specId);
+  explicit AutoLoweredOp(const std::string &mlirText);
 
   ~AutoLoweredOp() override = default;
 
@@ -68,8 +72,14 @@ class AutoLoweredOp : public Operator {
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
 
+  /**
+   * @brief Get the operator name extracted from MLIR entry function
+   * @return Operator name (available after first kernel compilation)
+   */
+  const std::string &GetOpName() const { return spec_->id; }
+
  private:
-  std::string specId_;                              // Kernel specification ID
+  std::unique_ptr<KernelSpec> spec_;                 // Owned kernel specification
   std::unique_ptr<LoweredKernelExecutor> executor_;  // Executor for this kernel
 };
 }  // namespace mrt::ops
