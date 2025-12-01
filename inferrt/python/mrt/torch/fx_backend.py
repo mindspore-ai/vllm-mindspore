@@ -242,9 +242,41 @@ def split_ops_hook(op, node, input_nodes, executor):
             return Op.split_tensor
     return op
 
+# pylint: disable=unused-argument
+def masked_fill_op_hook(op, node, input_nodes, executor):
+    """Get the masked_fill op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.masked_fill_scalar
+    return Op.masked_fill_tensor
+
+# pylint: disable=unused-argument
+def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
+    """Get the inplace_masked_fill op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.inplace_masked_fill_scalar
+    return Op.inplace_masked_fill_tensor
+
+# pylint: disable=unused-argument
+def copy_op_hook(op, node, input_nodes, executor):
+    """Get the copy op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.inplace_fill_scalar
+    return Op.inplace_copy
+
+# pylint: disable=unused-argument
+def fill_op_hook(op, node, input_nodes, executor):
+    """Get the fill op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.inplace_fill_scalar
+    return Op.inplace_fill_tensor
+
 
 def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
+    register_ops_mapping_hook(Op.masked_fill_tensor, masked_fill_op_hook)
+    register_ops_mapping_hook(Op.inplace_masked_fill_tensor, inplace_masked_fill_op_hook)
+    register_ops_mapping_hook(Op.inplace_fill_tensor, fill_op_hook)
+    register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
 
 
 def _next_unique_graph_id():
@@ -268,6 +300,7 @@ _OP_MAP = {
     torch.gt: Op.gt,
     torch.ge: Op.ge,
     torch.matmul: Op.matmul,
+    torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.reshape,
     torch.transpose: Op.permute,
     torch.unsqueeze: Op.unsqueeze,
@@ -337,7 +370,9 @@ _OP_MAP = {
     "square": Op.square,
     "rsqrt": Op.rsqrt,
     "view": Op.reshape,  # view is often used like reshape
-    "copy_": Op.copy,
+    "copy_": Op.inplace_copy,
+    "masked_fill_": Op.inplace_masked_fill_tensor,
+    "fill_": Op.inplace_fill_tensor,
     "long": Op.cast,
     "split": Op.split_with_size,
     "chunk": Op.split_with_size,

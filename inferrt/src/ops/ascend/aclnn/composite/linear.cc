@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "ops/ascend/aclnn/aclnn_linear.h"
+#include "ops/ascend/aclnn/composite/linear.h"
 #include <vector>
 #include <numeric>
 #include <algorithm>

@@ -463,6 +463,114 @@ def Mrt_GtOp : Mrt_Op<"gt", [Pure]> {
   let genAclnnOp = "aclnnGtTensor";
 }
 
+def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
+  let summary = "Copy operation";
+  let description = [{
+    Copies data from source tensor to destination tensor. The optional boolean parameter controls whether the copy is in-place.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$dst,
+    MrtAnyTensor:$src,
+    Mrt_BooleanType:$non_blocking
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $dst `,` $src `,` $non_blocking
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_InplaceFillScalarOp : Mrt_Op<"inplace_fill_scalar"> {
+  let summary = "Fill tensor with scalar value";
+  let description = [{
+    Fills the destination tensor with the specified scalar value.
+    Computes: result = fill(x, value)
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_ScalarType:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $value attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceFillScalar";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
+def Mrt_InplaceFillTensorOp : Mrt_Op<"inplace_fill_tensor"> {
+  let summary = "Fill tensor with tensor value";
+  let description = [{
+    Fills the destination tensor with the specified tensor value.
+    Computes: result = fill(x, value)
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $value attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceFillTensor";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
+def Mrt_InplaceMaskedFillScalarOp : Mrt_Op<"inplace_masked_fill_scalar"> {
+  let summary = "Masked fill operation";
+  let description = [{
+    Replaces elements in the input tensor with the fill value where the mask is True.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$mask,
+    Mrt_ScalarType:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $mask `,` $value attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceMaskedFillScalar";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
+def Mrt_InplaceMaskedFillTensorOp : Mrt_Op<"inplace_masked_fill_tensor"> {
+  let summary = "Masked fill operation";
+  let description = [{
+    Replaces elements in the input tensor with the fill value where the mask is True.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$mask,
+    MrtAnyTensor:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $mask `,` $value attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceMaskedFillTensor";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
 def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
   let summary = "Element-wise less-than-or-equal comparison";
   let description = [{
@@ -553,6 +661,44 @@ def Mrt_LtOp : Mrt_Op<"lt", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnLtTensor";
+}
+
+def Mrt_MaskedFillScalarOp : Mrt_Op<"masked_fill_scalar", [Pure]> {
+  let summary = "Masked fill operation";
+  let description = [{
+    Replaces elements in the input tensor with the fill value where the mask is True.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$mask,
+    Mrt_ScalarType:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $mask `,` $value attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_MaskedFillTensorOp : Mrt_Op<"masked_fill_tensor", [Pure]> {
+  let summary = "Masked fill operation";
+  let description = [{
+    Replaces elements in the input tensor with the fill value where the mask is True.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$mask,
+    MrtAnyTensor:$value
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $mask `,` $value attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
