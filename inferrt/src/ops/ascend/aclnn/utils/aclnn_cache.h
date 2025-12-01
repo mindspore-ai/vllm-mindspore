@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <functional>
 #include <utility>
+#include <optional>
 #include <list>
 
 #include "common/common.h"
@@ -31,7 +32,6 @@
 #include "ir/common/intrusive_ptr.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
 #include "ops/ascend/aclnn/utils/aclnn_deleter.h"
-#include "ops/ascend/aclnn/utils/convert_utils.h"
 
 namespace mrt {
 namespace ops {
@@ -126,6 +126,16 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TensorPtr &ten
   ++(*tensorIndex);
 }
 
+inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::optional<ir::TensorPtr> &tensor, size_t *irIndex,
+                       size_t *tensorIndex) {
+  if (tensor.has_value()) {
+    UpdateAddr(cacheEntry, tensor.value(), irIndex, tensorIndex);
+    return;
+  }
+  ++(*irIndex);
+  ++(*tensorIndex);
+}
+
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::vector<ir::TensorPtr> &tensorList, size_t *irIndex,
                        size_t *tensorIndex) {
   for (size_t i = 0; i < tensorList.size(); ++i) {
@@ -143,9 +153,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TuplePtr &tupl
     return;
   }
   if ((*tuple)[kIndex0]->IsTensor()) {
-    std::vector<ir::TensorPtr> tensorList;
-    TupleToTensorList(*tuple, &tensorList);
-    UpdateAddr(cacheEntry, tensorList, irIndex, tensorIndex);
+    UpdateAddr(cacheEntry, tuple->ToTensorList(), irIndex, tensorIndex);
     return;
   }
   ++(*irIndex);
@@ -308,7 +316,7 @@ class CacheProcessor {
 
   void UpdateTensorAddr(size_t *irIndex, size_t *tensorIndex, size_t *relativeIndex, void *tensorAddr) {
     LOG_OUT << "index: " << *irIndex << ", updaters size: " << tensorAddrUpdatersMap_.size()
-            << ", tensorIndex: " << *tensorIndex
+            << ", tensorIndex: " << (tensorIndex == nullptr ? 0 : *tensorIndex)
             << ", relativeIndex: " << (relativeIndex == nullptr ? 0 : *relativeIndex) << ", tensorAddr: " << tensorAddr;
 
     // Use the static map for efficient lookup, no need lookup in the future

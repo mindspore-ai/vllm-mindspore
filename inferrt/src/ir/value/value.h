@@ -82,6 +82,12 @@ class Tuple : public RefCounted {
   auto begin() { return elements_.begin(); }
   auto end() { return elements_.end(); }
 
+  std::vector<ir::TensorPtr> ToTensorList();
+  std::vector<int64_t> ToIntList();
+  std::vector<uint8_t> ToBoolList();
+  std::vector<float> ToFloatList();
+  std::vector<double> ToDoubleList();
+
  private:
   std::vector<ValuePtr> elements_;
 };

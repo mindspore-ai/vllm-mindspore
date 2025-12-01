@@ -44,9 +44,8 @@ def test_floor_div(pipeline, monkeypatch, shape):
     tensor_x = torch.from_numpy(tensor_x_cpu).npu()
     tensor_y = torch.from_numpy(tensor_y_cpu).npu()
 
-    result_operate = floor_div_op(tensor_x_cpu, tensor_y_cpu)
-
+    result_operate = floor_div_op(tensor_x, tensor_y)
     compile_op = get_op_func_compiled()
-    result_compile_op = compile_op(tensor_x, tensor_y).detach().cpu().numpy()
+    result_compile_op = compile_op(tensor_x, tensor_y)
 
     AssertRtolEqual(result_operate, result_compile_op)

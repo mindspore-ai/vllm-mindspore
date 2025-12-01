@@ -40,17 +40,18 @@ def _convert_type(obj, obj_type, optional_mapping: Dict[str, str] = None) -> str
 
     ptr_types_map = {
         'MrtAnyTensor': (f'{obj}->ToTensor()', f'{obj}->IsTensor()'),
-        'Mrt_I64ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
-        'Mrt_BooleanArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
-        'Mrt_F32ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
-        'Mrt_F64ArrayType' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
-        'MrtTensorList' : (f'{obj}->ToTuple()', f'{obj}->IsTuple()'),
+        'Mrt_I64ArrayType' : (f'{obj}->ToTuple()->ToIntList()', f'{obj}->IsTuple()'),
+        'Mrt_BooleanArrayType' : (f'{obj}->ToTuple()->ToBoolList()', f'{obj}->IsTuple()'),
+        'Mrt_F32ArrayType' : (f'{obj}->ToTuple()->ToFloatList()', f'{obj}->IsTuple()'),
+        'Mrt_F64ArrayType' : (f'{obj}->ToTuple()->ToDoubleList()', f'{obj}->IsTuple()'),
     }
     if obj_type in ptr_types_map:
         return ptr_types_map[obj_type][0]
     if optional_mapping is not None and obj_type in optional_mapping and optional_mapping[obj_type] in ptr_types_map:
         v = ptr_types_map[optional_mapping[obj_type]]
-        return f'{v[1]} ? {v[0]} : nullptr'
+        return f'{v[1]} ? std::optional({v[0]}) : std::nullopt'
+    if obj_type == 'MrtTensorList':
+        return f'{obj}->IsTuple() ? {obj}->ToTuple()->ToTensorList() : std::vector<ir::TensorPtr>()'
     raise ValueError(f"Invalid argument type: {obj_type}")
 
 class AclnnOpsGenerator(CodeGenerator):
