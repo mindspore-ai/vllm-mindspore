@@ -6,7 +6,6 @@ Note: Disabling NPU backends to prevent torch_npu related import errors
 os.environ["USE_NPU"] = "0"
 os.environ["USE_ASCEND"] = "0"
 os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
-
 import torch
 import pytest
 from mrt.torch import backend
@@ -21,7 +20,6 @@ def test_backend(pipeline, monkeypatch):
     Description: Test torch.compile with MRT backend when MRT_ENABLE_PIPELINE is enabled/disabled
     Expectation: Compiled function produces same results as original function in both pipeline modes
     """
-    print("===================")
     if pipeline:
         monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
