@@ -332,7 +332,7 @@ def Mrt_EmptyOp : Mrt_Op<"empty"> {
   );
 
   let assemblyFormat = [{
-    $size `,` $dtype
+    $size `,` $dtype `,` $device
     attr-dict `:` functional-type(operands, results)
   }];
 }
@@ -675,7 +675,7 @@ def Mrt_ZerosOp : Mrt_Op<"zeros"> {
   );
 
   let assemblyFormat = [{
-    $size `,` $dtype
+    $size `,` $dtype `,` $device
     attr-dict `:` functional-type(operands, results)
   }];
 }
