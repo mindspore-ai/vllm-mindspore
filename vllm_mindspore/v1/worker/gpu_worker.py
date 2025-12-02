@@ -21,6 +21,8 @@
 
 import os
 import subprocess
+import sys
+import traceback
 from typing import Any
 
 import psutil
@@ -64,16 +66,19 @@ def compile_or_warm_up_model(self) -> None:
 
 def execute_command(cmd_list):
     try:
-        with subprocess.Popen(cmd_list,
-                              shell=False,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as p:
-            out, _ = p.communicate(timeout=1000)
-        res = out.decode()
-        return res
-    except FileNotFoundError as e:
-        message = f"Failed to execute command, because {e}."
-        raise RuntimeError(message) from e
+        result = subprocess.run(cmd_list,
+                                shell=False,
+                                capture_output=True,
+                                timeout=60,
+                                check=False)
+        return result.stdout.decode()
+    except FileNotFoundError:
+        cmd = ' '.join(cmd_list)
+        logger.warning("Bind CPU command not found: %s", cmd)
+    except subprocess.TimeoutExpired as e:
+        logger.warning("Bind CPU command execution timed out: %s", e)
+    except Exception as e:
+        logger.warning("Bind CPU command execution failed: %s", e)
 
 
 def get_numa_map():
@@ -82,7 +87,7 @@ def get_numa_map():
     # Get quantity of CPUs and NUMA nodes.
     total_cpu_count = 0
     numa_node_count = 0
-    numa_info = execute_command("lscpu").strip().split("\n")
+    numa_info = execute_command(["lscpu"]).strip().split("\n")
     for val in numa_info:
         if val.startswith("CPU(s):"):
             total_cpu_count = int(val.split(" ")[-1])
@@ -153,7 +158,7 @@ def get_numa_map():
             else:
                 cpu_start = cpu_start + cpu_count
         shared_npu_count = len(val)
-        cpu_num_per_npu = int(cpu_count / shared_npu_count)
+        cpu_num_per_npu = cpu_count // shared_npu_count
         for npu in val:
             npu_to_core_map[npu] = [
                 cpu_start, cpu_start + cpu_num_per_npu - cpu_reserved_for_cann
@@ -170,7 +175,12 @@ def bind_cpu(rank):
 
     if "ASCEND_RT_VISIBLE_DEVICES" in os.environ:
         device_control_env_var = os.environ["ASCEND_RT_VISIBLE_DEVICES"]
-        device_id = int(device_control_env_var.split(",")[local_rank])
+        try:
+            device_id = int(device_control_env_var.split(",")[local_rank])
+        except IndexError as e:
+            raise IndexError("Process rank is greater than the number of "
+                             "available devices. Please check the value of "
+                             "`ASCEND_RT_VISIBLE_DEVICES`.") from e
 
     cpu_range = rank_cpu_maps[device_id]
     cpu_list = list(range(cpu_range[0], cpu_range[1]))
@@ -185,8 +195,20 @@ def wrapper_worker_bind_cpu(fun):
     def new_fun(*arg, **kwargs):
         if not is_310p():
             # Bind CPU with wrapper when workers are initializing.
-            local_rank = kwargs.get("local_rank")
-            bind_cpu(local_rank)
+            try:
+                local_rank = kwargs.get("local_rank")
+                bind_cpu(local_rank)
+            except Exception as e:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                tb_list = traceback.extract_tb(exc_traceback)
+                for frame in tb_list[-3:]:
+                    logger.warning("File \"%s\", line %s, in %s",
+                                   frame.filename, frame.lineno, frame.name)
+                    if frame.line:
+                        logger.warning("  %s", frame.line.strip())
+                logger.warning("%s: %s", type(e).__name__, exc_value)
+                logger.warning("Bind CPU to workers failed, please check the "
+                               "stack trace above for the root cause")
         fun(*arg, **kwargs)
 
     return new_fun
