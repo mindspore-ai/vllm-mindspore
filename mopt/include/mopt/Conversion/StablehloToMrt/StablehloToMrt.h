@@ -25,6 +25,9 @@ class Pass;
 /// Create a pass to convert StableHLO operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertStablehloToMRTPass();
 
+/// Create a pass to convert outlined fusion calls to mrt.linalg_call.
+std::unique_ptr<Pass> createConvertOutlinedFusionCallPass();
+
 }  // namespace mlir
 
 #endif  // MOPT_CONVERSION_STABLEHLO_TO_MRT_H

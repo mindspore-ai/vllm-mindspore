@@ -13,10 +13,14 @@ add_mlir_conversion_library(MoptConversionStablehloToMrt
   MLIRArithDialect
   MLIRFuncDialect
   MLIRFuncTransforms
+  MLIRLinalgDialect
+  MLIRMathDialect
+  MLIRTensorDialect
   MLIRIR
   MLIRPass
   MLIRSupport
   MLIRTransformUtils
   MLIRMrtDialect
   StablehloOps
+  StablehloLinalgTransforms
 )

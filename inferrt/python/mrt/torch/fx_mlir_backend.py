@@ -36,6 +36,8 @@ from mrt.torch._executor_builder import ExecutorBuilder
 
 # print IR flag
 _PRINT_IR = os.environ.get("MOPT_PRINT_IR") == "1"
+# fusion control flag
+_ENABLE_FUSION = os.environ.get("MOPT_ENABLE_FUSION") == "1"
 
 
 def _print_verbose(stage_title: str, content=None, dump_func=None):
@@ -133,6 +135,7 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
 
     Environment Variables:
         MOPT_PRINT_IR: Set to 1 to print IR at each stage
+        MOPT_ENABLE_FUSION: Set to 1 to enable fusion pipeline (StableHLO path), 0 for direct Torch->MRT conversion
     """
     get_collective_info_from_torch(gm)
     set_device_context()
@@ -164,6 +167,8 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     # Reason: mopt must be imported here to prevent default loading at module level
     from mopt.passmanager import PassManager
 
+    # ===== Conversion Pipeline =====
+    # Torch RAW -> Torch Backend IR
     with mlir_module.context:
         pm = PassManager.parse(
             "builtin.module(torchdynamo-export-to-torch-backend-pipeline)"
@@ -171,11 +176,52 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
         pm.run(mlir_module.operation)
     _print_verbose("Torch Backend IR", mlir_module)
 
-    # Run pass to convert Torch to MRT dialect directly
+    if _ENABLE_FUSION:
+        # Fusion enabled: use StableHLO path with fusion pipeline
+        # Torch Backend -> StableHLO
+        with mlir_module.context:
+            pm = PassManager.parse(
+                "builtin.module(torch-backend-to-stablehlo-backend-pipeline)"
+            )
+            pm.run(mlir_module.operation)
+        _print_verbose("StableHLO IR (from whitelisted ops)", mlir_module)
+
+        # Fusion pipeline - outline fusible regions (controlled by FusionStrategy)
+        with mlir_module.context:
+            pm = PassManager.parse("builtin.module(outline-stablehlo-fusion-regions)")
+            pm.run(mlir_module.operation)
+        _print_verbose("StableHLO After Outlining Fusion Regions", mlir_module)
+
+        # Prepare outlined fusion calls:
+        # - Serialize outlined fusion functions to Linalg MLIR text (with hacc.entry / hacc.function_kind<HOST>)
+        # - Annotate corresponding func.call ops with the serialized text
+        # - convert to mrt.linalg_call.
+        with mlir_module.context:
+            pm = PassManager.parse(
+                "builtin.module(convert-outlined-fusion-call,symbol-dce)"
+            )
+            pm.run(mlir_module.operation)
+        _print_verbose("After Annotating Outlined Fusion Calls", mlir_module)
+
+        # Convert remaining StableHLO to MRT dialect
+        # Note: convert-stablehlo-to-mrt will convert annotated func.call ops into mrt.linalg_call.
+        # After conversion, outlined fusion functions become dead symbols and are removed by symbol-dce.
+        with mlir_module.context:
+            pm = PassManager.parse("builtin.module(convert-stablehlo-to-mrt)")
+            pm.run(mlir_module.operation)
+        _print_verbose(
+            "MRT Dialect Module (after convert-stablehlo-to-mrt)", mlir_module
+        )
+
+    # Fusion disabled: directly convert Torch to MRT without StableHLO path
     with mlir_module.context:
-        pm = PassManager.parse("builtin.module(convert-torch-to-mrt,canonicalize)")
+        # Also reconcile unrealized conversion casts which may be inserted by
+        # earlier partial conversions (e.g. outlined fusion call lowering).
+        pm = PassManager.parse(
+            "builtin.module(convert-torch-to-mrt,reconcile-unrealized-casts,canonicalize)"
+        )
         pm.run(mlir_module.operation)
-    _print_verbose("MRT Dialect Module (after passes)", mlir_module)
+    _print_verbose("MRT Dialect Module (direct Torch->MRT conversion)", mlir_module)
 
     # Extract device information from first example_input and run pass
     # Use PassOptions to pass device info - all logic is handled in C++ pass

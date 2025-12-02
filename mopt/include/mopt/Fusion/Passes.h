@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef MOPT_CONVERSION_PASSES_H
-#define MOPT_CONVERSION_PASSES_H
+#ifndef MOPT_FUSION_PASSES_H
+#define MOPT_FUSION_PASSES_H
 
 #include "mlir/Pass/Pass.h"
 
@@ -29,32 +29,24 @@ class Pass;
 //===----------------------------------------------------------------------===//
 
 #define GEN_PASS_DECL
-#include "mopt/Conversion/Passes.h.inc"
+#include "mopt/Fusion/Passes.h.inc"
 
 //===----------------------------------------------------------------------===//
 // Pass creators
 //===----------------------------------------------------------------------===//
 
-/// Create a pass to convert Arith constant operations to MRT constant operations.
-std::unique_ptr<Pass> createConvertArithToMRTPass();
-
-/// Create a pass to convert StableHLO operations to MRT dialect operations.
-std::unique_ptr<Pass> createConvertStablehloToMRTPass();
-
-/// Create a pass to convert outlined fusion calls to mrt.linalg_call with serialized Linalg MLIR.
-std::unique_ptr<Pass> createConvertOutlinedFusionCallPass();
-
-/// Create a pass to convert Torch operations to MRT dialect operations.
-std::unique_ptr<Pass> createConvertTorchToMRTPass();
+/// Create a pass to outline StableHLO fusion regions into separate functions.
+std::unique_ptr<Pass> createOutlineStablehloFusionRegionsPass();
 
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//
 
-/// Generate the code for registering conversion passes.
+/// Generate the code for registering fusion passes.
 #define GEN_PASS_REGISTRATION
-#include "mopt/Conversion/Passes.h.inc"  // NOLINT(build/include)
+#include "mopt/Fusion/Passes.h.inc"  // NOLINT(build/include)
 
 }  // namespace mlir
 
-#endif  // MOPT_CONVERSION_PASSES_H
+#endif  // MOPT_FUSION_PASSES_H
+

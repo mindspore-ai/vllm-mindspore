@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include "mopt-c/Passes.h"
-#include "mopt/Conversion/Passes.h"
-#include "mopt/Dialect/Mrt/Transforms/Passes.h"
-#include "mopt/Fusion/Passes.h"
+#ifndef MOPT_CONVERSION_STABLEHLO_TO_MRT_OUTLINED_FUSION_CALL_H
+#define MOPT_CONVERSION_STABLEHLO_TO_MRT_OUTLINED_FUSION_CALL_H
 
-void mlirRegisterMoptPasses() {
-  // Register all conversion passes
-  mlir::registerMoptConversionPasses();
-  // Register all MRT transforms passes
-  mlir::registerMrtTransformsPasses();
-  // Register all fusion passes
-  mlir::registerMoptFusionPasses();
-}
+namespace mopt {
+
+/// Attribute attached on func.call ops that correspond to outlined fusion functions.
+/// The value is a serialized Linalg MLIR module (string).
+inline constexpr const char kOutlinedFusionMlirTextAttr[] = "mrt.outlined_fusion_mlir_text";
+
+}  // namespace mopt
+
+#endif  // MOPT_CONVERSION_STABLEHLO_TO_MRT_OUTLINED_FUSION_CALL_H
+
+
