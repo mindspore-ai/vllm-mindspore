@@ -199,6 +199,27 @@ def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
   let generated = 1;
 }
 
+def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {
+  let summary = "Tensor permutation operation";
+  let description = [{
+    Permutes the dimensions of a tensor according to the specified order.
+    Reorders the axes of the input tensor based on the permutation array.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$perm
+  );
+
+  let results = (outs MrtAnyTensor:$output);
+
+  let assemblyFormat = [{
+    $input `,` $perm attr-dict `:` functional-type(operands, results)
+  }];
+
+  let generated = 1;
+}
+
 def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
   let summary = "Concatenation operation";
   let description = [{

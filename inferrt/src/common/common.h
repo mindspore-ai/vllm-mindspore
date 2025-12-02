@@ -17,6 +17,7 @@
 #ifndef __COMMON_COMMON_H__
 #define __COMMON_COMMON_H__
 
+#include <algorithm>
 #include <codecvt>
 #include <cstring>
 #include <iostream>

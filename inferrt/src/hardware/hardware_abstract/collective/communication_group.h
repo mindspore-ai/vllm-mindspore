@@ -16,6 +16,7 @@
 #ifndef INFERRT_SRC_HARDWARE_COLLECTIVE_COMMUNICATION_GROUP_H_
 #define INFERRT_SRC_HARDWARE_COLLECTIVE_COMMUNICATION_GROUP_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
