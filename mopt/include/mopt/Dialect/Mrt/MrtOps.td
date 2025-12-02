@@ -340,6 +340,26 @@ def Mrt_EmptyOp : Mrt_Op<"empty"> {
   }];
 }
 
+def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
+  let summary = "flatten operation";
+  let description = [{
+    Flatten input tensor to the specified shape.
+    Takes two operands: input tensor and shape.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$start_idx,
+    Mrt_I64Type:$end_idx
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $start_idx `,` $end_idx attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegments]> {
   let summary = "NPU grouped matmul operation";
   let description = [{
@@ -679,7 +699,7 @@ def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   }];
 }
 
-def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
+def Mrt_SplitOp : Mrt_Op<"split_with_size", [Pure]> {
   let summary = "Split operation";
   let description = [{
     Splits tensor along the specified axis into multiple outputs.
@@ -687,15 +707,38 @@ def Mrt_SplitOp : Mrt_Op<"split", [Pure]> {
 
   let arguments = (ins
     MrtAnyTensor:$input,
-    Mrt_I64Type:$axis,
-    Mrt_I64ArrayType:$split_sizes
+    Mrt_I64ArrayType:$split_sizes,
+    Mrt_I64Type:$axis
   );
 
   let results = (outs MrtTensorList:$results);
 
   let assemblyFormat = [{
-    $input `,` $axis `,` $split_sizes attr-dict `:` functional-type(operands, results)
+    $input `,` $split_sizes `,` $axis attr-dict `:` functional-type(operands, results)
   }];
+  
+  let genAclnnOp = "aclnnSplitWithSize";
+}
+
+def Mrt_SplitTensorOp : Mrt_Op<"split_tensor", [Pure]> {
+  let summary = "Split tensor operation";
+  let description = [{
+    Splits tensor along the specified axis into multiple outputs.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$split_sizes,
+    Mrt_I64Type:$axis
+  );
+
+  let results = (outs MrtTensorList:$results);
+
+  let assemblyFormat = [{
+    $input `,` $split_sizes `,` $axis attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSplitTensor";
 }
 
 def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {

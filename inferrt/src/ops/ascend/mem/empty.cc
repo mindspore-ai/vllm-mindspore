@@ -16,24 +16,24 @@
 
 #include <vector>
 
-#include "ops/ascend/aclnn/aclnn_empty.h"
+#include "ops/ascend/mem/empty.h"
 #include "ops/ascend/aclnn/utils/opapi_utils.h"
 #include "ops/op_register.h"
 
 namespace mrt {
 namespace ops {
-OpsErrorCode AclnnEmpty::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                       size_t *workspaceSize) {
+OpsErrorCode Empty::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                  size_t *workspaceSize) {
   CHECK_IF_FAIL(input.size() >= kInputSize1);
   return SUCCESS;
 }
 
-OpsErrorCode AclnnEmpty::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                ir::Value *output, void *stream) {
+OpsErrorCode Empty::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                           ir::Value *output, void *stream) {
   CHECK_IF_FAIL(input.size() >= kInputSize1);
   return SUCCESS;
 }
 
-MRT_REG_OP(empty, AclnnEmpty, Ascend);
+MRT_REG_OP(empty, Empty, Ascend);
 }  // namespace ops
 }  // namespace mrt
