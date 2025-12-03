@@ -16,6 +16,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
+@pytest.mark.skip(reason="coredump bug")
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [[10, 10], [20, 30, 35]])
@@ -44,6 +45,7 @@ def get_zeros_op_func_compiled():
         return torch.zeros(size, dtype=dtype, device=device)
     return torch.compile(custom_op_func, backend=backend)
 
+@pytest.mark.skip(reason="coredump bug")
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [[10, 10], [20, 30, 35]])

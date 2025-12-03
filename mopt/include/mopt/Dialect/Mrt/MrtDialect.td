@@ -39,12 +39,21 @@ class Mrt_Type<string name, string typeMnemonic> : TypeDef<Mrt_Dialect, name> {
   let mnemonic = typeMnemonic;
 }
 
+// Markers for aclnn configuration dag structure
+def AclnnConfig;
+def IORef;
+
 // Base class for all MRT dialect operations.
 class Mrt_Op<string mnemonic, list<Trait> traits = []> :
     Op<Mrt_Dialect, mnemonic, traits> {
-  // Whether generate aclnn launch code.
-  // When set to '1', the aclnn launch code will be auto generated.
-  bit generated = 0;
+  // Optional string for aclnn operation name.
+  // When set, specifies the aclnn function name to use for code generation.
+  string genAclnnOp = ?;
+
+  // Optional dag for aclnn configuration with IORef list.
+  // Structure: (AclnnConfig (IORef out0, in0), (IORef out1, in1), ...)
+  // If not set, defaults to empty dag.
+  dag genAclnnCfg = ?;
 }
 
 #endif // MRT_DIALECT_MRT_DIALECT_TD
