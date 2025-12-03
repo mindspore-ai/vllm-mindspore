@@ -34,18 +34,24 @@ class CMakeBuild(build_ext):
         cmake_args = []
         cmake_args.append(f"-DLLVM_DIR={os.environ['LLVM_DIR']}")
         cmake_args.append(f"-DMLIR_DIR={os.environ['MLIR_DIR']}")
-        cmake_args.append(f"-DTORCHMLIR_SOURCE_DIR={os.environ['TORCHMLIR_SOURCE_DIR']}")
-
-        subprocess.check_call(
-            [
-                "cmake",
-                "-S",
-                str(Path(__file__).parent),
-                "-B",
-                self.build_temp,
-            ]
-            + cmake_args
+        cmake_args.append(
+            f"-DTORCHMLIR_SOURCE_DIR={os.environ['TORCHMLIR_SOURCE_DIR']}"
         )
+
+        # Configure with CMake
+        if os.environ.get("INC_BUILD", "0") != "1":
+            subprocess.check_call(
+                [
+                    "cmake",
+                    "-S",
+                    str(Path(__file__).parent),
+                    "-B",
+                    self.build_temp,
+                ]
+                + cmake_args
+            )
+
+        # Build with CMake
         build_jobs = os.environ.get("BUILD_JOBS", "8")
         subprocess.check_call(["cmake", "--build", self.build_temp, "-j", build_jobs])
 
@@ -61,8 +67,12 @@ class CMakeBuild(build_ext):
         # torch_mlir is generated during compilation, package from build path
         torch_mlir_build_dir = os.environ.get("TORCHMLIR_BUILD_DIR")
         if torch_mlir_build_dir:
-            torch_mlir_path = (Path(torch_mlir_build_dir) / "python_packages" /
-                              "torch_mlir" / "torch_mlir")
+            torch_mlir_path = (
+                Path(torch_mlir_build_dir)
+                / "python_packages"
+                / "torch_mlir"
+                / "torch_mlir"
+            )
             if torch_mlir_path.is_dir():
                 torch_mlir_dst = Path(self.build_lib) / "torch_mlir"
                 if torch_mlir_dst.exists():

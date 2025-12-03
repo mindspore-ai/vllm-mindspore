@@ -86,6 +86,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("__add__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a + b; })
     .def("__mul__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a * b; })
     .def("__truediv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a / b; })
+    .def("__mod__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a % b; })
     .def("__floordiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::FloorDiv(a, b); })
     .def("__ceildiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::CeilDiv(a, b); });
 
@@ -132,8 +133,10 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<int64_t>())
     .def(py::init<std::string>())
     .def(py::init<const ir::TuplePtr &>())
+    .def(py::init<const ir::SymbolicExprPtr &>())
     .def("is_tensor", &ir::Value::IsTensor)
     .def("is_tuple", &ir::Value::IsTuple)
+    .def("is_symbol", &ir::Value::IsSymbol)
     .def("is_float", &ir::Value::IsFloat)
     .def("is_double", &ir::Value::IsDouble)
     .def("is_int", &ir::Value::IsInt)
@@ -142,6 +145,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("is_none", &ir::Value::IsNone)
     .def("to_tensor", &ir::Value::ToTensor)
     .def("to_tuple", &ir::Value::ToTuple)
+    .def("to_symbol", &ir::Value::ToSymbol)
     .def("to_float", &ir::Value::ToFloat)
     .def("to_double", &ir::Value::ToDouble)
     .def("to_int", &ir::Value::ToInt)

@@ -19,6 +19,9 @@
 
 include "mopt/Dialect/Mrt/MrtDialect.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinDialect.td"
+include "mlir/IR/BuiltinTypeInterfaces.td"
+include "mlir/IR/CommonTypeConstraints.td"
 
 //===----------------------------------------------------------------------===//
 // Supported argument/result types for operations:
@@ -57,23 +60,27 @@ def Mrt_DeviceAttr : AttrDef<Mrt_Dialect, "Device"> {
 // Tensor Types
 //===----------------------------------------------------------------------===//
 
-def Mrt_TensorType : Mrt_Type<"Tensor", "tensor"> {
+def Mrt_TensorType : Mrt_Type<"Tensor", "tensor", [ShapedTypeInterface]> {
   let summary = "Tensor type for MRT dialect";
   let description = [{
     Represents a multi-dimensional array with shape, element type, and optional device information.
     Device information includes device type (e.g., "cpu", "npu") and device index.
-    Format: mrt.tensor<elementTypexshape, device=...> (e.g., mrt.tensor<f32x2x3, device=<npu, 0>>)
+    Format: mrt.tensor<shape x elementType, device=...> (e.g., mrt.tensor<2x3xf32, device=<npu, 0>>)
   }];
 
   let parameters = (ins
+    ArrayRefParameter<"int64_t">:$shape,
     "mlir::Type":$elementType,
-    "mlir::DenseI64ArrayAttr":$shape,
     OptionalParameter<"mrt::DeviceAttr">:$device
   );
 
+  let extraClassDeclaration = [{
+    bool hasRank() const;
+    mlir::ShapedType cloneWith(std::optional<llvm::ArrayRef<int64_t>> shape, mlir::Type elementType) const;
+  }];
+
   let hasCustomAssemblyFormat = 1;
 }
-
 
 // Type constraint that accepts both RankedTensorType and Mrt_TensorType
 // This allows operations to accept either standard MLIR RankedTensorType

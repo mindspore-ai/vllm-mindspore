@@ -137,6 +137,10 @@ assert parse(packaging.__version__) >= parse('24.2'), f'packaging {packaging.__v
 ##################################################
 if [[ $BUILD_OPT == 1 ]]; then
     pushd mopt
+    # Clean previous builds
+    if [[ $INC_BUILD != 1 ]]; then
+        rm -rf build dist
+    fi
 
     echo "Building mopt with LLVM from: ${LLVM_BUILD_DIR}"
     # Build the wheel

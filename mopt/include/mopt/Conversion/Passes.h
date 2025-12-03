@@ -38,6 +38,9 @@ class Pass;
 /// Create a pass to convert StableHLO operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertStablehloToMRTPass();
 
+/// Create a pass to convert Torch operations to MRT dialect operations.
+std::unique_ptr<Pass> createConvertTorchToMRTPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

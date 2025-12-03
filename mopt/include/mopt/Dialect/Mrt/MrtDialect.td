@@ -35,7 +35,8 @@ def Mrt_Dialect : Dialect {
   let useDefaultAttributePrinterParser = 1;
 }
 
-class Mrt_Type<string name, string typeMnemonic> : TypeDef<Mrt_Dialect, name> {
+class Mrt_Type<string name, string typeMnemonic, list<Trait> traits = []> :
+    TypeDef<Mrt_Dialect, name, traits> {
   let mnemonic = typeMnemonic;
 }
 

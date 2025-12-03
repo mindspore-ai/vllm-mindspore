@@ -47,11 +47,8 @@ namespace {
 // Convert RankedTensorType to Mrt_TensorType (device is optional)
 Type convertToMrtTensorType(MLIRContext *ctx, Type type) {
   if (auto rankedType = dyn_cast<RankedTensorType>(type)) {
-    mlir::Type elementType = rankedType.getElementType();
-    auto shapeVec = llvm::to_vector(rankedType.getShape());
-    mlir::DenseI64ArrayAttr shape = mlir::DenseI64ArrayAttr::get(ctx, shapeVec);
     // device is optional, can be nullptr
-    return mrt::TensorType::get(ctx, elementType, shape, nullptr);
+    return mrt::TensorType::get(ctx, rankedType.getShape(), rankedType.getElementType(), nullptr);
   }
   // If already Mrt_TensorType, return as is
   if (isa<mrt::TensorType>(type)) {

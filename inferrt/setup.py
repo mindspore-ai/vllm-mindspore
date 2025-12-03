@@ -75,16 +75,17 @@ class CMakeBuild(build_ext):
         print("cmake_args:", cmake_args)
 
         # Configure with CMake
-        subprocess.check_call(
-            [
-                "cmake",
-                "-S",
-                str(Path(__file__).parent),
-                "-B",
-                self.build_temp,
-            ]
-            + cmake_args
-        )
+        if os.environ.get("INC_BUILD", "0") != "1":
+            subprocess.check_call(
+                [
+                    "cmake",
+                    "-S",
+                    str(Path(__file__).parent),
+                    "-B",
+                    self.build_temp,
+                ]
+                + cmake_args
+            )
 
         # Build with CMake
         build_jobs = os.environ.get("BUILD_JOBS", "8")

@@ -42,4 +42,19 @@ def ConvertStablehloToMRT : Pass<"convert-stablehlo-to-mrt", "::mlir::ModuleOp">
   ];
 }
 
+def ConvertTorchToMRT : Pass<"convert-torch-to-mrt", "::mlir::ModuleOp"> {
+  let summary = "Convert Torch operations to MRT dialect operations";
+
+  let description = [{
+    This pass converts Torch dialect operations to the MRT dialect.
+  }];
+
+  let constructor = "mlir::createConvertTorchToMRTPass()";
+
+  let dependentDialects = [
+    "::mlir::torch::TorchDialect",
+    "::mrt::MrtDialect"
+  ];
+}
+
 #endif // MOPT_CONVERSION_PASSES
