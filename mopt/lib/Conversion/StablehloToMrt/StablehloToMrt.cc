@@ -16,27 +16,32 @@
 
 #include "mopt/Conversion/StablehloToMrt/StablehloToMrt.h"
 
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/Pass/Pass.h"
-#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/Matchers.h"
-#include "mlir/IR/Types.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Func/Transforms/FuncConversions.h"
+#include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Matchers.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/Types.h"
+#include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/SmallVector.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
+#include "mopt/Dialect/Mrt/MrtValueBuilder.h"
 
 using llvm::APFloat;
-using mlir::applyPatternsAndFoldGreedily;
 using mlir::ArrayRef;
 using mlir::cast;
+using mlir::ConversionPattern;
+using mlir::ConversionPatternRewriter;
+using mlir::ConversionTarget;
 using mlir::dyn_cast;
 using mlir::failed;
 using mlir::failure;
@@ -44,14 +49,12 @@ using mlir::isa;
 using mlir::LogicalResult;
 using mlir::MLIRContext;
 using mlir::ModuleOp;
+using mlir::OpConversionPattern;
 using mlir::Operation;
 using mlir::OperationPass;
 using mlir::Pass;
 using mlir::PassWrapper;
-using mlir::Pattern;
-using mlir::PatternRewriter;
 using mlir::RankedTensorType;
-using mlir::RewritePattern;
 using mlir::RewritePatternSet;
 using mlir::ShapedType;
 using mlir::SmallVector;
@@ -59,162 +62,120 @@ using mlir::StringRef;
 using mlir::success;
 using mlir::Type;
 using mlir::TypeAttr;
+using mlir::TypeConverter;
 using mlir::Value;
-using mlir::arith::ConstantOp;
+using mlir::ValueRange;
 
 namespace {
 
-// Import auto-generated pattern rewrite rules from TableGen
-#include "StablehloToMrtPatterns.cpp.inc"
+// TypeConverter for StableHLO to MRT conversion
+class StablehloToMrtTypeConverter : public mlir::TypeConverter {
+ public:
+  explicit StablehloToMrtTypeConverter(mlir::MLIRContext *ctx) {
+    addConversion([](mlir::Type type) { return type; });
+    mrt::populateMrtTypeConversions(*this, ctx);
+  }
+};
 
 //===----------------------------------------------------------------------===//
-// Helper functions
+// Generic conversion pattern template for simple ops
 //===----------------------------------------------------------------------===//
 
-// Create an i64 array value from shape values
-Value createI64ArrayValue(PatternRewriter &rewriter, mlir::Location loc, ArrayRef<int64_t> values) {
-  auto arrayAttr = rewriter.getI64ArrayAttr(values);
-  auto arrayType = mrt::I64ArrayType::get(rewriter.getContext());
-  return rewriter.create<mrt::CreateI64ArrayOp>(loc, arrayType, arrayAttr);
-}
+// Template for simple element-wise binary ops (e.g., mul, div)
+template <typename SrcOp, typename DstOp>
+struct ConvertSimpleBinaryOp : public OpConversionPattern<SrcOp> {
+  using OpConversionPattern<SrcOp>::OpConversionPattern;
 
-// Create an i64 value
-Value createI64Value(PatternRewriter &rewriter, mlir::Location loc, int64_t value) {
-  auto intAttr = rewriter.getI64IntegerAttr(value);
-  auto intType = mrt::I64Type::get(rewriter.getContext());
-  return rewriter.create<mrt::CreateI64Op>(loc, intType, intAttr);
-}
+  LogicalResult matchAndRewrite(SrcOp op, typename SrcOp::Adaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = this->getTypeConverter()->convertType(op.getResult().getType());
+    rewriter.replaceOpWithNewOp<DstOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs());
+    return success();
+  }
+};
 
-// Create a boolean value
-Value createBooleanValue(PatternRewriter &rewriter, mlir::Location loc, bool value) {
-  auto boolAttr = rewriter.getBoolAttr(value);
-  auto boolType = mrt::BooleanType::get(rewriter.getContext());
-  return rewriter.create<mrt::CreateBooleanOp>(loc, boolType, boolAttr);
-}
+// Template for simple element-wise unary ops (e.g., sigmoid)
+template <typename SrcOp, typename DstOp>
+struct ConvertSimpleUnaryOp : public OpConversionPattern<SrcOp> {
+  using OpConversionPattern<SrcOp>::OpConversionPattern;
 
-// Create a f32 value
-Value createF32Value(PatternRewriter &rewriter, mlir::Location loc, float value) {
-  auto floatAttr = rewriter.getF32FloatAttr(value);
-  auto f32Type = mrt::F32Type::get(rewriter.getContext());
-  return rewriter.create<mrt::CreateF32Op>(loc, f32Type, floatAttr);
-}
-
-// Create a f64 value
-Value createF64Value(PatternRewriter &rewriter, mlir::Location loc, double value) {
-  auto floatAttr = rewriter.getF64FloatAttr(value);
-  auto f64Type = mrt::F64Type::get(rewriter.getContext());
-  return rewriter.create<mrt::CreateF64Op>(loc, f64Type, floatAttr);
-}
-
-// Create a dtype value from element type
-Value createDtypeValue(PatternRewriter &rewriter, mlir::Location loc, Type elemType) {
-  auto typeAttr = TypeAttr::get(elemType);
-  auto dtypeType = mrt::DtypeType::get(rewriter.getContext(), elemType);
-  return rewriter.create<mrt::CreateDtypeOp>(loc, dtypeType, typeAttr);
-}
+  LogicalResult matchAndRewrite(SrcOp op, typename SrcOp::Adaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = this->getTypeConverter()->convertType(op.getResult().getType());
+    rewriter.replaceOpWithNewOp<DstOp>(op, resultType, adaptor.getOperand());
+    return success();
+  }
+};
 
 //===----------------------------------------------------------------------===//
 // Conversion patterns
 //===----------------------------------------------------------------------===//
 
 // Convert stablehlo.reshape to mrt.reshape
-struct ConvertReshapeOp : public RewritePattern {
-  explicit ConvertReshapeOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::ReshapeOp::getOperationName(), 1, context) {}
+struct ConvertReshapeOp : public OpConversionPattern<mlir::stablehlo::ReshapeOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto reshapeOp = cast<mlir::stablehlo::ReshapeOp>(op);
-
-    // Get result type (can be RankedTensorType or Mrt_TensorType, both are accepted by MrtAnyTensor)
-    Type resultType = reshapeOp.getResult().getType();
+  LogicalResult matchAndRewrite(mlir::stablehlo::ReshapeOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
     auto shapedType = dyn_cast<ShapedType>(resultType);
     if (!shapedType || !shapedType.hasRank()) {
       return failure();
     }
 
-    // Get shape from ShapedType (works for both RankedTensorType and Mrt_TensorType)
-    auto shape = shapedType.getShape();
-    auto shapeValue = createI64ArrayValue(rewriter, op->getLoc(), shape);
-
-    // Create mrt.reshape (type conversion will be handled by convert-ranked-tensor-to-mrt-tensor pass)
-    auto newOp = rewriter.create<mrt::ReshapeOp>(op->getLoc(), resultType, reshapeOp.getOperand(), shapeValue);
-
-    rewriter.replaceOp(op, newOp.getResult());
+    auto shapeValue = mrt::MrtValueBuilder(rewriter).createI64Array(op->getLoc(), shapedType.getShape());
+    rewriter.replaceOpWithNewOp<mrt::ReshapeOp>(op, resultType, adaptor.getOperand(), shapeValue);
     return success();
   }
 };
 
 // Convert stablehlo.concatenate to mrt.concat
-struct ConvertConcatenateOp : public RewritePattern {
-  explicit ConvertConcatenateOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::ConcatenateOp::getOperationName(), 1, context) {}
+struct ConvertConcatenateOp : public OpConversionPattern<mlir::stablehlo::ConcatenateOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto concatOp = cast<mlir::stablehlo::ConcatenateOp>(op);
-
-    // Create axis value from dimension attribute
-    int64_t dimension = concatOp.getDimension();
-    auto axisValue = createI64Value(rewriter, op->getLoc(), dimension);
-
-    // Create mrt.concat
-    auto newOp =
-      rewriter.create<mrt::ConcatOp>(op->getLoc(), concatOp.getResult().getType(), concatOp.getOperands(), axisValue);
-
-    rewriter.replaceOp(op, newOp.getResult());
+  LogicalResult matchAndRewrite(mlir::stablehlo::ConcatenateOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    auto axisValue = mrt::MrtValueBuilder(rewriter).createI64(op->getLoc(), op.getDimension());
+    rewriter.replaceOpWithNewOp<mrt::ConcatOp>(op, resultType, adaptor.getInputs(), axisValue);
     return success();
   }
 };
 
-// Note: Simple one-to-one patterns are now defined in StablehloToMrtPatterns.td using DRR (Declarative Rewrite Rules)
-
 // Convert stablehlo.batch_norm_inference to mrt.batch_norm
-struct ConvertBatchNormInferenceOp : public RewritePattern {
-  explicit ConvertBatchNormInferenceOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::BatchNormInferenceOp::getOperationName(), 1, context) {}
+struct ConvertBatchNormInferenceOp : public OpConversionPattern<mlir::stablehlo::BatchNormInferenceOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto bnOp = cast<mlir::stablehlo::BatchNormInferenceOp>(op);
+  LogicalResult matchAndRewrite(mlir::stablehlo::BatchNormInferenceOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    mrt::MrtValueBuilder vb(rewriter);
+    auto epsilon = vb.createF32(op->getLoc(), op.getEpsilon().convertToFloat());
+    auto isTraining = vb.createBoolean(op->getLoc(), false);
 
-    // Create epsilon and is_training values
-    // Use f32 for epsilon as it's typically a float value
-    auto epsilon = createF32Value(rewriter, op->getLoc(), bnOp.getEpsilon().convertToFloat());
-    auto isTraining = createBooleanValue(rewriter, op->getLoc(), false);  // false for inference
-
-    // Create mrt.batch_norm
-    auto newOp = rewriter.create<mrt::BatchNormOp>(op->getLoc(), bnOp.getResult().getType(),
-                                                   bnOp.getOperand(),   // input
-                                                   bnOp.getScale(),     // scale
-                                                   bnOp.getOffset(),    // offset
-                                                   bnOp.getMean(),      // mean
-                                                   bnOp.getVariance(),  // variance
-                                                   epsilon,             // epsilon
-                                                   isTraining);         // is_training
-
-    rewriter.replaceOp(op, newOp.getResult());
+    rewriter.replaceOpWithNewOp<mrt::BatchNormOp>(op, resultType, adaptor.getOperand(), adaptor.getScale(),
+                                                  adaptor.getOffset(), adaptor.getMean(), adaptor.getVariance(),
+                                                  epsilon, isTraining);
     return success();
   }
 };
 
 // Convert stablehlo.maximum(x, 0) to mrt.relu
-// This pattern detects the common ReLU pattern in StableHLO
-struct ConvertMaximumToReluOp : public RewritePattern {
-  explicit ConvertMaximumToReluOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::MaxOp::getOperationName(), 1, context) {}
+struct ConvertMaximumToReluOp : public OpConversionPattern<mlir::stablehlo::MaxOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto maxOp = cast<mlir::stablehlo::MaxOp>(op);
-
-    // Check if one operand is a constant zero
+  LogicalResult matchAndRewrite(mlir::stablehlo::MaxOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
     Value input;
     bool isRelu = false;
 
     // Check if rhs is constant zero
-    if (auto constOp = maxOp.getRhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
+    if (auto constOp = op.getRhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
       if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
         if (denseAttr.isSplat()) {
-          auto splatValue = denseAttr.getSplatValue<llvm::APFloat>();
+          auto splatValue = denseAttr.getSplatValue<APFloat>();
           if (splatValue.isZero()) {
-            input = maxOp.getLhs();
+            input = adaptor.getLhs();
             isRelu = true;
           }
         }
@@ -223,12 +184,12 @@ struct ConvertMaximumToReluOp : public RewritePattern {
 
     // Check if lhs is constant zero
     if (!isRelu) {
-      if (auto constOp = maxOp.getLhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
+      if (auto constOp = op.getLhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
         if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
           if (denseAttr.isSplat()) {
-            auto splatValue = denseAttr.getSplatValue<llvm::APFloat>();
+            auto splatValue = denseAttr.getSplatValue<APFloat>();
             if (splatValue.isZero()) {
-              input = maxOp.getRhs();
+              input = adaptor.getRhs();
               isRelu = true;
             }
           }
@@ -240,66 +201,50 @@ struct ConvertMaximumToReluOp : public RewritePattern {
       return failure();
     }
 
-    // Create mrt.relu
-    auto newOp = rewriter.create<mrt::ReluOp>(op->getLoc(), maxOp.getResult().getType(), input);
-
-    rewriter.replaceOp(op, newOp.getResult());
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    rewriter.replaceOpWithNewOp<mrt::ReluOp>(op, resultType, input);
     return success();
   }
 };
 
 // Convert stablehlo.convert to mrt.cast
-struct ConvertConvertOp : public RewritePattern {
-  explicit ConvertConvertOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::ConvertOp::getOperationName(), 1, context) {}
+struct ConvertConvertOp : public OpConversionPattern<mlir::stablehlo::ConvertOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto convertOp = cast<mlir::stablehlo::ConvertOp>(op);
-
-    // Get result type (can be RankedTensorType or Mrt_TensorType, both are accepted by MrtAnyTensor)
-    Type resultType = convertOp.getResult().getType();
+  LogicalResult matchAndRewrite(mlir::stablehlo::ConvertOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
     auto shapedType = dyn_cast<ShapedType>(resultType);
     if (!shapedType || !shapedType.hasRank()) {
       return failure();
     }
 
-    // Get element type from ShapedType (works for both RankedTensorType and Mrt_TensorType)
-    auto elementType = shapedType.getElementType();
-    auto dtypeValue = createDtypeValue(rewriter, op->getLoc(), elementType);
-
-    // Create mrt.cast (type conversion will be handled by convert-ranked-tensor-to-mrt-tensor pass)
-    auto newOp = rewriter.create<mrt::CastOp>(op->getLoc(), resultType, convertOp.getOperand(), dtypeValue);
-
-    rewriter.replaceOp(op, newOp.getResult());
+    auto dtypeValue = mrt::MrtValueBuilder(rewriter).createDtype(op->getLoc(), shapedType.getElementType());
+    rewriter.replaceOpWithNewOp<mrt::CastOp>(op, resultType, adaptor.getOperand(), dtypeValue);
     return success();
   }
 };
 
 // Convert stablehlo.convolution to mrt.conv
-struct ConvertConvolutionOp : public RewritePattern {
-  explicit ConvertConvolutionOp(MLIRContext *context)
-      : RewritePattern(mlir::stablehlo::ConvolutionOp::getOperationName(), 1, context) {}
+struct ConvertConvolutionOp : public OpConversionPattern<mlir::stablehlo::ConvolutionOp> {
+  using OpConversionPattern::OpConversionPattern;
 
-  LogicalResult matchAndRewrite(Operation *op, PatternRewriter &rewriter) const override {
-    auto convOp = cast<mlir::stablehlo::ConvolutionOp>(op);
+  LogicalResult matchAndRewrite(mlir::stablehlo::ConvolutionOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    auto windowStrides = op.getWindowStridesAttr();
+    auto padding = op.getPaddingAttr();
+    auto rhsDilation = op.getRhsDilationAttr();
 
-    // Extract attributes
-    auto windowStrides = convOp.getWindowStridesAttr();
-    auto padding = convOp.getPaddingAttr();
-    // WARNING: lhsDilation is not used in the conversion
-    auto rhsDilation = convOp.getRhsDilationAttr();
-
-    // Convert to MRT format
     SmallVector<int64_t> strides;
     if (windowStrides) {
       for (auto stride : windowStrides.asArrayRef()) {
         strides.push_back(stride);
       }
     } else {
-      // Default stride of 1
-      auto resultType = dyn_cast<ShapedType>(convOp.getResult().getType());
-      if (resultType) {
-        int spatialDims = resultType.getRank() - 2;  // Assuming NCHW or similar
+      auto shapedResultType = dyn_cast<ShapedType>(resultType);
+      if (shapedResultType) {
+        int spatialDims = shapedResultType.getRank() - 2;
         strides.assign(spatialDims, 1);
       }
     }
@@ -321,23 +266,38 @@ struct ConvertConvolutionOp : public RewritePattern {
       dilation.assign(spatialDims, 1);
     }
 
-    // Create operand values
-    auto stridesValue = createI64ArrayValue(rewriter, op->getLoc(), strides);
-    auto paddingValue = createI64ArrayValue(rewriter, op->getLoc(), paddingVec);
-    auto dilationValue = createI64ArrayValue(rewriter, op->getLoc(), dilation);
-    auto hasBiasValue = createBooleanValue(rewriter, op->getLoc(), false);
+    mrt::MrtValueBuilder vb(rewriter);
+    auto stridesValue = vb.createI64Array(op->getLoc(), strides);
+    auto paddingValue = vb.createI64Array(op->getLoc(), paddingVec);
+    auto dilationValue = vb.createI64Array(op->getLoc(), dilation);
+    auto hasBiasValue = vb.createBoolean(op->getLoc(), false);
 
-    // Create mrt.conv (without bias for now)
-    auto newOp = rewriter.create<mrt::ConvOp>(op->getLoc(), convOp.getResult().getType(),
-                                              convOp.getLhs(),  // input
-                                              convOp.getRhs(),  // kernel
-                                              Value(),          // bias (empty)
-                                              stridesValue,     // strides
-                                              paddingValue,     // padding
-                                              dilationValue,    // dilation
-                                              hasBiasValue);    // has_bias
+    rewriter.replaceOpWithNewOp<mrt::ConvOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs(), Value(), stridesValue,
+                                             paddingValue, dilationValue, hasBiasValue);
+    return success();
+  }
+};
 
-    rewriter.replaceOp(op, newOp.getResult());
+// Convert stablehlo.divide to mrt.div
+struct ConvertDivideOp : public OpConversionPattern<mlir::stablehlo::DivOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(mlir::stablehlo::DivOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    rewriter.replaceOpWithNewOp<mrt::DivOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs());
+    return success();
+  }
+};
+
+// Convert stablehlo.remainder to mrt.remainder_tensor_tensor
+struct ConvertRemainderOp : public OpConversionPattern<mlir::stablehlo::RemOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(mlir::stablehlo::RemOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
+    rewriter.replaceOpWithNewOp<mrt::RemainderTensorTensorOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs());
     return success();
   }
 };
@@ -357,27 +317,51 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     registry.insert<mlir::stablehlo::StablehloDialect>();
     registry.insert<mrt::MrtDialect>();
     registry.insert<mlir::arith::ArithDialect>();
+    registry.insert<mlir::func::FuncDialect>();
   }
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
+    MLIRContext *ctx = &getContext();
 
-    MLIRContext &context = getContext();
-    RewritePatternSet patterns(&context);
+    StablehloToMrtTypeConverter typeConverter(ctx);
 
-    // Add DRR-generated patterns from StablehloToMrtPatterns.td
-    populateWithGenerated(patterns);
+    ConversionTarget target(*ctx);
+    target.addLegalDialect<mrt::MrtDialect>();
+    target.addLegalDialect<mlir::arith::ArithDialect>();
+    target.addLegalOp<mlir::ModuleOp>();
 
-    // Add complex C++ patterns that require custom logic
-    patterns.add<ConvertReshapeOp>(&context);
-    patterns.add<ConvertBatchNormInferenceOp>(&context);
-    patterns.add<ConvertMaximumToReluOp>(&context);
-    patterns.add<ConvertConvolutionOp>(&context);
-    patterns.add<ConvertConcatenateOp>(&context);
-    patterns.add<ConvertConvertOp>(&context);
+    // Mark func.func as dynamically legal (need type conversion)
+    target.addDynamicallyLegalOp<mlir::func::FuncOp>(
+      [&](mlir::func::FuncOp op) { return typeConverter.isSignatureLegal(op.getFunctionType()); });
+    target.addDynamicallyLegalOp<mlir::func::ReturnOp>(
+      [&](mlir::func::ReturnOp op) { return typeConverter.isLegal(op.getOperandTypes()); });
 
-    // Apply the patterns
-    if (failed(applyPatternsAndFoldGreedily(module, std::move(patterns)))) {
+    target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
+
+    RewritePatternSet patterns(ctx);
+
+    // Add simple binary op conversions using template
+    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::MulOp, mrt::MulOp>>(typeConverter, ctx);
+    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::DivOp, mrt::DivOp>>(typeConverter, ctx);
+    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::RemOp, mrt::RemainderTensorTensorOp>>(typeConverter, ctx);
+
+    // Add simple unary op conversions using template
+    patterns.add<ConvertSimpleUnaryOp<mlir::stablehlo::LogisticOp, mrt::SigmoidOp>>(typeConverter, ctx);
+
+    // Add complex patterns
+    patterns.add<ConvertReshapeOp>(typeConverter, ctx);
+    patterns.add<ConvertConcatenateOp>(typeConverter, ctx);
+    patterns.add<ConvertBatchNormInferenceOp>(typeConverter, ctx);
+    patterns.add<ConvertMaximumToReluOp>(typeConverter, ctx);
+    patterns.add<ConvertConvertOp>(typeConverter, ctx);
+    patterns.add<ConvertConvolutionOp>(typeConverter, ctx);
+
+    // Add function signature conversion patterns
+    mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(patterns, typeConverter);
+    mlir::populateReturnOpTypeConversionPattern(patterns, typeConverter);
+
+    if (failed(mlir::applyPartialConversion(module, target, std::move(patterns)))) {
       signalPassFailure();
     }
   }

@@ -1,6 +1,7 @@
+file(GLOB MOPT_CAPI_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+
 add_mlir_public_c_api_library(MoptCAPI
-  Dialects.cc
-  Passes.cc
+  ${MOPT_CAPI_SRC}
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/mopt-c/
@@ -23,4 +24,3 @@ target_include_directories(MoptCAPI PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
 )
-

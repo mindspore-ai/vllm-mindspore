@@ -60,9 +60,11 @@ list(APPEND _mopt_private_libs
 
 # StableHLO registered via Python extension, no need to define MOPT_ENABLE_STABLEHLO in C++
 
+file(GLOB PYTHON_EXT_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
+
 declare_mlir_python_extension(MoptPythonExtension
   MODULE_NAME _mopt
-  SOURCES MoptModule.cc
+  SOURCES ${PYTHON_EXT_SRC}
   PRIVATE_LINK_LIBS
     ${_mopt_private_libs}
     MoptCAPI

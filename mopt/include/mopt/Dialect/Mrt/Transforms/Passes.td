@@ -48,25 +48,6 @@ def SetTensorDevice : Pass<"set-tensor-device", "::mlir::ModuleOp"> {
   ];
 }
 
-def ConvertRankedTensorToMrtTensor : Pass<"convert-ranked-tensor-to-mrt-tensor", "::mlir::ModuleOp"> {
-  let summary = "Convert RankedTensorType to Mrt_TensorType";
-
-  let description = [{
-    This pass converts all RankedTensorType instances in the module to Mrt_TensorType.
-    It walks through all operations, function arguments, and results, replacing
-    RankedTensorType with Mrt_TensorType while preserving element types and shapes.
-    This pass should be run before convert-stablehlo-to-mrt to ensure all types
-    are unified to Mrt_TensorType.
-  }];
-
-  let constructor = "mlir::createConvertRankedTensorToMrtTensorPass()";
-
-  let dependentDialects = [
-    "::mrt::MrtDialect",
-    "::mlir::func::FuncDialect"
-  ];
-}
-
 //===----------------------------------------------------------------------===//
 // AnnotateLinalgForHacc pass
 //===----------------------------------------------------------------------===//
