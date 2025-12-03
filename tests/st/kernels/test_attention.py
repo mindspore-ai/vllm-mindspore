@@ -23,8 +23,6 @@ from mindspore import Parameter, Tensor, context, mint
 from mindspore import dtype as mstype
 from mindspore import nn
 
-from vllm_mindspore.model_executor.layers.quantization.smooth_quant_modelslim \
-    import SmoothQuantModelSlimConfig
 from vllm_mindspore.model_executor.layers.quantization.attention import (
     BaseKVCacheMethod, KVCacheInt8Method)
 from vllm.config import CacheConfig
@@ -83,11 +81,7 @@ class TestBaseKVCacheMethod:
                                    gpu_memory_utilization=-1,
                                    swap_space=-1,
                                    cache_dtype="auto")
-        quant_config = SmoothQuantModelSlimConfig({},
-                                                  weight_bits=8,
-                                                  group_size=1,
-                                                  kv_cache_bits=16)
-        method = BaseKVCacheMethod(quant_config)
+        method = BaseKVCacheMethod()
         # create mock linear
         layer = SimpleAttention(method, params_dtype)
 
@@ -188,11 +182,7 @@ class TestKVCacheInt8Method:
         })
         context.set_context(mode=context.GRAPH_MODE)
         cache_config = None
-        quant_config = SmoothQuantModelSlimConfig({},
-                                                  weight_bits=8,
-                                                  group_size=1,
-                                                  kv_cache_bits=8)
-        method = KVCacheInt8Method(quant_config)
+        method = KVCacheInt8Method()
 
         layer = SimpleAttention(method, params_dtype)
         method.create_weights(layer=layer,

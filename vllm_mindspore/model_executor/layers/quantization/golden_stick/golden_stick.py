@@ -112,7 +112,7 @@ class GoldenStickConfig(QuantizationConfig):
         return "golden_stick"
 
     def get_supported_act_dtypes(self) -> list["mstype"]:
-        return [mstype.bfloat16, mstype.int8]
+        return [mstype.bfloat16, mstype.float16, mstype.int8]
 
     @staticmethod
     def get_config_filenames() -> list[str]:
@@ -131,6 +131,8 @@ class GoldenStickConfig(QuantizationConfig):
             return None
         quant_strategy = None
 
+        # replace prefix for multimodal model
+        prefix = prefix.replace("language_model.model", "model.language_model")
         for key, value in self.config.items():
             for uncat_name, cat_name in self.concat_linear_mapping.items():
                 key = key.replace(uncat_name, cat_name)
@@ -141,8 +143,9 @@ class GoldenStickConfig(QuantizationConfig):
                 break
 
         if not quant_strategy:
-            raise ValueError(
-                f"Cannot find quantization strategy for layer {prefix}.")
+            print(f"No quantization strategy matched for prefix '{prefix}', "
+                  f"using default: FLOAT")
+            quant_strategy = "FLOAT"
         if quant_strategy not in self.quantization_method_mapping:
             raise ValueError(
                 f"Unsupported quantization strategy: {quant_strategy} "

@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 from mindspore import Parameter, Tensor, nn, ops
 from mindspore.common import dtype as mstype
 from mindspore.common.initializer import initializer
@@ -25,6 +26,7 @@ from vllm.model_executor.utils import set_weight_attrs
 from vllm_mindspore.model_executor.layers.linear import RowParallelLinear
 from vllm_mindspore.model_executor.layers.quantization.quant_ops import (
     AclnnQuantBatchMatMul, ASDQuantBatchMatMul, Quant)
+from vllm_mindspore.utils import is_310p
 
 
 class A8W8LinearMethod(LinearMethodBase):
@@ -32,6 +34,7 @@ class A8W8LinearMethod(LinearMethodBase):
     def __init__(self, quant_config: QuantizationConfig) -> None:
         self.quant_config = quant_config
         self.is_modelslim = self.quant_config.is_modelslim
+        self.is_310p = is_310p()
 
     def create_weights(self, layer: nn.Cell, input_size_per_partition: int,
                        output_partition_sizes: list[int], input_size: int,
@@ -109,6 +112,12 @@ class A8W8LinearMethod(LinearMethodBase):
 
     def process_weights_after_loading(self, layer: nn.Cell) -> None:
         self.qbmm.process_weights_after_loading(layer)
+        if self.is_310p:
+            deq_scale = layer.deq_scale.asnumpy().view(np.int32).astype(
+                np.int64)
+            layer.deq_scale = Parameter(Tensor(deq_scale, dtype=mstype.int64),
+                                        name=layer.deq_scale.name,
+                                        requires_grad=False)
 
     def apply(self,
               layer: nn.Cell,
