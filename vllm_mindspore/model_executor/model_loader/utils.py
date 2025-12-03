@@ -213,7 +213,7 @@ def ms_device_loading_context(module, target_device):
 _original_initialize_model = initialize_model
 
 
-@functools.wraps(_original_initialize_model)
+@functools.wraps(_original_initialize_model)  # type: ignore[no-redef]
 def initialize_model(*args, **kwargs):
     '''
     Apply deferred initialization to reduce peak memory.

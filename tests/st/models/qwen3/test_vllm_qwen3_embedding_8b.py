@@ -21,11 +21,9 @@ from unittest.mock import patch
 
 import os
 
-from tests.utils.env_var_manager import EnvVarManager
-from tests.utils.common_utils import MODEL_PATH
+from tests.utils.common_utils import (teardown_function, setup_function,
+                                      MODEL_PATH)
 
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "VLLM_MS_MODEL_BACKEND": "Native",

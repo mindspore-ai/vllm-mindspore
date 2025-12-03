@@ -26,10 +26,10 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from collections.abc import Generator, Mapping
 from enum import Enum
 from pathlib import Path
-from typing import (TYPE_CHECKING, Callable, Generator, Generic, List, Mapping,
-                    Optional, Tuple, Union)
+from typing import TYPE_CHECKING, Callable, Generic, Optional, Union
 
 import numpy as np
 import torch
@@ -47,7 +47,7 @@ from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
 
 from .scripts import env_setup
 
-MsKVCache = Tuple[ms.Tensor, ms.Tensor]
+MsKVCache = tuple[ms.Tensor, ms.Tensor]
 
 logger = init_logger(__name__)
 
@@ -148,7 +148,7 @@ def _create_dummy_block_tables(dtype):
 
 
 def make_tensor_with_pad(
-    x: List[List[T]],
+    x: list[list[T]],
     pad: T,
     dtype: torch.dtype,
     *,

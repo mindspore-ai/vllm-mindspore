@@ -5,11 +5,13 @@ vLLM-MindSpore Plugin Community Contribution Guide
 Welcome to the vLLM-MindSpore Plugin community! Whether you're submitting code, fixing bugs, refining documentation, or proposing feature ideas, every contribution you make helps elevate this project. This guide outlines the complete contribution workflow, specification requirements, and support channels to ensure a smooth and efficient experience for all contributors.
 
 ## I. Pre-Contribution Preparation
+
 ### 1. Contributor License Agreement (CLA)
 
 - The vLLM-MindSpore Plugin is part of the MindSpore community. It's required to sign CLA before your first code submission to MindSpore community. For individual contributor, please refer to [ICLA online document](https://www.mindspore.cn/icla) for the detailed information.
 
 ### 2. Project Familiarization
+
 - Thoroughly review the [README.md](https://gitee.com/mindspore/vllm-mindspore/blob/master/README_en.md) in the project root directory to understand the project's positioning, core functionalities, and technology stack.
 
 - Check the [Release Notes](https://www.mindspore.cn/vllm_mindspore/docs/en/master/RELEASE.html) and [Milestones](https://gitee.com/mindspore/vllm-mindspore/milestones) to gain insights into the project's update history and current development priorities.
@@ -29,6 +31,7 @@ Welcome to the vLLM-MindSpore Plugin community! Whether you're submitting code, 
 ## II. Contribution Types & Workflows
 
 ### 1. Bug Fix Submission
+
 **Workflow:**
 
 **1. Search Existing Issues:** First, search the project's Issues to check if the bug has already been reported. If not, create a new Issue using the "Bug Report" template. Clearly describe the bug behavior, reproduction steps, expected results, and environment details (e.g., system version, dependency versions).
@@ -40,6 +43,7 @@ Welcome to the vLLM-MindSpore Plugin community! Whether you're submitting code, 
 **4. Submit Pull Request (PR):** Push your local branch to the remote repository and submit a PR. Use the title format: `[Bugfix] Brief description of the bugfix`. In the PR body, link to the associated Issue (e.g., "Fixes #ABC123") and explain your fix approach.
 
 ### 2. New Feature Development
+
 **Workflow:**
 
 **1. Feature Proposal:** For new features, first create a "Feature Request/RFC" Issue. Clearly outline the functional requirements, use cases, and implementation ideas. Wait for confirmation of feasibility from community maintainers. Feature Requests are lightweight requirement proposals, whereas RFCs are more inclined toward structured solution proposals.
@@ -53,6 +57,7 @@ Welcome to the vLLM-MindSpore Plugin community! Whether you're submitting code, 
 **5. Submit PR:** Push your branch and submit a PR. Use the title format: `[Feat/RFC] Brief description of the new feature`. In the PR body, link to the Feature Request/RFC Issue and explain key implementation details and test results.
 
 ### 3. New Model Contribution
+
 The workflow for contributing new models aligns with the new feature development process. If you want to merge a new model into the vLLM-MindSpore Plugin code repository, pay attention to the following points:
 
 - **File Format & Location Compliance:** All model code files must be placed in the `vllm_mindspore/model_executor` directory. Organize files into subdirectories based on model types.
@@ -61,6 +66,7 @@ The workflow for contributing new models aligns with the new feature development
 - **Unit Test Requirements:** Submit unit tests for the new model. Refer to the [Qwen2.5 model test cases](https://gitee.com/mindspore/vllm-mindspore/blob/master/tests/st/python/cases_parallel/vllm_qwen_7b.py) as a template.
 
 ### 4. Documentation Refinement / Translation​
+
 **Workflow:**
 
 **1. Confirm Requirements:** Either claim an existing "Documentation Optimization" task in Issues or create a new Issue using the "Documentation" template to propose improvements (e.g., adding explanations, correcting errors, or providing new translations).
@@ -70,6 +76,7 @@ The workflow for contributing new models aligns with the new feature development
 **3. Submit PR:** Push your branch and submit a PR. Use the title format: `[Docs] Brief description of the change` (e.g., `[Docs] Add API parameter explanations`, `[Docs] Add English translation for Chinese documentation`). In the PR body, explains the modified content and optimization points.
 
 ### 5. Other Contributions
+
 - Code Refactoring: Changes that are neither functional features nor defect fixes (such as code refactoring, version upgrades, or tool updates) can be submitted by creating a "Task Tracking" in Issues.
 
 - Testing Contributions: Participate in project testing by reporting potential issues in Issues or enhancing existing test cases.
@@ -83,6 +90,7 @@ The workflow for contributing new models aligns with the new feature development
 We recommend using the Fork-Pull Development Model for code submission. The detailed workflow is as follows:
 
 <a id="Fork-Pull development model"></a>
+
 ### Fork-Pull development model
 
 - Fork vLLM-MindSpore Plugin repository

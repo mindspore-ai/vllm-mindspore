@@ -24,10 +24,6 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, start_vllm_server,
                                       get_key_counter_from_log,
                                       stop_vllm_server, send_and_get_request)
-from tests.utils.env_var_manager import EnvVarManager
-
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 
 # def env
 env_vars = {
@@ -148,15 +144,15 @@ def test_vllm_mf_offline_002():
 
 def run_vllm_offline_003():
     from vllm import LLM, SamplingParams
-    prompts = ""
+    prompts_empty_str = ""
     sampling_params = SamplingParams(top_k=1)
     llm = LLM(model=QWEN_7B_MODEL)
     with pytest.raises(ValueError) as err:
-        llm.generate(prompts, sampling_params)
+        llm.generate(prompts_empty_str, sampling_params)
     assert "The decoder prompt cannot be empty" in str(err.value)
-    prompts = ["", "Today is", "Llama is"]
+    prompts_non_str = ["", "Today is", "Llama is"]
     with pytest.raises(ValueError) as err:
-        llm.generate(prompts, sampling_params)
+        llm.generate(prompts_non_str, sampling_params)
     assert "The decoder prompt cannot be empty" in str(err.value)
 
 

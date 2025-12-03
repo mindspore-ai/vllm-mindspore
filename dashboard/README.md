@@ -1,8 +1,10 @@
 # HOW TO USE DASHBOARD
+
 ## 1. prepare
+
 - download aisbench code when you need to run dataset:
 
-~~~
+~~~text
 git clone https://gitee.com/aisbench/benchmark.git
 ~~~
 
@@ -10,16 +12,17 @@ git clone https://gitee.com/aisbench/benchmark.git
 
 ## 2. run dashboard
 
-~~~
+~~~shell
 bash run_dashboard.sh
 ~~~
 
 ## 3. check results
+
 when run_dashboard.sh finished, the results will be saved in `results` folder
 
-~~~
+~~~shell
 cd results;
 python -m http.server 8001
 ~~~
 
-open the web: https://localhost:8001
+open the web: <https://localhost:8001>

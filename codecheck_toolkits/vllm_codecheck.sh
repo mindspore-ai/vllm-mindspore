@@ -13,22 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# only check in CI
-sed -i "18c\    args: [--diff]" .pre-commit-config.yaml  # yapf
-sed -i "25c\    args: ['--exit-non-zero-on-fix']" .pre-commit-config.yaml  # ruff
-sed -i "27i\    args: ['--diff']" .pre-commit-config.yaml  # ruff-format
-sed -i "39i\    args: ['--check-only', '--diff']" .pre-commit-config.yaml  # isort
-
-git add .pre-commit-config.yaml
-
 pip install -r codecheck_toolkits/requirements-lint.txt
 
 RUN_GATE=${1:-0}
 if [ "$RUN_GATE" -eq 0 ]; then
-  pre-commit run --from-ref origin/master --to-ref HEAD
+  pre-commit run --from-ref origin/master --to-ref HEAD --hook-stage manual
 else
-  pre-commit run --all-files
+  pre-commit run --all-files --hook-stage manual
 fi
 RET_FLAG=$?
 

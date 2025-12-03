@@ -20,7 +20,7 @@
 """A layer that compute logits from hidden_stats."""
 import inspect
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, no_type_check
 
 import vllm.envs as envs
 from mindspore import Tensor, jit, mint, nn
@@ -243,9 +243,9 @@ class LogitsProcessorGraph(LogitsProcessor):
         self.is_graph_mode = bool(not vllm_config.model_config.enforce_eager)
         self.tensor_model_parallel_all_gather = \
             AllGatherFromModelParallelRegion()
-        self.lm_head = None
+        self.lm_head: Optional[VocabParallelEmbedding] = None
         self.run_model = None
-        self.cached_input_info = {}
+        self.cached_input_info: dict = {}
 
     def set_dynamic_inputs(self):
         dyn_hidden_states = Tensor(shape=[None, None],
@@ -310,9 +310,12 @@ class LogitsProcessorGraph(LogitsProcessor):
         ) <= 0:
             logits = mint.zeros((0, self.vocab_size),
                                 dtype=hidden_states.dtype)
-        else:
+        elif self.run_model is not None:
             logits = self.run_model(hidden_states, selected_token_indices,
                                     embedding_bias)
+        else:
+            raise RuntimeError(
+                "Invalid run_model in logits with value of None")
 
         if sampling_metadata is not None and \
                 sampling_metadata.seq_groups is not None:
@@ -320,7 +323,8 @@ class LogitsProcessorGraph(LogitsProcessor):
 
         return logits
 
-    def construct(
+    @no_type_check
+    def construct(  # type: ignore[override]
         self,
         hidden_states: Tensor,
         selected_token_indices: Optional[Tensor] = None,

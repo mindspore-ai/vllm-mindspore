@@ -20,10 +20,6 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, start_vllm_server,
                                       get_key_counter_from_log,
                                       stop_vllm_server, send_and_get_request)
-from tests.utils.env_var_manager import EnvVarManager
-
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 
 # def env
 env_vars = {

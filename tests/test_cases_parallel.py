@@ -18,7 +18,7 @@
 import os
 import json
 import pytest
-import importlib
+from importlib.util import spec_from_file_location, module_from_spec
 
 from multiprocessing.pool import Pool
 from tests.utils.common_utils import (logger, teardown_function,
@@ -39,8 +39,8 @@ PLATFORM_MAP = {
 
 HAS_TESTS_REGISTERED = False
 
-registered_910b_tests = []
-registered_310p_tests = []
+registered_910b_tests: list = []
+registered_310p_tests: list = []
 
 
 def reset_registered_list():
@@ -166,8 +166,8 @@ def generate_group_contents(tests_info, capacity=8):
     """
     # Sort by the number of occupied devices in descending order.
     tests_info_sorted = sorted(tests_info, key=lambda x: x[0], reverse=True)
-    groups = []  # The total number of cards occupied by each group.
-    group_contents = []  # Store test information for each group.
+    groups: list = []  # The total number of cards occupied by each group.
+    group_contents: list = []  # Store test information for each group.
 
     for info in tests_info_sorted:
         num = info[0]
@@ -196,11 +196,12 @@ def get_module_pytest_marks(module_path, function_name):
     if not os.path.exists(module_file_path):
         raise ImportError("module file %s does not exist.", module_file_path)
 
-    spec = importlib.util.spec_from_file_location(module_path,
-                                                  module_file_path)
-    module = importlib.util.module_from_spec(spec)
+    spec = spec_from_file_location(module_path, module_file_path)
+    if spec is None:
+        raise ImportError("Load module from file failed")
+    module = module_from_spec(spec)
     try:
-        spec.loader.exec_module(module)
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
     except Exception as e:
         raise ImportError("Loading module %s failed: %s", module_path,
                           str(e)) from e
@@ -221,7 +222,7 @@ def collection_cases_by_level(test_register):
     According to the level of registered tests, divide them into
     corresponding maps.
     '''
-    tests_info = {
+    tests_info: dict = {
         f"{level_marks[0]}": [],
         f"{level_marks[1]}": [],
         f"{level_marks[2]}": [],

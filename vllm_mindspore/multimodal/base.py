@@ -27,7 +27,7 @@ from vllm.multimodal.base import MultiModalPlaceholderMap
 from vllm.multimodal.inputs import MultiModalKwargs
 
 
-@classmethod
+@classmethod  # type: ignore
 def from_seq_group(
     cls, seq_group: "SequenceGroupMetadata", positions: range
 ) -> tuple[Optional[MultiModalKwargs], dict[str, "MultiModalPlaceholderMap"]]:

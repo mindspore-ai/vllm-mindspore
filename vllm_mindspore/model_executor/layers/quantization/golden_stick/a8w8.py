@@ -43,8 +43,8 @@ class A8W8LinearMethod(LinearMethodBase):
         self.output_size = output_size
         self.input_size_per_partition = input_size_per_partition
         self.params_dtype = params_dtype
-        self.qbmm = AclnnQuantBatchMatMul(
-            params_dtype
+        self.qbmm: AclnnQuantBatchMatMul | ASDQuantBatchMatMul = (
+            AclnnQuantBatchMatMul(params_dtype)
         ) if self.quant_config.is_modelslim else ASDQuantBatchMatMul(
             params_dtype)
         self.quant = Quant(mstype.int8)

@@ -3,7 +3,9 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 </h1>
 
 欢迎加入vLLM-MindSpore插件开源社区！无论是提交代码、修复 Bug、优化文档，还是提出功能建议，你的每一份贡献都将帮助项目变得更好。本指南将为你提供完整的贡献流程、规范要求及支持渠道，确保贡献过程顺畅高效。​
+
 ## 一、贡献前准备​
+
 ### 1. 贡献者许可协议
 
 - vLLM-MindSpore插件从属于MindSpore开源社区，向社区提交代码之前，您需要签署《贡献者许可协议（CLA）》。个人贡献者请参见[ICLA在线文件](https://www.mindspore.cn/icla)。
@@ -29,6 +31,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 ## 二、贡献类型及流程
 
 ### 1. 提交 Bug 修复​
+
 **流程：**
 
 **1. 搜索 Issue：** 先在项目Issues中搜索相关 Bug，确认是否已被报告。若未报告，新建Issue，选择 “Bug Report” 模板，清晰描述 Bug 现象、复现步骤、预期结果及环境信息（如系统版本、依赖版本）。​
@@ -40,6 +43,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 **4. 提交 PR：** 将本地分支推送到远程仓库，提交 Pull Request（PR），PR 标题格式：`[Bugfix]修复Bug简要描述`，正文需关联对应的Issue编号（如Fixes #ABC123），并说明修复思路。​
 
 ### 2. 新增功能开发​​
+
 **流程：**
 
 **1. 功能提案：** 若为新增功能，先在Issues中新建 “Feature Request/RFC”，描述功能需求、使用场景及实现思路等内容，等待社区维护者（maintainer）确认可行性。Feature Request 是轻量需求提议，RFC 偏向结构化方案提案。
@@ -53,6 +57,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 **5. 提交 PR：** 推送分支并提交 PR，PR 标题格式：`[Feat/RFC] 新增功能简要描述`，正文关联 Feature Request/RFC 的Issue编号，说明功能实现细节及测试情况。​
 
 ### 3. 贡献新模型
+
 贡献新模型整体适配流程遵循新增功能开发流程，若希望将一个新模型合入vLLM-MindSpore插件代码仓库，需要注意几点：
 
 - **文件格式及位置要遵循规范。** 模型代码文件统一放置于`vllm_mindspore/model_executor`文件夹下，请根据不同模型将代码文件放置于对应的文件夹下。
@@ -61,6 +66,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 - **编写单元测试。** 新增的模型需同步提交单元测试用例，用例编写请参考[Qwen2.5模型用例](https://gitee.com/mindspore/vllm-mindspore/blob/master/tests/st/python/cases_parallel/vllm_qwen_7b.py)。
 
 ### 4. 文档优化 / 翻译​
+
 **流程：**
 
 **1. 确认需求：** 可直接在Issues中认领 “文档优化” 任务，或新建Issue提出文档改进建议（如补充说明、修正错误、新增翻译版本），选择 “Documentation” 模板。​
@@ -70,6 +76,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 **3. 提交 PR：** 推送分支并提交 PR，PR 标题格式：`[Docs]文档优化内容`（如`[Docs]补充API参数说明`、`[Docs]新增中文文档翻译`），正文说明修改内容及优化点。​
 
 ### 5. 其他贡献
+
 - 代码重构：非功能特性、非缺陷修复的更改，例如代码重构、版本升级或工具更新等可通过在Issues中新建 “Task Tracking” 提交。
 
 - 测试贡献：参与项目测试，在Issues中反馈测试过程中发现的潜在问题，或完善现有测试用例。​
@@ -83,6 +90,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 推荐大家使用Fork-Pull开发模型流程进行代码提交,具体步骤如下:
 
 <a id="Fork-Pull开发模型"></a>
+
 ### Fork-Pull开发模型
 
 - Fork vLLM-MindSpore插件代码仓库

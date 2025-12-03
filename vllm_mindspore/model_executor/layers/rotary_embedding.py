@@ -302,7 +302,8 @@ class MRotaryEmbedding(RotaryEmbedding):
 
         self.mrope_interleaved = mrope_interleaved
         if self.mrope_interleaved:
-            assert len(self.mrope_section) == 3
+            assert (self.mrope_section is not None
+                    and len(self.mrope_section) == 3)
             mrope_section_np = np.array(self.mrope_section, dtype=np.int64)
             sec_total = mrope_section_np.sum()
             h_sec = np.array(list(range(1, self.mrope_section[1] * 3,
@@ -310,11 +311,12 @@ class MRotaryEmbedding(RotaryEmbedding):
             w_sec = np.array(list(range(2, self.mrope_section[2] * 3,
                                         3))) + 2 * sec_total
             select_index = np.arange(sec_total, dtype=np.int64)
-            select_index[1:mrope_section[1] * 3:3] = h_sec
-            select_index[2:mrope_section[2] * 3:3] = w_sec
+            select_index[1:self.mrope_section[1] * 3:3] = h_sec
+            select_index[2:self.mrope_section[2] * 3:3] = w_sec
             self.rope_select_index = ms.from_numpy(select_index)
         else:
-            assert len(self.mrope_section) == 3
+            assert (self.mrope_section is not None
+                    and len(self.mrope_section) == 3)
             mrope_section_np = np.array(self.mrope_section, dtype=np.int64)
             sec_total = mrope_section_np.sum()
             sec_cu = mrope_section_np.cumsum()
@@ -351,8 +353,10 @@ class MRotaryEmbedding(RotaryEmbedding):
         else:
             self.rope_func = self._native_rope
 
-    def apply_interleaved_rope(self, x: Tensor,
-                               mrope_section: list[int]) -> Tensor:
+    def apply_interleaved_rope(
+            self,
+            x: Tensor,
+            mrope_section: Optional[list[int]] = None) -> Tensor:
         """Apply interleaved MRoPE to 3D rotary embeddings.
         Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
         interleaved [THTHWHTHW...TT], preserving frequency continuity.
@@ -367,8 +371,10 @@ class MRotaryEmbedding(RotaryEmbedding):
         x_t = mint.index_select(x, -1, self.rope_select_index)
         return x_t
 
-    def apply_no_interleaved_rope(self, x: Tensor,
-                                  mrope_section: list[int]) -> Tensor:
+    def apply_no_interleaved_rope(
+            self,
+            x: Tensor,
+            mrope_section: Optional[list[int]] = None) -> Tensor:
         """Apply non-interleaved MRoPE to 3D rotary embeddings.
         Reorganizes frequency layout from chunked [TTT...HHH...WWW] to
         non-interleaved [TTTHHHWWW].
@@ -435,7 +441,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         key = key.view(key_shape)
         return query, key
 
-    def construct(
+    def construct(  # type: ignore[override]
         self,
         positions: ms.Tensor,
         query: ms.Tensor,
@@ -1038,8 +1044,8 @@ class MRotaryEmbedding(RotaryEmbedding):
             st_idx = llm_pos_ids_list[-1].max() + 1 if llm_pos_ids_list else 0
             text_len = len(input_tokens) - st
             llm_pos_ids_list.append(
-                mint.arange(text_len.item(), dtype=ms.int64).view(
-                    1, -1).expand(3, -1) + st_idx)
+                mint.arange(text_len, dtype=ms.int64).view(1, -1).expand(
+                    3, -1) + st_idx)
 
         llm_positions = mint.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
         if llm_positions.shape[1] != seq_len:
@@ -1056,7 +1062,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         hf_config: PretrainedConfig,
         image_grid_thw: Union[list[list[int]], Tensor],
         video_grid_thw: Union[list[list[int]], Tensor],
-        second_per_grid_ts: list[float],
+        second_per_grid_ts: Optional[list[float]] = None,
         context_len: int = 0,
         seq_len: Optional[int] = None,
     ) -> tuple[Tensor, int]:

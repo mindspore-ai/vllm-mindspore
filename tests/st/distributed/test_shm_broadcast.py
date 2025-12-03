@@ -32,10 +32,6 @@ import time
 import numpy as np
 
 from tests.utils.common_utils import teardown_function, setup_function
-from tests.utils.env_var_manager import EnvVarManager
-
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 
 env_vars = {
     "vLLM_MODEL_BACKEND": "MindFormers",

@@ -19,7 +19,7 @@
 # limitations under the License.
 """Adaption for mindspore."""
 from collections.abc import Sequence
-from typing import Union, cast
+from typing import Union, cast, no_type_check
 
 import mindspore
 import numpy as np
@@ -45,6 +45,7 @@ def flat_build_elems(
     return [field_factory(data[cast(slice, s)]) for s in self.slices]
 
 
+@no_type_check
 def batched_reduce_data(self, batch: list[NestedTensors], *, pin_memory):
     # NOTE: vLLM-MindSpore Plugin:
     # Currently mindspore does not support operating tensors in a
@@ -62,6 +63,7 @@ def batched_reduce_data(self, batch: list[NestedTensors], *, pin_memory):
     return batch
 
 
+@no_type_check
 def flat_reduce_data(self, batch: list[NestedTensors], *, pin_memory):
     # NOTE: vLLM-MindSpore Plugin:
     # Currently mindspore does not support operating tensors in a
@@ -86,7 +88,8 @@ def flat_reduce_data(self, batch: list[NestedTensors], *, pin_memory):
     return [e for elem in batch for e in elem]
 
 
-@staticmethod
+@staticmethod  # type: ignore[misc]
+@no_type_check
 def _try_stack(nested_tensors: NestedTensors,
                pin_memory: bool = False) -> NestedTensors:
     """

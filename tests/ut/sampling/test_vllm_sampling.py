@@ -19,10 +19,7 @@ from unittest.mock import patch
 
 import os
 from tests.utils.common_utils import teardown_function, setup_function
-from tests.utils.env_var_manager import EnvVarManager
 
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "MS_ENABLE_LCCL": "off",

@@ -47,10 +47,10 @@ vLLM-MindSpore Plugin uses the plugin mechanism recommended by the vLLM communit
 - Hardware：Atlas 800I A2 Inference series, or Atlas 800T A2 Training series, with necessary drivers installed and access to the Internet.
 - Operating System: openEuler or Ubuntu Linux.
 - Software:
-  - Python >= 3.9, < 3.12
-  - CANN >= 8.0.0.beta1
-  - MindSpore
-  - vLLM
+    - Python >= 3.9, < 3.12
+    - CANN >= 8.0.0.beta1
+    - MindSpore
+    - vLLM
 
 Note: Please refer to [Version Compatibility](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html) for more details about version compatibility information.
 
