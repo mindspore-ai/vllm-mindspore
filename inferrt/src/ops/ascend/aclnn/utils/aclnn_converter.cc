@@ -61,9 +61,6 @@ aclScalar *Convert(const ir::Value *value) {
   if (value->IsInt()) {
     return CreateAclScalar(value->ToInt(), ACL_INT64);
   }
-  if (value->IsFloat()) {
-    return CreateAclScalar(value->ToFloat(), ACL_FLOAT);
-  }
   if (value->IsDouble()) {
     return CreateAclScalar(value->ToDouble(), ACL_DOUBLE);
   }

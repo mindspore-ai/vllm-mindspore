@@ -15,6 +15,7 @@
  */
 
 #include "mopt/Conversion/StablehloToMrt/StablehloToMrt.h"
+#include "mopt/Conversion/ConversionPatternTemplates.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -78,36 +79,6 @@ class StablehloToMrtTypeConverter : public mlir::TypeConverter {
 };
 
 //===----------------------------------------------------------------------===//
-// Generic conversion pattern template for simple ops
-//===----------------------------------------------------------------------===//
-
-// Template for simple element-wise binary ops (e.g., mul, div)
-template <typename SrcOp, typename DstOp>
-struct ConvertSimpleBinaryOp : public OpConversionPattern<SrcOp> {
-  using OpConversionPattern<SrcOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(SrcOp op, typename SrcOp::Adaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Type resultType = this->getTypeConverter()->convertType(op.getResult().getType());
-    rewriter.replaceOpWithNewOp<DstOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs());
-    return success();
-  }
-};
-
-// Template for simple element-wise unary ops (e.g., sigmoid)
-template <typename SrcOp, typename DstOp>
-struct ConvertSimpleUnaryOp : public OpConversionPattern<SrcOp> {
-  using OpConversionPattern<SrcOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(SrcOp op, typename SrcOp::Adaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Type resultType = this->getTypeConverter()->convertType(op.getResult().getType());
-    rewriter.replaceOpWithNewOp<DstOp>(op, resultType, adaptor.getOperand());
-    return success();
-  }
-};
-
-//===----------------------------------------------------------------------===//
 // Conversion patterns
 //===----------------------------------------------------------------------===//
 
@@ -129,84 +100,6 @@ struct ConvertReshapeOp : public OpConversionPattern<mlir::stablehlo::ReshapeOp>
   }
 };
 
-// Convert stablehlo.concatenate to mrt.concat
-struct ConvertConcatenateOp : public OpConversionPattern<mlir::stablehlo::ConcatenateOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(mlir::stablehlo::ConcatenateOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
-    auto axisValue = mrt::MrtValueBuilder(rewriter).createI64(op->getLoc(), op.getDimension());
-    rewriter.replaceOpWithNewOp<mrt::CatOp>(op, resultType, adaptor.getInputs(), axisValue);
-    return success();
-  }
-};
-
-// Convert stablehlo.batch_norm_inference to mrt.batch_norm
-struct ConvertBatchNormInferenceOp : public OpConversionPattern<mlir::stablehlo::BatchNormInferenceOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(mlir::stablehlo::BatchNormInferenceOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
-    mrt::MrtValueBuilder vb(rewriter);
-    auto epsilon = vb.createF32(op->getLoc(), op.getEpsilon().convertToFloat());
-    auto isTraining = vb.createBoolean(op->getLoc(), false);
-
-    rewriter.replaceOpWithNewOp<mrt::BatchNormOp>(op, resultType, adaptor.getOperand(), adaptor.getScale(),
-                                                  adaptor.getOffset(), adaptor.getMean(), adaptor.getVariance(),
-                                                  epsilon, isTraining);
-    return success();
-  }
-};
-
-// Convert stablehlo.maximum(x, 0) to mrt.relu
-struct ConvertMaximumToReluOp : public OpConversionPattern<mlir::stablehlo::MaxOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(mlir::stablehlo::MaxOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Value input;
-    bool isRelu = false;
-
-    // Check if rhs is constant zero
-    if (auto constOp = op.getRhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
-      if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
-        if (denseAttr.isSplat()) {
-          auto splatValue = denseAttr.getSplatValue<APFloat>();
-          if (splatValue.isZero()) {
-            input = adaptor.getLhs();
-            isRelu = true;
-          }
-        }
-      }
-    }
-
-    // Check if lhs is constant zero
-    if (!isRelu) {
-      if (auto constOp = op.getLhs().getDefiningOp<mlir::stablehlo::ConstantOp>()) {
-        if (auto denseAttr = dyn_cast<mlir::DenseElementsAttr>(constOp.getValue())) {
-          if (denseAttr.isSplat()) {
-            auto splatValue = denseAttr.getSplatValue<APFloat>();
-            if (splatValue.isZero()) {
-              input = adaptor.getRhs();
-              isRelu = true;
-            }
-          }
-        }
-      }
-    }
-
-    if (!isRelu) {
-      return failure();
-    }
-
-    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
-    rewriter.replaceOpWithNewOp<mrt::ReluOp>(op, resultType, input);
-    return success();
-  }
-};
-
 // Convert stablehlo.convert to mrt.cast
 struct ConvertConvertOp : public OpConversionPattern<mlir::stablehlo::ConvertOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -221,59 +114,6 @@ struct ConvertConvertOp : public OpConversionPattern<mlir::stablehlo::ConvertOp>
 
     auto dtypeValue = mrt::MrtValueBuilder(rewriter).createDtype(op->getLoc(), shapedType.getElementType());
     rewriter.replaceOpWithNewOp<mrt::CastOp>(op, resultType, adaptor.getOperand(), dtypeValue);
-    return success();
-  }
-};
-
-// Convert stablehlo.convolution to mrt.conv
-struct ConvertConvolutionOp : public OpConversionPattern<mlir::stablehlo::ConvolutionOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(mlir::stablehlo::ConvolutionOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Type resultType = getTypeConverter()->convertType(op.getResult().getType());
-    auto windowStrides = op.getWindowStridesAttr();
-    auto padding = op.getPaddingAttr();
-    auto rhsDilation = op.getRhsDilationAttr();
-
-    SmallVector<int64_t> strides;
-    if (windowStrides) {
-      for (auto stride : windowStrides.asArrayRef()) {
-        strides.push_back(stride);
-      }
-    } else {
-      auto shapedResultType = dyn_cast<ShapedType>(resultType);
-      if (shapedResultType) {
-        int spatialDims = shapedResultType.getRank() - 2;
-        strides.assign(spatialDims, 1);
-      }
-    }
-
-    SmallVector<int64_t> paddingVec;
-    if (padding) {
-      for (auto val : padding.getValues<int64_t>()) {
-        paddingVec.push_back(val);
-      }
-    }
-
-    SmallVector<int64_t> dilation;
-    if (rhsDilation) {
-      for (auto val : rhsDilation.asArrayRef()) {
-        dilation.push_back(val);
-      }
-    } else {
-      int spatialDims = strides.size();
-      dilation.assign(spatialDims, 1);
-    }
-
-    mrt::MrtValueBuilder vb(rewriter);
-    auto stridesValue = vb.createI64Array(op->getLoc(), strides);
-    auto paddingValue = vb.createI64Array(op->getLoc(), paddingVec);
-    auto dilationValue = vb.createI64Array(op->getLoc(), dilation);
-    auto hasBiasValue = vb.createBoolean(op->getLoc(), false);
-
-    rewriter.replaceOpWithNewOp<mrt::ConvOp>(op, resultType, adaptor.getLhs(), adaptor.getRhs(), Value(), stridesValue,
-                                             paddingValue, dilationValue, hasBiasValue);
     return success();
   }
 };
@@ -341,21 +181,14 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
 
     RewritePatternSet patterns(ctx);
 
-    // Add simple binary op conversions using template
-    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::MulOp, mrt::MulOp>>(typeConverter, ctx);
-    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::DivOp, mrt::DivOp>>(typeConverter, ctx);
-    patterns.add<ConvertSimpleBinaryOp<mlir::stablehlo::RemOp, mrt::RemainderTensorTensorOp>>(typeConverter, ctx);
-
-    // Add simple unary op conversions using template
-    patterns.add<ConvertSimpleUnaryOp<mlir::stablehlo::LogisticOp, mrt::SigmoidOp>>(typeConverter, ctx);
+    // Add simple binary op conversions using MOPT_CONVERT
+    patterns.add<MOPT_CONVERT(mlir::stablehlo::MulOp, mrt::MulOp, Lhs, Rhs)>(typeConverter, ctx);
+    patterns.add<MOPT_CONVERT(mlir::stablehlo::DivOp, mrt::DivOp, Lhs, Rhs)>(typeConverter, ctx);
+    patterns.add<MOPT_CONVERT(mlir::stablehlo::RemOp, mrt::RemainderTensorTensorOp, Lhs, Rhs)>(typeConverter, ctx);
 
     // Add complex patterns
     patterns.add<ConvertReshapeOp>(typeConverter, ctx);
-    patterns.add<ConvertConcatenateOp>(typeConverter, ctx);
-    patterns.add<ConvertBatchNormInferenceOp>(typeConverter, ctx);
-    patterns.add<ConvertMaximumToReluOp>(typeConverter, ctx);
     patterns.add<ConvertConvertOp>(typeConverter, ctx);
-    patterns.add<ConvertConvolutionOp>(typeConverter, ctx);
 
     // Add function signature conversion patterns
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(patterns, typeConverter);

@@ -62,7 +62,7 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
     MrtAnyTensor:$x1,
     MrtAnyTensor:$x2,
     MrtAnyTensor:$gamma,
-    Mrt_F32Type:$epsilon
+    Mrt_F64Type:$epsilon
   );
 
   let results = (outs
@@ -170,7 +170,7 @@ def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
     MrtAnyTensor:$offset,
     MrtAnyTensor:$mean,
     MrtAnyTensor:$variance,
-    Mrt_F32Type:$epsilon,
+    Mrt_F64Type:$epsilon,
     Mrt_BooleanType:$is_training
   );
 
@@ -317,6 +317,27 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   let genAclnnOp = "aclnnEmbedding";
 }
 
+def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
+  let summary = "Element-wise equality comparison";
+  let description = [{
+    Element-wise equality comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding elements are equal.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnEqTensor";
+}
+
 def Mrt_EmptyOp : Mrt_Op<"empty"> {
   let summary = "";
   let description = [{
@@ -361,6 +382,27 @@ def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
   }];
 }
 
+def Mrt_GeOp : Mrt_Op<"ge", [Pure]> {
+  let summary = "Element-wise greater-than-or-equal comparison";
+  let description = [{
+    Element-wise greater-than-or-equal comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding element in self is greater than or equal to the element in other.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnGeTensor";
+}
+
 def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegments]> {
   let summary = "NPU grouped matmul operation";
   let description = [{
@@ -398,6 +440,69 @@ def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegmen
     `,` $split_item `,` $group_type `,` $group_list_type `,` $act_type `,` $tuning_config `,` $output_dtype
     attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_GtOp : Mrt_Op<"gt", [Pure]> {
+  let summary = "Element-wise greater-than comparison";
+  let description = [{
+    Element-wise greater-than comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding element in self is greater than the element in other.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnGtTensor";
+}
+
+def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
+  let summary = "Element-wise less-than-or-equal comparison";
+  let description = [{
+    Element-wise less-than-or-equal comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding element in self is less than or equal to the element in other.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLeTensor";
+}
+
+def Mrt_LtOp : Mrt_Op<"lt", [Pure]> {
+  let summary = "Element-wise less-than comparison";
+  let description = [{
+    Element-wise less-than comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding element in self is less than the element in other.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLtTensor";
 }
 
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
@@ -516,6 +621,27 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   let genAclnnOp = "aclnnMul";
 }
 
+def Mrt_NeOp : Mrt_Op<"ne", [Pure]> {
+  let summary = "Element-wise not-equal comparison";
+  let description = [{
+    Element-wise not-equal comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding elements are not equal.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnNeTensor";
+}
+
 def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {
   let summary = "Tensor permutation operation";
   let description = [{
@@ -631,7 +757,7 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   let arguments = (ins
     MrtAnyTensor:$x,
     MrtAnyTensor:$gamma,
-    Mrt_F32Type:$epsilon
+    Mrt_F64Type:$epsilon
   );
 
   let results = (outs

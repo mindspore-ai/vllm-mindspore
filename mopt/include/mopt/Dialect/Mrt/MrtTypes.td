@@ -31,8 +31,8 @@ include "mlir/IR/CommonTypeConstraints.td"
 //   Integer Array   --> Mrt_I64ArrayType (replaces I64ArrayAttr, for axis, strides, shape, etc.)
 //   Boolean         --> Mrt_BooleanType (replaces BoolAttr)
 //   Boolean Array   --> Mrt_BooleanArrayType (replaces BoolArrayAttr)
-//   Float           --> Mrt_F32Type or Mrt_F64Type (replaces F32Attr/F64Attr)
-//   Float Array     --> Mrt_F32ArrayType or Mrt_F64ArrayType (replaces F32ArrayAttr/F64ArrayAttr)
+//   Float           --> Mrt_F64Type (replaces F64Attr)
+//   Float Array     --> Mrt_F64ArrayType (replaces F64ArrayAttr)
 //   String          --> Mrt_StringType (replaces StrAttr)
 //===----------------------------------------------------------------------===//
 
@@ -94,27 +94,6 @@ def MrtTensorList : Variadic<MrtAnyTensor>;
 //===----------------------------------------------------------------------===//
 // Scalar Types
 //===----------------------------------------------------------------------===//
-
-// 32-bit floating point scalar type (replaces F32Attr)
-// This type wraps a 32-bit floating point value and is distinct from tensor types.
-// Use this type as an operand to pass scalar float values to operations.
-def Mrt_F32Type : Mrt_Type<"F32", "f32"> {
-  let summary = "32-bit floating point scalar type for MRT dialect";
-  let description = [{
-    Represents a 32-bit floating point scalar value. This type is used as an operand
-    to replace F32Attr, allowing all parameters to be passed as operands.
-    This type is distinct from tensor types and can be used to pass scalar
-    floating point values to operations.
-  }];
-
-  let builders = [
-    TypeBuilderWithInferredContext<(ins), [{
-      return Base::get(context);
-    }]>
-  ];
-
-  let assemblyFormat = "";
-}
 
 // 64-bit floating point scalar type (replaces F64Attr)
 // This type wraps a 64-bit floating point value and is distinct from tensor types.
@@ -227,27 +206,6 @@ def Mrt_I64ArrayType : Mrt_Type<"I64Array", "i64_array"> {
   let assemblyFormat = "";
 }
 
-// 32-bit floating point array type (replaces F32ArrayAttr)
-// This type represents an array of float32 values and is distinct from tensor types.
-// Use this type as an operand to pass float arrays to operations.
-def Mrt_F32ArrayType : Mrt_Type<"F32Array", "f32_array"> {
-  let summary = "32-bit floating point array type for MRT dialect";
-  let description = [{
-    Represents an array of float32 values. This type is used as an operand
-    to replace F32ArrayAttr, allowing all parameters to be passed as operands.
-    This type is distinct from tensor types and can be used to pass float
-    arrays to operations.
-  }];
-
-  let builders = [
-    TypeBuilderWithInferredContext<(ins), [{
-      return Base::get(context);
-    }]>
-  ];
-
-  let assemblyFormat = "";
-}
-
 // 64-bit floating point array type (replaces F64ArrayAttr)
 // This type represents an array of float64 values and is distinct from tensor types.
 // Use this type as an operand to pass double arrays to operations.
@@ -311,27 +269,14 @@ def Mrt_DtypeType : Mrt_Type<"Dtype", "dtype"> {
   }];
 }
 
-// Scalar type (stores mlir::Type for element type)
-// This type represents a single-element scalar value with a specific data type.
-// Use this type as an operand to pass scalar values of different types to operations.
+// Scalar type constraint (accepts any scalar type)
+// This is a type constraint, not a concrete type. It accepts f64, i64, or boolean.
+// Use this constraint for operation arguments that can accept any scalar type.
 // For example, it can be used for the alpha parameter in Add operation.
-def Mrt_ScalarType : Mrt_Type<"Scalar", "scalar"> {
-  let summary = "Scalar type for MRT dialect";
-  let description = [{
-    Represents a single-element scalar value with a specific data type.
-    This type is used as an operand to pass scalar values of different types
-    (e.g., f32, f64, i64) to operations. The element type specifies the data type
-    of the scalar value. This type is distinct from tensor types and can be used
-    to pass scalar values like alpha parameter in Add operation.
-  }];
-
-  let parameters = (ins
-    "mlir::Type":$elementType
-  );
-
-  let assemblyFormat = [{
-    `<` $elementType `>`
-  }];
-}
+def Mrt_ScalarType : AnyTypeOf<[
+  Mrt_F64Type,
+  Mrt_I64Type,
+  Mrt_BooleanType
+], "scalar type (f64/i64/boolean)">;
 
 #endif // MRT_DIALECT_MRT_TYPES_TD

@@ -16,6 +16,8 @@
 
 #include "mopt/Conversion/TorchToMrt/TorchToMrt.h"
 
+#include <numeric>
+
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
@@ -23,29 +25,43 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Matchers.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
+#include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "mopt/Conversion/MrtTypeConverter.h"
+#include "mopt/Conversion/TorchToMrt/TorchConstantToMrt.h"
+#include "mopt/Conversion/TorchToMrt/TorchAtenToMrt.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 #include "mlir/Dialect/PDL/IR/PDL.h"
 #include "mlir/Dialect/PDLInterp/IR/PDLInterp.h"
 
 #include "TorchToMrt.pdll.h.inc"
+#include "mopt/Dialect/Mrt/MrtValueBuilder.h"
 
 namespace {
 
+namespace TorchD = mlir::torch::Torch;
+
 // Populate Torch-specific type conversions to MRT types
 void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter) {
-  converter.addConversion([](mlir::torch::Torch::ValueTensorType type) -> mlir::Type {
+  converter.addConversion([](TorchD::ValueTensorType type) -> mlir::Type {
     if (auto builtinType = mlir::dyn_cast<mlir::RankedTensorType>(type.toBuiltinTensor())) {
       return mrt::TensorType::get(type.getContext(), builtinType.getShape(), builtinType.getElementType(), nullptr);
     }
     return type;
   });
 
+  converter.addConversion([](TorchD::IntType type) -> mlir::Type { return mrt::I64Type::get(type.getContext()); });
+
+  converter.addConversion([](TorchD::FloatType type) -> mlir::Type { return mrt::F64Type::get(type.getContext()); });
+
+  converter.addConversion([](TorchD::BoolType type) -> mlir::Type { return mrt::BooleanType::get(type.getContext()); });
+
   converter.addConversion(
-    [](mlir::torch::Torch::IntType type) -> mlir::Type { return mrt::I64Type::get(type.getContext()); });
+    [](TorchD::StringType type) -> mlir::Type { return mrt::StringType::get(type.getContext()); });
 }
 
 // TypeConverter for Torch to MRT conversion
@@ -68,7 +84,7 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
   mlir::StringRef getDescription() const final { return "Convert Torch operations to MRT dialect operations"; }
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
-    registry.insert<mlir::torch::Torch::TorchDialect>();
+    registry.insert<TorchD::TorchDialect>();
     registry.insert<mrt::MrtDialect>();
     registry.insert<mlir::func::FuncDialect>();
     registry.insert<mlir::pdl::PDLDialect>();
@@ -80,6 +96,12 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     mlir::registerConversionPDLFunctions(patternList);
     populateGeneratedPDLLPatterns(patternList, mlir::PDLConversionConfig(&converter_));
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(patternList, converter_);
+
+    // Torch constant patterns
+    mlir::populateTorchConstantToMrtPatterns(converter_, patternList);
+    // Aten ops
+    mlir::populateAtenToMrtConversionPatterns(converter_, patternList);
+
     patterns_ = std::move(patternList);
     return mlir::success();
   }
@@ -89,7 +111,9 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     mlir::MLIRContext *ctx = &getContext();
 
     mlir::ConversionTarget target(*ctx);
-    target.addIllegalDialect<mlir::torch::Torch::TorchDialect>();
+    target.addIllegalDialect<TorchD::TorchDialect>();
+    // torch.constant.none is legal (unused constants will be eliminated by DCE)
+    target.addLegalOp<TorchD::ConstantNoneOp>();
     target.addLegalDialect<mrt::MrtDialect>();
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
       [&](mlir::func::FuncOp op) { return converter_.isSignatureLegal(op.getFunctionType()); });

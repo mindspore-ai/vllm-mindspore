@@ -38,10 +38,10 @@ mlir::Value MrtValueBuilder::createBoolean(mlir::Location loc, bool value) {
   return builder_.create<CreateBooleanOp>(loc, boolType, boolAttr);
 }
 
-mlir::Value MrtValueBuilder::createF32(mlir::Location loc, float value) {
-  auto floatAttr = builder_.getF32FloatAttr(value);
-  auto f32Type = F32Type::get(builder_.getContext());
-  return builder_.create<CreateF32Op>(loc, f32Type, floatAttr);
+mlir::Value MrtValueBuilder::createF64(mlir::Location loc, double value) {
+  auto floatAttr = builder_.getF64FloatAttr(value);
+  auto f64Type = F64Type::get(builder_.getContext());
+  return builder_.create<CreateF64Op>(loc, f64Type, floatAttr);
 }
 
 mlir::Value MrtValueBuilder::createDtype(mlir::Location loc, mlir::Type elemType) {

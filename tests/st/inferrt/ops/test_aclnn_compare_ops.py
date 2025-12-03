@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import torch
-from mrt.torch import backend
+from mrt.torch import fx_mlir_backend as backend
 import pytest
 from tests.mark_utils import arg_mark
 
@@ -159,5 +159,3 @@ def test_compare_ops_int_broadcast(ops, datatype):
 
         assert torch.equal(cache_miss_actual.cpu(), expected), f"\ncache_miss_actual={cache_hit_actual}\nexpected={expected}"
         assert torch.equal(cache_hit_actual.cpu(), expected), f"\ncache_hit_actual={cache_hit_actual}\nexpected={expected}"
-
-

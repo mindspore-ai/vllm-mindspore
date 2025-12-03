@@ -25,10 +25,48 @@ namespace mrt {
 
 // Populate type conversions for converting standard MLIR types to MRT types.
 // This adds conversions for RankedTensorType -> mrt::TensorType.
-inline void populateMrtTypeConversions(mlir::TypeConverter &converter) {
+inline void populateMrtTensorTypeConversions(mlir::TypeConverter &converter) {
   converter.addConversion([](mlir::RankedTensorType type) -> mlir::Type {
     return mrt::TensorType::get(type.getContext(), type.getShape(), type.getElementType(), nullptr);
   });
+}
+
+// Populate type conversions for standard MLIR scalar types to MRT scalar types.
+// This adds conversions for:
+//   - IntegerType(1)      -> mrt::BooleanType
+//   - IntegerType(8-64)   -> mrt::I64Type
+//   - Float16Type/BF16    -> mrt::F64Type
+//   - Float32Type         -> mrt::F64Type
+//   - Float64Type         -> mrt::F64Type
+//   - IndexType           -> mrt::I64Type
+inline void populateMrtScalarTypeConversions(mlir::TypeConverter &converter) {
+  // Integer types
+  converter.addConversion([](mlir::IntegerType type) -> mlir::Type {
+    unsigned width = type.getWidth();
+    if (width == 1) {
+      return mrt::BooleanType::get(type.getContext());
+    }
+    if (width <= 64) {
+      return mrt::I64Type::get(type.getContext());
+    }
+    return type;  // Keep unsupported widths as-is
+  });
+
+  // Float types
+  converter.addConversion([](mlir::Float16Type type) -> mlir::Type { return mrt::F64Type::get(type.getContext()); });
+  converter.addConversion([](mlir::BFloat16Type type) -> mlir::Type { return mrt::F64Type::get(type.getContext()); });
+  converter.addConversion([](mlir::Float32Type type) -> mlir::Type { return mrt::F64Type::get(type.getContext()); });
+  converter.addConversion([](mlir::Float64Type type) -> mlir::Type { return mrt::F64Type::get(type.getContext()); });
+
+  // Index type
+  converter.addConversion([](mlir::IndexType type) -> mlir::Type { return mrt::I64Type::get(type.getContext()); });
+}
+
+// Populate all type conversions for converting standard MLIR types to MRT types.
+// This includes both tensor and scalar type conversions.
+inline void populateMrtTypeConversions(mlir::TypeConverter &converter) {
+  populateMrtTensorTypeConversions(converter);
+  populateMrtScalarTypeConversions(converter);
 }
 
 }  // namespace mrt

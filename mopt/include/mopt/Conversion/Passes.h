@@ -35,6 +35,9 @@ class Pass;
 // Pass creators
 //===----------------------------------------------------------------------===//
 
+/// Create a pass to convert Arith constant operations to MRT constant operations.
+std::unique_ptr<Pass> createConvertArithToMRTPass();
+
 /// Create a pass to convert StableHLO operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertStablehloToMRTPass();
 

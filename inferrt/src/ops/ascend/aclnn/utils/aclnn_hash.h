@@ -57,8 +57,8 @@ inline void GatherHash(const ir::ValuePtr &value) {
     GatherHash(value->ToTensor());
   } else if (value->IsInt()) {
     GatherHash(value->ToInt());
-  } else if (value->IsFloat()) {
-    GatherHash(value->ToFloat());
+  } else if (value->IsDouble()) {
+    GatherHash(value->ToDouble());
   } else if (value->IsBool()) {
     GatherHash(value->ToBool());
   } else if (value->IsString()) {

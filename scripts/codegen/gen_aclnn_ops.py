@@ -31,7 +31,6 @@ def _convert_type(obj, obj_type, optional_mapping: Dict[str, str] = None) -> str
         'Mrt_DtypeType': f'static_cast<mrt::ir::DataType::Type>({obj}->ToInt())',
         'Mrt_I64Type': f'{obj}->ToInt()',
         'Mrt_BooleanType': f'{obj}->ToBool()',
-        'Mrt_F32Type': f'{obj}->ToFloat()',
         'Mrt_F64Type': f'{obj}->ToDouble()',
         'Mrt_StringType': f'{obj}->ToString()',
     }
@@ -42,7 +41,6 @@ def _convert_type(obj, obj_type, optional_mapping: Dict[str, str] = None) -> str
         'MrtAnyTensor': (f'{obj}->ToTensor()', f'{obj}->IsTensor()'),
         'Mrt_I64ArrayType' : (f'{obj}->ToTuple()->ToIntList()', f'{obj}->IsTuple()'),
         'Mrt_BooleanArrayType' : (f'{obj}->ToTuple()->ToBoolList()', f'{obj}->IsTuple()'),
-        'Mrt_F32ArrayType' : (f'{obj}->ToTuple()->ToFloatList()', f'{obj}->IsTuple()'),
         'Mrt_F64ArrayType' : (f'{obj}->ToTuple()->ToDoubleList()', f'{obj}->IsTuple()'),
     }
     if obj_type in ptr_types_map:

@@ -85,7 +85,6 @@ class Tuple : public RefCounted {
   std::vector<ir::TensorPtr> ToTensorList();
   std::vector<int64_t> ToIntList();
   std::vector<uint8_t> ToBoolList();
-  std::vector<float> ToFloatList();
   std::vector<double> ToDoubleList();
 
  private:
@@ -114,11 +113,6 @@ class DA_API Value : public RefCounted {
    * @param v The TensorPtr value.
    */
   explicit Value(const TensorPtr &v);
-  /**
-   * @brief Constructs a Value from a float.
-   * @param v The float value.
-   */
-  explicit Value(float v);
   /**
    * @brief Constructs a Value from a double.
    * @param v The double value.
@@ -175,7 +169,6 @@ class DA_API Value : public RefCounted {
   /** @name Type checkers */
   ///@{
   bool IsTensor() const { return tag_ == Tag::Tensor; }
-  bool IsFloat() const { return tag_ == Tag::Float; }
   bool IsDouble() const { return tag_ == Tag::Double; }
   bool IsInt() const { return tag_ == Tag::Int; }
   bool IsBool() const { return tag_ == Tag::Bool; }
@@ -191,7 +184,6 @@ class DA_API Value : public RefCounted {
    */
   ///@{
   const TensorPtr &ToTensor() const;
-  float ToFloat() const;
   double ToDouble() const;
   int64_t ToInt() const;
   bool ToBool() const;
@@ -212,7 +204,7 @@ class DA_API Value : public RefCounted {
   /**
    * @brief Enumeration of the possible types a Value can hold.
    */
-  enum class Tag { None, Tensor, Float, Double, Int, Bool, String, Tuple, Symbol };
+  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple, Symbol };
 
   /**
    * @brief Tag string representation.
@@ -224,7 +216,6 @@ class DA_API Value : public RefCounted {
   const Tag tag_;  ///< The tag indicating the type of the value.
   union {
     TensorPtr tensor_;
-    float float_;
     double double_;
     int64_t int_;
     bool bool_;

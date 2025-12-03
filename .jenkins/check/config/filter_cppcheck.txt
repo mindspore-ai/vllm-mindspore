@@ -1,3 +1,4 @@
 # mopt
 "mopt/lib/Conversion/StablehloToMrt/StablehloToMrt.cc"       "unknownMacro"
+"mopt/lib/Conversion/CommonToMrt/ArithToMrt.cc"              "unknownMacro"
 "mopt/lib/CAPI/Dialects.cc"                                  "unknownMacro"
