@@ -25,6 +25,51 @@ constexpr const char *kTagStrings[] = {
   "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple", "Symbol",
 };
 
+std::vector<ir::TensorPtr> Tuple::ToTensorList() {
+  std::vector<ir::TensorPtr> tensorList;
+  tensorList.reserve(elements_.size());
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    (void)tensorList.emplace_back(elements_[i]->ToTensor());
+  }
+  return tensorList;
+}
+
+std::vector<int64_t> Tuple::ToIntList() {
+  std::vector<int64_t> intList;
+  intList.reserve(elements_.size());
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    (void)intList.emplace_back(elements_[i]->ToInt());
+  }
+  return intList;
+}
+
+std::vector<uint8_t> Tuple::ToBoolList() {
+  std::vector<uint8_t> boolList;
+  boolList.reserve(elements_.size());
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    (void)boolList.emplace_back(static_cast<uint8_t>(elements_[i]->ToBool()));
+  }
+  return boolList;
+}
+
+std::vector<float> Tuple::ToFloatList() {
+  std::vector<float> floatList;
+  floatList.reserve(elements_.size());
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    (void)floatList.emplace_back(elements_[i]->ToFloat());
+  }
+  return floatList;
+}
+
+std::vector<double> Tuple::ToDoubleList() {
+  std::vector<double> doubleList;
+  doubleList.reserve(elements_.size());
+  for (size_t i = 0; i < elements_.size(); ++i) {
+    (void)doubleList.emplace_back(elements_[i]->ToDouble());
+  }
+  return doubleList;
+}
+
 const char *TagToString(Value::Tag tag) { return kTagStrings[static_cast<size_t>(tag)]; }
 
 Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}

@@ -23,12 +23,12 @@
 #include <vector>
 #include <tuple>
 #include <string>
+#include <optional>
 #include <type_traits>
 
 #include "ir/value/value.h"
 #include "ops/utils/op_constants.h"
 #include "ops/ascend/aclnn/utils/opapi_utils.h"
-#include "ops/ascend/aclnn/utils/convert_utils.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
 #include "ops/ascend/aclnn/utils/opapi_lib_loader.h"
 
@@ -84,6 +84,13 @@ inline aclTensor *Convert(const ir::TensorPtr &tensor) {
                          tensor->StorageOffset(), format, storageDims.data(), storageDims.size(), tensor->DataPtr());
 }
 
+inline aclTensor *Convert(const std::optional<ir::TensorPtr> &tensorOpt) {
+  if (tensorOpt.has_value()) {
+    return Convert(tensorOpt.value());
+  }
+  return nullptr;
+}
+
 inline aclTensorList *Convert(const std::vector<ir::TensorPtr> &tensorList) {
   if (tensorList.empty()) {
     LOG_OUT << "tensorList is empty";
@@ -104,10 +111,24 @@ T Convert(T value) {
 
 inline const char *Convert(const std::string &str) { return str.c_str(); }
 
+inline const char *Convert(const std::optional<std::string> &strOpt) {
+  if (strOpt.has_value()) {
+    return Convert(strOpt.value());
+  }
+  return nullptr;
+}
+
 inline aclIntArray *Convert(const std::vector<int64_t> &intList) {
   static const auto aclCreateIntArray = GET_ACLNN_COMMON_META_FUNC(aclCreateIntArray);
   CHECK_IF_NULL(aclCreateIntArray);
   return aclCreateIntArray(intList.data(), intList.size());
+}
+
+inline aclIntArray *Convert(const std::optional<std::vector<int64_t>> &intListOpt) {
+  if (intListOpt.has_value()) {
+    return Convert(intListOpt.value());
+  }
+  return nullptr;
 }
 
 inline aclBoolArray *Convert(const std::vector<uint8_t> &boolList) {
@@ -116,42 +137,24 @@ inline aclBoolArray *Convert(const std::vector<uint8_t> &boolList) {
   return aclCreateBoolArray(reinterpret_cast<const bool *>(boolList.data()), boolList.size());
 }
 
+inline aclBoolArray *Convert(const std::optional<std::vector<uint8_t>> &boolListOpt) {
+  if (boolListOpt.has_value()) {
+    return Convert(boolListOpt.value());
+  }
+  return nullptr;
+}
+
 inline aclFloatArray *Convert(const std::vector<float> &floatList) {
   static const auto aclCreateFloatArray = GET_ACLNN_COMMON_META_FUNC(aclCreateFloatArray);
   CHECK_IF_NULL(aclCreateFloatArray);
   return aclCreateFloatArray(floatList.data(), floatList.size());
 }
 
-inline void *Convert(const ir::TuplePtr &tuple) {
-  if (tuple == nullptr) {
-    return nullptr;
+inline aclFloatArray *Convert(const std::optional<std::vector<float>> &floatListOpt) {
+  if (floatListOpt.has_value()) {
+    return Convert(floatListOpt.value());
   }
-  if (tuple->Size() == 0) {
-    LOG_OUT << "tuple is empty";
-    return nullptr;
-  }
-  auto firstElement = (*tuple)[kIndex0];
-  // Not support tuple in tuple and the element type in the tuple must be the same.
-  if (firstElement->IsTensor()) {
-    std::vector<ir::TensorPtr> tensorList;
-    TupleToTensorList(*tuple, &tensorList);
-    return Convert(tensorList);
-  } else if (firstElement->IsInt()) {
-    std::vector<int64_t> intList;
-    TupleToIntList(*tuple, &intList);
-    return Convert(intList);
-  } else if (firstElement->IsFloat()) {
-    std::vector<float> floatList;
-    TupleToFloatList(*tuple, &floatList);
-    return Convert(floatList);
-  } else if (firstElement->IsBool()) {
-    std::vector<uint8_t> boolList;
-    TupleToBoolList(*tuple, &boolList);
-    return Convert(boolList);
-  } else {
-    LOG_EXCEPTION << "Invalid element type in tuple: " << tuple;
-    return nullptr;
-  }
+  return nullptr;
 }
 
 // Main entry for convert

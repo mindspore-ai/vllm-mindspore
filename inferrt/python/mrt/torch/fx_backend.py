@@ -226,6 +226,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_swiglu: Op.swiglu,
         torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
+        torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 

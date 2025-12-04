@@ -340,6 +340,45 @@ def Mrt_EmptyOp : Mrt_Op<"empty"> {
   }];
 }
 
+def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegments]> {
+  let summary = "NPU grouped matmul operation";
+  let description = [{
+    Performs grouped matrix multiplication on NPU with optional bias, scale, offset, and activation.
+  }];
+
+  let arguments = (ins
+    MrtTensorList:$x,
+    MrtTensorList:$weight,
+    MrtTensorList:$bias,
+    MrtTensorList:$scale,
+    MrtTensorList:$offset,
+    MrtTensorList:$antiquant_scale,
+    MrtTensorList:$antiquant_offset,
+    MrtTensorList:$per_token_scale,
+    Optional<MrtAnyTensor>:$group_list,
+    MrtTensorList:$activation_input,
+    MrtTensorList:$activation_quant_scale,
+    MrtTensorList:$activation_quant_offset,
+    Mrt_I64Type:$split_item,
+    Mrt_I64Type:$group_type,
+    Mrt_I64Type:$group_list_type,
+    Mrt_I64Type:$act_type,
+    Optional<Mrt_I64ArrayType>:$tuning_config,
+    Mrt_DtypeType:$output_dtype
+  );
+
+  let results = (outs
+    MrtTensorList:$output
+  );
+
+  let assemblyFormat = [{
+    $x `,` $weight `,` $bias `,` $scale `,` $offset `,` $antiquant_scale `,` $antiquant_offset `,` $per_token_scale 
+    (`,` $group_list^)? `,` $activation_input `,` $activation_quant_scale `,` $activation_quant_offset
+    `,` $split_item `,` $group_type `,` $group_list_type `,` $act_type `,` $tuning_config `,` $output_dtype
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let summary = "moe calc for input do Softmax, and do topK selection";
   let description = [{
