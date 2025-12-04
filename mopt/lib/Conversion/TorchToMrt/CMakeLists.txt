@@ -1,7 +1,8 @@
-# Generate pattern rewrite rules from TableGen
-# set(LLVM_TARGET_DEFINITIONS TorchToMrtPatterns.td)
-# mlir_tablegen(TorchToMrtPatterns.cpp.inc -gen-rewriters)
-# add_public_tablegen_target(MoptTorchToMrtPatternsIncGen)
+
+add_mlir_pdll_library(TorchToMrtPDLLIncGen
+  TorchToMrt.pdll
+  TorchToMrt.pdll.h.inc
+)
 
 file(GLOB TORCH_TO_MRT_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 
@@ -14,6 +15,7 @@ add_mlir_conversion_library(MoptConversionTorchToMrt
 
   DEPENDS
   MoptConversionPassIncGen
+  TorchToMrtPDLLIncGen
 
   LINK_LIBS PUBLIC
   MLIRArithDialect
@@ -24,6 +26,9 @@ add_mlir_conversion_library(MoptConversionTorchToMrt
   MLIRTransformUtils
   MLIRMrtDialect
   TorchMLIRTorchDialect
+  MLIRPDLDialect
+  MLIRPDLInterpDialect
+  MLIRParser
 )
 
 # Add generated include directory

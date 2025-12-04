@@ -1,0 +1,41 @@
+#include "mlir/Transforms/DialectConversion.pdll"
+#include "torch-mlir/Dialect/Torch/IR/TorchOps.td"
+#include "mopt/Dialect/Mrt/MrtOps.td"
+
+#include "TorchToMrtAten.pdll"
+#include "TorchToMrtCustom.pdll"
+
+Pattern ConvertSymbolicInt {
+  let root = op<torch.symbolic_int> {
+    symbol_name = symbolNameValue: Attr,
+    min_val = minValValue: Attr,
+    max_val = maxValValue: Attr
+  } -> (resType: Type);
+
+  replace root with op<mrt.symbolic_int> {
+    symbol_name = symbolNameValue,
+    min_val = minValValue,
+    max_val = maxValValue
+  } -> (convertType(resType));
+}
+
+Pattern ConvertBindSymbolicShape {
+  let root = op<torch.bind_symbolic_shape>(
+    operand: Value,
+    shape_symbols: ValueRange
+  ) {
+    shape_expressions = shapeExpressionsValue: Attr
+  };
+
+  replace root with op<mrt.bind_symbolic_shape>(
+    convertValue(operand),
+    convertValues(shape_symbols)
+  ) {
+    shape_expressions = shapeExpressionsValue
+  };
+}
+
+Pattern ConvertReturnOp {
+  let root = op<func.return>(operands: Value);
+  replace root with op<func.return>(convertValue(operands));
+}

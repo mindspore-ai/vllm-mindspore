@@ -17,6 +17,7 @@
 #include "mopt/Conversion/TorchToMrt/TorchToMrt.h"
 
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -27,77 +28,33 @@
 #include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
+#include "mlir/Dialect/PDL/IR/PDL.h"
+#include "mlir/Dialect/PDLInterp/IR/PDLInterp.h"
+
+#include "TorchToMrt.pdll.h.inc"
 
 namespace {
 
 // Populate Torch-specific type conversions to MRT types
-void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter, mlir::MLIRContext *ctx) {
-  converter.addConversion([ctx](mlir::torch::Torch::ValueTensorType type) -> mlir::Type {
+void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter) {
+  converter.addConversion([](mlir::torch::Torch::ValueTensorType type) -> mlir::Type {
     if (auto builtinType = mlir::dyn_cast<mlir::RankedTensorType>(type.toBuiltinTensor())) {
-      return mrt::TensorType::get(ctx, builtinType.getShape(), builtinType.getElementType(), nullptr);
+      return mrt::TensorType::get(type.getContext(), builtinType.getShape(), builtinType.getElementType(), nullptr);
     }
     return type;
   });
 
-  converter.addConversion([ctx](mlir::torch::Torch::IntType type) -> mlir::Type {
-    return mrt::I64Type::get(ctx);
-  });
+  converter.addConversion(
+    [](mlir::torch::Torch::IntType type) -> mlir::Type { return mrt::I64Type::get(type.getContext()); });
 }
 
 // TypeConverter for Torch to MRT conversion
 class TorchToMrtTypeConverter : public mlir::TypeConverter {
  public:
-  explicit TorchToMrtTypeConverter(mlir::MLIRContext *ctx) {
+  TorchToMrtTypeConverter() {
     addConversion([](mlir::Type type) { return type; });
-    mrt::populateMrtTypeConversions(*this, ctx);
-    populateTorchToMrtTypeConversions(*this, ctx);
-  }
-};
-
-struct ConvertSymbolicInt : public mlir::OpConversionPattern<mlir::torch::Torch::SymbolicIntOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  mlir::LogicalResult matchAndRewrite(mlir::torch::Torch::SymbolicIntOp op, OpAdaptor adaptor,
-                                      mlir::ConversionPatternRewriter &rewriter) const override {
-    mlir::Type resultType = getTypeConverter()->convertType(op.getType());
-    if (!resultType) return mlir::failure();
-
-    rewriter.replaceOpWithNewOp<mrt::SymbolicIntOp>(op, resultType, op.getSymbolName(), op.getMinVal(), op.getMaxVal());
-    return mlir::success();
-  }
-};
-
-struct ConvertBindSymbolicShape : public mlir::OpConversionPattern<mlir::torch::Torch::BindSymbolicShapeOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  mlir::LogicalResult matchAndRewrite(mlir::torch::Torch::BindSymbolicShapeOp op, OpAdaptor adaptor,
-                                      mlir::ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<mrt::BindSymbolicShapeOp>(op, adaptor.getOperand(), adaptor.getShapeSymbols(),
-                                                          op.getShapeExpressions());
-    return mlir::success();
-  }
-};
-
-struct ConvertAtenMulTensor : public mlir::OpConversionPattern<mlir::torch::Torch::AtenMulTensorOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  mlir::LogicalResult matchAndRewrite(mlir::torch::Torch::AtenMulTensorOp op, OpAdaptor adaptor,
-                                      mlir::ConversionPatternRewriter &rewriter) const override {
-    mlir::Type resultType = getTypeConverter()->convertType(op.getType());
-    if (!resultType) return mlir::failure();
-
-    rewriter.replaceOpWithNewOp<mrt::MulOp>(op, resultType, adaptor.getSelf(), adaptor.getOther());
-    return mlir::success();
-  }
-};
-
-struct ConvertReturnOp : public mlir::OpConversionPattern<mlir::func::ReturnOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  mlir::LogicalResult matchAndRewrite(mlir::func::ReturnOp op, OpAdaptor adaptor,
-                                      mlir::ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<mlir::func::ReturnOp>(op, adaptor.getOperands());
-    return mlir::success();
+    mrt::populateMrtTypeConversions(*this);
+    populateTorchToMrtTypeConversions(*this);
   }
 };
 
@@ -114,38 +71,38 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     registry.insert<mlir::torch::Torch::TorchDialect>();
     registry.insert<mrt::MrtDialect>();
     registry.insert<mlir::func::FuncDialect>();
+    registry.insert<mlir::pdl::PDLDialect>();
+    registry.insert<mlir::pdl_interp::PDLInterpDialect>();
+  }
+
+  mlir::LogicalResult initialize(mlir::MLIRContext *ctx) override {
+    mlir::RewritePatternSet patternList(ctx);
+    mlir::registerConversionPDLFunctions(patternList);
+    populateGeneratedPDLLPatterns(patternList, mlir::PDLConversionConfig(&converter_));
+    mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(patternList, converter_);
+    patterns_ = std::move(patternList);
+    return mlir::success();
   }
 
   void runOnOperation() override {
     mlir::ModuleOp module = getOperation();
-    mlir::MLIRContext *context = &getContext();
+    mlir::MLIRContext *ctx = &getContext();
 
-    TorchToMrtTypeConverter converter(context);
-    mlir::RewritePatternSet patterns(context);
-
-    patterns.add<ConvertSymbolicInt, ConvertBindSymbolicShape>(converter, context);
-    patterns.add<ConvertAtenMulTensor>(converter, context);
-    patterns.add<ConvertReturnOp>(converter, context);
-    mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(patterns, converter);
-
-    mlir::ConversionTarget target(*context);
+    mlir::ConversionTarget target(*ctx);
+    target.addIllegalDialect<mlir::torch::Torch::TorchDialect>();
     target.addLegalDialect<mrt::MrtDialect>();
-    target.addLegalOp<mlir::UnrealizedConversionCastOp>();
-
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
-      [&](mlir::func::FuncOp op) { return converter.isSignatureLegal(op.getFunctionType()); });
-
+      [&](mlir::func::FuncOp op) { return converter_.isSignatureLegal(op.getFunctionType()); });
     target.addDynamicallyLegalOp<mlir::func::ReturnOp>(
-      [&](mlir::func::ReturnOp op) { return converter.isLegal(op.getOperandTypes()); });
+      [&](mlir::func::ReturnOp op) { return converter_.isLegal(op.getOperandTypes()); });
 
-    target.addIllegalOp<mlir::torch::Torch::SymbolicIntOp>();
-    target.addIllegalOp<mlir::torch::Torch::BindSymbolicShapeOp>();
-    target.addIllegalOp<mlir::torch::Torch::AtenMulTensorOp>();
-
-    if (mlir::failed(mlir::applyPartialConversion(module, target, std::move(patterns)))) {
+    if (mlir::failed(mlir::applyPartialConversion(module, target, patterns_))) {
       signalPassFailure();
     }
   }
+
+  mlir::FrozenRewritePatternSet patterns_;
+  TorchToMrtTypeConverter converter_;
 };
 }  // namespace
 
