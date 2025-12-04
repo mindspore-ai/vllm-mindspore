@@ -1037,7 +1037,7 @@ class Qwen3LLMForCausalLM(Qwen3ForCausalLM):
         self.lm_head = ParallelLMHead(config.vocab_size,
                                       config.hidden_size,
                                       quant_config=quant_config)
-        if self.config.tie_word_embeddings:
+        if self.config.tie_word_embeddings and not is_310p():
             self.lm_head.weight = self.model.embed_tokens.weight
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.make_empty_intermediate_tensors = (
@@ -1530,6 +1530,8 @@ class Qwen3VLForConditionalGeneration(
                     loaded_param.add(name)
         loaded_param.update(visual_load)
         loaded_param.update(text_load)
+        if self.language_model.config.tie_word_embeddings and not is_310p():
+            loaded_param.add("lm_head.weight")
         return loaded_param
 
     def get_mm_mapping(self) -> MultiModelKeys:
