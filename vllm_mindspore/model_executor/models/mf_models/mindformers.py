@@ -450,6 +450,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         else:
             logits = self.lm_head(hidden_states)
         logits = logits.view(-1, logits.shape[-1])
+        ms.runtime.synchronize()
         return logits
 
     def capture_start_time(self, weights: Iterable[tuple[str, Tensor]]):
