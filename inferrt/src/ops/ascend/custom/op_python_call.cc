@@ -31,11 +31,40 @@ constexpr auto kTorchOpsModule = "torch.ops";
 constexpr auto kTorchOpsInnerModule = "torch._ops";
 
 py::object ValueToPyData(const ir::Value *input) {
-  if (input->IsTensor()) {
-    // mrt::ir::TensorPtr -> torch::Tensor -> py::object
-    return py::cast(ToTorchTensor(input->ToTensor()));
+  try {
+    if (input == nullptr || input->IsNone()) {
+      return py::none();
+    }
+    if (input->IsTensor()) {
+      return py::cast(ToTorchTensor(input->ToTensor()));
+    }
+    if (input->IsDouble()) {
+      return py::cast(input->ToDouble());
+    }
+    if (input->IsInt()) {
+      return py::cast(input->ToInt());
+    }
+    if (input->IsBool()) {
+      return py::cast(input->ToBool());
+    }
+    if (input->IsString()) {
+      return py::cast(input->ToString());
+    }
+    if (input->IsTuple()) {
+      const auto &tuple = input->ToTuple();
+      py::list py_list(tuple->Size());
+      for (size_t i = 0; i < tuple->Size(); ++i) {
+        py_list[i] = ValueToPyData(tuple->operator[](i).get());
+      }
+      return py_list;
+    }
+    if (input->IsSymbol()) {
+      return py::cast(input->ToInt());
+    }
+  } catch (const std::exception &e) {
+    LOG_EXCEPTION << "Failed to convert Value to Python object: " << e.what();
   }
-  return {};
+  return py::none();
 }
 
 py::function GetPythonCallable(const std::string &module_name, const std::string &func_name) {
