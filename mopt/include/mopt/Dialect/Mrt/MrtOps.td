@@ -230,7 +230,7 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   let arguments = (ins
     MrtAnyTensor:$input,
     MrtAnyTensor:$kernel,
-    Optional<MrtAnyTensor>:$bias,
+    MrtOptional<MrtAnyTensor>:$bias,
     Mrt_I64ArrayType:$strides,
     Mrt_I64ArrayType:$padding,
     Mrt_I64ArrayType:$dilation,
@@ -240,7 +240,7 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
-    $input `,` $kernel (`,` $bias^)? `,` $strides `,` $padding `,` $dilation `,` $has_bias
+    $input `,` $kernel `,` $bias `,` $strides `,` $padding `,` $dilation `,` $has_bias
     attr-dict `:` functional-type(operands, results)
   }];
 }
@@ -403,7 +403,7 @@ def Mrt_GeOp : Mrt_Op<"ge", [Pure]> {
   let genAclnnOp = "aclnnGeTensor";
 }
 
-def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegments]> {
+def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure]> {
   let summary = "NPU grouped matmul operation";
   let description = [{
     Performs grouped matrix multiplication on NPU with optional bias, scale, offset, and activation.
@@ -412,21 +412,21 @@ def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegmen
   let arguments = (ins
     MrtTensorList:$x,
     MrtTensorList:$weight,
-    MrtTensorList:$bias,
-    MrtTensorList:$scale,
-    MrtTensorList:$offset,
-    MrtTensorList:$antiquant_scale,
-    MrtTensorList:$antiquant_offset,
-    MrtTensorList:$per_token_scale,
-    Optional<MrtAnyTensor>:$group_list,
-    MrtTensorList:$activation_input,
-    MrtTensorList:$activation_quant_scale,
-    MrtTensorList:$activation_quant_offset,
+    MrtOptional<MrtTensorList>:$bias,
+    MrtOptional<MrtTensorList>:$scale,
+    MrtOptional<MrtTensorList>:$offset,
+    MrtOptional<MrtTensorList>:$antiquant_scale,
+    MrtOptional<MrtTensorList>:$antiquant_offset,
+    MrtOptional<MrtTensorList>:$per_token_scale,
+    MrtOptional<MrtAnyTensor>:$group_list,
+    MrtOptional<MrtTensorList>:$activation_input,
+    MrtOptional<MrtTensorList>:$activation_quant_scale,
+    MrtOptional<MrtTensorList>:$activation_quant_offset,
     Mrt_I64Type:$split_item,
     Mrt_I64Type:$group_type,
     Mrt_I64Type:$group_list_type,
     Mrt_I64Type:$act_type,
-    Optional<Mrt_I64ArrayType>:$tuning_config,
+    MrtOptional<Mrt_I64ArrayType>:$tuning_config,
     Mrt_DtypeType:$output_dtype
   );
 
@@ -436,7 +436,7 @@ def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure, AttrSizedOperandSegmen
 
   let assemblyFormat = [{
     $x `,` $weight `,` $bias `,` $scale `,` $offset `,` $antiquant_scale `,` $antiquant_offset `,` $per_token_scale 
-    (`,` $group_list^)? `,` $activation_input `,` $activation_quant_scale `,` $activation_quant_offset
+    `,` $group_list `,` $activation_input `,` $activation_quant_scale `,` $activation_quant_offset
     `,` $split_item `,` $group_type `,` $group_list_type `,` $act_type `,` $tuning_config `,` $output_dtype
     attr-dict `:` functional-type(operands, results)
   }];
@@ -513,7 +513,7 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   
   let arguments = (ins
     MrtAnyTensor:$x,
-    Optional<MrtAnyTensor>:$finished,
+    MrtOptional<MrtAnyTensor>:$finished,
     Mrt_I64Type:$k
   );
   
@@ -524,14 +524,14 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   );
   
   let assemblyFormat = [{
-    $x (`,` $finished^)? `,` $k
+    $x `,` $finished `,` $k
     attr-dict `:` functional-type(operands, results)
   }];
 
   let genAclnnOp = "aclnnMoeGatingTopKSoftmax";
 }
 
-def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOperandSegments]> {
+def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let summary = "aclnnMoeInitRoutingV3";
   let description = [{
     Operation for initializing Moe (Mixture of Experts) routing V3 using aclnn backend.
@@ -542,8 +542,8 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOpera
   let arguments = (ins
     MrtAnyTensor:$x,
     MrtAnyTensor:$expertIdx,
-    Optional<MrtAnyTensor>:$scaleOptional,
-    Optional<MrtAnyTensor>:$offsetOptional,
+    MrtOptional<MrtAnyTensor>:$scaleOptional,
+    MrtOptional<MrtAnyTensor>:$offsetOptional,
     Mrt_I64Type:$activeNum,
     Mrt_I64Type:$expertCapacity,
     Mrt_I64Type:$expertNum,
@@ -563,7 +563,7 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOpera
   );
 
   let assemblyFormat = [{
-    $x `,` $expertIdx (`,` $scaleOptional^)? (`,` $offsetOptional^)? `,`
+    $x `,` $expertIdx `,` $scaleOptional `,` $offsetOptional `,`
     $activeNum `,` $expertCapacity `,` $expertNum `,` $dropPadMode `,`
     $expertTokensNumType `,` $expertTokensNumFlag `,` $quantMode `,`
     $activeExpertRangeOptional `,` $rowIdxType
@@ -573,7 +573,7 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure, AttrSizedOpera
   let genAclnnOp = "aclnnMoeInitRoutingV3";
 }
 
-def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOperandSegments]> {
+def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure]> {
   let summary = "aclnnMoeTokenUnpermute";
   let description = [{
     Operation for moe token unpermute computation.
@@ -584,9 +584,9 @@ def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOper
   let arguments = (ins
     MrtAnyTensor:$permuted_tokens,
     MrtAnyTensor:$sorted_indices,
-    Optional<MrtAnyTensor>:$probs,
+    MrtOptional<MrtAnyTensor>:$probs,
     Mrt_BooleanType:$padded_mode,
-    Optional<Mrt_I64ArrayType>:$restore_shape
+    MrtOptional<Mrt_I64ArrayType>:$restore_shape
   );
 
   let results = (outs
@@ -594,7 +594,7 @@ def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure, AttrSizedOper
   );
 
   let assemblyFormat = [{
-    $permuted_tokens `,` $sorted_indices (`,` $probs^)? `,` $padded_mode (`,` $restore_shape^)?
+    $permuted_tokens `,` $sorted_indices `,` $probs `,` $padded_mode `,` $restore_shape
     attr-dict `:` functional-type(operands, results)
   }];
 
@@ -619,6 +619,24 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   }];
 
   let genAclnnOp = "aclnnMul";
+}
+
+def Mrt_MakeListOp : Mrt_Op<"make_list", [Pure]> {
+  let summary = "Construct a list from elements";
+  let description = [{
+    Creates a list from a list of elements, similar to torch.prim.ListConstruct.
+    This operation takes variadic elements and constructs a list type containing them.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyType>:$elements
+  );
+
+  let results = (outs MrtAnyList:$result);
+
+  let assemblyFormat = [{
+    $elements attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_NeOp : Mrt_Op<"ne", [Pure]> {

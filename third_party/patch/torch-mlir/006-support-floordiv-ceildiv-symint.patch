@@ -1,0 +1,57 @@
+diff --git a/python/torch_mlir/extras/fx_importer.py b/python/torch_mlir/extras/fx_importer.py
+index 69cc921..b0a080b 100644
+--- a/python/torch_mlir/extras/fx_importer.py
++++ b/python/torch_mlir/extras/fx_importer.py
+@@ -60,6 +60,14 @@ from torch.fx import (
+     Node,
+ )
+ 
++from torch.utils._sympy.functions import (
++    FloorDiv,
++    IntTrueDiv,
++    CeilDiv,
++    FloorToInt,
++    CeilToInt,
++)
++
+ try:
+     from torch.export.graph_signature import InputSpec as TypingInputSpec
+ except ModuleNotFoundError:
+@@ -100,6 +108,8 @@ from ..ir import (
+     AffineMapAttr,
+     AffineModExpr,
+     AffineMulExpr,
++    AffineFloorDivExpr,
++    AffineCeilDivExpr,
+     AffineSymbolExpr,
+     Attribute,
+     Block,
+@@ -380,6 +390,28 @@ def sympy_expr_to_semi_affine_expr(
+             sympy_expr_to_semi_affine_expr(dividend, symbols_map),
+             sympy_expr_to_semi_affine_expr(divisor, symbols_map),
+         )
++    elif isinstance(expr, FloorDiv):
++        dividend, divisor = expr.args
++        # For FloorDiv, we use affine floor div operations
++        return AffineFloorDivExpr.get(
++            sympy_expr_to_semi_affine_expr(dividend, symbols_map),
++            sympy_expr_to_semi_affine_expr(divisor, symbols_map),
++        )
++    elif isinstance(expr, CeilDiv):
++        dividend, divisor = expr.args
++        # For CeilDiv, we use affine ceil div operations
++        return AffineCeilDivExpr.get(
++            sympy_expr_to_semi_affine_expr(dividend, symbols_map),
++            sympy_expr_to_semi_affine_expr(divisor, symbols_map),
++        )
++    if isinstance(expr, FloorToInt) and isinstance(expr.args[0], IntTrueDiv):
++        return sympy_expr_to_semi_affine_expr(
++            FloorDiv(*expr.args[0].args), symbols_map
++        )
++    if isinstance(expr, CeilToInt) and isinstance(expr.args[0], IntTrueDiv):
++        return sympy_expr_to_semi_affine_expr(
++            CeilDiv(*expr.args[0].args), symbols_map
++        )
+     else:
+         raise NotImplementedError(
+             f"Translation of sympy.Expr of type {type(expr)} not implemented yet."

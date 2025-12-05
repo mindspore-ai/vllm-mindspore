@@ -105,6 +105,24 @@ Torch-MLIR 默认从 `externals/stablehlo` 目录构建 StableHLO。但在某些
 
 - `lib/Dialect/Torch/Transforms/ReduceOpVariants.cpp`
 
+### 006-support-floordiv-ceildiv-symint.patch
+
+**描述：**
+在 `fx_importer` 中添加对 SymPy `FloorDiv` 和 `CeilDiv` 表达式的支持，以增强动态形状（SymInt）处理能力。
+
+**问题：**
+在使用 FX Importer 导入包含动态形状的模型时，可能会遇到 SymPy 生成的 `FloorDiv` 或 `CeilDiv` 表达式。当前的 `sympy_expr_to_semi_affine_expr` 实现未涵盖这些情况，导致抛出 `NotImplementedError` 异常，阻碍了模型的成功导入。
+
+**解决方案：**
+
+- 扩展 `sympy_expr_to_semi_affine_expr` 函数，增加对 `FloorDiv` 和 `CeilDiv` 的分支处理
+- 将 `FloorDiv` 转换为 `AffineFloorDivExpr`，`CeilDiv` 转换为 `AffineCeilDivExpr`
+- 增加对 `FloorToInt` 和 `CeilToInt` 的支持，处理它们包裹 `IntTrueDiv` 的情况
+
+**修改的文件：**
+
+- `python/torch_mlir/extras/fx_importer.py`
+
 ## 应用顺序
 
 这些补丁应按数字顺序应用（001 → 002 → ...）。

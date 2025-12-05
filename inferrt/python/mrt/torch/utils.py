@@ -128,7 +128,7 @@ def to_torch(value: Value) -> Any:
         return _mrt_torch.to_torch(value.to_tensor())
     if value.is_tuple():
         return tuple(to_torch(item) for item in value.to_tuple())
-    if value.is_int():
+    if value.is_int() or value.is_symbol():
         return value.to_int()
     if value.is_double():
         return value.to_double()

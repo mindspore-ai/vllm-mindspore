@@ -31,6 +31,7 @@ mrt_add_pkg(torch_mlir
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/003-build-remove-tests.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/004-build-embedded.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/005-skip-operator-op-check.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/006-support-floordiv-ceildiv-symint.patch
 )
 
 message(STATUS "Torch-MLIR source downloaded: ${torch_mlir_DIRPATH}")

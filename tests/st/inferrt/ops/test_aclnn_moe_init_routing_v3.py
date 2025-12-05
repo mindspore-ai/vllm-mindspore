@@ -14,7 +14,7 @@
 
 import torch
 import torch_npu
-from mrt.torch import backend
+from mrt.torch.fx_mlir_backend import backend
 
 import pytest
 from tests.mark_utils import arg_mark

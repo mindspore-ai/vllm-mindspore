@@ -1,9 +1,11 @@
 #include "mlir/Transforms/DialectConversion.pdll"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.td"
 #include "mopt/Dialect/Mrt/MrtOps.td"
+#include "mopt/Dialect/Mrt/MrtConstantOps.td"
 
 #include "TorchToMrtAten.pdll"
-#include "TorchToMrtCustom.pdll"
+#include "TorchToMrtNpu.pdll"
+#include "TorchToMrtConstant.pdll"
 
 Pattern ConvertSymbolicInt {
   let root = op<torch.symbolic_int> {
@@ -36,6 +38,11 @@ Pattern ConvertBindSymbolicShape {
 }
 
 Pattern ConvertReturnOp {
-  let root = op<func.return>(operands: Value);
-  replace root with op<func.return>(convertValue(operands));
+  let root = op<func.return>(operands: ValueRange);
+  replace root with op<func.return>(convertValues(operands));
+}
+
+Pattern ConvertTorchListConstruct {
+  let root = op<torch.prim.ListConstruct>(elements: ValueRange) -> (resType: Type);
+  replace root with op<mrt.make_list>(convertValues(elements)) -> (convertType(resType));
 }
