@@ -205,8 +205,7 @@ class Qwen2VLProcessingInfo(BaseProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                # TODO: mindone not support fast processor yet.
-                use_fast=kwargs.pop("use_fast", False)),
+                use_fast=kwargs.get("use_fast")),
             **kwargs,
         )
 
@@ -433,8 +432,7 @@ class Qwen2_5_VLProcessingInfo(Qwen2VLProcessingInfo):
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
                 size=size,
-                # TODO: mindone not support fast processor yet.
-                use_fast=kwargs.pop("use_fast", False)),
+                use_fast=kwargs.get("use_fast")),
             **kwargs,
         )
 
