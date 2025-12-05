@@ -68,8 +68,6 @@ def _get_default_decomposition_ops() -> DecompositionOpsList:
         aten.select_backward,
         aten.slice_backward,
         aten.soft_margin_loss,
-        aten.split.Tensor,
-        aten.split_with_sizes,
         aten.squeeze.dims,
         aten.t,
         aten.unbind.int,

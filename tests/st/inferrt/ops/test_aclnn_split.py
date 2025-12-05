@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from mrt.torch.fx_mlir_backend import backend
 
 
 def op_func(input_self_tensor, split_size, dim=0):

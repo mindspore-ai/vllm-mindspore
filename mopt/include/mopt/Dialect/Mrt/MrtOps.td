@@ -956,6 +956,27 @@ def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {
   let genAclnnOp = "aclnnSwiGlu";
 }
 
+def Mrt_UnpackListOp : Mrt_Op<"unpack_list", [Pure]> {
+  let summary = "Unpack a list into individual elements";
+  let description = [{
+    Unpacks a list into individual elements, similar to torch.prim.ListUnpack.
+    This operation takes a list as input and produces variadic outputs representing
+    each element of the list. The number of outputs must match the list length.
+  }];
+
+  let arguments = (ins
+    MrtAnyList:$list
+  );
+
+  let results = (outs
+    Variadic<AnyType>:$elements
+  );
+
+  let assemblyFormat = [{
+    $list attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_UnsqueezeOp : Mrt_Op<"unsqueeze", [Pure]> {
   let summary = "Returns a new tensor with a dimension of size one inserted at the specified position.";
   let description = [{

@@ -343,6 +343,10 @@ class ExecutorBuilder:
             self._handle_constant(op, op_name)
             return
 
+        if op_name == "mrt.unpack_list":
+            self._handle_unpack_list(op)
+            return
+
         self._handle_runtime_op(op, op_name)
 
     def _handle_symbolic_int(self, op):
@@ -375,6 +379,28 @@ class ExecutorBuilder:
             )
         val_node = self.executor.add_value_node(constant_value)
         self.env[results[0]] = val_node
+
+    def _handle_unpack_list(self, op):
+        """Handle mrt.unpack_list operation."""
+        input_nodes_for_op = self._get_input_nodes(op)
+        results = list(op.results)
+
+        result_values = []
+        for result in results:
+            mrt_value = _create_mrt_value_from_mlir_type(result.type)
+            result_values.append(mrt_value)
+
+        # update the output value of input node with current results
+        tuple_value = Value(Tuple(result_values))
+        node = input_nodes_for_op[0]
+        node.output = tuple_value
+
+        for i, result in enumerate(results):
+            self.env[result] = self.executor.add_op_node(
+                Op.tuple_getitem,
+                [node, self.executor.add_value_node(Value(i))],
+                result_values[i],
+            )
 
     def _handle_runtime_op(self, op, op_name):
         """Handle runtime operations."""

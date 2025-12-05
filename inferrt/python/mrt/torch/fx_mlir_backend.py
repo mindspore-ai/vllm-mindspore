@@ -166,7 +166,10 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
 
     with mlir_module.context:
         pm = PassManager.parse(
-            "builtin.module(torchdynamo-export-to-torch-backend-pipeline)"
+            "builtin.module("
+            + "torchdynamo-export-to-torch-backend-pipeline{decompose-complex-ops=false}"
+            + ",func.func(torch-decompose-complex-ops,canonicalize)"
+            + ")"
         )
         pm.run(mlir_module.operation)
     _print_verbose("Torch Backend IR", mlir_module)
@@ -182,7 +185,9 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     device_str = "cpu"
     device_index = -1
     if example_inputs:
-        first_tensor = next((inp for inp in example_inputs if isinstance(inp, torch.Tensor)), None)
+        first_tensor = next(
+            (inp for inp in example_inputs if isinstance(inp, torch.Tensor)), None
+        )
         if first_tensor is not None:
             device_str = _get_device_string_from_torch_tensor(first_tensor)
             device_index = getattr(first_tensor.device, "index", None)
