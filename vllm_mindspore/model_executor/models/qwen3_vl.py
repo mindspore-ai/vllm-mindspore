@@ -1155,6 +1155,7 @@ class Qwen3VLForConditionalGeneration(
         head_dim = (self.vision_config.hidden_size //
                     self.vision_config.num_heads)
         self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
+        self._rot_pos_ids_cache: dict[tuple[int, int], ms.Tensor] = {}
 
     def common_preprocess(self, vllm_config, prefix=""):
         # override the common_preprocess method to
@@ -1544,31 +1545,110 @@ class Qwen3VLForConditionalGeneration(
             tower_model="model.visual.",
         )
 
+    def _get_rot_pos_ids(self, h: int, w: int,
+                         spatial_merge_size: int) -> ms.Tensor:
+        """Generate rotary position IDs for vision patches with spatial merging.
+
+        This function creates position indices (h_pos, w_pos) for each spatial
+        location after applying spatial merging. The positions are reorganized
+        to match the spatial merge pattern used in vision transformers.
+        Results are cached for repeated (h, w) combinations to avoid redundant
+        computation.
+
+        Args:
+            h (int): Height of the image grid in patches.
+            w (int): Width of the image grid in patches.
+            spatial_merge_size (int): Size of spatial merge window (e.g., 2
+            means 2x2 patches are merged into one).
+
+        Returns:
+            ms.Tensor: Position IDs tensor of shape [h*w, 2], where each row
+            contains [h_pos, w_pos] for the corresponding spatial location 
+            after merge.
+
+        Notes:
+            - Cache hit rate is typically high in batch inference with uniform
+              image sizes
+            - The reshape/permute operations align positions with the merge
+              pattern
+            - Output positions are in int32 for efficient indexing
+        """
+        key = (h, w)
+        cached = self._rot_pos_ids_cache.get(key)
+        if cached is not None:
+            return cached
+
+        hpos_ids = mint.arange(h, dtype=ms.int32).view(h, 1).expand(h, w)
+        wpos_ids = mint.arange(w, dtype=ms.int32).view(1, w).expand(h, w)
+
+        hpos_ids = (hpos_ids.reshape(
+            h // spatial_merge_size,
+            spatial_merge_size,
+            w // spatial_merge_size,
+            spatial_merge_size,
+        ).permute(0, 2, 1, 3).reshape(-1))
+        wpos_ids = (wpos_ids.reshape(
+            h // spatial_merge_size,
+            spatial_merge_size,
+            w // spatial_merge_size,
+            spatial_merge_size,
+        ).permute(0, 2, 1, 3).reshape(-1))
+
+        pos_ids = mint.stack([hpos_ids, wpos_ids], dim=-1).astype(ms.int32)
+        self._rot_pos_ids_cache[key] = pos_ids
+        return pos_ids
+
     def rot_pos_emb(self, grid_thw: ms.Tensor) -> ms.Tensor:
+        """Compute rotary position embeddings for vision inputs.
+
+        This function generates rotary position embeddings for vision patches 
+        in a multimodal model. It handles both images (t=1) and videos (t>1) by
+        computing 2D spatial position embeddings and optionally repeating them
+        across temporal dimension. The function is moved out of vision
+        transformer to support graph compilation mode.
+
+        Performance optimizations:
+            1. Caches position IDs for repeated (h, w) combinations via
+              _get_rot_pos_ids
+            2. Avoids unnecessary tile operations when t=1 (single frame images)
+            3. Computes rotary embeddings only once for max_grid_size
+            4. Uses single host-to-device transfer via asnumpy().tolist()
+
+        Args:
+            grid_thw (ms.Tensor): Tensor of shape [N, 3] containing (t, h, w)
+                for each image/video in the batch, where:
+                - t: temporal dimension (number of frames)
+                - h: height of the image grid in patches
+                - w: width of the image grid in patches
+
+        Returns:
+            ms.Tensor: Rotary position embeddings of shape 
+                [total_patches, embed_dim], where total_patches = 
+                sum(t*h*w for each item in grid_thw) and
+                embed_dim is the rotary embedding dimension (head_dim).
+
+        Example:
+            >>> # For 2 images: first is 224x224, second is 448x448
+            >>> grid_thw = ms.Tensor([[1, 16, 16], [1, 32, 32]])
+            >>> rot_emb = model.rot_pos_emb(grid_thw)
+            >>> # Output shape: [(16*16) + (32*32), embed_dim]
+        """
         # move out of vision transformer because it is not suit for graph mode.
         spatial_merge_size = self.vision_config.spatial_merge_size
+        grid_list = grid_thw.asnumpy().tolist()
         pos_ids = []
-        for t, h, w in grid_thw:
-            t, h, w = int(t.item()), int(h.item()), int(w.item())
-            hpos_ids = mint.arange(h).unsqueeze(1).expand((-1, w))
-            wpos_ids = mint.arange(w).unsqueeze(0).expand((h, -1))
+        max_grid_size = 0
 
-            hpos_ids = hpos_ids.reshape(
-                h // spatial_merge_size,
-                spatial_merge_size,
-                w // spatial_merge_size,
-                spatial_merge_size,
-            ).permute(0, 2, 1, 3).flatten()
-            wpos_ids = wpos_ids.reshape(
-                h // spatial_merge_size,
-                spatial_merge_size,
-                w // spatial_merge_size,
-                spatial_merge_size,
-            ).permute(0, 2, 1, 3).flatten()
-            pos_ids.append(
-                mint.tile(mint.stack([hpos_ids, wpos_ids], dim=-1), (t, 1)))
+        for t, h, w in grid_list:
+            max_grid_size = max(max_grid_size, h, w)
+            base_ids = self._get_rot_pos_ids(h, w, spatial_merge_size)
+            if t == 1:
+                pos_ids.append(base_ids)
+            else:
+                pos_ids.append(mint.tile(base_ids, (t, 1)))
+
         pos_ids = mint.cat(pos_ids, dim=0)
-        max_grid_size = int(grid_thw[:, 1:].max().item())
+
         rotary_pos_emb_full = self.rotary_pos_emb_full(max_grid_size)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(1)
         return rotary_pos_emb
