@@ -379,9 +379,8 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             hidden_states = self.network(**model_inputs)
             _set_network_flags(False, False)
             self.has_prefill_warmup = True
-            self.has_chunked_warmup = (
-                not self.use_ringmla
-                or is_ringmla_chunked) or self.enable_aclgraph
+            self.has_chunked_warmup = (not self.use_ringmla
+                                       or is_ringmla_chunked)
         else:
             hidden_states = self.network(**model_inputs)
 
@@ -396,8 +395,6 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         with no_init_parameters():  # Delay initialization
             network: PreTrainedModel = AutoModel.from_config(self.mf_config)
             network.model.return_hidden_states = True
-        if self.enable_aclgraph:
-            network.model.move_lens_to_cpu = False
         if get_pp_group().is_last_rank:
             return network, network.model.output_layer
         return network, None

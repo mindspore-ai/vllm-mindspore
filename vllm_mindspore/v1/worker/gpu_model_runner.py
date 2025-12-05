@@ -1231,9 +1231,8 @@ def capture_model(self: GPUModelRunner) -> None:
     # Capture the large shapes first so that the smaller shapes
     # can reuse the memory poll allocated for the large shapes.
 
-    # vllm-mindspore use full graph to capture aclgraph
-    # set the skip_attn to True
-    skip_attn = True
+    self.cudagraph_dispatcher.initialize_cudagraph_keys(
+        self.compilation_config.cudagraph_mode, self.uniform_decode_query_len)
 
     # because aclgraph limit, check the capture size
     max_capture_graph_size = 19
@@ -1250,8 +1249,20 @@ def capture_model(self: GPUModelRunner) -> None:
     for num_tokens in reversed(self.cudagraph_batch_sizes):
         for _ in range(
                 self.vllm_config.compilation_config.cudagraph_num_of_warmups):
-            _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
-        _aclgraph_capture_dummy_run(self, num_tokens, skip_attn=skip_attn)
+            self._dummy_run(num_tokens=num_tokens,
+                            cudagraph_runtime_mode=CUDAGraphMode.NONE,
+                            force_attention=False,
+                            uniform_decode=True,
+                            allow_microbatching=False,
+                            skip_eplb=True,
+                            remove_lora=False)
+        self._dummy_run(num_tokens=num_tokens,
+                        cudagraph_runtime_mode=CUDAGraphMode.PIECEWISE,
+                        force_attention=False,
+                        uniform_decode=True,
+                        allow_microbatching=False,
+                        skip_eplb=True,
+                        remove_lora=False)
 
     end_time = time.perf_counter()
     end_free_gpu_memory = torch.cuda.mem_get_info()[0]
