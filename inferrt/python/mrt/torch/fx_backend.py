@@ -58,6 +58,8 @@ _GLOBAL_GRAPH_ID = 0
 
 _ARG_MAPPING_HOOKS = {}
 
+_OPS_MAPPING_HOOKS = {}
+
 # Registry for linalg ops: maps op_name -> mlir_text
 # TODO(lmy) this temporary interface will be removed when mrt backend is ready.
 _LINALG_OP_REGISTRY = {}
@@ -87,6 +89,12 @@ def register_arg_mapping_hook(op, hook_func):
 
 def get_arg_mapping_hook(op):
     return _ARG_MAPPING_HOOKS.get(op)
+
+def register_ops_mapping_hook(op, hook_func):
+    _OPS_MAPPING_HOOKS[op] = hook_func
+
+def get_ops_mapping_hook(op):
+    return _OPS_MAPPING_HOOKS.get(op)
 
 
 # pylint: disable=unused-argument
@@ -127,6 +135,18 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
 
+# pylint: disable=unused-argument
+def split_ops_hook(op, node, input_nodes, executor):
+    if isinstance(input_nodes[1], (int, torch.SymInt)):
+        return Op.split_tensor
+    if hasattr(input_nodes[1], "meta") and input_nodes[1].meta is not None:
+        if isinstance(input_nodes[1].meta["example_value"], (int, torch.SymInt)):
+            return Op.split_tensor
+    return op
+
+def _init_ops_mapping_hooks():
+    register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
+
 
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
@@ -151,6 +171,8 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.reshape: Op.reshape,
     torch.transpose: Op.permute,
+    torch.split: Op.split_with_size,
+    torch.flatten: Op.flatten,
     torch.cat: Op.concat,
     torch.neg: Op.neg,
     torch.square: Op.square,
@@ -213,6 +235,8 @@ _OP_MAP = {
     "view": Op.reshape,  # view is often used like reshape
     "copy_": Op.copy,
     "long": Op.cast,
+    "split": Op.split_with_size,
+    "flatten": Op.flatten,
 }
 
 if TORCH_NPU_INSTALLED:
@@ -445,6 +469,11 @@ def _handle_call_node(node, executor, symbolic_shape_manager, env):
     if op is None:
         raise NotImplementedError(f"Unsupported op: {node.target}")
 
+    ops_hook = get_ops_mapping_hook(op)
+    if ops_hook is not None:
+        flat_node_args = _flatten_args(op, node)
+        op = ops_hook(op, node, flat_node_args, executor)
+
     input_nodes = _prepare_call_args(op, node, executor, env)
     example_value = node.meta.get("example_value", None)
     output_value = from_torch(example_value)
@@ -471,6 +500,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     print("======================fx graph======================")
     print(gm.graph)
     _init_arg_mapping_hooks()
+    _init_ops_mapping_hooks()
     _init_mrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")

@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_ASCEND_ACLNN_ACLNN_EMPTY_H__
-#define __OPS_ASCEND_ACLNN_ACLNN_EMPTY_H__
+#ifndef __OPS_ASCEND_MEM_MEMCPY_LIKES_H__
+#define __OPS_ASCEND_MEM_MEMCPY_LIKES_H__
 
 #include "ops/operator.h"
 #include "ops/ascend/aclnn/utils/aclnn_executor.h"
 
 namespace mrt {
 namespace ops {
-class AclnnEmpty : public Operator {
+class ViewMemcpyOpBase : public Operator {
  public:
-  AclnnEmpty() = default;
-  ~AclnnEmpty() override = default;
+  ViewMemcpyOpBase() = default;
+  ~ViewMemcpyOpBase() override = default;
 
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize) override;
@@ -33,6 +33,15 @@ class AclnnEmpty : public Operator {
                       ir::Value *output, void *stream) override;
 };
 
+#define DefineViewMemcpyOp(op_name)               \
+  class View##op_name : public ViewMemcpyOpBase { \
+   public:                                        \
+    View##op_name() {}                            \
+    ~View##op_name() override = default;          \
+  }
+
+// view memcpy ops
+DefineViewMemcpyOp(Flatten);
 }  // namespace ops
 }  // namespace mrt
-#endif  // __OPS_ASCEND_ACLNN_ACLNN_EMPTY_H__
+#endif  // __OPS_ASCEND_MEM_MEMCPY_LIKES_H__
