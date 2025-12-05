@@ -75,8 +75,6 @@ def patch_transformers():
         return
 
     import transformers
-    transformers.utils.is_accelerate_available = \
-        lambda *args, **kwargs: False
     from mindone.transformers import ProcessorMixin
     transformers.ProcessorMixin = ProcessorMixin
     transformers.processing_utils.ProcessorMixin = ProcessorMixin
