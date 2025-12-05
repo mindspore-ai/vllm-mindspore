@@ -60,6 +60,7 @@ from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
+from vllm_mindspore.utils import is_310p
 
 
 class Qwen2MLP(nn.Cell):
@@ -411,6 +412,14 @@ class Qwen2Model(nn.Cell):
                                             default_weight_loader)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
+                    if (is_310p() and self.config.tie_word_embeddings
+                            and "embed_tokens" in name
+                            and "lm_head.weight" in params_dict):
+                        lm_head_param = params_dict["lm_head.weight"]
+                        weight_loader = getattr(lm_head_param, "weight_loader",
+                                                default_weight_loader)
+                        weight_loader(lm_head_param, loaded_weight)
+                        loaded_params.add("lm_head.weight")
 
         return loaded_params
 
