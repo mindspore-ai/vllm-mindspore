@@ -25,9 +25,9 @@ namespace mrt {
 
 // Populate type conversions for converting standard MLIR types to MRT types.
 // This adds conversions for RankedTensorType -> mrt::TensorType.
-inline void populateMrtTypeConversions(mlir::TypeConverter &converter, mlir::MLIRContext *ctx) {
-  converter.addConversion([ctx](mlir::RankedTensorType type) -> mlir::Type {
-    return mrt::TensorType::get(ctx, type.getShape(), type.getElementType(), nullptr);
+inline void populateMrtTypeConversions(mlir::TypeConverter &converter) {
+  converter.addConversion([](mlir::RankedTensorType type) -> mlir::Type {
+    return mrt::TensorType::get(type.getContext(), type.getShape(), type.getElementType(), nullptr);
   });
 }
 

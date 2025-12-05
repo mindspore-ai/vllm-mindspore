@@ -1,0 +1,12 @@
+
+Pattern ConvertAtenMulTensor {
+  let root = op<torch.aten.mul.Tensor>(
+    self: Value,
+    other: Value
+  ) -> (resType: Type);
+
+  replace root with op<mrt.mul>(
+    convertValue(self),
+    convertValue(other)
+  ) -> (convertType(resType));
+}

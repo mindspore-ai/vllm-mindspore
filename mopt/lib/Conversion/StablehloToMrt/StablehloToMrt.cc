@@ -73,7 +73,7 @@ class StablehloToMrtTypeConverter : public mlir::TypeConverter {
  public:
   explicit StablehloToMrtTypeConverter(mlir::MLIRContext *ctx) {
     addConversion([](mlir::Type type) { return type; });
-    mrt::populateMrtTypeConversions(*this, ctx);
+    mrt::populateMrtTypeConversions(*this);
   }
 };
 
