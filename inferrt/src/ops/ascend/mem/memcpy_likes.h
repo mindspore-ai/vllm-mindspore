@@ -22,10 +22,10 @@
 
 namespace mrt {
 namespace ops {
-class ViewMemcpyOpBase : public Operator {
+class MemcpyOpBase : public Operator {
  public:
-  ViewMemcpyOpBase() = default;
-  ~ViewMemcpyOpBase() override = default;
+  MemcpyOpBase() = default;
+  ~MemcpyOpBase() override = default;
 
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize) override;
@@ -33,15 +33,16 @@ class ViewMemcpyOpBase : public Operator {
                       ir::Value *output, void *stream) override;
 };
 
-#define DefineViewMemcpyOp(op_name)               \
-  class View##op_name : public ViewMemcpyOpBase { \
-   public:                                        \
-    View##op_name() {}                            \
-    ~View##op_name() override = default;          \
+#define DefineMemcpyOp(op_name)         \
+  class op_name : public MemcpyOpBase { \
+   public:                              \
+    op_name() {}                        \
+    ~op_name() override = default;      \
   }
 
 // view memcpy ops
-DefineViewMemcpyOp(Flatten);
+DefineMemcpyOp(Flatten);
+DefineMemcpyOp(Unsqueeze);
 }  // namespace ops
 }  // namespace mrt
 #endif  // __OPS_ASCEND_MEM_MEMCPY_LIKES_H__

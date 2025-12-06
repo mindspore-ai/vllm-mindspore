@@ -892,6 +892,24 @@ def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {
   let genAclnnOp = "aclnnSwiGlu";
 }
 
+def Mrt_UnsqueezeOp : Mrt_Op<"unsqueeze", [Pure]> {
+  let summary = "Returns a new tensor with a dimension of size one inserted at the specified position.";
+  let description = [{
+    The returned tensor shares the same underlying data with this tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_ZerosOp : Mrt_Op<"zeros"> {
   let summary = "aclnnInplaceZero";
   let description = [{
