@@ -46,9 +46,10 @@ QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 def test_vllm_ms_server_apc_002():
     """
     Test Summary:
-        在线native qwen模型使用默认方式启动, 发送多batch
+        For the online native backend scenario with default mode,
+        and then send multiple batches of requests.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -88,9 +89,10 @@ def test_vllm_ms_server_apc_002():
 def test_vllm_ms_server_apc_003():
     """
     Test Summary:
-        在线native qwen模型使用默认方式启动, 使用util校验精度
+        For the online native backend scenario with default mode,
+        and perform precision verification using utility tools.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -123,9 +125,10 @@ def test_vllm_ms_server_apc_003():
 def test_vllm_ms_server_apc_004():
     """
     Test Summary:
-        在线native qwen模型使用默认方式启动, 关闭APC特性, 连续发送两条请求
+        For the online native backend scenario, disable the APC feature,
+        and then send two consecutive requests.
     Expected Result:
-        推理正常, Prefix cache无命中
+        Successful execution, but the prefix cache has no hits.
     Model Info:
         Qwen2.5-7B-Instruct
     """

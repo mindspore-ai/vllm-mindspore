@@ -73,5 +73,12 @@ def run_mf_qwen3_network():
 @patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 def test_mf_qwen3_v1():
-    """Test qwen3 8B using V0 LLMEngine."""
+    """
+    Test Summary:
+        Test MCore Qwen3 8B model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-8B
+    """
     run_mf_qwen3_network()

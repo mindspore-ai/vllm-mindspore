@@ -39,7 +39,12 @@ env_vars = {
 @pytest.mark.level0
 def test_deepseek_r1_bf16():
     """
-    test case deepseek r1 bf16
+    Test Summary:
+        Test case deepseek r1 bf16 model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        DeepSeek-R1-bf16
     """
     import vllm_mindspore
     from vllm import LLM, SamplingParams

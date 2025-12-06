@@ -56,10 +56,11 @@ LONG_PROMPT = "I love Beijing, because it is a city with a long history " \
 def test_vllm_ms_offline_chunked_prefill_001():
     """
     Test Summary:
-        离线Native Qwen2.5网络使用默认方式启动
-        下发单batch, 超过max_num_batched_tokens
+        For the offline native backend scenario with default mode,
+        Test sending single batch request whose length exceeding the
+        max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -83,10 +84,11 @@ def test_vllm_ms_offline_chunked_prefill_001():
 def test_vllm_ms_offline_chunked_prefill_003():
     """
     Test Summary:
-        离线Native Qwen2.5网络使用默认方式启动
-        下发多batch, 不超过max_num_batched_tokens
+        For the offline native backend scenario with default mode,
+        Test sending multiple batch requests, where all requests do not
+        exceed max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -110,9 +112,10 @@ def test_vllm_ms_offline_chunked_prefill_003():
 def test_vllm_ms_offline_chunked_prefill_004():
     """
     Test Summary:
-        离线native Qwen2.5网络多场景组合精度验证
+        For the offline native backend scenario with default mode,
+        Test sending combined requests for multiple scenarios.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -167,10 +170,11 @@ def run_ms_server_cp_base_qwen(log_name, extra_params, prompts):
 def test_vllm_ms_server_chunked_prefill_001():
     """
     Test Summary:
-        在线native Qwen2.5网络显式启动cp, 2p
-        下发单batch, 不超过max_num_batched_tokens
+        For the online native backend scenario with default mode, TP2.
+        Test sending single batch request whose length do not exceeding
+        the max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -189,11 +193,11 @@ def test_vllm_ms_server_chunked_prefill_001():
 def test_vllm_ms_server_chunked_prefill_002():
     """
     Test Summary:
-        在线native Qwen2.5网络使用默认方式启动
-        下发多batch, 不超过max_num_batched_tokens
-
+        For the online native backend scenario with default mode,
+        Test sending multiple batch requests, where all requests do not
+        exceed max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -209,11 +213,11 @@ def test_vllm_ms_server_chunked_prefill_002():
 def test_vllm_ms_server_chunked_prefill_003():
     """
     Test Summary:
-        在线native Qwen2.5网络使用默认方式启动2p
-        下发单batch, 超过max_num_batched_tokens
-        使用默认方式启动
+        For the online native backend scenario with default mode,
+        Test sending single batch request whose length exceeding the
+        max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -232,10 +236,11 @@ def test_vllm_ms_server_chunked_prefill_003():
 def test_vllm_ms_server_chunked_prefill_004():
     """
     Test Summary:
-        在线native Qwen2.5网络使用默认方式启动
-        下发多batch, 超过max_num_batched_tokens
+        For the online native backend scenario with default mode,
+        Test sending multiple batch requests, including the case of
+        the request length exceeding the max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -274,9 +279,10 @@ def run_server_chunked_prefill_005(log_name):
 def test_vllm_ms_server_chunked_prefill_005():
     """
     Test Summary:
-        在线native QWen2.5使用默认方式启动2p, 多场景组合精度验证
+        For the online native backend scenario with default mode, TP2.
+        Test sending combined requests for multiple scenarios.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """

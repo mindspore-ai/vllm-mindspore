@@ -23,7 +23,6 @@ import json
 import time
 import requests
 import pytest
-import sys
 from unittest.mock import patch
 import vllm_mindspore
 from vllm import LLM, SamplingParams
@@ -114,7 +113,14 @@ def initialize_engine() -> LLMEngine:
 @patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 def test_multilora_inference():
-    """test function that sets up and runs the prompt processing."""
+    """
+    Test Summary:
+        test function that sets up and runs the prompt processing.
+    Expected Result:
+        Successful execution with inference results meeting expectations.
+    Model Info:
+        Qwen2.5-7B-Lora-Law
+    """
     engine = initialize_engine()
     lora_path = QWEN_7B_LORA_LAW
     test_prompts = create_test_prompts(lora_path)
@@ -128,10 +134,10 @@ def test_multilora_inference():
 def test_vllm_ms_offline_multilora_002():
     """
     Test Summary:
-        离线native qwen模型默认架构启动,
-        不设置--enable-lora, 传入LoRARequest
+        For the offline native backend scenario with default mode,
+        do not set --enable-lora, and pass a LoRARequest.
     Expected Result:
-        报错合理
+        Raises ValueError with a reasonable information.
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
     """
@@ -154,10 +160,11 @@ def test_vllm_ms_offline_multilora_002():
 def test_vllm_ms_offline_multilora_003():
     """
     Test Summary:
-        离线native qwen模型默认架构启动,
-        设置enable-lora, LoRARequest不同的lora传入重复的lora id
+        For the offline native backend scenario with default mode,
+        enable --enable-lora, and pass duplicate LoRA IDs in LoRARequest
+        with different LoRAs.
     Expected Result:
-        不报错
+        Normal execution without errors
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
@@ -191,10 +198,11 @@ def test_vllm_ms_offline_multilora_003():
 def test_vllm_ms_offline_multilora_004():
     """
     Test Summary:
-        离线native qwen模型默认架构启动,
-        设置enable-lora, LoRARequest相同的lora传入不同的lora id
+        For the offline native backend scenario with default mode,
+        enable --enable-lora, and pass different LoRA IDs for the same
+        LoRA in LoRARequest.
     Expected Result:
-        不报错
+        Normal execution without errors
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
@@ -229,10 +237,11 @@ def test_vllm_ms_offline_multilora_004():
 def test_vllm_ms_offline_multilora_005():
     """
     Test Summary:
-        离线ms场景qwen模型默认架构启动,
-        设置enable-lora, LoRARequest传入错误的lora_path
+        For the offline native backend scenario with default mode,
+        enable --enable-lora, and pass an invalid lora_path in
+        LoRARequest.
     Expected Result:
-        报错合理
+        Raised Exception with a reasonable information.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -286,10 +295,10 @@ def test_vllm_ms_offline_multilora_005():
 def test_vllm_ms_server_multilora_001():
     """
     Test Summary:
-        在线native qwen模型默认架构启动,
-        正确设置--enable-lora --lora-modules
+        For the online native backend scenario with default mode,
+        enable --enable-lora --lora-modules
     Expected Result:
-        推理正常
+        Execution successful, executed on the native backend
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
     """
@@ -326,10 +335,10 @@ def test_vllm_ms_server_multilora_001():
 def test_vllm_ms_server_multilora_002():
     """
     Test Summary:
-        在线native qwen模型默认架构启动,
-        不设置--enable-lora, 设置--lora-modules {name}={path}
+        For the online native backend scenario with default mode,
+        do not set --enable-lora, but set --lora-modules {name}={path}.
     Expected Result:
-        报错合理
+        Raises ValueError with a reasonable information.
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
     """
@@ -357,10 +366,11 @@ def test_vllm_ms_server_multilora_002():
 def test_vllm_ms_server_multilora_003():
     """
     Test Summary:
-        在线native qwen模型默认架构启动, 设置--enable-lora,
-        设置--lora-modules {name}={path}的path为不存在路径
+        For the online native backend scenario with default mode,
+        enable --enable-lora, --lora-modules {name}={path},
+        but the path does not exist.
     Expected Result:
-        报错合理
+        Raises ValueError with a reasonable information.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -388,10 +398,11 @@ def test_vllm_ms_server_multilora_003():
 def test_vllm_ms_server_multilora_004():
     """
     Test Summary:
-        在线native qwen模型默认架构启动,
-        设置--enable-lora, 重复设置--lora-modules {name}={path}的name为同一个
+        For the online native backend scenario with default mode,
+        enable --enable-lora, and repeatedly set --lora-modules {name}={path}
+        configurations with the same name.
     Expected Result:
-        报错合理
+        Raises ValueError with a reasonable information.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -421,10 +432,11 @@ def test_vllm_ms_server_multilora_004():
 def test_vllm_ms_server_multilora_005():
     """
     Test Summary:
-        在线native qwen模型默认架构启动,
-        设置--enable-lora, 重复设置--lora-modules {name}={path}的path为同一个
+        For the online native backend scenario with default mode,
+        enable --enable-lora, and repeatedly set --lora-modules {name}={path}
+        configurations with the same path.
     Expected Result:
-        正常推理
+        Execution successful, executed on the native backend
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
     """
@@ -459,9 +471,10 @@ def test_vllm_ms_server_multilora_005():
 def test_vllm_ms_server_multilora_007():
     """
     Test Summary:
-        在线native qwen模型默认架构启动, multilora+APC+CP特性耦合
+        For the online native backend scenario with default mode,
+        testing the multi-LoRA, APC, and CP features.
     Expected Result:
-        推理正常, util校验精度
+        Execution successful, the prefix cache is expected to hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -502,10 +515,10 @@ def test_vllm_ms_server_multilora_007():
 def test_vllm_ms_offline_multilora_v1_001():
     """
     Test Summary:
-        离线native qwen模型默认架构启动, 开启enable_lora,
-        传入正确的LoRARequest
+        For the offline native backend scenario with default mode,
+        enable enable_lora, and pass a valid LoRARequest.
     Expected Result:
-        正常
+        Execution successful
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
@@ -540,11 +553,11 @@ def test_vllm_ms_offline_multilora_v1_001():
 def test_vllm_ms_server_multilora_v1_001():
     """
     Test Summary:
-        在线native qwen模型默认架构启动,　设置enable-lora,
-        设置lora-modules lora1=xxx lora2=xxx,
-        混合发送基础模型、lora1、lora2的请求
+        For the online native backend scenario with default mode,
+        enable --enable-lora, set --lora-modules lora1=xxx lora2=xxx,
+        and then send mixed requests for the base model, lora1, and lora2.
     Expected Result:
-        请求发送正常, 推理正常
+        Execution successful
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """

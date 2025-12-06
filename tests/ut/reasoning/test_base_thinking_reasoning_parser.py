@@ -44,10 +44,11 @@ DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
 def test_vllm_reasoning_mf_server():
     """
     Test Summary:
-        使用mf模型，运行vllm服务化场景，
-        单独配置--reasoning-parser deepseek_r1
+        For the online mindformers backend scenario, and set
+        --reasoning-parser deepseek_r1.
     Expected Result:
-        正常运行， 配置reasoning-parser就可以开启思考
+        Successful execution, enabling the reasoning-parser allows the model
+        to start reasoning.
     Model Info:
         DeepSeek-R1-W8A8
     """

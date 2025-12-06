@@ -50,10 +50,11 @@ env_vars = {
 def test_vllm_mf_offline_chunked_prefill_002():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, QWen2.5网络
-        下发多batch, 超过max_num_batched_tokens
+        For the offline mindformers backend scenario with default mode,
+        Test sending multiple batch requests, including the case of
+        the request length exceeding the max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -79,10 +80,11 @@ def test_vllm_mf_offline_chunked_prefill_002():
 def test_vllm_mf_offline_chunked_prefill_003():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, QWen2.5网络
-        下发多batch, 不超过max_num_batched_tokens
+        For the offline mindformers backend scenario with default mode,
+        Test sending multiple batch requests, where all requests do not
+        exceed max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -104,10 +106,11 @@ def test_vllm_mf_offline_chunked_prefill_003():
 def test_vllm_mf_offline_chunked_prefill_004():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, deepseek网络
-        下发单batch, 超过max_num_batched_tokens
+        For the offline mindformers backend scenario with default mode,
+        Test sending single batch request whose length exceeding the
+        max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         DeepSeek-R1-W8A8
     """
@@ -135,14 +138,14 @@ def test_vllm_mf_offline_chunked_prefill_004():
 def test_vllm_mf_offline_chunked_prefill_006():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, deepseek网络网络
-        下发多batch, 不超过max_num_batched_tokens
+        For the offline mindformers backend scenario with default mode,
+        the model contains MLA layers. Test sending multiple batch
+        requests, where all requests do not exceed max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         DeepSeek-R1-W8A8
     """
-    os.environ['VLLM_USE_V1'] = "1"
     prompts = ["I love Beijing", "Today is", "Llama is"]
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -165,10 +168,10 @@ def test_vllm_mf_offline_chunked_prefill_006():
 def test_vllm_mf_offline_chunked_prefill_007():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, Qwen2.5网络
-        下发多场景组合请求
+        For the offline mindformers backend scenario with default mode,
+        Test sending combined requests for multiple scenarios.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -192,10 +195,11 @@ def test_vllm_mf_offline_chunked_prefill_007():
 def test_vllm_mf_offline_chunked_prefill_008():
     """
     Test Summary:
-        离线mf场景, 使用默认方式启动, DEEPSEEK_W8A8_MODEL网络
-        下发多场景组合请求
+        For the offline mindformers backend scenario with default mode,
+        the model contains MLA layers. Test sending combined requests
+        for multiple scenarios.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         DeepSeek-R1-W8A8
     """
@@ -251,10 +255,11 @@ def run_mf_server_chunked_prefill(log_name, model, extra_params, data):
 def test_vllm_mf_server_chunked_prefill_002():
     """
     Test Summary:
-        在线mf场景, 使用默认方式启动,  Qwen2.5网络
-        下发多batch, 超过max_num_batched_tokens
+        For the online mindformers backend scenario with default mode,
+        Test sending multiple batch requests, including the case of
+        the request length exceeding the max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -280,10 +285,11 @@ def test_vllm_mf_server_chunked_prefill_002():
 def test_vllm_mf_server_chunked_prefill_003():
     """
     Test Summary:
-        在线mf场景, 使用默认方式启动,  deepseek网络
-        下发单batch, 超过max_num_batched_tokens
+        For the online mindformers backend scenario with default mode,
+        Test sending single batch request whose length exceeding the
+        max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         DeepSeek-R1-W8A8
     """
@@ -307,10 +313,11 @@ def test_vllm_mf_server_chunked_prefill_003():
 def test_vllm_mf_server_chunked_prefill_004():
     """
     Test Summary:
-        在线mf场景, 使用默认方式启动,  deepseek网络 2p
-        下发多batch, 超过max_num_batched_tokens
+        For the online mindformers backend scenario with default mode,
+        TP2. Test sending multiple batch requests, where all requests do
+        not exceed max_num_batched_tokens.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         DeepSeek-R1-W8A8
     """
@@ -335,10 +342,10 @@ def test_vllm_mf_server_chunked_prefill_004():
 def test_vllm_mf_server_chunked_prefill_005():
     """
     Test Summary:
-        在线mf场景, QWen2.5使用默认方式启动2p,
-        下发多场景组合请求
+        For the online mindformers backend scenario with default mode,
+        Test sending combined requests for multiple scenarios.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """

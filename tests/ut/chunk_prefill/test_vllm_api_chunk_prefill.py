@@ -33,10 +33,10 @@ DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
 def test_vllm_api_chunked_prefill_001():
     """
     Test Summary:
-        接口测试, 使用默认方式启动, 默认开启chunked_prefill,
-        max_num_batched_tokens < max_model_len
+        Perform interface testing with default mode (chunked_prefill enabled
+        by default), and set max_num_batched_tokens < max_model_len.
     Expected Result:
-        正常推理
+        Successful execution
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -58,10 +58,11 @@ def test_vllm_api_chunked_prefill_001():
 def test_vllm_api_chunked_prefill_002():
     """
     Test Summary:
-        接口测试, 使用默认方式启动, 使能cp,
-        设置max_num_batched_token小于max_num_seqs
+        Perform interface testing explicitly enable chunked_prefill,
+        and set max_num_batched_tokens < max_num_seqs.
     Expected Result:
-        报错, max_num_batched_token要大于max_num_seqs
+        Raises ValueError containing the message "must be greater than
+        or equal to max_num_seqs".
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -79,10 +80,11 @@ def test_vllm_api_chunked_prefill_002():
 def test_vllm_api_chunked_prefill_003():
     """
     Test Summary:
-        接口测试, 使用默认方式启动,
-        max_num_batched_token取值负数
+        Perform interface testing with default mode (chunked_prefill enabled
+        by default), and set the max_num_batched_token with a minus number.
     Expected Result:
-        报错, Engine core初始化失败
+        Raises ValueError containing the message "Engine core initialization
+        failed".
     Model Info:
         Qwen2.5-7B-Instruct
     """

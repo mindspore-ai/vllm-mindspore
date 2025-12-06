@@ -52,9 +52,10 @@ DEEPSEEK_W8A8_MTP_MODEL = MODEL_PATH["DeepSeek-R1-MTP"]
 def test_vllm_mf_server_apc_001():
     """
     Test Summary:
-        在线mf场景使用qwen模型使用默认方式启动, 连续发送两条请求
+        For the online mindformers backend scenario with default mode,
+        and then send two consecutive requests.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -95,10 +96,11 @@ def test_vllm_mf_server_apc_001():
 def test_vllm_mf_server_apc_003():
     """
     Test Summary:
-        在线mf场景qwen模型显式指定V1架构启动,
-        设置hash算法为sha256_cbor, 发送多batch
+        For the online mindformers backend scenario with default mode,
+        set the hash algorithm to sha256_cbor, and then send multiple
+        batches of requests.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -143,10 +145,11 @@ def test_vllm_mf_server_apc_003():
 def test_vllm_mf_server_apc_004():
     """
     Test Summary:
-        在线mf场景deepseek模型使用默认方式启动,
-        设置hash算法为sha256, 发送多batch
+        For the online mindformers backend scenario with default mode,
+        set the hash algorithm to sha256, and then send multiple
+        batches of requests.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         DeepSeek-R1-W8A8
     """
@@ -188,9 +191,10 @@ def test_vllm_mf_server_apc_004():
 def test_vllm_mf_server_apc_007():
     """
     Test Summary:
-        在线mf场景qwen模型使用默认方式启动, 使用util校验精度
+        For the online mindformers backend scenario with default mode,
+        and then verify the precision.
     Expected Result:
-        推理正常, Prefix cache成功命中
+        Successful execution, and the prefix cache is successfully hit.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -222,10 +226,10 @@ def test_vllm_mf_server_apc_007():
 def test_vllm_mf_server_apc_008():
     """
     Test Summary:
-        在线mf场景qwen模型使用默认方式启动,
-        关闭APC特性, 连续发送两条请求
+        For the online mindformers backend scenario, disable the APC feature,
+        and then send two consecutive requests.
     Expected Result:
-        推理正常, Prefix cache无命中
+        Successful execution, but the prefix cache has no hits.
     Model Info:
         Qwen2.5-7B-Instruct
     """
