@@ -158,7 +158,7 @@ def is_mixture_of_experts(model: object) -> TypeIs[MixtureOfExperts]:
 
 
 @runtime_checkable
-class SupportesMoeDpTp(Protocol):
+class SupportsMoeDpTp(Protocol):
     """
     The interface required for MoE models that MoE layer
     supports TP parallel under DP Context.

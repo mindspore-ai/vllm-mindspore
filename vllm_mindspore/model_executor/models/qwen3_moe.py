@@ -52,7 +52,7 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader)
 from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
-                                                             SupportesMoeDpTp)
+                                                             SupportsMoeDpTp)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, extract_layer_index, is_pp_missing_parameter,
@@ -509,7 +509,7 @@ class Qwen3MoeModel(nn.Cell):
         return loaded_params
 
 
-class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts,
+class Qwen3MoeForCausalLM(NativeModel, SupportsMoeDpTp, MixtureOfExperts,
                           SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [

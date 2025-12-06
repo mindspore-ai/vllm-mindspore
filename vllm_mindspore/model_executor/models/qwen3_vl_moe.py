@@ -50,7 +50,7 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader, get_loaded_weight)
 from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
-                                                             SupportesMoeDpTp)
+                                                             SupportsMoeDpTp)
 from vllm_mindspore.model_executor.models.utils import PPMissingLayer
 
 from .qwen2_5_vl import Qwen2_5_VisionRotaryEmbedding
@@ -319,7 +319,7 @@ class Qwen3MoeLLMForCausalLM(Qwen3MoeForCausalLM):
     dummy_inputs=Qwen3VLDummyInputsBuilder,
 )
 class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration,
-                                         SupportesMoeDpTp, MixtureOfExperts,
+                                         SupportsMoeDpTp, MixtureOfExperts,
                                          SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):

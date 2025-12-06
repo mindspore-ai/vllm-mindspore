@@ -33,7 +33,7 @@ from vllm.sequence import IntermediateTensors
 from vllm.v1.sample.metadata import SamplingMetadata
 
 from vllm_mindspore.model_executor.models.attention_mask import (
-    LowerTriangularMask)
+    LowerTriangularMask, MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import (
     is_mixture_of_experts, supports_moe_dp_tp)
 from vllm_mindspore.model_executor.models.utils import (convert_pin,
@@ -42,6 +42,8 @@ from vllm_mindspore.model_executor.utils import set_model_context
 from vllm_mindspore.utils import (STR_DTYPE_TO_MS_DTYPE, create_kv_cache,
                                   is_310p)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
+
+MODEL_INPUT_VALUE_CACHE_INDEX = 3
 
 
 class AttentionWrapper(AttentionLayerBase):
@@ -157,6 +159,7 @@ class MsModelBase:
         self.num_layers = self.model_config.get_num_layers(
             self.parallel_config)
 
+        self.use_mla = self.model_config.use_mla
         self.use_ringmla: bool = False
         self.has_prefill_warmup: bool = False
         self.has_chunked_warmup: bool = not self.use_ringmla
@@ -273,17 +276,18 @@ class MsModelBase:
         raise NotImplementedError
 
     def get_kvcache(self):
-        key_cache = []
-        value_cache = []
         forward_context = get_forward_context()
-        for i in range(self.num_layers):
-            k_cache = self.kv_caches[i].kv_cache[
-                forward_context.virtual_engine][0]
-            v_cache = self.kv_caches[i].kv_cache[
-                forward_context.virtual_engine][1]
-            key_cache.append(k_cache)
-            value_cache.append(v_cache)
-        return mutable(key_cache), mutable(value_cache)
+        key_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
+            for i in range(self.num_layers)
+        ]
+        if self.use_mla:
+            return (mutable(key_cache), )
+        value_cache = [
+            self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
+            for i in range(self.num_layers)
+        ]
+        return (mutable(key_cache), mutable(value_cache))
 
     @abstractmethod
     def compute_logits(
@@ -340,7 +344,7 @@ class MsModelBase:
         if attn_metadata is None:
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
-        key_cache, value_cache = self.get_kvcache()
+        kvcache = self.get_kvcache()
 
         is_prefill = attn_metadata.max_context_lens == 0
         query_lens_np = attn_metadata.q_seq_lens_np
@@ -362,8 +366,9 @@ class MsModelBase:
         model_inputs["position_ids"] = convert_pin(position_ids)
         model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
         model_inputs["attention_mask"] = convert_pin(attention_mask)
-        model_inputs["key_cache"] = key_cache
-        model_inputs["value_cache"] = value_cache
+        model_inputs["key_cache"] = kvcache[0]
+        if not self.use_mla:
+            model_inputs["value_cache"] = kvcache[1]
 
         return model_inputs, is_prefill
 
@@ -416,10 +421,20 @@ class NativeModel(MsModelBase):
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({"model": self.model, "lm_head": self.lm_head})
 
-        self.casual_mask = LowerTriangularMask(
-            dtype=self.model_config.dtype,
-            max_model_len=self.model_config.max_model_len)
-        self.kv_caches = [AttentionWrapper() for i in range(self.num_layers)]
+        if self.use_mla:
+            self.casual_mask = MLALowerTriangularMask(
+                dtype=self.model_config.dtype,
+                max_model_len=self.model_config.max_model_len)
+            self.kv_caches = [
+                MLAAttentionWrapper() for i in range(self.num_layers)
+            ]
+        else:
+            self.casual_mask = LowerTriangularMask(
+                dtype=self.model_config.dtype,
+                max_model_len=self.model_config.max_model_len)
+            self.kv_caches = [
+                AttentionWrapper() for i in range(self.num_layers)
+            ]
 
         compilation_config = vllm_config.compilation_config
         if prefix in compilation_config.static_forward_context:
@@ -481,10 +496,12 @@ class NativeModel(MsModelBase):
         num_layers = self.model_config.get_num_layers(self.parallel_config)
 
         dyn_key_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
-        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype)
+        dyn_value_cache = Tensor(shape=kv_cache_shape, dtype=kv_cache_dtype) \
+            if not self.use_mla else None
         dyn_key_caches = mutable([dyn_key_cache for _ in range(num_layers)])
         dyn_value_caches = mutable(
-            [dyn_value_cache for _ in range(num_layers)])
+            [dyn_value_cache for _ in range(num_layers)]) \
+                if not self.use_mla else None
 
         dyn_slot_mapping = Tensor(shape=[None], dtype=mstype.int32)
         dynamic_attention_mask = Tensor(shape=[None, None],
@@ -500,6 +517,9 @@ class NativeModel(MsModelBase):
             dyn_q_seq_lens, dyn_block_tables, dyn_intermediate_hidden_states,
             dyn_intermediate_residual, dyn_inputs_embeds
         ]
+        if self.use_mla:
+            # when use Multi-Query Latent Attention, value cache is redundant
+            set_inputs_args.pop(MODEL_INPUT_VALUE_CACHE_INDEX)
         # Add MoE-specific parameters if available
         if moe_params := self._get_moe_input_params():
             set_inputs_args.extend([
@@ -622,7 +642,8 @@ class NativeModel(MsModelBase):
         new_model_inputs["q_seq_lens"] = model_inputs["q_seq_lens"]
         new_model_inputs["attn_mask"] = model_inputs["attention_mask"]
         new_model_inputs["key_caches"] = model_inputs["key_cache"]
-        new_model_inputs["value_caches"] = model_inputs["value_cache"]
+        if not self.use_mla:
+            new_model_inputs["value_caches"] = model_inputs["value_cache"]
         # for multimodal model
         if intermediate_tensors is not None:
             new_model_inputs["input_ids"] = None

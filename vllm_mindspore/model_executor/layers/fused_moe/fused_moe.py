@@ -24,7 +24,8 @@ from typing import Optional
 import mindspore as ms
 import numpy as np
 from mindspore import Tensor, mint, nn, ops
-from mindspore.ops.auto_generate import (GroupedMatmulV4, MoeDistributeCombine,
+from mindspore.ops.auto_generate import (FusedAddTopKDiv, GroupedMatmulV4,
+                                         MoeDistributeCombine,
                                          MoeDistributeDispatch,
                                          MoeGatingTopKSoftmax,
                                          MoeInitRoutingV2, MoeTokenUnpermute)
@@ -32,6 +33,17 @@ from vllm.distributed.parallel_state import get_ep_group
 
 from vllm_mindspore.model_executor.layers.fused_moe.config import MoeMode
 from vllm_mindspore.utils import is_310p, is_910b
+
+try:
+    import ms_custom_ops
+    ms_custom_ops_is_available = True
+except ImportError:
+    # if user doesn't install ms_custom_ops, there will not be ImportError
+    # because ms_custom_ops is not a necessary lib in this module
+    ms_custom_ops_is_available = False
+
+DEFAULT_TOPK_IN_GROUP = 2
+DEFAULT_ROUTED_SCALING_FACTOR = 2.5
 
 
 def softmax_score_function(x):
@@ -61,16 +73,31 @@ def fused_topk(
 
 
 def grouped_topk(
-        hidden_states: Tensor,
-        gating_output: Tensor,
-        topk: int,
-        renormalize: bool,
-        num_expert_group: int = 0,
-        topk_group: int = 0,
-        scoring_func: str = "softmax",
-        e_score_correction_bias: Optional[Tensor] = None
+    hidden_states: Tensor,
+    gating_output: Tensor,
+    topk: int,
+    renormalize: bool,
+    num_expert_group: int = 0,
+    topk_group: int = 0,
+    scoring_func: str = "softmax",
+    e_score_correction_bias: Optional[Tensor] = None,
+    routed_scaling_factor: float = DEFAULT_ROUTED_SCALING_FACTOR,
 ) -> tuple[Tensor, Tensor]:
-    raise NotImplementedError("grouped_topk is not implemented.")
+    fused_add_topk_div = FusedAddTopKDiv()
+    scoring_type = 0 if scoring_func == "sigmoid" else -1
+    gating_output = gating_output.to(ms.float32)
+    topk_weights, topk_ids = fused_add_topk_div(
+        gating_output,
+        e_score_correction_bias,
+        num_expert_group,
+        topk_group,
+        DEFAULT_TOPK_IN_GROUP,
+        topk,
+        scoring_type,
+        renormalize,
+        routed_scaling_factor,
+    )
+    return topk_weights, topk_ids
 
 
 class FusedExperts(nn.Cell):
@@ -101,8 +128,10 @@ class FusedExperts(nn.Cell):
         if moe_config.moe_parallel_config.ep_size > 1 and \
            moe_config.moe_parallel_config.tp_size == 1:
             self.moe_mode = MoeMode.PURE_EP
-            self.dispatch = MoeDistributeDispatch()
-            self.combine = MoeDistributeCombine()
+            self.dispatch = ms_custom_ops.moe_distribute_dispatch_v3 \
+                if ms_custom_ops_is_available else MoeDistributeDispatch()
+            self.combine = ms_custom_ops.moe_distribute_combine_v3 \
+                if ms_custom_ops_is_available else MoeDistributeCombine()
             self.dispatch_tp_world_size = 0 if is_910b() else 1
             self.dispatch_shared_expert_num = 0 if is_910b() else 1
             self.max_bs = 256 if is_910b() else 512
@@ -255,4 +284,45 @@ class FusedExperts(nn.Cell):
 
     def run_ep(self, hidden_states, w1, w2, topk_ids, topk_weights, activation,
                global_num_experts):
-        raise NotImplementedError("ep mode not implemented yet.")
+        topk_ids = topk_ids.astype(ms.int32)
+        topk_weights = topk_weights.astype(ms.float32)
+        # Dispatch
+        (
+            sorted_input_tensor,
+            _,
+            assist_info_for_combine,
+            group_list,
+            ep_recv_counts,
+            tp_recv_counts,
+            _,
+        ) = self.dispatch(
+            x=hidden_states,
+            expert_ids=topk_ids,
+            ep_world_size=self.ep_size,
+            ep_rank_id=self.ep_rank,
+            moe_expert_num=global_num_experts,
+            group_ep=self.ep_group,
+            tp_world_size=self.dispatch_tp_world_size,
+            global_bs=self.max_bs,
+        )
+
+        # GroupMatmul
+        expert_output = self._ffn(sorted_input_tensor, w1, w2, group_list,
+                                  activation)
+
+        # Combine
+        moe_output = self.combine(
+            expand_x=expert_output,
+            expert_ids=topk_ids,
+            assist_info_for_combine=assist_info_for_combine,
+            ep_send_counts=ep_recv_counts,
+            expert_scales=topk_weights,
+            ep_world_size=self.ep_size,
+            ep_rank_id=self.ep_rank,
+            moe_expert_num=global_num_experts,
+            tp_send_counts=tp_recv_counts,
+            group_ep=self.ep_group,
+            tp_world_size=self.dispatch_tp_world_size,
+            shared_expert_num=self.dispatch_shared_expert_num,
+            global_bs=self.max_bs)
+        return moe_output

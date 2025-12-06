@@ -41,6 +41,9 @@ from vllm_mindspore.model_executor.models.vision import (
 from vllm_mindspore.model_executor.utils import get_model_context
 from vllm_mindspore.utils import MS_DTYPE_TO_SIZE, is_310p
 
+YARN_MSCALE_COEFFICIENT = 0.1
+YARN_DEFAULT_SCALE = 1.0
+
 
 def _get_feat_extract_output_lengths(input_lengths: ms.Tensor):
     input_lengths_leave = input_lengths % 100
@@ -1602,6 +1605,80 @@ class DynamicNTKScalingRotaryEmbedding(InferRotaryEmbedding):
         return cos, sin
 
 
+def yarn_get_mscale(scale: float = 1, mscale: float = 1) -> float:
+    if scale <= YARN_DEFAULT_SCALE:
+        return YARN_DEFAULT_SCALE
+    return YARN_MSCALE_COEFFICIENT * mscale * math.log(
+        scale) + YARN_DEFAULT_SCALE
+
+
+class DeepseekScalingRotaryEmbedding(InferRotaryEmbedding):
+    """RotaryEmbedding extended with YaRN method.
+
+    Credits to Peng et al. github.com/jquesnelle/yarn
+    """
+
+    def __init__(
+        self,
+        head_size: int,
+        rotary_dim: int,
+        max_position_embeddings: int,
+        base: float,
+        is_neox_style: bool,
+        scaling_factor: float,
+        dtype,
+        *,
+        extrapolation_factor: float = 1,
+        attn_factor: float = 1,
+        beta_fast: int = 32,
+        beta_slow: int = 1,
+        mscale: float = 1,
+        mscale_all_dim: float = 0,
+    ) -> None:
+        self.scaling_factor = scaling_factor
+        self.extrapolation_factor = extrapolation_factor
+        self.attn_factor = attn_factor
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        # Get n-d magnitude scaling corrected for interpolation.
+        self.mscale = float(
+            yarn_get_mscale(self.scaling_factor, float(mscale)) /
+            yarn_get_mscale(self.scaling_factor, float(mscale_all_dim)) *
+            attn_factor)
+        super().__init__(head_size, rotary_dim, max_position_embeddings, base,
+                         is_neox_style, dtype)
+
+    def _compute_inv_freq(self, scaling_factor: float):
+        pos_freqs = self.base**(
+            np.arange(0, self.rotary_dim, 2, dtype=np.float32) /
+            self.rotary_dim)
+        inv_freq_extrapolation = 1.0 / pos_freqs
+        inv_freq_interpolation = 1.0 / (scaling_factor * pos_freqs)
+
+        low, high = _yarn_find_correction_range(self.beta_fast, self.beta_slow,
+                                                self.rotary_dim, self.base,
+                                                self.max_position_embeddings)
+        # Get n-d rotational scaling corrected for extrapolation
+        inv_freq_mask = (1 - _yarn_linear_ramp_mask(
+            low, high, self.rotary_dim // 2,
+            dtype=np.float32)) * self.extrapolation_factor
+        inv_freq = inv_freq_interpolation * (
+            1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
+        return inv_freq
+
+    def _compute_cos_sin_cache(self):
+        inv_freq = self._compute_inv_freq(self.scaling_factor)
+        t = np.arange(self.max_position_embeddings *
+                      self.scaling_factor).astype(np.float32)
+        freqs = np.outer(t, inv_freq)
+        emb = np.concatenate((freqs, freqs), axis=-1)
+        freqs_cos = (np.cos(emb) * self.mscale)
+        freqs_sin = (np.sin(emb) * self.mscale)
+        freqs_cos = ms.from_numpy(freqs_cos).to(self.dtype)
+        freqs_sin = ms.from_numpy(freqs_sin).to(self.dtype)
+        return freqs_cos, freqs_sin
+
+
 def get_rope(
     head_size: int,
     rotary_dim: int,
@@ -1700,6 +1777,19 @@ def get_rope(
             rotary_emb = InferPhi3LongRoPEScaledRotaryEmbedding(
                 head_size, rotary_dim, max_position, original_max_position,
                 base, is_neox_style, short_factor, long_factor, dtype)
+        elif scaling_type == "deepseek_yarn":
+            scaling_factor = rope_scaling["factor"]
+            original_max_position = rope_scaling[
+                "original_max_position_embeddings"]
+            extra_kwargs = {
+                k: v
+                for k, v in rope_scaling.items()
+                if k in ("extrapolation_factor", "attn_factor", "beta_fast",
+                         "beta_slow", "mscale", "mscale_all_dim")
+            }
+            rotary_emb = DeepseekScalingRotaryEmbedding(
+                head_size, rotary_dim, original_max_position, base,
+                is_neox_style, scaling_factor, dtype, **extra_kwargs)
         else:
             raise NotImplementedError
 
