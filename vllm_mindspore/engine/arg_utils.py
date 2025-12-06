@@ -37,7 +37,9 @@ def _set_default_args(self, usage_context: UsageContext,
     # for non-pooling tasks.
     # For pooling tasks the default is False
     if model_config.runner_type != "pooling":
-        self.enable_chunked_prefill = True
+        # vllm-mindspore: Need to support the `False`
+        if self.enable_chunked_prefill is None:
+            self.enable_chunked_prefill = True
 
         # TODO: When prefix caching supports prompt embeds inputs, this
         # check can be removed.
@@ -72,7 +74,9 @@ def _set_default_args(self, usage_context: UsageContext,
     # V1 should use the new scheduler by default.
     # Swap it only if this arg is set to the original V0 default
     if self.scheduler_cls == EngineArgs.scheduler_cls:
-        self.scheduler_cls = "vllm.v1.core.sched.scheduler.Scheduler"
+        # vllm-mindspore: Use EnhancedScheduler in place of Scheduler
+        self.scheduler_cls = (
+            "vllm_mindspore.v1.core.sched.scheduler.EnhancedScheduler")
 
     # When no user override, set the default values based on the usage
     # context.
