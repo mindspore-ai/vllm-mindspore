@@ -137,7 +137,7 @@ struct ConvertConcatenateOp : public OpConversionPattern<mlir::stablehlo::Concat
                                 ConversionPatternRewriter &rewriter) const override {
     Type resultType = getTypeConverter()->convertType(op.getResult().getType());
     auto axisValue = mrt::MrtValueBuilder(rewriter).createI64(op->getLoc(), op.getDimension());
-    rewriter.replaceOpWithNewOp<mrt::ConcatOp>(op, resultType, adaptor.getInputs(), axisValue);
+    rewriter.replaceOpWithNewOp<mrt::CatOp>(op, resultType, adaptor.getInputs(), axisValue);
     return success();
   }
 };

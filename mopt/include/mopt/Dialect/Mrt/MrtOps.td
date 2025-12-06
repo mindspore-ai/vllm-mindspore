@@ -202,7 +202,7 @@ def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
   let genAclnnOp = "aclnnCast";
 }
 
-def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
+def Mrt_CatOp : Mrt_Op<"cat", [Pure]> {
   let summary = "Concatenation operation";
   let description = [{
     Concatenates tensors along the specified axis.
@@ -218,6 +218,7 @@ def Mrt_ConcatOp : Mrt_Op<"concat", [Pure]> {
   let assemblyFormat = [{
     $inputs `,` $axis attr-dict `:` functional-type(operands, results)
   }];
+  let genAclnnOp = "aclnnCat";
 }
 
 def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
