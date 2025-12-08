@@ -31,9 +31,12 @@ def set_weight_attrs(
         return
     for key, value in weight_attrs.items():
         from vllm.platforms import current_platform
-
-        # materializing param before weight loader.
-        if key == "weight_loader":
+        """
+        Ensure the parameter is materialized before loading weights,
+        as required by deferred initialization to reduce peak memory.
+        """
+        if key == "weight_loader" and hasattr(
+                current_platform, "make_materializing_weight_loader"):
             value = current_platform.make_materializing_weight_loader(value)
         setattr(weight, key, value)
 

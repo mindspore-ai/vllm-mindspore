@@ -383,3 +383,4 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration,
         head_dim = (self.vision_config.hidden_size //
                     self.vision_config.num_heads)
         self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
+        self._rot_pos_ids_cache: dict[tuple[int, int], ms.Tensor] = {}
