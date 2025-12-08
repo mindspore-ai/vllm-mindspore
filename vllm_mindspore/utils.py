@@ -40,7 +40,6 @@ else:
     Library = None
 
 import mindspore as ms
-from mindspore import dtype as mstype
 from mindspore.common.initializer import Zero
 from vllm.logger import init_logger
 from vllm.utils import (TORCH_DTYPE_TO_NUMPY_DTYPE, MemoryProfilingResult,
@@ -61,6 +60,15 @@ STR_DTYPE_TO_MS_DTYPE = {
     "fp8_e4m3": ms.uint8,
     "fp8_e5m2": ms.uint8,
     "int8": ms.int8,
+}
+
+MS_DTYPE_TO_SIZE = {
+    ms.float16: 2,
+    ms.bfloat16: 2,
+    ms.float32: 4,
+    ms.float64: 8,
+    ms.uint8: 1,
+    ms.int8: 1,
 }
 
 FORMAT_TYPE = {
@@ -194,17 +202,6 @@ STR_DTYPE_TO_TENSOR_DTYPE = {
     "fp8_e4m3": torch.uint8,
     "fp8_e5m2": torch.uint8,
     "int8": torch.int8,
-}
-
-STR_DTYPE_TO_MS_DTYPE = {
-    "half": mstype.float16,
-    "float16": mstype.float16,
-    "bfloat16": mstype.bfloat16,
-    "float": mstype.float32,
-    "fp8": mstype.uint8,
-    "fp8_e4m3": mstype.uint8,
-    "fp8_e5m2": mstype.uint8,
-    "int8": mstype.int8,
 }
 
 

@@ -77,3 +77,11 @@ DeepSeek-R1-W8A8-smoothquant-newconfig:
 Qwen3-VL-8B-Instruct:
   description: "Qwen3-VL-8B-Instruct, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-VL-8B-Instruct"
+
+GLM-4.1V-9B-Thinking:
+  description: "GLM-4.1V-9B-Thinking, HF default configuration, source from https://huggingface.co/zai-org/GLM-4.1V-9B-Thinking"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/GLM-4.1V-9B-Thinking"
+
+GLM-4-9B-0414:
+  description: "GLM-4-9B-0414, HF default configuration, source from https://huggingface.co/zai-org/GLM-4-9B-0414"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/GLM-4-9B-0414"

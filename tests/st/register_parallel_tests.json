@@ -119,6 +119,10 @@
     {
       "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_8b_v1.py::test_qwen3_vl_8b_v1",
       "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/glm4_1v/test_vllm_glm4_1v_9b_v1.py::test_glm4_1v_9b_v1",
+      "card_num": 2
     }
   ],
   "registered_310p_tests": [

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""test native qwen3 vl 8B."""
+"""test mf qwen3 vl 8B."""
 import pytest
 from unittest.mock import patch
 
@@ -23,7 +23,6 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from tests.utils.env_var_manager import EnvVarManager
 from tests.st.models.qwen2_5_vl.similarity import compare_distance
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
@@ -38,12 +37,12 @@ env_vars = {
 }
 
 PROMPT_TEMPLATE = (
-    "<|im_start|>user\nWhat is in the image?<|vision_start|><|image_pad|>"
-    "<|vision_end|><|im_end|>\n<|im_start|>assistant\n")
+    "[gMASK]<sop><|user|>\nWhat is in the image?<|begine_of_image|><|image|>"
+    "<|end_of_image|><|assistant|>\n")
 
 image_path = \
     "/home/workspace/mindspore_dataset/images/houses_and_mountain.jpeg"
-model_path = MODEL_PATH["Qwen3-VL-8B-Instruct"]
+model_path = MODEL_PATH["GLM-4.1V-9B-Thinking"]
 
 
 def pil_image() -> Image.Image:
@@ -79,16 +78,15 @@ def forward_and_check(llm):
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=128, top_k=1)
     expect_list = [
-        "This is a beautiful, scenic landscape photograph. Here's a "
-        "breakdown of what's in the image:\n\n* Foreground: A vibrant green "
-        "meadow dotted with wildflowers, including yellow daisies and pink "
-        "blossoms. A small, rustic wooden shed with a tiled roof sits "
-        "prominently in the grass.\n* Midground: A calm, blue lake or alpine "
-        "tarn stretches across the scene, surrounded by more green fields "
-        "and a few other small wooden structures. The shoreline is lined "
-        "with dense forests of evergreen trees.\n* Background: A majestic "
-        "range of snow-capped mountains rises in the distance, their peaks "
-        "catching the"
+        "Got it, let's analyze the image. The image shows a scenic landscape "
+        "with several elements. First, there's a grassy field with colorful "
+        "flowers (yellow and pink). Then, there are wooden cabins or small "
+        "houses scattered in the meadow. In the middle, there's a lake or "
+        "pond with blue water. Surrounding the area are dense forests with "
+        "tall trees, and in the background, there are majestic mountains "
+        "with some snow on their peaks, under a partly cloudy sky. So, the "
+        "main elements are natural landscapes: meadows, flowers, cabins, a "
+        "lake, forests, and mountains. I need to list what's"
     ]
 
     outputs = llm.generate(inputs, sampling_params)
@@ -101,9 +99,9 @@ def forward_and_check(llm):
 
 @patch.dict(os.environ, env_vars)
 @pytest.mark.level0
-def test_qwen3_vl_8b_v1():
+def test_glm4_1v_9b_v1():
     """
-    test case qwen3 vl 8B
+    test case glm4_1v 9B
     """
     import vllm_mindspore
 
@@ -115,9 +113,9 @@ def test_qwen3_vl_8b_v1():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
-def test_qwen3_vl_8b_v1_enforce_eager():
+def test_glm4_1v_9b_v1_enforce_eager():
     """
-    test case qwen3 vl 8B with eager mode
+    test case glm4_1v 9B with eager mode
     """
     import vllm_mindspore
 
