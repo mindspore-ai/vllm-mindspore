@@ -89,9 +89,9 @@ from vllm_mindspore.v1.utils import CpuGpuBuffer
 vllm.v1.utils.CpuGpuBuffer = CpuGpuBuffer
 
 from vllm_mindspore.v1.core.single_type_kv_cache_manager import (
-    spec_manager_map)
+    _spec_manager_map)
 
-vllm.v1.core.single_type_kv_cache_manager.spec_manager_map = spec_manager_map
+vllm.v1.core.single_type_kv_cache_manager.spec_manager_map = _spec_manager_map
 
 from vllm_mindspore.utils import (
     make_tensor_with_pad,
@@ -100,16 +100,16 @@ from vllm_mindspore.utils import (
     ms_memory_profiling,
 )
 
-from vllm_mindspore.config import CacheDType, _CacheConfig, \
+from vllm_mindspore.config import _CacheDType, _CacheConfig, \
     get_current_and_parent_class_attr_docs, _SchedulerConfig
 
-vllm.config.CacheConfig = _CacheConfig
+vllm.config.cache.CacheConfig = _CacheConfig
+vllm.config.cache.CacheDType = _CacheDType
 vllm.config.SchedulerConfig = _SchedulerConfig
-vllm.config.CacheDType = CacheDType
 vllm.config.get_attr_docs = get_current_and_parent_class_attr_docs
 import vllm.engine.arg_utils
 
-vllm.engine.arg_utils.CacheDType = CacheDType
+vllm.engine.arg_utils.CacheDType = _CacheDType
 vllm.engine.arg_utils.CacheConfig = _CacheConfig
 vllm.engine.arg_utils.SchedulerConfig = _SchedulerConfig
 vllm.engine.arg_utils.get_attr_docs = get_current_and_parent_class_attr_docs

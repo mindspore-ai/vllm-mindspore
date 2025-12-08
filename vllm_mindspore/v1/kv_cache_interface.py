@@ -18,7 +18,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 from dataclasses import dataclass
 
 from typing_extensions import Self
@@ -31,7 +30,6 @@ from vllm.v1.kv_cache_interface import FullAttentionSpec
 class MLAQuantFullAttentionSpec(FullAttentionSpec):
 
     fa3_quant: bool = False
-    diff_page_size_merge: bool = False
 
     @property
     def type_id(self) -> str:
@@ -42,40 +40,13 @@ class MLAQuantFullAttentionSpec(FullAttentionSpec):
         max_model_len = vllm_config.model_config.max_model_len
         return cdiv(max_model_len, self.block_size) * self.page_size_bytes
 
-    def get_page_size(self, fa3_quant: bool) -> int:
-        """
-        The size of a page with `block_size` tokens in bytes.
-        fa3_quant_layer k_cache is int8, v_cache is bfloat16.
-        no_fa3_quant_layer all k_cache and v_cache are bfloat16.
-
-        Returns:
-            The page size
-        """
-        coef = 1
-        ctkv_nope_dim = 512
-        qk_rope_dim = 64
-        return coef * self.block_size * self.num_kv_heads * \
-                ((ctkv_nope_dim if fa3_quant else ctkv_nope_dim * 2) + \
-                 qk_rope_dim * 2)
-
     @property
     def page_size_bytes(self) -> int:
         """
         The size of a page with `block_size` tokens in bytes.
         fa3_quant_layer k_cache is int8, v_cache is bfloat16.
         no_fa3_quant_layer all k_cache and v_cache are bfloat16.
-
-        this page_size_bytes is a property in the base class, and property
-        can't add function parameters. and if different page_size AttentionSpec
-        merged, this reseult of this function will be incorrect.
-        so if self.diff_page_size_merge is True, an error is reported.
         """
-        if self.diff_page_size_merge:
-            raise ValueError(
-                "after merge, self.fa3_quant is changed, "
-                "the function get_page_size maybe incorrect, "
-                "please use get_page_size function or evaluate the "
-                "possible impact of incorrect page_size_bytes.")
         coef = 1
         ctkv_nope_dim = 512
         qk_rope_dim = 64
@@ -86,10 +57,14 @@ class MLAQuantFullAttentionSpec(FullAttentionSpec):
     @classmethod
     def merge(cls, specs: list[Self]) -> Self:
         """
-        Merge a list of KVCacheSpec objects into a single KVCacheSpec object.
+        To ensure that the kvcache processing logic for fa quantization is
+        unified and all goes through UniformTypeKVCacheSpecs, and convenience
+        to handle in the _allocate_nz_kv_cache_tensors_fa3 function, false is
+        directly assert here.
+
+        The `assert False` is mainly for the scenarios where all layers are
+        either faquant or non-faquant. Logically, they can be merged, but for
+        the unification of fquant kvcache manage logic, `False` is directly
+        returned here.
         """
-        merge_specs = copy.deepcopy(specs[0])
-        if not all(spec.type_id == specs[0].type_id for spec in specs[1:]):
-            # TODO: merge_specs.diff_page_size_merge
-            pass
-        return merge_specs
+        assert False  # noqa: B011

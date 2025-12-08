@@ -30,6 +30,7 @@ import torch
 from pydantic.dataclasses import dataclass
 from transformers import PretrainedConfig
 from vllm.config import CacheConfig, VllmConfig, get_attr_docs
+from vllm.config.cache import CacheDType
 from vllm.config.compilation import (CompilationConfig, CompilationLevel,
                                      CUDAGraphMode)
 from vllm.config.model import (_STR_DTYPE_TO_TORCH_DTYPE, _find_dtype,
@@ -326,9 +327,9 @@ def stateless_destroy_socket_process_group(
 
 
 #The location of the native vllm:
-#https://github.com/vllm-project/vllm/blob/v0.9.1/vllm/config.py#1447
-#Compared with it, "int8" was added.
-CacheDType = Literal["auto", "fp8", "fp8_e4m3", "fp8_e5m2", "int8"]
+#https://github.com/vllm-project/vllm/blob/v0.11.0/vllm/config/cache.py#L25
+#Compared with it, "int8" was added, used for kvcahe int8 quant.
+_CacheDType = Literal[CacheDType, "int8"]
 
 # the vllm.config.get_attr_docs function can only obtain the' docs' of
 # the current class, but not the 'docs' of the member variables of the
@@ -386,7 +387,7 @@ class _CacheConfig(CacheConfig):
     @config decorator.
     '''
 
-    cache_dtype: CacheDType = "auto"
+    cache_dtype: _CacheDType = "auto"
     """Data type for kv cache storage. If "auto", will use model data type.
     CUDA 11.8+ supports fp8 (=fp8_e4m3) and fp8_e5m2. ROCm (AMD GPU) supports
     fp8 (=fp8_e4m3)."""
