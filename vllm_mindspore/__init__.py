@@ -440,11 +440,6 @@ V1Worker.__init__ = (wrapper_worker_bind_cpu(
 V1Worker.init_device = wrapper_worker_init_device(V1Worker.init_device)
 V1Worker.compile_or_warm_up_model = compile_or_warm_up_model
 
-from vllm_mindspore.v1.core.sched.scheduler import update_from_output
-from vllm.v1.core.sched.scheduler import Scheduler
-
-Scheduler.update_from_output = update_from_output
-
 from vllm_mindspore.v1.executor.multiproc_executor import (
     executor_ensure_worker_termination, )
 from vllm.v1.executor.multiproc_executor import MultiprocExecutor
