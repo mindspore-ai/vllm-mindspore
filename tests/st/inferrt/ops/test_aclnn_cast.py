@@ -18,7 +18,7 @@ import torch
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(x, dtype):
@@ -159,4 +159,3 @@ def test_cast_int_to_float(pipeline, monkeypatch):
     npu_output = op_func_compiled(npu_input, torch.float32).detach().cpu()
 
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
-

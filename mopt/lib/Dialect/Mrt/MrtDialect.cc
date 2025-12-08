@@ -192,7 +192,11 @@ void BindSymbolicShapeOp::print(mlir::OpAsmPrinter &p) {
 }
 
 llvm::LogicalResult BindSymbolicShapeOp::verify() {
-  if (getShapeSymbols().empty()) return emitOpError() << "requires non-empty shapeSymbols";
+  auto affineMap = getShapeExpressions().getValue();
+  if (affineMap.getNumSymbols() != getShapeSymbols().size()) {
+    return emitOpError() << "number of shape symbols (" << getShapeSymbols().size()
+                         << ") must match number of symbols in affine map (" << affineMap.getNumSymbols() << ")";
+  }
 
   for (auto symbol : getShapeSymbols()) {
     mlir::Operation *definingOp = symbol.getDefiningOp();

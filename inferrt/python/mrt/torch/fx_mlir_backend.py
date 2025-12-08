@@ -170,7 +170,7 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
 
     # Run pass to convert Torch to MRT dialect directly
     with mlir_module.context:
-        pm = PassManager.parse("builtin.module(convert-torch-to-mrt)")
+        pm = PassManager.parse("builtin.module(convert-torch-to-mrt,canonicalize)")
         pm.run(mlir_module.operation)
     _print_verbose("MRT Dialect Module (after passes)", mlir_module)
 
@@ -178,11 +178,13 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     # Use PassOptions to pass device info - all logic is handled in C++ pass
     device_str = "cpu"
     device_index = -1
-    if example_inputs and isinstance(example_inputs[0], torch.Tensor):
-        device_str = _get_device_string_from_torch_tensor(example_inputs[0])
-        device_index = getattr(example_inputs[0].device, "index", None)
-        if device_index is None:
-            device_index = -1
+    if example_inputs:
+        first_tensor = next((inp for inp in example_inputs if isinstance(inp, torch.Tensor)), None)
+        if first_tensor is not None:
+            device_str = _get_device_string_from_torch_tensor(first_tensor)
+            device_index = getattr(first_tensor.device, "index", None)
+            if device_index is None:
+                device_index = -1
 
     # Run pass with device information via PassOptions
     with mlir_module.context:

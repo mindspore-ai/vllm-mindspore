@@ -39,8 +39,8 @@ class MrtValueBuilder {
   // Create a boolean value
   mlir::Value createBoolean(mlir::Location loc, bool value);
 
-  // Create a f32 value
-  mlir::Value createF32(mlir::Location loc, float value);
+  // Create a f64 value
+  mlir::Value createF64(mlir::Location loc, double value);
 
   // Create a dtype value from element type
   mlir::Value createDtype(mlir::Location loc, mlir::Type elemType);

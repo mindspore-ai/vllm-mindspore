@@ -22,7 +22,7 @@
 namespace mrt {
 namespace ir {
 constexpr const char *kTagStrings[] = {
-  "None", "Tensor", "Float", "Double", "Int", "Bool", "String", "Tuple", "Symbol",
+  "None", "Tensor", "Double", "Int", "Bool", "String", "Tuple", "Symbol",
 };
 
 std::vector<ir::TensorPtr> Tuple::ToTensorList() {
@@ -52,15 +52,6 @@ std::vector<uint8_t> Tuple::ToBoolList() {
   return boolList;
 }
 
-std::vector<float> Tuple::ToFloatList() {
-  std::vector<float> floatList;
-  floatList.reserve(elements_.size());
-  for (size_t i = 0; i < elements_.size(); ++i) {
-    (void)floatList.emplace_back(elements_[i]->ToFloat());
-  }
-  return floatList;
-}
-
 std::vector<double> Tuple::ToDoubleList() {
   std::vector<double> doubleList;
   doubleList.reserve(elements_.size());
@@ -73,7 +64,6 @@ std::vector<double> Tuple::ToDoubleList() {
 const char *TagToString(Value::Tag tag) { return kTagStrings[static_cast<size_t>(tag)]; }
 
 Value::Value(const TensorPtr &v) : tag_(Tag::Tensor), tensor_(v) {}
-Value::Value(float v) : tag_(Tag::Float), float_(v) {}
 Value::Value(double v) : tag_(Tag::Double), double_(v) {}
 Value::Value(int64_t v) : tag_(Tag::Int), int_(v) {}
 Value::Value(bool v) : tag_(Tag::Bool), bool_(v) {}
@@ -104,9 +94,6 @@ Value::Value(Value &&other) noexcept : tag_(other.tag_) {
   switch (tag_) {
     case Tag::Tensor:
       new (&tensor_) TensorPtr(std::move(other.tensor_));
-      break;
-    case Tag::Float:
-      float_ = other.float_;
       break;
     case Tag::Double:
       double_ = other.double_;
@@ -149,9 +136,6 @@ Value &Value::operator=(const Value &other) {
       case Tag::Tensor:
         tensor_ = other.tensor_;
         break;
-      case Tag::Float:
-        float_ = other.float_;
-        break;
       case Tag::Double:
         double_ = other.double_;
         break;
@@ -186,10 +170,6 @@ Value &Value::operator=(const Value &other) {
 const TensorPtr &Value::ToTensor() const {
   CHECK_TAG(Tag::Tensor);
   return tensor_;
-}
-float Value::ToFloat() const {
-  CHECK_TAG(Tag::Float);
-  return float_;
 }
 double Value::ToDouble() const {
   CHECK_TAG(Tag::Double);
@@ -265,9 +245,6 @@ std::ostream &operator<<(std::ostream &os, const Value &value) {
       break;
     case Value::Tag::Tensor:
       os << value.ToTensor();
-      break;
-    case Value::Tag::Float:
-      os << value.ToFloat();
       break;
     case Value::Tag::Double:
       os << value.ToDouble();

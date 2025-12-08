@@ -19,7 +19,7 @@ import torch
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(input, dim0 ,dim1):

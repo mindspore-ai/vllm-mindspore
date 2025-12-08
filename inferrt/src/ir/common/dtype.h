@@ -154,7 +154,7 @@ struct DataType {
       {"int32", Int32},         {"i32", Int32},     {"si32", Int32},  // int32
       {"int64", Int64},         {"i64", Int64},     {"si64", Int64},  // int64
       {"uint8", UInt8},         {"ui8", UInt8},                       // uint8
-      {"bool", Bool},                                                 // bool
+      {"bool", Bool},           {"i1", Bool},                         // bool
       {"unknown", Unknown},                                           // unknown
     };
     auto it = kStringToTypeMap.find(str);

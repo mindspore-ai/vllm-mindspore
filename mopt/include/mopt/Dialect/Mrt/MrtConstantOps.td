@@ -54,21 +54,6 @@ def Mrt_CreateBooleanOp : Mrt_Op<"constant.boolean", [Pure]> {
   let assemblyFormat = "$value attr-dict `:` type($result)";
 }
 
-// Create a f32 value from an attribute
-// The created value can be modified at runtime through other operations.
-def Mrt_CreateF32Op : Mrt_Op<"constant.f32", [Pure]> {
-  let summary = "Create a f32 value from an attribute";
-  let description = [{
-    Creates a value of Mrt_F32Type from a float attribute.
-    The created value can be modified at runtime through other operations.
-  }];
-
-  let arguments = (ins F32Attr:$value);
-  let results = (outs Mrt_F32Type:$result);
-
-  let assemblyFormat = "$value attr-dict `:` type($result)";
-}
-
 // Create a f64 value from an attribute
 // The created value can be modified at runtime through other operations.
 def Mrt_CreateF64Op : Mrt_Op<"constant.f64", [Pure]> {
@@ -95,21 +80,6 @@ def Mrt_CreateI64ArrayOp : Mrt_Op<"constant.i64_array", [Pure]> {
 
   let arguments = (ins I64ArrayAttr:$value);
   let results = (outs Mrt_I64ArrayType:$result);
-
-  let assemblyFormat = "$value attr-dict `:` type($result)";
-}
-
-// Create a f32 array value from an attribute
-// The created value can be modified at runtime through other operations.
-def Mrt_CreateF32ArrayOp : Mrt_Op<"constant.f32_array", [Pure]> {
-  let summary = "Create a f32 array value from an attribute";
-  let description = [{
-    Creates a value of Mrt_F32ArrayType from a float array attribute.
-    The created value can be modified at runtime through other operations.
-  }];
-
-  let arguments = (ins F32ArrayAttr:$value);
-  let results = (outs Mrt_F32ArrayType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
 }
@@ -173,27 +143,6 @@ def Mrt_CreateDtypeOp : Mrt_Op<"constant.dtype", [Pure]> {
   let results = (outs Mrt_DtypeType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
-}
-
-// Create a scalar value from an attribute and element type
-// The created value can be modified at runtime through other operations.
-// This operation creates a Mrt_ScalarType with the specified element type.
-def Mrt_CreateScalarOp : Mrt_Op<"constant.scalar", [Pure]> {
-  let summary = "Create a scalar value from an attribute and element type";
-  let description = [{
-    Creates a value of Mrt_ScalarType from a value attribute and an element type.
-    The value attribute can be F32Attr, F64Attr, I64Attr, etc., and the elementType
-    specifies the data type of the scalar (e.g., f32, f64, i64).
-    The created value can be modified at runtime through other operations.
-  }];
-
-  let arguments = (ins
-    AnyAttr:$value,
-    TypeAttr:$elementType
-  );
-  let results = (outs Mrt_ScalarType:$result);
-
-  let assemblyFormat = "$value `,` $elementType attr-dict `:` type($result)";
 }
 
 #endif // MRT_DIALECT_MRT_CONSTANT_OPS_TD

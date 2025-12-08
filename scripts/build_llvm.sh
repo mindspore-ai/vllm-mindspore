@@ -16,6 +16,7 @@ if [[ $INC_BUILD == 1 ]] && [[ -f "${_LLVM_ENV}" ]]; then
     return
 fi
 
+rm -rf "${_TEMP_BUILD}"
 mkdir -p "${_TEMP_BUILD}"
 # Create minimal CMakeLists.txt to trigger cmake/llvm.cmake
 cat > "${_TEMP_BUILD}/CMakeLists.txt" << 'EOF'

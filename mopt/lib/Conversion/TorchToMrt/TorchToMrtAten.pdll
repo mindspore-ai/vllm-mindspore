@@ -1,12 +1,69 @@
+Pattern ConvertAtenAddTensor {
+  let root = op<torch.aten.add.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.add>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenBitwiseAndTensor {
+  let root = op<torch.aten.bitwise_and.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.bitwise_and_tensor>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenBitwiseNot {
+  let root = op<torch.aten.bitwise_not>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.bitwise_not>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenDivTensor {
+  let root = op<torch.aten.div.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.div>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenEmbedding {
+  let root = op<torch.aten.embedding>(
+    weight: Value, indices: Value,
+    padding_idx: Value, scale_grad_by_freq: Value, sparse: Value
+  ) -> (resType: Type);
+  replace root with op<mrt.embedding>(
+    convertValue(weight), convertValue(indices)
+  ) -> (convertType(resType));
+}
+
+Pattern ConvertAtenEqTensor {
+  let root = op<torch.aten.eq.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.eq>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenGeTensor {
+  let root = op<torch.aten.ge.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.ge>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenGtTensor {
+  let root = op<torch.aten.gt.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.gt>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenLeTensor {
+  let root = op<torch.aten.le.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.le>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenLtTensor {
+  let root = op<torch.aten.lt.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.lt>(convertValues(operands)) -> (convertType(resType));
+}
 
 Pattern ConvertAtenMulTensor {
-  let root = op<torch.aten.mul.Tensor>(
-    self: Value,
-    other: Value
-  ) -> (resType: Type);
+  let root = op<torch.aten.mul.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.mul>(convertValues(operands)) -> (convertType(resType));
+}
 
-  replace root with op<mrt.mul>(
-    convertValue(self),
-    convertValue(other)
-  ) -> (convertType(resType));
+Pattern ConvertAtenNeTensor {
+  let root = op<torch.aten.ne.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.ne>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenRemainderTensor {
+  let root = op<torch.aten.remainder.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.remainder_tensor_tensor>(convertValues(operands)) -> (convertType(resType));
 }
