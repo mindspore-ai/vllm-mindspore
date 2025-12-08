@@ -55,8 +55,9 @@ from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
                                                              SupportsMoeDpTp)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
-    PPMissingLayer, extract_layer_index, is_pp_missing_parameter,
-    make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+    AutoWeightsLoaderMS, PPMissingLayer, extract_layer_index,
+    is_pp_missing_parameter, make_empty_intermediate_tensors_factory,
+    make_layers, maybe_prefix)
 from vllm_mindspore.v1.attention import Attention
 
 logger = init_logger(__name__)
@@ -574,5 +575,5 @@ class Qwen3MoeForCausalLM(NativeModel, SupportsMoeDpTp, MixtureOfExperts,
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        return self.model.load_weights(weights, params_dict)
+        loader = AutoWeightsLoaderMS(self)
+        return loader.load_weights(weights)

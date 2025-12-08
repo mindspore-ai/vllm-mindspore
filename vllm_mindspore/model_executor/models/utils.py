@@ -18,19 +18,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
 import mindspore as ms
-from mindspore import Tensor, mint, ops
+from mindspore import Parameter, Tensor, mint, ops
+from vllm.logger import init_logger
 from vllm.sequence import IntermediateTensors
 
+from vllm_mindspore.model_executor.model_loader.weight_utils import (
+    default_weight_loader)
 from vllm_mindspore.multimodal.inputs import NestedTensors
 from vllm_mindspore.utils import get_valid_dtype, is_310p
 
 WeightsMapping = Mapping[str, Optional[str]]
 """If a key maps to a value of `None`, the corresponding weight is ignored."""
+
+logger = init_logger(__name__)
 
 
 def convert_pin(input_tensor):
@@ -338,3 +344,151 @@ def is_use_ringmla(vllm_config, mf_config=None):
                    and vllm_config.model_config.quantization is not None
                    and vllm_config.parallel_config.tensor_parallel_size < 16)
     return use_ringmla
+
+
+class AutoWeightsLoaderMS:
+    """
+    Helper class to load weights into a [`nn.Cell`][]. It is able
+    to automatically detect child modules and parameters while iterating over
+    the weights only once.
+
+    The weight loading logic for individual modules can be overridden
+    by defining a ``load_weights`` method.
+
+    Similarly, the weight loading logic for individual parameters can be
+    overridden by defining a ``weight_loader`` method.
+
+    Detailed weight loading information can be viewed by setting the
+    environment variable ``VLLM_LOGGING_LEVEL=DEBUG``.
+    """
+
+    # Models trained using early version ColossalAI
+    # may include these tensors in checkpoint. Skip them.
+    ROTARY_EMBEDS_UNUSED_WEIGHTS = [
+        "rotary_emb.inv_freq",
+        "rotary_emb.cos_cached",
+        "rotary_emb.sin_cached",
+    ]
+
+    def __init__(
+        self,
+        module,
+        *,
+        skip_prefixes: Optional[list[str]] = None,
+        skip_substrs: Optional[list[str]] = None,
+        ignore_unexpected_prefixes: Optional[list[str]] = None,
+    ) -> None:
+        super().__init__()
+
+        self.module = module
+        self.skip_prefixes = skip_prefixes or []
+        self.skip_substrs = skip_substrs or []
+        self.ignore_unexpected_prefixes = ignore_unexpected_prefixes or []
+        # update default skip_substrs
+        self.skip_substrs += self.ROTARY_EMBEDS_UNUSED_WEIGHTS
+
+    def _can_skip(self, qualname: str) -> bool:
+        return (any(qualname.startswith(p) for p in self.skip_prefixes)
+                or any(substr in qualname for substr in self.skip_substrs))
+
+    def _can_ignore_unexpected(self, qualname: str) -> bool:
+        return any(
+            qualname.startswith(p) for p in self.ignore_unexpected_prefixes)
+
+    def _groupby_prefix(
+        self,
+        weights: Iterable[tuple[str, Tensor]],
+    ) -> Iterable[tuple[str, Iterable[tuple[str, Tensor]]]]:
+        modules_name = self.module.get_modules_dict().keys()
+
+        # Define key func: find matching prefix (module name) in name
+        def get_prefix(name):
+            for prefix in modules_name:
+                if prefix == "":
+                    if "." not in name:
+                        return ""
+                elif name.startswith(prefix + ".") or name == prefix:
+                    # Ensure prefix does not end with '.'
+                    return prefix.rstrip('.')
+            return ""
+
+        # Group by prefix
+        for prefix, group in itertools.groupby(weights,
+                                               key=lambda x: get_prefix(x[0])):
+            yield (prefix, ((parts, weights_data)
+                            for parts, weights_data in group))
+
+    def _load_module(
+        self,
+        base_prefix: str,
+        module,
+        weights: Iterable[tuple[str, Tensor]],
+        param_dict: dict[str, Parameter],
+    ) -> Iterable[str]:
+        msg = ("There is no module or parameter named %s "
+               "in %s")
+
+        modules_dict = module.get_modules_dict()
+        for child_prefix, child_weights in self._groupby_prefix(weights):
+            if self._can_skip(child_prefix + '.'):
+                logger.debug("Skipping module %s", child_prefix)
+                continue
+
+            if self._can_ignore_unexpected(child_prefix + "."):
+                logger.debug("Ignoring missing %s", child_prefix)
+                continue
+
+            module = modules_dict.get(child_prefix, None)
+            if module is None:
+                raise ValueError(f'The prefix "{child_prefix}" of weight '
+                                 'is not found in model definition')
+
+            if isinstance(module, PPMissingLayer):
+                continue
+
+            # For submodule, e.g., Language_model, visual model.
+            if hasattr(module, "load_weights"):
+                yield from modules_dict[child_prefix].load_weights(
+                    child_weights, param_dict)
+            # For independent cell, which is define under Native Model.
+            # Or parameters rights under the Native Model
+            else:
+                memo = set()
+                for name, weight in child_weights:
+                    if self._can_skip(name):
+                        logger.debug("Skipping param %s", name)
+                        continue
+                    if self._can_ignore_unexpected(name):
+                        logger.debug("Ignoring missing %s", name)
+                        continue
+                    param = param_dict.get(name)
+                    if param is None:
+                        raise ValueError(
+                            msg.format(name,
+                                       type(self.module).__name__))
+                    assert isinstance(
+                        param, Parameter), f"param {name} is not a Parameter"
+                    weight_loader = getattr(param, "weight_loader",
+                                            default_weight_loader)
+                    weight_loader(param, weight)
+                    logger.debug("Loaded weight %s with shape %s", name,
+                                 param.shape)
+                    memo.add(name)
+                yield from memo
+
+    def load_weights(
+        self,
+        weights: Iterable[tuple[str, Tensor]],
+        *,
+        mapper: Optional[WeightsMapper] = None,
+    ) -> set[str]:
+        if mapper is not None:
+            weights = mapper.apply(weights)
+        # filter out weights with first-prefix/substr to skip in name
+        weights = ((name, weight) for name, weight in weights
+                   if not self._can_skip(name))
+
+        param_dict = self.module.get_params_dict()
+        autoloaded_weights = set(
+            self._load_module("", self.module, weights, param_dict))
+        return autoloaded_weights

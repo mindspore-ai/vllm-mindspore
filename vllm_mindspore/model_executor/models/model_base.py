@@ -190,18 +190,25 @@ class MsModelBase:
     def set_modules(self, model_dicts: dict[str, nn.Cell]):
         self.modules_dict = model_dicts
 
+    def get_modules_dict(self) -> dict[str, nn.Cell]:
+        self._check_modules_valid()
+        return cast(dict[str, nn.Cell], self.modules_dict)
+
     def _check_modules_valid(self):
         if self.modules_dict is None:
             raise RuntimeError("Should set modules firstly!")
 
     def named_parameters(self):
         self._check_modules_valid()
+        memo = set()
         modules_dict = cast(dict[str, nn.Cell], self.modules_dict)
         for cell_name, module in modules_dict.items():
             for par_name, par in module.parameters_and_names():
+                if par is None or par in memo:
+                    continue
                 if cell_name != "self":
                     par_name = cell_name + "." + par_name
-
+                memo.add(par)
                 yield par_name, par
 
     def get_params_dict(self):

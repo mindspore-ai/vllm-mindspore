@@ -61,7 +61,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import \
 from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
-    maybe_prefix)
+    maybe_prefix, AutoWeightsLoaderMS)
 from vllm_mindspore.model_executor.models.sparse_quant_weight_loader import (
     load_split_weights)
 from vllm_mindspore.utils import is_310p
@@ -431,14 +431,6 @@ class Qwen2Model(nn.Cell):
                                             default_weight_loader)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
-                    if (is_310p() and self.config.tie_word_embeddings
-                            and "embed_tokens" in name
-                            and "lm_head.weight" in params_dict):
-                        lm_head_param = params_dict["lm_head.weight"]
-                        weight_loader = getattr(lm_head_param, "weight_loader",
-                                                default_weight_loader)
-                        weight_loader(lm_head_param, loaded_weight)
-                        loaded_params.add("lm_head.weight")
 
         return loaded_params
 
@@ -480,7 +472,7 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
                                 prefix=maybe_prefix(prefix, "model"))
 
         if get_pp_group().is_last_rank:
-            if config.tie_word_embeddings:
+            if config.tie_word_embeddings and not is_310p():
                 self.lm_head = self.model.embed_tokens
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
@@ -515,8 +507,22 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        self.model.load_weights(weights, params_dict)
+        if is_310p() and self.config.tie_word_embeddings:
+            lm_head_weight = None
+            for name, weight in weights:
+                if "embed_tokens.weight" in name:
+                    lm_head_weight = weight
+                    break
+            if lm_head_weight is not None:
+                weights = list(weights)
+                weights.append(("lm_head.weight", lm_head_weight))
+
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)
 
     def compute_logits(
         self,

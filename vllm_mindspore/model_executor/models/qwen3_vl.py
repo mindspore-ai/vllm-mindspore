@@ -89,7 +89,8 @@ from vllm_mindspore.model_executor.models.qwen2_5_vl import (
 from vllm_mindspore.model_executor.models.qwen3 import (Qwen3ForCausalLM,
                                                         Qwen3Model)
 from vllm_mindspore.model_executor.models.utils import (
-    PPMissingLayer, WeightsMapper, _merge_multimodal_embeddings, maybe_prefix)
+    AutoWeightsLoaderMS, PPMissingLayer, WeightsMapper,
+    _merge_multimodal_embeddings, maybe_prefix)
 from vllm_mindspore.utils import is_310p
 
 try:
@@ -1172,9 +1173,9 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         # override the common_preprocess method to
         # set modules prefix and casual mask.
         self.set_modules({
-            "model.visual": self.visual,
-            "model.language_model": self.language_model.model,
-            "lm_head": self.language_model.lm_head
+            "visual": self.visual,
+            "language_model.model": self.language_model.model,
+            "language_model.lm_head": self.language_model.lm_head
         })
         self.casual_mask = MultiModalLowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -1526,30 +1527,20 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    ms.Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        loaded_param = set()
-        visual_load = set()
-        text_load = set()
-        for name, weight in weights:
-            if "model.visual." in name:
-                visual_load.update(
-                    self.visual.load_weights([(name, weight)], params_dict))
-            elif "model.language_model." in name:
-                text_load.update(
-                    self.model.load_weights([(name, weight)], params_dict))
-            else:
-                # Handle other weights
-                if name in params_dict:
-                    param = params_dict[name]
-                    weight_loader = getattr(param, "weight_loader",
-                                            default_weight_loader)
-                    weight_loader(param, weight)
-                    loaded_param.add(name)
-        loaded_param.update(visual_load)
-        loaded_param.update(text_load)
-        if self.language_model.config.tie_word_embeddings and not is_310p():
-            loaded_param.add("lm_head.weight")
-        return loaded_param
+        if is_310p() and self.config.tie_word_embeddings:
+            lm_head_weight = None
+            for name, weight in weights:
+                if "embed_tokens.weight" in name:
+                    lm_head_weight = weight
+                    break
+            if lm_head_weight is not None:
+                weights = list(weights)
+                weights.append(("lm_head.weight", lm_head_weight))
+        skip_prefixes = []
+        if self.visual is None:
+            skip_prefixes.extend(["visual."])
+        loader = AutoWeightsLoaderMS(self, skip_prefixes=skip_prefixes)
+        return loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
 
     def get_mm_mapping(self) -> MultiModelKeys:
         """

@@ -46,7 +46,8 @@ from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.models.llama import LlamaMLP as Glm4MLP
 from vllm_mindspore.model_executor.models.llama import LlamaModel
 from vllm_mindspore.model_executor.models.model_base import NativeModel
-from vllm_mindspore.model_executor.models.utils import (PPMissingLayer,
+from vllm_mindspore.model_executor.models.utils import (AutoWeightsLoaderMS,
+                                                        PPMissingLayer,
                                                         maybe_prefix)
 from vllm_mindspore.v1.attention import Attention
 
@@ -307,5 +308,9 @@ class Glm4ForCausalLM(NativeModel, SupportsPP):
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        return self.model.load_weights(weights, params_dict)
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)

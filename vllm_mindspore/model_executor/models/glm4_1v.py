@@ -84,7 +84,8 @@ from vllm_mindspore.model_executor.models.model_base import (AttentionWrapper,
 from vllm_mindspore.model_executor.models.qwen2_5_vl import (
     _qwen2vl_field_config)
 from vllm_mindspore.model_executor.models.utils import (
-    WeightsMapper, maybe_prefix, merge_multimodal_embeddings)
+    AutoWeightsLoaderMS, WeightsMapper, maybe_prefix,
+    merge_multimodal_embeddings)
 from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
@@ -1248,9 +1249,9 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal,
     # set modules prefix and casual mask.
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
-            "model.visual": self.visual,
-            "model.language_model": self.language_model.model,
-            "lm_head": self.language_model.lm_head
+            "visual": self.visual,
+            "language_model.model": self.language_model.model,
+            "language_model.lm_head": self.language_model.lm_head
         })
         self.casual_mask = MultiModalLowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -1547,21 +1548,8 @@ class Glm4vForConditionalGeneration(NativeModel, SupportsMultiModal,
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    ms.Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        loaded_param = set()
-        visual_load = set()
-        text_load = set()
-        for name, weight in weights:
-            if "visual." in name:
-                visual_load.update(
-                    self.visual.load_weights([(name, weight)], params_dict))
-            else:
-                text_load.update(
-                    self.model.load_weights([(name, weight)], params_dict))
-
-        loaded_param.update(visual_load)
-        loaded_param.update(text_load)
-        return loaded_param
+        loader = AutoWeightsLoaderMS(self)
+        return loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
 
     def get_mm_mapping(self) -> MultiModelKeys:
         """

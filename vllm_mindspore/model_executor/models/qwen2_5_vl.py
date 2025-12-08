@@ -78,18 +78,14 @@ from vllm_mindspore.distributed.communication_op import \
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
 from vllm_mindspore.model_executor.layers.linear import ColumnParallelLinear, \
     RowParallelLinear, QKVParallelLinear
-from vllm_mindspore.model_executor.layers.logits_processor import \
-    LogitsProcessor
-from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import \
-    ParallelLMHead
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     default_weight_loader
 from vllm_mindspore.model_executor.models.attention_mask import \
     MultiModalLowerTriangularMask
 from vllm_mindspore.model_executor.models.model_base import NativeModel, \
     AttentionWrapper
-from vllm_mindspore.model_executor.models.qwen2 import Qwen2Model
-from vllm_mindspore.model_executor.models.utils import PPMissingLayer
+from vllm_mindspore.model_executor.models.qwen2 import Qwen2ForCausalLM
+from vllm_mindspore.model_executor.models.utils import AutoWeightsLoaderMS
 from vllm_mindspore.model_executor.model_loader.weight_utils import \
     get_loaded_weight
 from .interfaces import (SupportsMultiModal)
@@ -1055,7 +1051,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
-        loaded_params.add(name)
+            loaded_params.add(name)
         return loaded_params
 
 
@@ -1153,10 +1149,15 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
     embedding_padding_modules = []  # type: ignore[var-annotated]
 
     # To ensure correct weight loading and mapping.
-    hf_to_vllm_mapper = WeightsMapper(orig_to_new_prefix={
-        "lm_head.": "language_model.lm_head.",
-        "model.": "language_model.model.",
-    })
+    hf_to_vllm_mapper = WeightsMapper(
+        orig_to_new_prefix={
+            # mapping for new names in checkpoint saved after transformers v4.52
+            "model.language_model.": "language_model.model.",
+            "model.visual.": "visual.",
+            # mapping for original checkpoint
+            "lm_head.": "language_model.lm_head.",
+            "model.": "language_model.model.",
+        })
 
     @classmethod
     def get_placeholder_str(cls, modality: str, i: int) -> Optional[str]:
@@ -1195,21 +1196,12 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         logger.info(
             "PyNative is not available for vit, vit is always graph mode.")
 
-        self.model = Qwen2Model(vllm_config=vllm_config,
-                                prefix=maybe_prefix(prefix, "model"))
+        self.language_model = Qwen2ForCausalLM(vllm_config=vllm_config,
+                                               prefix=maybe_prefix(
+                                                   prefix, "language_model"))
 
-        if get_pp_group().is_last_rank:
-            if config.tie_word_embeddings:
-                self.lm_head = self.model.embed_tokens
-            else:
-                self.lm_head = ParallelLMHead(config.vocab_size,
-                                              config.hidden_size,
-                                              quant_config=quant_config,
-                                              prefix=maybe_prefix(
-                                                  prefix, "lm_head"))
-            self.logits_processor = LogitsProcessor(config.vocab_size)
-        else:
-            self.lm_head = PPMissingLayer()
+        self.model = self.language_model.model
+        self.lm_head = self.language_model.lm_head
 
         self.common_preprocess(vllm_config, prefix)
         self.spatial_merge_size = config.vision_config.spatial_merge_size
@@ -1227,8 +1219,8 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
     def common_preprocess(self, vllm_config, prefix=""):
         self.set_modules({
             "visual": self.visual,
-            "model": self.model,
-            "lm_head": self.lm_head
+            "language_model.model": self.language_model.model,
+            "language_model.lm_head": self.language_model.lm_head
         })
         self.casual_mask = MultiModalLowerTriangularMask(
             dtype=self.model_config.dtype,
@@ -1595,20 +1587,18 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         self,
         hidden_states: ms.Tensor,
     ) -> Optional[ms.Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states)
+        logits = self.language_model.logits_processor(self.lm_head,
+                                                      hidden_states)
         return logits
 
     def load_weights(
         self, weights: Iterable[tuple[str, ms.Tensor]]
     ) -> None:  # type: ignore[override]
-        params_dict = self.get_params_dict()
-        for name, weight in weights:
-            if "visual." in name:
-                self.visual.load_weights([(name, weight)], params_dict)
-            else:
-                self.model.load_weights([(name, weight)], params_dict)
-
-        return None
+        skip_prefixes = []
+        if self.visual is None:
+            skip_prefixes.extend(["visual."])
+        loader = AutoWeightsLoaderMS(self, skip_prefixes=skip_prefixes)
+        return loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
 
     def get_mm_mapping(self) -> MultiModelKeys:
         """
