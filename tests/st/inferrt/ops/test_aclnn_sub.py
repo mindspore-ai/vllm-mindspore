@@ -8,31 +8,31 @@ from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(x1, x2, alpha):
-    """op function for add"""
-    return x1 + alpha * x2
+    """op function for sub"""
+    return x1 - alpha * x2
 
 
-def add_alpha_2(x1, x2):
+def sub_alpha_2(x1, x2):
     """custom op function with alpha=2"""
-    return torch.add(x1, x2, alpha=2)
+    return torch.sub(x1, x2, alpha=2)
 
 
-def add_alpha_0_5(x1, x2):
+def sub_alpha_0_5(x1, x2):
     """custom op function with alpha=0.5"""
-    return torch.add(x1, x2, alpha=0.5)
+    return torch.sub(x1, x2, alpha=0.5)
 
 
-def add_no_alpha(x1, x2):
-    """custom op function without alpha, using + operator"""
-    return x1 + x2
+def sub_no_alpha(x1, x2):
+    """custom op function without alpha, using - operator"""
+    return x1 - x2
 
 
-def add_forward(dtype, shape, alpha, op_func_compiled):
+def sub_forward(dtype, shape, alpha, op_func_compiled):
     """
-    add forward function
+    sub forward function
     Args:
         dtype: The data type of the input.
-        alpha: The alpha value in add.
+        alpha: The alpha value in sub.
         op_func_compiled: The compiled op function.
     """
     if np.issubdtype(dtype, np.integer):
@@ -60,36 +60,36 @@ def add_forward(dtype, shape, alpha, op_func_compiled):
 @pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
-    (add_no_alpha, 1.0),
-    (add_alpha_2, 2),
-    (add_alpha_0_5, 0.5)
+    (sub_no_alpha, 1.0),
+    (sub_alpha_2, 2),
+    (sub_alpha_0_5, 0.5)
 ])
-def test_add_fp32(pipeline, shape, op_func, alpha, monkeypatch):
+def test_sub_fp32(pipeline, shape, op_func, alpha, monkeypatch):
     """
-    Feature: Test aclnn add
-    Description: Test aclnn add with fp32 inputs and different alpha types
+    Feature: Test aclnn sub
+    Description: Test aclnn sub with fp32 inputs and different alpha types
     Expectation: The result is correct
     """
     if pipeline:
         monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     op_func_compiled = torch.compile(op_func, backend=backend)
-    add_forward(np.float32, shape, alpha, op_func_compiled)
+    sub_forward(np.float32, shape, alpha, op_func_compiled)
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
-    (add_no_alpha, 1),
-    (add_alpha_2, 2)
+    (sub_no_alpha, 1),
+    (sub_alpha_2, 2)
 ])
-def test_add_int32(pipeline, shape, op_func, alpha, monkeypatch):
+def test_sub_int32(pipeline, shape, op_func, alpha, monkeypatch):
     """
-    Feature: Test aclnn add
-    Description: Test aclnn add with int32 inputs and different alpha types
+    Feature: Test aclnn sub
+    Description: Test aclnn sub with int32 inputs and different alpha types
     Expectation: The result is correct
     """
     if pipeline:
         monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     op_func_compiled = torch.compile(op_func, backend=backend)
-    add_forward(np.int32, shape, alpha, op_func_compiled)
+    sub_forward(np.int32, shape, alpha, op_func_compiled)

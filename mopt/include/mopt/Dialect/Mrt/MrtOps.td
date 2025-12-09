@@ -868,6 +868,28 @@ def Mrt_SplitTensorOp : Mrt_Op<"split_tensor", [Pure]> {
   let genAclnnOp = "aclnnSplitTensor";
 }
 
+def Mrt_SubOp : Mrt_Op<"sub", [Pure]> {
+  let summary = "aclnnSub";
+  let description = [{
+    Element-wise subtraction of two tensors with an optional alpha scaling factor.
+    Computes: result = x - y * alpha
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$y,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $y `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSub";
+}
+
 def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {
   let summary = "aclnnSwiGlu";
   let description = [{
