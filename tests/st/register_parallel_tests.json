@@ -65,6 +65,10 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/models/deepseek/offline/test_vllm_deepseek_mtp.py::test_deepseek_r1_mtp",
+      "card_num": 4
+    },
+    {
       "test_node_id": "st/chunk_prefill/test_vllm_mf_qwen_7b_chunk_prefill_v1.py::test_mf_qwen_7b_chunk_prefill",
       "card_num": 2
     },

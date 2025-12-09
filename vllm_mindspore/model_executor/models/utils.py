@@ -326,9 +326,14 @@ def is_use_ringmla(vllm_config, mf_config=None):
         return False
     if is_310p():
         return False
-    if vllm_config.model_config.hf_config.model_type == "deepseek_mtp":
-        # weight of deepseek mtp model has not been quantized
+
+    fa3_quant = vllm_config.cache_config.cache_dtype == "int8"
+    if vllm_config.speculative_config is not None and not fa3_quant:
+        # For speculative inference, ringmla may reduce the acceptance rate.
+        # So that ringmla is enabled only if fa3_quant is enabled, and disabled
+        # when the base model is w8a8-quantized.
         return False
+
     use_ringmla = (vllm_config.model_config.use_mla
                    and vllm_config.model_config.quantization is not None
                    and vllm_config.parallel_config.tensor_parallel_size < 16)

@@ -235,6 +235,8 @@ def _prepare_inputs(
     # like FlashAttention requires that
     self.query_start_loc.np[num_reqs + 1:].fill(cu_num_tokens[-1])
     q_seq_lens_np = np.diff(self.query_start_loc.np[:num_reqs_padded + 1])
+    query_start_loc_np = self.query_start_loc.np[:num_reqs + 1]
+    query_start_loc = ms.from_numpy(query_start_loc_np)
 
     uniform_decode = \
         (max_num_scheduled_tokens == self.uniform_decode_query_len) and \
@@ -290,7 +292,6 @@ def _prepare_inputs(
         # We will ignore the sampled tokens from the partial requests.
         # TODO: Support prompt logprobs.
         # vllm-mindspore begin
-        query_start_loc = ms.from_numpy(self.query_start_loc.np[:num_reqs + 1])
         logits_indices = query_start_loc[1:] - 1
         # vllm-mindspore end
         num_draft_tokens = None
@@ -354,8 +355,9 @@ def _prepare_inputs(
             scheduler_output.num_common_prefix_blocks[kv_cache_group_id])
 
         common_attn_metadata = MsCommonAttentionMetadata(
-            query_start_loc=None,
+            query_start_loc=query_start_loc,
             query_start_loc_cpu=None,
+            query_start_loc_np=query_start_loc_np,
             q_seq_lens_np=q_seq_lens_np,
             seq_lens=seq_lens,
             seq_lens_cpu=None,
@@ -560,6 +562,19 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
             in fa3_quant_layer
         num_blocks = kv_cache_tensor.size // kv_cache_spec.page_size_bytes
         block_size = kv_cache_spec.block_size
+        head_dim = 1  # head_dim usually = 1
+
+        # allocate kvcache for draft model which does not use fa-quant.
+        if not isinstance(kv_cache_spec, MLAQuantFullAttentionSpec):
+            kv_shape = (num_blocks, block_size, head_dim,
+                        kv_lora_rank + qk_rope_head_dim)
+            kv_cache_layer = [
+                create_kv_cache(kv_shape, self.vllm_config.model_config.dtype)
+            ]
+            final_kv_tuple = mutable(tuple(kv_cache_layer))
+            for layer_name in kv_cache_tensor.shared_by:
+                kv_caches[layer_name] = final_kv_tuple
+            continue
 
         kv_cache_layer = []
         """
@@ -574,7 +589,6 @@ def _allocate_nz_kv_cache_tensors_fa3(self, kv_cache_config):
         k_dtype = ms.int8 if is_fa3_quant_layer else \
                   self.vllm_config.model_config.dtype
         v_dtype = self.vllm_config.model_config.dtype
-        head_dim = 1  # head_dim usually = 1
         k_shape = (num_blocks, block_size, head_dim, kv_lora_rank)
         v_shape = (num_blocks, block_size, head_dim, qk_rope_head_dim)
 
@@ -990,7 +1004,7 @@ def wrapper_gpu_model_runner_execute_model(func):
 def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
     block_size = self.vllm_config.cache_config.block_size
     use_mla = self.vllm_config.model_config.use_mla
-    fa3_quant = getattr(self.vllm_config.quant_config, "fa3_quant", False)
+    fa3_quant_ori = getattr(self.vllm_config.quant_config, "fa3_quant", False)
     fa3_quant_layer: set[int] = getattr(self.vllm_config.quant_config,
                                         "fa3_quant_layer", set())
     kv_cache_spec: dict[str, KVCacheSpec] = {}
@@ -1001,6 +1015,11 @@ def get_kv_cache_spec(self) -> dict[str, KVCacheSpec]:
         vllm-mindspore AttentionWrapper is not an Attention isinstance
         assert isinstance(attn_module, Attention)
         """
+        # disable fa-quant for draft model whose weight is not quantized.
+        num_hidden_layers = self.vllm_config.model_config.get_num_layers(
+            self.parallel_config)
+        fa3_quant = fa3_quant_ori and int(layer_name) < num_hidden_layers
+
         if attn_module.attn_type == AttentionType.DECODER:
             if attn_module.sliding_window is not None:
                 kv_cache_spec[layer_name] = SlidingWindowSpec(

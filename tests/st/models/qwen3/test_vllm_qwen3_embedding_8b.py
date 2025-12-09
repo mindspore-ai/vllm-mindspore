@@ -73,7 +73,8 @@ def test_vllm_qwen3_embedding_8b():
     input_texts = queries + documents
     model = LLM(model=MODEL_PATH["Qwen3-Embedding-8B"],
                 task="embed",
-                gpu_memory_utilization=0.5)
+                gpu_memory_utilization=0.9,
+                max_model_len=4096)
     outputs = model.embed(input_texts)
     embeddings = ms.tensor([o.outputs.embedding for o in outputs])
     scores = (embeddings[:2] @ embeddings[2:].T)

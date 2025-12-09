@@ -248,6 +248,26 @@ class MsAttentionMetadataBuilder:
         )
         return attn_metadata
 
+    def build_for_drafting(
+        self,
+        common_attn_metadata: CommonAttentionMetadata,
+        draft_index: int,
+    ):
+        """
+        Build attention metadata for draft model. Uses build by default.
+
+        Args:
+            common_attn_metadata: The common attention metadata.
+            draft_index: The index of the current draft operation.
+                When speculating a chain of tokens, this index refers to the
+                draft attempt for the i-th token.
+                For tree-based attention, this index instead refers to the
+                draft attempt for the i-th level in the tree of tokens.
+        """
+        return self.build(common_prefix_len=0,
+                          common_attn_metadata=common_attn_metadata,
+                          fast_build=True)
+
 
 FlashAttentionMetadata = MsAttentionMetadata
 
@@ -258,3 +278,4 @@ class MsCommonAttentionMetadata(CommonAttentionMetadata):
     seq_lens_np: np.ndarray = None
     num_computed_tokens_np: np.ndarray = None
     slot_mapping_np: np.ndarray = None
+    query_start_loc_np: np.ndarray = None

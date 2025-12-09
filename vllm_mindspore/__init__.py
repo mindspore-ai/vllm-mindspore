@@ -527,4 +527,21 @@ from vllm_mindspore.model_executor.layers.pooler import ms_forward_chunk
 
 PoolerNormalize.forward_chunk = ms_forward_chunk
 
+from vllm.v1.spec_decode.eagle import EagleProposer
+from vllm_mindspore.v1.spec_decode.eagle import (load_model, prepare_inputs,
+                                                 prepare_inputs_padded,
+                                                 prepare_next_token_ids_padded)
+
+EagleProposer.load_model = load_model
+EagleProposer.prepare_inputs = prepare_inputs
+EagleProposer.prepare_inputs_padded = prepare_inputs_padded
+EagleProposer.prepare_next_token_ids_padded = prepare_next_token_ids_padded
+
+import vllm.v1.sample.rejection_sampler
+from vllm_mindspore.v1.sample.rejection_sampler import (expand_batch_to_tokens,
+                                                        rejection_sample)
+
+vllm.v1.sample.rejection_sampler.expand_batch_to_tokens = expand_batch_to_tokens
+vllm.v1.sample.rejection_sampler.rejection_sample = rejection_sample
+
 check_ready()
