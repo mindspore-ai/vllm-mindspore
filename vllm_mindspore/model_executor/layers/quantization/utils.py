@@ -17,29 +17,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from typing import Literal, get_args
-
-from vllm.model_executor.layers.quantization.base_config import (
-    QuantizationConfig)
-
-# isort: off
-from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
-    golden_stick import GoldenStickConfig
-# isort: on
-
-QuantizationMethods = Literal[
-    "golden-stick",
-]
-
-QUANTIZATION_METHODS: list[str] = list(get_args(QuantizationMethods))
+from mindspore import Parameter, Tensor
+from mindspore.common import dtype as mstype
 
 
-def get_quantization_config(quantization: str) -> type[QuantizationConfig]:
-    if quantization not in QUANTIZATION_METHODS:
-        raise ValueError(f"Invalid quantization method: {quantization}.")
-
-    method_to_config: dict[str, type[QuantizationConfig]] = {
-        "golden-stick": GoldenStickConfig,
-    }
-    return method_to_config[quantization]
+def reciprocal(param: Parameter) -> Parameter:
+    np_param_recip = 1 / param.numpy()
+    param = Parameter(Tensor(np_param_recip, dtype=mstype.bfloat16),
+                      name=param.name,
+                      requires_grad=False)
+    return param
