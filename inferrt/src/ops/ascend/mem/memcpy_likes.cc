@@ -26,13 +26,13 @@
 
 namespace mrt {
 namespace ops {
-OpsErrorCode ViewMemcpyOpBase::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                             size_t *workspaceSize) {
+OpsErrorCode MemcpyOpBase::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                         size_t *workspaceSize) {
   return SUCCESS;
 }
 
-OpsErrorCode ViewMemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, void *workspace,
-                                      size_t workspaceSize, ir::Value *output, void *stream) {
+OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                                  ir::Value *output, void *stream) {
   auto inputTensor = input[kIndex0]->ToTensor();
   auto srcSize = inputTensor->Numel() * inputTensor->Dtype().GetSize();
   auto outTensor = output->ToTensor();
@@ -53,6 +53,7 @@ OpsErrorCode ViewMemcpyOpBase::Launch(const std::vector<const ir::Value *> &inpu
   return SUCCESS;
 }
 
-MRT_REG_OP(flatten, ViewFlatten, Ascend);
+MRT_REG_OP(flatten, Flatten, Ascend);
+MRT_REG_OP(unsqueeze, Unsqueeze, Ascend);
 }  // namespace ops
 }  // namespace mrt

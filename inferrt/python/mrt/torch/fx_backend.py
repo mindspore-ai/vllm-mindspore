@@ -147,7 +147,6 @@ def split_ops_hook(op, node, input_nodes, executor):
 def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
 
-
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
     _GLOBAL_GRAPH_ID += 1
@@ -171,6 +170,7 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.reshape: Op.reshape,
     torch.transpose: Op.permute,
+    torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
     torch.flatten: Op.flatten,
     torch.cat: Op.cat,
@@ -230,6 +230,7 @@ _OP_MAP = {
     "reshape": Op.reshape,
     "cat": Op.cat,
     "transpose": Op.permute,
+    "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
     "square": Op.square,
     "rsqrt": Op.rsqrt,
