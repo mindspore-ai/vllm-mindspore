@@ -101,7 +101,12 @@ def forward_and_check(llm):
 @pytest.mark.level0
 def test_glm4_1v_9b_v1():
     """
-    test case glm4_1v 9B
+    Test Summary:
+        Test native glm4.1 vl model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        GLM-4.1V-9B-Thinking
     """
     import vllm_mindspore
 
@@ -115,7 +120,12 @@ def test_glm4_1v_9b_v1():
 @pytest.mark.env_onecard
 def test_glm4_1v_9b_v1_enforce_eager():
     """
-    test case glm4_1v 9B with eager mode
+    Test Summary:
+        Test native glm4.1 vl model inference in eager mode.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        GLM-4.1V-9B-Thinking
     """
     import vllm_mindspore
 

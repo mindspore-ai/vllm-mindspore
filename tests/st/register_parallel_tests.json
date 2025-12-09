@@ -121,7 +121,7 @@
       "card_num": 2
     },
     {
-      "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_8b_v1.py::test_qwen3_vl_8b_v1",
+      "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_v1.py::test_qwen3_vl_8b_v1",
       "card_num": 2
     },
     {
