@@ -182,7 +182,7 @@ TensorPtr Tensor::ShallowClone() const {
   clonedTensor->SetFormat(memoryFormat_);
   clonedTensor->SetStorageShape(storageShape_);
   clonedTensor->SetStorageOffset(storageOffset_);
-  clonedTensor->SetSymbolicShape(symbolicShape_);
+  clonedTensor->SetSymbolicShapeRaw(symbolicShape_);
 
   // Verify that the cloned tensor shares the same storage
   // (This is a sanity check - the storage pointers should be the same)

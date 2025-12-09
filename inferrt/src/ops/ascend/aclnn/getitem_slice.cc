@@ -1,0 +1,111 @@
+/**
+ * Copyright 2025 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <vector>
+
+#include "ops/ascend/aclnn/getitem_slice.h"
+#include "ops/ascend/aclnn/utils/opapi_utils.h"
+#include "ops/op_register.h"
+
+namespace mrt {
+namespace ops {
+OpsErrorCode AclnnGetItemSlice::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                              size_t *workspaceSize) {
+  starts_ = input[kIndex1]->ToTuple()->ToIntList();
+  ends_ = input[kIndex2]->ToTuple()->ToIntList();
+  axes_ = input[kIndex3]->ToTuple()->ToIntList();
+  steps_ = input[kIndex4]->ToTuple()->ToIntList();
+  auto src = input[0]->ToTensor();
+  auto dst = output->ToTensor();
+  skipLaunch_ = std::any_of(dst->Shape().begin(), dst->Shape().end(), [](int64_t shape) { return shape == 0; });
+  if (skipLaunch_) {
+    LOG_OUT << "For GetItemSlice, the dst shape is " << dst->Shape() << " which contains 0, skipping launch.";
+    return SUCCESS;
+  }
+
+  needSqueeze_ = src->Shape().size() != dst->Shape().size();
+  if (needSqueeze_) {
+    // Adaptation for frontend getitem operation. For example, when x has shape (3, 3, 3, 4) and x[1, ..., 1:4:2] is
+    // executed, the actual output shape is (3, 3, 2), which is equivalent to squeezing dimensions with size 1. However,
+    // the backend aclnnSliceV2 requires the input and output shapes to have the same number of dimensions, so we need
+    // to re-infer the shape and add back the original axes with size 1.
+    dst_ = dst->ShallowClone();
+    std::vector<int64_t> sliceSizes(axes_.size());
+    CHECK_IF_FAIL(starts_.size() == ends_.size());
+    CHECK_IF_FAIL(ends_.size() == axes_.size());
+    CHECK_IF_FAIL(axes_.size() == steps_.size());
+    for (size_t i = 0; i < starts_.size(); i++) {
+      CHECK_IF_FAIL(steps_[i] != 0);
+      sliceSizes[i] = (ends_[i] - starts_[i] + steps_[i] - 1) / steps_[i];
+    }
+    std::vector<int64_t> shapes = src->Shape();
+    for (size_t i = 0; i < axes_.size(); i++) {
+      shapes[axes_[i]] = sliceSizes[i];
+    }
+
+    // Validate that shapes can be squeezed to dst->Shape()
+    // shapes should match dst after removing dimensions of size 1
+    size_t shapesIdx = 0;
+    auto dstShape = dst->Shape();
+    bool ShapeValid = true;
+    for (size_t dstIdx = 0; dstIdx < dstShape.size() && ShapeValid; ++dstIdx) {
+      while (shapesIdx < shapes.size() && shapes[shapesIdx] == 1 && shapes[shapesIdx] != dstShape[dstIdx]) {
+        shapesIdx++;  // Skip dimensions of size 1
+      }
+      ShapeValid = shapesIdx < shapes.size() && shapes[shapesIdx] == dstShape[dstIdx];
+      shapesIdx++;
+    }
+    // Ensure remaining shapes dimensions are all 1 (can be squeezed)
+    while (ShapeValid && shapesIdx < shapes.size()) {
+      ShapeValid = shapes[shapesIdx++] == 1;
+    }
+    if (!ShapeValid) {
+      LOG_EXCEPTION << "For GetItemSlice, the shapes " << shapes << " cannot be squeezed to dst shape " << dstShape
+                    << ". starts: " << starts_ << ", ends: " << ends_ << ", axes: " << axes_ << ", steps: " << steps_;
+    }
+
+    std::vector<int64_t> strides(shapes.size());
+    int64_t stride = 1;
+    for (int64_t i = static_cast<int64_t>(shapes.size()) - 1; i >= 0; --i) {
+      strides[i] = stride;
+      stride *= shapes[i];
+    }
+    dst_->SetShape(shapes);
+    dst_->SetStrides(strides);
+    executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), src, starts_, ends_, axes_, steps_, dst_);
+  } else {
+    executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), src, starts_, ends_, axes_, steps_, dst);
+  }
+  return SUCCESS;
+}
+
+OpsErrorCode AclnnGetItemSlice::Launch(const std::vector<const ir::Value *> &input, void *workspace,
+                                       size_t workspaceSize, ir::Value *output, void *stream) {
+  if (skipLaunch_) {
+    return SUCCESS;
+  }
+  if (needSqueeze_) {
+    executor_->Launch(workspace, workspaceSize, stream, input[0]->ToTensor(), starts_, ends_, axes_, steps_, dst_);
+  } else {
+    executor_->Launch(workspace, workspaceSize, stream, input[0]->ToTensor(), starts_, ends_, axes_, steps_,
+                      output->ToTensor());
+  }
+  return SUCCESS;
+}
+
+MRT_REG_OP(getitem_slice, AclnnGetItemSlice, Ascend);
+}  // namespace ops
+}  // namespace mrt
