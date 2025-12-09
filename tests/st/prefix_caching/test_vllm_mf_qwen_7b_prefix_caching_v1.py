@@ -38,7 +38,13 @@ env_vars = {
 @pytest.mark.level0
 def test_mf_qwen_7b_prefix_caching():
     """
-    test case qwen_7b_prefix_caching
+    Test Summary:
+        For the online mindformers backend scenario with default mode,
+        and then send two consecutive 2bs requests has same prefix.
+    Expected Result:
+        Successful execution with inference results meeting expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     from vllm import LLM, SamplingParams

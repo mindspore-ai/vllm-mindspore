@@ -158,4 +158,10 @@ def worker_fn():
 @patch.dict(os.environ, env_vars)
 @pytest.mark.level0
 def test_shm_broadcast():
+    """
+    Test Summary:
+        Test shm broadcast
+    Expected Result:
+        Successfully executed, verify process status.
+    """
     distributed_run(worker_fn, 4)

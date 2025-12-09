@@ -178,7 +178,12 @@ def prepare_text(processor, prompt: str):
 @pytest.mark.level0
 def test_qwen2_5_vl_7b_v1():
     """
-    test case qwen2.5 vl 7B
+    Test Summary:
+        Test native backend qwen2_5_vl model inference, with image inputs.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-VL-7B-Instruct
     """
     import vllm_mindspore
 
@@ -192,7 +197,13 @@ def test_qwen2_5_vl_7b_v1():
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_enforce_eager():
     """
-    test case qwen2.5 vl 7B with eager mode
+    Test Summary:
+        Test native backend qwen2_5_vl model inference in eager mode,
+        with image inputs.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-VL-7B-Instruct
     """
     import vllm_mindspore
 
@@ -205,6 +216,14 @@ def test_qwen2_5_vl_7b_v1_enforce_eager():
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_qwen2_5_vl_7b_v1_video_infer():
+    """
+    Test Summary:
+        Test native backend qwen2_5_vl model inference, with video inputs.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-VL-7B-Instruct
+    """
     import vllm_mindspore
     from vllm import LLM, SamplingParams
 

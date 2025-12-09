@@ -39,7 +39,12 @@ env_vars = {
 @pytest.mark.level0
 def test_mf_qwen():
     """
-    test case qwen2.5 7B
+    Test Summary:
+        Test case qwen2.5 7B model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     from vllm import LLM, SamplingParams
@@ -73,8 +78,13 @@ def test_mf_qwen():
 @patch.dict(os.environ, env_vars)
 def test_mf_qwen_batch():
     """
-    test case qwen2.5 7B, to test prefill and decode mixed, can trigger
-    PA q_seq_len > 1
+    Test Summary:
+        Test case qwen2.5 7B model inference. to test prefill and decode mixed,
+        can trigger PA q_seq_len > 1
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     from vllm import LLM, SamplingParams
@@ -114,7 +124,12 @@ def test_mf_qwen_batch():
 @pytest.mark.level0
 def test_mf_qwen_aclgraph():
     """
-    test case qwen2.5 7B
+    Test Summary:
+        test mcore qwen2.5 7B with aclgraph
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     from vllm import LLM, SamplingParams

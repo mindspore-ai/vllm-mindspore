@@ -76,7 +76,12 @@ def run_vllm_qwen(enforce_eager=False, enable_aclgraph=False):
 @pytest.mark.level0
 def test_vllm_qwen():
     """
-    test case qwen2.5 7B
+    Test Summary:
+        Test native backend qwen2.5 7B model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     run_vllm_qwen()
@@ -86,7 +91,12 @@ def test_vllm_qwen():
 @pytest.mark.level0
 def test_qwen_enforce_eager():
     """
-    Test qwen2.5 7B using ENFORCE_EAGER.
+    Test Summary:
+        Test native backend qwen2.5 7B model inference, using ENFORCE_EAGER.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen2.5-7B-Instruct
     """
     import vllm_mindspore
     run_vllm_qwen(enforce_eager=True)

@@ -103,7 +103,12 @@ def forward_and_check(llm):
 @pytest.mark.level0
 def test_qwen3_vl_8b_v1():
     """
-    test case qwen3 vl 8B
+    Test Summary:
+        Test native qwen3 vl model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-VL-8B-Instruct
     """
     import vllm_mindspore
 
@@ -117,7 +122,12 @@ def test_qwen3_vl_8b_v1():
 @pytest.mark.env_onecard
 def test_qwen3_vl_8b_v1_enforce_eager():
     """
-    test case qwen3 vl 8B with eager mode
+    Test Summary:
+        Test native qwen3 vl model inference in eager mode.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-VL-8B-Instruct
     """
     import vllm_mindspore
 

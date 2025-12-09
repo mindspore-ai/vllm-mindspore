@@ -243,6 +243,12 @@ TEST_CASES = [
                          TEST_CASES)
 def test_tool_call(streaming: bool, model_output: str,
                    expected_tool_calls: list[FunctionCall]):
+    """
+    Test Summary:
+        Test function call in various scenarios with deepseek_v3 tool_parser.
+    Expected Result:
+        Successful execution
+    """
     mock_tokenizer = MagicMock()
     tool_parser: ToolParser = ToolParserManager.get_tool_parser("deepseek_v3")(
         mock_tokenizer)

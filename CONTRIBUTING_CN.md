@@ -132,7 +132,13 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 
 2. 合并条件：
 
-    - PR 需关联对应的Issue（Bug 修复 / 功能开发），且描述清晰、改动合理，完成Self-checklist自检。​
+    - PR 需关联对应的Issue（Bug 修复 / 功能开发），且描述清晰、改动合理，完成Self-checklist自检。​PR 标题推荐添加相关的标签:
+  
+      - 类型标签: [Bugfix]、[CI]、[Doc]、[FEAT]、[Refactor]。
+  
+      - 分支标签: [master]、[r0.5.0]等。
+  
+      - 调试标签: [WIP]，处于该标签状态下的PR表示处于开发状态，不能被合入。
 
     - 所有门禁测试用例执行通过，无新增错误。​
 

@@ -38,7 +38,7 @@ env_vars = {
 
 
 def run_vllm_qwen3_30b_a3b(enforce_eager=False,
-                           is_310p=False,
+                           tp_size=2,
                            enable_aclgraph=False):
     """
     test case qwen3-30B-A3B
@@ -64,7 +64,7 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False,
     llm = LLM(
         model=MODEL_PATH["Qwen3-30B-A3B"],
         gpu_memory_utilization=0.9,
-        tensor_parallel_size=4 if is_310p else 2,
+        tensor_parallel_size=tp_size,
         max_model_len=4096,
         enforce_eager=enforce_eager,
         compilation_config=compilation_level,
@@ -87,6 +87,14 @@ def run_vllm_qwen3_30b_a3b(enforce_eager=False,
 @pytest.mark.level0
 def test_vllm_qwen3_30b_a3b():
     """
+    Test Summary:
+        Test native qwen3 moe model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-30B-A3B
+    """
+    """
     test case qwen3-30B-A3B
     """
 
@@ -97,7 +105,12 @@ def test_vllm_qwen3_30b_a3b():
 @pytest.mark.level0
 def test_vllm_qwen3_30b_a3b_eager():
     """
-    test case qwen3-30B-A3B eager mode
+    Test Summary:
+        Test native qwen3 moe model inference in eager mode.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-30B-A3B
     """
 
     run_vllm_qwen3_30b_a3b(enforce_eager=True)
@@ -107,10 +120,16 @@ def test_vllm_qwen3_30b_a3b_eager():
 @pytest.mark.level0
 def test_vllm_qwen3_30b_a3b_310p():
     """
-    test case qwen3-30B-A3B
+    Test Summary:
+        Test native qwen3 moe model inference in eager mode.
+        4 cards are required to execute on 310P.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-30B-A3B
     """
 
-    run_vllm_qwen3_30b_a3b(is_310p=True)
+    run_vllm_qwen3_30b_a3b(tp_size=4)
 
 
 @patch.dict(os.environ, env_vars)
@@ -126,5 +145,5 @@ def test_vllm_qwen3_30b_a3b_aclgraph():
     """
 
     run_vllm_qwen3_30b_a3b(enforce_eager=False,
-                           is_310p=False,
+                           tp_size=2,
                            enable_aclgraph=True)

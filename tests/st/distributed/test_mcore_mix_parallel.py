@@ -192,7 +192,7 @@ def test_vllm_qwen3_moe_30b_dp4_tp2_ep4():
         Running successfully, the first three tokens in the return result
         meet expectations.
     Model Info:
-        Qwen3-8B
+        Qwen3-30B-A3B
     """
     import vllm_mindspore
 

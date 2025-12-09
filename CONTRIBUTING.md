@@ -131,7 +131,13 @@ We recommend using the Fork-Pull Development Model for code submission. The deta
 
 2. Merging Criteria:
 
-    - The PR must be linked to the corresponding Issue (bug fix / feature development), with a clear description, reasonable changes, and completion of the Self-checklist.
+    - The PR must be linked to the corresponding Issue (bug fix / feature development), with a clear description, reasonable changes, and completion of the Self-checklist. It is recommended to add relevant tags to PR titles:
+  
+      - Type tags: [Bugfix], [CI], [Doc], [FEAT], [Refactor].
+  
+      - Branch tags: [master], [r0.5.0], etc.
+  
+      - WIP tag: [WIP]. A PR with this tag indicates that it is under development and must not be merged.
   
     - All CI test cases pass without new faults.
 

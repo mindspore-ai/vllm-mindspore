@@ -89,7 +89,7 @@ from tests.utils.common_utils import (teardown_function,     # [必选]pytest执
 def test_{test_function_name}(batch_size: int):   # 用例函数名以"test_"前缀开头，尽量体现测试场景
     """
     Test Summary:   # [必填]
-        描述测试用例的测试场景，中英文均可
+        描述测试用例的测试场景，推荐使用英文
     Expected Result: # [必填]
         预期执行结果
     Model Info:     # [可选]

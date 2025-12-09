@@ -65,10 +65,11 @@ def run_vllm_offline_001():
 def test_vllm_offline_001():
     """
     Test Summary:
-        离线ms场景使用最简配置，prompts传入字符串，
-        sampling_params为None
+        For the offline native backend scenario, the minimal configuration
+        is used, prompts are passed as strings, and sampling_params is set
+        to None.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -82,9 +83,11 @@ def test_vllm_offline_001():
 def test_vllm_mf_offline_001():
     """
     Test Summary:
-        离线mf场景使用最简配置，prompts传入字符串，sampling_params为None
+        For the offline mindformers backend scenario, the minimal configuration
+        is used, prompts are passed as strings, and sampling_params is set
+        to None.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -114,9 +117,10 @@ def run_vllm_offline_002(model, tensor_parallel_size=1):
 def test_vllm_offline_002():
     """
     Test Summary:
-        离线ms场景sampling_params配置支持的4个后处理参数
+        For the offline native backend scenario, test the 4 post-processing
+        parameters supported by the sampling_params configuration.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -128,9 +132,11 @@ def test_vllm_offline_002():
 def test_vllm_mf_offline_002():
     """
     Test Summary:
-        离线mf场景sampling_params配置支持的4个后处理参数
+        For the offline mindformers backend scenario, test the 4
+        post-processing parameters supported by the sampling_params
+        configuration.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-32B-Instruct
     """
@@ -157,9 +163,10 @@ def run_vllm_offline_003():
 def test_vllm_offline_003():
     """
     Test Summary:
-        离线ms场景llm.generate的promtps是空字符串
+        For the offline native backend scenario, test the prompts parameter
+        in llm.generate is an empty string.
     Expected Result:
-        运行报错 ValueError
+        Execution fails with a ValueError.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -173,9 +180,10 @@ def test_vllm_offline_003():
 def test_vllm_mf_offline_003():
     """
     Test Summary:
-        离线mf场景llm.generate的promtps是空字符串
+        For the offline mindformers backend scenario, test the prompts
+        parameter in llm.generate is an empty string.
     Expected Result:
-        运行报ValueError错误
+        Execution fails with a ValueError.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -203,9 +211,10 @@ def run_vllm_offline_004():
 def test_vllm_offline_004():
     """
     Test Summary:
-        离线ms场景llm.generate的promtps 是list(str)
+        For the offline native backend scenario, test the prompts parameter
+        in llm.generate is a list of strings (list[str]).
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -219,9 +228,10 @@ def test_vllm_offline_004():
 def test_vllm_mf_offline_004():
     """
     Test Summary:
-        离线mf场景llm.generate的promtps 是list(str)
+        For the offline mindformers backend scenario, test the prompts
+        parameter in llm.generate is a list of strings (list[str]).
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -235,9 +245,10 @@ def test_vllm_mf_offline_004():
 def test_vllm_server_001():
     """
     Test Summary:
-        ms服务化+请求接口,使用最简配置，prompts传入字符串
+        For the online native backend scenario, test request interface,
+        using the minimal configuration with prompts passed as strings.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -263,9 +274,10 @@ def test_vllm_server_001():
 def test_vllm_mf_server_001():
     """
     Test Summary:
-        mf服务化+请求接口,使用最简配置，prompts传入字符串
+        For the online mindformers backend scenario, test request interface,
+        using the minimal configuration with prompts passed as strings.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-32B-Instruct
     """
@@ -335,9 +347,10 @@ def run_vllm_server_002(log_name):
 def test_vllm_server_002():
     """
     Test Summary:
-        ms服务化+请求接口,测试prompts为字符串列表
+         For the online native backend scenario, test request interface
+         with prompts as a list of strings (list[str]).
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -355,9 +368,10 @@ def test_vllm_server_002():
 def test_vllm_mf_server_002():
     """
     Test Summary:
-        mf服务化+请求接口,测试prompts为字符串列表
+         For the online mindformers backend scenario, test request interface
+         with prompts as a list of strings (list[str]).
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -423,11 +437,12 @@ def run_vllm_server_003(log_name):
 def test_vllm_server_003():
     """
     Test Summary:
-        ms服务化+请求接口,后处理参数组合测试,测试repetition_penalty
-        temperature、top_k、top_p使用默认值
-        repetition_penalty配置为0.5 ，1.5，  2，  2.5
+        For the online native backend scenario, test request interface with
+        post-processing parameter combination:
+        temperature, top_k, and top_p use default values.
+        repetition_penalty is configured as 0.5, 1.5, 2, and 2.5.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-32B-Instruct
     """
@@ -443,11 +458,12 @@ def test_vllm_server_003():
 def test_vllm_mf_server_003():
     """
     Test Summary:
-        mf服务化+请求接口,后处理参数组合测试,测试repetition_penalty
-        temperature、top_k、top_p使用默认值
-        repetition_penalty配置为0.5 ，1.5，  2，  2.5
+        For the online mindformers backend scenario, test request interface
+        with post-processing parameter combination:
+        temperature, top_k, and top_p use default values.
+        repetition_penalty is configured as 0.5, 1.5, 2, and 2.5.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-32B-Instruct
     """
@@ -500,11 +516,12 @@ def run_vllm_server_004(log_name):
 def test_vllm_server_004():
     """
     Test Summary:
-        ms服务化+请求接口,后处理参数组合测试,测试temperature
-        repetition_penalty、top_k、top_p使用默认值
-        temperature配置为0， 0.0001，  0.001， 2
+        For the online native backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, top_k, and top_p use default values.
+        temperature is configured as 0, 0.0001, 0.001, and 2.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -522,11 +539,12 @@ def test_vllm_server_004():
 def test_vllm_mf_server_004():
     """
     Test Summary:
-        mf服务化+请求接口,后处理参数组合测试,测试temperature
-        repetition_penalty、top_k、top_p使用默认值
-        temperature配置为0， 0.0001，  0.001， 2
+        For the online mindformers backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, top_k, and top_p use default values.
+        temperature is configured as 0, 0.0001, 0.001, and 2.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -585,11 +603,14 @@ def run_vllm_server_005(log_name):
 def test_vllm_server_005():
     """
     Test Summary:
-        ms服务化+请求接口,后处理参数组合测试,测试top_k
-        repetition_penalty、temperature、top_p使用默认值
-        topk覆盖0，最大int，词表长度， 词表长度-1
+        For the online native backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, temperature, and top_p use default values.
+        top_k covers 0, maximum integer, vocabulary size, and vocabulary
+        size - 1.
     Expected Result:
-        除长度超出词表大小外,其余场景运行成功，推理结果正常
+        Except for the scenario where the value exceeds the vocabulary size,
+        all other scenarios execute successfully with normal inference results.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -607,11 +628,14 @@ def test_vllm_server_005():
 def test_vllm_mf_server_005():
     """
     Test Summary:
-        mf服务化+请求接口,后处理参数组合测试,测试top_k
-        repetition_penalty、temperature、top_p使用默认值
-        topk覆盖0，最大int，词表长度， 词表长度-1
+        For the online mindformers backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, temperature, and top_p use default values.
+        top_k covers 0, maximum integer, vocabulary size, and vocabulary
+        size - 1.
     Expected Result:
-        运行成功，推理结果正常
+        Except for the scenario where the value exceeds the vocabulary size,
+        all other scenarios execute successfully with normal inference results.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -664,11 +688,12 @@ def run_vllm_server_006(log_name):
 def test_vllm_server_006():
     """
     Test Summary:
-        ms服务化+请求接口,后处理参数组合测试,测试top_p
-        repetition_penalty、temperature、top_k使用默认值
-        top_p覆盖0， 0.3， 0.5， 0.8
+        For the online native backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, temperature, and top_k use default values.
+        top_p covers 0, 0.3, 0.5, and 0.8.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -686,11 +711,12 @@ def test_vllm_server_006():
 def test_vllm_mf_server_006():
     """
     Test Summary:
-        mf服务化+请求接口,后处理参数组合测试,测试top_p
-        repetition_penalty、temperature、top_k使用默认值
-        top_p覆盖0， 0.3， 0.5， 0.8
+        For the online mindformers backend scenario, test request interface
+        with post-processing parameter combination:
+        repetition_penalty, temperature, and top_k use default values.
+        top_p covers 0, 0.3, 0.5, and 0.8.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -760,12 +786,13 @@ def run_vllm_server_007(log_name):
 def test_vllm_server_007():
     """
     Test Summary:
-        ms服务化+请求接口,后处理参数组合测试,其他组合场景
+        For the online native backend scenario, test request interface
+        with post-processing parameter combination:
         repetition_penalty=1.5 temperature=0.001 top_k=5 top_p=0.5
         repetition_penalty=1 temperature=2 top_k=vocabSize-1 top_p=1
         repetition_penalty=2 temperature=0.001 top_k=1 top_p=1
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -783,12 +810,13 @@ def test_vllm_server_007():
 def test_vllm_mf_server_007():
     """
     Test Summary:
-        mf服务化+请求接口,后处理参数组合测试,其他组合场景
+        For the online mindformers backend scenario, test request interface
+        with post-processing parameter combination:
         repetition_penalty=1.5 temperature=0.001  top_k=5 top_p=0.5
         repetition_penalty=1 temperature=2  top_k=vocabSize-1 top_p=1
         repetition_penalty=2 temperature=0.001 top_k=1 top_p=1
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -805,9 +833,10 @@ def test_vllm_mf_server_007():
 def test_vllm_offline_err_001():
     """
     Test Summary:
-        ms离线场景SamplingParams的参数值异常
+        Test abnormal parameter values for SamplingParams in the native
+        backend offline scenario.
     Expected Result:
-        报ValueError,并校验对应报错信息
+        Raises ValueError, and the corresponding error message is verified.
     """
     with pytest.raises(ValueError) as err:
         SamplingParams(top_k=-5)
@@ -833,9 +862,11 @@ def test_vllm_offline_err_001():
 def test_vllm_offline_err_002():
     """
     Test Summary:
-        离线场景LLM接口的参数值异常
+        Abnormal parameter values for the LLM interface in the offline
+        scenario.
     Expected Result:
-        报ValueError/TypeError,并校验对应报错信息
+        Raises ValueError and TypeError, and the corresponding error
+        message is verified.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -866,13 +897,13 @@ def test_vllm_offline_err_002():
 def test_vllm_model_alias_ms_server_001():
     """
     Test Summary:
-        Natve模型运行vllm服务化场景，
-        模型路径配置为/home/path,served-model-name
-        配置 name1 name2 name2(name2有重复）...name8 ....(覆盖个数8个）
-        发送请求使用模型名称name2
-        发送请求使用模型名称name8
+        For the online native backend scenario, The model path is configured
+        as /home/path, with served-model-name. Configure 8 model names: name1,
+        name2, name2 (name2 is duplicated), ..., name8 (covering a total of
+        8 names). And then send requests using the model name "name2", send
+        requests using the model name "name8".
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -912,9 +943,11 @@ def test_vllm_model_alias_ms_server_001():
 def test_vllm_mf_server_err_001():
     """
     Test Summary:
-        mf服务化+请求接口,SamplingParams的参数值异常
+        For the online mindformers backend scenario, test abnormal parameter
+        values for SamplingParams.
     Expected Result:
-        报错, 关键字 "repetition_penalty must be greater than zero"
+        Execution fails with the error message containing the keyword:
+        "repetition_penalty must be greater than zero".
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -980,9 +1013,11 @@ def test_vllm_mf_server_err_001():
 def test_vllm_mf_server_err_002():
     """
     Test Summary:
-        服务化+请求接口,其他参数值异常
+        For the online mindformers backend scenario, test abnormal parameter
+        values of parameters other than SamplingParams.
     Expected Result:
-        报错提示正确格式要求
+        Execution fails with an error message indicating the correct
+        format requirements.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -1028,9 +1063,11 @@ def test_vllm_mf_server_err_002():
 def test_vllm_v073_mf_server_002():
     """
     Test Summary:
-        llm.chat 服务化场景chat请求错误处理测试
+        Error handling test for chat requests in the llm.chat online server
+        scenario.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution and the returned result contains prompt
+        information.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -1071,11 +1108,14 @@ def test_vllm_v073_mf_server_002():
 def test_vllm_v073_mf_server_005():
     """
     Test Summary:
-        使用mf模型，部署服务化，访问页面/v1/chat/completions进行推理
-        1.使用curl发送一条请求
-        2.包含多轮对话/多类用户的请求
+        Based on the mindformers backend, deploy online server and perform
+        inference process by accessing the /v1/chat/completions endpoint
+        as follow:
+        1.Send a single request via curl.
+        2.Include requests with multi-turn conversations or requests from
+        multiple types of users.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -1144,14 +1184,16 @@ def test_vllm_v073_mf_server_005():
 def test_vllm_v073_mf_server_006():
     """
     Test Summary:
-        使用mf模型，运行vllm服务化场景，模型路径配置为/home/path，
-        served-model-name 配置 name1 name2 ...
-        1.发送请求使用模型名称/home/path
-        2.发送请求使用模型名称name1
-        3.发送请求使用模型名称name2
-        4.发送请求使用模型名称name3
+        Based on the mindformers backend, deploy online server with the model
+        path of /home/path, and served-model-name is configured with name1,
+        name2, ...
+        And then:
+        Send a request using the model name "/home/path".
+        Send a request using the model name "name1".
+        Send a request using the model name "name2".
+        Send a request using the model name "name3".
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -1194,9 +1236,11 @@ def test_vllm_v073_mf_server_006():
 def test_vllm_v073_mf_offline_001():
     """
     Test Summary:
-        使用mf模型，离线推理场景，配置任意后处理参数,传入较长长度的输入(16k)
+        For the offline mindformers backend scenario, testing configure
+        arbitrary post-processing parameters, and send a long request (16k
+        in length).
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -1228,9 +1272,10 @@ def test_vllm_v073_mf_offline_001():
 def test_vllm_v073_mf_offline_002():
     """
     Test Summary:
-        使用mf模型，离线场景llm.chat传入错误处理测试
+        For the offline mindformers backend scenario, test error handling
+        for incoming requests in the llm.chat interface.
     Expected Result:
-        运行成功，推理结果正常
+        Successful execution with inference results meeting expectations.
     Model Info:
         Qwen2.5-7B-Instruct
     """

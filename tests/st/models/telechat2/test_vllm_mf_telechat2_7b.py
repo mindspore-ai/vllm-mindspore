@@ -72,5 +72,12 @@ def run_mf_telechat2_7b_network():
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
 def test_mf_telechat2_7b():
-    """Test telechat2_7b."""
+    """
+    Test Summary:
+        Test mcore telechat2 model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        telechat2_7b
+    """
     run_mf_telechat2_7b_network()

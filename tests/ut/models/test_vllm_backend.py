@@ -20,6 +20,10 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, start_vllm_server,
                                       get_key_counter_from_log,
                                       stop_vllm_server, send_and_get_request)
+from tests.utils.env_var_manager import EnvVarManager
+
+env_manager = EnvVarManager()
+env_manager.setup_mindformers_environment()
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 
@@ -30,10 +34,11 @@ QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 def test_vllm_backend_server_001():
     """
     Test Summary:
-        不配置VLLM_MS_MODEL_BACKEND情况下启动mf/native都支持的模型
-        在线模式推理
+        Start models supported by both mindformers and native backends
+        without explicitly specify VLLM_MS_MODEL_BACKEND, and perform
+        online inference.
     Expected Result:
-        运行成功，推理结果正常,以mf后端执行
+        Successful execution, executes under the minformers backend.
     Model Info:
         Qwen2.5-7B-Instruct
     """
@@ -83,10 +88,11 @@ def test_vllm_backend_server_001():
 def test_vllm_backend_offline_001():
     """
     Test Summary:
-        不配置VLLM_MS_MODEL_BACKEND情况下启动mf/native都支持的模型
-        离线模式推理
+        Start models supported by both mindformers and native backends
+        without explicitly specify VLLM_MS_MODEL_BACKEND, and perform
+        offline inference.
     Expected Result:
-        运行成功，推理结果正常,以mf后端执行
+        Successful execution, executes under the minformers backend.
     Model Info:
         Qwen2.5-7B-Instruct
     """
