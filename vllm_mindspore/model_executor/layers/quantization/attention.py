@@ -251,7 +251,7 @@ class KVCacheInt8Method(BaseKVCacheMethod):
     :param quant_config: the appropriate QuantizationConfig
     """
 
-    def __init__(self, quant_config: QuantizationConfig):
+    def __init__(self, quant_config: QuantizationConfig = None):
         self.quant_config = quant_config
         self.quant = QuantV2()
 
