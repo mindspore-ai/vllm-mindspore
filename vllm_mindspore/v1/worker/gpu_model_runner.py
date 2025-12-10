@@ -92,7 +92,8 @@ def gpu_model_runner_init(
 ):
     real_stream = torch.cuda.Stream
     try:
-        torch.cuda.Stream = FakeStream
+        if not vllm_config.scheduler_config.async_scheduling:
+            torch.cuda.Stream = FakeStream
         _original_init(self, vllm_config, device)
     finally:
         torch.cuda.Stream = real_stream
