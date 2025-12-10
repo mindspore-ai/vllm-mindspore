@@ -791,11 +791,9 @@ class Qwen2_5_VisionBlock(nn.Cell):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.weight_dtype = get_current_vllm_config().model_config.dtype
+        self.dtype = get_current_vllm_config().model_config.dtype
         if norm_layer is None:
-            norm_layer = partial(mint.nn.LayerNorm,
-                                 eps=1e-6,
-                                 dtype=self.weight_dtype)
+            norm_layer = partial(mint.nn.LayerNorm, eps=1e-6, dtype=self.dtype)
         self.norm1 = norm_layer(dim)
         self.norm2 = norm_layer(dim)
         self.attn = Qwen2_5_VisionAttention(embed_dim=dim,
@@ -833,13 +831,13 @@ class Qwen2_5_VisionPatchEmbed(nn.Cell):
         self.patch_size = patch_size
         self.temporal_patch_size = temporal_patch_size
         self.hidden_size = hidden_size
-        self.weight_dtype = get_current_vllm_config().model_config.dtype
+        self.dtype = get_current_vllm_config().model_config.dtype
 
         self.proj = nn.Dense(temporal_patch_size * patch_size * patch_size *
                              in_channels,
                              self.hidden_size,
                              has_bias=False,
-                             dtype=self.weight_dtype)
+                             dtype=self.dtype)
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
         x = self.proj(x)  # B Ph*Pw C_out
@@ -858,27 +856,23 @@ class Qwen2_5_VisionPatchMerger(nn.Cell):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.weight_dtype = get_current_vllm_config().model_config.dtype
+        self.dtype = get_current_vllm_config().model_config.dtype
         self.hidden_size = context_dim * (spatial_merge_size**2)
         if norm_layer is None:
-            norm_layer = partial(mint.nn.LayerNorm,
-                                 eps=1e-6,
-                                 dtype=self.weight_dtype)
+            norm_layer = partial(mint.nn.LayerNorm, eps=1e-6, dtype=self.dtype)
         self.ln_q = norm_layer(context_dim)
         self.mlp = nn.CellList([
             ColumnParallelLinear(self.hidden_size,
                                  self.hidden_size,
                                  bias=True,
                                  quant_config=quant_config,
-                                 prefix=f"{prefix}.mlp.0",
-                                 params_dtype=self.weight_dtype),
+                                 prefix=f"{prefix}.mlp.0"),
             nn.GELU(),
             RowParallelLinear(self.hidden_size,
                               d_model,
                               bias=True,
                               quant_config=quant_config,
-                              prefix=f"{prefix}.mlp.2",
-                              params_dtype=self.weight_dtype),
+                              prefix=f"{prefix}.mlp.2"),
         ])
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
@@ -933,7 +927,6 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         temporal_patch_size = vision_config.temporal_patch_size
         in_channels = vision_config.in_channels
         depth = vision_config.depth
-        self.weight_dtype = get_current_vllm_config().model_config.dtype
         self.hidden_size = vision_config.hidden_size
         self.num_heads = vision_config.num_heads
 
@@ -951,9 +944,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
             hidden_size=self.hidden_size,
         )
 
-        norm_layer = partial(RMSNorm,
-                             eps=norm_eps,
-                             params_dtype=self.weight_dtype)
+        norm_layer = partial(RMSNorm, eps=norm_eps)
         head_dim = self.hidden_size // self.num_heads
         self.rotary_pos_emb = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
 
@@ -980,7 +971,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         self.rank_id = get_rank()
 
     def set_model_inputs(self):
-        dyn_x = ms.Tensor(shape=[None, None], dtype=self.weight_dtype)
+        dyn_x = ms.Tensor(shape=[None, None], dtype=self.dtype)
         dyn_rotary_pos_emb = ms.Tensor(shape=[None, None],
                                        dtype=mstype.float32)
         dyn_window_index = ms.Tensor(shape=[None], dtype=mstype.int64)
@@ -1007,7 +998,7 @@ class Qwen2_5_VisionTransformer(nn.Cell):
         cu_window_seqlens: ms.Tensor,
         grid_thw: ms.Tensor,
     ) -> ms.Tensor:
-        hidden_states = x.to(dtype=self.weight_dtype)
+        hidden_states = x.to(dtype=self.dtype)
         hidden_states = self.patch_embed(hidden_states)
 
         seq_len, _ = hidden_states.shape
@@ -1181,7 +1172,7 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         multimodal_config = vllm_config.model_config.multimodal_config
 
         self.config = config
-        self.weight_dtype = get_current_vllm_config().model_config.dtype
+        self.dtype = get_current_vllm_config().model_config.dtype
         self.multimodal_config = multimodal_config
 
         self.visual = Qwen2_5_VisionTransformer(
@@ -1211,7 +1202,6 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
                                               config.hidden_size,
-                                              params_dtype=self.weight_dtype,
                                               quant_config=quant_config,
                                               prefix=maybe_prefix(
                                                   prefix, "lm_head"))
@@ -1428,11 +1418,9 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         assert grid_thw.ndim == 2
 
         if image_input["type"] == "image_embeds":
-            image_embeds = image_input["image_embeds"].type(
-                self.visual.weight_dtype)
+            image_embeds = image_input["image_embeds"].type(self.visual.dtype)
         else:
-            pixel_values = image_input["pixel_values"].type(
-                self.visual.weight_dtype)
+            pixel_values = image_input["pixel_values"].type(self.visual.dtype)
             os.environ[
                 "MS_DISABLE_INTERNAL_KERNELS_LIST"] = "FlashAttentionScore"
             # compute position embedding
@@ -1459,11 +1447,10 @@ class Qwen2_5_VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         assert grid_thw.ndim == 2
 
         if video_input["type"] == "video_embeds":
-            video_embeds = video_input["video_embeds"].type(
-                self.visual.weight_dtype)
+            video_embeds = video_input["video_embeds"].type(self.visual.dtype)
         else:
             pixel_values_videos = video_input["pixel_values_videos"].type(
-                self.visual.weight_dtype)
+                self.visual.dtype)
             os.environ[
                 "MS_DISABLE_INTERNAL_KERNELS_LIST"] = "FlashAttentionScore"
             rotary_pos_emb = self.rot_pos_emb(grid_thw)
