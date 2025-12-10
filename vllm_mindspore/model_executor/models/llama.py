@@ -39,7 +39,7 @@
 #    adapted.
 """Inference-only LLaMA model compatible with HuggingFace weights."""
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from transformers import LlamaConfig
@@ -385,9 +385,10 @@ class LlamaModel(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
-    ) -> Union[Tensor, IntermediateTensors]:
+    ) -> tuple[Tensor, Tensor]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -395,9 +396,8 @@ class LlamaModel(nn.Cell):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
@@ -408,14 +408,9 @@ class LlamaModel(nn.Cell):
                                             batch_valid_length, q_seq_lens,
                                             block_tables, residual)
 
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        if get_pp_group().is_last_rank:
+            hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]], params_dict):
         loaded_params: set[str] = set()
@@ -508,8 +503,14 @@ class LlamaForCausalLM(NativeModel, SupportsPP):
                 intermediate_tensors=None,
                 inputs_embeds=None,
                 **kwargs):
-        hidden_states = self.exec_model(input_ids, positions,
-                                        intermediate_tensors, inputs_embeds)
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

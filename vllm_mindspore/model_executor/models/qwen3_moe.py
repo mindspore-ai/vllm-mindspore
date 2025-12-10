@@ -35,6 +35,7 @@ from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.logger import init_logger
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
@@ -54,7 +55,7 @@ from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
                                                              SupportesMoeDpTp)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
-    extract_layer_index, is_pp_missing_parameter,
+    PPMissingLayer, extract_layer_index, is_pp_missing_parameter,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
 from vllm_mindspore.v1.attention import Attention
 
@@ -394,13 +395,14 @@ class Qwen3MoeModel(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
         dp_pad_index: Optional[Tensor] = None,
         dp_unpad_index: Optional[Tensor] = None,
         dp_pad_index_total_with_offset: Optional[Tensor] = None,
         dp_unpad_index_total_with_offset: Optional[Tensor] = None,
-    ) -> Union[Tensor, IntermediateTensors]:
+    ) -> tuple[Tensor, Tensor]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -408,9 +410,8 @@ class Qwen3MoeModel(nn.Cell):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(
@@ -419,13 +420,9 @@ class Qwen3MoeModel(nn.Cell):
                 batch_valid_length, q_seq_lens, block_tables, residual,
                 dp_pad_index, dp_unpad_index, dp_pad_index_total_with_offset,
                 dp_unpad_index_total_with_offset)
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        if get_pp_group().is_last_rank:
+            hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
         # Params for weights, fp8 weight scales, fp8 activation scales
@@ -489,6 +486,8 @@ class Qwen3MoeModel(nn.Cell):
                     if ((name.endswith(".bias") or name.endswith("_bias"))
                             and name not in params_dict):
                         continue
+                    if name not in params_dict:
+                        continue
                     param = params_dict[name]
                     weight_loader = param.weight_loader
                     weight_loader(param,
@@ -501,15 +500,17 @@ class Qwen3MoeModel(nn.Cell):
                     # Skip layers on other devices.
                     if is_pp_missing_parameter(name, self):
                         continue
-                    param = params_dict[name]
-                    weight_loader = getattr(param, "weight_loader",
-                                            default_weight_loader)
-                    weight_loader(param, loaded_weight)
+                    if name in params_dict:
+                        param = params_dict[name]
+                        weight_loader = getattr(param, "weight_loader",
+                                                default_weight_loader)
+                        weight_loader(param, loaded_weight)
             loaded_params.add(name)
         return loaded_params
 
 
-class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts):
+class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts,
+                          SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -532,9 +533,12 @@ class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts):
         self.quant_config = quant_config
         self.model = Qwen3MoeModel(vllm_config=vllm_config,
                                    prefix=maybe_prefix(prefix, "model"))
-        self.lm_head = ParallelLMHead(config.vocab_size,
-                                      config.hidden_size,
-                                      quant_config=quant_config)
+        if get_pp_group().is_last_rank:
+            self.lm_head = ParallelLMHead(config.vocab_size,
+                                          config.hidden_size,
+                                          quant_config=quant_config)
+        else:
+            self.lm_head = PPMissingLayer()
         if self.config.tie_word_embeddings:
             self.lm_head.weight = self.model.embed_tokens.weight
         self.logits_processor = LogitsProcessor(config.vocab_size)
@@ -552,8 +556,14 @@ class Qwen3MoeForCausalLM(NativeModel, SupportesMoeDpTp, MixtureOfExperts):
                 intermediate_tensors: Optional[IntermediateTensors] = None,
                 inputs_embeds: Optional[Tensor] = None,
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
-        hidden_states = self.exec_model(input_ids, positions,
-                                        intermediate_tensors, inputs_embeds)
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def compute_logits(

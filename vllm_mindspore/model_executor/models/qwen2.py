@@ -41,7 +41,7 @@ from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.models.interfaces import SupportsLoRA
+from vllm.model_executor.models.interfaces import SupportsLoRA, SupportsPP
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.v1.attention import Attention
@@ -332,9 +332,10 @@ class Qwen2Model(nn.Cell):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
-    ) -> Union[Tensor, IntermediateTensors]:
+    ) -> tuple[Tensor, Tensor]:
 
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
@@ -343,8 +344,8 @@ class Qwen2Model(nn.Cell):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
@@ -354,13 +355,9 @@ class Qwen2Model(nn.Cell):
                                             slot_mapping, attn_mask,
                                             batch_valid_length, q_seq_lens,
                                             block_tables, residual)
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        if get_pp_group().is_last_rank:
+            hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]],
                      params_dict: dict[str, Parameter]):
@@ -424,7 +421,7 @@ class Qwen2Model(nn.Cell):
         return loaded_params
 
 
-class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
+class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -485,8 +482,14 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA):
                 intermediate_tensors: IntermediateTensors = None,
                 inputs_embeds: Tensor = None,
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
-        hidden_states = self.exec_model(input_ids, positions,
-                                        intermediate_tensors, inputs_embeds)
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:

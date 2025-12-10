@@ -32,6 +32,7 @@ from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.layers.layernorm import RMSNorm
@@ -244,7 +245,7 @@ class Glm4Model(LlamaModel):
                          layer_type=Glm4DecoderLayer)
 
 
-class Glm4ForCausalLM(NativeModel):
+class Glm4ForCausalLM(NativeModel, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -287,8 +288,14 @@ class Glm4ForCausalLM(NativeModel):
                 intermediate_tensors: IntermediateTensors = None,
                 inputs_embeds: Tensor = None,
                 **kwargs) -> Union[Tensor, IntermediateTensors]:
-        hidden_states = self.exec_model(input_ids, positions,
-                                        intermediate_tensors, inputs_embeds)
+        hidden_states, residual = self.exec_model(input_ids, positions,
+                                                  intermediate_tensors,
+                                                  inputs_embeds)
+        if not get_pp_group().is_last_rank:
+            return IntermediateTensors({
+                "hidden_states": hidden_states,
+                "residual": residual
+            })
         return hidden_states
 
     def compute_logits(

@@ -28,7 +28,7 @@
 """Inference-only Qwen3-VL-MoE model compatible with HuggingFace weights."""
 import typing
 from collections.abc import Callable, Iterable, Mapping
-from typing import Optional, Union
+from typing import Optional
 
 import mindspore as ms
 import mindspore.mint as mint
@@ -39,8 +39,8 @@ from transformers.models.qwen3_vl_moe.configuration_qwen3_vl_moe import (
 from vllm.config import VllmConfig
 from vllm.distributed import get_pp_group
 from vllm.logger import init_logger
+from vllm.model_executor.models import SupportsPP
 from vllm.multimodal import MULTIMODAL_REGISTRY
-from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.layers.logits_processor import (
     LogitsProcessor)
@@ -50,6 +50,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader, get_loaded_weight)
 from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
                                                              SupportesMoeDpTp)
+from vllm_mindspore.model_executor.models.utils import PPMissingLayer
 
 from .qwen2_5_vl import Qwen2_5_VisionRotaryEmbedding
 from .qwen3_moe import Qwen3MoeForCausalLM, Qwen3MoeModel
@@ -95,14 +96,15 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
         batch_valid_length: Tensor,
         q_seq_lens: Tensor,
         block_tables: Tensor,
-        intermediate_tensors: Optional[IntermediateTensors] = None,
+        intermediate_hidden_states: Optional[Tensor] = None,
+        intermediate_residual: Optional[Tensor] = None,
         inputs_embeds: Optional[Tensor] = None,
         dp_pad_index: Optional[Tensor] = None,
         dp_unpad_index: Optional[Tensor] = None,
         dp_pad_index_total_with_offset: Optional[Tensor] = None,
         dp_unpad_index_total_with_offset: Optional[Tensor] = None,
         deepstack_input_embeds: Optional[Mapping[str, Tensor]] = None,
-    ) -> Union[Tensor, IntermediateTensors]:
+    ) -> tuple[Tensor, Tensor]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -110,9 +112,8 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
         else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+            hidden_states = intermediate_hidden_states
+            residual = intermediate_residual
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(
@@ -127,13 +128,9 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                 hidden_states = mint.add(hidden_states,
                                          deepstack_input_embeds[i])
 
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
-        hidden_states, _ = self.norm(hidden_states, residual)
-        return hidden_states
+        if get_pp_group().is_last_rank:
+            hidden_states, residual = self.norm(hidden_states, residual)
+        return hidden_states, residual
 
     def load_fused_expert_weights(self, name: str, params_dict: dict,
                                   loaded_weight: Tensor, shard_id: str,
@@ -213,6 +210,8 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                     if is_pp_missing_parameter(name_mapped, self):
                         continue
                     if is_fused_expert:
+                        if name_mapped not in params_dict:
+                            continue
                         loaded_weight = get_loaded_weight(loaded_weight)
                         loaded_weight = loaded_weight.swapaxes(-1,
                                                                -2)  # no bias
@@ -277,6 +276,8 @@ class Qwen3MoeLLMModel(Qwen3MoeModel):
                             continue
                         else:
                             name = remapped_kv_scale_name
+                    if name not in params_dict:
+                        continue
                     param = params_dict[name]
                     weight_loader = getattr(param, "weight_loader",
                                             default_weight_loader)
@@ -298,9 +299,12 @@ class Qwen3MoeLLMForCausalLM(Qwen3MoeForCausalLM):
         self.model = Qwen3MoeLLMModel(vllm_config=vllm_config,
                                       prefix=maybe_prefix(prefix, "model"),
                                       deepstack_layers=deepstack_layers)
-        self.lm_head = ParallelLMHead(self.config.vocab_size,
-                                      self.config.hidden_size,
-                                      quant_config=self.quant_config)
+        if get_pp_group().is_last_rank:
+            self.lm_head = ParallelLMHead(self.config.vocab_size,
+                                          self.config.hidden_size,
+                                          quant_config=self.quant_config)
+        else:
+            self.lm_head = PPMissingLayer()
         if self.config.tie_word_embeddings:
             self.lm_head.weight = self.model.embed_tokens.weight
         self.logits_processor = LogitsProcessor(self.config.vocab_size)
@@ -314,7 +318,8 @@ class Qwen3MoeLLMForCausalLM(Qwen3MoeForCausalLM):
     dummy_inputs=Qwen3VLDummyInputsBuilder,
 )
 class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration,
-                                         SupportesMoeDpTp, MixtureOfExperts):
+                                         SupportesMoeDpTp, MixtureOfExperts,
+                                         SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super(Qwen3VLForConditionalGeneration,
