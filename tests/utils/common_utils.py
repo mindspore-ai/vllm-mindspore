@@ -88,7 +88,7 @@ def is_port_available(port):
             s.bind(("", port))
             return True
     except OSError:
-        logger.info("Port %d is already in use", port)
+        logger.warning("Port %d is already in use", port)
         return False
 
 
@@ -103,6 +103,7 @@ def get_available_port(base_port):
     while not is_port_available(available_port):
         # Increment port number if already in use
         available_port += step_offset
+    logger.warning("Available Port: %d", available_port)
     return available_port
 
 
@@ -119,23 +120,23 @@ def setup_function():
         logger.warning("This case is assigned to device:%s", str(device_id))
         os.environ["ASCEND_RT_VISIBLE_DEVICES"] = device_id
 
-        # Used to distinguish multiple online services running simultaneously.
+    port_offset = int(device_id) if device_id else 0
+    # Used to distinguish multiple online services running simultaneously.
+    serve_port = BASE_PORT + port_offset
+    os.environ["TEST_SERVE_PORT"] = f"{get_available_port(serve_port)}"
+
+    # Randomly specify LCCL and HCCL ports for cases without specified port,
+    # mainly in single card concurrent scenarios, to avoid port conflicts.
+    lccl_port = os.getenv("LCAL_COMM_ID", None)
+    if not lccl_port:
+        lccl_port = LCCL_BASE_PORT + port_offset
         os.environ[
-            "TEST_SERVE_PORT"] = f"{get_available_port(BASE_PORT + int(device_id))}"
+            "LCAL_COMM_ID"] = f"127.0.0.1:{get_available_port(lccl_port)}"
 
-        # Randomly specify LCCL and HCCL ports for cases without specified port,
-        # mainly in single card concurrent scenarios, to avoid port conflicts.
-        lccl_port = os.getenv("LCAL_COMM_ID", None)
-        if not lccl_port:
-            lccl_port = random.randint(LCCL_BASE_PORT, HCCL_BASE_PORT - 1)
-            os.environ[
-                "LCAL_COMM_ID"] = f"127.0.0.1:{get_available_port(lccl_port)}"
-
-        hccl_port = os.getenv("HCCL_IF_BASE_PORT", None)
-        if not hccl_port:
-            hccl_port = random.randint(HCCL_BASE_PORT, PORT_UPPER_BOUND)
-            os.environ["HCCL_IF_BASE_PORT"] = str(
-                get_available_port(hccl_port))
+    hccl_port = os.getenv("HCCL_IF_BASE_PORT", None)
+    if not hccl_port:
+        hccl_port = HCCL_BASE_PORT + port_offset
+        os.environ["HCCL_IF_BASE_PORT"] = str(get_available_port(hccl_port))
 
 
 def cleanup_subprocesses(pid=None) -> None:
