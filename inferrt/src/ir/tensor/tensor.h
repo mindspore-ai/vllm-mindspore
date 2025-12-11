@@ -33,7 +33,6 @@
 
 namespace mrt {
 namespace ir {
-
 /**
  * @brief A multi-dimensional array (tensor).
  *
@@ -219,6 +218,8 @@ class Tensor : public RefCounted {
    * @param memoryFromat The memory format enum value.
    */
   void SetFormat(MemoryFormat memoryFormat) { memoryFormat_ = memoryFormat; }
+
+  IntrusivePtr<Tensor> ShallowClone() const;
 
  private:
   /**

@@ -194,6 +194,7 @@ _OP_MAP = {
     torch.nn.functional.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
     torch.nn.functional.embedding: Op.embedding,
+    torch.nn.functional.linear:Op.linear,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
