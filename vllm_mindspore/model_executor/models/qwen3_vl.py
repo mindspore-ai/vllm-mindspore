@@ -26,6 +26,7 @@
 """Inference-only Qwen3VL model compatible with HuggingFace weights."""
 
 import math
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
 from typing import Any, Optional
@@ -1152,7 +1153,18 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         head_dim = (self.vision_config.hidden_size //
                     self.vision_config.num_heads)
         self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
-        self._rot_pos_ids_cache: dict[tuple[int, int], ms.Tensor] = {}
+        # Use OrderedDict to implement LRUCache for rot_pos_ids
+        self._rot_pos_ids_cache: OrderedDict[tuple[int, int],
+                                             ms.Tensor] = OrderedDict()
+        # Default Cache size set to 256.
+        # Assume the Typical image pixel size is 4096 * 4096
+        # with patch_size is 14,
+        # then pos_ids length will be ((4096 * 4096) / (14 * 14)) * 2 = 85598.
+        # Therefore, one cache item will take 85598 * 4(init32) = 342392 Byte
+        # With cache max size 256, The cache will maximum occupy 87MB
+        self._rot_pos_ids_cache_max_size = int(
+            vllm_config.additional_config.get("mm_rot_pos_ids_cache_max_size",
+                                              256))
 
     def common_preprocess(self, vllm_config, prefix=""):
         # override the common_preprocess method to
@@ -1576,8 +1588,11 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
             - Output positions are in int32 for efficient indexing
         """
         key = (h, w)
-        cached = self._rot_pos_ids_cache.get(key)
-        if cached is not None:
+        # LRU cache: move to end if exists (most recently used)
+        if key in self._rot_pos_ids_cache:
+            cached = self._rot_pos_ids_cache[key]
+            # Move to end (mark as most recently used)
+            self._rot_pos_ids_cache.move_to_end(key)
             return cached
 
         hpos_ids = mint.arange(h, dtype=ms.int32).view(h, 1).expand(h, w)
@@ -1597,7 +1612,11 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         ).permute(0, 2, 1, 3).reshape(-1))
 
         pos_ids = mint.stack([hpos_ids, wpos_ids], dim=-1).astype(ms.int32)
+        # Add to cache (at end, most recently used)
         self._rot_pos_ids_cache[key] = pos_ids
+        # Remove oldest entry if cache exceeds max size
+        if len(self._rot_pos_ids_cache) > self._rot_pos_ids_cache_max_size:
+            self._rot_pos_ids_cache.popitem(last=False)
         return pos_ids
 
     def rot_pos_emb(self, grid_thw: ms.Tensor) -> ms.Tensor:
