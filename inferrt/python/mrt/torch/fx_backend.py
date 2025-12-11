@@ -134,13 +134,119 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
+    register_arg_mapping_hook(torch.chunk, chunk_arg_hook)
+    register_arg_mapping_hook("chunk", chunk_arg_hook)
+
+
+def _get_chunk_example_outputs(node):
+    """Return the list of chunk outputs from FX node meta, or None if missing."""
+    example_value = node.meta.get("example_value", None)
+    if not isinstance(example_value, (tuple, list)) or not example_value:
+        return None
+    first = example_value[0]
+    if not hasattr(first, "shape"):
+        return None
+    return example_value
+
+
+def _resolve_chunk_dim(dim_arg, input_tensor, ref_tensor):
+    """Resolve the dim argument for chunk to a concrete integer or None.
+
+    dim_arg can be:
+      - a Python int or torch.SymInt
+      - an FX Node whose meta['example_value'] is an int
+      - or something else, in which case we try to infer from shapes
+    """
+    # Direct integer or SymInt
+    if isinstance(dim_arg, (int, torch.SymInt)):
+        return int(dim_arg)
+
+    # dim passed as FX Node with example_value
+    if isinstance(dim_arg, Node):
+        dim_example = dim_arg.meta.get("example_value", None)
+        if isinstance(dim_example, (int, torch.SymInt)):
+            return int(dim_example)
+
+    # Fallback: infer from input/output shapes
+    if isinstance(input_tensor, Node):
+        input_example = input_tensor.meta.get("example_value", None)
+    else:
+        input_example = input_tensor
+
+    if hasattr(input_example, "shape") and hasattr(ref_tensor, "shape"):
+        in_shape = tuple(input_example.shape)
+        out_shape = tuple(ref_tensor.shape)
+        if len(in_shape) == len(out_shape):
+            for i, (si, so) in enumerate(zip(in_shape, out_shape)):
+                if si != so:
+                    return i
+
+    return None
+
+
+# pylint: disable=unused-argument
+def chunk_arg_hook(node, input_nodes, executor):
+    """Lower torch.chunk to split_with_size by constructing split_sizes.
+
+    We do not have a dedicated `chunk` op in the runtime. Instead, we use
+    the FX node's example_value (a tuple/list of chunk tensors) to derive
+    per-chunk sizes along the given dim and call the existing split_with_size
+    implementation. This guarantees we match PyTorch's chunk behavior.
+    """
+    # Example outputs from FX (tuple/list of chunk tensors)
+    example_value = _get_chunk_example_outputs(node)
+    if example_value is None:
+        return input_nodes
+    ref_tensor = example_value[0]
+
+    args = list(node.args)
+    kwargs = dict(node.kwargs)
+
+    # Input tensor (self) – forward original FX argument for later mapping.
+    if not args:
+        return input_nodes
+    input_tensor = args[0]
+
+    # Resolve dim to a concrete integer.
+    dim_arg = 0
+    if len(args) >= 3:
+        dim_arg = args[2]
+    elif "dim" in kwargs:
+        dim_arg = kwargs["dim"]
+
+    dim_int = _resolve_chunk_dim(dim_arg, input_tensor, ref_tensor)
+    if dim_int is None:
+        return input_nodes
+
+    rank = ref_tensor.dim()
+    if dim_int < 0:
+        dim_int += rank
+
+    # Derive per-chunk sizes along `dim` directly from example_value.
+    split_sizes = [int(t.shape[dim_int]) for t in example_value]
+
+    return [input_tensor, split_sizes, dim_int]
 
 # pylint: disable=unused-argument
 def split_ops_hook(op, node, input_nodes, executor):
+    """
+    Hook to determine which split op to use for a given FX node.
+
+    If the target is torch.chunk or the string "chunk", returns the original op.
+    If the second input node is an integer or torch.SymInt, returns Op.split_tensor.
+    If the second input node has a 'meta' attribute whose 'example_value'
+    is an integer or torch.SymInt, returns Op.split_tensor.
+    Otherwise, returns the original op.
+    """
+    if node.target is torch.chunk:
+        return op
+    if isinstance(node.target, str) and node.target == "chunk":
+        return op
+
     if isinstance(input_nodes[1], (int, torch.SymInt)):
         return Op.split_tensor
     if hasattr(input_nodes[1], "meta") and input_nodes[1].meta is not None:
-        if isinstance(input_nodes[1].meta["example_value"], (int, torch.SymInt)):
+        if isinstance(input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)):
             return Op.split_tensor
     return op
 
@@ -172,6 +278,7 @@ _OP_MAP = {
     torch.transpose: Op.permute,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
+    torch.chunk: Op.split_with_size,
     torch.flatten: Op.flatten,
     torch.cat: Op.cat,
     torch.neg: Op.neg,
@@ -238,6 +345,7 @@ _OP_MAP = {
     "copy_": Op.copy,
     "long": Op.cast,
     "split": Op.split_with_size,
+    "chunk": Op.split_with_size,
     "flatten": Op.flatten,
 }
 
