@@ -3,6 +3,11 @@ Pattern ConvertAtenAddTensor {
   replace root with op<mrt.add>(convertValues(operands)) -> (convertType(resType));
 }
 
+Pattern ConvertAtenSubTensor {
+  let root = op<torch.aten.sub.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.sub>(convertValues(operands)) -> (convertType(resType));
+}
+
 Pattern ConvertAtenBitwiseAndTensor {
   let root = op<torch.aten.bitwise_and.Tensor>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.bitwise_and_tensor>(convertValues(operands)) -> (convertType(resType));

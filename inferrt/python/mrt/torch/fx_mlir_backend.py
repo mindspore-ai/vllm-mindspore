@@ -148,13 +148,16 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     m = apply_decompositions(gm, fake_inputs)
     _print_verbose("FX Graph After Decompositions", dump_func=m.print_readable)
 
-    # Convert FX GraphModule to torch_mlir RAW module
-    torch_mlir_module = _convert_to_torch_mlir(m)
-    _print_verbose("Torch-MLIR RAW Module", torch_mlir_module)
-
-    # Serialize torch_mlir module to IR text
-    mlir_module = _parse_mlir_module_from_text(str(torch_mlir_module))
-    _print_verbose("Re-parsed MLIR Module (torch_mlir RAW, before passes)", mlir_module)
+    # Convert FX GraphModule to torch dialect MLIR module.
+    # We re-parse the MLIR text here to let mopt use its own MLIR context,
+    # separate from torch_mlir's. Both torch_mlir and mopt build their own
+    # copy of the torch dialect, and their MLIR contexts are not shared.
+    # The torch_mlir Python API uses the torch_mlir context by default,
+    # which can lead to resource conflicts. By reparsing, we ensure all
+    # later operations and resources are managed in mopt's context.
+    mlir_module = _convert_to_torch_mlir(m)
+    mlir_module = _parse_mlir_module_from_text(str(mlir_module))
+    _print_verbose("Torch-MLIR Raw Module (Re-parsed)", mlir_module)
 
     # Run pass pipeline to convert torch_mlir RAW to TORCH backend
     # pylint: disable=import-outside-toplevel
