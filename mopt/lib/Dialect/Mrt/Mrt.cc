@@ -22,7 +22,8 @@ using mlir::success;
 
 namespace mrt {
 LogicalResult ReshapeOp::verify() {
-  if (!mlir::isa<I64ArrayType>(getShape().getType())) {
+  auto listType = mlir::dyn_cast<ListType>(getShape().getType());
+  if (!listType || !mlir::isa<I64Type>(listType.getContainedType())) {
     return emitOpError("expects shape to be a mrt.i64_array type");
   }
   return success();

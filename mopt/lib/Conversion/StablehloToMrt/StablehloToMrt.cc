@@ -35,7 +35,6 @@
 #include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
-#include "mopt/Dialect/Mrt/MrtValueBuilder.h"
 
 using llvm::APFloat;
 using mlir::ArrayRef;
@@ -94,7 +93,7 @@ struct ConvertReshapeOp : public OpConversionPattern<mlir::stablehlo::ReshapeOp>
       return failure();
     }
 
-    auto shapeValue = mrt::MrtValueBuilder(rewriter).createI64Array(op->getLoc(), shapedType.getShape());
+    auto shapeValue = rewriter.create<mrt::CreateI64ArrayOp>(op->getLoc(), shapedType.getShape());
     rewriter.replaceOpWithNewOp<mrt::ReshapeOp>(op, resultType, adaptor.getOperand(), shapeValue);
     return success();
   }
@@ -112,7 +111,7 @@ struct ConvertConvertOp : public OpConversionPattern<mlir::stablehlo::ConvertOp>
       return failure();
     }
 
-    auto dtypeValue = mrt::MrtValueBuilder(rewriter).createDtype(op->getLoc(), shapedType.getElementType());
+    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(op->getLoc(), shapedType.getElementType());
     rewriter.replaceOpWithNewOp<mrt::CastOp>(op, resultType, adaptor.getOperand(), dtypeValue);
     return success();
   }

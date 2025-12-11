@@ -22,7 +22,7 @@ from typing import Dict, List, Any, Tuple
 
 def _parse_optional_mapping(json_data: Dict[str, Any]) -> Dict[str, str]:
     """
-    Parse Optional fields from JSON data and build anonymous -> baseType.def mapping.
+    Parse MrtOptional fields from JSON data and build anonymous -> baseType.def mapping.
 
     Args:
         json_data: The JSON data loaded from json
@@ -31,7 +31,7 @@ def _parse_optional_mapping(json_data: Dict[str, Any]) -> Dict[str, str]:
         A dictionary mapping anonymous type names to their baseType.def values.
     """
     optional_mapping = {}
-    optional_list = json_data.get('!instanceof', {}).get('Optional', [])
+    optional_list = json_data.get('!instanceof', {}).get('MrtOptional', [])
     for anonymous_name in optional_list:
         if anonymous_name in json_data:
             anonymous_def = json_data[anonymous_name]

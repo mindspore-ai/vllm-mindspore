@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef MOPT_CONVERSION_TORCHTOMRT_TORCHCONSTANTTOMRT_H
-#define MOPT_CONVERSION_TORCHTOMRT_TORCHCONSTANTTOMRT_H
+#ifndef MOPT_CONVERSION_TORCHTOMRT_TORCHNPUTOMRT_H
+#define MOPT_CONVERSION_TORCHTOMRT_TORCHNPUTOMRT_H
 
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 namespace mlir {
 
-// Populate Torch constant conversion patterns to MRT
-void populateTorchConstantToMrtPatterns(TypeConverter &converter, RewritePatternSet &patterns);
+// Populate Npu ops to MRT conversion patterns
+void populateNpuToMrtConversionPatterns(TypeConverter &converter, RewritePatternSet &patterns);
 
 }  // namespace mlir
 
-#endif  // MOPT_CONVERSION_TORCHTOMRT_TORCHCONSTANTTOMRT_H
-
+#endif  // MOPT_CONVERSION_TORCHTOMRT_TORCHNPUTOMRT_H

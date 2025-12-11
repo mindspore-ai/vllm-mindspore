@@ -27,7 +27,6 @@
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
-#include "mopt/Dialect/Mrt/MrtValueBuilder.h"
 
 namespace mlir {
 
@@ -64,7 +63,7 @@ struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTranspos
     std::iota(std::begin(permValues), std::end(permValues), 0);
     std::swap(permValues[dim0], permValues[dim1]);
 
-    auto permValue = mrt::MrtValueBuilder(rewriter).createI64Array(op.getLoc(), permValues);
+    auto permValue = rewriter.create<mrt::CreateI64ArrayOp>(op.getLoc(), permValues);
     rewriter.replaceOpWithNewOp<mrt::PermuteOp>(op, outType, self, permValue);
     return success();
   }
@@ -78,7 +77,7 @@ struct ConvertAtenToDtype : public OpConversionPattern<TorchD::AtenToDtypeOp> {
     Value self = adaptor.getSelf();
     auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
 
-    auto dtypeValue = mrt::MrtValueBuilder(rewriter).createDtype(op.getLoc(), outType.getElementType());
+    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(op.getLoc(), outType.getElementType());
     rewriter.replaceOpWithNewOp<mrt::CastOp>(op, outType, self, dtypeValue);
     return success();
   }
@@ -102,7 +101,7 @@ struct ConvertAtenDivTensorMode : public OpConversionPattern<TorchD::AtenDivTens
       mode = 1;
     }
 
-    auto modeValue = mrt::MrtValueBuilder(rewriter).createI64(op.getLoc(), mode);
+    auto modeValue = rewriter.create<mrt::CreateI64Op>(op.getLoc(), mode);
     rewriter.replaceOpWithNewOp<mrt::DivModOp>(op, outType, adaptor.getSelf(), adaptor.getOther(), modeValue);
     return success();
   }

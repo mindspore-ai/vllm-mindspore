@@ -20,6 +20,7 @@
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
 
 def Mrt_Dialect : Dialect {
   let name = "mrt";
@@ -38,6 +39,20 @@ def Mrt_Dialect : Dialect {
 class Mrt_Type<string name, string typeMnemonic, list<Trait> traits = []> :
     TypeDef<Mrt_Dialect, name, traits> {
   let mnemonic = typeMnemonic;
+}
+
+class Mrt_TypeWithContainedType<string name, string typeMnemonic> : Mrt_Type<name, typeMnemonic> {
+  let parameters = (ins "::mlir::Type":$containedType);
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins "::mlir::Type":$containedType), [{
+      return Base::get(containedType.getContext(), containedType);
+    }]>
+  ];
+
+  let assemblyFormat = [{
+    `<` $containedType `>`
+  }];
 }
 
 // Markers for aclnn configuration dag structure

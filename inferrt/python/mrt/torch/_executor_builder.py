@@ -57,6 +57,8 @@ def _create_mrt_value_from_mlir_type(mlir_type) -> Value:
     """Create MRT Value from MLIR Type."""
     if str(mlir_type) == "!mrt.i64":
         return Value(-1)
+    if str(mlir_type).startswith("!mrt.list<"):
+        return Value(Tuple([]))
     shape = [int(d) if int(d) >= 0 else -1 for d in mlir_type.shape]
     data_type = DataType.from_string(str(mlir_type.element_type))
     device = _mlir_device_to_device(mlir_type.device)
@@ -103,6 +105,8 @@ def _extract_mrt_constant_value(op):
 def _extract_constant_value(op):
     """Extract constant value from constant operation."""
     op_name = getattr(op, "name", "") or getattr(op, "OPERATION_NAME", "")
+    if op_name == "mrt.constant.none":
+        return Value()
     if op_name.startswith("mrt.constant."):
         return _extract_mrt_constant_value(op)
     raise NotImplementedError(f"Constant operation {op_name} is not supported: {op}")
@@ -113,6 +117,9 @@ def _extract_constant_value(op):
 
 def _map_op_name_to_runtime_op(name: str) -> Op:
     """Map MRT dialect operator name to GraphExecutor Op."""
+    if name == "mrt.make_list":
+        return Op.make_tuple
+
     # Extract operator name from full name (remove dialect prefix)
     # e.g.: "mrt.add" -> "add"
     if "." in name:
@@ -259,131 +266,163 @@ def _convert_affine_expr(
     raise NotImplementedError(f"Unsupported affine expr: {expr},  type: {type(expr)}")
 
 
-def gen_executor_from_mlir_module(mlir_module, fake_inputs):
-    """Build callable GraphExecutor from MLIR module (MRT dialect).
+class ExecutorBuilder:
+    """Helper class to build GraphExecutor from MLIR function."""
 
-    This function assumes MLIR module is already converted to MRT dialect, where
-    operators have one-to-one correspondence with GraphExecutor's Op.
+    def __init__(self, graph_name: Optional[str] = None):
+        """Initialize ExecutorBuilder."""
+        if graph_name is None:
+            graph_name = f"mrt_graph_{_next_unique_graph_id()}"
+        self.executor = GraphExecutor(graph_name)
+        self.env: Dict[Any, Node] = {}
+        self.symbol_map: Dict[str, SymbolicExpr] = {}
+        self.symbol_env: Dict[Any, SymbolicExpr] = {}
 
-    Workflow:
-    1. Find target func.func
-    2. Create GraphExecutor instance with unique name
-    3. Create value nodes for function parameters and add as parameters
-    4. Traverse all operations in function:
-       - Map MRT dialect operators to Op
-       - Create corresponding op nodes
-    5. Set return values
-    6. Build and return callable executor
+    def build(self, mlir_module, fake_inputs):
+        """Build GraphExecutor from MLIR module."""
+        # Find target function
+        func_op = _get_func_op(mlir_module)
+        if func_op is None:
+            raise ValueError("func.func not found in MLIR module")
 
-    Args:
-        mlir_module: MLIR Module object containing MRT dialect.
+        # Get function inputs and outputs
+        func_inputs, func_outputs = _get_func_io(func_op)
 
-    Returns:
-        A tuple of (GraphExecutor, placeholder_nodes) for building executable graph.
+        # Create value node for each function parameter
+        input_nodes = self._create_input_nodes(func_inputs, fake_inputs)
 
-    Raises:
-        ValueError: If func.func not found in MLIR module.
-        NotImplementedError: If unsupported operation encountered or operation has multiple results.
-    """
-    # Find target function
-    func_op = _get_func_op(mlir_module)
-    if func_op is None:
-        raise ValueError("func.func not found in MLIR module")
+        with self.executor:
+            for val_node in input_nodes:
+                self.executor.add_parameter(val_node)
 
-    # Create GraphExecutor
-    executor = GraphExecutor(f"mrt_graph_{_next_unique_graph_id()}")
+            self._process_ops(func_op)
 
-    # Environment: MLIR Value -> GraphExecutor Node mapping
-    env: Dict[Any, Node] = {}
+            if len(func_outputs) > 0:
+                return_nodes = [self.env[v] for v in func_outputs]
+                self.executor.make_tuple(return_nodes)
+            self.executor.set_return()
 
-    # Symbol Map: Symbol Name -> SymbolicExpr mapping
-    symbol_map: Dict[str, SymbolicExpr] = {}
+        placeholder_nodes = [self.env[arg] for arg in func_inputs]
+        return self.executor, placeholder_nodes
 
-    # Symbol Environment: MLIR Value -> SymbolicExpr mapping
-    symbol_env: Dict[Any, SymbolicExpr] = {}
+    def _create_input_nodes(self, func_inputs, fake_inputs) -> List[Node]:
+        """Create input nodes for function parameters."""
+        input_nodes = []
+        for arg, fake_input in zip(func_inputs, fake_inputs):
+            if isinstance(fake_input, torch.SymInt):
+                sym_name = str(fake_input.node.expr)
+                self.symbol_map[sym_name] = SymbolicVar(sym_name)
+                mrt_value = Value(self.symbol_map[sym_name])
+            else:
+                mrt_value = _create_mrt_value_from_mlir_type(arg.type)
+            val_node = self.executor.add_value_node(mrt_value)
+            self.env[arg] = val_node
+            input_nodes.append(val_node)
+        return input_nodes
 
-    # Get function inputs and outputs
-    func_inputs, func_outputs = _get_func_io(func_op)
-
-    # Create value node for each function parameter
-    input_nodes: List[Node] = []
-    for arg, fake_input in zip(func_inputs, fake_inputs):
-        if isinstance(fake_input, torch.SymInt):
-            sym_name = str(fake_input.node.expr)
-            symbol_map[sym_name] = SymbolicVar(sym_name)
-            mrt_value = Value(symbol_map[sym_name])
-        else:
-            mrt_value = _create_mrt_value_from_mlir_type(arg.type)
-        val_node = executor.add_value_node(mrt_value)
-        env[arg] = val_node
-        input_nodes.append(val_node)
-
-    with executor:
-        for val_node in input_nodes:
-            executor.add_parameter(val_node)
-
+    def _process_ops(self, func_op):
+        """Process all operations in the function."""
         for op in _iter_ops_in_func(func_op):
-            op_name = op.name
-            if op_name == "func.return":
-                continue
+            self._dispatch_op(op)
 
-            if op_name == "mrt.symbolic_int":
-                sym_name = ir.StringAttr(op.attributes["symbol_name"]).value
-                symbol_env[op.result] = symbol_map[sym_name]
-                continue
+    def _dispatch_op(self, op):
+        """Dispatch operation to appropriate handler."""
+        op_name = op.name
+        if op_name == "func.return":
+            return
 
-            if op_name == "mrt.bind_symbolic_shape":
-                target = op.operands[0]
-                shape_symbols = list(op.operands)[1:]
-                affine_map = ir.AffineMapAttr(op.attributes["shape_expressions"]).value
+        if op_name == "mrt.symbolic_int":
+            self._handle_symbolic_int(op)
+            return
 
-                symbol_vals = [symbol_env[s] for s in shape_symbols]
-                symbolic_shape = [
-                    _convert_affine_expr(expr, symbol_vals)
-                    for expr in affine_map.results
-                ]
+        if op_name == "mrt.bind_symbolic_shape":
+            self._handle_bind_symbolic_shape(op)
+            return
 
-                env[target].output.to_tensor().symbolic_shape = symbolic_shape
-                continue
+        if _is_constant_op(op_name):
+            self._handle_constant(op, op_name)
+            return
 
-            if _is_constant_op(op_name):
-                constant_value = _extract_constant_value(op)
-                results = list(op.results)
-                if len(results) != 1:
-                    raise NotImplementedError(
-                        f"Constant operation {op_name} has {len(results)} results; "
-                        f"currently only single-result supported"
-                    )
-                val_node = executor.add_value_node(constant_value)
-                env[results[0]] = val_node
-                continue
+        self._handle_runtime_op(op, op_name)
 
-            runtime_op = _map_op_name_to_runtime_op(op_name)
+    def _handle_symbolic_int(self, op):
+        """Handle mrt.symbolic_int operation."""
+        sym_name = ir.StringAttr(op.attributes["symbol_name"]).value
+        self.symbol_env[op.result] = self.symbol_map[sym_name]
 
-            input_nodes_for_op: List[Node] = []
-            for operand in op.operands:
-                if operand not in env:
-                    raise RuntimeError(f"Operand for operator {op_name} not ready")
-                input_nodes_for_op.append(env[operand])
+    def _handle_bind_symbolic_shape(self, op):
+        """Handle mrt.bind_symbolic_shape operation."""
+        target = op.operands[0]
+        shape_symbols = list(op.operands)[1:]
+        affine_map = ir.AffineMapAttr(op.attributes["shape_expressions"]).value
 
-            results = list(op.results)
-            if len(results) != 1:
-                raise NotImplementedError(
-                    f"{op_name} has {len(results)} results; "
-                    f"currently only single-result operators supported"
-                )
+        symbol_vals = [self.symbol_env[s] for s in shape_symbols]
+        symbolic_shape = [
+            _convert_affine_expr(expr, symbol_vals)
+            for expr in affine_map.results
+        ]
 
+        self.env[target].output.to_tensor().symbolic_shape = symbolic_shape
+
+    def _handle_constant(self, op, op_name):
+        """Handle constant operations."""
+        constant_value = _extract_constant_value(op)
+        results = list(op.results)
+        if len(results) != 1:
+            raise NotImplementedError(
+                f"Constant operation {op_name} has {len(results)} results; "
+                f"currently only single-result supported"
+            )
+        val_node = self.executor.add_value_node(constant_value)
+        self.env[results[0]] = val_node
+
+    def _handle_runtime_op(self, op, op_name):
+        """Handle runtime operations."""
+        input_nodes_for_op = self._get_input_nodes(op)
+        results = list(op.results)
+        runtime_op = _map_op_name_to_runtime_op(op_name)
+
+        if runtime_op == Op.make_tuple:
+            self.env[results[0]] = self.executor.make_tuple(input_nodes_for_op)
+            return
+
+        if len(results) == 1:
             mrt_value = _create_mrt_value_from_mlir_type(results[0].type)
-            node = executor.add_op_node(runtime_op, input_nodes_for_op, mrt_value)
-            env[results[0]] = node
+            node = self.executor.add_op_node(runtime_op, input_nodes_for_op, mrt_value)
+            self.env[results[0]] = node
+        else:
+            self._handle_multi_result_op(runtime_op, input_nodes_for_op, results)
 
-        if len(func_outputs) > 0:
-            return_nodes = [env[v] for v in func_outputs]
-            executor.make_tuple(return_nodes)
-        executor.set_return()
+    def _handle_multi_result_op(self, runtime_op, input_nodes, results):
+        """Handle operations with multiple results."""
+        result_values = []
+        for result in results:
+            mrt_value = _create_mrt_value_from_mlir_type(result.type)
+            result_values.append(mrt_value)
 
-    placeholder_nodes = [env[arg] for arg in func_inputs]
-    return executor, placeholder_nodes
+        # Create tuple value containing all result values
+        tuple_value = Value(Tuple(result_values))
+        node = self.executor.add_op_node(runtime_op, input_nodes, tuple_value)
+
+        # Store the tuple node and also create individual result nodes for getitem access
+        tuple_node = node
+        for i, result in enumerate(results):
+            # Create a getitem node to extract individual result from tuple
+            getitem_node = self.executor.add_op_node(
+                Op.tuple_getitem,
+                [tuple_node, self.executor.add_value_node(Value(i))],
+                result_values[i],
+            )
+            self.env[result] = getitem_node
+
+    def _get_input_nodes(self, op) -> List[Node]:
+        """Get input nodes for an operation."""
+        input_nodes = []
+        for operand in op.operands:
+            if operand not in self.env:
+                raise RuntimeError(f"Operand for operator {op.name} not ready")
+            input_nodes.append(self.env[operand])
+        return input_nodes
 
 
 # ===== Additional Helper Functions =====

@@ -32,7 +32,7 @@ from mrt.torch.utils import (
     update_runtime_inputs,
 )
 from mrt.torch._decompositions import apply_decompositions
-from mrt.torch._executor_builder import gen_executor_from_mlir_module
+from mrt.torch._executor_builder import ExecutorBuilder
 
 # print IR flag
 _PRINT_IR = os.environ.get("MOPT_PRINT_IR") == "1"
@@ -199,7 +199,7 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     _print_verbose("MRT Dialect Module (after set-tensor-device pass)", mlir_module)
 
     # Build MRT dialect module into GraphExecutor
-    executor, param_nodes = gen_executor_from_mlir_module(mlir_module, fake_inputs)
+    executor, param_nodes = ExecutorBuilder().build(mlir_module, fake_inputs)
     _print_verbose("Executor Graph", dump_func=executor.dump_graph)
 
     # Create compiled callable from GraphExecutor

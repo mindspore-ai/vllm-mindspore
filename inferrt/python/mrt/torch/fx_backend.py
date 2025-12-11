@@ -420,12 +420,26 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
     return [_map_arg(arg) for arg in args]
 
 
-def _handle_placeholder_node(node, executor, symbolic_shape_manager, env):
-    """Handle placeholder node processing."""
+def _handle_param_node(node, executor, symbolic_shape_manager, env):
+    """Handle param node processing."""
     example_value = node.meta.get("example_value", None)
     output_value = from_torch(example_value)
     symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
     env[node] = executor.add_value_node(output_value)
+
+
+def _handle_param_nodes(param_nodes, executor, symbolic_shape_manager, env):
+    """Handle param nodes processing."""
+    non_symbol_param_nodes = []
+    # handle sym int param nodes first to register symbols for later reference
+    for node in param_nodes:
+        if isinstance(node.meta.get("example_value"), torch.SymInt):
+            _handle_param_node(node, executor, symbolic_shape_manager, env)
+        else:
+            non_symbol_param_nodes.append(node)
+    # handle non sym int param nodes
+    for node in non_symbol_param_nodes:
+        _handle_param_node(node, executor, symbolic_shape_manager, env)
 
 
 def _handle_get_attr_node(node, gm, executor, env):
@@ -512,9 +526,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     get_collective_info_from_torch(gm)
     set_device_context()
 
-    for node in gm.graph.nodes:
-        if node.op == "placeholder":
-            _handle_placeholder_node(node, executor, symbolic_shape_manager, env)
+    fx_param_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
+    _handle_param_nodes(fx_param_nodes, executor, symbolic_shape_manager, env)
 
     with executor:
         for node in gm.graph.nodes:
@@ -537,7 +550,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.dump_graph()
     executor.build()
 
-    mrt_param_nodes = [env[n] for n in gm.graph.nodes if n.op == "placeholder"]
+    mrt_param_nodes = [env[n] for n in fx_param_nodes]
 
     def compiled_callable(*inputs: torch.Tensor):
         update_runtime_inputs(mrt_param_nodes, inputs)

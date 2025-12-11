@@ -2,6 +2,11 @@
 add_mlir_pdll_library(TorchToMrtPDLLIncGen
   TorchToMrt.pdll
   TorchToMrt.pdll.h.inc
+
+  DEPENDS
+  TorchToMrtAten.pdll
+  TorchToMrtConstant.pdll
+  TorchToMrtNpu.pdll
 )
 
 file(GLOB TORCH_TO_MRT_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")

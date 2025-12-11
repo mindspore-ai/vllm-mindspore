@@ -36,6 +36,30 @@ include "mlir/IR/CommonTypeConstraints.td"
 //   String          --> Mrt_StringType (replaces StrAttr)
 //===----------------------------------------------------------------------===//
 
+// This type represents a list/collection of elements and is distinct from tensor types.
+// Use this type as an operand to pass list values to operations.
+def Mrt_ListType : Mrt_TypeWithContainedType<"List", "list"> {
+  let summary = "List type for MRT dialect";
+  let description = [{
+    Represents a list of elements. This type is used as an operand
+    to pass list values to operations.
+  }];
+}
+
+// List type constraint (accepts any list type)
+def MrtAnyList : Type<CPred<"::llvm::isa<::mrt::ListType>($_self)">,
+                      "MRT list type",
+                      "::mrt::ListType">;
+
+// Helper to create list type constraints with specific element types
+class Mrt_List<Type containedType> : Type<
+    And<[
+      CPred<"::llvm::isa<::mrt::ListType>($_self)">,
+      SubstLeaves<"$_self", "::llvm::cast<::mrt::ListType>($_self).getContainedType()", containedType.predicate>
+    ]>,
+    "List of " # containedType.summary,
+    "::mrt::ListType">;
+
 //===----------------------------------------------------------------------===//
 // Device Attribute
 //===----------------------------------------------------------------------===//
@@ -69,7 +93,7 @@ def Mrt_TensorType : Mrt_Type<"Tensor", "tensor", [ShapedTypeInterface]> {
   }];
 
   let parameters = (ins
-    ArrayRefParameter<"int64_t">:$shape,
+    OptionalArrayRefParameter<"int64_t">:$shape,
     "mlir::Type":$elementType,
     OptionalParameter<"mrt::DeviceAttr">:$device
   );
@@ -87,9 +111,6 @@ def Mrt_TensorType : Mrt_Type<"Tensor", "tensor", [ShapedTypeInterface]> {
 def MrtAnyTensor : Type<CPred<"::llvm::isa<::mrt::TensorType>($_self)">,
                         "MRT tensor type",
                         "::mrt::TensorType">;
-
-// Tensor list type for Mrt dialect operations
-def MrtTensorList : Variadic<MrtAnyTensor>;
 
 //===----------------------------------------------------------------------===//
 // Scalar Types
@@ -183,70 +204,11 @@ def Mrt_StringType : Mrt_Type<"String", "string"> {
 // Array Types
 //===----------------------------------------------------------------------===//
 
-// 64-bit integer array type (replaces I64ArrayAttr)
-// This type represents a general-purpose array of int64 values and is distinct from tensor types.
-// Use this type as an operand to pass integer arrays for various purposes such as
-// axis, strides, padding, dilation, kernel_size, split_sizes, shape, etc.
-def Mrt_I64ArrayType : Mrt_Type<"I64Array", "i64_array"> {
-  let summary = "64-bit integer array type for MRT dialect";
-  let description = [{
-    Represents an array of int64 values for general-purpose use cases such as
-    axis indices, strides, padding, dilation, kernel sizes, split sizes, shape, etc.
-    This type is used as an operand to replace I64ArrayAttr, allowing all
-    parameters to be passed as operands. This type is distinct from tensor
-    types and can be used to pass integer arrays to operations.
-  }];
-
-  let builders = [
-    TypeBuilderWithInferredContext<(ins), [{
-      return Base::get(context);
-    }]>
-  ];
-
-  let assemblyFormat = "";
-}
-
-// 64-bit floating point array type (replaces F64ArrayAttr)
-// This type represents an array of float64 values and is distinct from tensor types.
-// Use this type as an operand to pass double arrays to operations.
-def Mrt_F64ArrayType : Mrt_Type<"F64Array", "f64_array"> {
-  let summary = "64-bit floating point array type for MRT dialect";
-  let description = [{
-    Represents an array of float64 values. This type is used as an operand
-    to replace F64ArrayAttr, allowing all parameters to be passed as operands.
-    This type is distinct from tensor types and can be used to pass double
-    arrays to operations.
-  }];
-
-  let builders = [
-    TypeBuilderWithInferredContext<(ins), [{
-      return Base::get(context);
-    }]>
-  ];
-
-  let assemblyFormat = "";
-}
-
-// Boolean array type (replaces BoolArrayAttr)
-// This type represents an array of boolean values and is distinct from tensor types.
-// Use this type as an operand to pass boolean arrays to operations.
-def Mrt_BooleanArrayType : Mrt_Type<"BooleanArray", "boolean_array"> {
-  let summary = "Boolean array type for MRT dialect";
-  let description = [{
-    Represents an array of boolean values. This type is used as an operand
-    to replace BoolArrayAttr, allowing all parameters to be passed as operands.
-    This type is distinct from tensor types and can be used to pass boolean
-    arrays to operations.
-  }];
-
-  let builders = [
-    TypeBuilderWithInferredContext<(ins), [{
-      return Base::get(context);
-    }]>
-  ];
-
-  let assemblyFormat = "";
-}
+// Tensor list type for Mrt dialect operations
+def MrtTensorList : Mrt_List<MrtAnyTensor>;
+def Mrt_I64ArrayType : Mrt_List<Mrt_I64Type>;
+def Mrt_F64ArrayType : Mrt_List<Mrt_F64Type>;
+def Mrt_BooleanArrayType : Mrt_List<Mrt_BooleanType>;
 
 // Dtype type (stores mlir::Type directly)
 // This type wraps a MLIR element type and is distinct from tensor types.
@@ -278,5 +240,31 @@ def Mrt_ScalarType : AnyTypeOf<[
   Mrt_I64Type,
   Mrt_BooleanType
 ], "scalar type (f64/i64/boolean)">;
+
+// None type (represents null/none values)
+// This type wraps a None value and is distinct from tensor types.
+// Use this type as an operand to pass None/null values to operations.
+def Mrt_NoneType : Mrt_Type<"None", "none"> {
+  let summary = "None type for MRT dialect";
+  let description = [{
+    Represents a None/null value. This type is used as an operand
+    to pass None values to operations. This type is distinct from tensor types
+    and can be used to represent optional or null values.
+  }];
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins), [{
+      return Base::get(context);
+    }]>
+  ];
+
+  let assemblyFormat = "";
+}
+
+// MRT-specific optional constraint that accepts the base type or Mrt_NoneType.
+class MrtOptional<Type type>
+    : AnyTypeOf<[type, Mrt_NoneType]> {
+  Type baseType = type;
+}
 
 #endif // MRT_DIALECT_MRT_TYPES_TD

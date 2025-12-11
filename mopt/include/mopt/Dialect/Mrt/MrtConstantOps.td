@@ -24,9 +24,36 @@ include "mopt/Dialect/Mrt/MrtTypes.td"
 // These operations create initial values that can be modified at runtime.
 //===----------------------------------------------------------------------===//
 
+// Create a None value
+def Mrt_CreateNoneOp : Mrt_Op<"constant.none", [
+    ConstantLike,
+    Pure,
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
+  let summary = "Create a None value";
+  let description = [{
+    Creates a value of Mrt_NoneType.
+  }];
+
+  let arguments = (ins);
+  let results = (outs Mrt_NoneType:$result);
+
+  let assemblyFormat = "attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins), [{
+      $_state.addTypes(NoneType::get($_builder.getContext()));
+    }]>
+  ];
+}
+
 // Create an i64 value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateI64Op : Mrt_Op<"constant.i64", [Pure]> {
+def Mrt_CreateI64Op : Mrt_Op<"constant.i64", [
+    ConstantLike,
+    Pure,
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
   let summary = "Create an i64 value from an attribute";
   let description = [{
     Creates a value of Mrt_I64Type from an integer attribute.
@@ -37,11 +64,27 @@ def Mrt_CreateI64Op : Mrt_Op<"constant.i64", [Pure]> {
   let results = (outs Mrt_I64Type:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "int64_t":$value), [{
+      $_state.addAttribute("value", $_builder.getI64IntegerAttr(value));
+      $_state.addTypes(I64Type::get($_builder.getContext()));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a boolean value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateBooleanOp : Mrt_Op<"constant.boolean", [Pure]> {
+def Mrt_CreateBooleanOp : Mrt_Op<"constant.boolean", [
+    ConstantLike,
+    Pure,
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
   let summary = "Create a boolean value from an attribute";
   let description = [{
     Creates a value of Mrt_BooleanType from a boolean attribute.
@@ -52,11 +95,27 @@ def Mrt_CreateBooleanOp : Mrt_Op<"constant.boolean", [Pure]> {
   let results = (outs Mrt_BooleanType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "bool":$value), [{
+      $_state.addAttribute("value", $_builder.getBoolAttr(value));
+      $_state.addTypes(BooleanType::get($_builder.getContext()));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a f64 value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateF64Op : Mrt_Op<"constant.f64", [Pure]> {
+def Mrt_CreateF64Op : Mrt_Op<"constant.f64", [
+    ConstantLike,
+    Pure,
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
   let summary = "Create a f64 value from an attribute";
   let description = [{
     Creates a value of Mrt_F64Type from a double attribute.
@@ -67,11 +126,23 @@ def Mrt_CreateF64Op : Mrt_Op<"constant.f64", [Pure]> {
   let results = (outs Mrt_F64Type:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "double":$value), [{
+      $_state.addAttribute("value", $_builder.getF64FloatAttr(value));
+      $_state.addTypes(F64Type::get($_builder.getContext()));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create an i64 array value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateI64ArrayOp : Mrt_Op<"constant.i64_array", [Pure]> {
+def Mrt_CreateI64ArrayOp : Mrt_Op<"constant.i64_array", [ConstantLike, Pure]> {
   let summary = "Create an i64 array value from an attribute";
   let description = [{
     Creates a value of Mrt_I64ArrayType from an integer array attribute.
@@ -82,11 +153,23 @@ def Mrt_CreateI64ArrayOp : Mrt_Op<"constant.i64_array", [Pure]> {
   let results = (outs Mrt_I64ArrayType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::llvm::ArrayRef<int64_t>":$value), [{
+      $_state.addAttribute("value", $_builder.getI64ArrayAttr(value));
+      $_state.addTypes(ListType::get($_builder.getContext(), I64Type::get($_builder.getContext())));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a f64 array value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateF64ArrayOp : Mrt_Op<"constant.f64_array", [Pure]> {
+def Mrt_CreateF64ArrayOp : Mrt_Op<"constant.f64_array", [ConstantLike, Pure]> {
   let summary = "Create a f64 array value from an attribute";
   let description = [{
     Creates a value of Mrt_F64ArrayType from a double array attribute.
@@ -97,11 +180,23 @@ def Mrt_CreateF64ArrayOp : Mrt_Op<"constant.f64_array", [Pure]> {
   let results = (outs Mrt_F64ArrayType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::llvm::ArrayRef<double>":$value), [{
+      $_state.addAttribute("value", $_builder.getF64ArrayAttr(value));
+      $_state.addTypes(ListType::get($_builder.getContext(), F64Type::get($_builder.getContext())));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a boolean array value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateBooleanArrayOp : Mrt_Op<"constant.boolean_array", [Pure]> {
+def Mrt_CreateBooleanArrayOp : Mrt_Op<"constant.boolean_array", [ConstantLike, Pure]> {
   let summary = "Create a boolean array value from an attribute";
   let description = [{
     Creates a value of Mrt_BooleanArrayType from a boolean array attribute.
@@ -112,11 +207,23 @@ def Mrt_CreateBooleanArrayOp : Mrt_Op<"constant.boolean_array", [Pure]> {
   let results = (outs Mrt_BooleanArrayType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::llvm::ArrayRef<bool>":$value), [{
+      $_state.addAttribute("value", $_builder.getBoolArrayAttr(value));
+      $_state.addTypes(ListType::get($_builder.getContext(), BooleanType::get($_builder.getContext())));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a string value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateStringOp : Mrt_Op<"constant.string", [Pure]> {
+def Mrt_CreateStringOp : Mrt_Op<"constant.string", [ConstantLike, Pure]> {
   let summary = "Create a string value from an attribute";
   let description = [{
     Creates a value of Mrt_StringType from a string attribute.
@@ -127,11 +234,23 @@ def Mrt_CreateStringOp : Mrt_Op<"constant.string", [Pure]> {
   let results = (outs Mrt_StringType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::llvm::StringRef":$value), [{
+      $_state.addAttribute("value", $_builder.getStringAttr(value));
+      $_state.addTypes(StringType::get($_builder.getContext()));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 // Create a dtype value from an attribute
 // The created value can be modified at runtime through other operations.
-def Mrt_CreateDtypeOp : Mrt_Op<"constant.dtype", [Pure]> {
+def Mrt_CreateDtypeOp : Mrt_Op<"constant.dtype", [ConstantLike, Pure]> {
   let summary = "Create a dtype value from a type attribute";
   let description = [{
     Creates a value of Mrt_DtypeType from a type attribute.
@@ -143,6 +262,18 @@ def Mrt_CreateDtypeOp : Mrt_Op<"constant.dtype", [Pure]> {
   let results = (outs Mrt_DtypeType:$result);
 
   let assemblyFormat = "$value attr-dict `:` type($result)";
+
+  let builders = [
+    OpBuilder<(ins "::mlir::Type":$value), [{
+      $_state.addAttribute("value", mlir::TypeAttr::get(value));
+      $_state.addTypes(DtypeType::get($_builder.getContext(), value));
+    }]>
+  ];
+  let extraClassDeclaration = [{
+    ::mlir::OpFoldResult fold(FoldAdaptor adaptor) {
+      return getValueAttr();
+    }
+  }];
 }
 
 #endif // MRT_DIALECT_MRT_CONSTANT_OPS_TD

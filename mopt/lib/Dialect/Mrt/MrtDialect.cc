@@ -127,14 +127,19 @@ mlir::Type TensorType::parse(mlir::AsmParser &odsParser) {
 }
 
 void TensorType::print(mlir::AsmPrinter &odsPrinter) const {
+  auto elementType = getElementType();
+  if (!elementType) {
+    return;
+  }
+
   odsPrinter << "<";
   for (int64_t dim : getShape()) {
-    if (dim == mlir::ShapedType::kDynamic)
+    if (dim < 0)
       odsPrinter << "?x";
     else
       odsPrinter << dim << "x";
   }
-  odsPrinter.printType(getElementType());
+  odsPrinter.printType(elementType);
 
   // Print optional device
   auto device = getDevice();
