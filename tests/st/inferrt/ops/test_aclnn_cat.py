@@ -19,7 +19,7 @@ import torch
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(input, axis):
@@ -34,10 +34,14 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("shapes", [[2, 5]])
-@pytest.mark.parametrize("axis", [0])
-@pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
 @pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("shapes,axis,dtypes", [
+    ([2, 5], 0, torch.float16),
+    ([3, 4, 5], 1, torch.bfloat16),
+    ([1, 10], -1, torch.float32),
+    ([5, 3, 2], 2, torch.bfloat16),
+    ([2, 3, 4, 5], 3, torch.float32)
+])
 def test_cat(shapes, axis, dtypes, pipeline, monkeypatch):
     """
     Feature: Test aclnn cat

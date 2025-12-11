@@ -18,6 +18,11 @@ Pattern ConvertAtenBitwiseNot {
   replace root with op<mrt.bitwise_not>(convertValues(operands)) -> (convertType(resType));
 }
 
+Pattern ConvertAtenCat {
+  let root = op<torch.aten.cat>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.cat>(convertValues(operands)) -> (convertType(resType));
+}
+
 Pattern ConvertAtenDivTensor {
   let root = op<torch.aten.div.Tensor>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.div>(convertValues(operands)) -> (convertType(resType));
