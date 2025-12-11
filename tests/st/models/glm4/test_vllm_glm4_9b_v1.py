@@ -44,7 +44,12 @@ env_vars = {
 @pytest.mark.env_onecard
 def test_vllm_glm4_9b():
     """
-    test case glm4 9B
+    Test Summary:
+        Test native glm4 model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        GLM-4-9B-0414
     """
 
     # Sample prompts.

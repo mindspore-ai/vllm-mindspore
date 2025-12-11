@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""test native qwen3 vl 8B."""
+"""test native qwen3 vl"""
 import pytest
 from unittest.mock import patch
 
@@ -43,14 +43,15 @@ PROMPT_TEMPLATE = (
 
 image_path = \
     "/home/workspace/mindspore_dataset/images/houses_and_mountain.jpeg"
-model_path = MODEL_PATH["Qwen3-VL-8B-Instruct"]
 
 
 def pil_image() -> Image.Image:
     return Image.open(image_path)
 
 
-def generate_llm_engine(enforce_eager=False, tensor_parallel_size=1):
+def generate_llm_engine(model_path,
+                        enforce_eager=False,
+                        tensor_parallel_size=1):
     from vllm import LLM
     # Create an LLM.
     llm = LLM(model=model_path,
@@ -65,7 +66,7 @@ def generate_llm_engine(enforce_eager=False, tensor_parallel_size=1):
     return llm
 
 
-def forward_and_check(llm):
+def forward_and_check(llm, expect_list):
     from vllm import SamplingParams
     inputs = [
         {
@@ -78,18 +79,6 @@ def forward_and_check(llm):
 
     # Create a sampling params object.
     sampling_params = SamplingParams(temperature=0.0, max_tokens=128, top_k=1)
-    expect_list = [
-        "This is a beautiful, scenic landscape photograph. Here's a "
-        "breakdown of what's in the image:\n\n* Foreground: A vibrant green "
-        "meadow dotted with wildflowers, including yellow daisies and pink "
-        "blossoms. A small, rustic wooden shed with a tiled roof sits "
-        "prominently in the grass.\n* Midground: A calm, blue lake or alpine "
-        "tarn stretches across the scene, surrounded by more green fields "
-        "and a few other small wooden structures. The shoreline is lined "
-        "with dense forests of evergreen trees.\n* Background: A majestic "
-        "range of snow-capped mountains rises in the distance, their peaks "
-        "catching the"
-    ]
 
     outputs = llm.generate(inputs, sampling_params)
     # Print the outputs.
@@ -97,6 +86,20 @@ def forward_and_check(llm):
         generated_text = output.outputs[0].text
         print(f"Prompt: {output.prompt!r}, Generated text: {generated_text!r}")
         compare_distance(generated_text, expect_list[0], bench_sim=0.95)
+
+
+qwen3_vl_8b_instruct_expect_list = [
+    "This is a beautiful, scenic landscape photograph. Here's a "
+    "breakdown of what's in the image:\n\n* Foreground: A vibrant green "
+    "meadow dotted with wildflowers, including yellow daisies and pink "
+    "blossoms. A small, rustic wooden shed with a tiled roof sits "
+    "prominently in the grass.\n* Midground: A calm, blue lake or alpine "
+    "tarn stretches across the scene, surrounded by more green fields "
+    "and a few other small wooden structures. The shoreline is lined "
+    "with dense forests of evergreen trees.\n* Background: A majestic "
+    "range of snow-capped mountains rises in the distance, their peaks "
+    "catching the"
+]
 
 
 @patch.dict(os.environ, env_vars)
@@ -111,9 +114,11 @@ def test_qwen3_vl_8b_v1():
         Qwen3-VL-8B-Instruct
     """
     import vllm_mindspore
-
-    llm = generate_llm_engine(enforce_eager=False, tensor_parallel_size=2)
-    forward_and_check(llm)
+    model_path = MODEL_PATH["Qwen3-VL-8B-Instruct"]
+    llm = generate_llm_engine(model_path=model_path,
+                              enforce_eager=False,
+                              tensor_parallel_size=2)
+    forward_and_check(llm, qwen3_vl_8b_instruct_expect_list)
 
 
 @patch.dict(os.environ, env_vars)
@@ -131,5 +136,45 @@ def test_qwen3_vl_8b_v1_enforce_eager():
     """
     import vllm_mindspore
 
-    llm = generate_llm_engine(enforce_eager=True, tensor_parallel_size=1)
-    forward_and_check(llm)
+    model_path = MODEL_PATH["Qwen3-VL-8B-Instruct"]
+    llm = generate_llm_engine(model_path=model_path,
+                              enforce_eager=True,
+                              tensor_parallel_size=1)
+    forward_and_check(llm, qwen3_vl_8b_instruct_expect_list)
+
+
+qwen3_vl_4b_instruct_expect_list = [
+    "The image depicts a serene and picturesque alpine landscape, "
+    "likely in a region such as the Swiss or Austrian Alps. Here's a "
+    "breakdown of what's in the image:\n\n"
+    "- Foreground: A vibrant green meadow dotted with wildflowers, "
+    "including yellow and purple blooms. A rustic, weathered wooden "
+    "barn or shed with a tiled roof sits prominently in the foreground, "
+    "slightly to the left.\n\n"
+    "- Midground: A calm, blue lake stretches across the scene, "
+    "surrounded by lush green hills and dense forests of coniferous "
+    "trees. Several smaller wooden structures, possibly farm sheds or "
+    "cabins, are scattered across the grassy areas near the lake"
+]
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_onecard
+def test_qwen3_vl_4b_v1():
+    """
+    Test Summary:
+        Test native qwen3 vl model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-VL-4B-Instruct
+    """
+    import vllm_mindspore
+
+    model_path = MODEL_PATH["Qwen3-VL-4B-Instruct"]
+    llm = generate_llm_engine(model_path=model_path,
+                              enforce_eager=True,
+                              tensor_parallel_size=1)
+    forward_and_check(llm, qwen3_vl_4b_instruct_expect_list)

@@ -78,6 +78,10 @@ DeepSeek-R1-W8A8-smoothquant-newconfig:
   description: "DeepSeek-R1 with smoothquant new config"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/DeepSeek-R1-W8A8-smoothquant-newconfig"
 
+Qwen3-VL-4B-Instruct:
+  description: "Qwen3-VL-4B-Instruct, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-VL-4B-Instruct"
+
 Qwen3-VL-8B-Instruct:
   description: "Qwen3-VL-8B-Instruct, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-VL-8B-Instruct"
