@@ -87,3 +87,6 @@ def patch_transformers():
     transformers.AutoImageProcessor = AutoImageProcessor
 
     _patch_processing_module()
+
+
+patch_transformers()

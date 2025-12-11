@@ -77,3 +77,6 @@ def patch_ray():
                 wrapper(_SerializationContext.serialize_to_numpy)
     except ImportError:
         pass
+
+
+patch_ray()

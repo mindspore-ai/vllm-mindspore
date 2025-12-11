@@ -27,6 +27,7 @@ from safetensors import safe_open
 from tqdm.auto import tqdm
 from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
                                                            enable_tqdm)
+from vllm_mindspore.model_executor.models.hybrid_unify import get_ms_tensor
 
 from vllm_mindspore.utils import cast_weight_for_310p, is_310p
 
@@ -93,4 +94,5 @@ def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     loaded_weight = get_loaded_weight(loaded_weight)
     if is_310p():
         loaded_weight = cast_weight_for_310p(loaded_weight)
-    param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+    # param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))
+    param.set_data(get_ms_tensor(loaded_weight, dtype=param.dtype))

@@ -13,17 +13,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Main entry point for monkey patching vllm."""
-
-# isort:skip_file
+"""vllm-mindspore plugin environment variables."""
 
 import os
-import vllm_mindspore.envs as env
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    VLLM_MS_HIYBRID_MODE: Optional[int] = None
 
 
-if not env.VLLM_MS_HIYBRID_MODE:
-    import msadapter
-    import vllm_mindspore.apply_patch.msadapter_patch
-    import vllm_mindspore.apply_patch.ray_patch
-    import vllm_mindspore.apply_patch.transformers_patch
-    import vllm_mindspore.apply_patch.vllm_patch
+environment_variables: dict[str, Callable[[], Any]] = {
+    "VLLM_MS_HIYBRID_MODE":
+    lambda: bool(int(os.getenv('VLLM_MS_HIYBRID_MODE', '0'))),
+}
+
+
+def __getattr__(name: str):
+    if name in environment_variables:
+        return environment_variables[name]()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return list(environment_variables.keys())

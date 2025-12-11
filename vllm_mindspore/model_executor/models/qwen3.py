@@ -60,7 +60,8 @@ from vllm_mindspore.model_executor.layers.logits_processor import (
     LogitsProcessor)
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead)
-from vllm_mindspore.model_executor.models.model_base import NativeModel
+from vllm_mindspore.model_executor.models.hybrid_unify import (
+    UnifiedNativeModel)
 from vllm_mindspore.model_executor.models.utils import (PPMissingLayer,
                                                         maybe_prefix)
 from vllm_mindspore.v1.attention import Attention
@@ -271,7 +272,7 @@ class Qwen3Model(Qwen2Model):
                          decoder_layer_type=Qwen3DecoderLayer)
 
 
-class Qwen3ForCausalLM(NativeModel, SupportsPP):
+class Qwen3ForCausalLM(UnifiedNativeModel, SupportsPP):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
@@ -324,7 +325,7 @@ class Qwen3ForCausalLM(NativeModel, SupportsPP):
             })
         return hidden_states
 
-    def compute_logits(
+    def _compute_logits(
         self,
         hidden_states: Tensor,
     ) -> Optional[Tensor]:

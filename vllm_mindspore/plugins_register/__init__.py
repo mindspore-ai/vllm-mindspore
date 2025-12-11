@@ -13,17 +13,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Main entry point for monkey patching vllm."""
 
-# isort:skip_file
+import vllm_mindspore.logger
+from vllm.logger import init_logger
 
-import os
 import vllm_mindspore.envs as env
+from vllm_mindspore.plugins_register.utils import init_env, init_context
 
 
-if not env.VLLM_MS_HIYBRID_MODE:
-    import msadapter
-    import vllm_mindspore.apply_patch.msadapter_patch
-    import vllm_mindspore.apply_patch.ray_patch
-    import vllm_mindspore.apply_patch.transformers_patch
-    import vllm_mindspore.apply_patch.vllm_patch
+logger = init_logger(__name__)
+
+
+def register_models():
+    if not env.VLLM_MS_HIYBRID_MODE:
+        return
+
+    init_env()
+    init_context()
+
+    logger.info("Register MindSpore models via vllm.general_plugins.")
+
+    from vllm_mindspore.plugins_register.register_models import (
+        _register_ms_models)
+    _register_ms_models()

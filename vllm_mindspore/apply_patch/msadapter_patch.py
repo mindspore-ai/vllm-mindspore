@@ -94,3 +94,6 @@ def patch_msadapter():
             )
 
     msadapter._tensor._device_to_ms = _device_to_ms
+
+
+patch_msadapter()

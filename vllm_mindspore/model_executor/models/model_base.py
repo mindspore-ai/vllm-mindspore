@@ -372,6 +372,7 @@ class NativeModel(MsModelBase):
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
+        set_model_context("model_dtype", vllm_config.model_config.dtype)
         self.quant_config = vllm_config.quant_config
         if vllm_config.lora_config is not None:
             # native model lora only support pynative mode now
@@ -381,25 +382,28 @@ class NativeModel(MsModelBase):
         self.decode_graph = None
 
         if is_mixture_of_experts(self):
-            ep_size = get_ep_group().world_size
-            custom_ep_size = \
-                vllm_config.additional_config.get("expert_parallel", ep_size) \
-                if vllm_config.additional_config is not None else ep_size
-            pure_ep = self.parallel_config.enable_expert_parallel and \
-                (ep_size // int(custom_ep_size)) == 1
-            if get_dp_group().world_size > 1 and not pure_ep:
-                if not supports_moe_dp_tp(self):
-                    raise ValueError(
-                        "The MoE Model do not support Data Parallel mix with "
-                        "Tensor Parallel. If want to use MoE with DP + TP, "
-                        "please implement `supports_moe_dp_tp` in models.")
-                self.moe_dp_need_pad = True
-                self.dp_group = get_dp_group().device_group._name
-                self.dp_cpu_group = get_dp_group().cpu_group._name
-                self.dp_world_size = get_dp_group().world_size
-                self.dp_rank = get_dp_group().rank_in_group
-            else:
-                self.moe_dp_need_pad = False
+            self.init_moe_params(vllm_config)
+
+    def init_moe_params(self, vllm_config):
+        ep_size = get_ep_group().world_size
+        custom_ep_size = \
+            vllm_config.additional_config.get("expert_parallel", ep_size) \
+            if vllm_config.additional_config is not None else ep_size
+        pure_ep = self.parallel_config.enable_expert_parallel and \
+            (ep_size // int(custom_ep_size)) == 1
+        if get_dp_group().world_size > 1 and not pure_ep:
+            if not supports_moe_dp_tp(self):
+                raise ValueError(
+                    "The MoE Model do not support Data Parallel mix with "
+                    "Tensor Parallel. If want to use MoE with DP + TP, "
+                    "please implement `supports_moe_dp_tp` in models.")
+            self.moe_dp_need_pad = True
+            self.dp_group = get_dp_group().device_group._name
+            self.dp_cpu_group = get_dp_group().cpu_group._name
+            self.dp_world_size = get_dp_group().world_size
+            self.dp_rank = get_dp_group().rank_in_group
+        else:
+            self.moe_dp_need_pad = False
 
     @property
     def ready_model(self) -> nn.Cell:
@@ -690,3 +694,9 @@ class NativeModel(MsModelBase):
             model_output = self.decode_graph(**model_inputs)
 
         return model_output
+
+    def compute_logits(
+        self,
+        hidden_states,
+    ):
+        return self._compute_logits(hidden_states)

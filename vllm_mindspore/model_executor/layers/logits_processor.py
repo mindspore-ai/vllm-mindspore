@@ -24,7 +24,8 @@ from typing import Optional
 
 import vllm.envs as envs
 from mindspore import Tensor, jit, mint, nn
-from vllm.config import current_platform, get_current_vllm_config
+from vllm.config import get_current_vllm_config
+from vllm.platforms import current_platform
 from vllm.distributed import (tensor_model_parallel_all_gather,
                               tensor_model_parallel_gather)
 from vllm.logger import init_logger

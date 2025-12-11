@@ -23,7 +23,7 @@ from typing import Optional, Union
 
 from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore._c_expression import typing
-from vllm.config import get_current_vllm_config
+from vllm_mindspore.model_executor.utils import get_model_context
 
 
 class RMSNorm(nn.Cell):
@@ -42,7 +42,7 @@ class RMSNorm(nn.Cell):
     ) -> None:
         super().__init__()
         if params_dtype is None:
-            params_dtype = get_current_vllm_config().model_config.dtype
+            params_dtype = get_model_context("model_dtype")
         self.weight = Parameter(mint.ones(hidden_size, dtype=params_dtype),
                                 requires_grad=False)
         self.rms_norm = ops.RmsNorm(eps)

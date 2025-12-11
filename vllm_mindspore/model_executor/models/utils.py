@@ -44,7 +44,11 @@ def convert_pin(input_tensor):
     """
     if not isinstance(input_tensor, Tensor):
         return input_tensor
-    if input_tensor._ms_device == "CPU" and not input_tensor.is_pinned():
+
+    # _ms_device is msadapter tensor's attribute
+    device_attr = (input_tensor._ms_device 
+        if hasattr(input_tensor, "_ms_device") else input_tensor.device)
+    if device_attr == "CPU" and not input_tensor.is_pinned():
         input_pined = input_tensor.pin_memory()
         return input_pined
     return input_tensor
