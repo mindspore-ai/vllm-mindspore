@@ -34,9 +34,7 @@ class CMakeBuild(build_ext):
         cmake_args = []
         cmake_args.append(f"-DLLVM_DIR={os.environ['LLVM_DIR']}")
         cmake_args.append(f"-DMLIR_DIR={os.environ['MLIR_DIR']}")
-        cmake_args.append(
-            f"-DTORCHMLIR_SOURCE_DIR={os.environ['TORCHMLIR_SOURCE_DIR']}"
-        )
+        cmake_args.append("-DMLIR_BINDINGS_PYTHON_NB_DOMAIN=mopt")
 
         # Configure with CMake
         if os.environ.get("INC_BUILD", "0") != "1":
@@ -64,23 +62,26 @@ class CMakeBuild(build_ext):
 
         # Package torch_mlir as a top-level package
         # (parallel to mopt in site-packages)
-        # torch_mlir is generated during compilation, package from build path
-        torch_mlir_build_dir = os.environ.get("TORCHMLIR_BUILD_DIR")
-        if torch_mlir_build_dir:
-            torch_mlir_path = (
-                Path(torch_mlir_build_dir)
-                / "python_packages"
-                / "torch_mlir"
-                / "torch_mlir"
-            )
-            if torch_mlir_path.is_dir():
+        # torch_mlir is installed to torch_mlir_HASHID/_install/python_packages/torch_mlir/torch_mlir
+        # Read install path from file written by CMake
+        torch_mlir_install_path_file = Path(self.build_temp) / "torch_mlir_install_path.txt"
+        if torch_mlir_install_path_file.exists():
+            torch_mlir_install_dir = Path(torch_mlir_install_path_file.read_text().strip())
+            # Try both python_packages (plural) and python_package (singular) paths
+            torch_mlir_path = None
+            for path_suffix in ["python_packages/torch_mlir/torch_mlir", "python_package/torch_mlir/torch_mlir"]:
+                candidate_path = torch_mlir_install_dir / path_suffix
+                if candidate_path.is_dir():
+                    torch_mlir_path = candidate_path
+                    break
+            if torch_mlir_path:
                 torch_mlir_dst = Path(self.build_lib) / "torch_mlir"
                 if torch_mlir_dst.exists():
                     shutil.rmtree(torch_mlir_dst)
                 shutil.copytree(torch_mlir_path, torch_mlir_dst)
                 print(f"Packaged torch_mlir from {torch_mlir_path}")
             else:
-                print(f"Warning: torch_mlir not found at {torch_mlir_path}")
+                print(f"Warning: torch_mlir not found in {torch_mlir_install_dir}")
 
 
 class BuildPyWithExt(build_py):

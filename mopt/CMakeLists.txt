@@ -59,6 +59,8 @@ set(TOP_DIR "${PROJECT_SOURCE_DIR}/..")
 # Note: StableHLO will be compiled by Torch-MLIR, not separately by mopt.
 # This avoids duplicate compilation and ensures consistent stablehlo versions.
 
+include(${TOP_DIR}/cmake/torch_mlir.cmake)
+
 include(${TOP_DIR}/cmake/stablehlo.cmake)
 
 include(MLIRDetectPythonEnv)

@@ -108,12 +108,9 @@ if [[ $BUILD_OPT == 1 || $ENABLE_ASCEND == 1 ]]; then
 
     echo "=========================================="
     echo "LLVM configuration:"
-    echo "  LLVM_SOURCE_DIR: ${LLVM_SOURCE_DIR}"
     echo "  LLVM_BUILD_DIR: ${LLVM_BUILD_DIR}"
     echo "  LLVM_DIR: ${LLVM_DIR}"
     echo "  MLIR_DIR: ${MLIR_DIR}"
-    echo "  TORCHMLIR_SOURCE_DIR: ${TORCHMLIR_SOURCE_DIR}"
-    echo "  TORCHMLIR_BUILD_DIR: ${TORCHMLIR_BUILD_DIR}"
     echo "=========================================="
 fi
 

@@ -20,7 +20,7 @@ fi
 
 # Set up include paths for tablegen files
 INCLUDE_PATHS=(
-    "-I${LLVM_SOURCE_DIR}/mlir/include"
+    "-I${LLVM_BUILD_DIR}/include"
     "-I${PROJECT_DIR}/mopt/include"
 )
 

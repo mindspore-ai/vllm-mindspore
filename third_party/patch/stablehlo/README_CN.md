@@ -61,6 +61,38 @@ nested name specifier
 2. 避免从嵌套结构体中直接调用父类模板方法
 3. 使用编译时类型特征检查（`if constexpr`）在编译时选择正确的实现
 
+### 003-build-remove-tests.patch
+
+**描述：**
+移除 StableHLO 测试相关的构建目标和子目录，简化构建过程。
+
+**问题：**
+
+1. 在将 StableHLO 作为依赖项集成到其他项目时，不需要构建和运行 StableHLO 的测试套件
+
+**解决方案：**
+
+- 移除根 `CMakeLists.txt` 中的测试目标定义（`check-stablehlo-ci`, `check-stablehlo-quick`, `check-stablehlo-slow`）
+- 移除 `add_subdirectory(examples)` 调用，不构建示例代码
+- 移除 `add_subdirectory(tools)` 调用，不构建工具代码
+- 移除各级cmake文件中对test目录的构建
+- 移除 `CheckCAPI` 的定义（因为依赖 `CheckOps`，而 `CheckOps` 在 tests 中构建），同时移除 `CheckPythonSources` 和 `CheckPythonExtensions` 的定义，因为他们依赖 `CheckCAPI`
+- 从 `StablehloUnifiedPythonCAPI` 和 `StablehloUnifiedPythonModules` 中移除 Check 相关的依赖
+
+**修改的文件：**
+
+- `CMakeLists.txt`
+- `stablehlo/CMakeLists.txt`
+- `stablehlo/conversions/linalg/CMakeLists.txt`
+- `stablehlo/conversions/tosa/CMakeLists.txt`
+- `stablehlo/integrations/c/CMakeLists.txt`
+- `stablehlo/integrations/cpp/builder/CMakeLists.txt`
+- `stablehlo/integrations/python/CMakeLists.txt`
+
+**技术细节：**
+
+Check dialect 是 StableHLO 中用于测试的 dialect，其实现（`CheckOps`）和 Python 绑定（`CheckPythonExtensions`）都属于测试基础设施。由于这些组件依赖于在 tests 目录中构建的 `CheckOps` 库，而 tests 目录已被移除，因此这些组件也必须被移除。
+
 ## 应用顺序
 
 这些补丁应按数字顺序应用（001 → 002 → ...）。
