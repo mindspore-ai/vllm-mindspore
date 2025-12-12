@@ -27,6 +27,7 @@
 # limitations under the License.
 """Inference-only Qwen3-VL-MoE model compatible with HuggingFace weights."""
 import typing
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping
 from typing import Optional
 
@@ -388,4 +389,15 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration,
         head_dim = (self.vision_config.hidden_size //
                     self.vision_config.num_heads)
         self.rotary_pos_emb_full = Qwen2_5_VisionRotaryEmbedding(head_dim // 2)
-        self._rot_pos_ids_cache: dict[tuple[int, int], ms.Tensor] = {}
+        # Use OrderedDict to implement LRUCache for rot_pos_ids
+        self._rot_pos_ids_cache: OrderedDict[tuple[int, int],
+                                             ms.Tensor] = OrderedDict()
+        # Default Cache size set to 256.
+        # Assume the Typical image pixel size is 4096 * 4096
+        # with patch_size is 14,
+        # then pos_ids length will be ((4096 * 4096) / (14 * 14)) * 2 = 85598.
+        # Therefore, one cache item will take 85598 * 4(init32) = 342392 Byte
+        # With cache max size 256, The cache will maximum occupy 87MB
+        self._rot_pos_ids_cache_max_size = int(
+            vllm_config.additional_config.get("mm_rot_pos_ids_cache_max_size",
+                                              256))
