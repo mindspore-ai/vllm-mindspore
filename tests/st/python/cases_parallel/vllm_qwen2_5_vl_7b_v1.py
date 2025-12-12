@@ -22,7 +22,6 @@ import numpy as np
 from PIL import Image
 from tests.st.python import utils
 from tests.st.python.cases_parallel.similarity import compare_distance
-from transformers import AutoProcessor
 
 
 def teardown_function():
@@ -44,6 +43,7 @@ env_vars = {
 # set env
 env_manager.setup_ai_environment(env_vars)
 import vllm_mindspore
+from transformers import AutoProcessor
 from vllm import LLM, SamplingParams
 
 PROMPT_TEMPLATE = (
