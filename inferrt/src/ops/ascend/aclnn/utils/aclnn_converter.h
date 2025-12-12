@@ -41,9 +41,7 @@ DA_API aclDataType Convert(ir::DataType::Type dtype);
 DA_API aclScalar *Convert(const ir::Value *value);
 
 // Convert ValuePtr to aclScalar
-inline aclScalar *Convert(const ir::ValuePtr &value) {
-  return Convert(value.get());
-}
+inline aclScalar *Convert(const ir::ValuePtr &value) { return Convert(value.get()); }
 
 // Convert tensor
 inline aclTensor *Convert(const ir::TensorPtr &tensor) {
@@ -124,6 +122,9 @@ inline const char *Convert(const std::optional<std::string> &strOpt) {
 }
 
 inline aclIntArray *Convert(const std::vector<int64_t> &intList) {
+  if (intList.empty()) {
+    return nullptr;
+  }
   static const auto aclCreateIntArray = GET_ACLNN_COMMON_META_FUNC(aclCreateIntArray);
   CHECK_IF_NULL(aclCreateIntArray);
   return aclCreateIntArray(intList.data(), intList.size());
@@ -134,6 +135,10 @@ inline aclIntArray *Convert(const std::optional<std::vector<int64_t>> &intListOp
     return Convert(intListOpt.value());
   }
   return nullptr;
+}
+
+inline aclIntArray *Convert(const std::pair<std::vector<int64_t>, bool> &intListPair) {
+  return Convert(intListPair.first);
 }
 
 inline aclBoolArray *Convert(const std::vector<uint8_t> &boolList) {
