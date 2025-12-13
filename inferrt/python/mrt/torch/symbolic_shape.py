@@ -129,7 +129,11 @@ class SymbolicShapeManager:
         """
         # Handle SymInt case
         if isinstance(torch_value, torch.SymInt) and mrt_value.is_symbol():
-            self._symbol_map[str(torch_value.node.expr)] = mrt_value.to_symbol()
+            sym_str = str(torch_value.node.expr)
+            if sym_str in self._symbol_map:
+                mrt_value = Value(self._symbol_map[sym_str])
+            else:
+                self._symbol_map[sym_str] = mrt_value.to_symbol()
 
         # Handle tensor case
         elif isinstance(torch_value, torch.Tensor) and mrt_value.is_tensor():
