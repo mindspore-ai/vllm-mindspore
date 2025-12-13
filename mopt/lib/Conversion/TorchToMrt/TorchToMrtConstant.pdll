@@ -22,3 +22,8 @@ Pattern ConvertTorchConstantNone {
   let root = op<torch.constant.none>;
   replace root with op<mrt.constant.none>;
 }
+
+Pattern ConvertTorchConstantDevice {
+  let root = op<torch.constant.device> { value = val: Attr } -> (resType: Type);
+  replace root with op<mrt.constant.string> { value = val } -> (convertType(resType));
+}

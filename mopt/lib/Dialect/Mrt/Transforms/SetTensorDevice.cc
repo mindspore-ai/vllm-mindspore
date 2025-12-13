@@ -152,12 +152,15 @@ struct SetTensorDevicePass : public impl::SetTensorDeviceBase<SetTensorDevicePas
 
       bool needsUpdate = false;
       for (auto result : op->getResults()) {
-        valueToDevice[result] = device;
-
         if (auto tensorType = mlir::dyn_cast<mrt::TensorType>(result.getType())) {
-          if (!tensorType.getDevice()) {
-            needsUpdate = true;
+          if (tensorType.getDevice()) {
+            valueToDevice[result] = tensorType.getDevice();
+            continue;
           }
+          needsUpdate = true;
+          valueToDevice[result] = device;
+        } else {
+          valueToDevice[result] = device;
         }
       }
 

@@ -244,7 +244,8 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
     with mlir_module.context:
         # Pass device info through PassManager.parse() options
         pm = PassManager.parse(
-            f"builtin.module(set-tensor-device{{device-type={device_str} device-index={device_index}}})"
+            f"builtin.module(set-tensor-device{{device-type={device_str} device-index={device_index}}},"
+            "reconcile-unrealized-casts)"
         )
         pm.run(mlir_module.operation)
     _print_verbose("MRT Dialect Module (after set-tensor-device pass)", mlir_module)

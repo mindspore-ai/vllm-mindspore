@@ -17,10 +17,12 @@ providing:
 """
 
 from typing import Sequence, Union
+import contextlib
 import torch
 from torch._decomp import get_decompositions
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.func import functionalize
+from torch._subclasses.fake_tensor import FakeTensor, FakeTensorMode
 
 # pylint: disable=protected-access
 
@@ -104,8 +106,35 @@ def apply_decompositions(gm: torch.fx.GraphModule, example_inputs):
     """
     decompositions = get_decompositions(_get_default_decomposition_ops())
 
-    gm = make_fx(
-        functionalize(gm),
-        decomposition_table=decompositions,
-    )(*example_inputs)
+    # 1. Try to reuse an existing FakeTensorMode from tensor inputs (typical case)
+    fake_mode = next(
+        (arg.fake_mode for arg in example_inputs if isinstance(arg, FakeTensor)),
+        None
+    )
+
+    # 2. If none is found (e.g., only SymInt inputs), rebuild ShapeEnv from SymInt and create a mode
+    if fake_mode is None:
+        shape_env = None
+        for arg in example_inputs:
+            if isinstance(arg, torch.SymInt):
+                # Grab the node behind the SymInt and its ShapeEnv
+                node = getattr(arg, "node", None)
+                shape_env = getattr(node, "shape_env", None)
+                if shape_env:
+                    break
+
+        # If ShapeEnv is available, create a FakeTensorMode sharing it
+        # This lets torch.empty create FakeTensor in the correct symbolic context
+        if shape_env:
+            fake_mode = FakeTensorMode(shape_env=shape_env)
+
+    # 3. Activate fake_mode and use tracing_mode="real"
+    # "real": avoid make_fx creating a new mode that conflicts
+    # with fake_mode: ensure factory ops (e.g., empty) dispatch to FakeTensor impl
+    with fake_mode if fake_mode else contextlib.nullcontext():
+        gm = make_fx(
+            functionalize(gm),
+            decomposition_table=decompositions,
+            tracing_mode="real",
+        )(*example_inputs)
     return gm

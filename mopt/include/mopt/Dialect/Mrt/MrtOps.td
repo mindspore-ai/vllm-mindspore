@@ -338,7 +338,9 @@ def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
   let genAclnnOp = "aclnnEqTensor";
 }
 
-def Mrt_EmptyOp : Mrt_Op<"empty"> {
+def Mrt_EmptyOp : Mrt_Op<"empty", [
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
   let summary = "";
   let description = [{
     Operation for empty ops.
@@ -348,7 +350,7 @@ def Mrt_EmptyOp : Mrt_Op<"empty"> {
 
   let arguments = (ins
     Mrt_I64ArrayType:$size,
-    Mrt_I64Type:$dtype,
+    Mrt_DtypeType:$dtype,
     Mrt_StringType:$device
   );
 
@@ -1192,7 +1194,9 @@ def Mrt_UnsqueezeOp : Mrt_Op<"unsqueeze", [Pure]> {
   }];
 }
 
-def Mrt_ZerosOp : Mrt_Op<"zeros"> {
+def Mrt_ZerosOp : Mrt_Op<"zeros", [
+    DeclareOpInterfaceMethods<InferTypeOpInterface>
+  ]> {
   let summary = "aclnnInplaceZero";
   let description = [{
     Operation for zeros ops.
@@ -1202,7 +1206,7 @@ def Mrt_ZerosOp : Mrt_Op<"zeros"> {
 
   let arguments = (ins
     Mrt_I64ArrayType:$size,
-    Mrt_I64Type:$dtype,
+    Mrt_DtypeType:$dtype,
     Mrt_StringType:$device
   );
 

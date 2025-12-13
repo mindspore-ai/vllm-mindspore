@@ -1,0 +1,64 @@
+diff --git a/include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td b/include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
+index 4ad03f54..445cf3d0 100644
+--- a/include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
++++ b/include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td
+@@ -10760,7 +10760,6 @@ def Torch_AtenZerosOp : Torch_Op<"aten.zeros", [
+       printDefaultTorchOp(printer, *this, 5, 1);
+     }
+   }];
+-  let hasFolder = 1;
+ }
+ 
+ def Torch_AtenNewZerosOp : Torch_Op<"aten.new_zeros", [
+diff --git a/lib/Dialect/Torch/IR/TorchOps.cpp b/lib/Dialect/Torch/IR/TorchOps.cpp
+index b58c6f21..3c2a9b80 100644
+--- a/lib/Dialect/Torch/IR/TorchOps.cpp
++++ b/lib/Dialect/Torch/IR/TorchOps.cpp
+@@ -4978,47 +4978,6 @@ OpFoldResult AtenOnesOp::fold(FoldAdaptor adaptor) {
+   return nullptr;
+ }
+ 
+-OpFoldResult AtenZerosOp::fold(FoldAdaptor adaptor) {
+-  SmallVector<int64_t> sizes;
+-  if (!matchPattern(getSize(), m_TorchListOfConstantInts(sizes))) {
+-    return nullptr;
+-  }
+-
+-  Type resultType = getResult().getType();
+-  BaseTensorType resultTensorType = dyn_cast<BaseTensorType>(resultType);
+-  if (!resultTensorType || !resultTensorType.hasDtype() ||
+-      !resultTensorType.hasSizes()) {
+-    return nullptr;
+-  }
+-
+-  for (auto sz : sizes)
+-    if (sz == Torch::kUnknownSize || sz < 0)
+-      return nullptr;
+-
+-  for (auto sz : resultTensorType.getSizes())
+-    if (sz == Torch::kUnknownSize || sz < 0)
+-      return nullptr;
+-
+-  ShapedType shapedty =
+-      mlir::RankedTensorType::get( // convert Torch type to builtin ShapedType
+-          sizes, resultTensorType.getDtype());
+-  if (!shapedty) {
+-    return nullptr;
+-  }
+-
+-  auto elementType = shapedty.getElementType();
+-  if (isa<IntegerType>(elementType)) {
+-    Attribute attribute = IntegerAttr::get(elementType, 0);
+-    return DenseElementsAttr::get(shapedty, attribute);
+-  }
+-  if (isa<mlir::FloatType>(elementType)) {
+-    Attribute attribute = FloatAttr::get(elementType, 0.0);
+-    return DenseElementsAttr::get(shapedty, attribute);
+-  }
+-
+-  return nullptr;
+-}
+-
+ OpFoldResult AtenFullOp::fold(FoldAdaptor adaptor) {
+   SmallVector<int64_t> sizes;
+   if (!matchPattern(getSize(), m_TorchListOfConstantInts(sizes))) {

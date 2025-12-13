@@ -61,6 +61,27 @@ struct ConvertAtenDivTensorMode : public OpConversionPattern<TorchD::AtenDivTens
   }
 };
 
+struct ConvertAtenEmptyMemoryFormat : public OpConversionPattern<TorchD::AtenEmptyMemoryFormatOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenEmptyMemoryFormatOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    // Extract device - automatically converted from constant.device to constant.string
+    // If device is None, create a default "cpu" string
+    Value deviceValue = adaptor.getDevice();
+    if (isa<mrt::NoneType>(deviceValue.getType())) {
+      deviceValue = rewriter.create<mrt::CreateStringOp>(loc, rewriter.getStringAttr("cpu"));
+    }
+
+    // use the dtype from the result type
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(loc, outType.getElementType());
+    rewriter.replaceOpWithNewOp<mrt::EmptyOp>(op, adaptor.getSize(), dtypeValue, deviceValue);
+    return success();
+  }
+};
+
 struct ConvertAtenSumDimIntList : public OpConversionPattern<TorchD::AtenSumDimIntListOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -145,6 +166,27 @@ struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTranspos
   }
 };
 
+struct ConvertAtenZeros : public OpConversionPattern<TorchD::AtenZerosOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenZerosOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    // Extract device - automatically converted from constant.device to constant.string
+    // If device is None, create a default "cpu" string
+    Value deviceValue = adaptor.getDevice();
+    if (isa<mrt::NoneType>(deviceValue.getType())) {
+      deviceValue = rewriter.create<mrt::CreateStringOp>(loc, rewriter.getStringAttr("cpu"));
+    }
+
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(loc, outType.getElementType());
+
+    rewriter.replaceOpWithNewOp<mrt::ZerosOp>(op, adaptor.getSize(), dtypeValue, deviceValue);
+    return success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // Pattern population
 //===----------------------------------------------------------------------===//
@@ -153,9 +195,11 @@ struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTranspos
 static void populateAtenToMrtCustomPatterns(TypeConverter &converter, RewritePatternSet &patterns) {
   MLIRContext *context = patterns.getContext();
   patterns.add<ConvertAtenDivTensorMode>(converter, context);
+  patterns.add<ConvertAtenEmptyMemoryFormat>(converter, context);
   patterns.add<ConvertAtenSumDimIntList>(converter, context);
   patterns.add<ConvertAtenToDtype>(converter, context);
   patterns.add<ConvertAtenTransposeInt>(converter, context);
+  patterns.add<ConvertAtenZeros>(converter, context);
 }
 
 // Populate all Aten ops to MRT conversion patterns

@@ -134,7 +134,7 @@ void TensorType::print(mlir::AsmPrinter &odsPrinter) const {
 
   odsPrinter << "<";
   for (int64_t dim : getShape()) {
-    if (dim < 0)
+    if (dim == mlir::ShapedType::kDynamic)
       odsPrinter << "?x";
     else
       odsPrinter << dim << "x";
@@ -145,7 +145,7 @@ void TensorType::print(mlir::AsmPrinter &odsPrinter) const {
   auto device = getDevice();
   if (device) {
     odsPrinter << ", device=";
-    device.print(odsPrinter);
+    odsPrinter.printAttribute(device);
   }
 
   odsPrinter << ">";
