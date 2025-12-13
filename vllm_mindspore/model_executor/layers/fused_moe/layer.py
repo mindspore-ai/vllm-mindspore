@@ -44,6 +44,8 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
 from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 from vllm_mindspore.model_executor.utils import get_model_context
 from vllm_mindspore.model_executor.models.hybrid_unify import get_ms_tensor
+from vllm_mindspore.distributed.communication_op import (get_dp_group_name,
+    get_ep_group_name, get_tp_group_name)
 
 logger = init_logger(__name__)
 
@@ -383,11 +385,11 @@ class FusedMoE(nn.Cell):
         self.quant_method.create_weights(layer=self, **moe_quant_params)
 
         # Initialize some communication ops and group.
-        self.dp_group = get_dp_group().device_group._name
-        self.ep_group = get_ep_group().device_group._name
+        self.dp_group = get_dp_group_name()
+        self.ep_group = get_ep_group_name()
 
         self.tp_world_size = get_tensor_model_parallel_world_size()
-        self.tp_group = get_tp_group().device_group._name
+        self.tp_group = get_tp_group_name()
         self.all_reduce_from_tp_group = ops.AllReduce(group=self.tp_group)
 
         if (self.pure_tp or self.tp_ep) and self.dp_size > 1:

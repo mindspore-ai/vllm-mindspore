@@ -28,9 +28,7 @@ from transformers import PretrainedConfig
 from vllm.config import LoRAConfig
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
-                              split_tensor_along_last_dim,
-                              tensor_model_parallel_all_gather,
-                              tensor_model_parallel_all_reduce)
+                              split_tensor_along_last_dim,)
 from vllm.distributed.utils import divide
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.rotary_embedding import (
@@ -41,6 +39,10 @@ from vllm.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.layers.linear import (
     ColumnParallelLinear, LinearBase, MergedColumnParallelLinear,
     QKVParallelLinear, RowParallelLinear)
+from vllm_mindspore.distributed.communication_op import (
+    ms_tensor_model_parallel_all_gather,
+    ms_tensor_model_parallel_all_reduce,
+    )
 
 if TYPE_CHECKING:
     from vllm.lora.punica_wrapper import PunicaWrapperBase
@@ -481,7 +483,7 @@ class ColumnParallelLinearWithLoRA(BaseLinearLayerWithLoRA):
         output_parallel = self.apply(input_, bias)
         if self.base_layer.gather_output:
             # All-gather across the partitions.
-            output = tensor_model_parallel_all_gather(output_parallel)
+            output = ms_tensor_model_parallel_all_gather(output_parallel)
         else:
             output = output_parallel
         output_bias = (self.base_layer.bias
@@ -829,7 +831,7 @@ class RowParallelLinearWithLoRA(BaseLinearLayerWithLoRA):
         # Matrix multiply.
         output_parallel = self.apply(input_parallel)
         if self.base_layer.reduce_results and self.base_layer.tp_size > 1:
-            output_ = tensor_model_parallel_all_reduce(output_parallel)
+            output_ = ms_tensor_model_parallel_all_reduce(output_parallel)
         else:
             output_ = output_parallel
 

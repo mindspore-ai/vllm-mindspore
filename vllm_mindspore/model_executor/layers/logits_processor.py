@@ -26,8 +26,7 @@ import vllm.envs as envs
 from mindspore import Tensor, jit, mint, nn
 from vllm.config import get_current_vllm_config
 from vllm.platforms import current_platform
-from vllm.distributed import (tensor_model_parallel_all_gather,
-                              tensor_model_parallel_gather)
+from vllm.distributed import (tensor_model_parallel_gather)
 from vllm.logger import init_logger
 from vllm.v1.sample.metadata import SamplingMetadata
 
@@ -36,6 +35,9 @@ from vllm_mindspore.distributed.communication_op import (
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
 from vllm_mindspore.utils import is_310p
+from vllm_mindspore.distributed.communication_op import (
+    ms_tensor_model_parallel_all_gather,
+    )
 
 _logits_processor_threadpool: Optional[ThreadPoolExecutor] = None
 if envs.VLLM_LOGITS_PROCESSOR_THREADS is not None:
@@ -131,7 +133,7 @@ class LogitsProcessor(nn.Cell):
                                             bias=embedding_bias)
         if self.use_all_gather:
             # Gather is not supported for some devices such as NPUs.
-            logits = tensor_model_parallel_all_gather(logits)
+            logits = ms_tensor_model_parallel_all_gather(logits)
         else:
             # None may be returned for rank > 0
             logits = tensor_model_parallel_gather(logits)

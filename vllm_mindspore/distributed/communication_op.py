@@ -23,8 +23,42 @@ Implement a unified communication interface for both graph and pynative mode.
 
 from mindspore import nn, ops
 from vllm.distributed.parallel_state import (
-    get_tensor_model_parallel_world_size, get_tp_group)
+    get_tensor_model_parallel_world_size, get_dp_group,
+    get_ep_group, get_tp_group)
+from vllm.distributed import (tensor_model_parallel_all_gather,
+    tensor_model_parallel_all_reduce,)
+from vllm_mindspore import envs as env
 
+is_external_mode = env.VLLM_MS_HIYBRID_MODE
+
+def get_dp_group_name():
+    if is_external_mode:
+        return get_dp_group().unique_name
+    return get_dp_group().device_group._name
+
+def get_ep_group_name():
+    if is_external_mode:
+        return get_ep_group().unique_name
+    return get_ep_group().device_group._name
+
+def get_tp_group_name():
+    if is_external_mode:
+        return get_tp_group().unique_name
+    return get_tp_group().device_group._name
+
+def ms_tensor_model_parallel_all_gather(input_):
+    if is_external_mode:
+        tensor_parallel_all_gather = AllGatherFromModelParallelRegion()
+    else:
+        tensor_parallel_all_gather = tensor_model_parallel_all_gather
+    return tensor_parallel_all_gather(input_)
+
+def ms_tensor_model_parallel_all_reduce(input_):
+    if is_external_mode:
+        tensor_parallel_all_reduce = ReduceFromModelParallelRegion()
+    else:
+        tensor_parallel_all_reduce = tensor_model_parallel_all_reduce
+    return tensor_parallel_all_reduce(input_)
 
 class ReduceFromModelParallelRegion(nn.Cell):
     "All reduce the input from the model parallel region."
@@ -33,7 +67,7 @@ class ReduceFromModelParallelRegion(nn.Cell):
         super().__init__()
         self.world_size = get_tensor_model_parallel_world_size()
         if self.world_size > 1:
-            self.tp_group = get_tp_group().device_group._name
+            self.tp_group = get_tp_group_name()
             self.all_reduce = ops.AllReduce(group=self.tp_group)
 
     def construct(self, input_):
@@ -53,7 +87,7 @@ class AllGatherFromModelParallelRegion(nn.Cell):
         super().__init__()
         self.world_size = get_tensor_model_parallel_world_size()
         if self.world_size > 1:
-            self.tp_group = get_tp_group().device_group._name
+            self.tp_group = get_tp_group_name()
             self.all_gather_into_tensor = ops.AllGather(group=self.tp_group)
 
     def construct(self, input_):
