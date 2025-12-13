@@ -40,6 +40,6 @@ Makefile
 .pytest_cache
 
 # Third party libs
-.mrtlibs/
+.mrtlib/
 third_party/torch-mlir
 third_party/llvm-project
