@@ -90,8 +90,10 @@ def register_arg_mapping_hook(op, hook_func):
 def get_arg_mapping_hook(op):
     return _ARG_MAPPING_HOOKS.get(op)
 
+
 def register_ops_mapping_hook(op, hook_func):
     _OPS_MAPPING_HOOKS[op] = hook_func
+
 
 def get_ops_mapping_hook(op):
     return _OPS_MAPPING_HOOKS.get(op)
@@ -102,11 +104,19 @@ def embedding_hook(node, input_nodes, executor):
     """swap the first and second param position."""
     return [input_nodes[1], input_nodes[0]]
 
+
 # pylint: disable=unused-argument
 def apply_rotary_pos_emb_hook(node, input_nodes, executor):
     """add layout parameter."""
     rope_layout_bsnd = 1
-    return [input_nodes[0], input_nodes[1], input_nodes[2], input_nodes[3], rope_layout_bsnd]
+    return [
+        input_nodes[0],
+        input_nodes[1],
+        input_nodes[2],
+        input_nodes[3],
+        rope_layout_bsnd,
+    ]
+
 
 # pylint: disable=unused-argument
 def floor_div_hook(node, input_nodes, executor):
@@ -114,10 +124,12 @@ def floor_div_hook(node, input_nodes, executor):
     div_mode = 2
     return [input_nodes[0], input_nodes[1], div_mode]
 
+
 # pylint: disable=unused-argument
 def long_hook(node, input_nodes, executor):
     """add long."""
-    return [input_nodes[0],  torch.int64]
+    return [input_nodes[0], torch.int64]
+
 
 # pylint: disable=unused-argument
 def permute_hook(node, input_nodes, executor):
@@ -126,7 +138,8 @@ def permute_hook(node, input_nodes, executor):
     dim_inx[input_nodes[1]] = input_nodes[2]
     dim_inx[input_nodes[2]] = input_nodes[1]
 
-    return [input_nodes[0],  dim_inx]
+    return [input_nodes[0], dim_inx]
+
 
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.permute, permute_hook)
@@ -134,6 +147,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
+
 
 # pylint: disable=unused-argument
 def split_ops_hook(op, node, input_nodes, executor):
@@ -144,8 +158,10 @@ def split_ops_hook(op, node, input_nodes, executor):
             return Op.split_tensor
     return op
 
+
 def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
+
 
 def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
@@ -194,7 +210,7 @@ _OP_MAP = {
     torch.nn.functional.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
     torch.nn.functional.embedding: Op.embedding,
-    torch.nn.functional.linear:Op.linear,
+    torch.nn.functional.linear: Op.linear,
     # operator functions
     operator.getitem: Op.tuple_getitem,
     operator.add: Op.add,
@@ -285,6 +301,7 @@ def _get_op(target):
                 return Op.custom_call
     return None
 
+
 def _argument_to_real_value(value_type, value, arg_len):
     """
     Convert a torch fx value to its real value.
@@ -331,14 +348,18 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     for arg in args:
         if schema.arguments[arg_idx].kwarg_only:
             return flat_args, False
-        real_arg = _argument_to_real_value(schema.arguments[arg_idx].real_type, arg, schema.arguments[arg_idx].N)
+        real_arg = _argument_to_real_value(
+            schema.arguments[arg_idx].real_type, arg, schema.arguments[arg_idx].N
+        )
         flat_args.append(real_arg)
         arg_idx += 1
 
     consumed_kwargs = 0
     for argument in schema.arguments[arg_idx:]:
         if argument.name in kwargs:
-            real_arg = _argument_to_real_value(argument.real_type, kwargs[argument.name], argument.N)
+            real_arg = _argument_to_real_value(
+                argument.real_type, kwargs[argument.name], argument.N
+            )
             flat_args.append(real_arg)
             consumed_kwargs += 1
         elif hasattr(argument, "default_value"):
@@ -360,7 +381,10 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
             ops_ns = getattr(torch.ops, ns)
             if hasattr(ops_ns, target):
                 op_target = getattr(ops_ns, target)
-                return [getattr(op_target, overload)._schema for overload in op_target.overloads()]
+                return [
+                    getattr(op_target, overload)._schema
+                    for overload in op_target.overloads()
+                ]
         return None
 
     if isinstance(target, OpOverload):
@@ -402,7 +426,9 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     return flat_args
 
 
-def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
+def _map_args(
+    args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
+) -> List[Node]:
     """
     Map torch.fx node arguments to GraphExecutor nodes.
     This function handles nested structures like lists and tuples.
@@ -416,31 +442,33 @@ def _map_args(args, env, executor: GraphExecutor) -> List[Node]:
             nodes = [_map_arg(item) for item in arg]
             return executor.make_tuple(nodes)
 
-        return executor.add_value_node(from_torch(arg))
+        value = from_torch(arg)
+        sym_mgr.bind_symbolic_shape(value, arg)
+        return executor.add_value_node(value)
 
     return [_map_arg(arg) for arg in args]
 
 
-def _handle_param_node(node, executor, symbolic_shape_manager, env):
+def _handle_param_node(node, executor, sym_mgr, env):
     """Handle param node processing."""
     example_value = node.meta.get("example_value", None)
     output_value = from_torch(example_value)
-    symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
+    sym_mgr.bind_symbolic_shape(output_value, example_value)
     env[node] = executor.add_value_node(output_value)
 
 
-def _handle_param_nodes(param_nodes, executor, symbolic_shape_manager, env):
+def _handle_param_nodes(param_nodes, executor, env, sym_mgr):
     """Handle param nodes processing."""
     non_symbol_param_nodes = []
     # handle sym int param nodes first to register symbols for later reference
     for node in param_nodes:
         if isinstance(node.meta.get("example_value"), torch.SymInt):
-            _handle_param_node(node, executor, symbolic_shape_manager, env)
+            _handle_param_node(node, executor, sym_mgr, env)
         else:
             non_symbol_param_nodes.append(node)
     # handle non sym int param nodes
     for node in non_symbol_param_nodes:
-        _handle_param_node(node, executor, symbolic_shape_manager, env)
+        _handle_param_node(node, executor, sym_mgr, env)
 
 
 def _handle_get_attr_node(node, gm, executor, env):
@@ -455,7 +483,7 @@ def _handle_get_attr_node(node, gm, executor, env):
     env[node] = executor.add_value_node(from_torch(attr_val))
 
 
-def _prepare_call_args(op, node, executor, env):
+def _prepare_call_args(op, node, executor, env, sym_mgr):
     """Prepare arguments for call_function/call_method nodes."""
     flat_node_args = _flatten_args(op, node)
 
@@ -477,10 +505,10 @@ def _prepare_call_args(op, node, executor, env):
         flat_node_args = hook_func(node, flat_node_args, executor)
         print(f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}")
 
-    return _map_args(flat_node_args, env, executor)
+    return _map_args(flat_node_args, env, executor, sym_mgr)
 
 
-def _handle_call_node(node, executor, symbolic_shape_manager, env):
+def _handle_call_node(node, executor, env, sym_mgr):
     """Handle call_function/call_method node processing."""
     op = _get_op(node.target)
     if op is None:
@@ -491,17 +519,17 @@ def _handle_call_node(node, executor, symbolic_shape_manager, env):
         flat_node_args = _flatten_args(op, node)
         op = ops_hook(op, node, flat_node_args, executor)
 
-    input_nodes = _prepare_call_args(op, node, executor, env)
+    input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
     example_value = node.meta.get("example_value", None)
     output_value = from_torch(example_value)
-    symbolic_shape_manager.bind_symbolic_shape(output_value, example_value)
+    sym_mgr.bind_symbolic_shape(output_value, example_value)
 
     env[node] = executor.add_op_node(op, input_nodes, output_value)
 
 
-def _handle_output_node(node, executor, env):
+def _handle_output_node(node, executor, env, sym_mgr):
     """Handle output node processing."""
-    input_nodes = _map_args(node.args, env, executor)
+    input_nodes = _map_args(node.args, env, executor, sym_mgr)
     env[node] = input_nodes[0]
     executor.set_return()
 
@@ -521,14 +549,14 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     _init_mrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
-    symbolic_shape_manager = SymbolicShapeManager()
+    sym_mgr = SymbolicShapeManager()
     env: Dict[Node, Any] = {}
 
     get_collective_info_from_torch(gm)
     set_device_context()
 
     fx_param_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
-    _handle_param_nodes(fx_param_nodes, executor, symbolic_shape_manager, env)
+    _handle_param_nodes(fx_param_nodes, executor, env, sym_mgr)
 
     with executor:
         for node in gm.graph.nodes:
@@ -537,13 +565,13 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             elif node.op == "get_attr":
                 _handle_get_attr_node(node, gm, executor, env)
             elif node.op in ("call_function", "call_method"):
-                _handle_call_node(node, executor, symbolic_shape_manager, env)
+                _handle_call_node(node, executor, env, sym_mgr)
             elif node.op == "call_module":
                 raise NotImplementedError(
                     "call_module is not supported in this simple backend."
                 )
             elif node.op == "output":
-                _handle_output_node(node, executor, env)
+                _handle_output_node(node, executor, env, sym_mgr)
             else:
                 raise NotImplementedError(f"Unsupported node op: {node.op}")
 
