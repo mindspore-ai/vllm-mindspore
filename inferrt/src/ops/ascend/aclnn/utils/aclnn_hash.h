@@ -19,6 +19,7 @@
 
 #include <string>
 #include <vector>
+#include <optional>
 
 #include "ir/value/value.h"
 #include "ops/ascend/aclnn/utils/hash_buf.h"
@@ -79,6 +80,13 @@ inline void GatherHash(const ir::TuplePtr &tuple) {
 }
 
 inline void GatherHash() {}
+
+template <typename T>
+void GatherHash(const std::optional<T> &value) {
+  if (value.has_value()) {
+    GatherHash(value.value());
+  }
+}
 
 template <typename T, typename... Args>
 void GatherHash(const T &arg, const Args &...args) {

@@ -117,6 +117,18 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const T &value, size_t *
   ++(*irIndex);
 }
 
+/// Some ops treat the `IntList` parameter as a tensor internally, such as `fias`.
+/// In order to make the `tensorIndex` be increased correctly when updating tensor address,
+/// the `IntList` parameter is wrapped in a pair whose second element is a boolean value,
+/// which indicates whether the `IntList` parameter should be treated as a tensor.
+inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::pair<std::vector<int64_t>, bool> &value,
+                       size_t *irIndex, size_t *tensorIndex) {
+  ++(*irIndex);
+  if (value.second) {
+    ++(*tensorIndex);
+  }
+}
+
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TensorPtr &tensor, size_t *irIndex,
                        size_t *tensorIndex) {
   if (tensor != nullptr) {
@@ -142,7 +154,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::vector<ir::Te
     cacheEntry->UpdateTensorAddr(irIndex, nullptr, &i, tensorList[i]->DataPtr());
   }
   ++(*irIndex);
-  *tensorIndex += tensorList.size();
+  *tensorIndex += tensorList.empty() ? 1 : tensorList.size();
 }
 
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TuplePtr &tuple, size_t *irIndex,
@@ -192,8 +204,9 @@ inline void UpdateAclTensorListAddr(aclTensorList *tensorList, size_t *irIndex, 
   }
   auto ret = aclSetDynamicTensorAddr(executor, *irIndex, *relativeIndex, tensorList, tensorAddr);
   if (ret != 0) {
-    LOG_EXCEPTION << "Call aclSetDynamicTensorAddr failed, index: " << *irIndex << ", tensorIndex: " << *tensorIndex
-                  << ", relativeIndex: " << *relativeIndex << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
+    LOG_EXCEPTION << "Call aclSetDynamicTensorAddr failed, index: " << *irIndex << ", relativeIndex: " << *relativeIndex
+                  << ", tensorIndex: " << (tensorIndex == nullptr ? "null" : std::to_string(*tensorIndex))
+                  << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
   }
 }
 
@@ -316,8 +329,9 @@ class CacheProcessor {
 
   void UpdateTensorAddr(size_t *irIndex, size_t *tensorIndex, size_t *relativeIndex, void *tensorAddr) {
     LOG_OUT << "index: " << *irIndex << ", updaters size: " << tensorAddrUpdatersMap_.size()
-            << ", tensorIndex: " << (tensorIndex == nullptr ? 0 : *tensorIndex)
-            << ", relativeIndex: " << (relativeIndex == nullptr ? 0 : *relativeIndex) << ", tensorAddr: " << tensorAddr;
+            << ", tensorIndex: " << (tensorIndex == nullptr ? "null" : std::to_string(*tensorIndex))
+            << ", relativeIndex: " << (relativeIndex == nullptr ? "null" : std::to_string(*relativeIndex))
+            << ", tensorAddr: " << tensorAddr;
 
     // Use the static map for efficient lookup, no need lookup in the future
     auto it = tensorAddrUpdatersMap_.find(*irIndex);
