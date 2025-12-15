@@ -23,6 +23,7 @@ mrt_add_pkg(stablehlo
     SOURCEMODULES .
     PATCHES ${TOP_DIR}/third_party/patch/stablehlo/001-fix-compiler-warning-flags.patch
     PATCHES ${TOP_DIR}/third_party/patch/stablehlo/002-fix-compile-error-with-old-gcc.patch
+    PATCHES ${TOP_DIR}/third_party/patch/stablehlo/003-build-remove-tests.patch
 )
 
 set(STABLEHLO_SOURCE_DIR ${stablehlo_DIRPATH})

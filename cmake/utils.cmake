@@ -1,6 +1,21 @@
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
+# Set default THNUM if not defined
+# Priority: 1. THNUM variable, 2. BUILD_JOBS env, 3. CPU cores, 4. default 8
+if(NOT DEFINED THNUM)
+    if(DEFINED ENV{BUILD_JOBS})
+        set(THNUM $ENV{BUILD_JOBS})
+    else()
+        # Default to number of CPU cores, or 8 if cannot determine
+        include(ProcessorCount)
+        ProcessorCount(THNUM)
+        if(NOT THNUM)
+            set(THNUM 8)
+        endif()
+    endif()
+endif()
+
 if(DEFINED ENV{MRTLIBS_CACHE_PATH})
     set(_MRT_LIB_CACHE $ENV{MRTLIBS_CACHE_PATH})
 else()
@@ -123,7 +138,7 @@ function(__find_pkg_then_add_target pkg_name pkg_exe lib_path)
 
     if(pkg_exe)
         unset(${pkg_exe}_EXE CACHE)
-        find_program(${pkg_exe}_EXE ${pkg_exe} PATHS ${${pkg_name}_BASE_DIR}/bin NO_DEFAULT_PATH)
+        find_program(${pkg_exe}_EXE ${pkg_exe} PATHS ${${pkg_name}_INSTALL_DIR}/bin NO_DEFAULT_PATH)
         if(NOT ${pkg_exe}_EXE)
             return()
         endif()
@@ -146,14 +161,14 @@ function(__find_pkg_then_add_target pkg_name pkg_exe lib_path)
         endif()
         set(${_LIB_NAME}_LIB ${_LIB_NAME}_LIB-NOTFOUND)
         if(APPLE)
-            find_library(${_LIB_NAME}_LIB ${_LIB_SEARCH_NAME} PATHS ${${pkg_name}_BASE_DIR}/${lib_path}
+            find_library(${_LIB_NAME}_LIB ${_LIB_SEARCH_NAME} PATHS ${${pkg_name}_INSTALL_DIR}/${lib_path}
                     PATH_SUFFIXES ${LIB_SUFFIXES_PATH} NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
         else()
-            find_library(${_LIB_NAME}_LIB ${_LIB_SEARCH_NAME} PATHS ${${pkg_name}_BASE_DIR}/${lib_path}
+            find_library(${_LIB_NAME}_LIB ${_LIB_SEARCH_NAME} PATHS ${${pkg_name}_INSTALL_DIR}/${lib_path}
                     PATH_SUFFIXES ${LIB_SUFFIXES_PATH} NO_DEFAULT_PATH)
         endif()
         if(NOT ${_LIB_NAME}_LIB)
-            message("not find ${_LIB_SEARCH_NAME} in path: ${${pkg_name}_BASE_DIR}/${lib_path}")
+            message("not find ${_LIB_SEARCH_NAME} in path: ${${pkg_name}_INSTALL_DIR}/${lib_path}")
             return()
         endif()
 
@@ -168,9 +183,9 @@ function(__find_pkg_then_add_target pkg_name pkg_exe lib_path)
             set_target_properties(${pkg_name}::${_LIB_NAME} PROPERTIES IMPORTED_LOCATION ${${_LIB_NAME}_LIB})
         endif()
 
-        if(EXISTS ${${pkg_name}_BASE_DIR}/include)
+        if(EXISTS ${${pkg_name}_INSTALL_DIR}/include)
             set_target_properties(${pkg_name}::${_LIB_NAME} PROPERTIES
-                INTERFACE_INCLUDE_DIRECTORIES "${${pkg_name}_BASE_DIR}/include")
+                INTERFACE_INCLUDE_DIRECTORIES "${${pkg_name}_INSTALL_DIR}/include")
         endif()
 
         list(APPEND ${pkg_name}_LIBS ${pkg_name}::${_LIB_NAME})
@@ -187,7 +202,7 @@ function(mrt_add_pkg pkg_name)
 
     set(options)
     set(oneValueArgs URL SHA256 GIT_REPOSITORY GIT_TAG VER EXE DIR HEAD_ONLY CMAKE_PATH RELEASE
-            LIB_PATH CUSTOM_CMAKE CUSTOM_SUBMODULE_DOWNLOAD CUSTOM_SUBMODULE_INFO)
+            LIB_PATH CUSTOM_CMAKE CUSTOM_SUBMODULE_DOWNLOAD CUSTOM_SUBMODULE_INFO CUSTOM_CMAKE_GENERATOR)
     set(multiValueArgs
             CMAKE_OPTION LIBS PRE_CONFIGURE_COMMAND CONFIGURE_COMMAND BUILD_OPTION INSTALL_INCS
             INSTALL_LIBS PATCHES SUBMODULES SOURCEMODULES ONLY_MAKE ONLY_MAKE_INCS ONLY_MAKE_LIBS
@@ -235,6 +250,12 @@ function(mrt_add_pkg pkg_name)
     set(${pkg_name}_DIRPATH ${${pkg_name}_BASE_DIR} CACHE STRING INTERNAL)
     set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR})
     set(${__FIND_PKG_NAME}_ROOT ${${pkg_name}_BASE_DIR} PARENT_SCOPE)
+    # Determine install directory: use _install subdirectory if SOURCEMODULES is specified
+    if(PKG_SOURCEMODULES)
+        set(${pkg_name}_INSTALL_DIR ${${pkg_name}_BASE_DIR}/_install)
+    else()
+        set(${pkg_name}_INSTALL_DIR ${${pkg_name}_BASE_DIR})
+    endif()
 
     set(_mrt_pkg_cache_hit OFF)
     if(NOT PKG_DIR AND EXISTS ${${pkg_name}_BASE_DIR}/options.txt)
@@ -265,14 +286,14 @@ function(mrt_add_pkg pkg_name)
                 SUFFIXES_PATH ${PKG_LIB_SUFFIXES_PATH}
                 NAMES ${PKG_LIBS})
         if(${pkg_name}_LIBS)
-            set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/include PARENT_SCOPE)
+            set(${pkg_name}_INC ${${pkg_name}_INSTALL_DIR}/include PARENT_SCOPE)
             message("Found libs: ${${pkg_name}_LIBS}")
             return()
         endif()
     elseif(NOT PKG_HEAD_ONLY)
         find_package(${__FIND_PKG_NAME} ${PKG_VER} PATHS ${${pkg_name}_BASE_DIR} ${MS_FIND_NO_DEFAULT_PATH})
         if(${__FIND_PKG_NAME}_FOUND)
-            set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/include PARENT_SCOPE)
+            set(${pkg_name}_INC ${${pkg_name}_INSTALL_DIR}/include PARENT_SCOPE)
             message("Found pkg: ${__FIND_PKG_NAME}")
             return()
         endif()
@@ -368,8 +389,8 @@ function(mrt_add_pkg pkg_name)
                 set(PKG_INSTALL_LIBS ${PKG_ONLY_MAKE_LIBS})
                 file(GLOB ${pkg_name}_INSTALL_INCS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_INCS})
                 file(GLOB ${pkg_name}_INSTALL_LIBS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_LIBS})
-                file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_BASE_DIR}/include)
-                file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_BASE_DIR}/lib)
+                file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_INSTALL_DIR}/include)
+                file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_INSTALL_DIR}/lib)
 
             elseif(PKG_CMAKE_OPTION)
                 # in cmake
@@ -388,19 +409,26 @@ function(mrt_add_pkg pkg_name)
                         set(${pkg_name}_CMAKE_LDFLAGS "-DCMAKE_SHARED_LINKER_FLAGS=${${pkg_name}_LDFLAGS}")
                     endif()
                 endif()
+                # Determine which generator to use
+                if(PKG_CUSTOM_CMAKE_GENERATOR)
+                    set(_CMAKE_GENERATOR ${PKG_CUSTOM_CMAKE_GENERATOR})
+                else()
+                    set(_CMAKE_GENERATOR ${CMAKE_GENERATOR})
+                endif()
                 if(APPLE)
                     __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
                             -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION}
                             ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
-                            -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
+                            -DCMAKE_INSTALL_PREFIX=${${pkg_name}_INSTALL_DIR}
+                            ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
                             WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
                     __exec_cmd(COMMAND ${CMAKE_COMMAND} --build . --target install --
                             WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
                 else()
                     __exec_cmd(COMMAND ${CMAKE_COMMAND} -DCMAKE_CXX_COMPILER_ARG1=${CMAKE_CXX_COMPILER_ARG1}
-                            -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION} -G ${CMAKE_GENERATOR}
+                            -DCMAKE_C_COMPILER_ARG1=${CMAKE_C_COMPILER_ARG1} ${PKG_CMAKE_OPTION} -G ${_CMAKE_GENERATOR}
                         ${${pkg_name}_CMAKE_CFLAGS} ${${pkg_name}_CMAKE_CXXFLAGS} ${${pkg_name}_CMAKE_LDFLAGS}
-                        -DCMAKE_INSTALL_PREFIX=${${pkg_name}_BASE_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
+                        -DCMAKE_INSTALL_PREFIX=${${pkg_name}_INSTALL_DIR} ${${pkg_name}_SOURCE_DIR}/${PKG_CMAKE_PATH}
                         WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR}/_build)
                     if(MSVC)
                         set(CONFIG_TYPE Release)
@@ -433,7 +461,7 @@ function(mrt_add_pkg pkg_name)
                 if(PKG_CONFIGURE_COMMAND)
                     __exec_cmd(COMMAND ${PKG_CONFIGURE_COMMAND}
                             ${${pkg_name}_MAKE_CFLAGS} ${${pkg_name}_MAKE_CXXFLAGS} ${${pkg_name}_MAKE_LDFLAGS}
-                            --prefix=${${pkg_name}_BASE_DIR}
+                            --prefix=${${pkg_name}_INSTALL_DIR}
                             WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
                 endif()
                 set(${pkg_name}_BUILD_OPTION ${PKG_BUILD_OPTION})
@@ -453,8 +481,8 @@ function(mrt_add_pkg pkg_name)
                 if(PKG_INSTALL_INCS OR PKG_INSTALL_LIBS)
                     file(GLOB ${pkg_name}_INSTALL_INCS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_INCS})
                     file(GLOB ${pkg_name}_INSTALL_LIBS ${${pkg_name}_SOURCE_DIR}/${PKG_INSTALL_LIBS})
-                    file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_BASE_DIR}/include)
-                    file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_BASE_DIR}/lib)
+                    file(COPY ${${pkg_name}_INSTALL_INCS} DESTINATION ${${pkg_name}_INSTALL_DIR}/include)
+                    file(COPY ${${pkg_name}_INSTALL_LIBS} DESTINATION ${${pkg_name}_INSTALL_DIR}/lib)
                 else()
                     __exec_cmd(COMMAND ${CMAKE_MAKE_PROGRAM} install WORKING_DIRECTORY ${${pkg_name}_SOURCE_DIR})
                 endif()
@@ -466,14 +494,14 @@ function(mrt_add_pkg pkg_name)
         __find_pkg_then_add_target(${pkg_name} ${PKG_EXE} ${PKG_LIB_PATH}
                 SUFFIXES_PATH ${PKG_LIB_SUFFIXES_PATH}
                 NAMES ${PKG_LIBS})
-        set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/include PARENT_SCOPE)
+        set(${pkg_name}_INC ${${pkg_name}_INSTALL_DIR}/include PARENT_SCOPE)
         if(NOT ${pkg_name}_LIBS)
             message(FATAL_ERROR "Can not find pkg: ${pkg_name}")
         endif()
     else()
         find_package(${__FIND_PKG_NAME} ${PKG_VER} QUIET ${MS_FIND_NO_DEFAULT_PATH})
         if(${__FIND_PKG_NAME}_FOUND)
-            set(${pkg_name}_INC ${${pkg_name}_BASE_DIR}/include PARENT_SCOPE)
+            set(${pkg_name}_INC ${${pkg_name}_INSTALL_DIR}/include PARENT_SCOPE)
             message("Found pkg: ${${__FIND_PKG_NAME}_LIBRARIES}")
             return()
         endif()
