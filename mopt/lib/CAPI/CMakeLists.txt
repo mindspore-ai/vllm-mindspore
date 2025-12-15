@@ -9,6 +9,7 @@ add_mlir_public_c_api_library(MoptCAPI
   DEPENDS
   MoptConversionPassIncGen
   MLIRMrtTransformsPassIncGen
+  MoptFusionPassIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR
@@ -17,6 +18,7 @@ add_mlir_public_c_api_library(MoptCAPI
   MoptConversionStablehloToMrt
   MoptConversionTorchToMrt
   MLIRMrtTransforms
+  MoptFusionPasses
 )
 
 # Add include directories

@@ -484,6 +484,32 @@ def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
   let genAclnnOp = "aclnnLeTensor";
 }
 
+def Mrt_LinalgCallOp : Mrt_Op<"linalg_call"> {
+  let summary = "Invoke a Linalg MLIR kernel";
+  let description = [{
+    Invokes a Linalg MLIR kernel compiled through BiSheng compiler.
+    The mlir_text operand contains a serialized Linalg MLIR module with a
+    function marked with hacc.entry attribute. 
+
+    Internal workflow:
+    1. Init: Extract MLIR text, call LoweredOpHelper::CreateFromMlirText()
+    2. InferShape/CalcWorkspace/Launch: Delegate to internal AutoLoweredOp
+  }];
+
+  let arguments = (ins
+    Mrt_StringType:$mlir_text,
+    Variadic<MrtAnyTensor>:$inputs
+  );
+
+  let results = (outs
+    Variadic<MrtAnyTensor>:$outputs
+  );
+
+  let assemblyFormat = [{
+    $mlir_text `,` $inputs attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_LinearOp : Mrt_Op<"linear", [Pure]> {
   let summary = "dense";
   let description = [{
@@ -849,6 +875,8 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   let assemblyFormat = [{
     $input attr-dict `:` functional-type(operands, results)
   }];
+
+  let genAclnnOp = "aclnnSigmoid";
 }
 
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {

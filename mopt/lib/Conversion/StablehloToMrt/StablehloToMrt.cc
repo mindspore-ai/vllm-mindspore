@@ -15,6 +15,7 @@
  */
 
 #include "mopt/Conversion/StablehloToMrt/StablehloToMrt.h"
+#include "mopt/Conversion/StablehloToMrt/StablehloToMrtTypeConverter.h"
 #include "mopt/Conversion/ConversionPatternTemplates.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -32,7 +33,6 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/SmallVector.h"
 #include "stablehlo/dialect/StablehloOps.h"
-#include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 
@@ -67,15 +67,6 @@ using mlir::Value;
 using mlir::ValueRange;
 
 namespace {
-
-// TypeConverter for StableHLO to MRT conversion
-class StablehloToMrtTypeConverter : public mlir::TypeConverter {
- public:
-  explicit StablehloToMrtTypeConverter(mlir::MLIRContext *ctx) {
-    addConversion([](mlir::Type type) { return type; });
-    mrt::populateMrtTypeConversions(*this);
-  }
-};
 
 //===----------------------------------------------------------------------===//
 // Conversion patterns
@@ -163,18 +154,25 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     ModuleOp module = getOperation();
     MLIRContext *ctx = &getContext();
 
-    StablehloToMrtTypeConverter typeConverter(ctx);
+    mopt::StablehloToMrtTypeConverter typeConverter(ctx);
 
     ConversionTarget target(*ctx);
     target.addLegalDialect<mrt::MrtDialect>();
     target.addLegalDialect<mlir::arith::ArithDialect>();
     target.addLegalOp<mlir::ModuleOp>();
+    // Allow unrealized conversion casts to pass through; they will be
+    // reconciled later by reconcile-unrealized-casts pass.
+    target.addLegalOp<mlir::UnrealizedConversionCastOp>();
 
     // Mark func.func as dynamically legal (need type conversion)
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
-      [&](mlir::func::FuncOp op) { return typeConverter.isSignatureLegal(op.getFunctionType()); });
+      [&](mlir::func::FuncOp op) {
+        return typeConverter.isSignatureLegal(op.getFunctionType());
+      });
     target.addDynamicallyLegalOp<mlir::func::ReturnOp>(
-      [&](mlir::func::ReturnOp op) { return typeConverter.isLegal(op.getOperandTypes()); });
+      [&](mlir::func::ReturnOp op) {
+        return typeConverter.isLegal(op.getOperandTypes());
+      });
 
     target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
 
@@ -184,6 +182,7 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
     patterns.add<MOPT_CONVERT(mlir::stablehlo::MulOp, mrt::MulOp, Lhs, Rhs)>(typeConverter, ctx);
     patterns.add<MOPT_CONVERT(mlir::stablehlo::DivOp, mrt::DivOp, Lhs, Rhs)>(typeConverter, ctx);
     patterns.add<MOPT_CONVERT(mlir::stablehlo::RemOp, mrt::RemainderTensorTensorOp, Lhs, Rhs)>(typeConverter, ctx);
+    patterns.add<MOPT_CONVERT(mlir::stablehlo::LogisticOp, mrt::SigmoidOp, Operand)>(typeConverter, ctx);
 
     // Add complex patterns
     patterns.add<ConvertReshapeOp>(typeConverter, ctx);

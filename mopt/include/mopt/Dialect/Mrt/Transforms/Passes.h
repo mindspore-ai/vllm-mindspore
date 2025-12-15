@@ -35,9 +35,6 @@ namespace mlir {
 /// Create a pass to set device information for tensors in MRT dialect.
 std::unique_ptr<Pass> createSetTensorDevice();
 
-/// Create a pass to annotate Linalg functions with hacc attributes.
-std::unique_ptr<Pass> createAnnotateLinalgForHaccPass();
-
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

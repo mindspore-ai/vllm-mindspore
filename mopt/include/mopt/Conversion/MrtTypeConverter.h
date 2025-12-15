@@ -69,6 +69,30 @@ inline void populateMrtTypeConversions(mlir::TypeConverter &converter) {
   populateMrtScalarTypeConversions(converter);
 }
 
+// Populate materialization functions for bridging between builtin types and MRT types.
+// This uses UnrealizedConversionCastOp for bridging, which should be cleaned up
+// later by reconcile-unrealized-casts pass.
+inline void populateMrtTypeMaterializations(mlir::TypeConverter &converter) {
+  // Target materialization: builtin types -> MRT types
+  // Used when creating new ops that expect MRT types
+  converter.addTargetMaterialization(
+      [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs,
+         mlir::Location loc) -> mlir::Value {
+        if (inputs.size() != 1)
+          return {};
+        return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
+      });
+
+  // Source materialization: MRT types -> builtin types
+  // Used to maintain compatibility with surrounding code that expects builtin types
+  converter.addSourceMaterialization(
+      [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs,
+         mlir::Location loc) -> mlir::Value {
+        if (inputs.size() != 1)
+          return {};
+        return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
+      });
+}
 }  // namespace mrt
 
 #endif  // MOPT_CONVERSION_MRT_TYPE_CONVERTER_H

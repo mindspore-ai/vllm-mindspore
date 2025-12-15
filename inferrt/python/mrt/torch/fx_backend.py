@@ -60,28 +60,6 @@ _ARG_MAPPING_HOOKS = {}
 
 _OPS_MAPPING_HOOKS = {}
 
-# Registry for linalg ops: maps op_name -> mlir_text
-# TODO(lmy) this temporary interface will be removed when mrt backend is ready.
-_LINALG_OP_REGISTRY = {}
-
-
-def register_linalg_op(op_name: str, mlir_text: str):
-    """Register a linalg op with its MLIR text.
-    this temporary interface will be removed when mrt backend is ready.
-
-    Args:
-        op_name: The operator name (e.g., "linalg_add")
-        mlir_text: The Linalg MLIR text with hacc annotations
-    """
-    _LINALG_OP_REGISTRY[op_name] = mlir_text
-
-
-def get_linalg_mlir(op_name: str) -> str:
-    """Get MLIR text for a registered linalg op.
-    this temporary interface will be removed when mrt backend is ready.
-    """
-    return _LINALG_OP_REGISTRY.get(op_name)
-
 
 def register_arg_mapping_hook(op, hook_func):
     _ARG_MAPPING_HOOKS[op] = hook_func
@@ -294,10 +272,6 @@ def _get_op(target):
             if not node_module.startswith(
                 "torch._ops.aten"
             ) and not node_module.startswith("torch._ops.prims"):
-                # mrt_linalg namespace -> linalg_call, mrt namespace -> custom_call
-                # TODO(lmy) this temporary interface will be removed when mrt backend is ready.
-                if node_module.startswith("torch._ops.mrt_linalg"):
-                    return Op.linalg_call
                 return Op.custom_call
     return None
 
@@ -488,15 +462,6 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
     if op == Op.custom_call:
         op_name = node.target.__name__
         flat_node_args = [op_name] + flat_node_args
-    elif op == Op.linalg_call:
-        op_name = node.target.__name__
-        mlir_text = get_linalg_mlir(op_name)
-        if mlir_text is None:
-            raise RuntimeError(
-                f"MLIR not registered for linalg op '{op_name}'. "
-                f"Use register_linalg_op('{op_name}', mlir_text) first."
-            )
-        flat_node_args = [mlir_text] + flat_node_args
 
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:
