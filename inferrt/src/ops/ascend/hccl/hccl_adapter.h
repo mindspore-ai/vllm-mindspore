@@ -100,8 +100,8 @@ class HcclAdapter {
                            const aclrtStream stream, HcclComm hcclComm) const;
   HcclResult HcclReduceScatter(void *sendBuf, void *recvBuf, uint64_t count, HcclDataType dataType, HcclReduceOp op,
                                const aclrtStream stream, HcclComm hcclComm) const;
-  HcclResult HcclSend(void *sendBuf, uint64_t count, HcclDataType dataType, uint32_t destRank,
-                      const aclrtStream stream, HcclComm hcclComm) const;
+  HcclResult HcclSend(void *sendBuf, uint64_t count, HcclDataType dataType, uint32_t destRank, const aclrtStream stream,
+                      HcclComm hcclComm) const;
   HcclResult HcclRecv(void *recvBuf, uint64_t count, HcclDataType dataType, uint32_t srcRank, const aclrtStream stream,
                       HcclComm hcclComm) const;
   HcclResult HcclAlltoAllV(void *sendBuf, void *recvBuf, HcclAllToAllVParams params, HcclDataType dataType,

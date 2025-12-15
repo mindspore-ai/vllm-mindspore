@@ -166,13 +166,9 @@ struct ConvertStablehloToMRTPass : public PassWrapper<ConvertStablehloToMRTPass,
 
     // Mark func.func as dynamically legal (need type conversion)
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
-      [&](mlir::func::FuncOp op) {
-        return typeConverter.isSignatureLegal(op.getFunctionType());
-      });
+      [&](mlir::func::FuncOp op) { return typeConverter.isSignatureLegal(op.getFunctionType()); });
     target.addDynamicallyLegalOp<mlir::func::ReturnOp>(
-      [&](mlir::func::ReturnOp op) {
-        return typeConverter.isLegal(op.getOperandTypes());
-      });
+      [&](mlir::func::ReturnOp op) { return typeConverter.isLegal(op.getOperandTypes()); });
 
     target.addIllegalDialect<mlir::stablehlo::StablehloDialect>();
 

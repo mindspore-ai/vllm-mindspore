@@ -31,4 +31,3 @@ std::unique_ptr<Pass> createConvertOutlinedFusionCallPass();
 }  // namespace mlir
 
 #endif  // MOPT_CONVERSION_STABLEHLO_TO_MRT_H
-

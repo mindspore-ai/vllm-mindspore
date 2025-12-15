@@ -69,19 +69,13 @@ SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return Mak
 
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMul>(lhs, rhs); }
 
-SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
-  return MakeIntrusive<SymbolicTrueDiv>(lhs, rhs);
-}
+SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicTrueDiv>(lhs, rhs); }
 
 SymbolicExprPtr operator%(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMod>(lhs, rhs); }
 
-SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
-  return MakeIntrusive<SymbolicFloorDiv>(lhs, rhs);
-}
+SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicFloorDiv>(lhs, rhs); }
 
-SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) {
-  return MakeIntrusive<SymbolicCeilDiv>(lhs, rhs);
-}
+SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicCeilDiv>(lhs, rhs); }
 
 }  // namespace ir
 }  // namespace mrt

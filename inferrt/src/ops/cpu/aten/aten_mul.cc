@@ -24,7 +24,7 @@ namespace mrt {
 namespace ops {
 
 OpsErrorCode AtenMul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                ir::Value *output, void *stream) {
+                             ir::Value *output, void *stream) {
   auto atenInput0 = ToAtenTensor(input[kIndex0]);
   auto atenInput1 = ToAtenTensor(input[kIndex1]);
   auto atenOutput = ToAtenTensor(output);

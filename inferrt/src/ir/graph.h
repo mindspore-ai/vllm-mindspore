@@ -52,8 +52,7 @@ using NodePtr = IntrusivePtr<Node>;
 using GraphPtr = IntrusivePtr<Graph>;
 
 inline std::ostream &operator<<(std::ostream &os, const Node &node) {
-  os << "Node("
-     << "op=" << ops::ToStr(node.op) << ", value=" << node.output << ")";
+  os << "Node(" << "op=" << ops::ToStr(node.op) << ", value=" << node.output << ")";
   return os;
 }
 

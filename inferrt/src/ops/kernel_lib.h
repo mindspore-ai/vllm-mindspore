@@ -27,7 +27,7 @@ namespace mrt {
 namespace ops {
 
 // The register entry of new kernel lib.
-#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                   \
+#define DART_REGISTER_KERNEL_LIB(KERNEL_LIB_NAME, KERNEL_LIB_CLASS)                \
   static const mrt::ops::KernelLibRegistrar g_kernel_lib_##KERNEL_LIB_CLASS##_reg( \
     KERNEL_LIB_NAME, []() { return new (std::nothrow) KERNEL_LIB_CLASS(); });
 

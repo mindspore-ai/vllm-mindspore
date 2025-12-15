@@ -126,9 +126,7 @@ TEST_F(StorageTest, TestRelease) {
 /// Expectation: External data remains valid after Storage destruction
 TEST_F(StorageTest, TestDestructorWithNonOwnedData) {
   void *dataPtr = malloc(512);
-  {
-    Storage storage(dataPtr, 512, device);
-  }
+  { Storage storage(dataPtr, 512, device); }
   EXPECT_NO_THROW(free(dataPtr));
 }
 

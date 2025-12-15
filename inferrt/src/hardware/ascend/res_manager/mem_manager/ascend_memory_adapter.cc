@@ -264,8 +264,7 @@ uint8_t *AscendMemAdapter::MallocFromRts(size_t size) const {
       size_t total = 0;
       (void)CALL_ASCEND_API(aclrtGetMemInfo, ACL_HBM_MEM, &freeSize, &total);
       LOG_ERROR << "#umsg#Framework Error Message:#umsg#Malloc device memory failed, size[" << size << "], ret[" << ret
-                << "], "
-                << "Device " << deviceId << " Available MOC size:" << total << " free size:" << freeSize
+                << "], " << "Device " << deviceId << " Available MOC size:" << total << " free size:" << freeSize
                 << " may be other processes occupying this card, check as: ps -ef|grep python";
     } else {
       LOG_ERROR << "rtMalloc mem size[" << size << "] fail, ret[" << ret << "]";
