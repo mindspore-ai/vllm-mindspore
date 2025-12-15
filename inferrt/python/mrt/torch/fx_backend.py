@@ -442,8 +442,7 @@ def _map_args(
             nodes = [_map_arg(item) for item in arg]
             return executor.make_tuple(nodes)
 
-        value = from_torch(arg)
-        sym_mgr.bind_symbolic_shape(value, arg)
+        value = sym_mgr.from_torch_with_sym(arg)
         return executor.add_value_node(value)
 
     return [_map_arg(arg) for arg in args]
@@ -452,8 +451,7 @@ def _map_args(
 def _handle_param_node(node, executor, sym_mgr, env):
     """Handle param node processing."""
     example_value = node.meta.get("example_value", None)
-    output_value = from_torch(example_value)
-    sym_mgr.bind_symbolic_shape(output_value, example_value)
+    output_value = sym_mgr.from_torch_with_sym(example_value)
     env[node] = executor.add_value_node(output_value)
 
 
@@ -521,8 +519,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
 
     input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
     example_value = node.meta.get("example_value", None)
-    output_value = from_torch(example_value)
-    sym_mgr.bind_symbolic_shape(output_value, example_value)
+    output_value = sym_mgr.from_torch_with_sym(example_value)
 
     env[node] = executor.add_op_node(op, input_nodes, output_value)
 

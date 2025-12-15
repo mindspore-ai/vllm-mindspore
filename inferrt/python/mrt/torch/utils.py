@@ -104,7 +104,7 @@ def from_torch(obj: Any) -> Value:
     if isinstance(obj, (int, float, bool, str)):
         return Value(obj)
     if isinstance(obj, torch.device):
-        device_str = str(obj).rsplit('.', maxsplit=1)[-1]
+        device_str = str(obj).rsplit(".", maxsplit=1)[-1]
         return Value(device_str)
     if isinstance(obj, torch.dtype):
         dtype_str = str(obj).rsplit(".", maxsplit=1)[-1]  # "torch.float32" -> "float32"
@@ -145,6 +145,24 @@ def set_device_context():
     _mrt_torch.set_device_context()
 
 
+def _update_tuple_data(mrt_value: Value, torch_value: Any) -> None:
+    """
+    Update tuple data with input value.
+    """
+    mrt_tuple_items = mrt_value.to_tuple()
+    if len(mrt_tuple_items) != len(torch_value):
+        raise ValueError(
+            f"Expected {len(mrt_tuple_items)} items in tuple, but received {len(torch_value)}"
+        )
+    for mrt_item, torch_item in zip(mrt_tuple_items, torch_value):
+        if mrt_item.is_tensor():
+            _mrt_torch.update_tensor_data(mrt_item.to_tensor(), torch_item)
+        elif mrt_item.is_tuple():
+            _update_tuple_data(mrt_item, torch_item)
+        else:
+            raise ValueError(f"Unsupported type {type(torch_item)} in tuple for update.")
+
+
 def update_runtime_inputs(
     param_nodes: List[Any],
     new_inputs: Tuple[Any, ...],
@@ -161,6 +179,8 @@ def update_runtime_inputs(
         if param_node.output.is_tensor():
             mrt_tensor = param_node.output.to_tensor()
             _mrt_torch.update_tensor_data(mrt_tensor, input_val)
+        elif param_node.output.is_tuple():
+            _update_tuple_data(param_node.output, input_val)
         elif param_node.output.is_symbol():
             mrt_symbol = param_node.output.to_symbol()
             if isinstance(mrt_symbol, SymbolicVar):

@@ -29,7 +29,8 @@ from torch.utils._sympy.functions import (
     FloorToInt,
     CeilToInt,
 )
-from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr, Value
+from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr, Value, Tuple
+from mrt.torch.utils import from_torch
 
 
 class SymbolicShapeManager:
@@ -48,8 +49,8 @@ class SymbolicShapeManager:
     }
 
     def __init__(self):
-        # Map from symbol name (str) to SymbolicVar
-        self._symbol_map: Dict[str, SymbolicVar] = {}
+        # Map from symbol name (str) to Value
+        self._symbol_map: Dict[str, Value] = {}
 
     def convert_sympy_expr_to_symbolic_expr(self, expr: sympy.Expr) -> SymbolicExpr:
         """
@@ -65,7 +66,7 @@ class SymbolicShapeManager:
             NotImplementedError: If the expression type is not supported
         """
         if expr.is_Symbol:
-            return self._symbol_map[str(expr)]
+            return self._symbol_map[str(expr)].to_symbol()
 
         if expr.is_Integer:
             return SymbolicConst(int(expr))
@@ -119,32 +120,38 @@ class SymbolicShapeManager:
 
         return symbolic_shape
 
-    def bind_symbolic_shape(self, mrt_value: Value, torch_value: Any) -> None:
+    def from_torch_with_sym(self, torch_value: Any) -> Value:
         """
-        Recursively create and apply symbolic shape for tensors in nested structures.
+        Convert a torch object to mrt.ir.Value with symbolic shape binding.
 
         Args:
-            mrt_value: The corresponding MRT value (can be Tensor, Tuple, or nested structures)
             torch_value: The value from torch (can be Tensor, list, tuple, or nested structures)
+
+        Returns:
+            A new MRT Value with symbolic shape information bound
         """
-        # Handle SymInt case
-        if isinstance(torch_value, torch.SymInt) and mrt_value.is_symbol():
+        # Handle SymInt case first - we need to create/retrieve SymbolicVar
+        if isinstance(torch_value, torch.SymInt):
             sym_str = str(torch_value.node.expr)
-            if sym_str in self._symbol_map:
-                mrt_value = Value(self._symbol_map[sym_str])
-            else:
-                self._symbol_map[sym_str] = mrt_value.to_symbol()
+            if sym_str not in self._symbol_map:
+                self._symbol_map[sym_str] = Value(SymbolicVar(sym_str))
+            return self._symbol_map[sym_str]
 
         # Handle tensor case
-        elif isinstance(torch_value, torch.Tensor) and mrt_value.is_tensor():
+        if isinstance(torch_value, torch.Tensor):
+            # Convert tensor using from_torch
+            mrt_value = from_torch(torch_value)
+            # Apply symbolic shape if needed
             symbolic_shape = self.create_symbolic_shape_for_tensor(torch_value)
             if symbolic_shape is not None:
                 mrt_value.to_tensor().symbolic_shape = symbolic_shape
+            return mrt_value
 
         # Handle nested lists/tuples recursively
-        elif isinstance(torch_value, (list, tuple)) and mrt_value.is_tuple():
-            tuple_value = mrt_value.to_tuple()
-            if len(tuple_value) != len(torch_value):
-                return
-            for i, torch_item in enumerate(torch_value):
-                self.bind_symbolic_shape(tuple_value[i], torch_item)
+        if isinstance(torch_value, (list, tuple)):
+            # Convert each element recursively
+            elements = [self.from_torch_with_sym(item) for item in torch_value]
+            return Value(Tuple(elements))
+
+        # For other types, just use from_torch
+        return from_torch(torch_value)
