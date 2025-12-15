@@ -18,8 +18,6 @@ import json
 import requests
 import pytest
 from unittest.mock import patch
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, logger, start_vllm_server,
                                       get_key_counter_from_log,
@@ -64,6 +62,8 @@ def test_vllm_ms_offline_chunked_prefill_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = LONG_PROMPT
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -92,6 +92,8 @@ def test_vllm_ms_offline_chunked_prefill_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = ["I love Beijing", "Today is", "Llama is"]
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -119,6 +121,8 @@ def test_vllm_ms_offline_chunked_prefill_004():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM
     llm = LLM(QWEN_7B_MODEL,
               max_num_seqs=16,
               max_num_batched_tokens=20,
@@ -178,6 +182,7 @@ def test_vllm_ms_server_chunked_prefill_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     prompts = "I love Beijing"
     log_name = "test_vllm_ms_server_chunked_prefill_001.log"
     extra_params = '--tensor_parallel_size=2 --enable-chunked-prefill '
@@ -201,6 +206,7 @@ def test_vllm_ms_server_chunked_prefill_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     prompts = ["I love Beijing", "Today is", "Llama is"]
     log_name = "test_vllm_ms_server_chunked_prefill_002.log"
     extra_params = '--max_num_seqs 16 --max-num-batched-tokens 32 '
@@ -221,6 +227,7 @@ def test_vllm_ms_server_chunked_prefill_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     prompts = LONG_PROMPT
     log_name = "test_vllm_ms_server_chunked_prefill_003.log"
     extra_params = '--tensor_parallel_size=2 --max_num_seqs 16 '
@@ -244,6 +251,7 @@ def test_vllm_ms_server_chunked_prefill_004():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     prompt1 = LONG_PROMPT
     prompt2 = "Today is"
     prompt3 = "Llama is"
@@ -286,6 +294,7 @@ def test_vllm_ms_server_chunked_prefill_005():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     log_name = "test_vllm_ms_server_chunked_prefill_005.log"
     test_results = run_server_chunked_prefill_005(log_name)
     assert test_results.get('failure') == 0

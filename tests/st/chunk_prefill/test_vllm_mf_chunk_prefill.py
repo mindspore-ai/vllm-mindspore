@@ -18,8 +18,6 @@ import pytest
 import json
 import requests
 from unittest.mock import patch
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, get_key_counter_from_log,
                                       start_vllm_server, stop_vllm_server,
@@ -58,6 +56,8 @@ def test_vllm_mf_offline_chunked_prefill_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompt1 = LONG_PROMPT
     prompt2 = "Today is"
     prompt3 = "Llama is"
@@ -88,6 +88,8 @@ def test_vllm_mf_offline_chunked_prefill_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = ["I love Beijing", "Today is", "Llama is"]
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -114,6 +116,8 @@ def test_vllm_mf_offline_chunked_prefill_004():
     Model Info:
         DeepSeek-R1-W8A8
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = LONG_PROMPT
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -121,7 +125,7 @@ def test_vllm_mf_offline_chunked_prefill_004():
     llm = LLM(DEEPSEEK_W8A8_MODEL,
               max_num_seqs=16,
               max_num_batched_tokens=32,
-              enable_chunked_prefill=False,
+              enable_chunked_prefill=True,
               max_model_len=32768,
               tensor_parallel_size=2)
     outputs = llm.generate(prompts, sampling_params)
@@ -146,6 +150,8 @@ def test_vllm_mf_offline_chunked_prefill_006():
     Model Info:
         DeepSeek-R1-W8A8
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = ["I love Beijing", "Today is", "Llama is"]
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -175,6 +181,8 @@ def test_vllm_mf_offline_chunked_prefill_007():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM
     llm = LLM(QWEN_7B_MODEL, max_num_seqs=16, max_num_batched_tokens=20)
     test_results = run_combination_accuracy(llm=llm,
                                             is_service=False,
@@ -203,6 +211,8 @@ def test_vllm_mf_offline_chunked_prefill_008():
     Model Info:
         DeepSeek-R1-W8A8
     """
+    import vllm_mindspore
+    from vllm import LLM
     llm = LLM(DEEPSEEK_W8A8_MODEL,
               max_num_seqs=16,
               max_num_batched_tokens=20,
@@ -231,6 +241,7 @@ def run_mf_server_chunked_prefill(log_name, model, extra_params, data):
       extra_params: Additional startup parameter
       data: Request data
     """
+    import vllm_mindspore
     process = start_vllm_server(model, log_name, extra_params=extra_params)
     serve_port = os.getenv("TEST_SERVE_PORT", None)
     if serve_port:
@@ -263,6 +274,7 @@ def test_vllm_mf_server_chunked_prefill_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     log_name = "test_vllm_mf_server_chunked_prefill_002.log"
     model = QWEN_7B_MODEL
     prompts = [LONG_PROMPT, "Today is", "Llama is"]
@@ -293,6 +305,7 @@ def test_vllm_mf_server_chunked_prefill_003():
     Model Info:
         DeepSeek-R1-W8A8
     """
+    import vllm_mindspore
     log_name = "test_vllm_mf_server_chunked_prefill_003.log"
     model = DEEPSEEK_W8A8_MODEL
     prompts = LONG_PROMPT
@@ -321,6 +334,7 @@ def test_vllm_mf_server_chunked_prefill_004():
     Model Info:
         DeepSeek-R1-W8A8
     """
+    import vllm_mindspore
     log_name = "test_vllm_mf_server_chunked_prefill_004.log"
     model = DEEPSEEK_W8A8_MODEL
     prompts = [LONG_PROMPT, "Today is", "Llama is"]
@@ -349,6 +363,7 @@ def test_vllm_mf_server_chunked_prefill_005():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     log_name = "test_vllm_mf_server_chunked_prefill_005.log"
     test_results = run_server_chunked_prefill_005(log_name)
     assert test_results.get('failure') <= 5

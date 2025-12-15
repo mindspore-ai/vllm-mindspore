@@ -24,7 +24,6 @@ env_manager = EnvVarManager()
 env_manager.setup_mindformers_environment()
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
-DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
 
 
 @pytest.mark.level1
