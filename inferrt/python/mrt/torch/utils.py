@@ -16,7 +16,7 @@
 utils for converting between torch and mrt.ir.
 """
 import os
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 
 import torch
 from torch import distributed as dist
@@ -145,6 +145,25 @@ def set_device_context():
     _mrt_torch.set_device_context()
 
 
+def _update_mrt_value(mrt_value: Value, torch_value: Any) -> Optional[Value]:
+    """
+    Update mrt.ir.Value with input value.
+    Return None if the value is updated, otherwise return a new Value.
+    """
+    if mrt_value.is_tensor():
+        _mrt_torch.update_tensor_data(mrt_value.to_tensor(), torch_value)
+        return None
+    if mrt_value.is_tuple():
+        _update_tuple_data(mrt_value, torch_value)
+        return None
+    if mrt_value.is_symbol():
+        mrt_symbol = mrt_value.to_symbol()
+        if isinstance(mrt_symbol, SymbolicVar):
+            mrt_symbol.set_value(int(torch_value))
+        return None
+    return from_torch(torch_value)
+
+
 def _update_tuple_data(mrt_value: Value, torch_value: Any) -> None:
     """
     Update tuple data with input value.
@@ -154,13 +173,11 @@ def _update_tuple_data(mrt_value: Value, torch_value: Any) -> None:
         raise ValueError(
             f"Expected {len(mrt_tuple_items)} items in tuple, but received {len(torch_value)}"
         )
-    for mrt_item, torch_item in zip(mrt_tuple_items, torch_value):
-        if mrt_item.is_tensor():
-            _mrt_torch.update_tensor_data(mrt_item.to_tensor(), torch_item)
-        elif mrt_item.is_tuple():
-            _update_tuple_data(mrt_item, torch_item)
-        else:
-            raise ValueError(f"Unsupported type {type(torch_item)} in tuple for update.")
+    for i, torch_item in enumerate(torch_value):
+        mrt_item = mrt_tuple_items[i]
+        new_value = _update_mrt_value(mrt_item, torch_item)
+        if new_value is not None:
+            mrt_tuple_items[i] = new_value
 
 
 def update_runtime_inputs(
@@ -176,14 +193,6 @@ def update_runtime_inputs(
         )
 
     for param_node, input_val in zip(param_nodes, new_inputs):
-        if param_node.output.is_tensor():
-            mrt_tensor = param_node.output.to_tensor()
-            _mrt_torch.update_tensor_data(mrt_tensor, input_val)
-        elif param_node.output.is_tuple():
-            _update_tuple_data(param_node.output, input_val)
-        elif param_node.output.is_symbol():
-            mrt_symbol = param_node.output.to_symbol()
-            if isinstance(mrt_symbol, SymbolicVar):
-                mrt_symbol.set_value(int(input_val))
-        else:
-            param_node.output = from_torch(input_val)
+        new_value = _update_mrt_value(param_node.output, input_val)
+        if new_value is not None:
+            param_node.output = new_value

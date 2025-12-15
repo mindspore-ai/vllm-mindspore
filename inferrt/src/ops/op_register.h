@@ -112,7 +112,7 @@ class OpFactory : public OpFactoryBase {
       }
     } else {
       if constexpr (std::is_same_v<OpFactoryType, CPUOpFactory>) {
-        if (!LoadOpLib("libkernel_aten", &errMsg)) {
+        if (!LoadOpLib("libops_cpu", &errMsg)) {
           LOG_EXCEPTION << "Load CPU Op Lib failed, error message: " << errMsg.str();
         }
       } else if constexpr (std::is_same_v<OpFactoryType, UnknownOpFactory>) {

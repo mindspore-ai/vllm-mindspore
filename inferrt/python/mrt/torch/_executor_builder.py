@@ -347,6 +347,10 @@ class ExecutorBuilder:
             self._handle_unpack_list(op)
             return
 
+        if op_name == "mrt.eval_symbolic_expr":
+            self._handle_eval_symbolic_expr(op)
+            return
+
         self._handle_runtime_op(op, op_name)
 
     def _handle_symbolic_int(self, op):
@@ -362,8 +366,7 @@ class ExecutorBuilder:
 
         symbol_vals = [self.symbol_env[s] for s in shape_symbols]
         symbolic_shape = [
-            _convert_affine_expr(expr, symbol_vals)
-            for expr in affine_map.results
+            _convert_affine_expr(expr, symbol_vals) for expr in affine_map.results
         ]
 
         self.env[target].output.to_tensor().symbolic_shape = symbolic_shape
@@ -401,6 +404,32 @@ class ExecutorBuilder:
                 [node, self.executor.add_value_node(Value(i))],
                 result_values[i],
             )
+
+    def _handle_eval_symbolic_expr(self, op):
+        """Handle mrt.eval_symbolic_expr operation."""
+        input_nodes_for_op = self._get_input_nodes(op)
+        results = list(op.results)
+
+        affine_map = ir.AffineMapAttr(op.attributes["expr"]).value
+        symbol_vars = [SymbolicVar(f"s{i}") for i in range(len(input_nodes_for_op))]
+
+        if len(affine_map.results) != 1:
+            raise ValueError(
+                "eval_symbolic_expr map must have exactly one result expression"
+            )
+
+        sym_vars_tuple = Tuple([Value(v) for v in symbol_vars])
+        sym_vars_node = self.executor.add_value_node(Value(sym_vars_tuple))
+
+        sym_expr = _convert_affine_expr(affine_map.results[0], symbol_vars)
+        sym_expr_val = Value(sym_expr)
+
+        node = self.executor.add_op_node(
+            Op.eval_symbolic_expr,
+            input_nodes_for_op + [sym_vars_node],
+            sym_expr_val,
+        )
+        self.env[results[0]] = node
 
     def _handle_runtime_op(self, op, op_name):
         """Handle runtime operations."""

@@ -116,6 +116,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def(py::init<std::vector<ir::ValuePtr>>())
     .def("__len__", &ir::Tuple::Size)
     .def("__getitem__", &ir::Tuple::operator[], py::return_value_policy::reference)
+    .def("__setitem__", [](ir::Tuple &t, size_t i, const ir::Value &v) { *(t[i]) = v; })
     .def(
       "__iter__", [](const ir::Tuple &t) { return py::make_iterator(t.begin(), t.end()); }, py::keep_alive<0, 1>())
     .def("__repr__", [](const ir::TuplePtr &t) {
