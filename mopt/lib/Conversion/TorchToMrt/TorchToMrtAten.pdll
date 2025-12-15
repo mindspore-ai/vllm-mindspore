@@ -77,3 +77,13 @@ Pattern ConvertAtenRemainderTensor {
   let root = op<torch.aten.remainder.Tensor>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.remainder_tensor_tensor>(convertValues(operands)) -> (convertType(resType));
 }
+
+Pattern ConvertAtenSplitTensor {
+  let root = op<torch.aten.split.Tensor>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.split_tensor>(convertValues(operands)) -> (convertType(resType));
+}
+
+Pattern ConvertAtenSplitWithSizes {
+  let root = op<torch.aten.split_with_sizes>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.split_with_size>(convertValues(operands)) -> (convertType(resType));
+}

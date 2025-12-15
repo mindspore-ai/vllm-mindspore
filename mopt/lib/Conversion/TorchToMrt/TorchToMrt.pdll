@@ -46,3 +46,8 @@ Pattern ConvertTorchListConstruct {
   let root = op<torch.prim.ListConstruct>(elements: ValueRange) -> (resType: Type);
   replace root with op<mrt.make_list>(convertValues(elements)) -> (convertType(resType));
 }
+
+Pattern ConvertTorchListUnpack {
+  let root = op<torch.prim.ListUnpack>(list: Value) -> (resTypes: TypeRange);
+  replace root with op<mrt.unpack_list>(convertValue(list)) -> (convertTypes(resTypes));
+}
