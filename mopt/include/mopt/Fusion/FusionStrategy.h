@@ -92,29 +92,26 @@ class StablehloFusionStrategy : public FusionStrategy {
       return true;
     }
     // Compute-intensive ops should NOT be fused - they go through standard MRT lowering
-    if (mlir::isa<mlir::stablehlo::DotGeneralOp, mlir::stablehlo::ConvolutionOp,
-                  mlir::stablehlo::ReduceOp>(op)) {
+    if (mlir::isa<mlir::stablehlo::DotGeneralOp, mlir::stablehlo::ConvolutionOp, mlir::stablehlo::ReduceOp>(op)) {
       return true;
     }
     // Memory/communication ops should NOT be fused
-    return mlir::isa<mlir::stablehlo::ScatterOp, mlir::stablehlo::GatherOp,
-                     mlir::stablehlo::SortOp,
+    return mlir::isa<mlir::stablehlo::ScatterOp, mlir::stablehlo::GatherOp, mlir::stablehlo::SortOp,
                      // Collective communication operations
-                     mlir::stablehlo::AllGatherOp, mlir::stablehlo::AllReduceOp,
-                     mlir::stablehlo::AllToAllOp, mlir::stablehlo::CollectiveBroadcastOp,
-                     mlir::stablehlo::CollectivePermuteOp, mlir::stablehlo::ReduceScatterOp>(op);
+                     mlir::stablehlo::AllGatherOp, mlir::stablehlo::AllReduceOp, mlir::stablehlo::AllToAllOp,
+                     mlir::stablehlo::CollectiveBroadcastOp, mlir::stablehlo::CollectivePermuteOp,
+                     mlir::stablehlo::ReduceScatterOp>(op);
   }
 
  private:
   /// Check if an operation is an elementwise operation
   static bool isElementwiseOp(mlir::Operation *op) {
     return mlir::isa<mlir::stablehlo::AddOp, mlir::stablehlo::SubtractOp, mlir::stablehlo::MulOp,
-                     mlir::stablehlo::DivOp, mlir::stablehlo::MaxOp, mlir::stablehlo::MinOp,
-                     mlir::stablehlo::TanhOp, mlir::stablehlo::ExpOp, mlir::stablehlo::LogOp,
-                     mlir::stablehlo::NegOp, mlir::stablehlo::AbsOp, mlir::stablehlo::SqrtOp,
-                     mlir::stablehlo::RsqrtOp, mlir::stablehlo::CeilOp, mlir::stablehlo::FloorOp,
-                     mlir::stablehlo::ClampOp, mlir::stablehlo::SelectOp, mlir::stablehlo::CompareOp,
-                     mlir::stablehlo::ConvertOp>(op);
+                     mlir::stablehlo::DivOp, mlir::stablehlo::MaxOp, mlir::stablehlo::MinOp, mlir::stablehlo::TanhOp,
+                     mlir::stablehlo::ExpOp, mlir::stablehlo::LogOp, mlir::stablehlo::NegOp, mlir::stablehlo::AbsOp,
+                     mlir::stablehlo::SqrtOp, mlir::stablehlo::RsqrtOp, mlir::stablehlo::CeilOp,
+                     mlir::stablehlo::FloorOp, mlir::stablehlo::ClampOp, mlir::stablehlo::SelectOp,
+                     mlir::stablehlo::CompareOp, mlir::stablehlo::ConvertOp>(op);
   }
 
   /// Check if an operation has dynamic shape in its inputs or outputs
@@ -142,4 +139,3 @@ class StablehloFusionStrategy : public FusionStrategy {
 }  // namespace mopt
 
 #endif  // MOPT_FUSION_FUSION_STRATEGY_H
-

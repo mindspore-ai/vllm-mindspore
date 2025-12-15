@@ -43,7 +43,6 @@
 using mlir::cast;
 using mlir::dyn_cast;
 using mlir::failed;
-using mlir::func::FuncOp;
 using mlir::MLIRContext;
 using mlir::ModuleOp;
 using mlir::OpBuilder;
@@ -52,6 +51,7 @@ using mlir::Pass;
 using mlir::PassWrapper;
 using mlir::SmallVector;
 using mlir::StringRef;
+using mlir::func::FuncOp;
 
 namespace {
 
@@ -109,16 +109,14 @@ struct ConvertOutlinedFusionCallOp : public mlir::OpConversionPattern<mlir::func
 
   mlir::LogicalResult matchAndRewrite(mlir::func::CallOp callOp, OpAdaptor adaptor,
                                       mlir::ConversionPatternRewriter &rewriter) const override {
-    auto mlirTextAttr =
-        callOp->getAttrOfType<mlir::StringAttr>(mopt::kOutlinedFusionMlirTextAttr);
+    auto mlirTextAttr = callOp->getAttrOfType<mlir::StringAttr>(mopt::kOutlinedFusionMlirTextAttr);
     if (!mlirTextAttr) {
       return rewriter.notifyMatchFailure(callOp, "missing outlined fusion MLIR text attribute");
     }
 
     // Create mlir_text operand as mrt.string
     auto stringType = mrt::StringType::get(rewriter.getContext());
-    mlir::Value mlirTextValue =
-        rewriter.create<mrt::CreateStringOp>(callOp.getLoc(), stringType, mlirTextAttr);
+    mlir::Value mlirTextValue = rewriter.create<mrt::CreateStringOp>(callOp.getLoc(), stringType, mlirTextAttr);
 
     // Convert result types using TypeConverter: tensor<...> -> !mrt.tensor<...>
     llvm::SmallVector<mlir::Type> convertedResultTypes;
@@ -138,8 +136,8 @@ struct ConvertOutlinedFusionCallOp : public mlir::OpConversionPattern<mlir::func
 
       if (srcType != dstType) {
         // Use TypeConverter's target materialization to insert cast
-        mlir::Value materialized = getTypeConverter()->materializeTargetConversion(
-            rewriter, callOp.getLoc(), dstType, operand);
+        mlir::Value materialized =
+          getTypeConverter()->materializeTargetConversion(rewriter, callOp.getLoc(), dstType, operand);
         if (!materialized) {
           return rewriter.notifyMatchFailure(callOp, "failed to materialize operand to MRT type");
         }
@@ -150,8 +148,8 @@ struct ConvertOutlinedFusionCallOp : public mlir::OpConversionPattern<mlir::func
     }
 
     // Create mrt.linalg_call with MRT tensor types
-    auto linalgCallOp = rewriter.create<mrt::LinalgCallOp>(
-        callOp.getLoc(), convertedResultTypes, mlirTextValue, convertedOperands);
+    auto linalgCallOp =
+      rewriter.create<mrt::LinalgCallOp>(callOp.getLoc(), convertedResultTypes, mlirTextValue, convertedOperands);
 
     rewriter.replaceOp(callOp, linalgCallOp.getResults());
     return mlir::success();
@@ -162,8 +160,7 @@ struct ConvertOutlinedFusionCallOp : public mlir::OpConversionPattern<mlir::func
 // ConvertOutlinedFusionCallPass
 //===----------------------------------------------------------------------===//
 
-struct ConvertOutlinedFusionCallPass
-    : public PassWrapper<ConvertOutlinedFusionCallPass, OperationPass<ModuleOp>> {
+struct ConvertOutlinedFusionCallPass : public PassWrapper<ConvertOutlinedFusionCallPass, OperationPass<ModuleOp>> {
   // cppcheck-suppress unknownMacro
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ConvertOutlinedFusionCallPass)
 
@@ -222,17 +219,15 @@ struct ConvertOutlinedFusionCallPass
     int annotatedCalls = 0;
     module.walk([&](mlir::func::CallOp callOp) {
       auto callee = dyn_cast<mlir::SymbolRefAttr>(callOp.getCallableForCallee());
-      if (!callee)
-        return;
+      if (!callee) return;
       auto it = serializedFuncs.find(callee.getRootReference());
-      if (it == serializedFuncs.end())
-        return;
+      if (it == serializedFuncs.end()) return;
       callOp->setAttr(mopt::kOutlinedFusionMlirTextAttr, mlir::StringAttr::get(ctx, it->second));
       annotatedCalls++;
     });
 
-    LLVM_DEBUG(llvm::dbgs() << "[ConvertOutlinedFusionCall] Annotated " << annotatedCalls
-                            << " calls with " << mopt::kOutlinedFusionMlirTextAttr << "\n");
+    LLVM_DEBUG(llvm::dbgs() << "[ConvertOutlinedFusionCall] Annotated " << annotatedCalls << " calls with "
+                            << mopt::kOutlinedFusionMlirTextAttr << "\n");
 
     // ===== Phase 2: Convert annotated func.call to mrt.linalg_call =====
     mopt::StablehloToMrtTypeConverter typeConverter(ctx);
@@ -247,9 +242,8 @@ struct ConvertOutlinedFusionCallPass
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
 
     // Annotated calls must be converted to mrt.linalg_call
-    target.addDynamicallyLegalOp<mlir::func::CallOp>([](mlir::func::CallOp callOp) {
-      return !callOp->hasAttr(mopt::kOutlinedFusionMlirTextAttr);
-    });
+    target.addDynamicallyLegalOp<mlir::func::CallOp>(
+      [](mlir::func::CallOp callOp) { return !callOp->hasAttr(mopt::kOutlinedFusionMlirTextAttr); });
 
     mlir::RewritePatternSet patterns(ctx);
     patterns.add<ConvertOutlinedFusionCallOp>(typeConverter, ctx);

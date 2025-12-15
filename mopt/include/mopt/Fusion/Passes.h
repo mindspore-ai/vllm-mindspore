@@ -49,4 +49,3 @@ std::unique_ptr<Pass> createOutlineStablehloFusionRegionsPass();
 }  // namespace mlir
 
 #endif  // MOPT_FUSION_PASSES_H
-

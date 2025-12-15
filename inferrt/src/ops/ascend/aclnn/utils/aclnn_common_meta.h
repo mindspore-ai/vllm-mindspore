@@ -63,7 +63,7 @@ using _aclSetTensorAddrFuncPtr = int (*)(aclOpExecutor *executor, const size_t i
 using _aclSetDynamicTensorAddrFuncPtr = int (*)(aclOpExecutor *executor, const size_t index, const size_t relativeIndex,
                                                 aclTensorList *tensors, void *addr);
 
-#define DECLARE_ACLNN_COMMON_META_FUNC(name)  DA_API _##name##FuncPtr name##_ = nullptr
+#define DECLARE_ACLNN_COMMON_META_FUNC(name) DA_API _##name##FuncPtr name##_ = nullptr
 
 #define EXTERN_ACLNN_COMMON_META_FUNC(name) \
   extern _##name##FuncPtr name##_;          \
@@ -98,8 +98,7 @@ EXTERN_ACLNN_COMMON_META_FUNC(aclSetDynamicTensorAddr);
       LoadOpApiLib();                    \
     }                                    \
     return name##_;                      \
-  }                                      \
-  ()
+  }()
 
 #define GET_ACLNN_OP_FUNC(name) GetAclnnOpApiFunc(name.c_str())
 

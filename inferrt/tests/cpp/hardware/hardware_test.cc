@@ -20,8 +20,7 @@
 
 void TestDeviceResource() {
   mrt::device::DeviceContextKey deviceContextKey{"Ascend", 0};
-  auto deviceContext =
-    mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+  auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
   if (deviceContext == nullptr) {
     LOG_ERROR << "Get device context failed.";
   }
@@ -43,8 +42,8 @@ void TestDeviceResource() {
   memoryStreamAddresses.emplace_back(0, ptr);
   auto inputEvent = deviceContext->deviceResManager_->CreateRuntimeEvent(true, true);
   int64_t taskIdOnStream = 1;
-  if (!deviceContext->deviceResManager_->RecordEvent(taskIdOnStream, SizeToUint(streamId),
-                                                        memoryStreamAddresses, inputEvent)) {
+  if (!deviceContext->deviceResManager_->RecordEvent(taskIdOnStream, SizeToUint(streamId), memoryStreamAddresses,
+                                                     inputEvent)) {
     LOG_ERROR << "Record event on stream failed.";
   }
   if (!deviceContext->deviceResManager_->WaitEvent(taskIdOnStream, SizeToUint(streamId))) {

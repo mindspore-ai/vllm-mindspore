@@ -70,9 +70,7 @@ class TaskIdOnStreamManager {
     initialized_ = true;
   }
 
-  inline int64_t Query(uint32_t userStreamId, uint32_t memoryStreamId) {
-    return status_[userStreamId][memoryStreamId];
-  }
+  inline int64_t Query(uint32_t userStreamId, uint32_t memoryStreamId) { return status_[userStreamId][memoryStreamId]; }
 
   inline bool Update(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
     if (status_[userStreamId][memoryStreamId] >= taskIdOnStream) {

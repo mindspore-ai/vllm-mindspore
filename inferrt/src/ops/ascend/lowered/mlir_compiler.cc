@@ -147,8 +147,7 @@ bool ExecuteCommand(const std::string &command, std::string *output, int *exitCo
   return true;
 }
 
-bool RunBishengirOpt(const std::string &inputFile, const std::string &outputFile,
-                     const std::string &bishengirOptPath) {
+bool RunBishengirOpt(const std::string &inputFile, const std::string &outputFile, const std::string &bishengirOptPath) {
   // Run bishengir-opt to convert linalg.generic to named operations
   std::ostringstream cmd;
   cmd << bishengirOptPath << " " << inputFile << " --hfusion-convert-generic-to-named" << " -o " << outputFile;
@@ -182,9 +181,9 @@ bool RunBishengirCompile(const std::string &linalgFile, const std::string &outpu
 
   // Run bishengir-compile to generate .so from Linalg IR
   std::ostringstream cmd;
-  cmd << bishengirCompilePath << " " << linalgFile << " --enable-hfusion-compile=true"
-      << " --enable-hivm-compile=true" << " --enable-auto-multi-buffer=true" << " --target=" << socName
-      << " --enable-bin-relocation=false" << " -o " << outputSo;
+  cmd << bishengirCompilePath << " " << linalgFile << " --enable-hfusion-compile=true" << " --enable-hivm-compile=true"
+      << " --enable-auto-multi-buffer=true" << " --target=" << socName << " --enable-bin-relocation=false" << " -o "
+      << outputSo;
 
   LOG_OUT << "Bishengir compile command: " << cmd.str();
 

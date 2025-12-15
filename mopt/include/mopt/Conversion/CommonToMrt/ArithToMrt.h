@@ -31,8 +31,7 @@ namespace mrt {
 
 /// Populate patterns for converting arith.constant to mrt.constant.xxx.
 /// Also sets up the ConversionTarget to mark scalar arith.constant as illegal.
-void populateArithToMrtConversionPatterns(mlir::RewritePatternSet &patterns,
-                                          mlir::TypeConverter &typeConverter,
+void populateArithToMrtConversionPatterns(mlir::RewritePatternSet &patterns, mlir::TypeConverter &typeConverter,
                                           mlir::ConversionTarget &target);
 
 }  // namespace mrt

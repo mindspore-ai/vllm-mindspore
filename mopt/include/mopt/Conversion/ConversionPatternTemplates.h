@@ -81,9 +81,9 @@ struct ConvertOp : public mlir::OpConversionPattern<SrcOp> {
 // Macro overloading based on number of arguments
 #define MOPT_GET_MACRO(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
 
-#define MOPT_CONVERT(...)                                                                     \
-  MOPT_GET_MACRO(__VA_ARGS__, MOPT_CONVERT_5, MOPT_CONVERT_4, MOPT_CONVERT_3, MOPT_CONVERT_2, \
-                 MOPT_CONVERT_1)(__VA_ARGS__)
+#define MOPT_CONVERT(...)                                                                                     \
+  MOPT_GET_MACRO(__VA_ARGS__, MOPT_CONVERT_5, MOPT_CONVERT_4, MOPT_CONVERT_3, MOPT_CONVERT_2, MOPT_CONVERT_1) \
+  (__VA_ARGS__)
 
 }  // namespace mopt
 

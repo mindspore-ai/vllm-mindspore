@@ -185,8 +185,8 @@ class LoweredKernelExecutor {
 
   const KernelSpec *spec_;  // Non-owning pointer to spec
 
-  std::string cacheDir_;           // Cache directory for compiled kernel (for cleanup)
-  bool keepIntermediateFiles_;     // Whether to keep intermediate files for debugging
+  std::string cacheDir_;        // Cache directory for compiled kernel (for cleanup)
+  bool keepIntermediateFiles_;  // Whether to keep intermediate files for debugging
 
   std::unordered_map<std::string, LoweredCacheEntryPtr> cache_;  // Cache by shape+config key
 

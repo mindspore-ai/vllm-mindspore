@@ -26,5 +26,3 @@ inline constexpr const char kOutlinedFusionMlirTextAttr[] = "mrt.outlined_fusion
 }  // namespace mopt
 
 #endif  // MOPT_CONVERSION_STABLEHLO_TO_MRT_OUTLINED_FUSION_CALL_H
-
-

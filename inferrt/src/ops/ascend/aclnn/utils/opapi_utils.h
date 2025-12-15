@@ -29,7 +29,7 @@ namespace mrt {
 namespace ops {
 DA_API int8_t GetCubeMathType();
 
-DA_API bool IsTensorBaseFormat(const ir::TensorPtr& tensor);
+DA_API bool IsTensorBaseFormat(const ir::TensorPtr &tensor);
 
 }  // namespace ops
 }  // namespace mrt

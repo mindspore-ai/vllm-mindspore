@@ -76,22 +76,18 @@ inline void populateMrtTypeMaterializations(mlir::TypeConverter &converter) {
   // Target materialization: builtin types -> MRT types
   // Used when creating new ops that expect MRT types
   converter.addTargetMaterialization(
-      [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs,
-         mlir::Location loc) -> mlir::Value {
-        if (inputs.size() != 1)
-          return {};
-        return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
-      });
+    [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs, mlir::Location loc) -> mlir::Value {
+      if (inputs.size() != 1) return {};
+      return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
+    });
 
   // Source materialization: MRT types -> builtin types
   // Used to maintain compatibility with surrounding code that expects builtin types
   converter.addSourceMaterialization(
-      [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs,
-         mlir::Location loc) -> mlir::Value {
-        if (inputs.size() != 1)
-          return {};
-        return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
-      });
+    [](mlir::OpBuilder &builder, mlir::Type toType, mlir::ValueRange inputs, mlir::Location loc) -> mlir::Value {
+      if (inputs.size() != 1) return {};
+      return builder.create<mlir::UnrealizedConversionCastOp>(loc, toType, inputs).getResult(0);
+    });
 }
 }  // namespace mrt
 
