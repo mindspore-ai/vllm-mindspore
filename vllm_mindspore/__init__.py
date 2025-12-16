@@ -21,7 +21,7 @@ import os
 import vllm_mindspore.envs as env
 
 
-if not env.VLLM_MS_HIYBRID_MODE:
+if not env.HIYBRID_MODE:
     import msadapter
     import vllm_mindspore.apply_patch.msadapter_patch
     import vllm_mindspore.apply_patch.ray_patch

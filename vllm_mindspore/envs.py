@@ -19,12 +19,12 @@ import os
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
-    VLLM_MS_HIYBRID_MODE: Optional[int] = None
+    HYBRID_MODE: Optional[int] = None
 
 
 environment_variables: dict[str, Callable[[], Any]] = {
-    "VLLM_MS_HIYBRID_MODE":
-    lambda: bool(int(os.getenv('VLLM_MS_HIYBRID_MODE', '0'))),
+    "HYBRID_MODE":
+    lambda: bool(int(os.getenv('HYBRID_MODE', '0'))),
 }
 
 

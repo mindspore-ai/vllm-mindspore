@@ -190,11 +190,11 @@ class MsModelAdapter(NativeModel):
 
     def __call__(
         self,
-        input_ids: Tensor,
-        positions: Tensor,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
         intermediate_tensors: Optional[IntermediateTensors] = None,
-        inputs_embeds: Optional[Tensor] = None,
-        previous_hidden_states: Optional[Tensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        previous_hidden_states: Optional[torch.Tensor] = None,
         spec_step_idx: int = 0,
         **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:

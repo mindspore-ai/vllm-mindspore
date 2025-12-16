@@ -25,7 +25,7 @@ logger = init_logger(__name__)
 
 
 def register_models():
-    if not env.VLLM_MS_HIYBRID_MODE:
+    if not env.HYBRID_MODE:
         return
 
     init_env()

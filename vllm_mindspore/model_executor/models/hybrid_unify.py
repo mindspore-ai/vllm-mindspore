@@ -26,7 +26,7 @@ import mindspore as ms
 
 import vllm_mindspore.envs as env
 
-if not env.VLLM_MS_HIYBRID_MODE:
+if not env.HYBRID_MODE:
     from vllm_mindspore.model_executor.models.model_base import NativeModel
     UnifiedNativeModel = NativeModel
 else:

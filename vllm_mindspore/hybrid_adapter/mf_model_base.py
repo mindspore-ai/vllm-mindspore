@@ -14,11 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import copy
 from collections.abc import Iterable
 from typing import Optional, Union
+import numpy as np
+
+import torch
+import torch_npu
 
 import mindspore as ms
-import numpy as np
+from mindspore import context
+from mindspore.communication.management import get_group_size, get_rank
+
+from mindformers.tools.utils import set_strategy_save_path
 from mindformers import AutoModel, PreTrainedModel
 from mindformers.core.context import build_mf_context, build_parallel_context
 from mindspore import Tensor, mutable, ops
@@ -30,34 +38,71 @@ from vllm.forward_context import get_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.sequence import IntermediateTensors
+from vllm.distributed.parallel_state import get_world_group
 
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask, MLALowerTriangularMask)
 from vllm_mindspore.model_executor.models.mf_models.config import gen_mf_config
 from vllm_mindspore.model_executor.models.model_base import (
-    AttentionWrapper, MLAAttentionWrapper, MsModelBase)
+    MsModelBase)
 from vllm_mindspore.model_executor.models.utils import (
     convert_pin, is_use_ringmla, make_empty_intermediate_tensors_factory)
 from vllm_mindspore.utils import is_310p
+
 import vllm_mindspore.envs as env
+from vllm_mindspore.hybrid_adapter.model_base import (
+    AttentionWrapper, MLAAttentionWrapper)
+from vllm_mindspore.hybrid_adapter.tensor_convert import (tensor_torch2ms,
+    tensor_ms2torch, get_ms_dtype)
+from vllm_mindspore.hybrid_adapter.utils import init_ms_distributed_no_group
+
 
 logger = init_logger(__name__)
 
 
-if not env.HYBRID_MODE:
-    MindFormersForCausalLM = _MindFormersForCausalLM
-else:
-    from vllm_mindspore.hybrid_adapter.mf_model_base import (
-        _MindFormersForCausalLM_V2)
-    MindFormersForCausalLM = _MindFormersForCausalLM_V2
-
-
-class _MindFormersForCausalLM(MsModelBase, SupportsPP):
+class _MindFormersForCausalLM_V2(MsModelBase, SupportsPP):
     _set_launch_group = False
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
-        super().__init__(vllm_config=vllm_config, prefix=prefix)
+        ##########super().__init__
+        config = vllm_config.model_config.hf_config
+        lora_config = vllm_config.lora_config
+
+        self.config = config
         self.model_config = vllm_config.model_config
+        self.lora_config = lora_config
+        self.cache_config = vllm_config.cache_config
+        self.parallel_config = vllm_config.parallel_config
+        self.load_config = vllm_config.load_config
+        self.scheduler_config = vllm_config.scheduler_config
+
+        # aclgraph need construct block table with real input
+        # here must know max_model_len and block_size
+        # for speculative infer, this value need update
+        self.block_size = self.cache_config.block_size
+        self.max_model_len = vllm_config.model_config.max_model_len
+        self.max_block_num = int(self.max_model_len / self.block_size)
+
+        self.modules_dict: Optional[dict[str, nn.Cell]] = None
+
+        self.enable_chunked_prefill = (
+            vllm_config.scheduler_config.enable_chunked_prefill)
+        self.enable_prefix_caching = (
+            vllm_config.cache_config.enable_prefix_caching)
+        self.num_layers = self.model_config.get_num_layers(
+            self.parallel_config)
+
+        self.use_ringmla: bool = False
+        self.has_prefill_warmup: bool = False
+        self.has_chunked_warmup: bool = not self.use_ringmla
+        self.kv_caches: list[Any] = []
+        self.casual_mask = LowerTriangularMask(
+            dtype=get_ms_dtype(self.model_config.dtype),
+            max_model_len=self.model_config.max_model_len)
+        self.model: Optional[nn.Cell] = None
+        self.lm_head: Optional[nn.Cell] = None
+        ##########super().__init__
+
         self.lm_head_graph = None
         self.is_eager_mode = vllm_config.model_config.enforce_eager
 
@@ -75,7 +120,9 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
 
         build_mf_context(self.mf_config)
         mf_par_ctx = build_parallel_context(self.mf_config)
-        mf_par_ctx.init_communication()
+        # mf_par_ctx.init_communication()
+        self._ms_init_communication(mf_par_ctx)
+
         if self.mla_config and not self.enable_aclgraph:
             self._set_runtime_kernel_launch_group()
 
@@ -122,6 +169,25 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
                 hidden_size=self.model_config.hf_config.hidden_size)
 
         self.cast = ops.Cast()
+    
+        # add local ms kv-cache
+        self.ms_key_caches = []
+        self.ms_value_caches = []
+        self.ms_rope_caches = []
+
+    def _ms_init_communication(self, mf_par_ctx):
+        rank = torch.distributed.get_rank()
+        local_rank = get_world_group().local_rank
+        init_ms_distributed_no_group(self.parallel_config, rank, local_rank)
+
+        device_num = get_group_size()
+        mf_par_ctx.parallel_ctx['device_num'] = device_num
+        context.reset_auto_parallel_context()
+        set_strategy_save_path(mf_par_ctx.parallel_ctx)
+        mf_par_ctx._set_ms_auto_parallel_context(**mf_par_ctx.parallel_ctx)
+        mf_par_ctx._set_ms_parallel()
+        mf_par_ctx._set_manmul_parallel()
+        return
 
     def _set_dynamic_inputs(self):
         self.network.set_dynamic_inputs()
@@ -145,28 +211,61 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
             return [wrapper_func(fa3_quant=True, kv_cache_dtype=ms.int8) \
                     if self.fa3_quant and i in self.fa3_quant_layer \
                     else wrapper_func(fa3_quant=True,
-                                      kv_cache_dtype=self.model_config.dtype) \
+                                      kv_cache_dtype=get_ms_dtype(self.model_config.dtype)) \
                         for i in range(self.num_layers)]
         else:
             return [wrapper_func() for _ in range(self.num_layers)]
 
+    def _get_kvcache(self):
+        if self.ms_key_caches and self.ms_value_caches:
+            return mutable(self.ms_key_caches), mutable(self.ms_value_caches)
+
+        key_cache = []
+        value_cache = []
+        forward_context = get_forward_context()
+        for i in range(self.num_layers):
+            k_cache = self.kv_caches[i].kv_cache[
+                forward_context.virtual_engine][0]
+            v_cache = self.kv_caches[i].kv_cache[
+                forward_context.virtual_engine][1]
+            key_cache.append(tensor_torch2ms(k_cache))
+            value_cache.append(tensor_torch2ms(v_cache))
+
+        if not self.has_prefill_warmup:
+            return mutable(key_cache), mutable(value_cache)
+        else:
+            self.ms_key_caches = key_cache
+            self.ms_value_caches = value_cache
+            return mutable(self.ms_key_caches), mutable(self.ms_value_caches)
+
+    def _get_mla_kvcache(self):
+        if len(self.ms_key_caches) == 0:
+            key_cache = []
+            rope_cache = []
+            forward_context = get_forward_context()
+            for i in range(self.num_layers):
+                k_cache = self.kv_caches[i].kv_cache[
+                    forward_context.virtual_engine][0]
+                key_cache.append(tensor_torch2ms(k_cache))
+                if self.use_ringmla:
+                    r_cache = self.kv_caches[i].kv_cache[
+                        forward_context.virtual_engine][1]
+                    rope_cache.append(tensor_torch2ms(r_cache))  
+
+            if self.has_prefill_warmup:
+                self.ms_key_caches = key_cache
+                self.ms_rope_caches = rope_cache
+        
+        if not self.use_ringmla:
+            return mutable(self.ms_key_caches), None
+        # deepseek mla op need key cache and rope cache
+        return mutable(self.ms_key_caches), mutable(self.ms_rope_caches)
+
     def get_kvcache(self):
         if not self.mla_config:
-            return super().get_kvcache()
-
-        forward_context = get_forward_context()
-        key_cache = [
-            self.kv_caches[i].kv_cache[forward_context.virtual_engine][0]
-            for i in range(self.num_layers)
-        ]
-        if not self.use_ringmla:
-            return mutable(key_cache), None
-        # deepseek mla op need key cache and rope cache
-        rope_cache = [
-            self.kv_caches[i].kv_cache[forward_context.virtual_engine][1]
-            for i in range(self.num_layers)
-        ]
-        return mutable(key_cache), mutable(rope_cache)
+            return self._get_kvcache()
+        
+        return self._get_mla_kvcache()
 
     def _get_padding_index(self, q_seq_len):
         """
@@ -280,32 +379,31 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         return model_inputs
 
     def prepare_inputs(self, input_ids, positions):
-
+        is_warm_up = False
         attn_metadata = get_forward_context().attn_metadata
-        # 0.9.1 attn_metadata[layer_name], don't have layer_name here
-        # so we just take one by default
-        if isinstance(attn_metadata, dict) and '1' in attn_metadata:
-            attn_metadata = attn_metadata['1']
-
         if attn_metadata is None:
-            # To enable dummy_run in chunked scenarios, set q_seq_lens_np
-            # to be greater than 1.
-            if self.has_prefill_warmup and not self.has_chunked_warmup:
-                input_ids = ms.ops.cat((input_ids, input_ids))
-                positions = ms.ops.cat((positions, ms.tensor([1])))
-
+            is_warm_up = True
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
+        elif isinstance(attn_metadata, dict) and '1' in attn_metadata:
+            attn_metadata = attn_metadata['1']
 
         key_cache, value_cache = self.get_kvcache()
 
-        is_prefill = attn_metadata.max_context_lens == 0
+        # only for V1
+        if is_warm_up is True:
+            is_prefill = attn_metadata.max_context_lens == 0
+            query_lens_np = attn_metadata.q_seq_lens_np
+            seq_lens_np = attn_metadata.seq_lens_np
+        else:
+            is_prefill = attn_metadata.attn_state == 0  # PrefillNoCache
+            query_lens_np = attn_metadata.query_lens.cpu().numpy()
+            seq_lens_np = attn_metadata.seq_lens.cpu().numpy()
+
         is_ringmla_chunked = \
             self.use_ringmla and not is_prefill and \
-            bool(attn_metadata.q_seq_lens_np.max() > 1)
-        query_lens_np = attn_metadata.q_seq_lens_np
-        seq_lens_np = attn_metadata.seq_lens_np
-        context_lens_tensor = attn_metadata.context_lens
+            bool(query_lens_np.max() > 1)
+        context_lens_tensor = tensor_torch2ms(attn_metadata.seq_lens)
 
         q_seq_lens = ms.Tensor(query_lens_np, dtype=ms.int32)
         position_ids = ms.Tensor(positions, dtype=ms.int32)
@@ -316,8 +414,10 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         model_inputs["input_ids"] = convert_pin(input_ids.astype(ms.int32))
         model_inputs["batch_valid_length"] = convert_pin(
             ms.from_numpy(seq_lens_np))
-        model_inputs["block_tables"] = convert_pin(attn_metadata.block_tables)
-        model_inputs["slot_mapping"] = convert_pin(attn_metadata.slot_mapping)
+        model_inputs["block_tables"] = convert_pin(tensor_torch2ms(
+                                           attn_metadata.block_tables))
+        model_inputs["slot_mapping"] = convert_pin(tensor_torch2ms(
+                                           attn_metadata.slot_mapping))
         model_inputs["positions"] = convert_pin(position_ids)
         model_inputs["q_seq_lens"] = convert_pin(q_seq_lens)
         model_inputs["attention_mask"] = convert_pin(attention_mask)
@@ -393,6 +493,7 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         else:
             hidden_states = self.network(**model_inputs)
 
+        hidden_states = tensor_ms2torch(hidden_states)
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})
         return hidden_states
@@ -428,6 +529,7 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         self,
         hidden_states: Tensor,
     ) -> Optional[Tensor]:
+        hidden_states = tensor_torch2ms(hidden_states)
         if is_310p():
             # To get better performance in 310p, the lm head should run
             # in O0 mode to avoid transdata, 910 keep the original process.
@@ -438,6 +540,7 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         else:
             logits = self.lm_head(hidden_states)
         logits = logits.view(-1, logits.shape[-1])
+        logits = tensor_ms2torch(logits)
         return logits
 
     def capture_start_time(self, weights: Iterable[tuple[str, Tensor]]):
@@ -451,3 +554,27 @@ class _MindFormersForCausalLM(MsModelBase, SupportsPP):
         self.capture_start_time(weights)
         self.network.load_weights(self.mf_config.load_checkpoint)
         return None
+
+    def __call__(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        intermediate_tensors: Optional[IntermediateTensors] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        previous_hidden_states: Optional[torch.Tensor] = None,
+        spec_step_idx: int = 0,
+        **kwargs,
+    ) -> Union[Tensor, IntermediateTensors]:
+        # convert to ms tensor
+        input_ids = tensor_torch2ms(input_ids)
+        positions = tensor_torch2ms(positions)
+        inputs_embeds = tensor_torch2ms(inputs_embeds)
+        previous_hidden_states = tensor_torch2ms(previous_hidden_states)
+
+        return self.forward(input_ids,
+                            positions,
+                            intermediate_tensors,
+                            inputs_embeds,
+                            previous_hidden_states=previous_hidden_states,
+                            spec_step_idx=spec_step_idx,
+                            **kwargs)

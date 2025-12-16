@@ -129,3 +129,18 @@ def init_ms_distributed(parallel_config, rank, local_rank):
     ms.communication.init("hccl")
     # After distributed job is initialized, reuse hccl comms for MindSpore.
     reuse_hccl_comm()
+
+
+def init_ms_distributed_no_group(parallel_config, rank, local_rank):
+    world_size = torch.distributed.get_world_size()
+    origin_dist_init_method = torch.distributed.distributed_c10d._default_pg_init_method
+    if origin_dist_init_method is None or origin_dist_init_method == "env://":
+        ip = os.getenv("MASTER_ADDR")
+        port = os.getenv("MASTER_PORT")
+        if ip is None or port is None:
+            raise RuntimeError("Cannot get ip and port.")
+        origin_dist_init_method = f"tcp://[{ip}]:{port}" if ":" in ip else f"tcp://{ip}:{port}"
+    dist_init_method = get_ms_dist_init_method(origin_dist_init_method)
+    set_ms_parallel_env(rank, local_rank, world_size, dist_init_method)
+
+    ms.communication.init("hccl")
