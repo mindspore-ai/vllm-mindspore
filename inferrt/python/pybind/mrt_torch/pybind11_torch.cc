@@ -182,6 +182,9 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
+  if (tensor->Numel() == 0) {
+    return at::empty({}, options);
+  }
 
   switch (atDevice.type()) {
     case at::DeviceType::CPU:

@@ -104,6 +104,11 @@ class Tensor : public RefCounted {
    */
   void SetStrides(const std::vector<int64_t> &strides) { strides_ = strides; }
   /**
+   * @brief Checks if the tensor is contiguous in memory.
+   * @return true if the tensor is contiguous, false otherwise.
+   */
+  bool IsContiguous() const;
+  /**
    * @brief Gets the number of dimensions of the tensor.
    * @return The number of dimensions.
    */

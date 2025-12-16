@@ -88,6 +88,21 @@ void Tensor::ComputeStrides() {
   }
 }
 
+bool Tensor::IsContiguous() const {
+  if (shape_.size() != strides_.size()) {
+    return false;
+  }
+  int64_t cumulatedStride = 1;
+  int64_t shapeLen = static_cast<int64_t>(shape_.size());
+  for (int64_t i = shapeLen - 1; i >= 0; --i) {
+    if (strides_[i] != cumulatedStride) {
+      return false;
+    }
+    cumulatedStride *= shape_[i];
+  }
+  return true;
+}
+
 Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Device device)
     : dtype_(dtype), shape_(shape) {
   ComputeStrides();

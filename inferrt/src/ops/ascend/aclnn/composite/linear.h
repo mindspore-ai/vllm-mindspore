@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_ASCEND_ACLNN_ACLNN_LINEAR_H__
-#define __OPS_ASCEND_ACLNN_ACLNN_LINEAR_H__
+#ifndef __OPS_ASCEND_ACLNN_COMPOSITE_LINEAR_H__
+#define __OPS_ASCEND_ACLNN_COMPOSITE_LINEAR_H__
 
 #include "ops/operator.h"
 #include "ops/ascend/aclnn/utils/aclnn_executor.h"
@@ -90,4 +90,4 @@ class AclnnLinear : public Operator {
 }  // namespace ops
 }  // namespace mrt
 
-#endif  // __OPS_ASCEND_ACLNN_ACLNN_LINEAR_H__
+#endif  // __OPS_ASCEND_ACLNN_COMPOSITE_LINEAR_H__

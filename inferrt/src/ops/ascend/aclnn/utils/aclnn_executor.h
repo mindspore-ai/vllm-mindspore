@@ -74,12 +74,12 @@ class AclnnExecutor {
       RunOpApi(workspace, workspaceSize, cacheEntry_->GetExecutor(), stream);
       return;
     }
-
+    // For the opExecutor that can not be cached, we don't need release it, because the second stage interface
+    // automatically release the opExecutor.
     uint64_t workspaceSizeTmp = 0;
     auto [convertedParams, opExecutor] = GenerateOpExecutor(&workspaceSizeTmp, args...);
     RunOpApi(workspace, workspaceSize, opExecutor, stream);
     ReleaseConvertedParams(convertedParams);
-    ReleaseExecutor(opExecutor);
   }
 
   template <typename... Args>
