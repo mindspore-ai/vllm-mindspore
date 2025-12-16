@@ -16,9 +16,7 @@ install(TARGETS kernel
 
 add_subdirectory(op_base)
 
-if(ENABLE_TORCH_FRONT)
-    add_subdirectory(cpu/aten)
-endif()
+add_subdirectory(cpu)
 
 if(ENABLE_ASCEND)
     add_subdirectory(ascend)

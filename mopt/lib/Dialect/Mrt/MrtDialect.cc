@@ -212,6 +212,22 @@ llvm::LogicalResult BindSymbolicShapeOp::verify() {
 
   return llvm::success();
 }
+
+//===----------------------------------------------------------------------===//
+// EvalSymbolicExprOp
+//===----------------------------------------------------------------------===//
+
+llvm::LogicalResult EvalSymbolicExprOp::verify() {
+  auto affineMap = getExpr().getValue();
+  if (affineMap.getNumSymbols() != getOperands().size()) {
+    return emitOpError() << "number of operands (" << getOperands().size()
+                         << ") must match number of symbols in affine map (" << affineMap.getNumSymbols() << ")";
+  }
+  if (affineMap.getNumResults() != 1) {
+    return emitOpError() << "affine map must have exactly one result";
+  }
+  return llvm::success();
+}
 }  // namespace mrt
 
 void mrt::MrtDialect::initialize() {

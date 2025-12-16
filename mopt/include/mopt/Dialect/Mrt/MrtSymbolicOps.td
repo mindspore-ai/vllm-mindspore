@@ -67,4 +67,30 @@ def Mrt_BindSymbolicShapeOp : Mrt_Op<"bind_symbolic_shape"> {
   let hasVerifier = 1;
 }
 
+def Mrt_EvalSymbolicExprOp : Mrt_Op<"eval_symbolic_expr", [Pure]> {
+  let summary = "Evaluates a symbolic integer expression defined by an affine map";
+  let description = [{
+    The `mrt.eval_symbolic_expr` operation evaluates an integer expression defined
+    by an affine map applied to its input operands. This can be used to fuse
+    sequences of integer arithmetic operations into a single symbolic expression.
+
+    Example:
+    ```
+    // Computes: ((a + b) - c) floordiv d
+    %0 = mrt.eval_symbolic_expr [%a, %b, %c, %d], affine_map<()[s0, s1, s2, s3] -> ((s0 + s1) - s2) floordiv s3> : !mrt.i64
+    ```
+  }];
+  let arguments = (ins
+    Variadic<Mrt_I64Type>:$operands,
+    Builtin_AffineMapAttr:$expr
+  );
+  let results = (outs
+    Mrt_I64Type:$result
+  );
+  let assemblyFormat = [{
+    ` ` `[` $operands `]` `,` $expr attr-dict `:` type($result)
+  }];
+  let hasVerifier = 1;
+}
+
 #endif // MOPT_DIALECT_MRT_MRTSYMBOLICOPS
