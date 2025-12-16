@@ -87,3 +87,8 @@ Pattern ConvertAtenSplitWithSizes {
   let root = op<torch.aten.split_with_sizes>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.split_with_size>(convertValues(operands)) -> (convertType(resType));
 }
+
+Pattern ConvertAtenUnsqueeze {
+  let root = op<torch.aten.unsqueeze>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.unsqueeze>(convertValues(operands)) -> (convertType(resType));
+}
