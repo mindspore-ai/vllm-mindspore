@@ -281,6 +281,7 @@ class MRotaryEmbedding(RotaryEmbedding):
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(
         self,
@@ -308,8 +309,8 @@ class MRotaryEmbedding(RotaryEmbedding):
         cos_sin = self.cos_sin_cache[positions]
         cos, sin = ops.chunk(cos_sin, 2, axis=-1)
         if positions.ndim == 2:
-            cos_l = mint.split(cos, self.mrope_section, dim=-1)
-            sin_l = mint.split(sin, self.mrope_section, dim=-1)
+            cos_l = self.split(cos, self.mrope_section, dim=-1)
+            sin_l = self.split(sin, self.mrope_section, dim=-1)
             cos, sin = (), ()
             for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
                 cos += (cos_l[i][i], )
@@ -529,6 +530,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(  # type: ignore[override]
         self,
@@ -553,8 +555,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
             sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
             if positions.ndim == 2:
-                cos_l = mint.split(cos, self.mrope_section, dim=-1)
-                sin_l = mint.split(sin, self.mrope_section, dim=-1)
+                cos_l = self.split(cos, self.mrope_section, dim=-1)
+                sin_l = self.split(sin, self.mrope_section, dim=-1)
                 cos, sin = (), ()
                 for i in range(len(
                         self.mrope_section)):  # type: ignore[arg-type]
@@ -589,8 +591,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
             cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
             sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
-            cos_l = mint.split(cos, self.mrope_section, dim=-1)
-            sin_l = mint.split(sin, self.mrope_section, dim=-1)
+            cos_l = self.split(cos, self.mrope_section, dim=-1)
+            sin_l = self.split(sin, self.mrope_section, dim=-1)
             cos, sin = (), ()
             for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
                 cos_l_select = mint.index_select(cos_l[i], 0,

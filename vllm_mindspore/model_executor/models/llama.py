@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 else:
     LlamaConfig = None
 
-from mindspore import Tensor, mint, nn
+from mindspore import Tensor, nn, ops
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
 from vllm.model_executor.models.interfaces import SupportsPP
 from vllm.model_executor.sampling_metadata import SamplingMetadata
@@ -208,6 +208,7 @@ class LlamaAttention(nn.Cell):
             per_layer_sliding_window=sliding_window,
             prefix=f"{prefix}.attn",
         )
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(
         self,
@@ -222,7 +223,7 @@ class LlamaAttention(nn.Cell):
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
-        q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
+        q, k, v = self.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
         q, k = self.rotary_emb(positions, q, k, batch_valid_length)
         attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,

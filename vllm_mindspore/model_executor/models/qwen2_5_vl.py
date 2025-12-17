@@ -706,6 +706,7 @@ class Qwen2_5_VisionAttention(nn.Cell):
                                       params_dtype=ms.bfloat16)
         self.tensor_model_parallel_all_gather = \
             AllGatherFromModelParallelRegion()
+        self.split = ops.auto_generate.SplitWithSize()
 
     def split_tensor_along_last_dim(
         self,
@@ -729,7 +730,7 @@ class Qwen2_5_VisionAttention(nn.Cell):
         last_dim_size = dist_utils.divide(tensor.shape[last_dim],
                                           num_partitions)
         # Split.
-        tensor_list = mint.split(tensor, last_dim_size, dim=last_dim)
+        tensor_list = self.split(tensor, last_dim_size, dim=last_dim)
         # NOTE: torch.split does not create contiguous tensors by default.
 
         return tensor_list
@@ -755,7 +756,7 @@ class Qwen2_5_VisionAttention(nn.Cell):
     ) -> ms.Tensor:
         seq_length = x.shape[0]
         qkv, _ = self.qkv(x)
-        q, k, v = mint.split(
+        q, k, v = self.split(
             qkv, (self.num_attention_heads_per_partition * self.head_dim,
                   self.num_attention_heads_per_partition * self.head_dim,
                   self.num_attention_heads_per_partition * self.head_dim), -1)
