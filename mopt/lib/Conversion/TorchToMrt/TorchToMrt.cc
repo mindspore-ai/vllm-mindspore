@@ -16,6 +16,8 @@
 
 #include "mopt/Conversion/TorchToMrt/TorchToMrt.h"
 
+#include <algorithm>
+#include <iterator>
 #include <numeric>
 
 #include "mlir/IR/PatternMatch.h"
@@ -50,7 +52,13 @@ void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter) {
   converter.addConversion([](TorchD::ValueTensorType type) -> mlir::Type {
     auto optionalSizes = type.getOptionalSizes();
     if (optionalSizes.has_value()) {
-      return mrt::TensorType::get(type.getContext(), optionalSizes.value(), type.getOptionalDtype(), nullptr);
+      // Normalize dynamic dims: Torch uses -1 / kUnknownSize, MRT uses ShapedType::kDynamic
+      llvm::SmallVector<int64_t> shape;
+      auto sizes = optionalSizes.value();
+      shape.reserve(sizes.size());
+      std::transform(sizes.begin(), sizes.end(), std::back_inserter(shape),
+                     [](int64_t dim) { return dim < 0 ? mlir::ShapedType::kDynamic : dim; });
+      return mrt::TensorType::get(type.getContext(), shape, type.getOptionalDtype(), nullptr);
     } else {
       return mrt::TensorType::get(type.getContext(), std::nullopt, type.getOptionalDtype(), nullptr);
     }
@@ -65,6 +73,9 @@ void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter) {
   converter.addConversion(
     [](TorchD::StringType type) -> mlir::Type { return mrt::StringType::get(type.getContext()); });
 
+  converter.addConversion(
+    [](TorchD::DeviceType type) -> mlir::Type { return mrt::StringType::get(type.getContext()); });
+
   converter.addConversion([](TorchD::NoneType type) -> mlir::Type { return mrt::NoneType::get(type.getContext()); });
 
   converter.addConversion([&](TorchD::ListType type) -> mlir::Type {
@@ -78,6 +89,7 @@ class TorchToMrtTypeConverter : public mlir::TypeConverter {
   TorchToMrtTypeConverter() {
     addConversion([](mlir::Type type) { return type; });
     mrt::populateMrtTypeConversions(*this);
+    mrt::populateMrtTypeMaterializations(*this);
     populateTorchToMrtTypeConversions(*this);
   }
 };
@@ -125,6 +137,7 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     mlir::ConversionTarget target(*ctx);
     target.addIllegalDialect<TorchD::TorchDialect>();
     target.addLegalDialect<mrt::MrtDialect>();
+    target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
       [&](mlir::func::FuncOp op) { return converter_.isSignatureLegal(op.getFunctionType()); });
     target.addDynamicallyLegalOp<mlir::func::ReturnOp>(

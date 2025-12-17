@@ -126,3 +126,26 @@ Torch-MLIR 默认从 `externals/stablehlo` 目录构建 StableHLO。但在某些
 ## 应用顺序
 
 这些补丁应按数字顺序应用（001 → 002 → ...）。
+
+### 007-disable-folding-aten-ops.patch
+
+**描述：**
+禁用一组 `aten` 常量折叠算子，确保 MRT 后端接收完整算子而不是被折叠成常量 tensor。
+
+**当前禁用的算子（后续可按需扩展）：**
+
+- `aten.zeros`
+
+**问题：**
+Torch-MLIR 默认会在形状、dtype 全确定时将这些算子折叠为 `DenseElementsAttr` 常量，这会绕过 MRT 后端对相关算子的处理，导致后端无法获取期望的设备与算子信息。
+
+**解决方案：**
+
+- 针对列表中的算子，移除对应的 `hasFolder` 声明
+- 删除其 `fold` 实现，避免在编译期折叠为常量
+- 让 MRT 后端直接接收原始算子
+
+**修改的文件：**
+
+- `include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td`
+- `lib/Dialect/Torch/IR/TorchOps.cpp`
