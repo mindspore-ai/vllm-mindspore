@@ -364,6 +364,27 @@ def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
   let genAclnnOp = "aclnnEqTensor";
 }
 
+def Mrt_ExpandOp : Mrt_Op<"expand", [Pure]> {
+  let summary = "expand operation";
+  let description = [{
+    Expands the input tensor 'self' to the given 'size' by broadcasting.
+    The output tensor will have the specified shape.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64ArrayType:$size
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $size attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnExpand";
+}
+
 def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
   let summary = "flatten operation";
   let description = [{
@@ -961,7 +982,9 @@ def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
 def Mrt_ReduceSumOp : Mrt_Op<"reduce_sum", [Pure]> {
   let summary = "Sum operation";
   let description = [{
-    Computes the sum of tensor elements along specified dimensions. The boolean parameter controls whether to keep dimensions, and the optional dtype parameter specifies the output data type.
+    Computes the sum of tensor elements along specified dimensions.
+    The boolean parameter controls whether to keep dimensions,
+    and the optional dtype parameter specifies the output data type.
   }];
 
   let arguments = (ins
@@ -1105,6 +1128,26 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSigmoid";
+}
+
+def Mrt_SizeOp : Mrt_Op<"size", [Pure]> {
+  let summary = "Get the size of a tensor dimension";
+  let description = [{
+    Returns the size of the specified dimension of the input tensor.
+    Takes two operands: input tensor and dimension index.
+    Returns a scalar tensor of type I64.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs Mrt_I64Type:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SliceOp : Mrt_Op<"slice", [Pure]> {
