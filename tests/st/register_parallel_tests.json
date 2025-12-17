@@ -25,6 +25,10 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/models/qwen2_5/test_vllm_mf_qwen_7b_v1.py::test_mf_qwen_aclgraph",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/models/qwen2_5/test_vllm_qwen_7b_v1.py::test_vllm_qwen",
       "card_num": 2
     },
@@ -45,7 +49,15 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/models/deepseek/offline/test_vllm_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16_aclgraph",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/models/deepseek/offline/test_vllm_deepseek_part_v1.py::test_deepseek_r1",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/deepseek/offline/test_vllm_deepseek_part_v1.py::test_deepseek_r1_aclgraph",
       "card_num": 2
     },
     {
@@ -122,6 +134,10 @@
     },
     {
       "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_v1.py::test_qwen3_vl_8b_v1",
+      "card_num": 2
+    },
+    {
+      "test_node_id": "st/models/qwen3_vl/test_vllm_qwen3_vl_v1.py::test_qwen3_vl_8b_v1_aclgraph",
       "card_num": 2
     },
     {
