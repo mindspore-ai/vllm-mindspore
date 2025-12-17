@@ -34,7 +34,83 @@ namespace TorchD = mlir::torch::Torch;
 
 //===----------------------------------------------------------------------===//
 // Custom conversion patterns
+// (the pattern list should be alphabetically sorted)
 //===----------------------------------------------------------------------===//
+
+struct ConvertAtenDivTensorMode : public OpConversionPattern<TorchD::AtenDivTensorModeOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenDivTensorModeOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+
+    std::string roundingMode;
+    if (!matchPattern(op.getRoundingMode(), TorchD::m_TorchConstantStr(roundingMode)))
+      return rewriter.notifyMatchFailure(op, "rounding_mode must be a constant string");
+
+    int64_t mode = 0;
+    if (roundingMode == "floor") {
+      mode = 2;
+    } else if (roundingMode == "trunc") {
+      mode = 1;
+    }
+
+    auto modeValue = rewriter.create<mrt::CreateI64Op>(op.getLoc(), mode);
+    rewriter.replaceOpWithNewOp<mrt::DivModOp>(op, outType, adaptor.getSelf(), adaptor.getOther(), modeValue);
+    return success();
+  }
+};
+
+struct ConvertAtenSumDimIntList : public OpConversionPattern<TorchD::AtenSumDimIntListOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenSumDimIntListOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value self = adaptor.getSelf();
+
+    auto inType = cast<mrt::TensorType>(self.getType());
+
+    // convert dim to i64 array if dim is none or empty list
+    Value dimsValue = adaptor.getDim();
+    bool reduceAll = false;
+    if (isa<mrt::NoneType>(dimsValue.getType())) {
+      reduceAll = true;
+    } else if (auto makeList = dimsValue.getDefiningOp<mrt::MakeListOp>()) {
+      if (makeList.getElements().empty()) {
+        reduceAll = true;
+      }
+    }
+    if (reduceAll) {
+      int64_t inputRank = inType.getRank();
+      llvm::SmallVector<int64_t, 4> dims(inputRank);
+      std::iota(dims.begin(), dims.end(), 0);
+      dimsValue = rewriter.create<mrt::CreateI64ArrayOp>(loc, dims);
+    }
+
+    Value keepdim = adaptor.getKeepdim();
+
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+    Value dtypeValue = rewriter.create<mrt::CreateDtypeOp>(loc, outType.getElementType());
+
+    rewriter.replaceOpWithNewOp<mrt::ReduceSumOp>(op, outType, self, dimsValue, keepdim, dtypeValue);
+    return success();
+  }
+};
+
+struct ConvertAtenToDtype : public OpConversionPattern<TorchD::AtenToDtypeOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenToDtypeOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Value self = adaptor.getSelf();
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+
+    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(op.getLoc(), outType.getElementType());
+    rewriter.replaceOpWithNewOp<mrt::CastOp>(op, outType, self, dtypeValue);
+    return success();
+  }
+};
 
 struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTransposeIntOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -69,44 +145,6 @@ struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTranspos
   }
 };
 
-struct ConvertAtenToDtype : public OpConversionPattern<TorchD::AtenToDtypeOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(TorchD::AtenToDtypeOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    Value self = adaptor.getSelf();
-    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
-
-    auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(op.getLoc(), outType.getElementType());
-    rewriter.replaceOpWithNewOp<mrt::CastOp>(op, outType, self, dtypeValue);
-    return success();
-  }
-};
-
-struct ConvertAtenDivTensorMode : public OpConversionPattern<TorchD::AtenDivTensorModeOp> {
-  using OpConversionPattern::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(TorchD::AtenDivTensorModeOp op, OpAdaptor adaptor,
-                                ConversionPatternRewriter &rewriter) const override {
-    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
-
-    std::string roundingMode;
-    if (!matchPattern(op.getRoundingMode(), TorchD::m_TorchConstantStr(roundingMode)))
-      return rewriter.notifyMatchFailure(op, "rounding_mode must be a constant string");
-
-    int64_t mode = 0;
-    if (roundingMode == "floor") {
-      mode = 2;
-    } else if (roundingMode == "trunc") {
-      mode = 1;
-    }
-
-    auto modeValue = rewriter.create<mrt::CreateI64Op>(op.getLoc(), mode);
-    rewriter.replaceOpWithNewOp<mrt::DivModOp>(op, outType, adaptor.getSelf(), adaptor.getOther(), modeValue);
-    return success();
-  }
-};
-
 //===----------------------------------------------------------------------===//
 // Pattern population
 //===----------------------------------------------------------------------===//
@@ -114,8 +152,8 @@ struct ConvertAtenDivTensorMode : public OpConversionPattern<TorchD::AtenDivTens
 // Populate custom (hand-written) Aten ops to MRT conversion patterns
 static void populateAtenToMrtCustomPatterns(TypeConverter &converter, RewritePatternSet &patterns) {
   MLIRContext *context = patterns.getContext();
-
   patterns.add<ConvertAtenDivTensorMode>(converter, context);
+  patterns.add<ConvertAtenSumDimIntList>(converter, context);
   patterns.add<ConvertAtenToDtype>(converter, context);
   patterns.add<ConvertAtenTransposeInt>(converter, context);
 }

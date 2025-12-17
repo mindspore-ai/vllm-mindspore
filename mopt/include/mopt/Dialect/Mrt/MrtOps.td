@@ -899,6 +899,29 @@ def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
   }];
 }
 
+def Mrt_ReduceSumOp : Mrt_Op<"reduce_sum", [Pure]> {
+  let summary = "Sum operation";
+  let description = [{
+    Computes the sum of tensor elements along specified dimensions. The boolean parameter controls whether to keep dimensions, and the optional dtype parameter specifies the output data type.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$dimensions,
+    Mrt_BooleanType:$keepdim,
+    Mrt_DtypeType:$dtype
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dimensions `,` $keepdim `,` $dtype
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnReduceSum";
+}
+
 def Mrt_ReluOp : Mrt_Op<"relu", [Pure]> {
   let summary = "ReLU activation function";
   let description = [{
