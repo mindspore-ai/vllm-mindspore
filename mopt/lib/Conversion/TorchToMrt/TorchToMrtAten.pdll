@@ -68,6 +68,11 @@ Pattern ConvertAtenLtTensor {
   replace root with op<mrt.lt>(convertValues(operands)) -> (convertType(resType));
 }
 
+Pattern ConvertAtenMm {
+  let root = op<torch.aten.mm>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.mm>(convertValues(operands)) -> (convertType(resType));
+}
+
 Pattern ConvertAtenMulTensor {
   let root = op<torch.aten.mul.Tensor>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.mul>(convertValues(operands)) -> (convertType(resType));

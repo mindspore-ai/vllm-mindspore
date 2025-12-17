@@ -724,6 +724,42 @@ def Mrt_MaskedFillTensorOp : Mrt_Op<"masked_fill_tensor", [Pure]> {
   }];
 }
 
+def Mrt_Matmul : Mrt_Op<"matmul", [Pure]> {
+  let summary = "aclnnMatmul";
+  let description = [{
+    Performs matrix multiplication of two tensors (supports 1D to 6D tensor).
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_Mm : Mrt_Op<"mm", [Pure]> {
+  let summary = "aclnnMm";
+  let description = [{
+    Performs matrix multiplication of two 2D tensors.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let summary = "moe calc for input do Softmax, and do topK selection";
   let description = [{
