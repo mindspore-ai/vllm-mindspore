@@ -45,6 +45,13 @@
     LOG_EXCEPTION << '\'' << TO_STR(a) << "\' is not true. check fail."; \
   }
 
+#define CHECK_IF_FAIL_MSG(a, msg) \
+  do {                            \
+    if (MS_UNLIKELY(!(a))) {      \
+      LOG_EXCEPTION << (msg);     \
+    }                             \
+  } while (0)
+
 #define EVER \
   ;          \
   ;  // NOLINT(whitespace/semicolon)
