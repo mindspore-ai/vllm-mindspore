@@ -465,6 +465,27 @@ def Mrt_GtOp : Mrt_Op<"gt", [Pure]> {
   let genAclnnOp = "aclnnGtTensor";
 }
 
+def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
+  let summary = "Indexes a tensor using a list of index tensors.";
+  let description = [{
+    Operation for indexing a tensor using a list of index tensors.
+    Performs advanced indexing where each tensor in the indices list
+    corresponds to indexing along that dimension.
+    This is the implementation of `aten.index.Tensor_hacked_twin`.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtTensorList:$indices
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $indices attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
   let summary = "Copy operation";
   let description = [{
@@ -1050,6 +1071,34 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   let genAclnnOp = "aclnnSigmoid";
 }
 
+def Mrt_SliceOp : Mrt_Op<"slice", [Pure]> {
+  let summary = "Selects a range of elements from an input tensor along a given dimension.";
+  let description = [{
+    Extracts a contiguous slice from the input tensor `self` along the specified dimension `dim`, 
+    beginning at index `start`, and continuing up to (but not including) index `end`, 
+    with elements selected every `step` indices.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$dim,
+    Mrt_I64Type:$start,
+    Mrt_I64Type:$end,
+    Mrt_I64Type:$step
+  );
+
+  let results = (outs
+    MrtAnyTensor:$result
+  );
+
+  let assemblyFormat = [{
+    $self `,` $dim `,` $start `,` $end `,` $step
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSlice";
+}
+
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   let summary = "Softmax activation function";
   let description = [{
@@ -1107,6 +1156,26 @@ def Mrt_SplitTensorOp : Mrt_Op<"split_tensor", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSplitTensor";
+}
+
+def Mrt_SqueezeDimOp : Mrt_Op<"squeeze_dim", [Pure]> {
+  let summary = "Removes a single dimension of size one from the input tensor at the specified position (dim).";
+  let description = [{
+    The returned tensor shares the same underlying data with this tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SubOp : Mrt_Op<"sub", [Pure]> {
@@ -1191,6 +1260,23 @@ def Mrt_UnsqueezeOp : Mrt_Op<"unsqueeze", [Pure]> {
 
   let assemblyFormat = [{
     $input `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_ViewOp : Mrt_Op<"view", [Pure]> {
+  let summary = "Returns a view tensor which shares the same memory with the original one.";
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$shape
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $shape attr-dict `:` functional-type(operands, results)
   }];
 }
 
