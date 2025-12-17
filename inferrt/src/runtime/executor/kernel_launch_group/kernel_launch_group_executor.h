@@ -70,9 +70,10 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
 
   static std::vector<std::pair<size_t, void *>> streams_;
   static std::vector<DeviceEventPtr> events_;
+  static std::vector<DeviceEventPtr> eventsToDefaultStream_;
   static std::vector<AsyncTaskQueuePtr> queues_;
 
-  std::unordered_map<OpRunner *, std::vector<DeviceEventPtr>> serialLaunchKernelsToEvents_;
+  std::unordered_map<OpRunner *, std::vector<DeviceEventPtr>> serialLaunchKernelsToEvents_{};
 
   device::DeviceContext *deviceContext_;
 
@@ -86,6 +87,8 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
   uint64_t parallelSliceNum_{0};
 
   MemoryCache memoryCache_;
+
+  bool initialized_;
 };
 }  // namespace runtime
 }  // namespace mrt

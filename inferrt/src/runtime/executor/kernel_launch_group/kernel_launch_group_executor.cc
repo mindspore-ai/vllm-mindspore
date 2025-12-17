@@ -29,9 +29,10 @@
 
 namespace mrt {
 namespace runtime {
-std::vector<std::pair<size_t, void *>> KernelLaunchGroupExecutor::streams_;
-std::vector<DeviceEventPtr> KernelLaunchGroupExecutor::events_;
-std::vector<AsyncTaskQueuePtr> KernelLaunchGroupExecutor::queues_;
+std::vector<std::pair<size_t, void *>> KernelLaunchGroupExecutor::streams_{};
+std::vector<DeviceEventPtr> KernelLaunchGroupExecutor::events_{};
+std::vector<DeviceEventPtr> KernelLaunchGroupExecutor::eventsToDefaultStream_{};
+std::vector<AsyncTaskQueuePtr> KernelLaunchGroupExecutor::queues_{};
 
 KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
   const std::shared_ptr<std::vector<OpRunner>> &opRunners,
@@ -48,7 +49,8 @@ KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
       graphOutputs_(graphOutputs),
       parallelDispatchNum_(parallelDispatchNum),
       parallelSliceNum_(parallelSliceNum),
-      memoryCache_() {
+      memoryCache_(),
+      initialized_(false) {
   device::DeviceContextKey deviceContextKey = device::DeviceToDeviceContextKey(
     {hardware::DeviceType::NPU, Uint32ToInt8(mrt::collective::CollectiveManager::Instance().local_rank_id())});
   deviceContext_ = device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
@@ -76,6 +78,9 @@ void KernelLaunchGroupExecutor::Run(bool isDynamic) {
 
 void KernelLaunchGroupExecutor::Initialize() {
   LOG_OUT << "Begin initialize";
+  if (initialized_) {
+    LOG_EXCEPTION << "KernelLaunchGroupExecutor has been initialized, can not support multi graph.";
+  }
   PipelineExecutor::Initialize();
 
   if (streams_.empty()) {
@@ -95,6 +100,14 @@ void KernelLaunchGroupExecutor::Initialize() {
       auto event = deviceContext_->deviceResManager_->CreateEventWithFlag(false, false, false);
       CHECK_IF_NULL(event);
       events_.push_back(event);
+    }
+  }
+
+  if (eventsToDefaultStream_.empty()) {
+    for (size_t i = 0; i < streams_.size(); i++) {
+      auto event = deviceContext_->deviceResManager_->CreateEventWithFlag(false, false, true);
+      CHECK_IF_NULL(event);
+      eventsToDefaultStream_.push_back(event);
     }
   }
 
@@ -121,6 +134,8 @@ void KernelLaunchGroupExecutor::Initialize() {
       eventArray[i] = event;
     }
   }
+
+  initialized_ = true;
   LOG_OUT << "End initialize";
 }
 
@@ -358,7 +373,14 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
       e->ResetEvent();
     }
   }
-
+  // It must be ensured that the reset at the tail is executed within the step, or an event create via
+  // aclrtCreateEventExWithFlag is inserted between the parallel stream and the default stream.
+  size_t parallelStreamSize = streams_.size();
+  for (size_t i = 0; i < parallelStreamSize; ++i) {
+    auto &e = eventsToDefaultStream_[i];
+    e->RecordEvent(streams_[i].first);
+    e->WaitEventWithoutReset(0);
+  }
   LOG_OUT << "End parallel dispatch kernels";
 }
 
