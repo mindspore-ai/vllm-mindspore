@@ -456,7 +456,7 @@ class ExecutorBuilder:
             result_values.append(mrt_value)
 
         # Create tuple value containing all result values
-        tuple_value = Value(Tuple(result_values))
+        tuple_value = Value(Tuple(result_values)) if len(results) > 0 else Value()
         node = self.executor.add_op_node(runtime_op, input_nodes, tuple_value)
 
         # Store the tuple node and also create individual result nodes for getitem access

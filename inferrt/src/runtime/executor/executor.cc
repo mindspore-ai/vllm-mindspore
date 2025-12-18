@@ -366,7 +366,6 @@ void GraphExecutor::DumpGraph() {
     std::cout << std::setw(10) << "// " << tensorNode->output << std::endl;
   }
 
-  std::cout << "  return %" << nodeNumMap_[tensorNode] << std::endl;
   std::cout << "}" << std::endl;
 }
 #endif

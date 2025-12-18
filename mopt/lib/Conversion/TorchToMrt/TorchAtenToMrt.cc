@@ -16,6 +16,7 @@
 
 #include "mopt/Conversion/TorchToMrt/TorchAtenToMrt.h"
 
+#include <limits>
 #include <numeric>
 #include <string>
 
@@ -78,6 +79,56 @@ struct ConvertAtenEmptyMemoryFormat : public OpConversionPattern<TorchD::AtenEmp
     auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
     auto dtypeValue = rewriter.create<mrt::CreateDtypeOp>(loc, outType.getElementType());
     rewriter.replaceOpWithNewOp<mrt::EmptyOp>(op, adaptor.getSize(), dtypeValue, deviceValue);
+    return success();
+  }
+};
+
+struct ConvertAtenSliceScatter : public OpConversionPattern<TorchD::AtenSliceScatterOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenSliceScatterOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    Value self = adaptor.getSelf();
+    Value src = adaptor.getSrc();
+    auto selfType = cast<mrt::TensorType>(self.getType());
+    int64_t rank = selfType.getRank();
+
+    int64_t dim;
+    if (!matchPattern(op.getDim(), TorchD::m_TorchConstantInt(&dim)))
+      return rewriter.notifyMatchFailure(op, "dim must be constant");
+
+    dim = TorchD::toPositiveDim(dim, rank);
+    if (!TorchD::isValidDim(dim, rank)) return rewriter.notifyMatchFailure(op, "dim out of range");
+
+    int64_t step;
+    if (!matchPattern(op.getStep(), TorchD::m_TorchConstantInt(&step)))
+      return rewriter.notifyMatchFailure(op, "step must be constant");
+
+    int64_t start = 0;
+    if (!isa<TorchD::NoneType>(op.getStart().getType())) {
+      if (!matchPattern(op.getStart(), TorchD::m_TorchConstantInt(&start)))
+        return rewriter.notifyMatchFailure(op, "start must be constant");
+    }
+
+    int64_t end = std::numeric_limits<int64_t>::max();
+    if (!isa<TorchD::NoneType>(op.getEnd().getType())) {
+      if (!matchPattern(op.getEnd(), TorchD::m_TorchConstantInt(&end)))
+        return rewriter.notifyMatchFailure(op, "end must be constant");
+    }
+
+    if (end == std::numeric_limits<int64_t>::max() && selfType.hasStaticShape()) {
+      end = selfType.getDimSize(dim);
+    }
+
+    Value clonedSelf = rewriter.create<mrt::CloneOp>(op.getLoc(), selfType, self);
+
+    Value beginVal = rewriter.create<mrt::CreateI64ArrayOp>(op.getLoc(), ArrayRef<int64_t>{start});
+    Value endVal = rewriter.create<mrt::CreateI64ArrayOp>(op.getLoc(), ArrayRef<int64_t>{end});
+    Value stridesVal = rewriter.create<mrt::CreateI64ArrayOp>(op.getLoc(), ArrayRef<int64_t>{step});
+    Value axesVal = rewriter.create<mrt::CreateI64ArrayOp>(op.getLoc(), ArrayRef<int64_t>{dim});
+
+    rewriter.create<mrt::StridedSliceAssignOp>(op.getLoc(), clonedSelf, src, beginVal, endVal, stridesVal, axesVal);
+    rewriter.replaceOp(op, clonedSelf);
     return success();
   }
 };
@@ -196,6 +247,7 @@ static void populateAtenToMrtCustomPatterns(TypeConverter &converter, RewritePat
   MLIRContext *context = patterns.getContext();
   patterns.add<ConvertAtenDivTensorMode>(converter, context);
   patterns.add<ConvertAtenEmptyMemoryFormat>(converter, context);
+  patterns.add<ConvertAtenSliceScatter>(converter, context);
   patterns.add<ConvertAtenSumDimIntList>(converter, context);
   patterns.add<ConvertAtenToDtype>(converter, context);
   patterns.add<ConvertAtenTransposeInt>(converter, context);

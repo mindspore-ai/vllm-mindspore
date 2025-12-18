@@ -221,6 +221,23 @@ def Mrt_CatOp : Mrt_Op<"cat", [Pure]> {
   let genAclnnOp = "aclnnCat";
 }
 
+def Mrt_CloneOp : Mrt_Op<"clone", [Pure]> {
+  let summary = "Clone operation";
+  let description = [{
+    Returns a clone of the input tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   let summary = "2D convolution operation";
   let description = [{
@@ -1211,6 +1228,30 @@ def Mrt_SqueezeDimOp : Mrt_Op<"squeeze_dim", [Pure]> {
 
   let assemblyFormat = [{
     $input `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_StridedSliceAssignOp : Mrt_Op<"strided_slice_assign"> {
+  let summary = "Strided slice assign operation";
+  let description = [{
+    Strided slice operation with support for updating values in the input tensor.
+    Extracts a slice from the input tensor along the specified axes with the given starts, ends, and strides,
+    and updates the extracted slice with the update tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$update,
+    Mrt_I64ArrayType:$begin,
+    Mrt_I64ArrayType:$end,
+    Mrt_I64ArrayType:$strides,
+    MrtOptional<Mrt_I64ArrayType>:$axes
+  );
+
+  let results = (outs);
+
+  let assemblyFormat = [{
+    $x `,` $update `,` $begin `,` $end `,` $strides `,` $axes attr-dict `:` type(operands)
   }];
 }
 
