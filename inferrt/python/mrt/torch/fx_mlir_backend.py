@@ -20,7 +20,6 @@ This module provides:
 """
 
 import os
-from typing import List
 from collections import namedtuple
 
 import torch
@@ -123,12 +122,12 @@ def _parse_mlir_module_from_text(text: str):
     return ir.Module.parse(text, ctx)
 
 
-def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
+def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=invalid-name, unused-argument
     """FX backend entry point: FX GraphModule -> StableHLO -> MRT dialect -> GraphExecutor.
 
     Args:
         gm: torch.fx.GraphModule instance
-        example_inputs: Example input list for type inference
+        _example_inputs: (NOT USED) Example input list for type inference
 
     Returns:
         Callable executor function
@@ -226,23 +225,10 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
         pm.run(mlir_module.operation)
     _print_verbose("MRT Dialect Module (direct Torch->MRT conversion)", mlir_module)
 
-    # Extract device information from first example_input and run pass
-    # Use PassOptions to pass device info - all logic is handled in C++ pass
-    device_str = "cpu"
-    device_index = -1
-    if example_inputs:
-        first_tensor = next(
-            (inp for inp in example_inputs if isinstance(inp, torch.Tensor)), None
-        )
-        if first_tensor is not None:
-            device_str = _get_device_string_from_torch_tensor(first_tensor)
-            device_index = getattr(first_tensor.device, "index", None)
-            if device_index is None:
-                device_index = -1
-
     # Run pass with device information via PassOptions
     with mlir_module.context:
         # Pass device info through PassManager.parse() options
+        device_str, device_index = _get_device_info_from_gm(gm)
         pm = PassManager.parse(
             f"builtin.module(set-tensor-device{{device-type={device_str} device-index={device_index}}},"
             "reconcile-unrealized-casts)"
@@ -264,22 +250,20 @@ def backend(gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]):
 
     return compiled_callable
 
+def _get_device_info_from_gm(gm: torch.fx.GraphModule):
+    """Extract device information from input node metadata of FX GraphModule."""
+    for node in gm.graph.nodes:
+        if node.op == "placeholder":
+            # 'val' is the standard metadata (usually FakeTensor) produced by TorchDynamo/AOTAutograd
+            # 'example_value' is the metadata produced by conventional FX tracing
+            val = node.meta.get("val", node.meta.get("example_value"))
+            if isinstance(val, torch.Tensor):
+                device = val.device
+                device_type_str = str(device.type)
+                # Handle device type string
+                device_str = "npu" if device_type_str in ("npu", "privateuse1") else "cpu"
+                device_index = getattr(device, "index", -1)
+                return device_str, device_index
 
-def _get_device_string_from_torch_tensor(tensor: torch.Tensor) -> str:
-    """Extract device type string from torch tensor.
-
-    Args:
-        tensor: PyTorch tensor
-
-    Returns:
-        Device type string: "cpu" or "npu"
-    """
-    device = tensor.device
-    device_type_str = str(device.type)
-    if device_type_str == "cpu":
-        return "cpu"
-    if device_type_str in ("npu", "privateuse1"):
-        # torch.device('npu') uses PrivateUse1 device type
-        return "npu"
-    # Default to cpu for unknown device types
-    return "cpu"
+    # default to cpu
+    return "cpu", -1
