@@ -8,9 +8,8 @@ find_package(pybind11 REQUIRED CONFIG)
 
 find_package(Python3 COMPONENTS Development REQUIRED)
 
-add_library(ops_utils SHARED  data_convert.cc)
+add_library(ops_utils SHARED data_convert.cc)
 target_link_libraries(ops_utils PRIVATE mrt_common mrt_ir_obj ${CMAKE_DL_LIBS})
-target_link_libraries(ops_utils PUBLIC pybind11::module pybind11::embed)
 target_link_libraries(ops_utils PUBLIC ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 target_link_libraries(ops_utils PUBLIC Python3::Python)
 

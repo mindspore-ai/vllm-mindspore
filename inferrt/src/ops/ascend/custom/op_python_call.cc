@@ -52,11 +52,11 @@ py::object ValueToPyData(const ir::Value *input) {
     }
     if (input->IsTuple()) {
       const auto &tuple = input->ToTuple();
-      py::list py_list(tuple->Size());
+      py::list pyList(tuple->Size());
       for (size_t i = 0; i < tuple->Size(); ++i) {
-        py_list[i] = ValueToPyData(tuple->operator[](i).get());
+        pyList[i] = ValueToPyData(tuple->operator[](i).get());
       }
-      return py_list;
+      return pyList;
     }
     if (input->IsSymbol()) {
       return py::cast(input->ToInt());
@@ -67,35 +67,51 @@ py::object ValueToPyData(const ir::Value *input) {
   return py::none();
 }
 
-py::function GetPythonCallable(const std::string &module_name, const std::string &func_name) {
+py::function GetPythonCallable(const std::string &moduleName, const std::string &funcName) {
   py::gil_scoped_acquire gil;
   try {
-    if (module_name.rfind(kTorchOpsInnerModule, 0) != 0) {
-      LOG_EXCEPTION << "Python callable only supports '" << kTorchOpsInnerModule << "' prefix, got: " << module_name;
+    if (moduleName.rfind(kTorchOpsInnerModule, 0) != 0) {
+      LOG_EXCEPTION << "Python callable only supports '" << kTorchOpsInnerModule << "' prefix, got: " << moduleName;
       return {};
     }
 
-    std::string sub_module_name = module_name.substr(strlen(kTorchOpsInnerModule));
-    if (!sub_module_name.empty() && sub_module_name.front() == '.') {
-      sub_module_name.erase(0, 1);
+    std::string subModuleName = moduleName.substr(strlen(kTorchOpsInnerModule));
+    if (!subModuleName.empty() && subModuleName.front() == '.') {
+      subModuleName.erase(0, 1);
     }
 
-    if (sub_module_name.empty()) {
-      LOG_EXCEPTION << "invalid module_name: " << module_name;
+    if (subModuleName.empty()) {
+      LOG_EXCEPTION << "invalid moduleName: " << moduleName;
       return {};
     }
 
-    py::module_ torch_ops = py::module_::import(kTorchOpsModule);
-    py::object sub_mod = torch_ops.attr(sub_module_name.c_str());
-    py::object func = sub_mod.attr(func_name.c_str());
+    py::module_ torchOps = py::module_::import(kTorchOpsModule);
+    py::object subMod = torchOps.attr(subModuleName.c_str());
+    py::object func = subMod.attr(funcName.c_str());
     if (func.is_none()) {
-      LOG_EXCEPTION << "attribute '" + func_name + "' is None";
+      LOG_EXCEPTION << "attribute '" + funcName + "' is None";
     }
     return func.cast<py::function>();
   } catch (const std::exception &e) {
-    LOG_EXCEPTION << "Failed to get Python callable [" + module_name + "." << func_name + "]: " + e.what();
+    LOG_EXCEPTION << "Failed to get Python callable [" + moduleName + "." << funcName + "]: " + e.what();
     return {};
   }
+}
+
+void AttachAtenTensorNoCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix) {
+  std::vector<int64_t> atenShape(atenTensor.sizes().begin(), atenTensor.sizes().end());
+  if (atenShape != irTensor->Shape()) {
+    LOG_EXCEPTION << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;
+  }
+
+  c10::DataPtr dataPtr = atenTensor.storage().set_data_ptr(std::move(c10::DataPtr()));
+  void *data = dataPtr.get();
+
+  auto dataPtrShared = std::make_shared<c10::DataPtr>(std::move(dataPtr));
+  auto deleter = [dataPtrShared](void *) mutable {
+    if (dataPtrShared) dataPtrShared->clear();
+  };
+  irTensor->GetStorage()->SetDataPtrFromAten(data, deleter);
 }
 }  // namespace
 
@@ -111,11 +127,6 @@ void OpPythonCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   pyFunc_ = GetPythonCallable(moduleName_, opName_);
 }
 
-OpsErrorCode OpPythonCall::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  Operator::InferShape(input, output);
-  return SUCCESS;
-}
-
 OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
   return SUCCESS;
@@ -127,10 +138,10 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
     LOG_EXCEPTION << "Python interpreter is not initialized.";
     return UNKNOWN_ERROR;
   }
-  py::gil_scoped_acquire gil_acquire;
-  py::tuple py_args = PreprocessInputs(inputs_);
+  py::gil_scoped_acquire gilAcquire;
+  py::tuple pyArgs = PreprocessInputs(inputs_);
   py::object result;
-  LOG_OUT << "input size: " << py_args.size();
+  LOG_OUT << "input size: " << pyArgs.size();
 
   if (pyFunc_.is_none()) {
     LOG_EXCEPTION << "Python function object is null, func name: " << opName_;
@@ -138,7 +149,7 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
   }
 
   try {
-    result = inputs_.empty() ? pyFunc_() : pyFunc_(*py_args);
+    result = inputs_.empty() ? pyFunc_() : pyFunc_(*pyArgs);
   } catch (const std::exception &e) {
     LOG_EXCEPTION << "Python function call failed: " << e.what();
     return UNKNOWN_ERROR;
@@ -148,57 +159,59 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
 }
 
 py::tuple OpPythonCall::PreprocessInputs(const std::vector<const ir::Value *> &input) {
-  pybind11::tuple py_args(input.size());
+  pybind11::tuple pyArgs(input.size());
   for (size_t i = 0; i < input.size(); i++) {
-    py_args[i] = ValueToPyData(input[i]);
+    pyArgs[i] = ValueToPyData(input[i]);
   }
 
-  return py_args;
+  return pyArgs;
 }
 
-OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output, void *stream) {
-  if (!output) {
+OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output, void * /*stream*/) {
+  if (!output || output->IsNone()) {
     LOG_OUT << "PythonCall op " << opName_ << " has no output tensor; ";
     return SUCCESS;
   }
 
-  if (!output->IsTensor()) {
-    LOG_EXCEPTION << "PythonCall op " << opName_ << " output value is not a tensor.";
-    return UNKNOWN_ERROR;
+  if (py::isinstance<py::tuple>(result)) {
+    if (!output->IsTuple()) {
+      LOG_EXCEPTION << "PythonCall op " << opName_ << " expects tuple but IR output is not tuple.";
+    }
+    py::tuple tup = result.cast<py::tuple>();
+    auto irList = output->ToTuple()->ToTensorList();
+    if (irList.size() != tup.size()) {
+      LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple size mismatch: expect " << irList.size() << ", got "
+                    << tup.size();
+    }
+    for (size_t i = 0; i < tup.size(); ++i) {
+      at::Tensor aten;
+      try {
+        aten = tup[i].cast<at::Tensor>();
+      } catch (...) {
+        LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple[" << i << "] is not a torch.Tensor";
+      }
+      AttachAtenTensorNoCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]");
+    }
+    LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " tensors into output tuple.";
+    return SUCCESS;
   }
 
-  ir::TensorPtr ir_tensor = output->ToTensor();
-  if (!ir_tensor) {
+  at::Tensor aten;
+  try {
+    aten = result.cast<at::Tensor>();
+  } catch (...) {
+    LOG_EXCEPTION << "PythonCall op " << opName_ << " result is not a torch.Tensor";
+  }
+  ir::TensorPtr irTensor = output->ToTensor();
+  if (!irTensor) {
     LOG_EXCEPTION << "PythonCall op " << opName_ << " output tensor pointer is null.";
-    return UNKNOWN_ERROR;
   }
-
-  py::module_ torch = py::module_::import("torch");
-  if (!torch.attr("is_tensor")(result).cast<bool>()) {
-    LOG_EXCEPTION << "result  is not a torch.Tensor";
-  }
-
-  void *src_ptr = reinterpret_cast<void *>(result.attr("data_ptr")().cast<uintptr_t>());
-  const size_t actual_bytes = result.attr("nbytes").cast<size_t>();
-  const size_t expect_bytes = ir_tensor->GetStorage()->SizeBytes();
-
-  if (actual_bytes != expect_bytes) {
-    LOG_EXCEPTION << "PythonCall op " << opName_ << " byte-size mismatch: python tensor " << actual_bytes
-                  << " vs ir tensor " << expect_bytes << ".";
-    return UNKNOWN_ERROR;
-  }
-
-  if (!mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(ir_tensor->DataPtr(), expect_bytes, src_ptr,
-                                                                   expect_bytes, stream)) {
-    LOG_EXCEPTION << "PythonCall op " << opName_ << " device-to-device copy failed.";
-    return UNKNOWN_ERROR;
-  }
-
-  LOG_OUT << "PythonCall op " << opName_ << " copied " << expect_bytes << " bytes to output tensor successfully.";
+  AttachAtenTensorNoCopy(aten, irTensor, "PythonCall op " + opName_);
+  LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached single at::Tensor data ptr.";
   return SUCCESS;
 }
 
 MRT_REG_OP(python_call, OpPythonCall, Ascend);
-
+MRT_REG_OP(python_call, OpPythonCall, CPU);
 }  // namespace ops
 }  // namespace mrt

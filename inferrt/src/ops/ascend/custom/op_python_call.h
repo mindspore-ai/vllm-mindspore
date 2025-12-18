@@ -32,8 +32,6 @@ class OpPythonCall : public Operator {
 
   void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output);
 
-  OpsErrorCode InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) override;
-
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize);
 

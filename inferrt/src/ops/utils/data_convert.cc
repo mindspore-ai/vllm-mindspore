@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <pybind11/pybind11.h>
 #include <torch/extension.h>
 #include <vector>
 #include <utility>
@@ -30,7 +29,6 @@
 #include "ops/utils/data_convert.h"
 #include "common/logger.h"
 
-namespace py = pybind11;
 namespace ir = mrt::ir;
 
 namespace mrt::ops {
@@ -165,17 +163,7 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto storage = tensor->GetStorage();
-  if (!storage->CheckOwnsData()) {
-    // Parameter or tensor which references a parameter is graph output.
-    storage = CopyStorage(storage);
-  }
-  auto allocator = storage->GetAllocator();
-  auto deleter = [allocator](void *dataPtr) {
-    if (dataPtr != nullptr) {
-      allocator.Free(dataPtr);
-    }
-  };
-  void *dataPtr = storage->Release();
+  void *dataPtr = storage->Data();
   CHECK_IF_NULL(dataPtr);
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
@@ -183,11 +171,11 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
 
   switch (atDevice.type()) {
     case at::DeviceType::CPU:
-      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), nullptr, options);
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1:
-      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), tensor->StorageOffset(),
-                                       std::move(deleter), options);
+      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), tensor->StorageOffset(), nullptr,
+                                       options);
 #endif
     default:
       LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
