@@ -102,6 +102,10 @@ def floor_div_hook(node, input_nodes, executor):
     div_mode = 2
     return [input_nodes[0], input_nodes[1], div_mode]
 
+# pylint: disable=unused-argument
+def clone_hook(node, input_nodes, executor):
+    """input[1] not use"""
+    return [input_nodes[0]]
 
 # pylint: disable=unused-argument
 def long_hook(node, input_nodes, executor):
@@ -120,6 +124,7 @@ def permute_hook(node, input_nodes, executor):
 
 
 def _init_arg_mapping_hooks():
+    register_arg_mapping_hook(Op.clone, clone_hook)
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
@@ -308,6 +313,7 @@ _OP_MAP = {
     torch.chunk: Op.split_with_size,
     torch.flatten: Op.flatten,
     torch.cat: Op.cat,
+    torch.clone: Op.clone,
     torch.neg: Op.neg,
     torch.square: Op.square,
     torch.rsqrt: Op.rsqrt,
@@ -364,6 +370,7 @@ _OP_MAP = {
     "sigmoid": Op.sigmoid,
     "reshape": Op.reshape,
     "cat": Op.cat,
+    "clone": Op.clone,
     "transpose": Op.permute,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
