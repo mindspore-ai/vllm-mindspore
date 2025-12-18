@@ -109,6 +109,30 @@ def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   let genAclnnCfg = (AclnnConfig (IORef 0, 0), (IORef 1, 1));
 }
 
+def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
+  let summary = "Batch normalization operation";
+  let description = [{
+    Performs batch normalization on input tensors.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$scale,
+    MrtAnyTensor:$offset,
+    MrtAnyTensor:$mean,
+    MrtAnyTensor:$variance,
+    Mrt_F64Type:$epsilon,
+    Mrt_BooleanType:$is_training
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $scale `,` $offset `,` $mean `,` $variance `,` $epsilon `,` $is_training
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_BitwiseAndTensorOp : Mrt_Op<"bitwise_and_tensor", [Pure]> {
   let summary = "aclnnBitwiseAndTensor";
   let description = [{
@@ -156,30 +180,6 @@ def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnBitwiseNot";
-}
-
-def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
-  let summary = "Batch normalization operation";
-  let description = [{
-    Performs batch normalization on input tensors.
-  }];
-
-  let arguments = (ins
-    MrtAnyTensor:$input,
-    MrtAnyTensor:$scale,
-    MrtAnyTensor:$offset,
-    MrtAnyTensor:$mean,
-    MrtAnyTensor:$variance,
-    Mrt_F64Type:$epsilon,
-    Mrt_BooleanType:$is_training
-  );
-
-  let results = (outs MrtAnyTensor:$result);
-
-  let assemblyFormat = [{
-    $input `,` $scale `,` $offset `,` $mean `,` $variance `,` $epsilon `,` $is_training
-    attr-dict `:` functional-type(operands, results)
-  }];
 }
 
 def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
@@ -317,27 +317,6 @@ def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   let genAclnnOp = "aclnnEmbedding";
 }
 
-def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
-  let summary = "Element-wise equality comparison";
-  let description = [{
-    Element-wise equality comparison of two tensors.
-    Returns a boolean tensor where each element is true if the corresponding elements are equal.
-  }];
-
-  let arguments = (ins
-    MrtAnyTensor:$self,
-    MrtAnyTensor:$other
-  );
-
-  let results = (outs MrtAnyTensor:$out);
-
-  let assemblyFormat = [{
-    $self `,` $other attr-dict `:` functional-type(operands, results)
-  }];
-
-  let genAclnnOp = "aclnnEqTensor";
-}
-
 def Mrt_EmptyOp : Mrt_Op<"empty", [
     DeclareOpInterfaceMethods<InferTypeOpInterface>
   ]> {
@@ -362,6 +341,27 @@ def Mrt_EmptyOp : Mrt_Op<"empty", [
     $size `,` $dtype `,` $device
     attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
+  let summary = "Element-wise equality comparison";
+  let description = [{
+    Element-wise equality comparison of two tensors.
+    Returns a boolean tensor where each element is true if the corresponding elements are equal.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnEqTensor";
 }
 
 def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
@@ -686,6 +686,24 @@ def Mrt_LtOp : Mrt_Op<"lt", [Pure]> {
   let genAclnnOp = "aclnnLtTensor";
 }
 
+def Mrt_MakeListOp : Mrt_Op<"make_list", [Pure]> {
+  let summary = "Construct a list from elements";
+  let description = [{
+    Creates a list from a list of elements, similar to torch.prim.ListConstruct.
+    This operation takes variadic elements and constructs a list type containing them.
+  }];
+
+  let arguments = (ins
+    Variadic<AnyType>:$elements
+  );
+
+  let results = (outs MrtAnyList:$result);
+
+  let assemblyFormat = [{
+    $elements attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_MaskedFillScalarOp : Mrt_Op<"masked_fill_scalar", [Pure]> {
   let summary = "Masked fill operation";
   let description = [{
@@ -874,24 +892,6 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   }];
 
   let genAclnnOp = "aclnnMul";
-}
-
-def Mrt_MakeListOp : Mrt_Op<"make_list", [Pure]> {
-  let summary = "Construct a list from elements";
-  let description = [{
-    Creates a list from a list of elements, similar to torch.prim.ListConstruct.
-    This operation takes variadic elements and constructs a list type containing them.
-  }];
-
-  let arguments = (ins
-    Variadic<AnyType>:$elements
-  );
-
-  let results = (outs MrtAnyList:$result);
-
-  let assemblyFormat = [{
-    $elements attr-dict `:` functional-type(operands, results)
-  }];
 }
 
 def Mrt_NeOp : Mrt_Op<"ne", [Pure]> {
