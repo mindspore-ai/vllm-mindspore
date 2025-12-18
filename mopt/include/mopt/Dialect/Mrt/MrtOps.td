@@ -505,6 +505,8 @@ def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
   let assemblyFormat = [{
     $self `,` $indices attr-dict `:` functional-type(operands, results)
   }];
+
+  let genAclnnOp = "aclnnIndex";
 }
 
 def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
