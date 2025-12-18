@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_OP_BASE_OP_LINALG_CALL_H__
-#define __OPS_OP_BASE_OP_LINALG_CALL_H__
+#ifndef __OPS_ASCEND_LOWERED_OP_LINALG_CALL_H__
+#define __OPS_ASCEND_LOWERED_OP_LINALG_CALL_H__
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "ops/op_register.h"
 
@@ -72,4 +72,4 @@ class OpLinalgCall : public Operator {
 }  // namespace ops
 }  // namespace mrt
 
-#endif  // __OPS_OP_BASE_OP_LINALG_CALL_H__
+#endif  // __OPS_ASCEND_LOWERED_OP_LINALG_CALL_H__

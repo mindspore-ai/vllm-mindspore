@@ -11,6 +11,7 @@ include_directories(${ASCEND_PATH}/latest/aarch64-linux/include/experiment)
 link_directories(${ASCEND_PATH}/latest/lib64/)
 
 add_subdirectory(aclnn)
+add_subdirectory(dvm)
 add_subdirectory(hccl)
 add_subdirectory(lowered)
 add_subdirectory(mem)

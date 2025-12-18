@@ -60,6 +60,25 @@ _ARG_MAPPING_HOOKS = {}
 
 _OPS_MAPPING_HOOKS = {}
 
+# Registry for dvm ops: maps op_name -> payload_json
+# todo(lmy) remove dvm op when mrt backend is ready
+_DVM_OP_REGISTRY = {}
+
+
+def register_dvm_op(op_name: str, payload_json: str):
+    """Register a dvm op with its JSON payload.
+
+    Args:
+        op_name: The operator name (e.g., "dvm_add")
+        payload_json: The DVM JSON payload
+    """
+    _DVM_OP_REGISTRY[op_name] = payload_json
+
+
+def get_dvm_payload(op_name: str) -> str:
+    """Get JSON payload for a registered dvm op."""
+    return _DVM_OP_REGISTRY.get(op_name)
+
 
 def register_arg_mapping_hook(op, hook_func):
     _ARG_MAPPING_HOOKS[op] = hook_func
@@ -422,6 +441,9 @@ def _get_op(target):
             if not node_module.startswith(
                 "torch._ops.aten"
             ) and not node_module.startswith("torch._ops.prims"):
+                # mrt_dvm namespace -> dvm_call
+                if node_module.startswith("torch._ops.mrt_dvm"):
+                    return Op.dvm_call
                 return Op.custom_call
     return None
 
@@ -612,6 +634,15 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
     if op == Op.custom_call:
         op_name = node.target.__name__
         flat_node_args = [op_name] + flat_node_args
+    elif op == Op.dvm_call:
+        op_name = node.target.__name__
+        payload_json = get_dvm_payload(op_name)
+        if payload_json is None:
+            raise RuntimeError(
+                f"Payload not registered for dvm op '{op_name}'. "
+                f"Use register_dvm_op('{op_name}', payload_json) first."
+            )
+        flat_node_args = [payload_json] + flat_node_args
 
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:
