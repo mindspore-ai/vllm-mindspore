@@ -21,7 +21,7 @@ import os
 import vllm_mindspore.envs as env
 
 
-if env.ENABLE_MS_ADAPTER:
+if not env.ENABLE_MS_ADAPTER:
     # It can be removed after replacing ms platform plugin
     import vllm_mindspore.apply_patch.vllm_ascend_patch
 else:
