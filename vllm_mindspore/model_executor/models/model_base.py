@@ -93,7 +93,7 @@ class MLAAttentionWrapper(AttentionWrapper):
         if not self.use_ringmla:
             self.kv_cache = [
                 (
-                    ms.mint.zeros(
+                    create_kv_cache(
                         self.kv_shape,  # type: ignore[misc]
                         dtype=vllm_config.model_config.dtype), ) for _ in
                 range(vllm_config.parallel_config.pipeline_parallel_size)
@@ -108,19 +108,19 @@ class MLAAttentionWrapper(AttentionWrapper):
                 k_shape = [*(self.kv_shape[0:-2]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-2]), qk_rope_head_dim]
                 self.kv_cache = [(
-                    ms.mint.zeros(k_shape, dtype=kv_cache_dtype),
-                    ms.mint.zeros(r_shape,
-                                  dtype=vllm_config.model_config.dtype),
+                    create_kv_cache(k_shape, dtype=kv_cache_dtype),
+                    create_kv_cache(r_shape,
+                                    dtype=vllm_config.model_config.dtype),
                 ) for _ in range(
                     vllm_config.parallel_config.pipeline_parallel_size)]
             else:
                 k_shape = [*(self.kv_shape[0:-1]), kv_lora_rank]
                 r_shape = [*(self.kv_shape[0:-1]), qk_rope_head_dim]
                 self.kv_cache = [
-                    (ms.mint.zeros(k_shape,
-                                   dtype=vllm_config.model_config.dtype),
-                     ms.mint.zeros(r_shape,
-                                   dtype=vllm_config.model_config.dtype))
+                    (create_kv_cache(k_shape,
+                                     dtype=vllm_config.model_config.dtype),
+                     create_kv_cache(r_shape,
+                                     dtype=vllm_config.model_config.dtype))
                     for _ in range(
                         vllm_config.parallel_config.pipeline_parallel_size)
                 ]
