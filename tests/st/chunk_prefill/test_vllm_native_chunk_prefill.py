@@ -169,7 +169,7 @@ def run_ms_server_cp_base_qwen(log_name, extra_params, prompts):
     assert result >= 1
 
 
-@pytest.mark.level1
+@pytest.mark.level0
 @patch.dict(os.environ, env_vars)
 def test_vllm_ms_server_chunked_prefill_001():
     """
