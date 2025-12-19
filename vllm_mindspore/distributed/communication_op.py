@@ -29,7 +29,7 @@ from vllm.distributed import (tensor_model_parallel_all_gather,
     tensor_model_parallel_all_reduce,)
 from vllm_mindspore import envs as env
 
-is_external_mode = env.ENABLE_MS_ADAPTER
+is_external_mode = not env.ENABLE_MS_ADAPTER
 
 def get_dp_group_name():
     if is_external_mode:
