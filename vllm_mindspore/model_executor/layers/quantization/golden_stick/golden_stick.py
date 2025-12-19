@@ -29,6 +29,8 @@ from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
 
+WEIGHT_PARTS = 2
+
 
 def _validate_quantization_consistency(config: dict[str, str]):
     """
@@ -36,6 +38,25 @@ def _validate_quantization_consistency(config: dict[str, str]):
     specified prefix. This checks that all weights under the prefix
     have the same quantization type and handles fused linear layers.
     Raises ValueError if there are conflicts in quantization types.
+
+    Args:
+        config (dict[str, str]): A dictionary mapping weight names to their
+                                 quantization types.
+    Example:
+        config = {
+            ...
+            "model.layers.0.self_attn.q_proj.weight": "W8A8",
+            "model.layers.0.self_attn.q_proj.smooth_scale": "W8A8",
+            "model.layers.0.self_attn.k_proj.weight": "W8A8",
+            "model.layers.0.self_attn.k_proj.smooth_scale": "W8A8",
+            "model.layers.0.self_attn.v_proj.weight": "W8A8",
+            "model.layers.0.self_attn.v_proj.smooth_scale": "W8A8",
+            ...
+        }
+        The quantization types for q_proj.weight and q_proj.smooth_scale
+        should be consistent, and similarly for k_proj and v_proj.
+        Also, the quantization types for q_proj, k_proj, and v_proj
+        should be consistent due to fusion into qkv_proj.
     """
 
     class ModuleQuantizationDescription:
@@ -64,6 +85,9 @@ def _validate_quantization_consistency(config: dict[str, str]):
     conflict_info = {}
     for weight_full_name, quant_type in config.items():
         parts = weight_full_name.split('.')
+        # make sure it's a weight
+        if len(parts) < WEIGHT_PARTS:
+            continue
         # format with
         # model.layers.{layer_number}.{module}.{linear}.{weight} or
         # model.visual.blocks.{layer_number}.{module}.{linear}.{weight}
@@ -74,7 +98,7 @@ def _validate_quantization_consistency(config: dict[str, str]):
         if not module_quant_descriptions[
                 module_name].register_weight_quant_type(quant_type):
             conflict_info[module_name] = "inner_conflict"
-        linear_name = parts[-2]
+        linear_name = parts[-WEIGHT_PARTS]
         if linear_name in FusedQuantizationDescription.fused_linear_mapping:
             fused_linear_name = \
                 FusedQuantizationDescription.fused_linear_mapping[
@@ -157,3 +181,10 @@ class GoldenStickConfig(QuantizationConfig):
     @classmethod
     def get_min_capability(cls) -> int:
         return -1
+
+
+class ModelSlimConfig(GoldenStickConfig):
+
+    def __init__(self, config: dict[str, str]) -> None:
+        super().__init__(config)
+        self.is_modelslim = True

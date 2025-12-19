@@ -39,7 +39,7 @@ from vllm.config.scheduler import SchedulerConfig
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
-from vllm_mindspore.utils import is_310p, is_native_model_backend
+from vllm_mindspore.utils import is_310p
 
 logger = init_logger(__name__)
 
@@ -66,8 +66,7 @@ def vllm_config_post_init(self):
         self.lora_config.verify_with_model_config(self.model_config)
 
     if self.quant_config is None and \
-        self.model_config is not None and self.load_config is not None and \
-            is_native_model_backend():
+        self.model_config is not None and self.load_config is not None:
         self.quant_config = VllmConfig._get_quantization_config(
             self.model_config, self.load_config)
 
