@@ -122,8 +122,10 @@ def setup_function():
 
     port_offset = int(device_id) if device_id else 0
     # Used to distinguish multiple online services running simultaneously.
-    serve_port = BASE_PORT + port_offset
-    os.environ["TEST_SERVE_PORT"] = f"{get_available_port(serve_port)}"
+    serve_port = os.getenv("TEST_SERVE_PORT", None)
+    if not serve_port:
+        serve_port = BASE_PORT + port_offset
+        os.environ["TEST_SERVE_PORT"] = f"{get_available_port(serve_port)}"
 
     # Randomly specify LCCL and HCCL ports for cases without specified port,
     # mainly in single card concurrent scenarios, to avoid port conflicts.
