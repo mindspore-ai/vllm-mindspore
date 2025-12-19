@@ -15,6 +15,7 @@
  */
 
 #include "runtime/builder/builder.h"
+#include <algorithm>
 #include <unordered_set>
 #include <memory>
 #include <utility>
@@ -31,10 +32,13 @@ namespace {
  * @brief Get the device type of an operation node.
  *  The function follows these rules:
  * 1. If the output is a single tensor, returns the device of that tensor.
- * 2. If the output is a tuple:
+ * 2. If the output is None:
+ *    - If any input element is a tensor, returns the device of the first tensor.
+ *    - If no input element is a tensor, defaults to CPU device.
+ * 3. If the output is a tuple:
  *    - If all elements are tensors, returns the device of the first tensor.
  *    - If any element is not a tensor, defaults to CPU device.
- * 3. For any other case or if checks fail, defaults to CPU device.
+ * 4. For any other case or if checks fail, defaults to CPU device.
  * Note: Need to select operator type as 'device' for the copy operator.
  */
 hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
@@ -44,6 +48,14 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
     auto &tensor = nodeOutput->ToTensor();
     CHECK_IF_NULL(tensor);
     return tensor->GetDevice();
+  }
+
+  if (nodeOutput->IsNone()) {
+    auto &inputs = opNode->inputs;
+    auto it = std::find_if(inputs.begin(), inputs.end(), [](const auto &node) { return node->output->IsTensor(); });
+    if (it != inputs.end()) {
+      return (*it)->output->ToTensor()->GetDevice();
+    }
   }
 
   if (nodeOutput->IsTuple()) {
