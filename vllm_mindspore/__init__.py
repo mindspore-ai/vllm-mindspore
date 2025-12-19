@@ -21,7 +21,10 @@ import os
 import vllm_mindspore.envs as env
 
 
-if not env.HIYBRID_MODE:
+if env.ENABLE_MS_ADAPTER:
+    # It can be removed after replacing ms platform plugin
+    import vllm_mindspore.apply_patch.vllm_ascend_patch
+else:
     import msadapter
     import vllm_mindspore.apply_patch.msadapter_patch
     import vllm_mindspore.apply_patch.ray_patch

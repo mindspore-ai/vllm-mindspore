@@ -25,7 +25,7 @@ logger = init_logger(__name__)
 
 
 def register_models():
-    if not env.HYBRID_MODE:
+    if not env.ENABLE_MS_ADAPTER:
         return
 
     init_env()

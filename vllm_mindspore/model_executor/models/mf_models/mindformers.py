@@ -44,7 +44,7 @@ import vllm_mindspore.envs as env
 logger = init_logger(__name__)
 
 
-if not env.HYBRID_MODE:
+if not env.ENABLE_MS_ADAPTER:
     MindFormersForCausalLM = _MindFormersForCausalLM
 else:
     from vllm_mindspore.hybrid_adapter.mf_model_base import (

@@ -19,12 +19,12 @@ import os
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
-    HYBRID_MODE: Optional[int] = None
+    ENABLE_MS_ADAPTER: Optional[int] = None
 
 
 environment_variables: dict[str, Callable[[], Any]] = {
-    "HYBRID_MODE":
-    lambda: bool(int(os.getenv('HYBRID_MODE', '0'))),
+    "ENABLE_MS_ADAPTER":
+    lambda: bool(int(os.getenv('ENABLE_MS_ADAPTER', '0'))),
 }
 
 
