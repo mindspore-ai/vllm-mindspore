@@ -23,6 +23,7 @@ from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
 
 from mrt import _mrt_torch
+from mrt._mrt_api import is_custom_op_registered
 from mrt.ir import Value, Tuple as MrtTuple, DataType, SymbolicVar
 from mrt._mrt_collective import CollectiveManager
 
@@ -233,3 +234,26 @@ def tuple_indices_to_slice_arg(indices: Tuple[int, ...], shape: Tuple[int, ...])
             steps.append(1)
             axes.append(axis)
     return begin, end, steps, axes
+
+
+def is_op_registered_by_custom_or_torch(full_op_name: str) -> bool:
+    """
+    Check if the full_op_name is registered in the custom operator registry or torch.ops registry.
+    """
+    if "." in full_op_name:
+        op_namespace, op_name = full_op_name.rsplit(".", 1)
+    elif "::" in full_op_name:
+        op_namespace, op_name = full_op_name.rsplit("::", 1)
+    else:
+        op_namespace, op_name = None, full_op_name
+
+    # Check if the op_name is registered in the custom operator registry.
+    if is_custom_op_registered(op_name):
+        return True
+
+    # Check if the op_name is registered in the torch.ops registry.
+    torch_ns = getattr(torch.ops, op_namespace)
+    if hasattr(torch_ns, op_name):
+        return True
+
+    return False

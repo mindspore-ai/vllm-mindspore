@@ -15,6 +15,7 @@
  */
 
 #include "mrt/pybind11_api.h"
+#include "ops/custom_op_register.h"
 
 DALangPy::~DALangPy() {
   if (callable_ != nullptr) {
@@ -104,4 +105,9 @@ PYBIND11_MODULE(_mrt_api, mod) {
     .def("__call__", &DALangPy::Run, py::arg("args") = py::list(), "Run with arguments.")
     .def("compile", &DALangPy::Compile, py::arg("source"), py::arg("graph") = py::bool_(false),
          py::arg("dump") = py::bool_(false), "Compile the source with arguments.");
+
+  mod.def(
+    "is_custom_op_registered",
+    [](const std::string &op_name) { return mrt::ops::CustomOpRegistry::GetInstance().IsCustomOpRegistered(op_name); },
+    py::arg("op_name"), "Check if a custom operator is registered.");
 }

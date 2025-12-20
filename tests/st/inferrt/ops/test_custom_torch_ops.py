@@ -13,19 +13,24 @@
 # limitations under the License.
 
 import pytest
-import numpy as np
 import torch
 import torch_npu
-from mrt.torch import backend
+from mrt.torch.fx_backend import backend as fx_backend
+from mrt.torch.fx_mlir_backend import backend as mlir_backend
 from tests.mark_utils import arg_mark
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-def test_aten_ldexp():
+@pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
+def test_aten_ldexp(pipeline, monkeypatch, backend):
     """
     Feature: Check aten ldexp op launch
     Description: Check aten ldexp op launch
     Expectation: The result is correct
     """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+
     def aten_ldexp(x, y):
         return torch.ops.aten.ldexp(x, y)
 
@@ -37,12 +42,17 @@ def test_aten_ldexp():
     assert torch.allclose(z, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-def test_npu_quant_matmul_with_nz_format():
+@pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
+def test_npu_quant_matmul_with_nz_format(pipeline, monkeypatch, backend):
     """
     Feature: Check npu_quant_matmul op launch
     Description: Check npu_quant_matmul op launch
     Expectation: The result is correct
     """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+
     def npu_quant_matmul_func(x, y, scale, output_dtype):
         return torch_npu.npu_quant_matmul(x, y, scale, output_dtype=output_dtype)
 

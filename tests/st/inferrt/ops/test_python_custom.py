@@ -4,7 +4,8 @@ from typing import List
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from mrt.torch.fx_backend import backend as fx_backend
+from mrt.torch.fx_mlir_backend import backend as mlir_backend
 
 
 try:
@@ -78,7 +79,7 @@ def _should_skip_test():
     return not supports_custom_op()
 
 
-def get_op_func_compiled():
+def get_op_func_compiled(backend):
     def custom_op_func(x, bias):
         return torch.ops.vllm.scale_and_bias(x, bias)
     return torch.compile(custom_op_func, backend=backend)
@@ -90,7 +91,8 @@ def get_op_func_compiled():
 )
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
-def test_python_custom_op(shape):
+@pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
+def test_python_custom_op(shape, backend):
     """
     Feature: Test python custom op
     Description: Test python custom op with torch.compile
@@ -103,13 +105,13 @@ def test_python_custom_op(shape):
     bias_npu = bias_cpu.clone().npu()
 
     cpu_output = scale_and_bias(x_cpu, bias_cpu)
-    op_func_compiled = get_op_func_compiled()
+    op_func_compiled = get_op_func_compiled(backend)
     npu_output = op_func_compiled(x_npu, bias_npu)
 
     AssertRtolEqual(cpu_output, npu_output.detach().cpu())
 
 
-def _get_mixed_types_compiled():
+def _get_mixed_types_compiled(backend):
     def custom_op_func(x, scale, shift, flag, label, in_shapes):
         return torch.ops.vllm.mixed_types_op(x, scale, shift, flag, label, in_shapes)
     return torch.compile(custom_op_func, backend=backend)
@@ -127,7 +129,8 @@ def _get_mixed_types_compiled():
         ([32, 1024], 1.25, 1, False, "mixed_types", [16, 8]),
     ],
 )
-def test_python_custom_op_mixed_types(shape, scale, shift, flag, label, in_shapes):
+@pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
+def test_python_custom_op_mixed_types(shape, scale, shift, flag, label, in_shapes, backend):
     """
     Feature: Test python custom op mixed types conversion
     Description: Verify ValueToPyData supports tensor, float, int, bool, string, tuple
@@ -137,7 +140,7 @@ def test_python_custom_op_mixed_types(shape, scale, shift, flag, label, in_shape
     x_npu = x_cpu.clone().npu()
 
     cpu_output = mixed_types_op(x_cpu, scale, shift, flag, label, in_shapes)
-    op_func_compiled = _get_mixed_types_compiled()
+    op_func_compiled = _get_mixed_types_compiled(backend)
     npu_output = op_func_compiled(x_npu, scale, shift, flag, label, in_shapes)
 
     AssertRtolEqual(cpu_output, npu_output.detach().cpu())

@@ -262,6 +262,27 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   }];
 }
 
+def Mrt_CustomCallOp : Mrt_Op<"custom_call"> {
+  let summary = "Invoke a custom operator";
+  let description = [{
+    Invokes a custom operator by name.
+    The op_name operand contains the name of the custom operator to invoke.
+  }];
+
+  let arguments = (ins
+    Mrt_StringType:$op_name,
+    Variadic<AnyType>:$inputs
+  );
+
+  let results = (outs
+    Variadic<AnyType>:$outputs
+  );
+
+  let assemblyFormat = [{
+    $op_name `,` $inputs attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_DivOp : Mrt_Op<"div", [Pure]> {
   let summary = "aclnnDiv";
   let description = [{

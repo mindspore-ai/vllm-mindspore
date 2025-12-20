@@ -1,18 +1,24 @@
 import torch
 import mrt
-from mrt.torch import backend
+from mrt.torch.fx_backend import backend as fx_backend
+from mrt.torch.fx_mlir_backend import backend as mlir_backend
 import os
 import pytest
 from tests.mark_utils import arg_mark
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-def test_aclnn_custom_div_op():
+@pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
+def test_aclnn_custom_div_op(pipeline, monkeypatch, backend):
     """
     Feature: Check aclnn custom div op launch
     Description: Check aclnn custom div op launch with cache
     Expectation: The result is correct
     """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     aclnn_div_path = os.path.join(script_dir, "aclnn_custom_div.cc")
     mrt.ops.load(name="aclnn_custom_div", sources=[aclnn_div_path], backend="Ascend")

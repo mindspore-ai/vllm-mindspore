@@ -229,7 +229,7 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
   static const std::unordered_map<c10::TypeKind, std::function<bool(const ir::Value *)>> typeCheckMap = {
     {c10::TypeKind::TensorType, [](const ir::Value *val) { return val->IsTensor(); }},
     {c10::TypeKind::NumberType, [](const ir::Value *val) { return val->IsDouble() || val->IsInt(); }},
-    {c10::TypeKind::IntType, [](const ir::Value *val) { return val->IsInt(); }},
+    {c10::TypeKind::IntType, [](const ir::Value *val) { return val->IsInt() || val->IsSymbol(); }},
     {c10::TypeKind::BoolType, [](const ir::Value *val) { return val->IsBool(); }},
     {c10::TypeKind::FloatType, [](const ir::Value *val) { return val->IsDouble(); }},
     {c10::TypeKind::StringType, [](const ir::Value *val) { return val->IsString(); }},

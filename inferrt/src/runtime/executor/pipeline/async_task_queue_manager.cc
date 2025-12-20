@@ -17,6 +17,7 @@
 #include "runtime/executor/pipeline/async_task_queue_manager.h"
 #include <memory>
 #include "runtime/utils/exception.h"
+#include "runtime/utils/gil_scoped.h"
 
 namespace mrt {
 namespace runtime {
@@ -35,6 +36,7 @@ void AsyncTaskQueueManager::InitializeAll() {
 }
 
 void AsyncTaskQueueManager::PauseAll() {
+  GilReleaseWithCheck gil_release;
   inferQueue_->Pause();
   launchQueue_->Pause();
 }
@@ -45,12 +47,14 @@ void AsyncTaskQueueManager::ContinueAll() {
 }
 
 void AsyncTaskQueueManager::WaitAll() {
+  GilReleaseWithCheck gil_release;
   inferQueue_->Wait();
   launchQueue_->Wait();
   MrtException::GetInstance().CheckException();
 }
 
 void AsyncTaskQueueManager::WorkerJoin() {
+  GilReleaseWithCheck gil_release;
   inferQueue_->WorkerJoin();
   launchQueue_->WorkerJoin();
 }
