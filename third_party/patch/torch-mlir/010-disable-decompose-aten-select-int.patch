@@ -1,0 +1,16 @@
+--- a/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp
++++ b/lib/Dialect/Torch/Transforms/DecomposeComplexOps.cpp
+@@ -13135,7 +13135,12 @@ struct DecomposeComplexOpsPass
+     addPatternIfTargetOpIsIllegal<DecomposeAtenMeanOp>(patterns);
+     addPatternIfTargetOpIsIllegal<DecomposeAtenMeanDimOp>(patterns);
+     addPatternIfTargetOpIsIllegal<DecomposeAtenStftCenterOp>(patterns);
+-    addPatternIfTargetOpIsIllegal<DecomposeAtenSelectIntOp>(patterns);
++    // MOPT NOTE:
++    // Keep `aten.select.int` intact so TorchDynamo symbolic-shape binding
++    // (`torch.bind_symbolic_shape`) can still be associated with the original
++    // select result (avoids introducing unbound slice+squeeze chains that may
++    // keep intermediate shapes unknown at runtime).
++    // addPatternIfTargetOpIsIllegal<DecomposeAtenSelectIntOp>(patterns);
+     addPatternIfTargetOpIsIllegal<DecomposeAtenMatmulOp>(patterns);
+     addPatternIfTargetOpIsIllegal<DecomposeAtenMvOp>(patterns);
+     addPatternIfTargetOpIsIllegal<DecomposeAtenRenormOp>(patterns);

@@ -41,6 +41,15 @@ std::unique_ptr<Pass> createOutlineStablehloFusionRegionsPass();
 /// Create a pass to mark Torch ops to be converted to StableHLO.
 std::unique_ptr<Pass> createMarkTorchToStablehloOpPass();
 
+/// Create a pass to propagate torch symbolic shape bindings onto builtin tensor producers.
+std::unique_ptr<Pass> createPropagateTorchSymbolicShapePass();
+
+/// Create a pass to remove redundant dynamic broadcast chains using symbolic shape info.
+std::unique_ptr<Pass> createRemoveRedundantDynamicBroadcastPass();
+
+/// Create a pass to validate `mopt.symbolic_shape` attribute schema/type.
+std::unique_ptr<Pass> createVerifySymbolicShapeAttrsPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

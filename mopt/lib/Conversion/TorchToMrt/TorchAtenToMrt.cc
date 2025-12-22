@@ -217,6 +217,20 @@ struct ConvertAtenTransposeInt : public OpConversionPattern<TorchD::AtenTranspos
   }
 };
 
+struct ConvertAtenSelectInt : public OpConversionPattern<TorchD::AtenSelectIntOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(TorchD::AtenSelectIntOp op, OpAdaptor adaptor,
+                                ConversionPatternRewriter &rewriter) const override {
+    // Lower to a single view op to avoid creating an intermediate tensor with
+    // unknown (index-dependent) extent like [1, -1, 64] before launch.
+    auto outType = cast<mrt::TensorType>(getTypeConverter()->convertType(op.getType()));
+    rewriter.replaceOpWithNewOp<mrt::SelectViewOp>(op, outType, adaptor.getSelf(), adaptor.getDim(),
+                                                   adaptor.getIndex());
+    return success();
+  }
+};
+
 struct ConvertAtenZeros : public OpConversionPattern<TorchD::AtenZerosOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -247,6 +261,7 @@ static void populateAtenToMrtCustomPatterns(TypeConverter &converter, RewritePat
   MLIRContext *context = patterns.getContext();
   patterns.add<ConvertAtenDivTensorMode>(converter, context);
   patterns.add<ConvertAtenEmptyMemoryFormat>(converter, context);
+  patterns.add<ConvertAtenSelectInt>(converter, context);
   patterns.add<ConvertAtenSliceScatter>(converter, context);
   patterns.add<ConvertAtenSumDimIntList>(converter, context);
   patterns.add<ConvertAtenToDtype>(converter, context);

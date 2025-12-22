@@ -25,6 +25,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <ctime>
 
 static inline std::string GetTime() {
   auto t = time(0);
@@ -105,7 +106,63 @@ class Cexception {
   Cerr() << GetTime() << " [(pid:" << getpid() << ", thread id:" << std::hex << std::this_thread::get_id() << std::dec \
          << ") " << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] error: "
 
-#define LOG_EXCEPTION Cexception(__FILE__, __LINE__, __FUNCTION__)
+namespace mrt {
+namespace common {
+
+// Stream-style exception builder that keeps compiler-visible [[noreturn]] semantics.
+//
+// Motivation:
+// - Legacy LOG_EXCEPTION throws from Cexception destructor, which is not visible
+//   as "noreturn" to the compiler and can trigger "missing return" diagnostics
+//   in non-void functions under -Werror.
+//
+// Usage:
+//   LOG_EXCEPTION << "bad value: " << v;
+//
+// NOTE: We intentionally pass (file, line, func) from the call-site so the
+// thrown exception points to the real error location rather than this helper.
+class ThrowStream final {
+ public:
+  ThrowStream(const char *file, int line, const char *func) : file_(file), line_(line), func_(func) {}
+
+  std::ostringstream &Stream() { return oss_; }
+
+  [[noreturn]] void ThrowNow() {
+    ::Cexception(file_, line_, func_) << oss_.str();
+    __builtin_unreachable();
+  }
+
+ private:
+  const char *file_;
+  int line_;
+  const char *func_;
+  std::ostringstream oss_;
+};
+
+// A null sink used to keep NO_LOG_EXCEPTION well-formed and streamable.
+class NullStream final {
+ public:
+  template <typename T>
+  NullStream &operator<<(const T &) noexcept {
+    return *this;
+  }
+};
+
+}  // namespace common
+}  // namespace mrt
+
+#define MRT_LOG_CONCAT_INNER_(a, b) a##b
+#define MRT_LOG_CONCAT_(a, b) MRT_LOG_CONCAT_INNER_(a, b)
+
+// Implemented as a for-loop:
+// - the body performs stream insertion
+// - the increment expression calls a [[noreturn]] function that throws
+#define LOG_EXCEPTION_IMPL_(id)                                                                                       \
+  for (::mrt::common::ThrowStream MRT_LOG_CONCAT_(_mrt_log_exception_stream_, id)(__FILE__, __LINE__, __FUNCTION__);; \
+       MRT_LOG_CONCAT_(_mrt_log_exception_stream_, id).ThrowNow())                                                    \
+  MRT_LOG_CONCAT_(_mrt_log_exception_stream_, id).Stream()
+
+#define LOG_EXCEPTION LOG_EXCEPTION_IMPL_(__COUNTER__)
 
 #define NO_LOG_OUT \
   while (false) Cout()
@@ -114,7 +171,7 @@ class Cexception {
   while (false) Cerr()
 
 #define NO_LOG_EXCEPTION \
-  while (false) Cexception()
+  while (false) ::mrt::common::NullStream()
 
 #ifndef DEBUG_LOG_OUT
 #undef LOG_OUT

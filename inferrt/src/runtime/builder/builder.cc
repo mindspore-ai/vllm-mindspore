@@ -61,7 +61,11 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
   if (nodeOutput->IsTuple()) {
     auto &tuple = nodeOutput->ToTuple();
     CHECK_IF_NULL(tuple);
-    CHECK_IF_FAIL(tuple->Size() > 0);
+
+    // Empty tuple (e.g., from mrt.shape on scalar tensors) - default to CPU.
+    if (tuple->Size() == 0) {
+      return {hardware::DeviceType::CPU, 0};
+    }
 
     bool allTensor = std::all_of(tuple->begin(), tuple->end(), [](const ir::ValuePtr &elem) {
       CHECK_IF_NULL(elem);

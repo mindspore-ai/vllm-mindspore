@@ -62,7 +62,10 @@ OpsErrorCode OpLinalgCall::InferShape(const std::vector<const ir::Value *> &inpu
     return UNKNOWN_ERROR;
   }
   // Pass realInputs_ instead of input: input contains MLIR text, loweredOp_ only needs actual tensor inputs
-  return loweredOp_->InferShape(realInputs_, output);
+  auto ret = loweredOp_->InferShape(realInputs_, output);
+  if (ret != OpsErrorCode::SUCCESS) return ret;
+  // Ensure symbolic shapes (if attached) are evaluated before downstream ops / launch.
+  return Operator::InferShape(realInputs_, output);
 }
 
 OpsErrorCode OpLinalgCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,

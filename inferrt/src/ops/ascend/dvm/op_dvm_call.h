@@ -43,7 +43,7 @@ class OpDvmCall : public Operator {
    * @param inputs Input list:
    *   - inputs[0]: DVM Payload (String type Value)
    *   - inputs[1...N]: Actual input tensors
-   * @param output Output tensor
+   * @param output Output value (Tensor or Tuple-of-Tensors)
    */
   void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output);
 

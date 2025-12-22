@@ -1,0 +1,26 @@
+diff --git a/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp b/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp
+index 11e9020..08a5e8f 100644
+--- a/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp
++++ b/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp
+@@ -18,6 +18,7 @@
+ #include "stablehlo/dialect/ChloOps.h"
+ #include "stablehlo/dialect/StablehloOps.h"
+ #include "torch-mlir/Conversion/Passes.h"
++#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+ #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+ #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+ #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+@@ -81,6 +82,13 @@ public:
+         typeConverter, patterns, target, options);
+
+     llvm::DenseSet<OperationName> opsToOverride;
++
++    // Allow TorchDynamo symbolic shape modeling ops to remain. The surrounding
++    // compilation flow may partially lower Torch->StableHLO (for fusion/outlining),
++    // and then lower remaining Torch ops (including these symbolic shape ops)
++    // via a separate path (e.g. Torch->MRT).
++    target.addLegalOp<mlir::torch::Torch::SymbolicIntOp,
++                      mlir::torch::Torch::BindSymbolicShapeOp>();
+     for (auto &pattern : patterns.getNativePatterns()) {
+       if (auto rootKind = pattern->getRootKind()) {
+         opsToOverride.insert(*rootKind);

@@ -66,7 +66,7 @@ class DvmKernelExecutor {
    * @return 0 on success, error code otherwise
    */
   int BuildKernel(std::function<void(dvm::Kernel &, const std::vector<const ir::Value *> &, const ir::Value *,
-                                     const std::vector<dvm::ShapeRef *> &, const dvm::ShapeRef *,
+                                     const std::vector<dvm::ShapeRef *> &, const std::vector<dvm::ShapeRef *> &,
                                      std::vector<dvm::NDObject *> *, std::vector<dvm::NDObject *> *)>
                     buildFunc,
                   const std::vector<const ir::Value *> &inputs, const ir::Value *output);
@@ -119,7 +119,7 @@ class DvmKernelExecutor {
    */
   void UpdateShapeRefs(const std::vector<const ir::Value *> &inputs, const ir::Value *output);
 
-  void EnsureShapeRefsInitialized(size_t numInputs);
+  void EnsureShapeRefsInitialized(size_t numInputs, size_t numOutputs);
 
   /**
    * @brief Build relocation table for kernel launch
@@ -139,7 +139,7 @@ class DvmKernelExecutor {
   std::vector<std::vector<int64_t>> shapesStorage_;  // Owns shape data
   std::vector<dvm::ShapeRef> shapeRefs_;             // References to storage (addresses must stay stable)
   std::vector<dvm::ShapeRef *> inputShapeRefPtrs_;   // Persistent pointers to input ShapeRefs
-  dvm::ShapeRef *outputShapeRefPtr_{nullptr};        // Persistent pointer to output ShapeRef
+  std::vector<dvm::ShapeRef *> outputShapeRefPtrs_;  // Persistent pointers to output ShapeRefs
 
   // RelocTable for Launch
   dvm::RelocTable relocTable_;

@@ -105,7 +105,10 @@ Pattern ConvertAtenSizeInt {
 
 Pattern ConvertAtenSliceTensor {
   let root = op<torch.aten.slice.Tensor>(operands: ValueRange) -> (resType: Type);
-  replace root with op<mrt.slice>(convertValues(operands)) -> (convertType(resType));
+  // Prefer view semantics: aten.slice.Tensor returns a view in PyTorch.
+  // Using mrt.slice_view avoids materializing an intermediate tensor whose
+  // dynamic dims may be unresolved before launch in some symbolic-shape cases.
+  replace root with op<mrt.slice_view>(convertValues(operands)) -> (convertType(resType));
 }
 
 Pattern ConvertAtenSplitTensor {

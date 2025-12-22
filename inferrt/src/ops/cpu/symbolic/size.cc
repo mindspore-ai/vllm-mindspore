@@ -26,10 +26,20 @@ namespace mrt {
 namespace ops {
 OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   // TODO(YzLi): Handle case where input[kIndex1] could be None and returns a tuple.
-  // Temporary solution: Falls back to parent class Operator::InferShape (verified).
-  // Note: The method of assigning tupleData to output has not been validated in pipeline mode for the Qwen3 network.
-  Operator::InferShape(input, output);
-  return SUCCESS;
+  // For now we implement the common case: `size(tensor, dim) -> i64`.
+  // This is required by dynamic-shape graphs where expand/view shapes are built from `mrt.size`.
+  if (input.size() != kInputSize2) {
+    LOG_ERROR << "Size::InferShape expects 2 inputs, but got: " << input.size();
+    return INVALID_INPUT_NUM;
+  }
+  if (!input[kIndex0] || !input[kIndex0]->IsTensor()) {
+    LOG_ERROR << "Size::InferShape expects input[0] to be a tensor";
+    return INVALID_PARAM;
+  }
+  if (!input[kIndex1]) {
+    LOG_ERROR << "Size::InferShape expects input[1] (dim) not null";
+    return INVALID_PARAM;
+  }
 
   const auto &shape = input[kIndex0]->ToTensor()->Shape();
   int64_t dim = input[kIndex1]->ToInt();
@@ -41,7 +51,9 @@ OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::V
     dim += ndim;
   }
 
-  *output = ir::Value(shape[dim]);
+  // Output is an i64 Value; its tag is fixed at graph-build time, so we must
+  // keep it as Tag::Int (Value(int64_t)).
+  *output = ir::Value(static_cast<int64_t>(shape[dim]));
   return SUCCESS;
 }
 

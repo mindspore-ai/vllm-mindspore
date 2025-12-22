@@ -17,10 +17,15 @@
 #include "mopt/Conversion/StablehloToDvm/StablehloToDvm.h"
 
 #include "stablehlo/dialect/StablehloOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Shape/IR/Shape.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 
 #include "mopt/Dialect/Dvm/Dvm.h"
 #include "mopt/Dialect/Dvm/DvmDialect.h"
@@ -368,6 +373,13 @@ struct ConvertStablehloToDvmPass : public PassWrapper<ConvertStablehloToDvmPass,
     registry.insert<mlir::stablehlo::StablehloDialect>();
     registry.insert<mlir::dvm::DvmDialect>();
     registry.insert<func::FuncDialect>();
+    registry.insert<mlir::arith::ArithDialect>();
+    registry.insert<mlir::tensor::TensorDialect>();
+    registry.insert<mlir::shape::ShapeDialect>();
+    // Allow mixed modules: Torch ops and TorchConversion bridge ops may remain
+    // at this stage and be handled later by convert-torch-to-mrt.
+    registry.insert<mlir::torch::Torch::TorchDialect>();
+    registry.insert<mlir::torch::TorchConversion::TorchConversionDialect>();
   }
 
   static constexpr StringRef kFusionOutlinedAttr = "fusion.outlined";
@@ -383,8 +395,16 @@ struct ConvertStablehloToDvmPass : public PassWrapper<ConvertStablehloToDvmPass,
     insertLoadStoreOps(module);
 
     ConversionTarget target(*ctx);
+    // Strict contract: this pass only rewrites StableHLO ops inside outlined
+    // fusion functions, but only a known set of dialects may remain. Any
+    // unexpected dialect/op will cause conversion failure.
     target.addLegalDialect<mlir::dvm::DvmDialect>();
     target.addLegalDialect<func::FuncDialect>();
+    target.addLegalDialect<mlir::arith::ArithDialect>();
+    target.addLegalDialect<mlir::tensor::TensorDialect>();
+    target.addLegalDialect<mlir::shape::ShapeDialect>();
+    target.addLegalDialect<mlir::torch::Torch::TorchDialect>();
+    target.addLegalDialect<mlir::torch::TorchConversion::TorchConversionDialect>();
 
     // If op is inside an outlined-fusion-function, convert stablehlo ops to dvm ops.
     auto isInsideOutlinedFusion = [](Operation *op) {

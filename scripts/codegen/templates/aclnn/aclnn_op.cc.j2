@@ -20,6 +20,7 @@
 
 namespace mrt {
 namespace ops {
+
 OpsErrorCode Aclnn{{ capitalize_op_name }}::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                      size_t *workspaceSize) {
   LOG_OUT << "Begin CalcWorkspace for op [{{ op_name }}]";

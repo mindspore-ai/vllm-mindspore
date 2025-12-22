@@ -40,6 +40,7 @@
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Dvm/DvmDialect.h"
 #include "mopt/Conversion/Passes.h"
+#include "mopt/Fusion/Passes.h"
 #include "mopt/Dialect/Mrt/Transforms/Passes.h"
 
 namespace {
@@ -67,6 +68,9 @@ int main(int argc, char **argv) {
 
   // Register custom conversion passes for Mopt
   mlir::registerMoptConversionPasses();
+
+  // Register Mopt fusion passes (StableHLO outlining, symbolic shape propagation, etc.)
+  mlir::registerMoptFusionPasses();
 
   // Register MRT transforms passes
   mlir::registerMrtTransformsPasses();

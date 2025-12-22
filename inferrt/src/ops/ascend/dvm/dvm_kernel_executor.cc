@@ -16,11 +16,11 @@
 
 #include "ops/ascend/dvm/dvm_kernel_executor.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <string_view>
 
 #include "common/logger.h"
-#include "common/throw.h"
 #include "ir/tensor/tensor.h"
 
 namespace mrt::ops {
@@ -75,6 +75,40 @@ bool InitDvmLibrary() {
   }
   return initialized;
 }
+
+static std::vector<ir::TensorPtr> ExtractOutputTensors(const ir::Value *output) {
+  if (output == nullptr) {
+    return {};
+  }
+  if (output->IsTensor()) {
+    return {output->ToTensor()};
+  }
+  if (output->IsTuple()) {
+    const auto &tup = output->ToTuple();
+    if (tup == nullptr) {
+      return {};
+    }
+    // Avoid depending on Tuple::ToTensorList() symbol (may not be linked into this plugin).
+    // Iterate tuple elements and extract tensors directly.
+    std::vector<ir::TensorPtr> outs;
+    outs.reserve(tup->Size());
+    for (const auto &item : *tup) {
+      if (item == nullptr) {
+        LOG_EXCEPTION << "DvmKernelExecutor: output tuple contains null element";
+      }
+      if (!item->IsTensor()) {
+        LOG_EXCEPTION << "DvmKernelExecutor: output tuple must contain only tensors";
+      }
+      outs.push_back(item->ToTensor());
+    }
+    return outs;
+  }
+  LOG_EXCEPTION << "DvmKernelExecutor: output must be a Tensor or Tuple-of-Tensors, but got tag="
+                << static_cast<int>(output->GetTag());
+  return {};
+}
+
+static size_t OutputTensorCountOrOne(const std::vector<ir::TensorPtr> &outs) { return outs.empty() ? 1 : outs.size(); }
 }  // namespace
 
 DvmKernelExecutor::DvmKernelExecutor(dvm::KernelType kernelType)
@@ -89,16 +123,13 @@ DvmKernelExecutor::DvmKernelExecutor(dvm::KernelType kernelType)
 
 DvmKernelExecutor::~DvmKernelExecutor() { LOG_OUT << "DvmKernelExecutor destroyed"; }
 
-void DvmKernelExecutor::EnsureShapeRefsInitialized(size_t numInputs) {
-  // NOTE: DvmKernelExecutor currently only supports a single output shape ref.
-  // TODO(lmy): support multi-output (tuple) by plumbing output count & output ShapeRef pointers through build/launch.
-  constexpr size_t kNumOutputs = 1;
-  const size_t expected = numInputs + kNumOutputs;  // inputs + output(s)
+void DvmKernelExecutor::EnsureShapeRefsInitialized(size_t numInputs, size_t numOutputs) {
+  const size_t expected = numInputs + numOutputs;  // inputs + output(s)
   if (!shapeRefs_.empty()) {
     // Once the kernel graph is built, DVM may keep pointers to ShapeRef objects.
     // Do NOT reallocate/move ShapeRefs after that point.
     if (shapeRefs_.size() != expected) {
-      MRT_THROW("ShapeRef count mismatch. Expected ", expected, ", got ", shapeRefs_.size());
+      LOG_EXCEPTION << "ShapeRef count mismatch. Expected " << expected << ", got " << shapeRefs_.size();
     }
     return;
   }
@@ -106,19 +137,25 @@ void DvmKernelExecutor::EnsureShapeRefsInitialized(size_t numInputs) {
   shapesStorage_.resize(expected);
   shapeRefs_.resize(expected);
   inputShapeRefPtrs_.resize(numInputs);
+  outputShapeRefPtrs_.resize(numOutputs);
 
   for (size_t i = 0; i < numInputs; ++i) {
     shapeRefs_[i] = shapesStorage_[i];
     inputShapeRefPtrs_[i] = &shapeRefs_[i];
   }
-  shapeRefs_[numInputs] = shapesStorage_[numInputs];
-  outputShapeRefPtr_ = &shapeRefs_[numInputs];
+  for (size_t o = 0; o < numOutputs; ++o) {
+    const size_t idx = numInputs + o;
+    shapeRefs_[idx] = shapesStorage_[idx];
+    outputShapeRefPtrs_[o] = &shapeRefs_[idx];
+  }
 }
 
 void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
-  EnsureShapeRefsInitialized(inputs.size());
+  auto outTensors = ExtractOutputTensors(output);
+  const size_t numOutputs = OutputTensorCountOrOne(outTensors);
+  EnsureShapeRefsInitialized(inputs.size(), numOutputs);
 
-  if (shapeRefs_.size() != inputs.size() + 1) {
+  if (shapeRefs_.size() != inputs.size() + numOutputs) {
     // Defensive: avoid writing out of bounds.
     LOG_EXCEPTION << "UpdateShapeRefs skipped due to ShapeRef size mismatch";
     return;
@@ -171,14 +208,22 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
     }
   }
 
-  // Update output shape
-  const auto &outputTensor = output->ToTensor();
-  if (outputTensor == nullptr) {
-    LOG_ERROR << "Output value is not a tensor";
-    shapesStorage_.back().clear();
-    shapeRefs_.back() = shapesStorage_.back();
-  } else {
-    const auto &outShape = outputTensor->Shape();
+  // Update output shapes (tuple outputs supported).
+  //
+  // IMPORTANT:
+  // - DVM may cache/copy ShapeRef (or even shape data pointer) during graph build.
+  // - Do NOT resize/reallocate shape storage after BuildKernel.
+  for (size_t o = 0; o < numOutputs; ++o) {
+    const size_t idx = inputs.size() + o;
+    const ir::TensorPtr outTensor = (o < outTensors.size()) ? outTensors[o] : nullptr;
+    if (outTensor == nullptr) {
+      LOG_ERROR << "Output[" << o << "] value is not a tensor (or empty tuple)";
+      shapesStorage_[idx].clear();
+      shapeRefs_[idx] = shapesStorage_[idx];
+      continue;
+    }
+    const auto &outShape = outTensor->Shape();
+
     // Log output shape for debugging
     std::string outShapeStr = "[";
     for (size_t d = 0; d < outShape.size(); ++d) {
@@ -186,20 +231,21 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
       if (d < outShape.size() - 1) outShapeStr += ", ";
     }
     outShapeStr += "]";
-    LOG_OUT << "Output shape: " << outShapeStr;
-    if (shapesStorage_.back().empty()) {
+    LOG_OUT << "Output[" << o << "] shape: " << outShapeStr;
+
+    if (shapesStorage_[idx].empty()) {
       // First initialization (allowed to allocate).
-      shapesStorage_.back().assign(outShape.begin(), outShape.end());
-    } else if (shapesStorage_.back().size() != outShape.size()) {
-      LOG_EXCEPTION << "DVM dyn-shape rank change is not supported. " << "Output rank changed from "
-                    << shapesStorage_.back().size() << " to " << outShape.size() << ". "
-                    << "Old shape=" << shapesStorage_.back() << ", new shape=" << outShape;
+      shapesStorage_[idx].assign(outShape.begin(), outShape.end());
+    } else if (shapesStorage_[idx].size() != outShape.size()) {
+      LOG_EXCEPTION << "DVM dyn-shape rank change is not supported. " << "Output[" << o << "] rank changed from "
+                    << shapesStorage_[idx].size() << " to " << outShape.size() << ". "
+                    << "Old shape=" << shapesStorage_[idx] << ", new shape=" << outShape;
     } else {
       for (size_t d = 0; d < outShape.size(); ++d) {
-        shapesStorage_.back()[d] = outShape[d];
+        shapesStorage_[idx][d] = outShape[d];
       }
     }
-    shapeRefs_.back() = shapesStorage_.back();
+    shapeRefs_[idx] = shapesStorage_[idx];
   }
 
   LOG_OUT << "Updated shape refs: " << shapeRefs_.size() << " shapes";
@@ -207,8 +253,8 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
 
 int DvmKernelExecutor::BuildKernel(
   std::function<void(dvm::Kernel &, const std::vector<const ir::Value *> &, const ir::Value *,
-                     const std::vector<dvm::ShapeRef *> &, const dvm::ShapeRef *, std::vector<dvm::NDObject *> *,
-                     std::vector<dvm::NDObject *> *)>
+                     const std::vector<dvm::ShapeRef *> &, const std::vector<dvm::ShapeRef *> &,
+                     std::vector<dvm::NDObject *> *, std::vector<dvm::NDObject *> *)>
     buildFunc,
   const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   if (isKernelBuilt_) {
@@ -224,7 +270,7 @@ int DvmKernelExecutor::BuildKernel(
   outputNDObjects_.clear();
 
   // Call user-provided build function with NDObject* output parameters
-  buildFunc(kernel_, inputs, output, inputShapeRefPtrs_, outputShapeRefPtr_, &inputNDObjects_, &outputNDObjects_);
+  buildFunc(kernel_, inputs, output, inputShapeRefPtrs_, outputShapeRefPtrs_, &inputNDObjects_, &outputNDObjects_);
 
   // Validate that NDObjects were properly recorded
   if (inputNDObjects_.size() != inputs.size()) {
@@ -236,12 +282,6 @@ int DvmKernelExecutor::BuildKernel(
   if (outputNDObjects_.empty()) {
     LOG_ERROR << "BuildFunc did not record any output NDObjects";
     return -1;
-  }
-  if (outputNDObjects_.size() != 1) {
-    // NOTE: current executor only supports a single output address + single output ShapeRef.
-    // TODO(lmy): support multi-output (tuple) by extending Launch/RelocTable/address mapping for N outputs.
-    MRT_THROW("DVM kernel currently supports single output only, but got ", outputNDObjects_.size(),
-              " output NDObjects. Please ensure payload has exactly one output Store or implement multi-output.");
   }
 
   isKernelBuilt_ = true;
@@ -299,6 +339,7 @@ int DvmKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector
 }
 
 void DvmKernelExecutor::BuildRelocTable(const std::vector<const ir::Value *> &inputs, ir::Value *output) {
+  (void)output;
   // Validate that kernel was built and NDObjects were recorded
   if (inputNDObjects_.size() != inputs.size()) {
     LOG_ERROR << "Mismatch between recorded NDObjects and actual inputs. " << "NDObjects: " << inputNDObjects_.size()
@@ -322,6 +363,7 @@ void DvmKernelExecutor::BuildRelocTable(const std::vector<const ir::Value *> &in
 
 int DvmKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *stream,
                               const std::vector<const ir::Value *> &inputs, ir::Value *output) {
+  (void)workspaceSize;
   if (!isKernelBuilt_) {
     LOG_ERROR << "Kernel not built yet";
     return -1;
@@ -345,8 +387,18 @@ int DvmKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *strea
     inputAddrs.push_back(tensor ? tensor->DataPtr() : nullptr);
   }
 
-  const auto &outputTensor = output->ToTensor();
-  outputAddrs.push_back(outputTensor ? outputTensor->DataPtr() : nullptr);
+  auto outTensors = ExtractOutputTensors(output);
+  if (outTensors.empty()) {
+    LOG_EXCEPTION << "DvmKernelExecutor::Launch: output is empty (expected at least one tensor)";
+  }
+  if (!outputNDObjects_.empty() && outTensors.size() != outputNDObjects_.size()) {
+    LOG_EXCEPTION << "DvmKernelExecutor::Launch: output tensor count mismatch. Payload/build recorded "
+                  << outputNDObjects_.size() << " output NDObjects, but runtime output value has " << outTensors.size()
+                  << " tensors.";
+  }
+  outputAddrs.resize(outTensors.size());
+  std::transform(outTensors.begin(), outTensors.end(), outputAddrs.begin(),
+                 [](const ir::TensorPtr &t) { return t ? t->DataPtr() : nullptr; });
 
   // Launch DVM kernel
   int ret = kernel_.Launch(relocTable_, inputAddrs.data(), outputAddrs.data(), workspace, stream);

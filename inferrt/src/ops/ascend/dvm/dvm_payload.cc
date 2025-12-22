@@ -23,7 +23,7 @@
 #include <unordered_map>
 
 #include "nlohmann/json.hpp"
-#include "common/throw.h"
+#include "common/logger.h"
 #include "ops/ascend/dvm/prebuild/dvm.h"
 
 using json = nlohmann::json;
@@ -174,7 +174,7 @@ T LookupByName(const std::array<MappingEntry<T>, N> &table, std::string_view nam
   if (it != table.end()) {
     return it->value;
   }
-  MRT_THROW("Unknown ", what, ": ", name);
+  LOG_EXCEPTION << "Unknown " << what << ": " << name;
 }
 
 template <typename T, size_t N>
@@ -189,7 +189,7 @@ std::string_view LookupByValue(const std::array<MappingEntry<T>, N> &table, T va
 DvmOpCode StringToOpCode(const std::string &op) {
   auto it = kOpCodeByName.find(std::string_view{op});
   if (it == kOpCodeByName.end()) {
-    MRT_THROW("Unknown OpCode: ", op);
+    LOG_EXCEPTION << "Unknown OpCode: " << op;
   }
   return it->second;
 }
@@ -209,7 +209,7 @@ const json *GetAttrsPtr(const json &inst_json) {
   const auto &attrs = inst_json["attrs"];
   if (attrs.is_null()) return nullptr;
   if (!attrs.is_object()) {
-    MRT_THROW("Instruction 'attrs' must be an object");
+    LOG_EXCEPTION << "Instruction 'attrs' must be an object";
   }
   return &attrs;
 }
@@ -218,10 +218,10 @@ void ParseInputsField(const json &inst_json, DvmInstruction *inst) {
   if (!inst_json.contains("inputs")) return;
   const auto &inputs = inst_json["inputs"];
   if (!inputs.is_array()) {
-    MRT_THROW("Instruction 'inputs' must be an array");
+    LOG_EXCEPTION << "Instruction 'inputs' must be an array";
   }
   if (inputs.size() > kMaxOperands) {
-    MRT_THROW("Instruction 'inputs' length must be <= ", kMaxOperands);
+    LOG_EXCEPTION << "Instruction 'inputs' length must be <= " << kMaxOperands;
   }
   for (size_t i = 0; i < inputs.size(); ++i) {
     inst->operand_idxs[i] = inputs[i].get<int32_t>();
@@ -239,7 +239,7 @@ void ParseLoad(const json &inst_json, DvmInstruction *inst) {
     inst->aux_int = StringToDType(inst_json["dtype"].get<std::string>());
     return;
   }
-  MRT_THROW("Load instruction missing attrs.dtype");
+  LOG_EXCEPTION << "Load instruction missing attrs.dtype";
 }
 
 void ParseStore(const json &inst_json, DvmInstruction *inst) {
@@ -358,7 +358,7 @@ void ParseCast(const json &inst_json, DvmInstruction *inst) {
     inst->aux_int = StringToDType(inst_json["dtype"].get<std::string>());
     return;
   }
-  MRT_THROW("Cast instruction missing attrs.dtype");
+  LOG_EXCEPTION << "Cast instruction missing attrs.dtype";
 }
 
 void ParseReshapeOrBroadcast(const json &inst_json, DvmInstruction *inst) {
@@ -368,6 +368,34 @@ void ParseReshapeOrBroadcast(const json &inst_json, DvmInstruction *inst) {
     inst->operand_idxs[0] = inst_json["src"].get<int32_t>();
   }
   // Shape is provided at runtime via ShapeRef.
+  //
+  // For multi-output graphs, shape-driven ops (reshape/broadcast) need to know
+  // where the target shape comes from.
+  //
+  // Schema:
+  //   attrs: { "shape_ref": {"output_pos":<int>} }  OR
+  //          { "shape_ref": {"input_pos":<int>} }   OR
+  //          { "shape_ref": {"dims":[...]} }
+  const auto *attrs = GetAttrsPtr(inst_json);
+  if (attrs != nullptr && attrs->contains("shape_ref") && (*attrs)["shape_ref"].is_object()) {
+    const auto &sr = (*attrs)["shape_ref"];
+    const bool has_output_pos = sr.contains("output_pos");
+    const bool has_input_pos = sr.contains("input_pos");
+    const bool has_dims = sr.contains("dims");
+    const int count = static_cast<int>(has_output_pos) + static_cast<int>(has_input_pos) + static_cast<int>(has_dims);
+    if (count != 1) {
+      LOG_EXCEPTION << "shape_ref must specify exactly one of {output_pos, input_pos, dims}";
+    }
+    if (has_output_pos) {
+      inst->shape_ref_output_pos = sr["output_pos"].get<int32_t>();
+    }
+    if (has_input_pos) {
+      inst->shape_ref_input_pos = sr["input_pos"].get<int32_t>();
+    }
+    if (has_dims) {
+      inst->shape_ref_dims = sr["dims"].get<std::vector<int64_t>>();
+    }
+  }
 }
 
 void ParseSelect(const json &inst_json, DvmInstruction *inst) {
@@ -482,12 +510,26 @@ void SerializeReshape(const DvmInstruction &inst, json *inst_json) {
   (*inst_json)["op"] = "reshape";
   (*inst_json)["inputs"] = json::array({inst.operand_idxs[0]});
   (*inst_json)["attrs"] = json::object();
+  json sr = json::object();
+  if (inst.shape_ref_output_pos >= 0) sr["output_pos"] = inst.shape_ref_output_pos;
+  if (inst.shape_ref_input_pos >= 0) sr["input_pos"] = inst.shape_ref_input_pos;
+  if (!inst.shape_ref_dims.empty()) sr["dims"] = inst.shape_ref_dims;
+  if (!sr.empty()) {
+    (*inst_json)["attrs"]["shape_ref"] = sr;
+  }
 }
 
 void SerializeBroadcast(const DvmInstruction &inst, json *inst_json) {
   (*inst_json)["op"] = "broadcast";
   (*inst_json)["inputs"] = json::array({inst.operand_idxs[0]});
   (*inst_json)["attrs"] = json::object();
+  json sr = json::object();
+  if (inst.shape_ref_output_pos >= 0) sr["output_pos"] = inst.shape_ref_output_pos;
+  if (inst.shape_ref_input_pos >= 0) sr["input_pos"] = inst.shape_ref_input_pos;
+  if (!inst.shape_ref_dims.empty()) sr["dims"] = inst.shape_ref_dims;
+  if (!sr.empty()) {
+    (*inst_json)["attrs"]["shape_ref"] = sr;
+  }
 }
 
 void SerializeSelect(const DvmInstruction &inst, json *inst_json) {
@@ -550,7 +592,7 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
   // Non-throwing parse to avoid exception-based control-flow.
   auto j = json::parse(json_str, nullptr, false);
   if (j.is_discarded()) {
-    MRT_THROW("Failed to parse DVM payload JSON");
+    LOG_EXCEPTION << "Failed to parse DVM payload JSON";
   }
 
   // Parse version and kernel_type
@@ -564,14 +606,14 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
 
   // Parse instructions
   if (!j.contains("instructions")) {
-    MRT_THROW("Missing 'instructions' field in DVM payload");
+    LOG_EXCEPTION << "Missing 'instructions' field in DVM payload";
   }
 
   for (auto &inst_json : j["instructions"]) {
     DvmInstruction inst;
 
     if (!inst_json.contains("op") || !inst_json.contains("idx")) {
-      MRT_THROW("Instruction missing 'op' or 'idx' field");
+      LOG_EXCEPTION << "Instruction missing 'op' or 'idx' field";
     }
 
     std::string op = inst_json["op"].get<std::string>();
