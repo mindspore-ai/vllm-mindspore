@@ -123,8 +123,21 @@ def permute_hook(node, input_nodes, executor):
     return [input_nodes[0], dim_inx]
 
 
+# pylint: disable=unused-argument
+def fused_inter_attention_score_hook(node, input_nodes, executor):
+    """swap the first and second param position."""
+    return [input_nodes[0], [input_nodes[1]], [input_nodes[2]], input_nodes[3], input_nodes[4], input_nodes[5],
+            input_nodes[6], input_nodes[7], input_nodes[8], input_nodes[9], input_nodes[10], input_nodes[11],
+            input_nodes[12], input_nodes[13], input_nodes[18], input_nodes[19], input_nodes[20], input_nodes[14],
+            input_nodes[15], input_nodes[16], input_nodes[17], input_nodes[21], input_nodes[22], input_nodes[23],
+            input_nodes[24], input_nodes[25], input_nodes[26], input_nodes[27], input_nodes[28], input_nodes[29],
+            input_nodes[30], input_nodes[31], input_nodes[32], input_nodes[33], input_nodes[34], input_nodes[35],
+            input_nodes[36], input_nodes[39], input_nodes[37], input_nodes[38]]
+
+
 def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.clone, clone_hook)
+    register_arg_mapping_hook(Op.fused_infer_attention_score, fused_inter_attention_score_hook)
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
@@ -398,6 +411,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
+        torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 

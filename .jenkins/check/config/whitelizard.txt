@@ -5,3 +5,4 @@
 #
 
 vllm-mindspore/inferrt/python/pybind/mrt/pybind11_ir.cc:PYBIND11_MODULE
+vllm-mindspore/inferrt/src/ops/ascend/aclnn/aclnn_fused_infer_attention_score.cc:CalcWorkspace, Launch

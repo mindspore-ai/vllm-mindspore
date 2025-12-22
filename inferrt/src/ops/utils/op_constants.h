@@ -60,6 +60,9 @@ inline constexpr size_t kIndex34 = 34;
 inline constexpr size_t kIndex35 = 35;
 inline constexpr size_t kIndex36 = 36;
 inline constexpr size_t kIndex37 = 37;
+inline constexpr size_t kIndex38 = 38;
+inline constexpr size_t kIndex39 = 39;
+inline constexpr size_t kIndex40 = 40;
 
 // dim of shape
 inline constexpr size_t kDim0 = 0;

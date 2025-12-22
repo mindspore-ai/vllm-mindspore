@@ -844,6 +844,61 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let genAclnnOp = "aclnnMoeGatingTopKSoftmax";
 }
 
+def Mrt_FusedInferAttentionScoreOp : Mrt_Op<"fused_infer_attention_score", [Pure]> {
+  let summary = "aclnnFusedInferAttentionScoreV3";
+  let description = [{
+    Support FlashAttention and PagedAttenton in prefill and decoder.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$query,
+    MrtTensorList:$key,
+    MrtTensorList:$value,
+    Optional<MrtAnyTensor>:$pseShiftOptional,
+    Optional<MrtAnyTensor>:$attenMaskOptional,
+    Optional<Mrt_I64ArrayType>:$actualSeqLengthsOptional,
+    Optional<Mrt_I64ArrayType>:$actualSeqLengthsKvOptional,
+    Optional<MrtAnyTensor>:$deqScale1Optional,
+    Optional<MrtAnyTensor>:$quantScale1Optional,
+    Optional<MrtAnyTensor>:$deqScale2Optional,
+    Optional<MrtAnyTensor>:$quantScale2Optional,
+    Optional<MrtAnyTensor>:$quantOffset2Optional,
+    Optional<MrtAnyTensor>:$antiquantScaleOptional,
+    Optional<MrtAnyTensor>:$antiquantOffsetOptional,
+    Optional<MrtAnyTensor>:$blockTableOptional,
+    Optional<MrtAnyTensor>:$queryPaddingSizeOptional,
+    Optional<MrtAnyTensor>:$kvPaddingSizeOptional,
+    Optional<MrtAnyTensor>:$keyAntiquantScaleOptional,
+    Optional<MrtAnyTensor>:$keyAntiquantOffsetOptional,
+    Optional<MrtAnyTensor>:$valueAntiquantScaleOptional,
+    Optional<MrtAnyTensor>:$valueAntiquantOffsetOptional,
+    Optional<MrtAnyTensor>:$keySharedPrefixOptional,
+    Optional<MrtAnyTensor>:$valueSharedPrefixOptional,
+    Optional<MrtAnyTensor>:$actualSharedPrefixLenOptional,
+    Optional<MrtAnyTensor>:$queryRopeOptional,
+    Optional<MrtAnyTensor>:$keyRopeOptional,
+    Optional<MrtAnyTensor>:$keyRopeAntiquantScaleOptional,
+    Mrt_I64Type:$numHeads,
+    Mrt_F64Type:$scaleValue,
+    Mrt_I64Type:$preTokens,
+    Mrt_I64Type:$nextTokens,
+    Mrt_StringType:$inputLayout,
+    Mrt_I64Type:$numKeyValueHeads,
+    Mrt_I64Type:$sparseMode,
+    Mrt_I64Type:$innerPrecise,
+    Mrt_I64Type:$blockSize,
+    Mrt_I64Type:$antiquantMode,
+    Mrt_BooleanType:$softmaxLseFlag,
+    Mrt_I64Type:$keyAntiquantMode,
+    Mrt_I64Type:$valueAntiquantMode
+  );
+
+  let results = (outs
+    MrtAnyTensor:$attentionOut,
+    MrtAnyTensor:$softmaxLse
+  );
+}
+
 def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let summary = "aclnnMoeInitRoutingV3";
   let description = [{
