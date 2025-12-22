@@ -18,7 +18,7 @@ Welcome to the vLLM-MindSpore Plugin community! Whether you're submitting code, 
 
 - Follow the installation steps in the [Installation Guide](https://www.mindspore.cn/vllm_mindspore/docs/en/master/getting_started/installation/installation.html) to set up your local development environment.
 
-- Validate your environment by running the project's local test command: execute `pytest tests` in the root directory of the code repository (note: you may need to update the path to your local model weights). Ensure all default test cases pass to confirm the environment is functioning correctly.
+- Validate your environment by running the project's local test command: execute `pytest tests -v --forked` in the root directory of the code repository (note: you may need to update the path to your local model weights). Ensure all default test cases pass to confirm the environment is functioning correctly.
 
 ### 4. Coding guidelines​
 

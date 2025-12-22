@@ -18,7 +18,7 @@ vLLM-MindSpore Plugin 开源社区贡献指南​
 
 - 按照[安装指南](https://www.mindspore.cn/vllm_mindspore/docs/zh-CN/master/getting_started/installation/installation.html)中的安装步骤，完成本地开发环境搭建。​
 
-- 执行项目的本地测试命令（代码仓库根目录下执行 `pytest tests` ，需用户修改至本地权重路经），确保基础环境正常运行，无默认测试用例失败。​
+- 执行项目的本地测试命令（代码仓库根目录下执行 `pytest tests -v --forked` ，需用户修改至本地权重路经），确保基础环境正常运行，无默认测试用例失败。​
 
 ### 4. 代码规范认知​
 

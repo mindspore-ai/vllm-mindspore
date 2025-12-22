@@ -26,10 +26,6 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       stop_vllm_server, send_and_get_request)
 from tests.utils.env_var_manager import EnvVarManager
 
-import vllm_mindspore
-from vllm import LLM, SamplingParams
-from openai import OpenAI
-
 env_manager = EnvVarManager()
 env_manager.setup_mindformers_environment()
 
@@ -47,6 +43,8 @@ QWEN_32B_MODEL = MODEL_PATH["Qwen2.5-32B-Instruct"]
 
 
 def run_vllm_offline_001():
+    from vllm import LLM
+
     prompts = "Today is"
     sampling_params = None
     llm = LLM(model=QWEN_7B_MODEL)
@@ -72,6 +70,7 @@ def test_vllm_offline_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_001()
 
 
@@ -90,10 +89,13 @@ def test_vllm_mf_offline_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_001()
 
 
 def run_vllm_offline_002(model, tensor_parallel_size=1):
+    from vllm import LLM, SamplingParams
+
     prompts = "Today is"
     sampling_params = SamplingParams(n=3,
                                      top_k=3,
@@ -123,6 +125,7 @@ def test_vllm_offline_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_002(model=QWEN_7B_MODEL)
 
 
@@ -139,10 +142,12 @@ def test_vllm_mf_offline_002():
     Model Info:
         Qwen2.5-32B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_002(model=QWEN_32B_MODEL, tensor_parallel_size=2)
 
 
 def run_vllm_offline_003():
+    from vllm import LLM, SamplingParams
     prompts = ""
     sampling_params = SamplingParams(top_k=1)
     llm = LLM(model=QWEN_7B_MODEL)
@@ -169,6 +174,7 @@ def test_vllm_offline_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_003()
 
 
@@ -186,10 +192,12 @@ def test_vllm_mf_offline_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_003()
 
 
 def run_vllm_offline_004():
+    from vllm import LLM, SamplingParams
     prompts = ["I am", "Today is", "I love Beijing, because"]
     sampling_params = SamplingParams(temperature=0.0, logprobs=4)
     llm = LLM(model=QWEN_7B_MODEL)
@@ -217,6 +225,7 @@ def test_vllm_offline_004():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_004()
 
 
@@ -234,6 +243,7 @@ def test_vllm_mf_offline_004():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
     run_vllm_offline_004()
 
 
@@ -251,6 +261,8 @@ def test_vllm_server_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    from openai import OpenAI
+
     log_name = "test_vllm_server_001.log"
     model = QWEN_7B_MODEL
     process = start_vllm_server(model, log_name)
@@ -280,6 +292,8 @@ def test_vllm_mf_server_001():
     Model Info:
         Qwen2.5-32B-Instruct
     """
+    from openai import OpenAI
+
     log_name = "test_vllm_mf_server_001.log"
     model = QWEN_32B_MODEL
     process = start_vllm_server(model,
@@ -837,6 +851,9 @@ def test_vllm_offline_err_001():
     Expected Result:
         Raises ValueError, and the corresponding error message is verified.
     """
+    import vllm_mindspore
+    from vllm import SamplingParams
+
     with pytest.raises(ValueError) as err:
         SamplingParams(top_k=-5)
     assert "top_k must be 0 (disable), or at least 1, got -5." in str(
@@ -869,6 +886,9 @@ def test_vllm_offline_err_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM
+
     with pytest.raises(TypeError) as err:
         LLM(model=1)
     assert "expected str, bytes or os.PathLike object, not int" in str(
@@ -906,6 +926,8 @@ def test_vllm_model_alias_ms_server_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+
     log_name = "test_vllm_v073_ms_server_001.log"
     model = QWEN_7B_MODEL
     process = start_vllm_server(
@@ -1243,6 +1265,9 @@ def test_vllm_v073_mf_offline_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+
     model = QWEN_7B_MODEL
     message = "Hello!" * 10000
     sampling_params = SamplingParams(top_k=3,
@@ -1278,6 +1303,9 @@ def test_vllm_v073_mf_offline_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+
     model = QWEN_7B_MODEL
     message = "Hello!"
     sampling_params = SamplingParams(temperature=0.0)

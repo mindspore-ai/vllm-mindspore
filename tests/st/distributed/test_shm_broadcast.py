@@ -31,11 +31,6 @@ import time
 
 import numpy as np
 
-import vllm_mindspore
-import torch.distributed as dist
-from vllm.distributed.device_communicators.shm_broadcast import MessageQueue
-from vllm.utils import get_ip, get_open_port, get_distributed_init_method
-
 from tests.utils.common_utils import teardown_function, setup_function
 from tests.utils.env_var_manager import EnvVarManager
 
@@ -45,7 +40,6 @@ env_manager.setup_mindformers_environment()
 env_vars = {
     "vLLM_MODEL_BACKEND": "MindFormers",
     "MS_ENABLE_LCCL": "off",
-    "ASCEND_RT_VISIBLE_DEVICES": "0,1,2,3,4,5,6,7",
     "LCCL_DETERMINISTIC": "1",
     "HCCL_DETERMINISTIC": "true",
     "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
@@ -62,6 +56,7 @@ def get_arrays(n: int, seed: int = 0) -> list[np.ndarray]:
 
 
 def distributed_run(fn, world_size):
+    from vllm.utils import get_open_port, get_distributed_init_method
     number_of_processes = world_size
     processes = []
 
@@ -86,6 +81,9 @@ def worker_fn_wrapper(fn):
     # `multiprocessing.Process` cannot accept environment variables directly
     # so we need to pass the environment variables as arguments
     # and update the environment variables in the function
+    import msadapter
+    import torch.distributed as dist
+
     def wrapped_fn(distributed_init_method, rank, world_size):
         dist.init_process_group(
             backend="nccl",
@@ -100,6 +98,10 @@ def worker_fn_wrapper(fn):
 
 @worker_fn_wrapper
 def worker_fn():
+    import torch.distributed as dist
+    from vllm.distributed.device_communicators.shm_broadcast import MessageQueue
+    from vllm.utils import get_ip, get_open_port
+
     rank = dist.get_rank()
     if rank == 0:
         port = get_open_port()
@@ -164,4 +166,5 @@ def test_shm_broadcast():
     Expected Result:
         Successfully executed, verify process status.
     """
+    import vllm_mindspore
     distributed_run(worker_fn, 4)

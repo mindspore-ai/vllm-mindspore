@@ -25,8 +25,8 @@ from collections.abc import Iterator
 from enum import Enum
 from typing import NamedTuple, Optional
 
+import vllm_mindspore
 import torch
-
 from vllm.utils import make_tensor_with_pad
 from vllm.v1.sample.logits_processor import BatchUpdate, LogitsProcessor
 from vllm.v1.sample.metadata import SamplingMetadata
