@@ -97,4 +97,8 @@ GLM-4-9B-0414:
 Qwen3-Embedding-8B:
   description: "Qwen3-Embedding-8B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-Embedding-8B"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-Embedding-8B"
+
+Qwen3-32B-gs-A8W8:
+  description: "Qwen3-32B with golden stick A8W8 quantilization, source from https://modelers.cn/models/MindSpore-Lab/Qwen3-32B-gs-A8W8"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-32B-gs-A8W8"
   
