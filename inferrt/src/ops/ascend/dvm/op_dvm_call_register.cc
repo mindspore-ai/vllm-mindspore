@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "ops/ascend/lowered/op_linalg_call.h"
+#include "ops/ascend/dvm/op_dvm_call.h"
 #include "ops/op_register.h"
 
 namespace mrt {
 namespace ops {
-// Register linalg_call operator for Ascend platform
-MRT_REG_OP(linalg_call, OpLinalgCall, Ascend);
+// Register dvm_call operator for Ascend platform
+MRT_REG_OP(dvm_call, OpDvmCall, Ascend);
 }  // namespace ops
 }  // namespace mrt

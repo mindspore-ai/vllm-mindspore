@@ -12,7 +12,11 @@ include_directories(${LLVM_INCLUDE_DIRS})
 
 #Link dependencies
 target_link_libraries(ops_ascend_lowered PRIVATE
-    ops_base_obj hardware_ascend kernel mrt::securec ${CMAKE_DL_LIBS} LLVMSupport)
+    hardware_ascend
+    kernel
+    mrt::securec
+    ${CMAKE_DL_LIBS}
+    LLVMSupport)
 
 #Install library
 install(TARGETS ops_ascend_lowered LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
