@@ -250,6 +250,7 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
 
     return compiled_callable
 
+
 def _get_device_info_from_gm(gm: torch.fx.GraphModule):
     """Extract device information from input node metadata of FX GraphModule."""
     for node in gm.graph.nodes:
@@ -263,6 +264,8 @@ def _get_device_info_from_gm(gm: torch.fx.GraphModule):
                 # Handle device type string
                 device_str = "npu" if device_type_str in ("npu", "privateuse1") else "cpu"
                 device_index = getattr(device, "index", -1)
+                if device_index is None:
+                    device_index = -1
                 return device_str, device_index
 
     # default to cpu
