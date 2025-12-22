@@ -44,7 +44,6 @@ env_vars = {
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 QWEN_32B_MODEL = MODEL_PATH["Qwen2.5-32B-Instruct"]
-DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
 
 
 def run_vllm_offline_001():
