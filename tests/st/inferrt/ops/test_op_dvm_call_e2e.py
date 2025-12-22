@@ -31,9 +31,9 @@ def test_dvm_call_add_staticshape_e2e():
         "version": 1,
         "kernel_type": "static_shape",
         "instructions": [
-            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "add"}},
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "Add"}},
             {"op": "store", "idx": 3, "inputs": [2], "attrs": {}}
         ],
         "input_indices": [0, 1],
@@ -91,10 +91,10 @@ def test_dvm_call_mul_add_fused_staticshape_e2e():
         "version": 1,
         "kernel_type": "static_shape",
         "instructions": [
-            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "mul"}},
-            {"op": "binary", "idx": 3, "inputs": [2, 0], "attrs": {"type": "add"}},
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "Mul"}},
+            {"op": "binary", "idx": 3, "inputs": [2, 0], "attrs": {"type": "Add"}},
             {"op": "store", "idx": 4, "inputs": [3], "attrs": {}}
         ],
         "input_indices": [0, 1],
@@ -145,8 +145,8 @@ def test_dvm_call_matmul_dynshape_e2e(m, k, n):
         "version": 1,
         "kernel_type": "dyn_shape",
         "instructions": [
-            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "float16"}},
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
             {"op": "matmul", "idx": 2, "inputs": [0, 1], "attrs": {"trans_a": false, "trans_b": false}},
             {"op": "store", "idx": 3, "inputs": [2], "attrs": {}}
         ],
@@ -201,13 +201,13 @@ def test_dvm_call_dynshape_combo_with_matmul_e2e(m, k, n):
         "version": 1,
         "kernel_type": "dyn_shape",
         "instructions": [
-            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "float16"}},
-            {"op": "load", "idx": 2, "inputs": [], "attrs": {"dtype": "float16"}},
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 2, "inputs": [], "attrs": {"dtype": "f16"}},
             {"op": "matmul", "idx": 3, "inputs": [0, 1], "attrs": {"trans_a": false, "trans_b": false}},
-            {"op": "binary", "idx": 4, "inputs": [3, 2], "attrs": {"type": "add"}},
-            {"op": "unary", "idx": 5, "inputs": [4], "attrs": {"type": "exp"}},
-            {"op": "binary", "idx": 6, "inputs": [5, 4], "attrs": {"type": "mul"}},
+            {"op": "binary", "idx": 4, "inputs": [3, 2], "attrs": {"type": "Add"}},
+            {"op": "unary", "idx": 5, "inputs": [4], "attrs": {"type": "Exp"}},
+            {"op": "binary", "idx": 6, "inputs": [5, 4], "attrs": {"type": "Mul"}},
             {"op": "store", "idx": 7, "inputs": [6], "attrs": {}}
         ],
         "input_indices": [0, 1, 2],

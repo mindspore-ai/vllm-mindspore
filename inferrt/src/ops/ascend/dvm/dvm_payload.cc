@@ -119,49 +119,53 @@ const std::array<std::string_view, kOpCodeCount> kOpNameByCode = {
   "stage_pad_store",  // kStagePadStore
 };
 
+// DType strings are aligned to MLIR type tokens (Type::print), e.g., f16/bf16/f32/i32/i64/i1.
 constexpr std::array<MappingEntry<int32_t>, 6> kDTypes = {{
-  {"float16", dvm::kFloat16},
-  {"bfloat16", dvm::kBFloat16},
-  {"float32", dvm::kFloat32},
-  {"int32", dvm::kInt32},
-  {"int64", dvm::kInt64},
-  {"bool", dvm::kBool},
+  {"f16", dvm::kFloat16},
+  {"bf16", dvm::kBFloat16},
+  {"f32", dvm::kFloat32},
+  {"i32", dvm::kInt32},
+  {"i64", dvm::kInt64},
+  {"i1", dvm::kBool},
 }};
 
+// Binary op strings are aligned to MLIR enum stringify spellings, e.g., Add/GreaterEqual.
 constexpr std::array<MappingEntry<int32_t>, 15> kBinaryOps = {{
-  {"equal", dvm::kEqual},
-  {"not_equal", dvm::kNotEqual},
-  {"greater", dvm::kGreater},
-  {"greater_equal", dvm::kGreaterEqual},
-  {"less", dvm::kLess},
-  {"less_equal", dvm::kLessEqual},
-  {"add", dvm::kAdd},
-  {"sub", dvm::kSub},
-  {"mul", dvm::kMul},
-  {"div", dvm::kDiv},
-  {"pow", dvm::kPow},
-  {"maximum", dvm::kMaximum},
-  {"minimum", dvm::kMinimum},
-  {"logical_and", dvm::kLogicalAnd},
-  {"logical_or", dvm::kLogicalOr},
+  {"Equal", dvm::kEqual},
+  {"NotEqual", dvm::kNotEqual},
+  {"Greater", dvm::kGreater},
+  {"GreaterEqual", dvm::kGreaterEqual},
+  {"Less", dvm::kLess},
+  {"LessEqual", dvm::kLessEqual},
+  {"Add", dvm::kAdd},
+  {"Sub", dvm::kSub},
+  {"Mul", dvm::kMul},
+  {"Div", dvm::kDiv},
+  {"Pow", dvm::kPow},
+  {"Maximum", dvm::kMaximum},
+  {"Minimum", dvm::kMinimum},
+  {"LogicalAnd", dvm::kLogicalAnd},
+  {"LogicalOr", dvm::kLogicalOr},
 }};
 
+// Unary op strings are aligned to MLIR enum stringify spellings, e.g., Exp/IsFinite.
 constexpr std::array<MappingEntry<int32_t>, 11> kUnaryOps = {{
-  {"sqrt", dvm::kSqrt},
-  {"abs", dvm::kAbs},
-  {"log", dvm::kLog},
-  {"exp", dvm::kExp},
-  {"reciprocal", dvm::kReciprocal},
-  {"is_finite", dvm::kIsFinite},
-  {"logical_not", dvm::kLogicalNot},
-  {"round", dvm::kRound},
-  {"floor", dvm::kFloor},
-  {"ceil", dvm::kCeil},
-  {"trunc", dvm::kTrunc},
+  {"Sqrt", dvm::kSqrt},
+  {"Abs", dvm::kAbs},
+  {"Log", dvm::kLog},
+  {"Exp", dvm::kExp},
+  {"Reciprocal", dvm::kReciprocal},
+  {"IsFinite", dvm::kIsFinite},
+  {"LogicalNot", dvm::kLogicalNot},
+  {"Round", dvm::kRound},
+  {"Floor", dvm::kFloor},
+  {"Ceil", dvm::kCeil},
+  {"Trunc", dvm::kTrunc},
 }};
 
+// Reduce op strings are aligned to MLIR enum stringify spellings.
 constexpr std::array<MappingEntry<int32_t>, 1> kReduceOps = {{
-  {"sum", dvm::kSum},
+  {"Sum", dvm::kSum},
 }};
 
 template <typename T, size_t N>
@@ -449,7 +453,7 @@ void SerializeBinary(const DvmInstruction &inst, json *inst_json) {
 void SerializeUnary(const DvmInstruction &inst, json *inst_json) {
   (*inst_json)["op"] = "unary";
   (*inst_json)["inputs"] = json::array({inst.operand_idxs[0]});
-  (*inst_json)["attrs"] = json::object({{"type", std::string(LookupByValue(kUnaryOps, inst.aux_int, "sqrt"))}});
+  (*inst_json)["attrs"] = json::object({{"type", std::string(LookupByValue(kUnaryOps, inst.aux_int, "Sqrt"))}});
 }
 
 void SerializeMatMul(const DvmInstruction &inst, json *inst_json) {
@@ -462,7 +466,7 @@ void SerializeReduce(const DvmInstruction &inst, json *inst_json) {
   (*inst_json)["op"] = "reduce";
   (*inst_json)["inputs"] = json::array({inst.operand_idxs[0]});
   (*inst_json)["attrs"] = json::object({
-    {"type", std::string(LookupByValue(kReduceOps, inst.aux_int, "sum"))},
+    {"type", std::string(LookupByValue(kReduceOps, inst.aux_int, "Sum"))},
     {"axes", inst.aux_params},
     {"keepdims", inst.aux_flags[0]},
   });
