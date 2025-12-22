@@ -25,11 +25,12 @@ from vllm.model_executor.layers.quantization.base_config import (
 
 # isort: off
 from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
-    golden_stick import GoldenStickConfig
+    golden_stick import GoldenStickConfig, ModelSlimConfig
 # isort: on
 
 QuantizationMethods = Literal[
     "golden-stick",
+    "ascend",
 ]
 
 QUANTIZATION_METHODS: list[str] = list(get_args(QuantizationMethods))
@@ -41,5 +42,6 @@ def get_quantization_config(quantization: str) -> type[QuantizationConfig]:
 
     method_to_config: dict[str, type[QuantizationConfig]] = {
         "golden-stick": GoldenStickConfig,
+        "ascend": ModelSlimConfig,
     }
     return method_to_config[quantization]
