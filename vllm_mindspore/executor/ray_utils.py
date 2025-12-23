@@ -21,6 +21,7 @@
 # limitations under the License.
 """Adaption for ray executor."""
 
+import os
 from typing import Dict, List, Optional
 
 from vllm.config import ParallelConfig, VllmConfig
@@ -32,6 +33,12 @@ from vllm.v1.engine.utils import CoreEngineActorManager, EngineZmqAddresses
 from vllm.v1.executor.abstract import Executor
 
 logger = init_logger(__name__)
+
+# Disable ray's automatic setting of ASCEND_RT_VISIBLE_DEVICES
+# to avoid device recognition issues.
+_RAY_NOSET_ASCEND_ENV = {
+    "RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES": "1"
+}
 
 
 class MsRayWorkerWrapper(RayWorkerWrapper):
@@ -85,20 +92,24 @@ def initialize_ray_cluster(
             logger.warning(
                 "No existing RAY instance detected. "
                 "A new instance will be launched with current node resources.")
-            ray.init(address=ray_address, num_gpus=parallel_config.world_size)
+            ray.init(address=ray_address,
+                     num_gpus=parallel_config.world_size,
+                     runtime_env=parallel_config.ray_runtime_env)
     else:
         # vllm-mindspore: To prevent the issue of setting device failure caused
         # by ray override `ASCEND_RT_VISIBLE_DEVICES` override,
         # pass RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1 as "env_vars"
         # parameter.
-        ray.init(address=ray_address,
-                 runtime_env={
-                     "env_vars": {
-                         "RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES":
-                         "1"
-                     }
-                 })
+        from ray.runtime_env import RuntimeEnv
 
+        if parallel_config.ray_runtime_env is None:
+            init_runtime_env = RuntimeEnv(env_vars=_RAY_NOSET_ASCEND_ENV)
+        else:
+            init_runtime_env = parallel_config.ray_runtime_env
+            init_runtime_env.set(
+                "env_vars",
+                init_runtime_env.env_vars() | _RAY_NOSET_ASCEND_ENV)
+        ray.init(address=ray_address, runtime_env=init_runtime_env)
     device_str = current_platform.ray_device_key
     if not device_str:
         raise ValueError(
@@ -188,10 +199,28 @@ def core_engine_actor_manager_init(
     import copy
 
     import ray
+    from ray.runtime_env import RuntimeEnv
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+    from vllm.platforms import current_platform
+    from vllm.ray.ray_env import get_env_vars_to_copy
+    from vllm.v1.engine.utils import get_device_indices
 
-    self.local_engine_actors = []
-    self.remote_engine_actors = []
+    self.local_engine_actors: list[ray.ActorHandle] = []
+    self.remote_engine_actors: list[ray.ActorHandle] = []
+
+    env_vars_list = get_env_vars_to_copy(destination="DPEngineCoreActor")
+    self.env_vars_dict = {
+        name: os.environ[name]
+        for name in env_vars_list if name in os.environ
+    }
+    # vllm-mindspore: Add RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES for
+    # remote call.
+    runtime_env = RuntimeEnv(env_vars=self.env_vars_dict
+                             | _RAY_NOSET_ASCEND_ENV)
+
+    self.addresses = addresses
+    self.executor_class = executor_class
+    self.log_stats = log_stats
     dp_size = vllm_config.parallel_config.data_parallel_size
     local_engine_count = \
         vllm_config.parallel_config.data_parallel_size_local
@@ -204,11 +233,7 @@ def core_engine_actor_manager_init(
         # by ray override `ASCEND_RT_VISIBLE_DEVICES` override,
         # pass RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1 as "env_vars"
         # parameter.
-        ray.init(runtime_env={
-            "env_vars": {
-                "RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES": "1"
-            }
-        })
+        ray.init(runtime_env={"env_vars": _RAY_NOSET_ASCEND_ENV})
 
     if placement_groups is not None:
         assert local_dp_ranks is not None, (
@@ -227,30 +252,45 @@ def core_engine_actor_manager_init(
     assert len(placement_groups) == dp_size, (
         "Number of placement groups must match data parallel size")
 
+    self.placement_group_is_local = []
     refs = []
-    for index in range(dp_size):
-        local_index = local_dp_ranks[index]
+    for index, local_index, pg in zip(range(dp_size), local_dp_ranks,
+                                      placement_groups):
         dp_vllm_config = copy.deepcopy(vllm_config)
-        pg = placement_groups[index]
         dp_vllm_config.parallel_config.placement_group = pg
-        on_head_node = index < local_engine_count
+        local_client = index < local_engine_count
+
+        # Ray XPU known issue: dpctl initializes the GPU runtime early, so
+        # setting device env vars in Ray actor's initialization method
+        # will not affect device selection. See:
+        # https://github.com/ray-project/ray/blob/master/python/ray/_private/accelerators/intel_gpu.py#L56 # noqa: E501
+        if current_platform.is_xpu():
+            device_evar = current_platform.device_control_env_var
+            device_indices = get_device_indices(device_evar, local_index,
+                                                world_size)
+            actor_env_vars = self.env_vars_dict.copy()
+            actor_env_vars[device_evar] = device_indices
+            runtime_env = RuntimeEnv(env_vars=actor_env_vars)
+
         # vllm-mindspore: Use MsDPEngineCoreActor to enable vllm-mindspore
         # firstly.
         actor = ray.remote(MsDPEngineCoreActor).options(
             scheduling_strategy=PlacementGroupSchedulingStrategy(
                 placement_group=pg,
                 placement_group_bundle_index=world_size,
-            )).remote(vllm_config=dp_vllm_config,
-                      executor_class=executor_class,
-                      log_stats=log_stats,
-                      on_head_node=on_head_node,
-                      addresses=addresses,
-                      dp_rank=index,
-                      local_dp_rank=local_index)
-        if on_head_node:
+            ),
+            runtime_env=runtime_env).remote(vllm_config=dp_vllm_config,
+                                            executor_class=executor_class,
+                                            log_stats=log_stats,
+                                            local_client=local_client,
+                                            addresses=addresses,
+                                            dp_rank=index,
+                                            local_dp_rank=local_index)
+        if local_client:
             self.local_engine_actors.append(actor)
         else:
             self.remote_engine_actors.append(actor)
+        self.placement_group_is_local.append(local_client)
         refs.append(actor.wait_for_init.remote())
 
     ray.get(refs)
