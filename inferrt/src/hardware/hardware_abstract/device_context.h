@@ -30,6 +30,7 @@
 #include "common/visible.h"
 #include "hardware/hardware_abstract/stream_util.h"
 #include "hardware/hardware_abstract/device_event.h"
+#include "hardware/hardware_abstract/capture_graph.h"
 #include "hardware/device.h"
 #ifdef __APPLE__
 #include "async/spinlock.h"
@@ -259,6 +260,9 @@ class MRT_EXPORT DeviceResManager {
 
   // Create device event for runtime.
   virtual DeviceEventPtr CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) { return nullptr; }
+
+  // Create aclgraph
+  virtual CaptureGraphPtr CreateCaptureGraph() { return nullptr; }
 
   // Create device event with flag.
   virtual DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi = true) {

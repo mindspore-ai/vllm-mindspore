@@ -33,6 +33,7 @@
 #include "hardware/ascend/res_manager/symbol_interface/acl_compiler_symbol.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
 #include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
+#include "hardware/ascend/res_manager/capture_graph/ascend_capture_graph.h"
 #include "acl/acl_rt.h"
 #include "hardware/hardware_abstract/device_context.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
@@ -399,6 +400,8 @@ DeviceEventPtr AscendResManager::CreateRuntimeEvent(bool enableBlocking, bool en
 void AscendResManager::SetAllocator(const AllocateFunc &allocator) { allocator_ = allocator; }
 
 void AscendResManager::SetDeleter(const DeleteFunc &deleter) { deleter_ = deleter; }
+
+CaptureGraphPtr AscendResManager::CreateCaptureGraph() { return std::make_shared<AscendCaptureGraph>(); }
 
 DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) {
   auto flag = enableTiming ? (ACL_EVENT_TIME_LINE | ACL_EVENT_SYNC) : ACL_EVENT_SYNC;

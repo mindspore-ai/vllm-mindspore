@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "acl_mdl_symbol.h"
+#include "hardware/ascend/res_manager/symbol_interface/acl_mdl_symbol.h"
 #include <string>
-#include "symbol_utils.h"
+#include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
 
 namespace mrt::device::ascend {
 aclmdlAddDatasetBufferFunObj aclmdlAddDatasetBuffer_ = nullptr;
@@ -67,6 +67,11 @@ aclmdlRICaptureGetInfoFunObj aclmdlRICaptureGetInfo_ = nullptr;
 aclmdlRICaptureEndFunObj aclmdlRICaptureEnd_ = nullptr;
 aclmdlRIExecuteAsyncFunObj aclmdlRIExecuteAsync_ = nullptr;
 aclmdlRIDestroyFunObj aclmdlRIDestroy_ = nullptr;
+aclmdlRICaptureTaskGrpBeginFunObj aclmdlRICaptureTaskGrpBegin_ = nullptr;
+aclmdlRICaptureTaskGrpEndFunObj aclmdlRICaptureTaskGrpEnd_ = nullptr;
+aclmdlRICaptureTaskUpdateBeginFunObj aclmdlRICaptureTaskUpdateBegin_ = nullptr;
+aclmdlRICaptureTaskUpdateEndFunObj aclmdlRICaptureTaskUpdateEnd_ = nullptr;
+
 #endif
 
 void LoadAclMdlApiSymbol(const std::string &ascendPath) {
@@ -125,6 +130,10 @@ void LoadAclMdlApiSymbol(const std::string &ascendPath) {
   aclmdlRICaptureEnd_ = DlsymAscendFuncObj(aclmdlRICaptureEnd, handler);
   aclmdlRIExecuteAsync_ = DlsymAscendFuncObj(aclmdlRIExecuteAsync, handler);
   aclmdlRIDestroy_ = DlsymAscendFuncObj(aclmdlRIDestroy, handler);
+  aclmdlRICaptureTaskGrpBegin_ = DlsymAscendFuncObj(aclmdlRICaptureTaskGrpBegin, handler);
+  aclmdlRICaptureTaskGrpEnd_ = DlsymAscendFuncObj(aclmdlRICaptureTaskGrpEnd, handler);
+  aclmdlRICaptureTaskUpdateBegin_ = DlsymAscendFuncObj(aclmdlRICaptureTaskUpdateBegin, handler);
+  aclmdlRICaptureTaskUpdateEnd_ = DlsymAscendFuncObj(aclmdlRICaptureTaskUpdateEnd, handler);
 #endif
 
   LOG_OUT << "Load acl mdl api success!";

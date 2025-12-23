@@ -25,6 +25,7 @@
 #include "acl/acl_rt.h"
 #include "hardware/ascend/res_manager/ascend_stream_manager.h"
 #include "hardware/hardware_abstract/device_event.h"
+#include "hardware/hardware_abstract/capture_graph.h"
 #include "hardware/hardware_abstract/device_context.h"
 #include "common/visible.h"
 
@@ -102,6 +103,7 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   size_t DefaultStream() const override;
 
   DeviceEventPtr CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) override;
+  CaptureGraphPtr CreateCaptureGraph() override;
   DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) override;
   bool DestroyEvent(const DeviceEventPtr &event) override;
   bool DestroyAllEvents() override;
