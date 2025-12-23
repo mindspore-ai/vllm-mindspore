@@ -17,6 +17,7 @@
 
 import mindspore as ms
 import torch
+import torch_npu
 
 def tensor_torch2ms(x: torch.Tensor):
     if x is None or not isinstance(x, torch.Tensor):
@@ -35,6 +36,7 @@ def tensor_ms2torch(x: ms.Tensor):
     # ms tensor -> dlpack -> torch tensor
     ms_dlpack = ms.utils.dlpack.to_dlpack(x)
     torch_tensor = torch.utils.dlpack.from_dlpack(ms_dlpack)
+    torch_npu.npu.synchronize()
     return torch_tensor
 
 
