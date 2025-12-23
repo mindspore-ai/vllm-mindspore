@@ -251,10 +251,9 @@ vllm.config.ParallelConfig.has_unfinished_dp = has_unfinished_dp
 from .utils import update_modules
 
 ######### for multi-model
-from vllm_mindspore.multimodal.inputs import (as_kwargs, batched_reduce_data,
+from vllm_mindspore.multimodal.inputs import (batched_reduce_data,
                                               flat_build_elems,
-                                              flat_reduce_data, from_items,
-                                              MultiModalFieldElem, _try_stack)
+                                              flat_reduce_data, _try_stack)
 
 from vllm.multimodal.inputs import MultiModalBatchedField
 from vllm.multimodal.inputs import MultiModalFlatField
@@ -263,12 +262,7 @@ from vllm.multimodal.inputs import MultiModalKwargs
 MultiModalBatchedField._reduce_data = batched_reduce_data
 MultiModalFlatField.build_elems = flat_build_elems
 MultiModalFlatField._reduce_data = flat_reduce_data
-MultiModalKwargs.as_kwargs = as_kwargs
-MultiModalKwargs.from_items = from_items
 MultiModalKwargs._try_stack = _try_stack
-
-vllm.multimodal.inputs.MultiModalFieldElem = MultiModalFieldElem
-vllm.v1.serial_utils.MultiModalFieldElem = MultiModalFieldElem
 
 from vllm_mindspore.v1.serial_utils import _encode_tensor, _decode_tensor
 from vllm.v1.serial_utils import MsgpackEncoder, MsgpackDecoder
@@ -439,6 +433,13 @@ V1Worker.__init__ = (wrapper_worker_bind_cpu(
     wrapper_worker_init(V1Worker.__init__)))
 V1Worker.init_device = wrapper_worker_init_device(V1Worker.init_device)
 V1Worker.compile_or_warm_up_model = compile_or_warm_up_model
+
+from vllm_mindspore.v1.request import wrapper_request_init
+from vllm.v1.request import Request
+
+# Wrap Request.__init__ with wrapper_request_init to avoid
+# memory leaks caused by circular references
+Request.__init__ = wrapper_request_init(Request.__init__)
 
 from vllm_mindspore.v1.executor.multiproc_executor import (
     executor_ensure_worker_termination, )
