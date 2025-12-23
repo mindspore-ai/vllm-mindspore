@@ -18,15 +18,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
+from mindspore import Tensor, mint
+
+_SAMPLING_EPS = 1e-5
 
 
 def apply_temperature(
     self,
-    logits: torch.Tensor,
-    temp: torch.Tensor,
+    logits: Tensor,
+    temp: Tensor,
     all_random: bool,
-) -> torch.Tensor:
+) -> Tensor:
+    # Use in-place division to avoid creating a new tensor.
+    # Avoid division by zero if there are greedy requests.
+    if not all_random:
+        temp = mint.where(temp < _SAMPLING_EPS, 1.0, temp)
+
     # logits.div_ will cause some error right now.
     # So we use logits = logits.div instead of logits.div_.
     return logits.div(temp.unsqueeze(dim=1))
