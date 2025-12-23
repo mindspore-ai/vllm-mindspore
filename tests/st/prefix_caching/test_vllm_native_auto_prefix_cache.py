@@ -19,7 +19,6 @@ import time
 import json
 import requests
 from unittest.mock import patch
-import vllm_mindspore
 
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, check_hit,

@@ -24,9 +24,6 @@ import os
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
 
-import vllm_mindspore
-from vllm import LLM, SamplingParams
-
 # def env
 env_vars = {
     "VLLM_MS_MODEL_BACKEND": "Native",
@@ -51,6 +48,8 @@ def test_vllm_llama3_8b():
     Model Info:
         LLaMA3-8B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [
@@ -94,6 +93,8 @@ def test_vllm_llama3_8b_aclgraph():
     Model Info:
         LLAMA3-8B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [

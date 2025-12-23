@@ -24,9 +24,6 @@ import os
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
 
-import vllm_mindspore
-from vllm import LLM, SamplingParams
-
 # def env
 env_vars = {
     "VLLM_MS_MODEL_BACKEND": "Native",
@@ -51,6 +48,8 @@ def test_vllm_minicpm4_0_5b():
     Model Info:
         MiniCPM4-0.5B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
 
     # Sample prompts.
     prompts = [

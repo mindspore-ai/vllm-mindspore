@@ -24,9 +24,6 @@ import time
 import requests
 import pytest
 from unittest.mock import patch
-import vllm_mindspore
-from vllm import LLM, SamplingParams
-from vllm.lora.request import LoRARequest
 
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, check_hit,
@@ -36,8 +33,6 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       process_request)
 
 from typing import Optional
-
-from vllm import EngineArgs, LLMEngine, RequestOutput
 
 # def env
 env_vars = {
@@ -54,11 +49,12 @@ QWEN_7B_LORA_LAW = MODEL_PATH["Qwen2.5-7B-Lora-Law"]
 QWEN_7B_LORA_MEDICAL = MODEL_PATH["Qwen2.5-7B-Lora-Medical"]
 
 
-def create_test_prompts(
-        lora_path: str
-) -> list[tuple[str, SamplingParams, Optional[LoRARequest]]]:
+def create_test_prompts(lora_path):
     """Create a list of test prompts with their sampling parameters.
     """
+    from vllm import SamplingParams
+    from vllm.lora.request import LoRARequest
+
     return [
         ("违章停车与违法停车是否有区别？",
          SamplingParams(temperature=0.0, top_p=1, top_k=-1,
@@ -67,9 +63,7 @@ def create_test_prompts(
     ]
 
 
-def process_requests(engine: LLMEngine,
-                     test_prompts: list[tuple[str, SamplingParams,
-                                              Optional[LoRARequest]]]):
+def process_requests(engine, test_prompts):
     """Continuously process a list of prompts and handle the outputs."""
     request_id = 0
 
@@ -82,7 +76,7 @@ def process_requests(engine: LLMEngine,
                                lora_request=lora_request)
             request_id += 1
 
-        request_outputs: list[RequestOutput] = engine.step()
+        request_outputs = engine.step()
         for request_output in request_outputs:
             if request_output.finished:
                 print(f'text is: {request_output.outputs[0].text}', flush=True)
@@ -90,7 +84,7 @@ def process_requests(engine: LLMEngine,
                     request_output.outputs[0].text
 
 
-def initialize_engine() -> LLMEngine:
+def initialize_engine():
     """Initialize the LLMEngine."""
     # max_loras: controls the number of LoRAs that can be used in the same
     #   batch. Larger numbers will cause higher memory usage, as each LoRA
@@ -99,6 +93,7 @@ def initialize_engine() -> LLMEngine:
     #   numbers will cause higher memory usage. If you know that all LoRAs will
     #   use the same rank, it is recommended to set this as low as possible.
     # max_cpu_loras: controls the size of the CPU LoRA cache.
+    from vllm import EngineArgs, LLMEngine
     engine_args = EngineArgs(model=QWEN_7B_MODEL,
                              enable_lora=True,
                              max_loras=1,
@@ -121,6 +116,7 @@ def test_multilora_inference():
     Model Info:
         Qwen2.5-7B-Lora-Law
     """
+    import vllm_mindspore
     engine = initialize_engine()
     lora_path = QWEN_7B_LORA_LAW
     test_prompts = create_test_prompts(lora_path)
@@ -141,6 +137,10 @@ def test_vllm_ms_offline_multilora_002():
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
     model = QWEN_7B_MODEL
     prompts = ["Hello,", "你好,"]
     sampling_params = SamplingParams(temperature=0.0,
@@ -168,6 +168,10 @@ def test_vllm_ms_offline_multilora_003():
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
     model = QWEN_7B_MODEL
     prompts = ["Hello,", "你好,"]
     sampling_params = SamplingParams(temperature=0.0,
@@ -206,6 +210,10 @@ def test_vllm_ms_offline_multilora_004():
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
     model = QWEN_7B_MODEL
     prompts = ["Hello,", "你好,"]
     sampling_params = SamplingParams(temperature=0.0,
@@ -245,6 +253,10 @@ def test_vllm_ms_offline_multilora_005():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
     log_name = "test_vllm_ms_offline_multilora_005.log"
     parent_dir = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -522,6 +534,10 @@ def test_vllm_ms_offline_multilora_v1_001():
     Model Info:
         Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law, Qwen2.5-7B-Lora-Medical
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
     model = QWEN_7B_MODEL
     prompts = ["Hello,", "你好,"]
     sampling_params = SamplingParams(temperature=0.0,

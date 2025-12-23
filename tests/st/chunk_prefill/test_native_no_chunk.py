@@ -15,11 +15,9 @@
 # limitations under the License.
 """Test Prefill-first Scheduler."""
 import os
-from typing import Optional
 import pytest
 from unittest.mock import patch
-import vllm_mindspore
-from vllm import LLM, SamplingParams
+
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
 
@@ -47,6 +45,8 @@ def test_prefill_first_schedule_qwen_offline():
     Model Info:
         Qwen3-0.6B
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     sampling_params = SamplingParams(temperature=0.0, max_tokens=4, top_k=1)
 
     with pytest.raises(ValueError):

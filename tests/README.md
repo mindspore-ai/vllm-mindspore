@@ -99,6 +99,21 @@ def test_{test_function_name}(batch_size: int):   # 用例函数名以"test_"前
 ```
 
 标记为必选的标签必须添加，否则门禁系统无法正常识别执行用例。
+
+ **注意:** 针对需要调用vllm原生接口的用例，需要提前导入`vllm_mindspore`，但由于`VLLM_MS_MODEL_BACKEND`等环境变量需要在导入`vllm_mindspore`前生效，推荐在用例内导入保证环境变量的有效性。如下示例:
+
+```
+env_vars = {
+    "VLLM_MS_MODEL_BACKEND": "Native",
+}
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_deepseek_r1():
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+```
+
 ## 3.2 基础示例(单卡/8卡场景)
 * 单卡910B用例示例(推荐)
 
@@ -269,7 +284,36 @@ env_vars = {
 @patch.dict(os.environ, env_vars)
 ```
 
-## 3.7 门禁报错定位分析
+## 3.7 本地环境用例执行
+Case1: 本地全量用例执行
+
+```
+pytest tests -v --forked
+```
+
+注:依赖安装pytest-xdist，`--forked`可保证每次用例执行环境变量正确初始化，不受前置用例影响。
+
+Case2: 本地执行单卡用例
+
+```
+export DEVICE_ID=6    # 模拟在门禁场景下6卡执行该用例
+pytest test_case_file.py::test_case
+```
+
+Case3: 本地执行多卡并行用例
+
+```
+pytest -sv tests/test_cases_parallel.py
+```
+
+注:开发者可以通过`-sv`打印日志信息查看是否正确执行对应用例，也可以通过注释`test_cases_parallel.py`中的UT/ST检索代码来控制是否执行对应逻辑，如下所示。
+
+```
+retrieve_tests_from_path(ut_abs_path)
+retrieve_tests_from_path(st_abs_path)
+```
+
+## 3.8 门禁报错定位分析
 提交PR后会自动触发门禁CI，或通过评论`/retest`主动触发。门禁执行完成后会打上`ci-pipeline-passed`标签，否则会打上`ci-pipeline-failed`并反馈错误信息。
 错误信息查看与分析流程:
 

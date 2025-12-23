@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import pytest
-import vllm_mindspore
-from vllm import LLM, SamplingParams
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
 from tests.utils.env_var_manager import EnvVarManager
@@ -39,6 +37,8 @@ def test_vllm_api_chunked_prefill_001():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
     prompts = "I love Beijing."
     sampling_params = SamplingParams(temperature=0.0,
                                      top_p=0.95,
@@ -65,6 +65,8 @@ def test_vllm_api_chunked_prefill_002():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM
     with pytest.raises(ValueError,
                        match="must be greater than or equal to max_num_seqs"):
         LLM(QWEN_7B_MODEL,
@@ -87,6 +89,8 @@ def test_vllm_api_chunked_prefill_003():
     Model Info:
         Qwen2.5-7B-Instruct
     """
+    import vllm_mindspore
+    from vllm import LLM
     with pytest.raises(RuntimeError,
                        match="Engine core initialization failed"):
         LLM(QWEN_7B_MODEL,
