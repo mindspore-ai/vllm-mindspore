@@ -171,12 +171,15 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     // Parameter or tensor which references a parameter is graph output.
     storage = CopyStorage(storage);
   }
-  auto allocator = storage->GetAllocator();
-  auto deleter = [allocator](void *dataPtr) {
-    if (dataPtr != nullptr) {
-      allocator.Free(dataPtr);
-    }
-  };
+  auto deleter = storage->GetDeleter();
+  if (deleter == nullptr) {
+    auto allocator = storage->GetAllocator();
+    deleter = [allocator](void *dataPtr) {
+      if (dataPtr != nullptr) {
+        allocator.Free(dataPtr);
+      }
+    };
+  }
   void *dataPtr = storage->Release();
   CHECK_IF_NULL(dataPtr);
 

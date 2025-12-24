@@ -121,6 +121,12 @@ class OpFactory : public OpFactoryBase {
         LOG_EXCEPTION << "Got invalid OpFactoryType, only supports AscendOpFactory, CPUOpFactory and UnknownOpFactory.";
       }
     }
+#ifdef ENABLE_TORCH_FRONT
+    errMsg.str("");
+    if (!LoadOpLib("libops_torch", &errMsg)) {
+      LOG_EXCEPTION << "Load torch Op Lib failed, error message: " << errMsg.str();
+    }
+#endif
   }
 
   void Register(const std::string &opName, CreatorFunc &&creator) {

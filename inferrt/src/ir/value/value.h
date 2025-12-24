@@ -105,6 +105,11 @@ using TuplePtr = IntrusivePtr<Tuple>;
 class DA_API Value : public RefCounted {
  public:
   /**
+   * @brief Enumeration of the possible types a Value can hold.
+   */
+  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple, Symbol };
+
+  /**
    * @brief Default constructor. Creates a None value.
    */
   Value() : tag_(Tag::None) {}
@@ -191,6 +196,7 @@ class DA_API Value : public RefCounted {
   const TuplePtr &ToTuple() const;
   const SymbolicExprPtr &ToSymbol() const;
   ///@}
+  Tag GetTag() const { return tag_; }
 
   /**
    * @brief Overloads the output stream operator for ValuePtr.
@@ -201,11 +207,6 @@ class DA_API Value : public RefCounted {
   friend std::ostream &operator<<(std::ostream &os, const Value &value);
 
  private:
-  /**
-   * @brief Enumeration of the possible types a Value can hold.
-   */
-  enum class Tag { None, Tensor, Double, Int, Bool, String, Tuple, Symbol };
-
   /**
    * @brief Tag string representation.
    * @param tag Input tag enumeration.

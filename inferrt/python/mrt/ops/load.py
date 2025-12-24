@@ -203,7 +203,8 @@ class CustomOpLoader:
                 raise FileNotFoundError(f"Source file not found: {source}")
 
             dst_source = build_dir / source_path.name
-            shutil.copy2(source_path, dst_source)
+            if source_path != dst_source:
+                shutil.copy(source_path, dst_source)
             dst_sources.append(str(dst_source))
 
         backend_env = self._get_backend_environment(backend)
@@ -234,8 +235,7 @@ class CustomOpLoader:
         python_include_path = sysconfig.get_path('include', scheme='posix_prefix')
         python_includes = [python_include_path] if python_include_path else []
         all_cflags = [f'-isystem {include}' for include in python_includes]
-        all_cflags += extra_cflags + ['-std=c++17', '-fstack-protector-all', '-fPIC', '-pie',
-                                     '-shared', '-DENABLE_FAST_HASH_TABLE=1']
+        all_cflags += ['-std=c++17', '-fstack-protector-all', '-fPIC', '-pie', '-shared'] + extra_cflags
         try:
             # pylint: disable=import-outside-toplevel
             import torch
@@ -305,6 +305,7 @@ class CustomOpLoader:
         ninja_file = build_dir / "build.ninja"
         ninja_file.write_text(ninja_content)
         return ninja_file
+
     def _run_ninja_build(self, build_dir: Path, lib_name: str) -> None:
         """Run Ninja build in the specified directory."""
         # Build with ninja

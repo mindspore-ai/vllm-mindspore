@@ -30,21 +30,21 @@ namespace ir {
  */
 struct DataType {
   /**
-   * @brief Enumeration of supported data types.
+   * @brief Enumeration of supported data types. The value equal to torch scalar type.
    */
   enum Type : int8_t {
-    Unknown,    ///< Unknown data type
-    Float16,    ///< 16-bit floating point
-    BFloat16,   ///< 16-bit bfloating point
-    Float32,    ///< 32-bit floating point
-    Float64,    ///< 64-bit floating point
-    Complex64,  ///< 64-bit complex floating point
-    Int8,       ///< 8-bit signed integer
-    Int16,      ///< 16-bit signed integer
-    Int32,      ///< 32-bit signed integer
-    Int64,      ///< 64-bit signed integer
-    UInt8,      ///< 8-bit unsigned integer
-    Bool,       ///< Boolean
+    Unknown = -1,    ///< Unknown data type
+    UInt8 = 0,       ///< 8-bit unsigned integer
+    Int8 = 1,        ///< 8-bit signed integer
+    Int16 = 2,       ///< 16-bit signed integer
+    Int32 = 3,       ///< 32-bit signed integer
+    Int64 = 4,       ///< 64-bit signed integer
+    Float16 = 5,     ///< 16-bit floating point
+    Float32 = 6,     ///< 32-bit floating point
+    Float64 = 7,     ///< 64-bit floating point
+    Complex64 = 10,  ///< 64-bit complex floating point
+    Bool = 11,       ///< Boolean
+    BFloat16 = 15,   ///< 16-bit bfloating point
   };
 
   Type value;  ///< The underlying enum value.
