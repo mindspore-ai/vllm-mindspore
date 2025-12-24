@@ -47,6 +47,9 @@ std::unique_ptr<Pass> createConvertOutlinedFusionCallPass();
 /// Create a pass to convert Torch operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertTorchToMRTPass();
 
+/// Create a pass to convert StableHLO operations to DVM dialect operations.
+std::unique_ptr<Pass> createConvertStablehloToDvmPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

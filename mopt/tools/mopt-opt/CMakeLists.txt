@@ -8,6 +8,7 @@ set(LIBS
   MLIRRegisterAllDialects
   MLIRRegisterAllPasses
   MLIRMrtDialect
+  MLIRDvmDialect
   MoptConversionStablehloToMrt
   StablehloRegister
 )
@@ -17,6 +18,7 @@ add_llvm_executable(mopt-opt
 
   DEPENDS
   MLIRMrtDialect
+  MLIRDvmDialect
   MoptConversionPassIncGen
 )
 

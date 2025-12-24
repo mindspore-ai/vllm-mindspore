@@ -92,4 +92,24 @@ def ConvertOutlinedFusionCall : Pass<"convert-outlined-fusion-call", "::mlir::Mo
   ];
 }
 
+//===----------------------------------------------------------------------===//
+// StablehloToDvm conversion pass
+//===----------------------------------------------------------------------===//
+
+def ConvertStablehloToDvm : Pass<"convert-stablehlo-to-dvm", "::mlir::ModuleOp"> {
+  let summary = "Convert StableHLO operations to DVM dialect operations";
+
+  let description = [{
+    This pass converts StableHLO dialect operations to the DVM dialect.
+  }];
+
+  let constructor = "mlir::createConvertStablehloToDvmPass()";
+
+  let dependentDialects = [
+    "::mlir::stablehlo::StablehloDialect",
+    "::mlir::dvm::DvmDialect",
+    "::mlir::func::FuncDialect"
+  ];
+}
+
 #endif // MOPT_CONVERSION_PASSES

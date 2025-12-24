@@ -38,6 +38,7 @@
 
 // Mopt project specific includes
 #include "mopt/Dialect/Mrt/Mrt.h"
+#include "mopt/Dialect/Dvm/DvmDialect.h"
 #include "mopt/Conversion/Passes.h"
 #include "mopt/Dialect/Mrt/Transforms/Passes.h"
 
@@ -53,6 +54,7 @@ void initializeDialectRegistry(mlir::DialectRegistry &registry) {
   mlir::torch::registerAllDialects(registry);
   mlir::torch::registerAllExtensions(registry);
   registry.insert<mrt::MrtDialect>();
+  registry.insert<mlir::dvm::DvmDialect>();
 }
 }  // namespace
 
