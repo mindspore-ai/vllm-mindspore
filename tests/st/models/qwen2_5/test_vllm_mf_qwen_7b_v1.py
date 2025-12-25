@@ -121,7 +121,7 @@ def test_mf_qwen_batch():
 
 
 @patch.dict(os.environ, env_vars)
-@pytest.mark.level0
+@pytest.mark.level1
 def test_mf_qwen_aclgraph():
     """
     Test Summary:

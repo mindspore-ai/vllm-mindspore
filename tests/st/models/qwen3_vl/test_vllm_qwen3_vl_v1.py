@@ -51,7 +51,8 @@ def pil_image() -> Image.Image:
 
 def generate_llm_engine(model_path,
                         enforce_eager=False,
-                        tensor_parallel_size=1):
+                        tensor_parallel_size=1,
+                        compilation_level=1):
     from vllm import LLM
     # Create an LLM.
     llm = LLM(model=model_path,
@@ -61,7 +62,8 @@ def generate_llm_engine(model_path,
               max_model_len=4096,
               max_num_seqs=32,
               max_num_batched_tokens=4096,
-              limit_mm_per_prompt={"video": 0})
+              limit_mm_per_prompt={"video": 0},
+              compilation_config=compilation_level)
 
     return llm
 
@@ -178,3 +180,23 @@ def test_qwen3_vl_4b_v1():
                               enforce_eager=True,
                               tensor_parallel_size=1)
     forward_and_check(llm, qwen3_vl_4b_instruct_expect_list)
+
+
+@patch.dict(os.environ, env_vars)
+@pytest.mark.level0
+def test_qwen3_vl_8b_v1_aclgraph():
+    """
+    Test Summary:
+        Test native qwen3 vl model inference.
+    Expected Result:
+        Running successfully, the request result meets expectations.
+    Model Info:
+        Qwen3-VL-8B-Instruct
+    """
+    import vllm_mindspore
+    model_path = MODEL_PATH["Qwen3-VL-8B-Instruct"]
+    llm = generate_llm_engine(model_path=model_path,
+                              enforce_eager=False,
+                              tensor_parallel_size=2,
+                              compilation_level=3)
+    forward_and_check(llm, qwen3_vl_8b_instruct_expect_list)
