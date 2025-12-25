@@ -11,7 +11,7 @@ ms_custom_ops:
   'https://repo.mindspore.cn/mindspore/ms_custom_ops/version/202512/20251212/master_20251212041508_1b8aacc9e17d38a31c24346d17fbafef993c2f36_newest/'
 
 mindone:
-  'https://repo.mindspore.cn/mindspore-lab/mindone/version/202512/20251205/master_20251205093444_4be9653bfac58cedc70a5696b9b91f7d40e25ebb_newest/'
+  'https://repo.mindspore.cn/mindspore-lab/mindone/version/202512/20251223/master_20251223115818_36c25653b3ebaff55eb40ca10bc742d603b21f0a_newest/'
 
 vllm:
   'https://repo.mindspore.cn/mirrors/vllm/version/202511/20251113/v0.11.0/'
