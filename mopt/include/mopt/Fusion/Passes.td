@@ -51,6 +51,13 @@ def OutlineStablehloFusionRegions : Pass<"outline-stablehlo-fusion-regions", "::
 
   let constructor = "mlir::createOutlineStablehloFusionRegionsPass()";
 
+  let options = [
+    Option<"allowDotGeneral", "allow-dot-general", "bool", "false",
+           "Allow stablehlo.dot / stablehlo.dot_general (MatMul) to be fused into clusters (as producers)">,
+    Option<"allowDynamicShape", "allow-dynamic-shape", "bool", "false",
+           "Allow operations with dynamic shapes to be fused into clusters">
+  ];
+
   let dependentDialects = [
     "::mlir::stablehlo::StablehloDialect",
     "::mlir::func::FuncDialect"

@@ -314,6 +314,32 @@ def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
   let genAclnnOp = "aclnnDivMod";
 }
 
+def Mrt_DvmCallOp : Mrt_Op<"dvm_call"> {
+  let summary = "Invoke a DVM kernel described by a JSON payload";
+  let description = [{
+    Invokes a DVM kernel described by a JSON payload.
+    The payload operand contains a serialized instruction stream compatible with
+    the runtime OpDvmCall JSON schema (see tests/st/inferrt/ops/test_op_dvm_call_e2e.py).
+
+    Operand order:
+    - payload_json: mrt.string JSON payload
+    - inputs: variadic tensor inputs bound to Load instructions in-order
+  }];
+
+  let arguments = (ins
+    Mrt_StringType:$payload_json,
+    Variadic<MrtAnyTensor>:$inputs
+  );
+
+  let results = (outs
+    Variadic<MrtAnyTensor>:$outputs
+  );
+
+  let assemblyFormat = [{
+    $payload_json `,` $inputs attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_EmbeddingOp : Mrt_Op<"embedding", [Pure]> {
   let summary = "aclnnEmbedding";
   let description = [{

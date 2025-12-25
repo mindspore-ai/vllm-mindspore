@@ -65,6 +65,9 @@ class FusionStrategy {
 /// - Memory/communication ops (scatter, gather, collective ops)
 class StablehloFusionStrategy : public FusionStrategy {
  public:
+  explicit StablehloFusionStrategy(bool allowDotGeneral = false, bool allowDynamicShape = false)
+      : allowDotGeneral_(allowDotGeneral), allowDynamicShape_(allowDynamicShape) {}
+
   bool isFusionRoot(mlir::Operation *op) const override {
     // Only elementwise ops are fusion roots
     return isElementwiseOp(op);
@@ -83,16 +86,23 @@ class StablehloFusionStrategy : public FusionStrategy {
     if (mlir::isa<mlir::stablehlo::ConstantOp>(op)) {
       return true;
     }
+    // MatMul / Dot can be fused (for DVM-call mode), but not as fusion roots.
+    if (allowDotGeneral_ && mlir::isa<mlir::stablehlo::DotOp, mlir::stablehlo::DotGeneralOp>(op)) {
+      return true;
+    }
     return false;
   }
 
   bool shouldNotBeFused(mlir::Operation *op) const override {
     // Dynamic shape ops should NOT be fused
-    if (hasDynamicShape(op)) {
+    if (!allowDynamicShape_ && hasDynamicShape(op)) {
       return true;
     }
     // Compute-intensive ops should NOT be fused - they go through standard MRT lowering
-    if (mlir::isa<mlir::stablehlo::DotGeneralOp, mlir::stablehlo::ConvolutionOp, mlir::stablehlo::ReduceOp>(op)) {
+    if (!allowDotGeneral_ && mlir::isa<mlir::stablehlo::DotOp, mlir::stablehlo::DotGeneralOp>(op)) {
+      return true;
+    }
+    if (mlir::isa<mlir::stablehlo::ConvolutionOp, mlir::stablehlo::ReduceOp>(op)) {
       return true;
     }
     // Memory/communication ops should NOT be fused
@@ -104,6 +114,9 @@ class StablehloFusionStrategy : public FusionStrategy {
   }
 
  private:
+  bool allowDotGeneral_{false};
+  bool allowDynamicShape_{false};
+
   /// Check if an operation is an elementwise operation
   static bool isElementwiseOp(mlir::Operation *op) {
     return mlir::isa<mlir::stablehlo::AddOp, mlir::stablehlo::SubtractOp, mlir::stablehlo::MulOp,

@@ -10,6 +10,7 @@ set(LIBS
   MLIRMrtDialect
   MLIRDvmDialect
   MoptConversionStablehloToMrt
+  MoptStablehloToDvm
   StablehloRegister
 )
 

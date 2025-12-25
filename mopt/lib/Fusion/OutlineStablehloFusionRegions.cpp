@@ -251,9 +251,8 @@ class FunctionOutliner {
 
     // Build function type
     SmallVector<Type> inputTypes;
-    for (Value input : cluster.inputs) {
-      inputTypes.push_back(input.getType());
-    }
+    std::transform(cluster.inputs.begin(), cluster.inputs.end(), std::back_inserter(inputTypes),
+                   [](Value input) { return input.getType(); });
 
     auto funcType = mlir::FunctionType::get(module_.getContext(), inputTypes, cluster.outputTypes);
 
@@ -300,9 +299,8 @@ class FunctionOutliner {
 
     // Create return
     SmallVector<Value> returnValues;
-    for (Value output : cluster.outputs) {
-      returnValues.push_back(mapper.lookup(output));
-    }
+    std::transform(cluster.outputs.begin(), cluster.outputs.end(), std::back_inserter(returnValues),
+                   [&mapper](Value output) { return mapper.lookup(output); });
     mlir::func::ReturnOp::create(funcBuilder, loc, returnValues);
 
     return funcOp;
@@ -381,11 +379,8 @@ class FunctionOutliner {
 
     // Initialize worklist with ops that have no dependencies within the cluster
     SmallVector<Operation *> worklist;
-    for (Operation *op : ops) {
-      if (inDegree[op] == 0) {
-        worklist.push_back(op);
-      }
-    }
+    std::copy_if(ops.begin(), ops.end(), std::back_inserter(worklist),
+                 [&inDegree](Operation *op) { return inDegree[op] == 0; });
 
     // Process worklist
     while (!worklist.empty()) {
@@ -420,27 +415,25 @@ class FunctionOutliner {
 // Pass definition
 //===----------------------------------------------------------------------===//
 
+}  // namespace
+
+namespace mlir {
+
+#define GEN_PASS_DEF_OUTLINESTABLEHLOFUSIONREGIONS
+#include "mopt/Fusion/Passes.h.inc"
+
 struct OutlineStablehloFusionRegionsPass
-    : public PassWrapper<OutlineStablehloFusionRegionsPass, OperationPass<ModuleOp>> {
-  // cppcheck-suppress unknownMacro
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(OutlineStablehloFusionRegionsPass)
-
-  StringRef getArgument() const final { return "outline-stablehlo-fusion-regions"; }
-
-  StringRef getDescription() const final { return "Outline StableHLO fusion regions into separate functions"; }
-
-  void getDependentDialects(mlir::DialectRegistry &registry) const override {
-    registry.insert<mlir::stablehlo::StablehloDialect>();
-    registry.insert<mlir::func::FuncDialect>();
-  }
+    : public impl::OutlineStablehloFusionRegionsBase<OutlineStablehloFusionRegionsPass> {
+  using OutlineStablehloFusionRegionsBase::OutlineStablehloFusionRegionsBase;
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
 
     LLVM_DEBUG(llvm::dbgs() << "[Fusion] Running outline-stablehlo-fusion-regions pass\n");
 
-    // Use StableHLO fusion strategy
-    mopt::StablehloFusionStrategy strategy;
+    // Use configurable StableHLO fusion strategy.
+    // Defaults keep existing behavior; options are provided via Passes.td.
+    mopt::StablehloFusionStrategy strategy(allowDotGeneral, allowDynamicShape);
 
     // Step 1: Build fusion clusters using the strategy
     FusionClusterBuilder clusterBuilder(strategy);
@@ -471,10 +464,6 @@ struct OutlineStablehloFusionRegionsPass
     LLVM_DEBUG(llvm::dbgs() << "[Fusion] Pass complete, outlined " << totalOutlined << " clusters\n");
   }
 };
-
-}  // namespace
-
-namespace mlir {
 
 std::unique_ptr<Pass> createOutlineStablehloFusionRegionsPass() {
   return std::make_unique<OutlineStablehloFusionRegionsPass>();

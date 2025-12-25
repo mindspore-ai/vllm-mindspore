@@ -10,6 +10,8 @@ from tests.mark_utils import arg_mark
 
 # Enable fusion pipeline
 os.environ.setdefault("MOPT_ENABLE_FUSION", "1")
+# Opt into linalg_call lowering (default is dvm_call).
+os.environ.setdefault("MOPT_ENABLE_LINALG_CALL", "1")
 
 import torch
 
