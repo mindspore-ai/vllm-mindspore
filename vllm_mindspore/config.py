@@ -99,9 +99,8 @@ def vllm_config_post_init(self):
 
         if self.compilation_config.level is None:
             # the default value will change to piecewise in future
-            logger.warning_once(
-                "vllm-mindspore use no_compilation as default.")
-            self.compilation_config.level = CompilationLevel.NO_COMPILATION
+            logger.warning_once("vllm-mindspore use piecewise as default.")
+            self.compilation_config.level = CompilationLevel.PIECEWISE
 
     self._set_cudagraph_sizes()
 

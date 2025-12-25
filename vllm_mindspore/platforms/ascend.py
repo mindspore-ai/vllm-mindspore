@@ -81,6 +81,40 @@ class AscendPlatform(Platform):
         pass
 
     @classmethod
+    def is_support_aclgraph(cls, vllm_config: VllmConfig) -> bool:
+        if vllm_config.model_config is None:
+            logger.warning_once("model config is None, not support aclgraph")
+            return False
+
+        if vllm_config.model_config.enforce_eager:
+            logger.warning_once("enforce_eager is True, not support aclgraph")
+            return False
+
+        if is_310p():
+            logger.warning_once(
+                "current platform is 310p, not support aclgraph")
+            return False
+
+        if vllm_config.speculative_config is not None:
+            logger.warning_once("current O3 is not support mtp")
+            return False
+
+        not_support_model_type = [
+            "Glm4vForConditionalGeneration", "Glm4ForCausalLM",
+            "MiniCPMForCausalLM"
+        ]
+
+        model_arch = vllm_config.model_config.architectures[0]
+        logger.warning_once(f"model architectures {model_arch}"
+                            "current not support aclgraph")
+        if model_arch in not_support_model_type:
+            logger.warning_once(f"model architectures {model_arch}"
+                                " current not support aclgraph")
+            return False
+
+        return True
+
+    @classmethod
     def check_and_update_config(cls, vllm_config: VllmConfig) -> None:
         parallel_config = vllm_config.parallel_config
         model_config = vllm_config.model_config
@@ -99,6 +133,11 @@ class AscendPlatform(Platform):
         # so check if `model_config` is `None`
         if model_config is not None:
             model_config.disable_cascade_attn = True
+
+        if not cls.is_support_aclgraph(vllm_config=vllm_config):
+            logger.warning_once("reset compilation level to no_compilation")
+            vllm_config.compilation_config.level \
+                                = CompilationLevel.NO_COMPILATION
 
         vllm_config.compilation_config.splitting_ops = list(
             vllm_config.compilation_config._attention_ops)
