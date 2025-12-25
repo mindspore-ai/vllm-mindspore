@@ -507,4 +507,24 @@ from vllm.multimodal.processing import InputProcessingContext
 
 InputProcessingContext.call_hf_processor = call_hf_processor
 
+from vllm_mindspore.v1.pool.metadata import ms_build_pooling_cursor
+
+vllm.v1.pool.metadata.build_pooling_cursor = ms_build_pooling_cursor
+
+from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+from vllm_mindspore.v1.worker.gpu_model_runner import ms_pool
+
+GPUModelRunner._pool = ms_pool
+
+from vllm_mindspore.model_executor.models.adapters import \
+    ms_create_pooling_model_cls
+
+vllm.model_executor.models.adapters._create_pooling_model_cls = \
+    ms_create_pooling_model_cls
+
+from vllm.model_executor.layers.pooler import PoolerNormalize
+from vllm_mindspore.model_executor.layers.pooler import ms_forward_chunk
+
+PoolerNormalize.forward_chunk = ms_forward_chunk
+
 check_ready()

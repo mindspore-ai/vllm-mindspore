@@ -514,9 +514,10 @@ class NativeModel(MsModelBase):
 
         self.ready_model.set_inputs(*set_inputs_args)
 
-        dynamic_hidden_states = Tensor(shape=[None, None],
-                                       dtype=self.model_config.dtype)
-        self.ready_lm_head.set_inputs(dynamic_hidden_states)
+        if not hasattr(self, "is_pooling_model") or not self.is_pooling_model:
+            dynamic_hidden_states = Tensor(shape=[None, None],
+                                           dtype=self.model_config.dtype)
+            self.ready_lm_head.set_inputs(dynamic_hidden_states)
 
     def _get_moe_input_params(self):
         """Get MoE-specific input parameters.
