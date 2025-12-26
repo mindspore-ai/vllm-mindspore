@@ -64,5 +64,20 @@ def OutlineStablehloFusionRegions : Pass<"outline-stablehlo-fusion-regions", "::
   ];
 }
 
-#endif // MOPT_FUSION_PASSES
+//===----------------------------------------------------------------------===//
+// MarkTorchToStablehloOp pass
+//===----------------------------------------------------------------------===//
 
+def MarkTorchToStablehloOp : Pass<"mark-torch-to-stablehlo-op", "::mlir::ModuleOp"> {
+  let summary = "Mark Torch ops to be converted to StableHLO";
+  let description = [{
+    This pass marks Torch operations that should be converted to StableHLO based on:
+    1. An environment variable MOPT_TORCH_TO_STABLEHLO_WHITELIST
+    2. Custom C++ matching rules
+
+    Marked operations will have the 'mopt.torch_to_stablehlo' attribute added.
+  }];
+  let constructor = "mlir::createMarkTorchToStablehloOpPass()";
+}
+
+#endif // MOPT_FUSION_PASSES

@@ -46,6 +46,7 @@ mrt_add_pkg(torch_mlir
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/005-skip-operator-op-check.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/006-support-floordiv-ceildiv-symint.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/007-disable-folding-aten-ops.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/008-torch-to-stablehlo-whitelist-filter.patch
 )
 
 set(TORCHMLIR_SOURCE_DIR ${torch_mlir_DIRPATH})

@@ -1,6 +1,7 @@
 # Fusion passes for StableHLO to MRT Linalg conversion
 add_mlir_library(MoptFusionPasses
   OutlineStablehloFusionRegions.cpp
+  MarkTorchToStablehloOp.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/mopt/Fusion
@@ -18,4 +19,3 @@ add_mlir_library(MoptFusionPasses
 
 # Add generated include directory
 target_include_directories(MoptFusionPasses PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-

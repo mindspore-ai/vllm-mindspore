@@ -12,7 +12,6 @@ import torch
 from tests.mark_utils import arg_mark
 
 
-os.environ.setdefault("MOPT_ENABLE_FUSION", "1")
 os.environ.setdefault("MOPT_ENABLE_LINALG_CALL", "0")
 
 
@@ -49,6 +48,8 @@ def test_mul_exp_fusion_lower_to_dvm_call():
 
     from mrt.torch.fx_mlir_backend import backend
 
+    os.environ["MOPT_TORCH_TO_STABLEHLO_WHITELIST"] = "all"
+
     def sigmoid_mul_exp_fn(x, scale):
         sig_out = torch.sigmoid(x)
         scaled = sig_out * scale
@@ -59,6 +60,8 @@ def test_mul_exp_fusion_lower_to_dvm_call():
 
     compiled_fn = torch.compile(sigmoid_mul_exp_fn, backend=backend)
     result = compiled_fn(x, scale)
+
+    os.environ.pop("MOPT_TORCH_TO_STABLEHLO_WHITELIST", None)
 
     expected = torch.exp(torch.sigmoid(x) * scale)
     torch.testing.assert_close(result, expected, rtol=1e-2, atol=1e-2)
@@ -86,6 +89,8 @@ def test_matmul_combo_fusion_lower_to_dvm_call():
 
     from mrt.torch.fx_mlir_backend import backend
 
+    os.environ["MOPT_TORCH_TO_STABLEHLO_WHITELIST"] = "all"
+
     def matmul_combo(x, w, y):
         z = x @ w + y
         return torch.exp(z) * z
@@ -103,6 +108,7 @@ def test_matmul_combo_fusion_lower_to_dvm_call():
     expected = torch.exp(z) * z
     torch.testing.assert_close(result, expected, rtol=1e-2, atol=1e-2)
 
+    os.environ.pop("MOPT_TORCH_TO_STABLEHLO_WHITELIST", None)
 
 
 def main():
@@ -111,12 +117,10 @@ def main():
     print("FX-MLIR Fusion->DVMCall End-to-End Test")
     print("=" * 60)
 
-    enable_fusion = os.environ.get("MOPT_ENABLE_FUSION", "0") == "1"
     enable_linalg_call = os.environ.get("MOPT_ENABLE_LINALG_CALL", "0") == "1"
     print_ir = os.environ.get("MOPT_PRINT_IR", "0") == "1"
 
     print("\nEnvironment variables:")
-    print(f"  MOPT_ENABLE_FUSION: {enable_fusion}")
     print(f"  MOPT_ENABLE_LINALG_CALL: {enable_linalg_call}")
     print(f"  MOPT_PRINT_IR: {print_ir}")
 
@@ -142,5 +146,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

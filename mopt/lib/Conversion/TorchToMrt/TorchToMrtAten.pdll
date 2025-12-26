@@ -93,6 +93,11 @@ Pattern ConvertAtenRemainderTensor {
   replace root with op<mrt.remainder_tensor_tensor>(convertValues(operands)) -> (convertType(resType));
 }
 
+Pattern ConvertAtenSigmoid {
+  let root = op<torch.aten.sigmoid>(operands: ValueRange) -> (resType: Type);
+  replace root with op<mrt.sigmoid>(convertValues(operands)) -> (convertType(resType));
+}
+
 Pattern ConvertAtenSizeInt {
   let root = op<torch.aten.size.int>(operands: ValueRange) -> (resType: Type);
   replace root with op<mrt.size>(convertValues(operands)) -> (convertType(resType));

@@ -38,6 +38,9 @@ class Pass;
 /// Create a pass to outline StableHLO fusion regions into separate functions.
 std::unique_ptr<Pass> createOutlineStablehloFusionRegionsPass();
 
+/// Create a pass to mark Torch ops to be converted to StableHLO.
+std::unique_ptr<Pass> createMarkTorchToStablehloOpPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

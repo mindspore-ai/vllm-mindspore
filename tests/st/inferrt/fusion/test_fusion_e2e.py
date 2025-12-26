@@ -8,8 +8,6 @@ import os
 import sys
 from tests.mark_utils import arg_mark
 
-# Enable fusion pipeline
-os.environ.setdefault("MOPT_ENABLE_FUSION", "1")
 # Opt into linalg_call lowering (default is dvm_call).
 os.environ.setdefault("MOPT_ENABLE_LINALG_CALL", "1")
 
@@ -50,12 +48,19 @@ def test_mul_exp_fusion():
         sig_out = sigmoid(x)      # Not in whitelist → Torch → mrt.sigmoid (step 6)
         scaled = sig_out * scale  # In whitelist → StableHLO } fused
         result = exp(scaled)      # In whitelist → StableHLO } into single linalg_call
+
+    Torch ops:
+        torch.aten.sigmoid
+        torch.aten.mul.Tensor
+        torch.aten.exp
     """
     from mrt.torch.fx_mlir_backend import backend
 
     print("\n" + "=" * 60)
     print("Test: Sigmoid + Mul + Exp Local Fusion")
     print("=" * 60)
+
+    os.environ["MOPT_TORCH_TO_STABLEHLO_WHITELIST"] = "all"
 
     def sigmoid_mul_exp_fn(x, scale):
         # Sigmoid - not in whitelist, stays as Torch, converted to mrt.sigmoid
@@ -88,6 +93,7 @@ def test_mul_exp_fusion():
     print(f"  Max difference: {max_diff:.6e}")
     print(f"  Result: {'Passed' if passed else 'Failed'}")
 
+    os.environ.pop("MOPT_TORCH_TO_STABLEHLO_WHITELIST", None)
     assert passed, f"Local fusion test failed, max_diff={max_diff}"
     return True
 
@@ -99,11 +105,9 @@ def main():
     print("=" * 60)
 
     # Print environment configuration
-    enable_fusion = os.environ.get("MOPT_ENABLE_FUSION", "0") == "1"
     print_ir = os.environ.get("MOPT_PRINT_IR", "0") == "1"
 
     print("\nEnvironment variables:")
-    print(f"  MOPT_ENABLE_FUSION: {enable_fusion}")
     print(f"  MOPT_PRINT_IR: {print_ir}")
 
     # Check NPU availability

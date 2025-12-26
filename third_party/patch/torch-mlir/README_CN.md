@@ -149,3 +149,24 @@ Torch-MLIR 默认会在形状、dtype 全确定时将这些算子折叠为 `Dens
 
 - `include/torch-mlir/Dialect/Torch/IR/GeneratedTorchOps.td`
 - `lib/Dialect/Torch/IR/TorchOps.cpp`
+
+### 008-torch-to-stablehlo-whitelist-filter.patch
+
+**描述：**
+修改 `convert-torch-to-stablehlo` pass，支持基于 `mopt.torch_to_stablehlo` 属性的白名单过滤机制，允许混合 IR（Torch 和 StableHLO op 共存）。
+
+**问题：**
+原生的 `convert-torch-to-stablehlo` 是全量转换，要求所有 op 都必须转换为 StableHLO，否则报错。在我们的融合场景中，仅希望将特定的、可融合的算子转换为 StableHLO，其余算子保持为 Torch 形式由 MRT 后端处理。
+
+**解决方案：**
+
+- 修改 `ConvertTorchToStablehlo` pass，通过 `addDynamicallyLegalOp` 实现动态合法性检查：只有带有 `mopt.torch_to_stablehlo` 属性的 op 才会被强制转换为 StableHLO，其余 op 保持合法。
+- 放宽 `FinalizingBackendTypeConversionForStablehloPass` 和 `VerifyStablehloBackendContractPass` 的检查，允许 Torch Dialect 和 TorchConversion Dialect 的 op 及类型存在。
+- 在上述 pass 中将 `applyFullConversion` 改为 `applyPartialConversion`，避免对整个模块进行强制转换。
+
+**修改的文件：**
+
+- `lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp`
+- `lib/Dialect/TorchConversion/Transforms/BackendTypeConversionPasses.cpp`
+- `lib/Dialect/TorchConversion/Transforms/Passes.cpp`
+- `lib/Dialect/TorchConversion/Transforms/VerifyStablehloBackendContract.cpp`
