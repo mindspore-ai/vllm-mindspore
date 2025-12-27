@@ -33,6 +33,8 @@ install(TARGETS kernel
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)
 
+add_subdirectory(utils)
+
 add_subdirectory(op_base)
 add_subdirectory(cpu)
 

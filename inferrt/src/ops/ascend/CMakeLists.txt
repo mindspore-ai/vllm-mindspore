@@ -3,3 +3,5 @@ add_subdirectory(dvm)
 add_subdirectory(hccl)
 add_subdirectory(lowered)
 add_subdirectory(mem)
+add_subdirectory(custom)
+

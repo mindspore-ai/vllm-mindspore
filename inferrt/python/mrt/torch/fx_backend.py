@@ -115,6 +115,7 @@ def apply_rotary_pos_emb_hook(node, input_nodes, executor):
     ]
 
 
+
 # pylint: disable=unused-argument
 def floor_div_hook(node, input_nodes, executor):
     """add div mode parameter."""
@@ -479,8 +480,11 @@ def _get_op(target):
             node_module = target.__module__
             if node_module.startswith("torch._ops.mrt_dvm"):
                 return Op.dvm_call
+            if node_module.startswith("torch._ops.vllm"):
+                return Op.python_call
 
     return Op.custom_call
+
 
 
 def _argument_to_real_value(value_type, value, arg_len):
@@ -667,6 +671,11 @@ def _handle_get_attr_node(node, gm, executor, env):
 def _prepare_call_args(op, node, executor, env, sym_mgr):
     """Prepare arguments for call_function/call_method nodes."""
     op_name, flat_node_args = _flatten_args(op, node)
+
+    if op == Op.python_call:
+        module_name = node.target.__module__
+        op_name = node.target.__name__
+        flat_node_args = [module_name, op_name] + flat_node_args
 
     if op == Op.custom_call:
         if not op_name:
