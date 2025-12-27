@@ -30,6 +30,8 @@ class AclnnLinear : public Operator {
     executorMatmul_ = std::make_unique<AclnnExecutor>("aclnnMatmul");
     executorAddmm_ = std::make_unique<AclnnExecutor>("aclnnAddmm");
     executorAdd_ = std::make_unique<AclnnExecutor>("aclnnAdd");
+    executorMatmulNz_ = std::make_unique<AclnnExecutor>("aclnnMatmulWeightNz");
+    executorAddmmNz_ = std::make_unique<AclnnExecutor>("aclnnAddmmWeightNz");
   }
   ~AclnnLinear() override = default;
 
@@ -44,10 +46,14 @@ class AclnnLinear : public Operator {
   std::unique_ptr<AclnnExecutor> executorAddmm_{nullptr};   // Add + Matmul fused
   std::unique_ptr<AclnnExecutor> executorAdd_{nullptr};     // Element-wise add
 
+  std::unique_ptr<AclnnExecutor> executorMatmulNz_{nullptr};
+  std::unique_ptr<AclnnExecutor> executorAddmmNz_{nullptr};
+
   bool isBiasNone_{false};  // Whether bias is None
   size_t biasRank_{0};      // Rank of bias tensor
   size_t xRank_{0};         // Rank of input tensor
   int8_t cubeMathType_{0};  // Cube math type for matmul
+  bool isWeightNz_{false};  // whether weight is in NZ format
 
   // Temporary tensors for intermediate computations
   ir::TensorPtr weightTransposeTensor_{nullptr};  // Transposed weight tensor
@@ -69,6 +75,21 @@ class AclnnLinear : public Operator {
    */
   std::vector<int64_t> TransposeWeight(const ir::TensorPtr &wTensor, const std::vector<int64_t> &wShape,
                                        ir::TensorPtr &weightTransposeTensor);
+
+  /**
+   * @brief Calculate storage shape for NZ format tensor
+   *
+   * For NZ format, storage shape is calculated based on view shape:
+   * - Keep first N-2 dimensions
+   * - Convert last 2 dimensions to block format: [ceil(W/16), ceil(H/16), 16, 16]
+   *
+   * @param viewShape The view shape (logical shape)
+   * @param format The memory format
+   * @param dtype The data type
+   * @return The calculated storage shape
+   */
+  std::vector<int64_t> CalculateStorageShapeForNZ(const std::vector<int64_t> &viewShape, ir::MemoryFormat format,
+                                                  ir::DataType dtype);
 
   /**
    * @brief Set flattened 2D tensor storage info for ND linear operations
