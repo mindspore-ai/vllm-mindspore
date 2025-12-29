@@ -38,6 +38,7 @@ from vllm.logger import init_logger
 from vllm.model_executor.models.interfaces_base import VllmModelForPooling
 from vllm.sampling_params import SamplingType
 from vllm.utils import round_up
+from vllm.utils.jsontree import json_map_leaves
 from vllm.v1.attention.backends.flash_attn import AttentionMetadata
 from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadataBuilder
 from vllm.v1.attention.backends.utils import (CommonAttentionMetadata,
@@ -46,7 +47,7 @@ from vllm.v1.kv_cache_interface import (FullAttentionSpec, KVCacheConfig,
                                         KVCacheSpec, MLAAttentionSpec,
                                         SlidingWindowSpec,
                                         UniformTypeKVCacheSpecs)
-from vllm.v1.outputs import ModelRunnerOutput
+from vllm.v1.outputs import ModelRunnerOutput, PoolerOutput
 from vllm.v1.spec_decode.eagle import EagleProposer
 from vllm.v1.spec_decode.metadata import SpecDecodeMetadata
 from vllm.v1.worker.gpu_input_batch import CachedRequestState
@@ -1271,3 +1272,50 @@ def capture_model(self: GPUModelRunner) -> None:
                 elapsed_time, cuda_graph_size / (1 << 30))
 
     # disable mindspore graph capture (captured graphs replay still work)
+
+
+# To fit the cpu Tensor to np Tensor.
+def ms_pool(
+    self,
+    hidden_states: torch.Tensor,
+    num_scheduled_tokens: int,
+    num_scheduled_tokens_np: np.ndarray,
+) -> ModelRunnerOutput:
+    assert self.input_batch.num_reqs ==\
+        len(self.input_batch.pooling_params), \
+    "Either all or none of the requests in" \
+    " a batch must be pooling request"
+
+    hidden_states = hidden_states[:num_scheduled_tokens]
+    pooling_metadata = self.input_batch.get_pooling_metadata()
+    pooling_metadata.build_pooling_cursor(num_scheduled_tokens_np.tolist(),
+                                          device=hidden_states.device)
+    # Use np Tensor for seq_lens to fit mindspore cpu Tensor
+    seq_lens_cpu = self.seq_lens.np[:self.input_batch.num_reqs]
+
+    model = cast(VllmModelForPooling, self.model)
+    raw_pooler_output: PoolerOutput = model.pooler(
+        hidden_states=hidden_states,
+        pooling_metadata=pooling_metadata,
+    )
+    raw_pooler_output = json_map_leaves(
+        lambda x: x.to("cpu", non_blocking=True),
+        raw_pooler_output,
+    )
+    self._sync_device()
+
+    pooler_output: list[Optional[torch.Tensor]] = []
+    for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu,
+                                               pooling_metadata.prompt_lens):
+
+        output = raw_output if seq_len == prompt_len else None
+        pooler_output.append(output)
+
+    return ModelRunnerOutput(
+        req_ids=self.input_batch.req_ids,
+        req_id_to_index=self.input_batch.req_id_to_index,
+        sampled_token_ids=[],
+        logprobs=None,
+        prompt_logprobs_dict={},
+        pooler_output=pooler_output,
+    )
