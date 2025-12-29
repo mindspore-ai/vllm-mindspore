@@ -123,10 +123,12 @@ def floor_div_hook(node, input_nodes, executor):
     div_mode = 2
     return [input_nodes[0], input_nodes[1], div_mode]
 
+
 # pylint: disable=unused-argument
 def clone_hook(node, input_nodes, executor):
     """input[1] not use"""
     return [input_nodes[0]]
+
 
 # pylint: disable=unused-argument
 def long_hook(node, input_nodes, executor):
@@ -281,12 +283,14 @@ def split_ops_hook(op, node, input_nodes, executor):
             return Op.split_tensor
     return op
 
+
 # pylint: disable=unused-argument
 def masked_fill_op_hook(op, node, input_nodes, executor):
     """Get the masked_fill op for a given node."""
     if isinstance(node.args[-1], (int, float)):
         return Op.masked_fill_scalar
     return Op.masked_fill_tensor
+
 
 # pylint: disable=unused-argument
 def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
@@ -295,12 +299,14 @@ def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
         return Op.inplace_masked_fill_scalar
     return Op.inplace_masked_fill_tensor
 
+
 # pylint: disable=unused-argument
 def copy_op_hook(op, node, input_nodes, executor):
     """Get the copy op for a given node."""
     if isinstance(node.args[-1], (int, float)):
         return Op.inplace_fill_scalar
     return Op.inplace_copy
+
 
 # pylint: disable=unused-argument
 def fill_op_hook(op, node, input_nodes, executor):
@@ -322,6 +328,47 @@ def _next_unique_graph_id():
     global _GLOBAL_GRAPH_ID
     _GLOBAL_GRAPH_ID += 1
     return _GLOBAL_GRAPH_ID
+
+
+def _match_node_by_name(node, op_type, name):
+    """Check if a node matches the given op type and name."""
+    if node.op != op_type:
+        return False
+    if op_type == 'call_function' and hasattr(node.target, '__name__'):
+        return node.target.__name__ == name
+    if op_type == 'call_method' and isinstance(node.target, str):
+        return node.target == name
+    return False
+
+
+# Remove unwanted nodes before processing
+def _remove_matched_nodes(gm: GraphModule, matchers):
+    """
+    Remove nodes from the graph that match any of the given matchers.
+
+    Args:
+        gm: The GraphModule to process.
+        matchers: A list of matcher specifications. Each matcher can be:
+            - A tuple of (op_type, name): matches nodes by op type and name
+
+    Returns:
+        int: The number of nodes removed.
+    """
+    nodes_to_erase = []
+    for node in gm.graph.nodes:
+        for matcher in matchers:
+            if isinstance(matcher, tuple) and len(matcher) == 2:
+                op_type, name = matcher
+                should_remove = _match_node_by_name(node, op_type, name)
+                if should_remove:
+                    nodes_to_erase.append(node)
+
+    for node in nodes_to_erase:
+        gm.graph.erase_node(node)
+
+    # Recompile GraphModule after graph modification to keep internal state consistent
+    if nodes_to_erase:
+        gm.recompile()
 
 
 # pylint: disable=protected-access
@@ -437,6 +484,7 @@ if TORCH_NPU_INSTALLED:
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
+
 def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""
     operator_map = {
@@ -461,6 +509,12 @@ def _convert_operator_to_torch_op(op):
         return operator_map[op]
     return op
 
+
+_OP_MATCHERS = [
+    ('call_function', '_log_api_usage_once'),
+]
+
+
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
     if isinstance(target, str):
@@ -482,6 +536,8 @@ def _get_op(target):
             node_module = target.__module__
             if node_module.startswith("torch._ops.mrt_dvm"):
                 return Op.dvm_call
+            if node_module.startswith("torch._ops.vllm"):
+                return Op.python_call
 
     return Op.custom_call
 
@@ -613,7 +669,7 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
 
 
 def _map_args(
-    args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
+        args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
 ) -> List[Node]:
     """
     Map torch.fx node arguments to GraphExecutor nodes.
@@ -670,6 +726,11 @@ def _handle_get_attr_node(node, gm, executor, env):
 def _prepare_call_args(op, node, executor, env, sym_mgr):
     """Prepare arguments for call_function/call_method nodes."""
     op_name, flat_node_args = _flatten_args(op, node)
+
+    if op == Op.python_call:
+        module_name = node.target.__module__
+        op_name = node.target.__name__
+        flat_node_args = [module_name, op_name] + flat_node_args
 
     if op == Op.custom_call:
         if not op_name:
@@ -730,6 +791,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
     and returns a callable that executes the compiled graph.
     """
+    _remove_matched_nodes(gm, _OP_MATCHERS)
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
