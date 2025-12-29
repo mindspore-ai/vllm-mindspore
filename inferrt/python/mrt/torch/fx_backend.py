@@ -32,6 +32,8 @@ from mrt.torch.utils import (
     set_device_context,
     update_runtime_inputs,
 )
+from mrt.torch.getitem_impl import getitem_process
+from mrt.torch.setitem_impl import setitem_process
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -369,6 +371,7 @@ _OP_MAP = {
     torch.nn.functional.linear: Op.linear,
     # operator functions
     operator.getitem: Op.tuple_getitem,
+    operator.setitem: Op.setitem,
     operator.add: Op.add,
     operator.sub: Op.sub,
     operator.mul: Op.mul,
@@ -682,13 +685,17 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
                 f"Use register_dvm_op('{op_name}', payload_json) first."
             )
         flat_node_args = [payload_json] + flat_node_args
+    elif op == Op.tuple_getitem:
+        op, flat_node_args = getitem_process(node, flat_node_args)
+    elif op == Op.setitem:
+        op, flat_node_args = setitem_process(node, flat_node_args)
 
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:
         flat_node_args = hook_func(node, flat_node_args, executor)
         print(f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}")
 
-    return _map_args(flat_node_args, env, executor, sym_mgr)
+    return op, _map_args(flat_node_args, env, executor, sym_mgr)
 
 
 def _handle_call_node(node, executor, env, sym_mgr):
@@ -702,7 +709,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
         _, flat_node_args = _flatten_args(op, node)
         op = ops_hook(op, node, flat_node_args, executor)
 
-    input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
+    op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
     example_value = node.meta.get("example_value", None)
     output_value = sym_mgr.from_torch_with_sym(example_value)
 

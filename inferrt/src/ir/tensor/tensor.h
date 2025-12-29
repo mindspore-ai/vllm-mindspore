@@ -143,7 +143,11 @@ class Tensor : public RefCounted {
    * @param shape The new symbolic shape to set.
    */
   void SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape);
-
+  /**
+   * @brief Sets the symbolic shape without recomputing shape.
+   * @param shape The symbolic shape to set.
+   */
+  void SetSymbolicShapeRaw(const std::vector<SymbolicExprPtr> &shape) { symbolicShape_ = shape; }
   /**
    * @brief Gets the device where the tensor data is stored.
    * @return The device.

@@ -448,6 +448,29 @@ def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
   }];
 }
 
+def Mrt_GatherV2Op : Mrt_Op<"gather_v2", [Pure]> {
+  let summary = "gather_v2 operation";
+  let description = [{
+    Gathers elements from a tensor along a specified dimension using indices from another tensor.
+    Takes three operands: input tensor, dimension index, and indices tensor.
+    Produces a tensor containing elements gathered from the input tensor at the specified indices.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_I64Type:$dim,
+    MrtAnyTensor:$index
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $dim `,` $index attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnGatherV2";
+}
+
 def Mrt_GeOp : Mrt_Op<"ge", [Pure]> {
   let summary = "Element-wise greater-than-or-equal comparison";
   let description = [{
@@ -467,6 +490,28 @@ def Mrt_GeOp : Mrt_Op<"ge", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnGeTensor";
+}
+
+def Mrt_GetItemSliceOp : Mrt_Op<"getitem_slice", [Pure]> {
+  let summary = "getitem use aclnnSliceV2";
+  let description = [{
+    Slice operation with support for multiple axes, starts, ends, and steps.
+    Extracts a slice from the input tensor along the specified axes with the given starts, ends, and steps.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_I64ArrayType:$starts,
+    Mrt_I64ArrayType:$ends,
+    Mrt_I64ArrayType:$axes,
+    Mrt_I64ArrayType:$steps
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $starts `,` $ends `,` $axes `,` $steps attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure]> {

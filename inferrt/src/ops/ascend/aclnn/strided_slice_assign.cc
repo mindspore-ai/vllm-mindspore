@@ -42,22 +42,27 @@ OpsErrorCode AclnnStridedSliceAssign::CalcWorkspace(const std::vector<const ir::
 
   // For AclnnStridedSliceAssignV2, the last stride value must be 1.
   if (strides_.back() != kLastStride) {
+    x_ = input[kXIndex]->ToTensor()->ShallowClone();
+    value_ = input[kValueIndex]->ToTensor()->ShallowClone();
+
     auto expandedXShape = x_->Shape();
     auto expandedXStrides = x_->Strides();
     expandedXShape.push_back(kLastStride);
-    expandedXStrides.push_back(kLastStride);
+    x_->SetShape(expandedXShape);
+    // Only set strides when it is not empty.
+    if (!expandedXStrides.empty()) {
+      expandedXStrides.push_back(kLastStride);
+      x_->SetStrides(expandedXStrides);
+    }
 
     auto expandedValueShape = value_->Shape();
     auto expandedValueStrides = value_->Strides();
     expandedValueShape.push_back(kLastStride);
-    expandedValueStrides.push_back(kLastStride);
-
-    x_ = input[kXIndex]->ToTensor()->ShallowClone();
-    value_ = input[kValueIndex]->ToTensor()->ShallowClone();
-    x_->SetShape(expandedXShape);
-    x_->SetStrides(expandedXStrides);
     value_->SetShape(expandedValueShape);
-    value_->SetStrides(expandedValueStrides);
+    if (!expandedValueStrides.empty()) {
+      expandedValueStrides.push_back(kLastStride);
+      value_->SetStrides(expandedValueStrides);
+    }
 
     begin_.push_back(0);
     end_.push_back(kLastStride);
