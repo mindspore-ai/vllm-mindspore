@@ -206,7 +206,6 @@ setup(
     url="https://gitee.com/mindspore/vllm-mindspore",
     project_urls={
         "Homepage": "https://gitee.com/mindspore/vllm-mindspore",
-        "Documentation": "",
     },
     classifiers=[
         "Programming Language :: Python :: 3.9",

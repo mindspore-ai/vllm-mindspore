@@ -1,0 +1,17 @@
+mindspore:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.1.post1/MindSpore'
+
+mindformers:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.1/MindFormers'
+
+vllm:
+  'https://repo.mindspore.cn/mirrors/vllm/version/202511/20251113/v0.11.0/'
+
+msadapter:
+  'https://repo.mindspore.cn/mindspore/msadapter/version/202510/20251011/r0.3.0_20251011095813_951a8218d4c29785e48f304e720212b57056573e_newest/'
+
+mindone:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.1.post1/MindOne'
+
+ms_custom_ops:
+  'https://ms-release.obs.cn-north-4.myhuaweicloud.com/2.7.1.post1/ms_custom_ops'
