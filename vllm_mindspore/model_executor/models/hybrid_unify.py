@@ -45,3 +45,11 @@ def get_ms_tensor(input_data, dtype=None):
         from vllm_mindspore.hybrid_adapter.tensor_convert import (
             tensor_torch2ms)
         return tensor_torch2ms(input_data)
+
+
+def sync_weights():
+    if env.ENABLE_MS_ADAPTER:
+        return
+    else:
+        import torch
+        torch.npu.current_stream().synchronize()

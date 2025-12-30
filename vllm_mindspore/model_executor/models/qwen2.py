@@ -61,6 +61,7 @@ from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
 from vllm_mindspore.utils import is_310p
+from vllm_mindspore.model_executor.models.hybrid_unify import sync_weights
 
 
 class Qwen2MLP(nn.Cell):
@@ -372,6 +373,7 @@ class Qwen2Model(nn.Cell):
         ]
 
         for name, loaded_weight in weights:
+            sync_weights()
             if "rotary_emb.inv_freq" in name:
                 continue
             if ("rotary_emb.cos_cached" in name
