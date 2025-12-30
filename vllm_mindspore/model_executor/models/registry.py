@@ -78,6 +78,7 @@ _NATIVE_MODELS = {
     "Glm4vForConditionalGeneration":
     ("glm4_1v", "Glm4vForConditionalGeneration"),
     "Glm4ForCausalLM": ("glm4", "Glm4ForCausalLM"),
+    "DeepseekV3ForCausalLM": ("deepseekv3", "DeepseekV3ForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {
