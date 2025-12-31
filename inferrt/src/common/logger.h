@@ -17,6 +17,8 @@
 #ifndef __COMMON_LOGGER_H__
 #define __COMMON_LOGGER_H__
 
+#include <unistd.h>
+#include <thread>
 #include <string>
 #include <iomanip>
 #include <vector>
@@ -74,7 +76,8 @@ class Cerr {
 class Cexception {
  public:
   Cexception(const char *file, int line, const char *func) {
-    prefix_ << GetTime() << " [" << file << ':' << line << ' ' << func << "] exception: ";
+    prefix_ << GetTime() << " [(pid:" << getpid() << ", thread id:" << std::hex << std::this_thread::get_id()
+            << std::dec << ") " << file << ':' << line << ' ' << func << "] exception: ";
   }
   ~Cexception() noexcept(false) {
     std::string msg = msg_.str();
@@ -94,9 +97,13 @@ class Cexception {
   std::stringstream msg_;
 };
 
-#define LOG_OUT Cout() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] "
+#define LOG_OUT                                                                                                        \
+  Cout() << GetTime() << " [(pid:" << getpid() << ", thread id:" << std::hex << std::this_thread::get_id() << std::dec \
+         << ") " << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] "
 
-#define LOG_ERROR Cerr() << GetTime() << " [" << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] error: "
+#define LOG_ERROR                                                                                                      \
+  Cerr() << GetTime() << " [(pid:" << getpid() << ", thread id:" << std::hex << std::this_thread::get_id() << std::dec \
+         << ") " << __FILE__ << ':' << __LINE__ << ' ' << __FUNCTION__ << "] error: "
 
 #define LOG_EXCEPTION Cexception(__FILE__, __LINE__, __FUNCTION__)
 

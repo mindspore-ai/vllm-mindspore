@@ -262,6 +262,24 @@ def Mrt_ConvOp : Mrt_Op<"conv", [Pure]> {
   }];
 }
 
+def Mrt_ContiguousOp : Mrt_Op<"contiguous", [Pure]> {
+  let summary = "tensor contiguous operation";
+  let description = [{
+    Performs contiguous operation on input tensors.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_CustomCallOp : Mrt_Op<"custom_call"> {
   let summary = "Invoke a custom operator";
   let description = [{
@@ -567,7 +585,7 @@ def Mrt_GroupedMatmulOp : Mrt_Op<"grouped_matmul", [Pure]> {
   );
 
   let assemblyFormat = [{
-    $x `,` $weight `,` $bias `,` $scale `,` $offset `,` $antiquant_scale `,` $antiquant_offset `,` $per_token_scale 
+    $x `,` $weight `,` $bias `,` $scale `,` $offset `,` $antiquant_scale `,` $antiquant_offset `,` $per_token_scale
     `,` $group_list `,` $activation_input `,` $activation_quant_scale `,` $activation_quant_offset
     `,` $split_item `,` $group_type `,` $group_list_type `,` $act_type `,` $tuning_config `,` $output_dtype
     attr-dict `:` functional-type(operands, results)
@@ -752,7 +770,7 @@ def Mrt_LinalgCallOp : Mrt_Op<"linalg_call"> {
   let description = [{
     Invokes a Linalg MLIR kernel compiled through BiSheng compiler.
     The mlir_text operand contains a serialized Linalg MLIR module with a
-    function marked with hacc.entry attribute. 
+    function marked with hacc.entry attribute.
 
     Internal workflow:
     1. Init: Extract MLIR text, call LoweredOpHelper::CreateFromMlirText()
@@ -915,19 +933,19 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let description = [{
     Performs a Softmax and TopK on input tensors.
   }];
-  
+
   let arguments = (ins
     MrtAnyTensor:$x,
     MrtOptional<MrtAnyTensor>:$finished,
     Mrt_I64Type:$k
   );
-  
-  let results = (outs 
+
+  let results = (outs
     MrtAnyTensor:$y,
     MrtAnyTensor:$expert_idx,
     MrtAnyTensor:$row_idx
   );
-  
+
   let assemblyFormat = [{
     $x `,` $finished `,` $k
     attr-dict `:` functional-type(operands, results)
@@ -1280,6 +1298,30 @@ def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
   let genAclnnCfg = (AclnnConfig (IORef 0, 0));
 }
 
+def Mrt_SelectViewOp : Mrt_Op<"select_view", [Pure]> {
+  let summary = "Slices the input tensor along the selected dimension at the given index.";
+  let description = [{
+    Operation for select_view.
+    Accepts input, dim, index.
+    Returns a view of the original tensor with the given dimension removed.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$dim,
+    Mrt_I64Type:$index
+  );
+
+  let results = (outs
+    MrtAnyTensor:$result
+  );
+
+  let assemblyFormat = [{
+    $self `,` $dim `,` $index
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   let summary = "Sigmoid activation function";
   let description = [{
@@ -1319,8 +1361,8 @@ def Mrt_SizeOp : Mrt_Op<"size", [Pure]> {
 def Mrt_SliceOp : Mrt_Op<"slice", [Pure]> {
   let summary = "Selects a range of elements from an input tensor along a given dimension.";
   let description = [{
-    Extracts a contiguous slice from the input tensor `self` along the specified dimension `dim`, 
-    beginning at index `start`, and continuing up to (but not including) index `end`, 
+    Extracts a contiguous slice from the input tensor `self` along the specified dimension `dim`,
+    beginning at index `start`, and continuing up to (but not including) index `end`,
     with elements selected every `step` indices.
   }];
 
@@ -1342,6 +1384,32 @@ def Mrt_SliceOp : Mrt_Op<"slice", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSlice";
+}
+
+def Mrt_SliceViewOp : Mrt_Op<"slice_view", [Pure]> {
+  let summary = "Selects a range of elements from an input tensor along a given dimension.";
+  let description = [{
+    Extracts a contiguous slice from the input tensor `self` along the specified dimension `dim`,
+    beginning at index `start`, and continuing up to (but not including) index `end`,
+    with elements selected every `step` indices.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$dim,
+    Mrt_I64Type:$start,
+    Mrt_I64Type:$end,
+    Mrt_I64Type:$step
+  );
+
+  let results = (outs
+    MrtAnyTensor:$result
+  );
+
+  let assemblyFormat = [{
+    $self `,` $dim `,` $start `,` $end `,` $step
+    attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
@@ -1378,8 +1446,28 @@ def Mrt_SplitOp : Mrt_Op<"split_with_size", [Pure]> {
   let assemblyFormat = [{
     $input `,` $split_sizes `,` $axis attr-dict `:` functional-type(operands, results)
   }];
-  
+
   let genAclnnOp = "aclnnSplitWithSize";
+}
+
+def Mrt_SplitWithSizeViewOp : Mrt_Op<"split_with_size_view", [Pure]> {
+  let summary = "Splits the tensor into chunks. Each chunk is a view of the original tensor.";
+  let description = [{
+    Tensor will be split into len(split_sizes) chunks with sizes in dim according to split_sizes.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$split_sizes,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs MrtTensorList:$results);
+
+  let assemblyFormat = [{
+    $input `,` $split_sizes `,` $dim
+    attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SplitTensorOp : Mrt_Op<"split_tensor", [Pure]> {
@@ -1401,6 +1489,26 @@ def Mrt_SplitTensorOp : Mrt_Op<"split_tensor", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSplitTensor";
+}
+
+def Mrt_SplitTensorViewOp : Mrt_Op<"split_tensor_view", [Pure]> {
+  let summary = "Splits the tensor into chunks. Each chunk is a view of the original tensor.";
+  let description = [{
+    Tensor will be split into equally sized chunks (if possible). Last chunk will be smaller if the tensor size along the given dimension dim is not divisible by split_size.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$split_size,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs MrtTensorList:$results);
+
+  let assemblyFormat = [{
+    $input `,` $split_size `,` $dim
+    attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SqueezeDimOp : Mrt_Op<"squeeze_dim", [Pure]> {

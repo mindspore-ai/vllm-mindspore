@@ -320,6 +320,16 @@ void AscendResManager::SetCurrentStream(void *currentStream) {
 
 void *AscendResManager::GetCurrentStream() const { return AscendStreamMng::GetInstance().GetCurrentStream(); }
 
+void AscendResManager::BindCurrentStream() {
+  if (bindStreamFunc_ != nullptr) {
+    bindStreamFunc_();
+    return;
+  }
+  LOG_EXCEPTION << "Stream binding function is not configured, cannot bind current stream.";
+}
+
+void AscendResManager::SetBindStreamFunc(const BindStreamFunc &bindStreamFunc) { bindStreamFunc_ = bindStreamFunc; }
+
 bool AscendResManager::QueryStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
     LOG_ERROR << "Bind context to current thread failed";

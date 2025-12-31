@@ -24,85 +24,85 @@
 namespace mrt {
 namespace ops {
 namespace {
-std::optional<std::vector<int64_t>> CalculateViewStrides(const std::vector<int64_t> &cur_shape,
-                                                         const std::vector<int64_t> &cur_strides,
-                                                         const std::vector<int64_t> &new_shape) {
-  if (cur_shape.empty()) {
-    return std::vector<int64_t>(new_shape.size(), 1);
+std::optional<std::vector<int64_t>> CalculateViewStrides(const std::vector<int64_t> &curShape,
+                                                         const std::vector<int64_t> &curStrides,
+                                                         const std::vector<int64_t> &newShape) {
+  if (curShape.empty()) {
+    return std::vector<int64_t>(newShape.size(), 1);
   }
 
-  bool is_old_empty = std::any_of(cur_shape.begin(), cur_shape.end(), [](const int64_t dim) { return dim == 0; });
-  if (is_old_empty && cur_shape == new_shape) {
-    return cur_strides;
+  bool isOldEmpty = std::any_of(curShape.begin(), curShape.end(), [](const int64_t dim) { return dim == 0; });
+  if (isOldEmpty && curShape == newShape) {
+    return curStrides;
   }
 
-  const int64_t new_rank = SizeToLong(new_shape.size());
-  std::vector<int64_t> new_strides(new_rank, 0);
-  if (is_old_empty) {
-    for (int64_t dim = new_rank - 1; dim >= 0; --dim) {
-      if (dim == (new_rank - 1)) {
-        new_strides[dim] = 1;
+  const int64_t newRank = SizeToLong(newShape.size());
+  std::vector<int64_t> newStrides(newRank, 0);
+  if (isOldEmpty) {
+    for (int64_t dim = newRank - 1; dim >= 0; --dim) {
+      if (dim == (newRank - 1)) {
+        newStrides[dim] = 1;
       } else {
-        new_strides[dim] = std::max(new_shape[dim + 1], static_cast<int64_t>(1)) * new_strides[dim + 1];
+        newStrides[dim] = std::max(newShape[dim + 1], static_cast<int64_t>(1)) * newStrides[dim + 1];
       }
     }
-    return new_strides;
+    return newStrides;
   }
 
-  int64_t view_dim = new_rank - 1;
-  int64_t base_stride = cur_strides.back();
-  int64_t tensor_elems = 1;
-  int64_t view_elems = 1;
-  for (int64_t dim = SizeToLong(cur_shape.size()) - 1; dim >= 0; --dim) {
-    tensor_elems *= cur_shape[dim];
-    if (dim == 0 || (cur_shape[dim - 1] != 1 && cur_strides[dim - 1] != tensor_elems * base_stride)) {
-      while (view_dim >= 0 && (view_elems < tensor_elems || new_shape[view_dim] == 1)) {
-        new_strides[view_dim] = view_elems * base_stride;
-        view_elems *= new_shape[view_dim];
-        --view_dim;
+  int64_t viewDim = newRank - 1;
+  int64_t baseStride = curStrides.back();
+  int64_t tensorElems = 1;
+  int64_t viewElems = 1;
+  for (int64_t dim = SizeToLong(curShape.size()) - 1; dim >= 0; --dim) {
+    tensorElems *= curShape[dim];
+    if (dim == 0 || (curShape[dim - 1] != 1 && curStrides[dim - 1] != tensorElems * baseStride)) {
+      while (viewDim >= 0 && (viewElems < tensorElems || newShape[viewDim] == 1)) {
+        newStrides[viewDim] = viewElems * baseStride;
+        viewElems *= newShape[viewDim];
+        --viewDim;
       }
-      if (view_elems != tensor_elems) {
+      if (viewElems != tensorElems) {
         return std::nullopt;
       }
       if (dim > 0) {
-        base_stride = cur_strides[dim - 1];
-        tensor_elems = 1;
-        view_elems = 1;
+        baseStride = curStrides[dim - 1];
+        tensorElems = 1;
+        viewElems = 1;
       }
     }
   }
-  if (view_dim != -1) {
+  if (viewDim != -1) {
     return std::nullopt;
   }
 
-  return new_strides;
+  return newStrides;
 }
 
-std::vector<int64_t> InferSizeImpl(const std::vector<int64_t> &new_shape, int64_t num_elements) {
-  int64_t new_size = 1;
-  std::optional<int64_t> infer_dim;
-  for (int64_t dim = 0, ndim = static_cast<int64_t>(new_shape.size()); dim != ndim; ++dim) {
-    if (new_shape[dim] == -1) {
-      if (infer_dim) {
+std::vector<int64_t> InferSizeImpl(const std::vector<int64_t> &newShape, int64_t numElements) {
+  int64_t newSize = 1;
+  std::optional<int64_t> inferDim;
+  for (int64_t dim = 0, ndim = static_cast<int64_t>(newShape.size()); dim != ndim; ++dim) {
+    if (newShape[dim] == -1) {
+      if (inferDim) {
         LOG_EXCEPTION << "only one dimension can be inferred";
       }
-      infer_dim = dim;
-    } else if (new_shape[dim] >= 0) {
-      new_size *= new_shape[dim];
+      inferDim = dim;
+    } else if (newShape[dim] >= 0) {
+      newSize *= newShape[dim];
     } else {
       LOG_EXCEPTION << "invalid proposed_shape dimension";
     }
   }
 
-  if (num_elements == new_size || (infer_dim && new_size > 0 && num_elements % new_size == 0)) {
-    std::vector<int64_t> res(new_shape);
-    if (infer_dim) {
-      if (new_size == 0) {
+  if (numElements == newSize || (inferDim && newSize > 0 && numElements % newSize == 0)) {
+    std::vector<int64_t> res(newShape);
+    if (inferDim) {
+      if (newSize == 0) {
         LOG_OUT << "WARNING: cannot reshape tensor of 0 elements into proposed_shape, because the unspecified "
                    "dimension size -1 can be any value and is ambiguous";
-        res[*infer_dim] = 0;
+        res[*inferDim] = 0;
       } else {
-        res[*infer_dim] = num_elements / new_size;
+        res[*inferDim] = numElements / newSize;
       }
     }
     return res;
@@ -111,39 +111,39 @@ std::vector<int64_t> InferSizeImpl(const std::vector<int64_t> &new_shape, int64_
   return {};
 }
 
-std::vector<int64_t> InferShape(const std::vector<int64_t> &new_shape, const std::vector<int64_t> &cur_shape) {
-  const int64_t num_elements =
-    std::accumulate(cur_shape.begin(), cur_shape.end(), static_cast<int64_t>(1), std::multiplies<int64_t>());
-  auto res = InferSizeImpl(new_shape, num_elements);
+std::vector<int64_t> InferShape(const std::vector<int64_t> &newShape, const std::vector<int64_t> &curShape) {
+  const int64_t numElements =
+    std::accumulate(curShape.begin(), curShape.end(), static_cast<int64_t>(1), std::multiplies<int64_t>());
+  auto res = InferSizeImpl(newShape, numElements);
   return res;
 }
 
-void UpdateOutputViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                          const std::vector<int64_t> &new_shape) {
-  const auto &cur_shape = input_tensor_ptr->Shape();
-  const auto &cur_strides = GetTensorStrides(input_tensor_ptr);
-  const auto infer_shape = InferShape(new_shape, cur_shape);
-  const auto strides = CalculateViewStrides(cur_shape, cur_strides, infer_shape);
+void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                          const std::vector<int64_t> &newShape) {
+  const auto &curShape = inputTensorPtr->Shape();
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  const auto inferShape = InferShape(newShape, curShape);
+  const auto strides = CalculateViewStrides(curShape, curStrides, inferShape);
   if (strides.has_value()) {
-    UpdateTensorViewInfo(input_tensor_ptr, output_tensor_ptr, infer_shape, strides.value());
+    UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferShape, strides.value());
     return;
   }
-  LOG_EXCEPTION << "View shape " << new_shape << "is not compatible with input tensor's shape " << cur_shape
-                << " and stride " << cur_strides;
+  LOG_EXCEPTION << "View shape " << newShape << "is not compatible with input tensor's shape " << curShape
+                << " and stride " << curStrides;
 }
 }  // namespace
 
 OpsErrorCode AclnnView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                       size_t *workspaceSize) {
-  const auto input_tensor_ptr = input[kIndex0]->ToTensor();
-  if (!input_tensor_ptr->IsContiguous()) {
+  const auto inputTensorPtr = input[kIndex0]->ToTensor();
+  if (!inputTensorPtr->IsContiguous()) {
     LOG_EXCEPTION << "Input tensor is not contiguous";
   }
   const auto &shape = input[kIndex1]->ToTuple()->ToIntList();
-  if (std::any_of(shape.begin(), shape.end(), [](const int &shape_i) { return shape_i < -1; })) {
+  if (std::any_of(shape.begin(), shape.end(), [](const int &shapeI) { return shapeI < -1; })) {
     LOG_EXCEPTION << "For View the component of shape can't be less than -1";
   }
-  UpdateOutputViewInfo(input_tensor_ptr, output->ToTensor(), shape);
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), shape);
   return SUCCESS;
 }
 

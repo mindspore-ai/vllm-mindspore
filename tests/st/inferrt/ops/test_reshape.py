@@ -41,7 +41,6 @@ def reshape_forward(shape_format, op_func_compiled):
         AssertRtolEqual(cpu_output, npu_output)
 
 
-@pytest.mark.skip(reason="view operator not yet supported")
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_reshape(pipeline, monkeypatch):

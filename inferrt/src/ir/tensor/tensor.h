@@ -223,6 +223,15 @@ class Tensor : public RefCounted {
    */
   void SetStorage(const StoragePtr &storage) { storage_ = storage; }
   /**
+   * @brief Check whether this tensor currently owns the Storage.
+   */
+  bool CheckOwnsStorage() const { return ownsStorage_; }
+  /**
+   * @brief Sets whether this tensor owns the storage.
+   * @param val True if the tensor should own the storage, false otherwise.
+   */
+  void SetOwnsStorage(bool ownsStorage) { ownsStorage_ = ownsStorage; }
+  /**
    * @brief Sets the memory format of the tensor.
    * @param memoryFromat The memory format enum value.
    */
@@ -245,6 +254,7 @@ class Tensor : public RefCounted {
   StoragePtr storage_{nullptr};                 ///< The underlying storage.
   std::vector<int64_t> storageShape_;           ///< The underlying storage shape of the tensor.
   int64_t storageOffset_ = 0;                   ///< The offset in the storage, in number of elements.
+  bool ownsStorage_{true};                      ///< Whether the tensor owns the storage.
 };
 
 using TensorPtr = IntrusivePtr<Tensor>;

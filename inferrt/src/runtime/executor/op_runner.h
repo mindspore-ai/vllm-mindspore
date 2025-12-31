@@ -24,6 +24,7 @@
 #include "ops/operator.h"
 #include "ir/graph.h"
 #include "ir/value/value.h"
+#include "hardware/hardware_abstract/device_context.h"
 
 namespace mrt {
 namespace runtime {
@@ -36,12 +37,14 @@ class OpRunner {
  public:
   OpRunner() = delete;
   OpRunner(ops::Op opName, const std::vector<ir::NodePtr> &inputs, const ir::ValuePtr &output,
-           std::unique_ptr<ops::Operator> &&operatorPtr, void *stream, hardware::Device device, bool isDynamicShape)
+           std::unique_ptr<ops::Operator> &&operatorPtr, void *stream, hardware::Device device,
+           device::DeviceContext *deviceContext, bool isDynamicShape)
       : stream_(stream),
         alloc_(device),
         operator_(std::move(operatorPtr)),
         opName_(opName),
         device_(device),
+        deviceContext_(deviceContext),
         isDynamicShape_(isDynamicShape) {
     output_ = output.get();
     auto inputSize = inputs.size();
@@ -63,6 +66,7 @@ class OpRunner {
         operator_(std::move(other.operator_)),
         opName_(other.opName_),
         device_(other.device_),
+        deviceContext_(other.deviceContext_),
         isDynamicShape_(other.isDynamicShape_) {}
 
   OpRunner &operator=(OpRunner &&other) noexcept {
@@ -77,6 +81,7 @@ class OpRunner {
       operator_ = std::move(other.operator_);
       opName_ = other.opName_;
       device_ = other.device_;
+      deviceContext_ = other.deviceContext_;
       isDynamicShape_ = other.isDynamicShape_;
     }
     return *this;
@@ -173,6 +178,9 @@ class OpRunner {
 
   // On which type of device does this operator execute on.
   hardware::Device device_;
+
+  // Device context for the operator execution.
+  device::DeviceContext *deviceContext_;
 
   // Flag indicating if the operator has dynamic shapes.
   bool isDynamicShape_;

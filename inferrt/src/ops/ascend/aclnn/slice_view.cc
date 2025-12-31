@@ -24,49 +24,49 @@
 namespace mrt {
 namespace ops {
 namespace {
-void UpdateOutputViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                          const int64_t ori_dim, const int64_t ori_start, const int64_t ori_end, const int64_t step) {
-  const auto &cur_shape = input_tensor_ptr->Shape();
-  const auto &cur_strides = GetTensorStrides(input_tensor_ptr);
-  const auto dim_size = cur_shape.size();
-  CHECK_IF_FAIL_MSG(dim_size > 0, "slice can not be applied to a 0-dim tensor.");
-  const auto dim = DynamicDimWrap(ori_dim, dim_size);
-  const auto dim_value = cur_shape[dim];
+void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                          const int64_t oriDim, const int64_t oriStart, const int64_t oriEnd, const int64_t step) {
+  const auto &curShape = inputTensorPtr->Shape();
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  const auto dimSize = curShape.size();
+  CHECK_IF_FAIL_MSG(dimSize > 0, "slice can not be applied to a 0-dim tensor.");
+  const auto dim = DynamicDimWrap(oriDim, dimSize);
+  const auto dimValue = curShape[dim];
 
-  auto start = ori_start < 0 ? ori_start + dim_value : ori_start;
+  auto start = oriStart < 0 ? oriStart + dimValue : oriStart;
   if (start < 0) {
     start = 0;
-  } else if (start > dim_value) {
-    start = dim_value;
+  } else if (start > dimValue) {
+    start = dimValue;
   }
 
-  auto end = ori_end < 0 ? ori_end + dim_value : ori_end;
+  auto end = oriEnd < 0 ? oriEnd + dimValue : oriEnd;
   if (end < start) {
     end = start;
-  } else if (end > dim_value) {
-    end = dim_value;
+  } else if (end > dimValue) {
+    end = dimValue;
   }
 
   const auto len = end - start;
-  auto new_shape = cur_shape;
-  new_shape[dim] = (len + step - 1) / step;
-  auto new_strides = cur_strides;
-  new_strides[dim] *= step;
-  const auto storage_offset = input_tensor_ptr->StorageOffset();
-  const size_t new_storage_offset = storage_offset + LongToSize(start * cur_strides[dim]);
-  UpdateTensorViewInfo(input_tensor_ptr, output_tensor_ptr, new_shape, new_strides, new_storage_offset);
+  auto newShape = curShape;
+  newShape[dim] = (len + step - 1) / step;
+  auto newStrides = curStrides;
+  newStrides[dim] *= step;
+  const auto storageOffset = inputTensorPtr->StorageOffset();
+  const size_t newStorageOffset = storageOffset + LongToSize(start * curStrides[dim]);
+  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, newShape, newStrides, newStorageOffset);
 }
 }  // namespace
 
 OpsErrorCode AclnnSliceView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                            size_t *workspaceSize) {
-  const auto input_tensor_ptr = input[kIndex0]->ToTensor();
+  const auto inputTensorPtr = input[kIndex0]->ToTensor();
   const auto dim = input[kIndex1]->ToInt();
   const auto start = input[kIndex2]->ToInt();
   const auto end = input[kIndex3]->ToInt();
   const auto step = input[kIndex4]->ToInt();
   CHECK_IF_FAIL_MSG(step > 0, "step must be positive");
-  UpdateOutputViewInfo(input_tensor_ptr, output->ToTensor(), dim, start, end, step);
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dim, start, end, step);
   return SUCCESS;
 }
 

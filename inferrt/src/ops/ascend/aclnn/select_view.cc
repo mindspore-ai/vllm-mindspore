@@ -24,35 +24,35 @@
 namespace mrt {
 namespace ops {
 namespace {
-void UpdateOutputViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                          const int64_t ori_dim, const int64_t ori_index) {
-  const auto &cur_shape = input_tensor_ptr->Shape();
-  const auto dim_size = cur_shape.size();
-  CHECK_IF_FAIL_MSG(dim_size > 0, "For Primitive [SelectExtView] rank must >= 1");
-  const auto dim = DynamicDimWrap(ori_dim, dim_size);
-  const auto dim_value = cur_shape[dim];
-  CHECK_IF_FAIL_MSG(ori_index >= -dim_value && ori_index < dim_value,
-                    "For Primitive [SelectExtView] start exceed range. start: " + std::to_string(ori_index) +
-                      ", start should be in [" + std::to_string(-dim_value) + ", " + std::to_string(dim_value) + ").");
+void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                          const int64_t oriDim, const int64_t oriIndex) {
+  const auto &curShape = inputTensorPtr->Shape();
+  const auto dimSize = curShape.size();
+  CHECK_IF_FAIL_MSG(dimSize > 0, "For Primitive [SelectExtView] rank must >= 1");
+  const auto dim = DynamicDimWrap(oriDim, dimSize);
+  const auto dimValue = curShape[dim];
+  CHECK_IF_FAIL_MSG(oriIndex >= -dimValue && oriIndex < dimValue,
+                    "For Primitive [SelectExtView] start exceed range. start: " + std::to_string(oriIndex) +
+                      ", start should be in [" + std::to_string(-dimValue) + ", " + std::to_string(dimValue) + ").");
 
-  const auto index = ori_index < 0 ? ori_index + dim_value : ori_index;
-  auto new_shape = cur_shape;
-  const auto &cur_strides = GetTensorStrides(input_tensor_ptr);
-  auto new_strides = cur_strides;
-  const auto storage_offset = input_tensor_ptr->StorageOffset();
-  const size_t new_storage_offset = storage_offset + LongToSize(index * cur_strides[dim]);
-  new_shape.erase(new_shape.begin() + dim);
-  new_strides.erase(new_strides.begin() + dim);
-  UpdateTensorViewInfo(input_tensor_ptr, output_tensor_ptr, new_shape, new_strides, new_storage_offset);
+  const auto index = oriIndex < 0 ? oriIndex + dimValue : oriIndex;
+  auto newShape = curShape;
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  auto newStrides = curStrides;
+  const auto storageOffset = inputTensorPtr->StorageOffset();
+  const size_t newStorageOffset = storageOffset + LongToSize(index * curStrides[dim]);
+  newShape.erase(newShape.begin() + dim);
+  newStrides.erase(newStrides.begin() + dim);
+  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, newShape, newStrides, newStorageOffset);
 }
 }  // namespace
 
 OpsErrorCode AclnnSelectView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                             size_t *workspaceSize) {
-  const auto input_tensor_ptr = input[kIndex0]->ToTensor();
+  const auto inputTensorPtr = input[kIndex0]->ToTensor();
   const auto dim = input[kIndex1]->ToInt();
   const auto index = input[kIndex2]->ToInt();
-  UpdateOutputViewInfo(input_tensor_ptr, output->ToTensor(), dim, index);
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dim, index);
   return SUCCESS;
 }
 

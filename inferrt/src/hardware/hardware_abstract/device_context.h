@@ -40,6 +40,7 @@ namespace runtime {
 enum class KernelTaskType;
 }
 namespace device {
+using BindStreamFunc = std::function<void()>;
 constexpr size_t kSizeZero = 0;
 
 struct MRT_EXPORT DeviceContextKey {
@@ -218,6 +219,9 @@ class MRT_EXPORT DeviceResManager {
 
   virtual void SetCurrentStream(void *currentStream) {}
   virtual void *GetCurrentStream() const { return nullptr; }
+
+  virtual void BindCurrentStream() {}
+  virtual void SetBindStreamFunc(const BindStreamFunc &bindStreamFunc) {}
 
   virtual void *GetStream() const { return nullptr; }
 

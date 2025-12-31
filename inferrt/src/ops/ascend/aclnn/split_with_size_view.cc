@@ -24,47 +24,47 @@
 namespace mrt {
 namespace ops {
 namespace {
-void SplitSizeInputsCheck(const std::vector<int64_t> &split_size, const int64_t &axis,
-                          const std::vector<int64_t> &tensor_shape) {
-  CHECK_IF_FAIL_MSG(split_size.size() > 0, "For SplitWithSize, the size of split_size should > 0, but got" +
-                                             std::to_string(split_size.size()));
-  const int64_t sum_split_size = std::accumulate(split_size.begin(), split_size.end(), 0);
-  if (sum_split_size != tensor_shape[axis]) {
-    LOG_EXCEPTION << "For 'SplitWithSize',  the sum of split_size should be equal to " << tensor_shape[axis]
-                  << "(input.shape[" << axis << "]), but got split_sizes: " << split_size;
+void SplitSizeInputsCheck(const std::vector<int64_t> &splitSize, const int64_t &axis,
+                          const std::vector<int64_t> &tensorShape) {
+  CHECK_IF_FAIL_MSG(splitSize.size() > 0,
+                    "For SplitWithSize, the size of splitSize should > 0, but got" + std::to_string(splitSize.size()));
+  const int64_t sumSplitSize = std::accumulate(splitSize.begin(), splitSize.end(), 0);
+  if (sumSplitSize != tensorShape[axis]) {
+    LOG_EXCEPTION << "For 'SplitWithSize',  the sum of splitSize should be equal to " << tensorShape[axis]
+                  << "(input.shape[" << axis << "]), but got splitSize: " << splitSize;
   }
 }
 
-void UpdateOutputViewInfo(const ir::TensorPtr &input_tensor_ptr, const std::vector<ir::TensorPtr> &output_tensor_vector,
-                          const std::vector<int64_t> &split_size, int64_t dim) {
-  const auto &cur_shape = input_tensor_ptr->Shape();
-  const auto &cur_strides = GetTensorStrides(input_tensor_ptr);
-  auto cur_offset = input_tensor_ptr->StorageOffset();
-  const auto rank = SizeToLong(cur_shape.size());
+void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const std::vector<ir::TensorPtr> &outputTensorVector,
+                          const std::vector<int64_t> &splitSize, int64_t dim) {
+  const auto &curShape = inputTensorPtr->Shape();
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  auto curOffset = inputTensorPtr->StorageOffset();
+  const auto rank = SizeToLong(curShape.size());
   CHECK_IF_FAIL_MSG(rank > 0, "For SplitWithSize, rank should > 0, but got" + std::to_string(rank));
-  const auto ndim = cur_shape.size();
-  const auto wrap_dim = DynamicDimWrap(dim, ndim);
-  SplitSizeInputsCheck(split_size, wrap_dim, cur_shape);
+  const auto ndim = curShape.size();
+  const auto wrapDim = DynamicDimWrap(dim, ndim);
+  SplitSizeInputsCheck(splitSize, wrapDim, curShape);
 
-  CHECK_IF_FAIL_MSG(split_size.size() == output_tensor_vector.size(),
-                    "For SplitWithSize, the size of split_size is " + std::to_string(split_size.size()) +
-                      " and the size of output_tensor_vector is " + std::to_string(output_tensor_vector.size()));
-  for (size_t i = 0; i < split_size.size(); ++i) {
-    const auto split_iter = split_size[i];
-    std::vector<int64_t> slice_shape(cur_shape);
-    slice_shape[wrap_dim] = split_iter;
-    UpdateTensorViewInfo(input_tensor_ptr, output_tensor_vector[i], slice_shape, cur_strides, cur_offset);
-    cur_offset += LongToSize(split_iter * cur_strides[wrap_dim]);
+  CHECK_IF_FAIL_MSG(splitSize.size() == outputTensorVector.size(),
+                    "For SplitWithSize, the size of splitSize is " + std::to_string(splitSize.size()) +
+                      " and the size of outputTensorVector is " + std::to_string(outputTensorVector.size()));
+  for (size_t i = 0; i < splitSize.size(); ++i) {
+    const auto splitIter = splitSize[i];
+    std::vector<int64_t> slice_shape(curShape);
+    slice_shape[wrapDim] = splitIter;
+    UpdateTensorViewInfo(inputTensorPtr, outputTensorVector[i], slice_shape, curStrides, curOffset);
+    curOffset += LongToSize(splitIter * curStrides[wrapDim]);
   }
 }
 }  // namespace
 
 OpsErrorCode AclnnSplitWithSizeView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                                    size_t *workspaceSize) {
-  const auto input_tensor_ptr = input[kIndex0]->ToTensor();
-  const auto split_size = input[kIndex1]->ToTuple()->ToIntList();
+  const auto inputTensorPtr = input[kIndex0]->ToTensor();
+  const auto splitSize = input[kIndex1]->ToTuple()->ToIntList();
   const auto dim = input[kIndex2]->ToInt();
-  UpdateOutputViewInfo(input_tensor_ptr, output->ToTuple()->ToTensorList(), split_size, dim);
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTuple()->ToTensorList(), splitSize, dim);
   return SUCCESS;
 }
 

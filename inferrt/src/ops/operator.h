@@ -67,7 +67,7 @@ class DA_API Operator {
    * @param input Vector of pointers to input data.
    * @param output Pointer to the output data.
    */
-  virtual void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {}
+  virtual void Init(const std::vector<const ir::Value *> &input, const ir::Value *output) {}
 
   /**
    *  @brief Infer the output shape based on input shape or value.

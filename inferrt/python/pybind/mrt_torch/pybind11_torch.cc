@@ -171,17 +171,18 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     // Parameter or tensor which references a parameter is graph output.
     storage = CopyStorage(storage);
   }
+
+  void *dataPtr = storage->Release();
+  CHECK_IF_NULL(dataPtr);
   auto deleter = storage->GetDeleter();
   if (deleter == nullptr) {
     auto allocator = storage->GetAllocator();
-    deleter = [allocator](void *dataPtr) {
+    deleter = [allocator, dataPtr](void *) {
       if (dataPtr != nullptr) {
         allocator.Free(dataPtr);
       }
     };
   }
-  void *dataPtr = storage->Release();
-  CHECK_IF_NULL(dataPtr);
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
@@ -189,13 +190,29 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     return at::empty(tensor->Shape(), options);
   }
 
+  std::vector<int64_t> strides;
+  if (tensor->Strides().empty() && !tensor->Shape().empty()) {
+    // Create default strides for contiguous tensor
+    strides = tensor->Shape();
+    if (!strides.empty()) {
+      strides.erase(strides.begin());
+    }
+    strides.push_back(1);
+    for (int i = static_cast<int>(strides.size()) - 2; i >= 0; i--) {
+      strides[i] = strides[i] * strides[i + 1];
+    }
+  } else {
+    strides = tensor->Strides();
+  }
+
   switch (atDevice.type()) {
     case at::DeviceType::CPU:
-      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+      return at::from_blob(dataPtr, tensor->Shape(), strides, std::move(deleter), options);
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1:
-      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), tensor->StorageOffset(),
-                                       std::move(deleter), options);
+      return at_npu::native::from_blob(
+        static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()), tensor->Shape(), strides,
+        0, std::move(deleter), options);
 #endif
     default:
       LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
@@ -221,15 +238,17 @@ void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
     self->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
     LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(self->Format()) << ", strides=" << self->Strides()
             << ", storageOffset=" << self->StorageOffset() << ", storageShape=" << self->StorageShape()
-            << ", isView=" << atTensor.is_view();
+            << ", isView=" << atTensor.is_view() << " at.tensor.shape: " << atTensor.sizes();
   }
 #endif
 
+  self->SetOwnsStorage(false);
   self->SetDtype(type);
   self->SetShape(std::move(shape));
   self->Resize();
   CHECK_IF_NULL(data);
   self->UpdateData(data);
+  self->GetStorage()->Resize(atTensor.storage().nbytes());
 }
 
 void SetDeviceContext() {
@@ -239,7 +258,12 @@ void SetDeviceContext() {
   auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
   CHECK_IF_NULL(deviceContext);
   CHECK_IF_NULL(deviceContext->deviceResManager_);
-  auto currentStream = c10_npu::getCurrentNPUStream().stream();
+
+  auto currentNPUStream = c10_npu::getCurrentNPUStream();
+  auto bindStreamFunc = [currentNPUStream]() { c10_npu::setCurrentNPUStream(currentNPUStream); };
+  deviceContext->deviceResManager_->SetBindStreamFunc(bindStreamFunc);
+
+  auto currentStream = currentNPUStream.stream();
   CHECK_IF_NULL(currentStream);
   deviceContext->deviceResManager_->SetCurrentStream(currentStream);
 #endif

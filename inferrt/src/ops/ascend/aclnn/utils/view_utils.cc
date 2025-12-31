@@ -33,48 +33,48 @@ std::vector<int64_t> CalculateStrides(const std::vector<int64_t> &shape) {
   return ret;
 }
 
-int64_t DynamicDimWrap(int64_t dim, int64_t dim_post_expr, bool wrap_scalar) {
-  if (dim_post_expr * -1 <= dim && dim < dim_post_expr) {
+int64_t DynamicDimWrap(int64_t dim, int64_t dimPostExpr, bool wrapScalar) {
+  if (dimPostExpr * -1 <= dim && dim < dimPostExpr) {
     if (dim < 0) {
-      return dim + dim_post_expr;
+      return dim + dimPostExpr;
     }
     return dim;
   }
-  if (dim_post_expr == 0) {
-    if (!wrap_scalar) {
+  if (dimPostExpr == 0) {
+    if (!wrapScalar) {
       LOG_EXCEPTION << "dim value specified as " << dim << ", but tensor has no dimensions";
     }
     return DynamicDimWrap(dim, 1, false);
   }
-  LOG_EXCEPTION << "Dimension out of range (expected to be in range of [" << -dim_post_expr << ", " << dim_post_expr
+  LOG_EXCEPTION << "Dimension out of range (expected to be in range of [" << -dimPostExpr << ", " << dimPostExpr
                 << "), but got " << dim << ")";
   return -1;
 }
 
-std::vector<int64_t> GetTensorStrides(const ir::TensorPtr &tensor_ptr) {
-  const auto &strides = tensor_ptr->Strides();
+std::vector<int64_t> GetTensorStrides(const ir::TensorPtr &tensorPtr) {
+  const auto &strides = tensorPtr->Strides();
   if (strides.empty()) {
-    return CalculateStrides(tensor_ptr->Shape());
+    return CalculateStrides(tensorPtr->Shape());
   }
   return strides;
 }
 
-void UpdateTensorViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                          const std::vector<int64_t> &new_shape, const std::vector<int64_t> &new_strides,
-                          size_t new_storage_offset) {
-  output_tensor_ptr->SetShape(new_shape);
-  output_tensor_ptr->SetStrides(new_strides);
-  output_tensor_ptr->SetStorageOffset(new_storage_offset);
-  output_tensor_ptr->SetStorageShape(input_tensor_ptr->StorageShape());
+void UpdateTensorViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                          const std::vector<int64_t> &newShape, const std::vector<int64_t> &newStrides,
+                          size_t newStorageOffset) {
+  outputTensorPtr->SetShape(newShape);
+  outputTensorPtr->SetStrides(newStrides);
+  outputTensorPtr->SetStorageOffset(newStorageOffset);
+  outputTensorPtr->SetStorageShape(inputTensorPtr->StorageShape());
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> GenerateOutputInputRefPair(const ir::Value *output) {
   std::vector<std::pair<uint32_t, uint32_t>> result;
 
   if (output->IsTuple()) {
-    const auto num_output = output->ToTuple()->Size();
-    result.reserve(num_output);
-    for (uint32_t i = 0; i < num_output; ++i) {
+    const auto numOutput = output->ToTuple()->Size();
+    result.reserve(numOutput);
+    for (uint32_t i = 0; i < numOutput; ++i) {
       result.emplace_back(i, 0);
     }
   } else if (output->IsTensor()) {

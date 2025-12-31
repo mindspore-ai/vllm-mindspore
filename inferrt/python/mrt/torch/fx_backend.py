@@ -388,7 +388,7 @@ _OP_MAP = {
     torch.ge: Op.ge,
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
-    torch.reshape: Op.reshape,
+    torch.reshape: Op.view,
     torch.transpose: Op.permute,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
@@ -437,7 +437,7 @@ _OP_MAP = {
     operator.mod: Op.remainder_tensor_tensor,
     operator.floordiv: Op.div_mod,
     # tensor methods (as strings)
-    "size": Op.shape,
+    "size": Op.size,
     "add": Op.add,
     "sub": Op.sub,
     "mul": Op.mul,
@@ -451,15 +451,16 @@ _OP_MAP = {
     "relu": Op.relu,
     "to": Op.cast,
     "sigmoid": Op.sigmoid,
-    "reshape": Op.reshape,
+    "reshape": Op.view,
     "cat": Op.cat,
     "clone": Op.clone,
+    "contiguous": Op.contiguous,
     "transpose": Op.permute,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
     "square": Op.square,
     "rsqrt": Op.rsqrt,
-    "view": Op.reshape,  # view is often used like reshape
+    "view": Op.view,  # view is often used like reshape
     "copy_": Op.inplace_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "fill_": Op.inplace_fill_tensor,
@@ -585,6 +586,12 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     args = node.args
     kwargs = node.kwargs
     arg_idx = 0
+
+    # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
+    # allowing the shape to be specified as unpacked integers.
+    if node.target == "view":
+        if not isinstance(args[1], Node) or not isinstance(args[1].meta.get("example_value"), torch.Size):
+            args = [args[0], args[1:]]
     if len(args) + len(kwargs) > len(schema.arguments):
         return flat_args, False
 
@@ -839,6 +846,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     mrt_param_nodes = [env[n] for n in fx_param_nodes]
 
     def compiled_callable(*inputs: torch.Tensor):
+        set_device_context()
         update_runtime_inputs(mrt_param_nodes, inputs)
         result = executor.run()
         return to_torch(result)

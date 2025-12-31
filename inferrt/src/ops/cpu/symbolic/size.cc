@@ -25,6 +25,12 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
+  // TODO(YzLi): Handle case where input[kIndex1] could be None and returns a tuple.
+  // Temporary solution: Falls back to parent class Operator::InferShape (verified).
+  // Note: The method of assigning tupleData to output has not been validated in pipeline mode for the Qwen3 network.
+  Operator::InferShape(input, output);
+  return SUCCESS;
+
   const auto &shape = input[kIndex0]->ToTensor()->Shape();
   int64_t dim = input[kIndex1]->ToInt();
 

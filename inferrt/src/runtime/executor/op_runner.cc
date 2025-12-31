@@ -23,7 +23,9 @@ namespace runtime {
 ops::OpsErrorCode OpRunner::InferShape() {
   if (isDynamicShape_) {
     LOG_OUT << "Begin InferShape for op[" << ops::ToStr(opName_) << "], inputs=" << input_;
-    return operator_->InferShape(input_, output_);
+    auto ret = operator_->InferShape(input_, output_);
+    LOG_OUT << "End InferShape for op[" << ops::ToStr(opName_) << "]";
+    return ret;
   }
 
   return ops::SUCCESS;
@@ -32,13 +34,20 @@ ops::OpsErrorCode OpRunner::InferShape() {
 ops::OpsErrorCode OpRunner::CalcWorkspace() {
   LOG_OUT << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
           << ", workspaceSize=" << workspaceSize_;
-  return operator_->CalcWorkspace(input_, output_, &workspaceSize_);
+  auto ret = operator_->CalcWorkspace(input_, output_, &workspaceSize_);
+  LOG_OUT << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
+  return ret;
 }
 
 ops::OpsErrorCode OpRunner::Launch() {
+  void *stream = deviceContext_->deviceResManager_->GetCurrentStream();
+  if (device_.type != hardware::DeviceType::CPU) {
+    CHECK_IF_NULL(stream);
+  }
   LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
-          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream_;
-  auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream_);
+          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
+  auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
+  LOG_OUT << "End launch op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
@@ -47,6 +56,7 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
   LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
           << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
+  LOG_OUT << "End launch op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
@@ -54,7 +64,7 @@ void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
   ir::VisitAllTensors(output_, [&](const ir::TensorPtr &tensor) {
     const auto &storage = tensor->GetStorage();
-    if (storage->CheckOwnsData() && storage->Data() != nullptr) {
+    if (tensor->CheckOwnsStorage() && storage->CheckOwnsData() && storage->Data() != nullptr) {
       LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
     }
     // For op output ref graph input tensor case.
@@ -106,6 +116,7 @@ void OpRunner::UpdateRefNodeOutputValue() {
       auto &outputTensor = output_->ToTensor();
       CHECK_IF_NULL(outputTensor);
       outputTensor->SetStorage(inputTensor->GetStorage());
+      outputTensor->SetOwnsStorage(false);
     } else if (output_->IsTuple()) {
       auto &outputTuple = output_->ToTuple();
       CHECK_IF_FAIL(outputIndex < outputTuple->Size());
@@ -115,6 +126,7 @@ void OpRunner::UpdateRefNodeOutputValue() {
       auto &outputTensor = output->ToTensor();
       CHECK_IF_NULL(outputTensor);
       outputTensor->SetStorage(inputTensor->GetStorage());
+      outputTensor->SetOwnsStorage(false);
     } else {
       LOG_EXCEPTION << "The output type of operator " << GetOpName()
                     << " is not supported to ref input. The output index: " << outputIndex

@@ -89,6 +89,9 @@ void Tensor::ComputeStrides() {
 }
 
 bool Tensor::IsContiguous() const {
+  if (strides_.empty()) {
+    return true;
+  }
   if (shape_.size() != strides_.size()) {
     return false;
   }
@@ -105,7 +108,6 @@ bool Tensor::IsContiguous() const {
 
 Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Device device)
     : dtype_(dtype), shape_(shape) {
-  ComputeStrides();
   numel_ = CalculateNumel(shape_, true);
   size_t sizeBytes = 0;
   if (!HasDynamicShape()) {
@@ -117,17 +119,17 @@ Tensor::Tensor(const std::vector<int64_t> &shape, DataType dtype, hardware::Devi
 
 void Tensor::Resize() {
   CHECK_IF_NULL(storage_);
-  ComputeStrides();
   numel_ = CalculateNumel(shape_, false);
-  size_t sizeBytes = numel_ * dtype_.GetSize();
-  storage_->Resize(sizeBytes);
+  if (ownsStorage_) {
+    size_t sizeBytes = numel_ * dtype_.GetSize();
+    storage_->Resize(sizeBytes);
+  }
 }
 
 void Tensor::UpdateData(void *data) { storage_->SetData(data); }
 
 Tensor::Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType dtype)
     : dtype_(dtype), shape_(shape), storage_(storage) {
-  ComputeStrides();
   numel_ = CalculateNumel(shape_, true);
   if (!HasDynamicShape()) {
     if (storage_->SizeBytes() < numel_ * dtype_.GetSize()) {
@@ -138,7 +140,6 @@ Tensor::Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType d
 
 Tensor::Tensor(void *data, const std::vector<int64_t> &shape, DataType dtype, hardware::Device device)
     : dtype_(dtype), shape_(shape) {
-  ComputeStrides();
   numel_ = CalculateNumel(shape_, false);
   size_t sizeBytes = numel_ * dtype_.GetSize();
 
@@ -165,7 +166,6 @@ void Tensor::SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape) {
       shape_[i] = -1;
     }
   }
-  ComputeStrides();
   numel_ = CalculateNumel(shape_, true);
 }
 
@@ -227,7 +227,10 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
     }
     os << "]";
   }
+  os << ", numel: " << tensor.Numel();
+  os << ", strides: " << ShapeToString(tensor.Strides());
   os << ", dtype=" << tensor.Dtype().ToString();
+  os << ", storageShape: " << ShapeToString(tensor.StorageShape());
   os << ", device=[type=" << hardware::GetDeviceNameByType(tensor.GetDevice().type)
      << ", index:" << int(tensor.GetDevice().index) << "]";
   os << ", data=[";

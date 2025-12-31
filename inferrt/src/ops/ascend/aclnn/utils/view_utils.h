@@ -27,21 +27,20 @@ namespace mrt {
 namespace ops {
 DA_API std::vector<int64_t> CalculateStrides(const std::vector<int64_t> &shape);
 
-DA_API int64_t DynamicDimWrap(int64_t dim, int64_t dim_post_expr, bool wrap_scalar = false);
+DA_API int64_t DynamicDimWrap(int64_t dim, int64_t dimPostExpr, bool wrapScalar = false);
 
-DA_API std::vector<int64_t> GetTensorStrides(const ir::TensorPtr &tensor_ptr);
+DA_API std::vector<int64_t> GetTensorStrides(const ir::TensorPtr &tensorPtr);
 
-DA_API void UpdateTensorViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                                 const std::vector<int64_t> &new_shape, const std::vector<int64_t> &new_strides,
-                                 size_t new_storage_offset);
+DA_API void UpdateTensorViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                                 const std::vector<int64_t> &newShape, const std::vector<int64_t> &newStrides,
+                                 size_t newStorageOffset);
 
-DA_API inline void UpdateTensorViewInfo(const ir::TensorPtr &input_tensor_ptr, const ir::TensorPtr &output_tensor_ptr,
-                                        const std::vector<int64_t> &new_shape,
-                                        const std::vector<int64_t> &new_strides) {
-  UpdateTensorViewInfo(input_tensor_ptr, output_tensor_ptr, new_shape, new_strides, input_tensor_ptr->StorageOffset());
+DA_API inline void UpdateTensorViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
+                                        const std::vector<int64_t> &newShape, const std::vector<int64_t> &newStrides) {
+  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, newShape, newStrides, inputTensorPtr->StorageOffset());
 }
 
 DA_API std::vector<std::pair<uint32_t, uint32_t>> GenerateOutputInputRefPair(const ir::Value *output);
 }  // namespace ops
 }  // namespace mrt
-#endif  //__OPS_ASCEND_ACLNN_UTILS_VIEW_UTILS_H__
+#endif  // __OPS_ASCEND_ACLNN_UTILS_VIEW_UTILS_H__
