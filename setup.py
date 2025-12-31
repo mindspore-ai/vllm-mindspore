@@ -111,7 +111,7 @@ def _get_ascend_home_path():
 
 def _get_ascend_env_path():
     env_script_path = os.path.realpath(
-        os.path.join(_get_ascend_home_path(), "..", "set_env.sh"))
+        os.path.join(_get_ascend_home_path(), "set_env.sh"))
     if not os.path.exists(env_script_path):
         raise ValueError(
             "The file '{}' is not found, please make sure environment "
