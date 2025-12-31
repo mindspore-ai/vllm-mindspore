@@ -161,9 +161,6 @@ class MsModelBase:
         self.has_prefill_warmup: bool = False
         self.has_chunked_warmup: bool = not self.use_ringmla
         self.kv_caches: list[Any] = []
-        self.casual_mask = LowerTriangularMask(
-            dtype=self.model_config.dtype,
-            max_model_len=self.model_config.max_model_len)
         self.model: Optional[nn.Cell] = None
         self.lm_head: Optional[nn.Cell] = None
 
@@ -524,10 +521,10 @@ class NativeModel(MsModelBase):
 
     def _get_moe_input_params(self):
         """Get MoE-specific input parameters.
-        
+
         Returns a dict with MoE parameters if MoE is supported, None otherwise.
         Subclasses can override this method to customize MoE parameter handling.
-        
+
         Returns:
             dict or None: Dict with keys: dp_pad_index, dp_unpad_index,
                 dp_pad_index_with_offset, dp_unpad_index_total_with_offset
@@ -550,10 +547,10 @@ class NativeModel(MsModelBase):
 
     def _get_extra_input_params(self):
         """Get extra input parameters for model-specific features.
-        
+
         Subclasses can override this method to add additional parameters
         (e.g., deepstack_input_embeds for multimodal models).
-        
+
         Returns:
             list or None: List of additional parameters to pass to set_inputs,
                          or None if no extra parameters are needed.

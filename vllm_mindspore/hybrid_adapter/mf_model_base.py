@@ -64,44 +64,7 @@ class _MindFormersForCausalLM_V2(MsModelBase, SupportsPP):
     _set_launch_group = False
 
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
-        ##########super().__init__
-        config = vllm_config.model_config.hf_config
-        lora_config = vllm_config.lora_config
-
-        self.config = config
-        self.model_config = vllm_config.model_config
-        self.lora_config = lora_config
-        self.cache_config = vllm_config.cache_config
-        self.parallel_config = vllm_config.parallel_config
-        self.load_config = vllm_config.load_config
-        self.scheduler_config = vllm_config.scheduler_config
-
-        # aclgraph need construct block table with real input
-        # here must know max_model_len and block_size
-        # for speculative infer, this value need update
-        self.block_size = self.cache_config.block_size
-        self.max_model_len = vllm_config.model_config.max_model_len
-        self.max_block_num = int(self.max_model_len / self.block_size)
-
-        self.modules_dict: Optional[dict[str, nn.Cell]] = None
-
-        self.enable_chunked_prefill = (
-            vllm_config.scheduler_config.enable_chunked_prefill)
-        self.enable_prefix_caching = (
-            vllm_config.cache_config.enable_prefix_caching)
-        self.num_layers = self.model_config.get_num_layers(
-            self.parallel_config)
-
-        self.use_ringmla: bool = False
-        self.has_prefill_warmup: bool = False
-        self.has_chunked_warmup: bool = not self.use_ringmla
-        self.kv_caches: list[Any] = []
-        self.casual_mask = LowerTriangularMask(
-            dtype=get_ms_dtype(self.model_config.dtype),
-            max_model_len=self.model_config.max_model_len)
-        self.model: Optional[nn.Cell] = None
-        self.lm_head: Optional[nn.Cell] = None
-        ##########super().__init__
+        super().__init__(vllm_config=vllm_config, prefix=prefix)
 
         self.lm_head_graph = None
         self.is_eager_mode = vllm_config.model_config.enforce_eager
@@ -169,7 +132,7 @@ class _MindFormersForCausalLM_V2(MsModelBase, SupportsPP):
                 hidden_size=self.model_config.hf_config.hidden_size)
 
         self.cast = ops.Cast()
-    
+
         # add local ms kv-cache
         self.ms_key_caches = []
         self.ms_value_caches = []
@@ -250,12 +213,12 @@ class _MindFormersForCausalLM_V2(MsModelBase, SupportsPP):
                 if self.use_ringmla:
                     r_cache = self.kv_caches[i].kv_cache[
                         forward_context.virtual_engine][1]
-                    rope_cache.append(tensor_torch2ms(r_cache))  
+                    rope_cache.append(tensor_torch2ms(r_cache))
 
             if self.has_prefill_warmup:
                 self.ms_key_caches = key_cache
                 self.ms_rope_caches = rope_cache
-        
+
         if not self.use_ringmla:
             return mutable(self.ms_key_caches), None
         # deepseek mla op need key cache and rope cache
@@ -264,7 +227,7 @@ class _MindFormersForCausalLM_V2(MsModelBase, SupportsPP):
     def get_kvcache(self):
         if not self.mla_config:
             return self._get_kvcache()
-        
+
         return self._get_mla_kvcache()
 
     def _get_padding_index(self, q_seq_len):
