@@ -169,7 +169,7 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .def("run_graph", &GraphExecutor::RunGraph, py::arg("is_dynamic") = false)
     .def("dump_graph", &GraphExecutor::DumpGraph)
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)
-    .def("add_return", &GraphExecutor::AddReturn, py::return_value_policy::reference)
+    .def("add_return_node", &GraphExecutor::AddReturnNode)
     .def("add_parameter", &GraphExecutor::AddParameter, py::arg("param"))
     .def("add_op_node", &GraphExecutor::AddOpNode, py::arg("op"), py::arg("inputs"), py::arg("output"),
          py::return_value_policy::reference)

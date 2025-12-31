@@ -297,10 +297,8 @@ class ExecutorBuilder:
 
             self._process_ops(func_op)
 
-            if len(func_outputs) > 0:
-                return_nodes = [self.env[v] for v in func_outputs]
-                self.executor.make_tuple(return_nodes)
-            self.executor.set_return()
+            return_nodes = [self.env[v] for v in func_outputs]
+            self.executor.add_return_node(self.executor.make_tuple(return_nodes))
 
         placeholder_nodes = [self.env[arg] for arg in func_inputs]
         return self.executor, placeholder_nodes

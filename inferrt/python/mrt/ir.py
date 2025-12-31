@@ -82,16 +82,16 @@ class GraphExecutor:
         """Add a constant node to the graph from a python object (e.g. torch.Tensor, scalar)."""
         return self._executor.add_value_node(value)
 
-    def set_return(self) -> Node:
-        """Add a return node to the graph. The last added node will be the return value."""
-        self._return_node = self._executor.add_return()
-        return self._return_node
+    def add_return_node(self, node: Node):
+        """Add a return node to the graph."""
+        self._return_node = node
+        self._executor.add_return_node(node)
 
     def run(self, is_dynamic: bool = True) -> Value:
         """Run the built graph and return the output."""
         self._executor.run_graph(is_dynamic)
         if self._return_node is None:
-            raise RuntimeError("Return node not set. Call set_return() before running.")
+            raise RuntimeError("Return node not set. Call add_return_node() before running.")
         return self._return_node.output
 
     def build(self):

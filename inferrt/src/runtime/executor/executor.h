@@ -102,7 +102,7 @@ class DA_API GraphExecutor {
   // Add an operation node.
   ir::NodePtr AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs, const ir::ValuePtr &output = nullptr);
   // Add return node.
-  ir::NodePtr AddReturn();
+  void AddReturnNode(const ir::NodePtr &node);
 
   // 2. Create Builder, analyse execution order and create Executor by execution mode.
   void BuildExecutor();

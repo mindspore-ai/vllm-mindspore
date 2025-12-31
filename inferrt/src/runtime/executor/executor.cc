@@ -214,17 +214,16 @@ ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> 
 }
 
 // Add return node.
-ir::NodePtr GraphExecutor::AddReturn() {
-  LOG_OUT << "Add return node from last node";
+void GraphExecutor::AddReturnNode(const ir::NodePtr &node) {
+  LOG_OUT << "Add return node: " << node;
   CHECK_IF_NULL(graph_);
-  auto lastNode = graph_->nodes[graph_->nodes.size() - 1];
-  auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
-  node->op = ops::Op_return;
-  node->output = lastNode->output;
-  (void)node->inputs.emplace_back(lastNode);
-  (void)graph_->nodes.emplace_back(node);
-  return node;
+  auto returnNode = ir::MakeIntrusive<ir::Node>();
+  CHECK_IF_NULL(returnNode);
+  returnNode->op = ops::Op_return;
+  returnNode->output = node->output;
+  (void)returnNode->inputs.emplace_back(node);
+  (void)graph_->nodes.emplace_back(returnNode);
 }
 
 // Run a single node

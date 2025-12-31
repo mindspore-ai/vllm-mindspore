@@ -90,7 +90,7 @@ Slot VM::ConvertConstType(ConstType type, const std::string &value) {
     }
     case ConstType_tensor: {
       slot.type = SlotTensor;
-      slot.tensor_ = nullptr;  // TODO: convert string value to tensor value later.
+      slot.tensor_ = nullptr;  // TODO(xmoqian): convert string value to tensor value later.
       return slot;
     }
     default:
@@ -262,6 +262,7 @@ void VM::InstPopTop(ssize_t offset) {
   CurrentStack().pop_back();
 }
 
+// cppcheck-suppress syntaxError
 BINARY_OP(Add, +)  // VM::InstBinaryAdd
 BINARY_OP(Sub, -)  // VM::InstBinarySub
 BINARY_OP(Mul, *)  // VM::InstBinaryMul
@@ -540,8 +541,8 @@ void VM::InstEnterBlock(ssize_t offset) {
 namespace {
 COMPARE_OP(==)
 COMPARE_OP(!=)
-COMPARE_OP(>)
-COMPARE_OP(<)
+COMPARE_OP(>)  // NOLINT(whitespace/operators)
+COMPARE_OP(<)  // NOLINT(whitespace/operators)
 COMPARE_OP(>=)
 COMPARE_OP(<=)
 }  // namespace
@@ -766,7 +767,6 @@ void VM::FinishGraph(const Frame &frame) {
     return;
   }
   if (graphExecutor_.HasGraph()) {
-    (void)graphExecutor_.AddReturn();
     graphExecutor_.EndGraph();
 
     graphExecutor_.DumpGraph();

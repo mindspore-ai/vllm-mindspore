@@ -781,7 +781,7 @@ def _handle_output_node(node, executor, env, sym_mgr):
     """Handle output node processing."""
     input_nodes = _map_args(node.args, env, executor, sym_mgr)
     env[node] = input_nodes[0]
-    executor.set_return()
+    executor.add_return_node(env[node])
 
 
 # pylint: disable=bad-continuation
