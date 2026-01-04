@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_ASCEND_CUSTOM_OP_PYTHON_CALL_H__
-#define __OPS_ASCEND_CUSTOM_OP_PYTHON_CALL_H__
+#ifndef __OPS_CPU_ATEN_OP_PYTHON_CALL_H__
+#define __OPS_CPU_ATEN_OP_PYTHON_CALL_H__
 
 #include <ops/op_base/op_python_call.h>
 
 namespace mrt {
 namespace ops {
-class AscendOpPythonCall : public OpPythonCall {
+class CPUOpPythonCall : public OpPythonCall {
  public:
-  AscendOpPythonCall() = default;
-  ~AscendOpPythonCall() override = default;
+  CPUOpPythonCall() = default;
+  ~CPUOpPythonCall() override = default;
 };
 }  // namespace ops
 }  // namespace mrt
 
-#endif  // __OPS_ASCEND_CUSTOM_OP_PYTHON_CALL_H__
+#endif  // __OPS_CPU_ATEN_OP_PYTHON_CALL_H__
