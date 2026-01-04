@@ -175,7 +175,6 @@ main() {
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1" "${ARCH}")
     local msadapter_url=$(get_package_url "msadapter" "any")
     local mindformers_url=$(get_obs_package_url "mindformers" "1.7.0" "any")
     
