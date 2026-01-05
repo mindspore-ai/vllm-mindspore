@@ -1,9 +1,6 @@
-# SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-
 [project]
-name = "vllm"
-authors = [{name = "vLLM Team"}]
+name = "vllm_mindspore"
+authors = [{name = "MindSpore Team"}]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 readme = "README.md"
@@ -13,32 +10,31 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.14"
 dynamic = [ "version", "dependencies", "optional-dependencies"]
 
 [project.urls]
-Homepage="https://github.com/vllm-project/vllm"
-Documentation="https://docs.vllm.ai/en/latest/"
-Slack="https://slack.vllm.ai/"
+Homepage="https://gitee.com/mindspore/vllm-mindspore"
 
 [project.scripts]
-vllm = "vllm.entrypoints.cli.main:main"
+vllm_mindspore = "vllm_mindspore.entrypoints.cli.main:main"
 
-[project.entry-points."vllm.general_plugins"]
-lora_filesystem_resolver = "vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver"
+[project.entry-points."vllm_mindspore.general_plugins"]
+lora_filesystem_resolver = "vllm_mindspore.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver"
 
 [tool.setuptools_scm]
 # no extra settings needed, presence enables setuptools-scm
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vllm*"]
+include = ["vllm_mindspore*"]
 
 [tool.yapfignore]
 ignore_patterns = [
@@ -57,13 +53,11 @@ line-length = 80
 "vllm_mindspore/version.py" = ["F401"]
 "vllm_mindspore/_version.py" = ["ALL"]
 # Python 3.8 typing - skip V0 code
-"vllm_mindspore/core/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/attention/**/*.py" = ["UP006", "UP035"]
+"vllm_mindspore/engine/**/*.py" = ["UP006", "UP035"]
 "vllm_mindspore/executor/**/*.py" = ["UP006", "UP035"]
-"vllm_mindspore/prompt_adapter/**/*.py" = ["UP006", "UP035"]
-"vllm_mindspore/spec_decode/**/*.py" = ["UP006", "UP035"]
-"vllm_mindspore/v1/worker/**/*.py" = ["UP006", "UP035"]
-# Python 3.8 typing - skip utils for ROCm
-"vllm_mindspore/utils.py" = ["UP006", "UP035"]
+"vllm_mindspore/worker/**/*.py" = ["UP006", "UP035"]
+# Self-Defined in vllm-mindspore
 "vllm_mindspore/__init__.py" = ["E402"]
 "vllm_mindspore/entrypoints/__main__.py" = ["F401", "E402"]
 "tests/**/*.py" = ["F401", "E402"]
@@ -108,24 +102,6 @@ ignore_missing_imports = true
 check_untyped_defs = true
 follow_imports = "silent"
 
-# After fixing type errors resulting from follow_imports: "skip" -> "silent",
-# move the directory here and remove it from tools/mypy.sh
-files = [
-    "vllm_mindspore/*.py",
-    "vllm_mindspore/entrypoints",
-    "vllm_mindspore/inputs",
-    "vllm_mindspore/multimodal",
-    "vllm_mindspore/platforms",
-]
-# TODO(woosuk): Include the code from Megatron and HuggingFace.
-exclude = [
-    "vllm_mindspore/model_executor/parallel_utils/|vllm_mindspore/model_executor/models/",
-]
-
-[tool.codespell]
-ignore-words-list = "dout, te, indicies, subtile, ElementE, CANN"
-skip = "tests/models/fixtures/*,tests/prompts/*,benchmarks/sonnet.txt,tests/lora/data/*,build/*,vllm_mindspore/third_party/*"
-
 [tool.isort]
 skip_glob = [
     ".buildkite/*",
@@ -137,8 +113,10 @@ skip_gitignore = true
 
 [tool.pytest.ini_options]
 markers = [
+    "slow_test",
     "skip_global_cleanup",
     "core_model: enable this model test in each PR instead of only nightly",
+    "hybrid_model: models that contain mamba layers (including pure SSM and hybrid architectures)",
     "cpu_model: enable this model test in CPU tests",
     "split: run this test as part of a split",
     "distributed: run this test only in distributed GPU tests",
@@ -146,19 +124,202 @@ markers = [
     "optional: optional tests that are automatically skipped, include --optional to run them",
 ]
 
-[tool.pymarkdown]
-plugins.md004.style = "sublist" # ul-style
-plugins.md007.indent = 4 # ul-indent
-plugins.md007.start_indented = true # ul-indent
-plugins.md013.enabled = false # line-length
-plugins.md041.enabled = false # first-line-h1
-plugins.md033.enabled = false # inline-html
-plugins.md046.enabled = false # code-block-style
-plugins.md024.allow_different_nesting = true # no-duplicate-headers
-
 [tool.ty.src]
 root = "./vllm_mindspore"
 respect-ignore-files = true
 
 [tool.ty.environment]
 python = "./.venv"
+
+[tool.typos.files]
+# these files may be written in non english words
+extend-exclude = ["tests/models/fixtures/*", "tests/prompts/*",
+    "benchmarks/sonnet.txt", "tests/lora/data/*", "build/*",
+    "vllm_mindspore/third_party/*"]
+ignore-hidden = true
+ignore-files = true
+ignore-dot = true
+ignore-vcs = true
+ignore-global = true
+ignore-parent = true
+
+[tool.typos.default]
+binary = false
+check-filename = false
+check-file = true
+unicode = true
+ignore-hex = true
+identifier-leading-digits = false
+locale = "en"
+extend-ignore-identifiers-re = ["NVML_*", ".*Unc.*", ".*_thw",
+    ".*UE8M0.*", ".*[UE4M3|ue4m3].*", ".*eles.*",
+     ".*[Tt]h[rR].*"]
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.default.extend-identifiers]
+bbc5b7ede = "bbc5b7ede"
+womens_doubles = "womens_doubles"
+v_2nd = "v_2nd"
+# splitted_input = "splitted_input"
+NOOPs = "NOOPs"
+typ = "typ"
+nin_shortcut = "nin_shortcut"
+UperNetDecoder = "UperNetDecoder"
+subtile = "subtile"
+cudaDevAttrMaxSharedMemoryPerBlockOptin = "cudaDevAttrMaxSharedMemoryPerBlockOptin"
+SFOuput = "SFOuput"
+# huggingface transformers repo uses these words
+depthwise_seperable_out_channel = "depthwise_seperable_out_channel"
+DepthWiseSeperableConv1d = "DepthWiseSeperableConv1d"
+depthwise_seperable_CNN = "depthwise_seperable_CNN"
+
+[tool.typos.default.extend-words]
+iy = "iy"
+tendencias = "tendencias"
+# intel cpu features
+tme = "tme"
+dout = "dout"
+Pn = "Pn"
+arange = "arange"
+# CANN
+CANN = "CANN"
+cann = "cann"
+
+[tool.typos.type.py]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.py.extend-identifiers]
+arange = "arange"
+NDArray = "NDArray"
+EOFError = "EOFError"
+fo = "fo"
+ba = "ba"
+batch_datas = "batch_datas"
+# special defination
+ND_TO_FRACTAL_NZ = "ND_TO_FRACTAL_NZ"
+
+[tool.typos.type.py.extend-words]
+ba = "ba"
+
+[tool.typos.type.cpp]
+extend-glob = ["*.cu"]
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.cpp.extend-identifiers]
+countr_one = "countr_one"
+k_ot = "k_ot"
+ot = "ot"
+
+[tool.typos.type.cpp.extend-words]
+
+[tool.typos.type.rust]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.rust.extend-identifiers]
+flate2 = "flate2"
+
+[tool.typos.type.rust.extend-words]
+ser = "ser"
+
+[tool.typos.type.lock]
+extend-glob = []
+check-file = false
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.lock.extend-identifiers]
+
+[tool.typos.type.lock.extend-words]
+
+[tool.typos.type.jl]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.jl.extend-identifiers]
+
+[tool.typos.type.jl.extend-words]
+modul = "modul"
+egals = "egals"
+usig = "usig"
+egal = "egal"
+
+[tool.typos.type.go]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.go.extend-identifiers]
+flate = "flate"
+
+[tool.typos.type.go.extend-words]
+
+[tool.typos.type.css]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.css.extend-identifiers]
+nd = "nd"
+
+[tool.typos.type.css.extend-words]
+
+[tool.typos.type.man]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.man.extend-identifiers]
+Nd = "Nd"
+
+[tool.typos.type.man.extend-words]
+
+[tool.typos.type.cert]
+extend-glob = []
+check-file = false
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.cert.extend-identifiers]
+
+[tool.typos.type.cert.extend-words]
+
+[tool.typos.type.sh]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.sh.extend-identifiers]
+ot = "ot"
+
+[tool.typos.type.sh.extend-words]
+
+[tool.typos.type.vimscript]
+extend-glob = []
+extend-ignore-identifiers-re = []
+extend-ignore-words-re = []
+extend-ignore-re = []
+
+[tool.typos.type.vimscript.extend-identifiers]
+windo = "windo"
+
+[tool.typos.type.vimscript.extend-words]
+
+[tool.uv]
+no-build-isolation-package = ["torch"]

@@ -131,14 +131,15 @@ def setup_function():
     # mainly in single card concurrent scenarios, to avoid port conflicts.
     lccl_port = os.getenv("LCAL_COMM_ID", None)
     if not lccl_port:
-        lccl_port = LCCL_BASE_PORT + port_offset
+        lccl_port_num = LCCL_BASE_PORT + port_offset
         os.environ[
-            "LCAL_COMM_ID"] = f"127.0.0.1:{get_available_port(lccl_port)}"
+            "LCAL_COMM_ID"] = f"127.0.0.1:{get_available_port(lccl_port_num)}"
 
     hccl_port = os.getenv("HCCL_IF_BASE_PORT", None)
     if not hccl_port:
-        hccl_port = HCCL_BASE_PORT + port_offset
-        os.environ["HCCL_IF_BASE_PORT"] = str(get_available_port(hccl_port))
+        hccl_port_num = HCCL_BASE_PORT + port_offset
+        os.environ["HCCL_IF_BASE_PORT"] = str(
+            get_available_port(hccl_port_num))
 
 
 def cleanup_subprocesses(pid=None) -> None:
@@ -376,7 +377,7 @@ def send_and_get_request(data, fmt="prompt", url=None):
     else:
         url = url + "v1/completions"
     os.environ['NO_PROXY'] = "localhost"
-    proxies = {"http": None, "https": None}
+    proxies = {"http": "", "https": ""}
     response = requests.post(url,
                              data=json_data,
                              headers={'Content-Type': 'application/json'},
@@ -938,7 +939,7 @@ def gen_mix_prompt(seq_lengths, model_max_token):
             random.seed(rand_num)
             random.shuffle(bs_seq_list)
             prompt_list0.append(prompt_mul)
-            prompt_list1.append(bs_seq_list)
+            prompt_list1.append(bs_seq_list)  # type: ignore
 
     return [prompt_list0, prompt_list1]
 # yapf: enable

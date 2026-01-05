@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+default_stages:
+  - pre-commit  # Run locally
+  - manual  # Run in CI
 exclude: ^(codecheck_toolkits/)
 repos:
 - repo: local
@@ -8,7 +11,19 @@ repos:
       name: "Pre-run: copy codecheck_toolkits/pyproject.toml to ./"
       entry: ln -s codecheck_toolkits/pyproject.toml pyproject.toml
       language: system
-      stages: [ pre-commit ]
+      always_run: true
+      pass_filenames: false
+    - id: pre-config-markdownlint
+      name: "Pre-run: copy codecheck_toolkits/.markdownlint.yaml to ./"
+      entry: ln -s codecheck_toolkits/.markdownlint.yaml .markdownlint.yaml
+      language: system
+      always_run: true
+      pass_filenames: false
+      stages: [ manual ]
+    - id: pre-config-shellcheck
+      name: "Pre-run: copy codecheck_toolkits/.shellcheckrc to ./"
+      entry: ln -s codecheck_toolkits/.shellcheckrc .shellcheckrc
+      language: system
       always_run: true
       pass_filenames: false
 - repo: https://gitee.com/moran3/yapf
@@ -18,24 +33,43 @@ repos:
     args: [--in-place, --verbose]
     # Keep the same list from yapfignore here to avoid yapf failing without any inputs
     exclude: '(.buildkite|benchmarks|build|examples)/.*'
+    stages: [pre-commit] # Don't run in CI
+  - id: yapf
+    args: [--diff]
+    # Keep the same list from yapfignore here to avoid yapf failing without any inputs
+    exclude: '(.buildkite|benchmarks|build|examples)/.*'
+    stages: [manual] # run in CI
 - repo: https://gitee.com/moran3/ruff-pre-commit
   rev: v0.11.7
   hooks:
   - id: ruff
     args: [--output-format, github, --fix]
+    stages: [pre-commit] # Don't run in CI
+  - id: ruff
+    args: ['--exit-non-zero-on-fix']
+    stages: [manual] # run in CI
   - id: ruff-format
     files: ^(.buildkite|benchmarks|examples)/.*
-- repo: https://gitee.com/moran3/codespell
-  rev: v2.4.1
+    stages: [pre-commit] # Don't run in CI
+  - id: ruff-format
+    args: ['--diff']
+    files: ^(.buildkite|benchmarks|examples)/.*
+    stages: [manual] # run in CI
+- repo: https://gitee.com/moran3/typos
+  rev: v1.35.5
   hooks:
-  - id: codespell
-    additional_dependencies: ['tomli']
-    args: ['--skip', '*.c,*cpp,*.h']
+  - id: typos
+    args: [ -v ]
 - repo: https://gitee.com/moran3/isort
   rev: 6.0.1
   hooks:
   - id: isort
     exclude: ^(examples/|tests/|vllm_mindspore/__init__.py)
+    stages: [pre-commit]
+  - id: isort
+    exclude: ^(examples/|tests/|vllm_mindspore/__init__.py)
+    args: ['--check-only', '--diff']
+    stages: [ manual ]
 - repo: https://gitee.com/moran3/mirrors-clang-format
   rev: v20.1.3
   hooks:
@@ -43,44 +77,45 @@ repos:
     exclude: 'csrc/(moe/topk_softmax_kernels.cu|quantization/gguf/(ggml-common.h|dequantize.cuh|vecdotq.cuh|mmq.cuh|mmvq.cuh))|vllm/third_party/.*'
     types_or: [c++, cuda]
     args: [--style=file, --verbose]
-- repo: https://gitee.com/moran3/pymarkdown
-  rev: v0.9.29
-  hooks:
-  - id: pymarkdown
-    exclude: '.*\.inc\.md|.gitee/'
-    args: [fix]
+#  Node.js in CI machine is too old to support it.
+#- repo: https://gitee.com/moran3/markdownlint-cli
+#  rev: v0.45.0
+#  hooks:
+#  - id: markdownlint
+#    exclude: '.*\.inc\.md|\.gitee/'
+#    stages: [manual] # Only run in CI
 - repo: https://gitee.com/moran3/uv-pre-commit
   rev: 0.6.17
   hooks:
     - id: pip-compile
-      args: [requirements/test.in, -o, requirements/test.txt, --index-strategy, unsafe-best-match, --torch-backend, cu128]
+      args: [requirements/test.in, -o, requirements/test.txt, --index-strategy, unsafe-best-match, --torch-backend, cu128, --python-platform, x86_64-manylinux_2_28]
       files: ^requirements/test\.(in|txt)$
 - repo: local
   hooks:
-  - id: mypy-3.9 # TODO: Use https://github.com/pre-commit/mirrors-mypy when mypy setup is less awkward
-    name: Run mypy for Python 3.9
-    entry: codecheck_toolkits/mypy.sh "3.9"
-    language: python
-    types: [python]
-    additional_dependencies: &mypy_deps [mypy==1.11.1, types-cachetools, types-setuptools, types-PyYAML, types-requests, pydantic]
-  - id: mypy-3.10 # TODO: Use https://github.com/pre-commit/mirrors-mypy when mypy setup is less awkward
+  - id: mypy-local
+    name: Run mypy for local Python installation
+    entry: python codecheck_toolkits/pre_commit/mypy.py 0 "local"
+    stages: [pre-commit] # Don't run in CI
+    <<: &mypy_common
+      language: python
+      types_or: [python, pyi]
+      require_serial: true
+      additional_dependencies: [mypy==1.11.1, regex, types-cachetools, types-setuptools, types-PyYAML, types-requests, types-torch, pydantic]
+  - id: mypy-3.10 # TODO: Use https://gitee.com/pre-commit/mirrors-mypy when mypy setup is less awkward
     name: Run mypy for Python 3.10
-    entry: codecheck_toolkits/mypy.sh "3.10"
-    language: python
-    types: [python]
-    additional_dependencies: *mypy_deps
-  - id: mypy-3.11 # TODO: Use https://github.com/pre-commit/mirrors-mypy when mypy setup is less awkward
+    entry: python codecheck_toolkits/pre_commit/mypy.py 1 "3.10"
+    <<: *mypy_common
+    stages: [manual] # Only run in CI
+  - id: mypy-3.11 # TODO: Use https://gitee.com/pre-commit/mirrors-mypy when mypy setup is less awkward
     name: Run mypy for Python 3.11
-    entry: codecheck_toolkits/mypy.sh "3.11"
-    language: python
-    types: [python]
-    additional_dependencies: *mypy_deps
-  - id: mypy-3.12 # TODO: Use https://github.com/pre-commit/mirrors-mypy when mypy setup is less awkward
+    entry: python codecheck_toolkits/pre_commit/mypy.py 1 "3.11"
+    <<: *mypy_common
+    stages: [manual] # Only run in CI
+  - id: mypy-3.12 # TODO: Use https://gitee.com/pre-commit/mirrors-mypy when mypy setup is less awkward
     name: Run mypy for Python 3.12
-    entry: codecheck_toolkits/mypy.sh "3.12"
-    language: python
-    types: [python]
-    additional_dependencies: *mypy_deps
+    entry: python codecheck_toolkits/pre_commit/mypy.py 1 "3.12"
+    <<: *mypy_common
+    stages: [manual] # Only run in CI
   - id: shellcheck
     name: Lint shell scripts
     entry: codecheck_toolkits/shellcheck.sh
@@ -108,6 +143,11 @@ repos:
     entry: python codecheck_toolkits/check_spdx_header.py
     language: python
     types: [python]
+#  - id: check-root-lazy-imports
+#    name: Check root lazy imports
+#    entry: python codecheck_toolkits/check_init_lazy_imports.py
+#    language: python
+#    types: [python]
   - id: check-filenames
     name: Check for spaces in all filenames
     entry: bash
@@ -136,26 +176,49 @@ repos:
     types: [python]
     pass_filenames: false
     additional_dependencies: [regex]
+  - id: check-pickle-imports
+    name: Prevent new pickle/cloudpickle imports
+    entry: python codecheck_toolkits/pre_commit/check_pickle_imports.py
+    language: python
+    types: [python]
+    additional_dependencies: [regex]
+  - id: validate-config
+    name: Validate configuration has default values and that each field has a docstring
+    entry: python codecheck_toolkits/validate_config.py
+    language: python
+    additional_dependencies: [regex]
   # remove cache files
   - id: remove cache
     name: "remove ruff, mypy, shellcheck cache"
     entry: rm -rf .ruff_cache/ .mypy_cache/ shellcheck-stable/
     language: system
-    stages: [ pre-commit ]
     always_run: true
     pass_filenames: false
   # Keep `suggestion` last
   - id: suggestion
     name: Suggestion
-    entry: bash -c 'echo "To bypass pre-commit hooks, add --no-verify to git commit."'
+    entry: bash -c 'echo "To bypass all the pre-commit hooks, add --no-verify to git commit. To skip a specific hook, prefix the commit command with SKIP=<hook-id>."'
     language: system
     verbose: true
     pass_filenames: false
+  # Insert new entries above the `suggestion` entry
   - id: post-run-shell
     name: "Post-run: remove ./pyproject.toml"
     entry: rm -f pyproject.toml
     language: system
-    stages: [ pre-commit ]
+    always_run: true
+    pass_filenames: false
+  - id: post-config-markdownlint
+    name: "Post-run: remove ./.markdownlint.yaml"
+    entry: rm -f .markdownlint.yaml
+    language: system
+    always_run: true
+    pass_filenames: false
+    stages: [ manual ]
+  - id: post-config-shellcheck
+    name: "Post-run: remove ./.shellcheckrc"
+    entry: rm -f .shellcheckrc
+    language: system
     always_run: true
     pass_filenames: false
   # Insert new entries above the `suggestion` entry

@@ -205,8 +205,8 @@ def core_engine_actor_manager_init(
     from vllm.ray.ray_env import get_env_vars_to_copy
     from vllm.v1.engine.utils import get_device_indices
 
-    self.local_engine_actors: list[ray.ActorHandle] = []
-    self.remote_engine_actors: list[ray.ActorHandle] = []
+    self.local_engine_actors: list[ray.ActorHandle] = []  # type: ignore[misc]
+    self.remote_engine_actors: list[ray.ActorHandle] = []  # type: ignore[misc]
 
     env_vars_list = get_env_vars_to_copy(destination="DPEngineCoreActor")
     self.env_vars_dict = {

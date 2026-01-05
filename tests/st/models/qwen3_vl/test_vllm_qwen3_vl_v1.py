@@ -23,7 +23,6 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from tests.utils.env_var_manager import EnvVarManager
 from tests.st.models.qwen2_5_vl.similarity import compare_distance
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)

@@ -25,10 +25,6 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       get_key_counter_from_log,
                                       start_vllm_server, stop_vllm_server,
                                       run_combination_accuracy)
-from tests.utils.env_var_manager import EnvVarManager
-
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 
 # def env
 env_vars = {

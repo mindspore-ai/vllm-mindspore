@@ -21,10 +21,7 @@ import os
 
 from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH)
-from tests.utils.env_var_manager import EnvVarManager
 
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 # def env
 env_vars = {
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
@@ -51,7 +48,7 @@ def run_mf_telechat2_7b_network():
 
     # Create an LLM.
     llm = LLM(model=MODEL_PATH["telechat2_7b"],
-              gpu_memory_utilization=0.9,
+              gpu_memory_utilization=0.8,
               trust_remote_code=True,
               tensor_parallel_size=1)
     # Generate texts from the prompts.

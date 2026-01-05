@@ -67,7 +67,7 @@ def _validate_quantization_consistency(config: dict[str, str]):
 
         def register_weight_quant_type(self, quant_type: str):
             if self.quant_type is None:
-                self.quant_type = quant_type
+                self.quant_type = quant_type  # type: ignore[assignment]
                 return True
             return self.quant_type == quant_type
 

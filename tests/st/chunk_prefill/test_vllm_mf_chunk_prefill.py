@@ -22,12 +22,8 @@ from tests.utils.common_utils import (teardown_function, setup_function,
                                       MODEL_PATH, get_key_counter_from_log,
                                       start_vllm_server, stop_vllm_server,
                                       run_combination_accuracy)
-from tests.utils.env_var_manager import EnvVarManager
 from tests.st.chunk_prefill.test_vllm_native_chunk_prefill import (
     LONG_PROMPT, run_server_chunked_prefill_005)
-
-env_manager = EnvVarManager()
-env_manager.setup_mindformers_environment()
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
