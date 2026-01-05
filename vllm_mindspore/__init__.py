@@ -397,10 +397,6 @@ TopKTopPSampler.forward_native = topk_topp_sampler_forward_native
 vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_top_p = apply_top_k_top_p
 vllm.v1.sample.ops.topk_topp_sampler.random_sample = random_sample
 vllm.v1.sample.ops.topk_topp_sampler.apply_top_k_only = apply_top_k_only
-from vllm_mindspore.v1.sample.sampler import apply_temperature
-import vllm.v1.sample.sampler
-
-vllm.v1.sample.sampler.Sampler.apply_temperature = apply_temperature
 
 from vllm_mindspore.v1.sample.logits_processor.builtin import update_state
 import vllm.v1.sample.logits_processor.builtin
