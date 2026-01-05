@@ -1,0 +1,122 @@
+--- a/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp
++++ b/lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp
+@@ -18,8 +18,10 @@
+ #include "stablehlo/dialect/ChloOps.h"
+ #include "stablehlo/dialect/StablehloOps.h"
+ #include "torch-mlir/Conversion/Passes.h"
++#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+ #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+ #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
++#include "llvm/ADT/DenseSet.h"
+ 
+ using namespace mlir;
+ using namespace mlir::torch;
+@@ -79,6 +81,19 @@
+     torch_to_stablehlo::populateUncategorizedPatternsAndLegality(
+         typeConverter, patterns, target, options);
+ 
++    llvm::DenseSet<OperationName> opsToOverride;
++    for (auto &pattern : patterns.getNativePatterns()) {
++      if (auto rootKind = pattern->getRootKind()) {
++        opsToOverride.insert(*rootKind);
++      }
++    }
++
++    for (const auto &opName : opsToOverride) {
++      target.addDynamicallyLegalOp(opName, [](Operation *op) {
++        return !op->hasAttr("mopt.torch_to_stablehlo");
++      });
++    }
++
+     if (failed(applyPartialConversion(getOperation(), target,
+                                       std::move(patterns)))) {
+       return signalPassFailure();
+
+--- a/lib/Dialect/TorchConversion/Transforms/BackendTypeConversionPasses.cpp
++++ b/lib/Dialect/TorchConversion/Transforms/BackendTypeConversionPasses.cpp
+@@ -17,6 +17,7 @@
+ #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
+ #include "torch-mlir/Dialect/TorchConversion/Transforms/BackendTypeConversion.h"
+ #include "torch-mlir/Dialect/TorchConversion/Transforms/Passes.h"
++#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+ 
+ using namespace mlir;
+ using namespace mlir::torch;
+@@ -269,9 +270,14 @@
+ 
+     // Mark materializations as illegal in this pass (since we are finalizing)
+     // and add patterns that eliminate them.
+-    setupFinalization<ToBuiltinTensorOp, FromBuiltinTensorOp, FromI1Op, ToI1Op,
++    // setupFinalization<ToBuiltinTensorOp, FromBuiltinTensorOp, FromI1Op, ToI1Op,
++    //                   FromI64Op, ToI64Op, FromF64Op, ToF64Op, I64ToGeneratorOp,
++    //                   GeneratorToI64Op>(target, patterns, typeConverter);
++
++    target.addLegalDialect<Torch::TorchDialect>();
++    target.addLegalOp<ToBuiltinTensorOp, FromBuiltinTensorOp, FromI1Op, ToI1Op,
+                       FromI64Op, ToI64Op, FromF64Op, ToF64Op, I64ToGeneratorOp,
+-                      GeneratorToI64Op>(target, patterns, typeConverter);
++                      GeneratorToI64Op>();
+ 
+     // If all result types are legal, and all block arguments are legal, then
+     // all types in the program are legal.
+@@ -280,10 +286,11 @@
+     // IR. For example, this prevents the patterns from updating
+     // the types of the operands to a return op without updating the enclosing
+     // function.
++    target.addLegalOp<func::ReturnOp>();
+     target.markUnknownOpDynamicallyLegal(
+         [&](Operation *op) { return typeConverter.isLegal(op); });
+ 
+-    if (failed(applyFullConversion(func, target, std::move(patterns))))
++    if (failed(applyPartialConversion(func, target, std::move(patterns))))
+       signalPassFailure();
+ 
+     // Drop attributes that are no longer used after conversion out of Torch.
+
+--- a/lib/Dialect/TorchConversion/Transforms/Passes.cpp
++++ b/lib/Dialect/TorchConversion/Transforms/Passes.cpp
+@@ -165,8 +165,8 @@
+ 
+   // Finish the type conversion from `torch` types to the types of the
+   // StableHLO backend contract.
+-  pm.addPass(
+-      TorchConversion::createFuncBackendTypeConversionForStablehloPass());
++  // pm.addPass(
++  //     TorchConversion::createFuncBackendTypeConversionForStablehloPass());
+   pm.addNestedPass<func::FuncOp>(createCanonicalizerPass());
+   pm.addNestedPass<func::FuncOp>(
+       TorchConversion::createFinalizingBackendTypeConversionForStablehloPass());
+
+--- a/lib/Dialect/TorchConversion/Transforms/VerifyStablehloBackendContract.cpp
++++ b/lib/Dialect/TorchConversion/Transforms/VerifyStablehloBackendContract.cpp
+@@ -16,7 +16,9 @@
+ #include "mlir/Transforms/DialectConversion.h"
+ #include "stablehlo/dialect/ChloOps.h"
+ #include "stablehlo/dialect/StablehloOps.h"
++#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
+ #include "torch-mlir/Dialect/TorchConversion/Transforms/Passes.h"
++#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+ 
+ using namespace mlir;
+ using namespace mlir::torch;
+@@ -33,6 +35,10 @@
+   void runOnOperation() override {
+     TypeConverter converter;
+     converter.addConversion([](Type type) -> Type {
++      // Allow Torch types in mixed IR.
++      if (isa<Torch::TorchDialect>(type.getDialect()))
++        return type;
++
+       auto elemTy = type;
+       if (isa<TensorType>(type))
+         elemTy = cast<TensorType>(type).getElementType();
+@@ -56,6 +62,9 @@
+     target.addLegalDialect<arith::ArithDialect>();
+     target.addLegalDialect<math::MathDialect>();
+     target.addLegalDialect<shape::ShapeDialect>();
++    target.addLegalDialect<Torch::TorchDialect>();
++    target.addLegalDialect<TorchConversion::TorchConversionDialect>();
++    
+     auto moduleOp = getOperation();
+     RewritePatternSet patterns(context);
+     if (failed(applyFullConversion(moduleOp, target, std::move(patterns)))) {

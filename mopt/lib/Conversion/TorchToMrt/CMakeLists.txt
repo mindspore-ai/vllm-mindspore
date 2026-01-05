@@ -31,6 +31,7 @@ add_mlir_conversion_library(MoptConversionTorchToMrt
   MLIRTransformUtils
   MLIRMrtDialect
   TorchMLIRTorchDialect
+  TorchMLIRTorchConversionDialect
   MLIRPDLDialect
   MLIRPDLInterpDialect
   MLIRParser

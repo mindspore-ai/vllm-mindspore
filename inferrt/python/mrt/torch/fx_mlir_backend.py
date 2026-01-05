@@ -35,6 +35,7 @@ from mrt.torch.utils import (
 from mrt.torch._decompositions import apply_decompositions
 from mrt.torch._executor_builder import ExecutorBuilder
 
+
 def _is_print_ir_enabled() -> bool:
     return os.environ.get("MOPT_PRINT_IR") == "1"
 
@@ -48,7 +49,6 @@ class BackendOptions:
     """
 
     print_ir: bool
-    enable_fusion: bool
     # Default fusion lowering is mrt.dvm_call. Set env var to opt into linalg_call.
     enable_linalg_call: bool
 
@@ -66,7 +66,6 @@ class BackendOptions:
             env = os.environ
         return cls(
             print_ir=cls._flag(env, "MOPT_PRINT_IR", default=False),
-            enable_fusion=cls._flag(env, "MOPT_ENABLE_FUSION", default=False),
             enable_linalg_call=cls._flag(env, "MOPT_ENABLE_LINALG_CALL", default=False),
         )
 
@@ -173,6 +172,28 @@ def _parse_mlir_module_from_text(text: str):
     return ir.Module.parse(text, ctx)
 
 
+def _has_fusible_ops(mlir_module) -> bool:
+    """Check if any op in the module is tagged for StableHLO conversion (fusible ops)."""
+    module_op = mlir_module.operation
+    for region in module_op.regions:
+        for block in region:
+            for op in block:
+                if _check_op_tag_recursive(op):
+                    return True
+    return False
+
+
+def _check_op_tag_recursive(op) -> bool:
+    if "mopt.torch_to_stablehlo" in op.attributes:
+        return True
+    for region in op.regions:
+        for block in region:
+            for child_op in block:
+                if _check_op_tag_recursive(child_op):
+                    return True
+    return False
+
+
 def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=invalid-name, unused-argument
     """FX backend entry point: FX GraphModule -> StableHLO -> MRT dialect -> GraphExecutor.
 
@@ -185,7 +206,6 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
 
     Environment Variables:
         MOPT_PRINT_IR: Set to 1 to print IR at each stage
-        MOPT_ENABLE_FUSION: Set to 1 to enable fusion pipeline (StableHLO path), 0 for direct Torch->MRT conversion
         MOPT_ENABLE_LINALG_CALL: Set to 1 to lower outlined fusion regions to mrt.linalg_call (default is mrt.dvm_call)
     """
     opts = BackendOptions.from_env()
@@ -238,14 +258,22 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
         stage="Torch Backend IR",
     )
 
-    if opts.enable_fusion:
-        # Fusion enabled: use StableHLO path with fusion pipeline
+    # Mark Torch ops to be converted to StableHLO based on whitelist/rules.
+    # This pass identifies and marks operations that can be fused.
+    run_pipeline(
+        "builtin.module(mark-torch-to-stablehlo-op)",
+        stage="After Marking Torch To StableHLO Ops",
+    )
+
+    # Check if any op is marked. If not, skip StableHLO conversion entirely.
+    if _has_fusible_ops(mlir_module):
         # Torch Backend -> StableHLO
         run_pipeline(
             "builtin.module(torch-backend-to-stablehlo-backend-pipeline)",
             stage="StableHLO IR (from whitelisted ops)",
         )
 
+        # Fusion pipeline:
         # Outline fusible regions (DVM-call mode enables advanced outlining).
         use_dvm_outline = not opts.enable_linalg_call
         run_pipeline(

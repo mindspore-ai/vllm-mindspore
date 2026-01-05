@@ -32,6 +32,7 @@
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
 #include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Conversion/TorchToMrt/TorchAtenToMrt.h"
 #include "mopt/Conversion/TorchToMrt/TorchNpuToMrt.h"
@@ -94,6 +95,22 @@ class TorchToMrtTypeConverter : public mlir::TypeConverter {
   }
 };
 
+// Pattern to remove torch_c conversion ops (they become identity/casts in MRT)
+template <typename OpTy>
+class TorchConversionOpToMrtPattern : public mlir::OpConversionPattern<OpTy> {
+ public:
+  using mlir::OpConversionPattern<OpTy>::OpConversionPattern;
+
+  mlir::LogicalResult matchAndRewrite(OpTy op, typename OpTy::Adaptor adaptor,
+                                      mlir::ConversionPatternRewriter &rewriter) const override {
+    if (adaptor.getOperands().size() != 1 || op->getNumResults() != 1) {
+      return mlir::failure();
+    }
+    rewriter.replaceOp(op, adaptor.getOperand());
+    return mlir::success();
+  }
+};
+
 //===----------------------------------------------------------------------===//
 // Pass definition
 //===----------------------------------------------------------------------===//
@@ -126,6 +143,10 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     // Integer arithmetic ops
     mlir::populateArithToMrtConversionPatterns(converter_, patternList);
 
+    // TorchConversion ops
+    patternList.add<TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::ToBuiltinTensorOp>,
+                    TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::FromBuiltinTensorOp>>(converter_, ctx);
+
     patterns_ = std::move(patternList);
     return mlir::success();
   }
@@ -136,6 +157,8 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
 
     mlir::ConversionTarget target(*ctx);
     target.addIllegalDialect<TorchD::TorchDialect>();
+    target.addIllegalOp<mlir::torch::TorchConversion::ToBuiltinTensorOp,
+                        mlir::torch::TorchConversion::FromBuiltinTensorOp>();
     target.addLegalDialect<mrt::MrtDialect>();
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
