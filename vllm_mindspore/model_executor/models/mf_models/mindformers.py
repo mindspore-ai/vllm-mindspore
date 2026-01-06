@@ -49,9 +49,10 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.model_config = vllm_config.model_config
+        self.speculative_config = vllm_config.speculative_config
         self.lm_head_graph = None
         self.is_eager_mode = vllm_config.model_config.enforce_eager
-
+        self.model_type = vllm_config.model_config.hf_config.model_type
         self.enable_aclgraph = \
             vllm_config.compilation_config.level == CompilationLevel.PIECEWISE
 
@@ -104,8 +105,13 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             raise ValueError(f"Duplicate layer name: {prefix}")
 
         for i in range(self.num_layers):
+            # In eagle(deepseek-mtp), draft model uses the same vllm_config
+            # as the base model. Change the layer name of draft model here
+            # to distinguish the kvcache of draft model and base model.
+            layer_id = i if self.model_type != "deepseek_mtp" else \
+                i + self.model_config.hf_config.num_hidden_layers
             compilation_config.static_forward_context[str(
-                i)] = self.kv_caches[i]
+                layer_id)] = self.kv_caches[i]
 
         self.make_empty_intermediate_tensors = \
             make_empty_intermediate_tensors_factory(
@@ -275,15 +281,19 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         attn_metadata = get_forward_context().attn_metadata
         # 0.9.1 attn_metadata[layer_name], don't have layer_name here
         # so we just take one by default
-        if isinstance(attn_metadata, dict) and '1' in attn_metadata:
-            attn_metadata = attn_metadata['1']
+        if isinstance(attn_metadata, dict) and attn_metadata:
+            attn_metadata = list(attn_metadata.values())[0]
 
+        q_seq_len_decode_limit = 1 if self.speculative_config is None else \
+            self.model_config.hf_config.num_nextn_predict_layers + 1
         if attn_metadata is None:
             # To enable dummy_run in chunked scenarios, set q_seq_lens_np
-            # to be greater than 1.
+            # to be greater than `q_seq_len_decode_limit`.
             if self.has_prefill_warmup and not self.has_chunked_warmup:
-                input_ids = ms.ops.cat((input_ids, input_ids))
-                positions = ms.ops.cat((positions, ms.tensor([1])))
+                input_ids = ms.ops.cat(
+                    [input_ids for _ in range(q_seq_len_decode_limit + 1)])
+                positions = ms.ops.cat(
+                    (positions, ms.tensor([q_seq_len_decode_limit])))
 
             attn_metadata = self._dummy_attention_metadata(
                 input_ids, positions)
@@ -293,7 +303,7 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         is_prefill = attn_metadata.max_context_lens == 0
         is_ringmla_chunked = \
             self.use_ringmla and not is_prefill and \
-            bool(attn_metadata.q_seq_lens_np.max() > 1)
+            bool(attn_metadata.q_seq_lens_np.max() > q_seq_len_decode_limit)
         query_lens_np = attn_metadata.q_seq_lens_np
         seq_lens_np = attn_metadata.seq_lens_np
         context_lens_tensor = attn_metadata.context_lens
@@ -345,10 +355,10 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
         if intermediate_tensors is not None:
             model_inputs["hidden_states"] = \
                 convert_pin(intermediate_tensors["hidden_states"])
-        elif kwargs.get("previous_hidden_states") is not None:
+        elif kwargs.get("hidden_states") is not None:
             # used for deepseek-mtp
             model_inputs["hidden_states"] = convert_pin(
-                kwargs["previous_hidden_states"])
+                kwargs["hidden_states"])
 
         def _set_network_flags(prefill_flag, chunked_flag):
             self.network.add_flags_custom_mcore(is_prefill=prefill_flag)
@@ -366,8 +376,12 @@ class MindFormersForCausalLM(MsModelBase, SupportsPP):
             # and chunked only if ringmla is enabled).
             need_set_flag = (not self.has_prefill_warmup
                              or not self.has_chunked_warmup)
-            self.network.phase =  "prefill" if is_prefill \
-                else "chunked" if is_ringmla_chunked else "increment"
+            # mtp model is not quantized and does not support mla/ringmla ops
+            # the decode-phase of mtp model and base model should be different
+            self.network.phase = \
+                "prefill" if is_prefill else \
+                "chunked" if is_ringmla_chunked else \
+                "increment" if self.model_type != "deepseek_mtp" else "decode"
 
         # The value of has_prefill_warmup and has_chunked_warmup indicates
         # whether the corresponding inference graph has been executed.

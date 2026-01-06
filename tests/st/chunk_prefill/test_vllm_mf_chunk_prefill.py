@@ -27,6 +27,7 @@ from tests.st.chunk_prefill.test_vllm_native_chunk_prefill import (
 
 QWEN_7B_MODEL = MODEL_PATH["Qwen2.5-7B-Instruct"]
 DEEPSEEK_W8A8_MODEL = MODEL_PATH["DeepSeek-R1-W8A8"]
+DEEPSEEK_W8A8_MTP_MODEL = MODEL_PATH["DeepSeek-R1-MTP"]
 
 env_vars = {
     "VLLM_MS_MODEL_BACKEND": "MindFormers",
@@ -214,6 +215,43 @@ def test_vllm_mf_offline_chunked_prefill_008():
               max_num_batched_tokens=20,
               enable_chunked_prefill=True,
               max_model_len=32768)
+    test_results = run_combination_accuracy(llm=llm,
+                                            is_service=False,
+                                            batches=[1, 4],
+                                            concurrency_levels=[1, 5],
+                                            seq_lengths=[5, 50],
+                                            formats=["prompt", "chat"],
+                                            languages=["english", "chinese"],
+                                            ignored_basic_check=True,
+                                            model_max_token=163840)
+    assert test_results.get('failure') == 0
+
+
+@pytest.mark.level1
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_onecard
+@patch.dict(os.environ, env_vars)
+def test_vllm_mf_offline_dsr1_mtp_chunked_prefill_009():
+    """
+    Test Summary:
+        Test chunked prefill for dsr1-mtp model.
+    Expected Result:
+        Successful execution with inference results meeting expectations.
+    Model Info:
+        DeepSeek-R1-MTP
+    """
+    import vllm_mindspore
+    from vllm import LLM
+    llm = LLM(DEEPSEEK_W8A8_MTP_MODEL,
+              max_num_seqs=16,
+              max_num_batched_tokens=20,
+              enable_chunked_prefill=True,
+              max_model_len=4096,
+              gpu_memory_utilization=0.7,
+              speculative_config={
+                  "num_speculative_tokens": 1,
+                  "method": "deepseek_mtp"
+              })
     test_results = run_combination_accuracy(llm=llm,
                                             is_service=False,
                                             batches=[1, 4],
