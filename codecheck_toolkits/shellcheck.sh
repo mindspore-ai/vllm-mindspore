@@ -16,7 +16,7 @@ if ! [ -x "$(command -v shellcheck)" ]; then
     fi
 
     # automatic local install if linux x86_64
-    wget -qO- "https://github.com/koalaman/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
+    wget -qO- "https://gitee.com/moran3/shellcheck/releases/download/${scversion?}/shellcheck-${scversion?}.linux.x86_64.tar.xz" | tar -xJv
     export PATH="$PATH:$(pwd)/shellcheck-${scversion}"
 fi
 
