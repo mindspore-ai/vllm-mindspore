@@ -37,6 +37,7 @@
 #include "mopt/Conversion/TorchToMrt/TorchAtenToMrt.h"
 #include "mopt/Conversion/TorchToMrt/TorchNpuToMrt.h"
 #include "mopt/Conversion/TorchToMrt/TorchArithToMrt.h"
+#include "mopt/Conversion/TorchToMrt/TorchCustomToMrt.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 #include "mlir/Dialect/PDL/IR/PDL.h"
@@ -146,6 +147,9 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     // TorchConversion ops
     patternList.add<TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::ToBuiltinTensorOp>,
                     TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::FromBuiltinTensorOp>>(converter_, ctx);
+
+    // Add a generic pattern to convert any remaining Torch operations to custom_call.
+    mlir::populateCustomToMrtConversionPatterns(converter_, patternList);
 
     patterns_ = std::move(patternList);
     return mlir::success();

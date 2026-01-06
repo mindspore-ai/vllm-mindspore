@@ -31,6 +31,7 @@ from mrt.torch.utils import (
     get_collective_info_from_torch,
     set_device_context,
     update_runtime_inputs,
+    is_op_registered_by_custom_or_torch,
 )
 from mrt.torch.getitem_impl import getitem_process
 from mrt.torch.setitem_impl import setitem_process
@@ -733,10 +734,15 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
         flat_node_args = [module_name, op_name] + flat_node_args
 
     if op == Op.custom_call:
-        if not op_name:
-            raise ValueError(f"Custom op name is empty for node {node}")
-        op_name = op_name.replace("::", ".")
-        flat_node_args = [op_name] + flat_node_args
+        if not is_op_registered_by_custom_or_torch(op_name):
+            print(f"Unregistered custom/torch op: {op_name}, fallback to python_call")
+            module_name = node.target.__module__
+            op_name = node.target.__name__
+            flat_node_args = [module_name, op_name] + flat_node_args
+            op = Op.python_call
+        else:
+            op_name = op_name.replace("::", ".")
+            flat_node_args = [op_name] + flat_node_args
     elif op == Op.dvm_call:
         op_name = node.target.__name__
         payload_json = get_dvm_payload(op_name)

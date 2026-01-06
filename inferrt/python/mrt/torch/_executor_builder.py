@@ -35,6 +35,7 @@ from mrt.ir import (
     DeviceType,
 )
 from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr
+from mrt.torch.utils import is_op_registered_by_custom_or_torch
 
 # ===== MLIR Type Conversion Utilities =====
 
@@ -429,6 +430,29 @@ class ExecutorBuilder:
         )
         self.env[results[0]] = node
 
+    def _handle_custom_call_op(self, runtime_op, input_nodes_for_op):
+        """Handle custom_call operation."""
+        op_name = input_nodes_for_op[0].output.to_string()
+        # eg. torch.aten.add.Tensor -> aten.add
+        real_op_name = op_name
+        if real_op_name.startswith('torch.'):
+            real_op_name = real_op_name[6:]  # len('torch.') = 6
+        parts = real_op_name.split('.')
+        if len(parts) >= 2:
+            real_op_name = f"{parts[0]}.{parts[1]}"
+
+        if is_op_registered_by_custom_or_torch(real_op_name):
+            input_nodes_for_op[0] = self.executor.add_value_node(Value(real_op_name))
+        else:
+            print(f"Unregistered custom/torch op: {op_name}, fallback to python_call")
+            module_name, op_name = op_name.rsplit('.', maxsplit=1)
+            input_nodes_for_op[0] = self.executor.add_value_node(Value(op_name))
+            if module_name.startswith('torch.'):
+                module_name = "torch._ops." + module_name[6:]  # len('torch.') = 6
+            input_nodes_for_op = [self.executor.add_value_node(Value(module_name))] + input_nodes_for_op
+            runtime_op = Op.python_call
+        return runtime_op, input_nodes_for_op
+
     def _handle_runtime_op(self, op, op_name):
         """Handle runtime operations."""
         input_nodes_for_op = self._get_input_nodes(op)
@@ -438,6 +462,9 @@ class ExecutorBuilder:
         if runtime_op == Op.make_tuple:
             self.env[results[0]] = self.executor.make_tuple(input_nodes_for_op)
             return
+
+        if runtime_op == Op.custom_call:
+            runtime_op, input_nodes_for_op = self._handle_custom_call_op(runtime_op, input_nodes_for_op)
 
         if len(results) == 1:
             mrt_value = _create_mrt_value_from_mlir_type(results[0].type)

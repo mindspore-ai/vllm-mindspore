@@ -24,12 +24,13 @@ namespace mrt {
 namespace ops {
 constexpr size_t kInputIOpNameIndex = 0;
 constexpr size_t kRealInputIndex = 1;
+
 void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   CHECK_IF_NULL(inputs[kInputIOpNameIndex]);
   opName_ = inputs[kInputIOpNameIndex]->ToString();
   size_t pos = opName_.find(".");
   if (pos == std::string::npos) {
-    LOG_EXCEPTION << "Invalid op name: " << opName_ << ". Op name must be in the format of ns::op_name.";
+    LOG_EXCEPTION << "Invalid op name: " << opName_ << ". Op name must be in the format of ns.op_name.";
   }
   std::string opName = opName_.substr(pos + 1);
   operatorPtr_ = CreateCustomOperator(opName);
