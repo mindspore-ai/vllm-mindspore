@@ -119,6 +119,10 @@ void AscendResManager::Destroy() {
 bool AscendResManager::IsEnableVmm() const { return AscendVmmAdapter::GetInstance().IsEnabled(); }
 
 void *AscendResManager::AllocateMemory(size_t size, uint32_t streamId) const {
+  if (allocator_ != nullptr) {
+    size = device::MemoryManager::GetCommonAlignSize(size);
+    return allocator_(size);
+  }
   AscendHalManager::GetInstance().SetContext(deviceId_);
   CHECK_IF_NULL(memManager_);
   return memManager_->MallocMemFromMemPool(size, false, false, streamId);
@@ -136,8 +140,12 @@ size_t AscendResManager::GetMaxUsedMemorySize() const {
 
 void AscendResManager::FreeMemory(void *ptr) const {
   CHECK_IF_NULL(ptr);
-  CHECK_IF_NULL(memManager_);
-  memManager_->FreeMemFromMemPool(ptr);
+  if (deleter_ != nullptr) {
+    deleter_(ptr);
+  } else {
+    CHECK_IF_NULL(memManager_);
+    memManager_->FreeMemFromMemPool(ptr);
+  }
 }
 
 void AscendResManager::FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
@@ -387,6 +395,10 @@ DeviceEventPtr AscendResManager::CreateRuntimeEvent(bool enableBlocking, bool en
   }
   return std::make_shared<AscendEvent>(flag);
 }
+
+void AscendResManager::SetAllocator(const AllocateFunc &allocator) { allocator_ = allocator; }
+
+void AscendResManager::SetDeleter(const DeleteFunc &deleter) { deleter_ = deleter; }
 
 DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) {
   auto flag = enableTiming ? (ACL_EVENT_TIME_LINE | ACL_EVENT_SYNC) : ACL_EVENT_SYNC;
