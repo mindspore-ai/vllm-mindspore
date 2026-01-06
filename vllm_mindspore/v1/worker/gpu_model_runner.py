@@ -1303,7 +1303,7 @@ def capture_model(self: GPUModelRunner) -> None:
 
 
 # To fit the cpu Tensor to np Tensor.
-def ms_pool(
+def _pool(
     self,
     hidden_states: torch.Tensor,
     num_scheduled_tokens: int,
@@ -1318,9 +1318,10 @@ def ms_pool(
     pooling_metadata = self.input_batch.get_pooling_metadata()
     pooling_metadata.build_pooling_cursor(num_scheduled_tokens_np.tolist(),
                                           device=hidden_states.device)
-    # Use np Tensor for seq_lens to fit mindspore cpu Tensor
+    # vllm-mindspore begin: Use np Tensor for seq_lens to
+    # fit mindspore cpu Tensor
     seq_lens_cpu = self.seq_lens.np[:self.input_batch.num_reqs]
-
+    # vllm-mindspore end.
     model = cast(VllmModelForPooling, self.model)
     raw_pooler_output: PoolerOutput = model.pooler(
         hidden_states=hidden_states,

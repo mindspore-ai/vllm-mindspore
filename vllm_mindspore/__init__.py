@@ -458,11 +458,9 @@ from vllm_mindspore.entrypoints.__main__ import (
 patch_server_run_api_server_worker_proc()
 
 from vllm_mindspore.model_executor.models.registry import (
-    _normalize_arch, _try_resolve_transformers, inspect_model_cls,
-    resolve_model_cls)
+    _try_resolve_transformers, inspect_model_cls, resolve_model_cls)
 from vllm.model_executor.models.registry import _ModelRegistry
 
-_ModelRegistry._normalize_arch = _normalize_arch
 _ModelRegistry._try_resolve_transformers = _try_resolve_transformers
 _ModelRegistry.inspect_model_cls = inspect_model_cls
 _ModelRegistry.resolve_model_cls = resolve_model_cls
@@ -503,25 +501,31 @@ from vllm.multimodal.processing import InputProcessingContext
 
 InputProcessingContext.call_hf_processor = call_hf_processor
 
-from vllm_mindspore.v1.pool.metadata import ms_build_pooling_cursor
+from vllm_mindspore.v1.pool.metadata import build_pooling_cursor
 
-vllm.v1.pool.metadata.build_pooling_cursor = ms_build_pooling_cursor
+vllm.v1.pool.metadata.build_pooling_cursor = build_pooling_cursor
 
 from vllm.v1.worker.gpu_model_runner import GPUModelRunner
-from vllm_mindspore.v1.worker.gpu_model_runner import ms_pool
+from vllm_mindspore.v1.worker.gpu_model_runner import _pool
 
-GPUModelRunner._pool = ms_pool
+GPUModelRunner._pool = _pool
 
 from vllm_mindspore.model_executor.models.adapters import \
-    ms_create_pooling_model_cls
+    _create_pooling_model_cls
 
 vllm.model_executor.models.adapters._create_pooling_model_cls = \
-    ms_create_pooling_model_cls
+    _create_pooling_model_cls
 
 from vllm.model_executor.layers.pooler import PoolerNormalize
-from vllm_mindspore.model_executor.layers.pooler import ms_forward_chunk
+from vllm_mindspore.model_executor.layers.pooler import \
+    forward_chunk
 
-PoolerNormalize.forward_chunk = ms_forward_chunk
+PoolerNormalize.forward_chunk = forward_chunk
+
+# Use mindspore implementation in pooler
+from vllm_mindspore.model_executor.layers.linear import ReplicatedLinear
+
+vllm.model_executor.layers.linear.ReplicatedLinear = ReplicatedLinear
 
 from vllm.v1.spec_decode.eagle import EagleProposer
 from vllm_mindspore.v1.spec_decode.eagle import (load_model, prepare_inputs,

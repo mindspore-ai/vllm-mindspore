@@ -259,13 +259,10 @@ class MsModelBase:
         spec_step_idx: int = 0,
         **kwargs,
     ) -> Union[Tensor, IntermediateTensors]:
-        return self.forward(input_ids,
-                            positions,
-                            intermediate_tensors,
-                            inputs_embeds,
-                            previous_hidden_states=previous_hidden_states,
-                            spec_step_idx=spec_step_idx,
-                            **kwargs)
+        if previous_hidden_states:
+            kwargs["previous_hidden_states"] = previous_hidden_states
+        return self.forward(input_ids, positions, intermediate_tensors,
+                            inputs_embeds, **kwargs)
 
     def forward(self,
                 input_ids: Tensor,

@@ -222,8 +222,8 @@ def _try_resolve_transformers(
     return model_config._get_transformers_backend_cls()
 
 
-def _normalize_arch(
-    self,
+def _add_default_architectures(
+    register,
     architectures: Union[str, list[str]],
 ) -> list[str]:
     # Refer to
@@ -235,15 +235,15 @@ def _normalize_arch(
 
     # filter out support architectures
     normalized_arch = list(
-        filter(lambda model: model in self.models, architectures))
+        filter(lambda model: model in register.models, architectures))
 
     # make sure MindFormersForCausalLM and MindONE Transformers backend
     # is put at the last as a fallback
     if len(normalized_arch) != len(architectures):
-        normalized_arch.append("MindFormersForCausalLM")
-        normalized_arch.append("TransformersForCausalLM")
+        architectures.append("MindFormersForCausalLM")
+        architectures.append("TransformersForCausalLM")
 
-    return normalized_arch
+    return architectures
 
 
 def inspect_model_cls(
@@ -279,9 +279,10 @@ def inspect_model_cls(
 
     # vllm-ms: Modify the architecture normalization process in vLLM
     # to ensure that the MindFormers backend is added to the architecture.
-    normalized_arch = self._normalize_arch(architectures)
-    for arch in normalized_arch:
-        model_info = self._try_inspect_model_cls(arch)
+    architectures = _add_default_architectures(self, architectures)
+    for arch in architectures:
+        normalized_arch = self._normalize_arch(arch, model_config)
+        model_info = self._try_inspect_model_cls(normalized_arch)
         if model_info is not None:
             return (model_info, arch)
 
@@ -332,9 +333,10 @@ def resolve_model_cls(
 
     # vllm-ms: Modify the architecture normalization process in vLLM
     # to ensure that the MindFormers backend is added to the architecture.
-    normalized_arch = self._normalize_arch(architectures)
-    for arch in normalized_arch:
-        model_cls = self._try_load_model_cls(arch)
+    architectures = _add_default_architectures(self, architectures)
+    for arch in architectures:
+        normalized_arch = self._normalize_arch(arch, model_config)
+        model_cls = self._try_load_model_cls(normalized_arch)
         if model_cls is not None:
             return (model_cls, arch)
 

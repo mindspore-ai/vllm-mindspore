@@ -22,8 +22,8 @@ import torch
 from vllm.v1.pool.metadata import PoolingCursor
 
 
-def ms_build_pooling_cursor(num_scheduled_tokens: list[int],
-                            prompt_lens: torch.Tensor, device: torch.device):
+def build_pooling_cursor(num_scheduled_tokens: list[int],
+                         prompt_lens: torch.Tensor, device: torch.device):
     assert len(prompt_lens) == len(num_scheduled_tokens)
 
     n_seq = len(num_scheduled_tokens)

@@ -28,7 +28,8 @@ from mindspore.nn.utils import no_init_parameters
 from vllm.config import ModelConfig, ModelImpl
 from vllm.model_executor.model_loader.utils import initialize_model, logger
 from vllm.model_executor.models import ModelRegistry
-from vllm.model_executor.models.adapters import as_embedding_model
+from vllm.model_executor.models.adapters import (as_embedding_model,
+                                                 as_seq_cls_model)
 
 from vllm_mindspore.model_executor.models.registry import (
     AUTO_SELECT_FIXED_MODEL, MindSporeModelRegistry, mcore_support_list,
@@ -194,11 +195,11 @@ def get_ms_model_architecture(
 
     model_cls, arch = MindSporeModelRegistry.resolve_model_cls(
         architectures, model_config)
-    if model_config.task == "embed":
+    if model_config.convert_type == "embed":
         model_cls = as_embedding_model(model_cls)
-    elif model_config.task == "classify":
-        raise RecursionError("MindSpore unsupported classify model task now!")
-    elif model_config.task == "reward":
+    elif model_config.convert_type == "classify":
+        model_cls = as_seq_cls_model(model_cls)
+    elif model_config.convert_type == "reward":
         raise RecursionError("MindSpore unsupported reward model task now!")
 
     return model_cls, arch
