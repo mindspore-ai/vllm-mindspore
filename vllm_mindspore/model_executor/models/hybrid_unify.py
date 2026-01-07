@@ -35,16 +35,19 @@ else:
 
 
 def get_ms_tensor(input_data, dtype=None):
-    if input_data is None or isinstance(input_data, ms.Tensor):
-        return input_data
-    elif isinstance(input_data, np.ndarray):
-        if dtype is not None:
-            return ms.Tensor(input_data, dtype=dtype)
-        return ms.from_numpy(input_data)
+    if env.ENABLE_MS_ADAPTER:
+        if input_data is None or isinstance(input_data, ms.Tensor):
+            return input_data
+        else:
+            if dtype is not None:
+                return ms.Tensor(input_data, dtype=dtype)
+            return ms.from_numpy(input_data)
     else:
         from vllm_mindspore.hybrid_adapter.tensor_convert import (
             tensor_torch2ms)
-        return tensor_torch2ms(input_data)
+        ms_tensor = tensor_torch2ms(input_data.contiguous())
+        # Paramters need to device; otherwise, the performance will be affected.
+        return ms_tensor.move_to("Ascend")
 
 
 def sync_weights():
