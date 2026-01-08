@@ -62,6 +62,8 @@ static const map<int64_t, HcclDataType> kConstOpHcomDataTypeMap = {
   {DataType::UInt8, HCCL_DATA_TYPE_UINT8},
   {DataType::Float64, HCCL_DATA_TYPE_FP64},
   {DataType::Bool, HCCL_DATA_TYPE_INT8},
+  {DataType::Float16, HCCL_DATA_TYPE_FP16},
+  {DataType::BFloat16, HCCL_DATA_TYPE_BFP16},
 #ifdef EXPERIMENT_A5
   {DataType::kNumberTypeHiFloat8, HCCL_DATA_TYPE_HIF8},
   {DataType::kNumberTypeFloat8E5M2, HCCL_DATA_TYPE_FP8E5M2},

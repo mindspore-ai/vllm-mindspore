@@ -65,7 +65,7 @@ def _set_communication_info(ptd):
     hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
     CollectiveManager.instance().set_global_rank_id(rank)
-    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_local_rank_id(rank)
     CollectiveManager.instance().set_global_rank_size(world_size)
 
     CollectiveManager.instance().create_communication_group(
