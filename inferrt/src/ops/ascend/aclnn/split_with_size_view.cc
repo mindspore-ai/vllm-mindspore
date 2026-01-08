@@ -1,0 +1,73 @@
+/**
+ * Copyright 2025 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "ops/ascend/aclnn/split_with_size_view.h"
+
+#include <vector>
+#include "ops/ascend/aclnn/utils/opapi_utils.h"
+#include "ops/ascend/aclnn/utils/view_utils.h"
+#include "ops/op_register.h"
+
+namespace mrt {
+namespace ops {
+namespace {
+void SplitSizeInputsCheck(const std::vector<int64_t> &splitSize, const int64_t &axis,
+                          const std::vector<int64_t> &tensorShape) {
+  CHECK_IF_FAIL_MSG(splitSize.size() > 0,
+                    "For SplitWithSize, the size of splitSize should > 0, but got" + std::to_string(splitSize.size()));
+  const int64_t sumSplitSize = std::accumulate(splitSize.begin(), splitSize.end(), 0);
+  if (sumSplitSize != tensorShape[axis]) {
+    LOG_EXCEPTION << "For 'SplitWithSize',  the sum of splitSize should be equal to " << tensorShape[axis]
+                  << "(input.shape[" << axis << "]), but got splitSize: " << splitSize;
+  }
+}
+
+void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const std::vector<ir::TensorPtr> &outputTensorVector,
+                          const std::vector<int64_t> &splitSize, int64_t dim) {
+  const auto &curShape = inputTensorPtr->Shape();
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  auto curOffset = inputTensorPtr->StorageOffset();
+  const auto rank = SizeToLong(curShape.size());
+  CHECK_IF_FAIL_MSG(rank > 0, "For SplitWithSize, rank should > 0, but got" + std::to_string(rank));
+  const auto ndim = curShape.size();
+  const auto wrapDim = DynamicDimWrap(dim, ndim);
+  SplitSizeInputsCheck(splitSize, wrapDim, curShape);
+
+  CHECK_IF_FAIL_MSG(splitSize.size() == outputTensorVector.size(),
+                    "For SplitWithSize, the size of splitSize is " + std::to_string(splitSize.size()) +
+                      " and the size of outputTensorVector is " + std::to_string(outputTensorVector.size()));
+  for (size_t i = 0; i < splitSize.size(); ++i) {
+    const auto splitIter = splitSize[i];
+    std::vector<int64_t> slice_shape(curShape);
+    slice_shape[wrapDim] = splitIter;
+    UpdateTensorViewInfo(inputTensorPtr, outputTensorVector[i], slice_shape, curStrides, curOffset);
+    curOffset += LongToSize(splitIter * curStrides[wrapDim]);
+  }
+}
+}  // namespace
+
+OpsErrorCode AclnnSplitWithSizeView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                                   size_t *workspaceSize) {
+  const auto inputTensorPtr = input[kIndex0]->ToTensor();
+  const auto splitSize = input[kIndex1]->ToTuple()->ToIntList();
+  const auto dim = input[kIndex2]->ToInt();
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTuple()->ToTensorList(), splitSize, dim);
+  return SUCCESS;
+}
+
+MRT_REG_OP(split_with_size_view, AclnnSplitWithSizeView, Ascend);
+}  // namespace ops
+}  // namespace mrt

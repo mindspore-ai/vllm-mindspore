@@ -90,6 +90,8 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   size_t GetCurrentStreamId() const override;
   void SetCurrentStream(void *currentStream) override;
   void *GetCurrentStream() const override;
+  void BindCurrentStream() override;
+  void SetBindStreamFunc(const BindStreamFunc &bindStreamFunc) override;
 
   bool QueryStream(size_t streamId) const override;
   bool SyncStream(size_t streamId = 0) const override;
@@ -136,6 +138,7 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   uint32_t deviceId_{0};
   bool enableMemoryTracker_{false};
   bool initialized_ = false;
+  BindStreamFunc bindStreamFunc_{nullptr};
 };
 }  // namespace ascend
 }  // namespace device

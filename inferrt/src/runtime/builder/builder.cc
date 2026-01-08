@@ -131,16 +131,14 @@ void Builder::RecordStorageFreePoint() {
       ir::VisitAllTensors(inputNode->output, [&](const ir::TensorPtr &tensor) {
         auto storage = tensor->GetStorage().get();
         CHECK_IF_NULL(storage);
-        if (!storage->CheckOwnsData()) {
-          LOG_OUT << "Skip storage that is not managed by mrt";
-          return;
-        }
         // First encounter, meaning current node is the last consumer
         // and is responsible for freeing the storage.
         if (recordedStorages.find(storage) == recordedStorages.end()) {
           LOG_OUT << "Record node input Storage: " << storage;
           (void)recordedStorages.insert(storage);
-          (void)storagesToFree_[currentNode].emplace_back(storage);
+          if (storage->CheckOwnsData()) {
+            (void)storagesToFree_[currentNode].emplace_back(storage);
+          }
         }
       });
     }
@@ -152,7 +150,9 @@ void Builder::RecordStorageFreePoint() {
       if (recordedStorages.find(storage) == recordedStorages.end()) {
         LOG_OUT << "Record node output Storage: " << storage;
         (void)recordedStorages.insert(storage);
-        (void)storagesToFree_[currentNode].emplace_back(storage);
+        if (storage->CheckOwnsData()) {
+          (void)storagesToFree_[currentNode].emplace_back(storage);
+        }
       }
     });
   }
@@ -208,7 +208,7 @@ void Builder::CreateOpRunners() {
     }
     // TODO: need to support ascend stream creation and getting real dynamic shape info.  // NOLINT(readability/todo)
     (void)(opRunners_->emplace_back(node->op, node->inputs, node->output, std::move(operatorPtr), stream, device,
-                                    true /*isDynamicShape*/));
+                                    deviceContext, true /*isDynamicShape*/));
     nodeToOpRunner_.emplace(node.get(), &(opRunners_->back()));
   }
 }

@@ -49,6 +49,7 @@ class OpTorchCall : public Operator {
   void ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) const;
   bool MatchOpSchema(const std::vector<const ir::Value *> &inputs,
                      const std::shared_ptr<torch::jit::Operator> op) const;
+  bool HasSharedStorageWithInput(const ir::Value *output, const ir::Value *input) const;
   std::string GetOpsExpr(const std::vector<const ir::Value *> &inputs) const;
   std::string GetAvailableTorchOps() const;
 

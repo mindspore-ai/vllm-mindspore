@@ -46,6 +46,7 @@ void PipelineExecutor::Run(bool isDynamic) {
   LOG_OUT << "Begin pipeline executor run.";
   auto &asyncTaskQueueManager = AsyncTaskQueueManager::GetInstance();
   asyncTaskQueueManager.ContinueAll();
+  asyncTaskQueueManager.BindDevice();
 
   AsyncTaskQueue *inferQeueue = asyncTaskQueueManager.GetInferQueue();
   AsyncTaskQueue *launchQeueue = asyncTaskQueueManager.GetLaunchQueue();

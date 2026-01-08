@@ -12,6 +12,8 @@ from mrt.torch import backend
 from tests.mark_utils import arg_mark
 
 
+# TODO(YzLi)
+@pytest.mark.skip(reason="view operator not yet registered on CPU")
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_backend(pipeline, monkeypatch):

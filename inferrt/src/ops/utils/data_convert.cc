@@ -171,11 +171,20 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
 
   switch (atDevice.type()) {
     case at::DeviceType::CPU:
-      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), nullptr, options);
+      if (tensor->Strides().empty()) {
+        return at::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), options);
+      } else {
+        return at::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), nullptr,
+                             options);
+      }
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1:
-      return at_npu::native::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), tensor->StorageOffset(), nullptr,
-                                       options);
+      if (tensor->Strides().empty()) {
+        return at_npu::native::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), options);
+      } else {
+        return at_npu::native::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), 0,
+                                         nullptr, options);
+      }
 #endif
     default:
       LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();

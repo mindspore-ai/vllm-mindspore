@@ -74,17 +74,32 @@ inline aclTensor *Convert(const ir::TensorPtr &tensor) {
         format = ACL_FORMAT_ND;
     }
     if (aclDtype != ACL_STRING) {
-      storageDims.emplace_back(tensor->Numel());
+      storageDims.emplace_back(tensor->GetStorage()->SizeBytes() / tensor->Dtype().GetSize());
     }
   }
 
-  LOG_OUT << "Create aclTensor, viewShape=" << tensor->Shape() << ", strides=" << tensor->Strides()
+  std::vector<int64_t> strides;
+  if (tensor->Strides().empty() && !tensor->Shape().empty()) {
+    // Create default strides for contiguous tensor
+    strides = tensor->Shape();
+    if (!strides.empty()) {
+      strides.erase(strides.begin());
+    }
+    strides.push_back(1);
+    for (int i = static_cast<int>(strides.size()) - 2; i >= 0; i--) {
+      strides[i] = strides[i] * strides[i + 1];
+    }
+  } else {
+    strides = tensor->Strides();
+  }
+
+  LOG_OUT << "Create aclTensor, viewShape=" << tensor->Shape() << ", strides=" << strides
           << ", StorageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
           << ", storageDims=" << storageDims
           << ", format=" << ir::FormatEnumToStr(static_cast<ir::MemoryFormat>(format));
 
-  return aclCreateTensor(tensor->Shape().data(), tensor->Dim(), aclDtype, tensor->Strides().data(),
-                         tensor->StorageOffset(), format, storageDims.data(), storageDims.size(), tensor->DataPtr());
+  return aclCreateTensor(tensor->Shape().data(), tensor->Dim(), aclDtype, strides.data(), tensor->StorageOffset(),
+                         format, storageDims.data(), storageDims.size(), tensor->GetStorage()->Data());
 }
 
 inline aclTensor *Convert(const std::optional<ir::TensorPtr> &tensorOpt) {

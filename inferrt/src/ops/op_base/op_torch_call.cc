@@ -165,7 +165,7 @@ void OpTorchCall::ConvertInputsToStack(const std::vector<const ir::Value *> &inp
 }
 
 void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) const {
-  if (ivalue.isTensor()) {
+  if (ivalue.isTensor() && output->IsTensor()) {
     auto tensor = ivalue.toTensor();
     auto outTensor = output->ToTensor();
     std::vector<int64_t> atenShape(tensor.sizes().begin(), tensor.sizes().end());
@@ -308,6 +308,15 @@ OpsErrorCode OpTorchCall::Launch(const std::vector<const ir::Value *> &input, vo
 #endif
   // Outputs process. Convert aten tensor to ir::Value.
   ConvertStackToOutput(output, std::move(stack), stream);
+  if (input.size() > 0 && input[0]->IsTensor() && output != nullptr) {
+    const auto *inputStorageData = input[0]->ToTensor()->GetStorage()->Data();
+    if ((output->IsTensor() && output->ToTensor()->GetStorage()->Data() == inputStorageData) ||
+        (output->IsTuple() && (*output->ToTuple())[0]->ToTensor()->GetStorage()->Data() == inputStorageData)) {
+      LOG_EXCEPTION << "Custom Call: Operator " << qualifiedOpName_ << " does not support reference. "
+                    << "Input[0] DataPtr: " << input[0]->ToTensor()->DataPtr() << ", "
+                    << "Output DataPtr: " << output->ToTensor()->DataPtr();
+    }
+  }
   return SUCCESS;
 }
 }  // namespace ops

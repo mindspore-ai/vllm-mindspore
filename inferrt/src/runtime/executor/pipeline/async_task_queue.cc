@@ -78,8 +78,10 @@ void AsyncTaskQueue::Initialize() {
 
 void AsyncTaskQueue::BindDevice(const std::set<const device::DeviceContext *> &deviceContexts) {
   auto bind_device_task = [&deviceContexts]() {
-    std::for_each(deviceContexts.begin(), deviceContexts.end(),
-                  [](const device::DeviceContext *item) { item->deviceResManager_->BindDeviceToCurrentThread(false); });
+    std::for_each(deviceContexts.begin(), deviceContexts.end(), [](const device::DeviceContext *item) {
+      item->deviceResManager_->BindDeviceToCurrentThread(false);
+      item->deviceResManager_->BindCurrentStream();
+    });
   };
   Push(std::move(bind_device_task), TaskType::BindDevice);
   Wait();
