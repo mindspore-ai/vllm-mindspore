@@ -32,6 +32,7 @@ from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.sequence import IntermediateTensors
 from vllm.v1.sample.metadata import SamplingMetadata
 
+from vllm_mindspore.hybrid_adapter.tensor_convert import tensor_ms2torch
 from vllm_mindspore.model_executor.models.attention_mask import (
     LowerTriangularMask)
 from vllm_mindspore.model_executor.models.interfaces import (
@@ -363,6 +364,12 @@ class MsModelBase:
         model_inputs["value_cache"] = value_cache
 
         return model_inputs, is_prefill
+
+    def state_dict(self):
+        params_dict = self.get_params_dict()
+        for key in params_dict:
+            params_dict[key] = tensor_ms2torch(params_dict[key])
+        return params_dict
 
 
 class NativeModel(MsModelBase):
