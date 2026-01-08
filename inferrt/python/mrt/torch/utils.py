@@ -38,12 +38,17 @@ _DIST_OP_LIST = [
 
 
 def _extract_global_comm_info():
+    """Extract distributed communication information (rank, world_size)."""
     rank = dist.get_rank() if dist.is_initialized() else 0
-    local_rank = int(os.getenv("LOCAL_RANK", "0"))
+    if rank > 7:
+        raise ValueError(
+            f"Expected rank id between 0 and 7, but received {rank}"
+        )
     world_size = dist.get_world_size()
 
     CollectiveManager.instance().set_global_rank_id(rank)
-    CollectiveManager.instance().set_local_rank_id(local_rank)
+    # TODO: Multi-machine scenario needs verification, current implementation only supports single machine with 8 NPUs
+    CollectiveManager.instance().set_local_rank_id(rank)
     CollectiveManager.instance().set_global_rank_size(world_size)
 
 
