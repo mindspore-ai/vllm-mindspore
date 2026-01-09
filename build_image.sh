@@ -90,7 +90,7 @@ if [ $# -gt 0 ]; then
 fi
 
 readonly IMAGE_TAG="vllm_ms_$(date +%Y%m%d)"
-readonly CANN_VERSION="8.3.RC1"
+readonly CANN_VERSION="8.3.RC2"
 
 log() {
     echo "===== Build image for ${TARGET} ==== $*"
