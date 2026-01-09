@@ -120,8 +120,45 @@ Value::Value(Value &&other) noexcept : tag_(other.tag_) {
 
 Value &Value::operator=(Value &&other) noexcept {
   if (this != &other) {
-    this->~Value();
-    new (this) Value(std::move(other));
+    // NOTE:
+    // `Value` is managed by intrusive refcounting (RefCounted base). We must NOT
+    // destroy and placement-new the whole object here, otherwise RefCounted will
+    // be re-constructed and its refCount_ will be reset to 0, corrupting the
+    // reference count of existing ValuePtr holders.
+    //
+    // Also, `tag_` is declared `const` (see value.h), so move-assignment cannot
+    // change the tag. This matches the semantics of copy-assignment: the tag
+    // must be the same.
+    if (tag_ != other.tag_) {
+      LOG_EXCEPTION << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
+                    << ", other tag: " << TagToString(other.tag_);
+    }
+
+    switch (tag_) {
+      case Tag::Tensor:
+        tensor_ = std::move(other.tensor_);
+        break;
+      case Tag::Double:
+        double_ = other.double_;
+        break;
+      case Tag::Int:
+        int_ = other.int_;
+        break;
+      case Tag::Bool:
+        bool_ = other.bool_;
+        break;
+      case Tag::String:
+        string_ = std::move(other.string_);
+        break;
+      case Tag::Tuple:
+        tuple_ = std::move(other.tuple_);
+        break;
+      case Tag::Symbol:
+        symbol_ = std::move(other.symbol_);
+        break;
+      case Tag::None:
+        break;
+    }
   }
   return *this;
 }
