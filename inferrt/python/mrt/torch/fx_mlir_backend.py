@@ -328,6 +328,7 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
     executor.build()
 
     def compiled_callable(*inputs: torch.Tensor):
+        set_device_context()
         update_runtime_inputs(param_nodes, inputs)
         result = executor.run()
         return to_torch(result)
