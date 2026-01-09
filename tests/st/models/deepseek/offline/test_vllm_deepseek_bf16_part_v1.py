@@ -69,7 +69,8 @@ def test_deepseek_r1_bf16():
               trust_remote_code=True,
               gpu_memory_utilization=0.9,
               tensor_parallel_size=2,
-              max_model_len=33 * 1024)
+              max_model_len=33 * 1024,
+              compilation_config=1)
     # Generate texts from the prompts. The output is a list of RequestOutput
     # objects that contain the prompt, generated text, and other information.
     outputs = llm.generate(prompts, sampling_params)

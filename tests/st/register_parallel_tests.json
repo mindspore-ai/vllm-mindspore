@@ -57,6 +57,10 @@
       "card_num": 2
     },
     {
+      "test_node_id": "st/models/deepseek/offline/test_vllm_native_deepseek_bf16_part_v1.py::test_deepseek_r1_bf16_aclgraph",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/models/deepseek/offline/test_vllm_deepseek_part_v1.py::test_deepseek_r1",
       "card_num": 2
     },

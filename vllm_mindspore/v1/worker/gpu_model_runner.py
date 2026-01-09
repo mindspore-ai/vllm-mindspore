@@ -350,6 +350,7 @@ def _prepare_inputs(
 
         # Fill unused with -1. Needed for reshape_and_cache in full cuda
         # graph mode.
+        blk_table.slot_mapping.np[total_num_scheduled_tokens:].fill(-1)
         blk_table.slot_mapping.gpu[total_num_scheduled_tokens:].fill_(-1)
         num_common_prefix_blocks = (
             scheduler_output.num_common_prefix_blocks[kv_cache_group_id])
@@ -1262,9 +1263,17 @@ def capture_model(self: GPUModelRunner) -> None:
         self.cudagraph_batch_sizes = self.cudagraph_batch_sizes[:
                                                                 max_capture_graph_size]
 
+    split_ops_list = ["moveto"]
+
+    if self.parallel_config.data_parallel_size > 1:
+        logger.warning(
+            "Current aclgraph not support allgather and reducescatter in"
+            "data parallel, split the ops")
+        split_ops_list.append("allgather")
+        split_ops_list.append("reducescatter")
+
     # enable mindspore graph capture
-    ms.set_kernel_launch_capture(True,
-                                 op_capture_skip=["moveto", "custom_mla"])
+    ms.set_kernel_launch_capture(True, op_capture_skip=split_ops_list)
     for num_tokens in reversed(self.cudagraph_batch_sizes):
         for _ in range(
                 self.vllm_config.compilation_config.cudagraph_num_of_warmups):
