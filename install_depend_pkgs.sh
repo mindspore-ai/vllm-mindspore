@@ -184,10 +184,10 @@ main() {
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1" "${ARCH}")
+    local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1.post1" "${ARCH}")
     local msadapter_url=$(get_package_url "msadapter" "any")
     local mindformers_url=$(get_obs_package_url "mindformers" "1.7.0" "any")
-    local mindone_url=$(get_obs_package_url "mindone" "0.5.0.dev0%2Bg36c2565.d20251223" "any")
+    local mindone_url=$(get_obs_package_url "mindone" "0.5.0" "any")
     local ms_custom_ops_url=$(get_obs_package_url "ms_custom_ops" "0.1.0" "${ARCH}")
     
     if [ -z "${mindspore_url:-}" ]; then
@@ -200,7 +200,7 @@ main() {
         local mindformers_url=$(get_package_url "mindformers" "any")
     fi
     if [ -z "${mindone_url:-}" ]; then
-        local mindone_url=$(get_package_url "mindformers" "any")
+        local mindone_url=$(get_package_url "mindone" "any")
     fi
     if [ -z "${ms_custom_ops_url:-}" ]; then
         local ms_custom_ops_url=$(get_package_url "ms_custom_ops" "any")
