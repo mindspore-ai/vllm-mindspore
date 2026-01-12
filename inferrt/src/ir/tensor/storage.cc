@@ -95,6 +95,8 @@ void *Storage::Release() {
   }
   void *p = data_;
   // data_ = nullptr;
+  deleter_ = nullptr;
+  fromAten_ = false;
   ownsData_ = false;
   return p;
 }

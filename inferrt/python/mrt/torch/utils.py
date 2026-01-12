@@ -15,7 +15,6 @@
 """
 utils for converting between torch and mrt.ir.
 """
-import os
 from typing import Any, List, Tuple, Optional
 
 import torch
@@ -56,7 +55,6 @@ def _set_communication_info(ptd):
     """Get communication info from torch and set to CollectiveManager for a given process group."""
     pg = _resolve_process_group(ptd)
     rank = dist.get_rank() if dist.is_initialized() else 0
-    local_rank = int(os.getenv("LOCAL_RANK", "0"))
     world_size = dist.get_world_size()
 
     group_rank = dist.get_rank(pg)

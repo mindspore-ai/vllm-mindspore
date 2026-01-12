@@ -117,10 +117,7 @@ void Builder::RecordStorageFreePoint() {
     ir::VisitAllTensors(param->output, [&](const ir::TensorPtr &tensor) {
       auto storage = tensor->GetStorage().get();
       CHECK_IF_NULL(storage);
-      // Only insert if not already present in the map
-      if (storageToOwner.find(storage) == storageToOwner.end()) {
-        storageToOwner[storage] = param.get();
-      }
+      (void)storageToOwner.insert({storage, param.get()});
     });
   }
   // Visit all nodes in the graph
@@ -129,10 +126,7 @@ void Builder::RecordStorageFreePoint() {
     ir::VisitAllTensors(node->output, [&](const ir::TensorPtr &tensor) {
       auto storage = tensor->GetStorage().get();
       CHECK_IF_NULL(storage);
-      // Only insert if not already present in the map
-      if (storageToOwner.find(storage) == storageToOwner.end()) {
-        storageToOwner[storage] = node.get();
-      }
+      (void)storageToOwner.insert({storage, node.get()});
     });
   }
 

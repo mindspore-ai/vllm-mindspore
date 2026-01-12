@@ -26,6 +26,7 @@
 #include "torch_npu/csrc/core/npu/NPUFormat.h"
 #include "torch_npu/csrc/core/NPUStorageImpl.h"
 #include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
+#include "torch_npu/csrc/framework/OpCommand.h"
 #endif
 
 #include "hardware/hardware_abstract/device_context.h"
@@ -33,6 +34,7 @@
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
+#include "ops/utils/async.h"
 #include "common/logger.h"
 
 namespace py = pybind11;
@@ -296,7 +298,10 @@ void SetDeviceContext() {
   auto bindStreamFunc = [currentNPUStream]() { c10_npu::setCurrentNPUStream(currentNPUStream); };
   deviceContext->deviceResManager_->SetBindStreamFunc(bindStreamFunc);
 
-  auto currentStream = currentNPUStream.stream();
+  mrt::ops::OpAsync::SetLaunchOpFunc(at_npu::native::OpCommand::RunOpApiV2);
+  mrt::ops::OpAsync::SetWaitLaunchFinishFunc([]() { (void)c10_npu::getCurrentNPUStream().stream(true); });
+
+  auto currentStream = currentNPUStream.stream(false);
   CHECK_IF_NULL(currentStream);
   deviceContext->deviceResManager_->SetCurrentStream(currentStream);
   auto ascend_allocator = [](size_t size) -> void * {

@@ -38,12 +38,13 @@ add_subdirectory(ops)
 add_subdirectory(optimize)
 add_subdirectory(runtime)
 
-set(OBJECTS mrt_common mrt_config hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
+set(OBJECTS mrt_common ops_utils mrt_config hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
     vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj)
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
 target_link_libraries(da ${OBJECTS})
+set_property(TARGET da APPEND PROPERTY BUILD_RPATH "${TORCH_INSTALL_PREFIX}/../torch.libs")
 
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
 add_library(inferrt SHARED lang/api/c_api.cc)

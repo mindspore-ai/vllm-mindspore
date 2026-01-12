@@ -154,8 +154,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &,
-                                              const ir::ValuePtr &))&GraphExecutor::AddOpNode,
+    std::bind((ir::NodePtr(GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &, const ir::ValuePtr &)) &
+                GraphExecutor::AddOpNode,
               this, std::placeholders::_1, std::placeholders::_2, nullptr);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }

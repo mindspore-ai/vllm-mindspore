@@ -44,19 +44,6 @@ OpsErrorCode HcclWaitTensor::CalcWorkspace(const std::vector<const ir::Value *> 
 
 OpsErrorCode HcclWaitTensor::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                     ir::Value *output, void *stream) {
-  LOG_OUT << "WaitTensor launch";
-
-  auto srcTensor = input[kIndex0]->ToTensor();
-  auto outTensor = output->ToTensor();
-  auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
-
-  auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
-                                                                         srcTensor->DataPtr(), dstSize, stream);
-  if (ret == false) {
-    LOG_ERROR << " call aclrtMemcpyAsync in Op WaitTensor failed";
-  }
-
-  mrt::device::ascend::AscendStreamMng::GetInstance().SyncStream(stream);
   return SUCCESS;
 }
 MRT_REG_OP(wait_tensor, HcclWaitTensor, Ascend);

@@ -69,9 +69,6 @@ void OpRunner::AllocateMemory() {
     storage->AllocateMemory();
     LOG_OUT << "alloc storage: " << storage;
   }
-
-  // Allocate workspace memory if needed.
-  AllocateWorkspaceMemory();
 }
 
 void OpRunner::AllocateWorkspaceMemory() {

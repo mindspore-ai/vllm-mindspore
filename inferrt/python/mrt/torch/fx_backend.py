@@ -167,6 +167,7 @@ def fused_inter_attention_score_hook(node, input_nodes, executor):
 
 
 def _init_arg_mapping_hooks():
+    """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
     register_arg_mapping_hook(Op.fused_infer_attention_score, fused_inter_attention_score_hook)
     register_arg_mapping_hook(Op.permute, permute_hook)
