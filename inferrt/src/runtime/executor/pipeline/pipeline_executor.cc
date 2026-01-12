@@ -63,14 +63,14 @@ void PipelineExecutor::Run(bool isDynamic) {
       if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
         LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
+      opRunner.AllocateMemory();
+      opRunner.FreeMemory();
 
       // Push async launch task into launch queue.
       auto launchTask = [&opRunner]() {
-        opRunner.AllocateMemory();
         if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
           LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
         }
-        opRunner.FreeMemory();
       };
       launchQeueue->Push(std::move(launchTask), TaskType::Launch);
     };

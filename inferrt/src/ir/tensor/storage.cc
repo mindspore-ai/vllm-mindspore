@@ -32,11 +32,10 @@ void *Allocator::Allocate(size_t sizeBytes) const { return deviceResManager_->Al
 void Allocator::Free(void *ptr) const { deviceResManager_->FreeMemory(ptr); }
 
 namespace ir {
-Storage::Storage(size_t sizeBytes, hardware::Device device)
-    : sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(true) {}
+Storage::Storage(size_t sizeBytes, hardware::Device device) : sizeBytes_(sizeBytes), alloc_(device), device_(device) {}
 
 Storage::Storage(void *data, size_t sizeBytes, hardware::Device device)
-    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device), ownsData_(false) {}
+    : data_(data), sizeBytes_(sizeBytes), alloc_(device), device_(device) {}
 
 Storage::~Storage() {
   if (ownsData_ && data_ != nullptr) {
@@ -55,7 +54,7 @@ void Storage::Resize(size_t sizeBytes) {
 }
 
 void Storage::AllocateMemory() {
-  if (data_ != nullptr && ownsData_) {
+  if (ownsData_) {
     LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
                   << GetDeviceNameByType(device_.type) << ", data: " << data_;
   }
@@ -77,7 +76,7 @@ void Storage::FreeMemory() {
     }
     deleter_(nullptr);
     deleter_ = nullptr;
-    data_ = nullptr;
+    // data_ = nullptr;
     fromAten_ = false;
     ownsData_ = false;
     return;
@@ -85,7 +84,7 @@ void Storage::FreeMemory() {
 
   CHECK_IF_NULL(data_);
   alloc_.Free(data_);
-  data_ = nullptr;
+  // data_ = nullptr;
   ownsData_ = false;
 }
 
@@ -95,20 +94,10 @@ void *Storage::Release() {
                      "reference memory passed in from external sources.";
   }
   void *p = data_;
-  data_ = nullptr;
+  // data_ = nullptr;
   ownsData_ = false;
   return p;
 }
 
-void Storage::DisableOwnData() {
-  if (!ownsData_) {
-    return;
-  }
-
-  if (ownsData_ && data_ != nullptr) {
-    LOG_EXCEPTION << "Can not disable own data for storage which has already allocated memory.";
-  }
-  ownsData_ = false;
-}
 }  // namespace ir
 }  // namespace mrt

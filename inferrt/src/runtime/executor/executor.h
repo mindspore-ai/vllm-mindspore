@@ -89,8 +89,6 @@ class DA_API GraphExecutor {
   // Finish building graph.
   void EndGraph();
 
-  void DisableParamsOwnData();
-
   // Optimize the graph.
   void OptGraph();
   // Build DAKernels for graph.

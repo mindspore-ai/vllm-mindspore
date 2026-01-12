@@ -147,7 +147,6 @@ void GraphExecutor::BeginGraph(const std::string &name) {
 void GraphExecutor::EndGraph() {
   LOG_OUT << "End graph building";
   CHECK_IF_NULL(graph_);
-  DisableParamsOwnData();
 }
 
 // Finish building graph.
@@ -155,8 +154,8 @@ void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
   pass::TensorCreator tensorCreator =
-    std::bind((ir::NodePtr(GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &, const ir::ValuePtr &)) &
-                GraphExecutor::AddOpNode,
+    std::bind((ir::NodePtr (GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &,
+                                              const ir::ValuePtr &))&GraphExecutor::AddOpNode,
               this, std::placeholders::_1, std::placeholders::_2, nullptr);
   pass::PassManager::Instance().Run(graph_, tensorCreator);
 }
@@ -368,18 +367,6 @@ void GraphExecutor::DumpGraph() {
   std::cout << "}" << std::endl;
 }
 #endif
-
-void GraphExecutor::DisableParamsOwnData() {
-  for (auto &param : graph_->parameters) {
-    CHECK_IF_NULL(param);
-    auto &value = param->output;
-    CHECK_IF_NULL(value);
-    ir::VisitAllTensors(value, [&](const ir::TensorPtr &tensor) {
-      CHECK_IF_NULL(tensor);
-      tensor->GetStorage()->DisableOwnData();
-    });
-  }
-}
 
 void GraphExecutor::BuildExecutor() {
   CHECK_IF_FAIL(nullptr == builder_);
