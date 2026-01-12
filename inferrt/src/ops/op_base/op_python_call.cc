@@ -151,7 +151,9 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
 #ifdef ENABLE_TORCH_NPU
   (void)c10_npu::getCurrentNPUStream().stream(true);
 #endif
-  return PostprocessOutputs(result, output, stream);
+  auto ret = PostprocessOutputs(result, output, stream);
+  CheckOutputInputRef(inputs_, output, opName_);
+  return ret;
 }
 
 py::tuple OpPythonCall::PreprocessInputs(const std::vector<const ir::Value *> &input) {

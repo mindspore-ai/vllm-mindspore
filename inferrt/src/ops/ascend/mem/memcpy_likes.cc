@@ -20,6 +20,7 @@
 #include "ops/ascend/aclnn/utils/opapi_utils.h"
 #include "ops/op_register.h"
 #include "acl/acl_rt.h"
+#include "ir/tensor/tensor.h"
 #include "hardware/ascend/res_manager/ascend_res_manager.h"
 #include "hardware/ascend/res_manager/symbol_interface/symbol_utils.h"
 #include "hardware/ascend/res_manager/symbol_interface/acl_rt_symbol.h"
@@ -34,8 +35,15 @@ OpsErrorCode MemcpyOpBase::CalcWorkspace(const std::vector<const ir::Value *> &i
 OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                   ir::Value *output, void *stream) {
   auto inputTensor = input[kIndex0]->ToTensor();
-  auto srcSize = inputTensor->Numel() * inputTensor->Dtype().GetSize();
   auto outTensor = output->ToTensor();
+  if (!inputTensor->IsContiguous() || inputTensor->StorageOffset() != 0 || !IsTensorBaseFormat(inputTensor) ||
+      !IsTensorBaseFormat(outTensor)) {
+    LOG_EXCEPTION << "memcpy_likes operator does not support non-standard tensor memory layout, "
+                  << "but got strides: " << inputTensor->Strides() << ", offset: " << inputTensor->StorageOffset()
+                  << ", inputTensor format: " << FormatEnumToStr(inputTensor->Format())
+                  << ", outTensor format: " << FormatEnumToStr(outTensor->Format());
+  }
+  auto srcSize = inputTensor->Numel() * inputTensor->Dtype().GetSize();
   auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
   if (srcSize > dstSize) {
     LOG_EXCEPTION << "unexpected input and output, src size is " << srcSize << ", dst size is " << dstSize;
