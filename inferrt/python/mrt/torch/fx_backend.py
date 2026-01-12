@@ -21,6 +21,7 @@ import torch
 from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
+from torch.fx.immutable_collections import immutable_list
 
 from mrt import config
 from mrt.ir import GraphExecutor, Op
@@ -544,6 +545,24 @@ def _get_op(target):
     return Op.custom_call
 
 
+def _is_shape_sequence(arg):
+    """
+    Determines whether the given argument represents shape information,
+    including direct sequence types or torch.fx.Node with shape-like example_value.
+
+    Args:
+        arg: The argument to check
+
+    Returns:
+        bool: True if the argument represents a shape sequence, False otherwise
+    """
+    if isinstance(arg, (tuple, list, torch.Size, immutable_list)):
+        return True
+    if isinstance(arg, torch.fx.Node):
+        example_value = arg.meta.get("example_value", None)
+        return isinstance(example_value, (tuple, list, torch.Size))
+    return False
+
 def _argument_to_real_value(value_type, value, arg_len):
     """
     Convert a torch fx value to its real value.
@@ -589,9 +608,9 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if node.target == "view":
-        if not isinstance(args[1], Node) or not isinstance(args[1].meta.get("example_value"), torch.Size):
-            args = [args[0], args[1:]]
+    if node.target == "view" and not _is_shape_sequence(args[1]):
+        args = [args[0], args[1:]]
+
     if len(args) + len(kwargs) > len(schema.arguments):
         return flat_args, False
 
