@@ -19,10 +19,13 @@
 
 #include <torch/extension.h>
 #include "ir/tensor/tensor.h"
+#include "ir/value/value.h"
 #include "common/visible.h"
 namespace mrt::ops {
 
 MRT_EXPORT at::Tensor ToTorchTensor(const ir::TensorPtr &tensor);
 MRT_EXPORT ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false);
+MRT_EXPORT void CheckOutputInputRef(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                    const std::string &opName);
 }  // namespace mrt::ops
 #endif  // INFERRT_INFERRT_SRC_OPS_ASCEND_CUSTOM_UTILS_H_

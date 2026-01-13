@@ -192,4 +192,18 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   return at::Tensor{};
 }
 
+void CheckOutputInputRef(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                         const std::string &opName) {
+  if (input.size() > 0 && input[0]->IsTensor() && output != nullptr) {
+    const auto *inputStorageData = input[0]->ToTensor()->GetStorage()->Data();
+    if ((output->IsTensor() && output->ToTensor()->GetStorage()->Data() == inputStorageData) ||
+        (output->IsTuple() && (*output->ToTuple())[0]->IsTensor() &&
+         (*output->ToTuple())[0]->ToTensor()->GetStorage()->Data() == inputStorageData)) {
+      LOG_EXCEPTION << "Custom/Python Call: Operator " << opName << " does not support reference. "
+                    << "Input[0] DataPtr: " << input[0]->ToTensor()->DataPtr() << ", "
+                    << "Output DataPtr: " << output->ToTensor()->DataPtr();
+    }
+  }
+}
+
 }  // namespace mrt::ops

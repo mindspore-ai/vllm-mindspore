@@ -24,6 +24,7 @@
 #endif
 
 #include "ops/utils/aten_convert.h"
+#include "ops/utils/data_convert.h"
 
 #define CONVERT_TUPLE_TO_STACK(func) [this](const ir::TuplePtr tuple, torch::jit::Stack &stack) { func(tuple, stack); }
 
@@ -308,15 +309,7 @@ OpsErrorCode OpTorchCall::Launch(const std::vector<const ir::Value *> &input, vo
 #endif
   // Outputs process. Convert aten tensor to ir::Value.
   ConvertStackToOutput(output, std::move(stack), stream);
-  if (input.size() > 0 && input[0]->IsTensor() && output != nullptr) {
-    const auto *inputStorageData = input[0]->ToTensor()->GetStorage()->Data();
-    if ((output->IsTensor() && output->ToTensor()->GetStorage()->Data() == inputStorageData) ||
-        (output->IsTuple() && (*output->ToTuple())[0]->ToTensor()->GetStorage()->Data() == inputStorageData)) {
-      LOG_EXCEPTION << "Custom Call: Operator " << qualifiedOpName_ << " does not support reference. "
-                    << "Input[0] DataPtr: " << input[0]->ToTensor()->DataPtr() << ", "
-                    << "Output DataPtr: " << output->ToTensor()->DataPtr();
-    }
-  }
+  CheckOutputInputRef(input, output, qualifiedOpName_);
   return SUCCESS;
 }
 }  // namespace ops
