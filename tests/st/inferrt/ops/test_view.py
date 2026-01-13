@@ -19,7 +19,7 @@ from torch_npu.testing.common_utils import create_common_tensor
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
+from mrt.torch import backend
 
 
 def op_func(input1, input2, shape):
@@ -79,6 +79,11 @@ def view_forward_twice(shape_format, op_func_compiled):
         AssertRtolEqual(cpu_output, npu_output)
 
 
+def op_func_variadic(input_tensor, *shape):
+    """op function for view with variadic int arguments."""
+    return input_tensor.view(*shape)
+
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_view(pipeline, monkeypatch):
@@ -119,3 +124,25 @@ def test_view_twice(pipeline, monkeypatch):
     ]
     op_func_compiled = torch.compile(op_func_twice, backend=backend)
     view_forward_twice(shape_format, op_func_compiled)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("pipeline", (True, False))
+@pytest.mark.parametrize("shape", [(64,), (4, 4, 4), (8, 8), (2, 16, 2)])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
+def test_view_variadic_args(pipeline, monkeypatch, shape, dtype):
+    """
+    Feature: Test view with variadic int arguments
+    Description: Test view op with single or multiple int arguments using torch.randn
+    Expectation: The result is correct
+    """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+
+    cpu_input = torch.randn(8, 8, dtype=dtype)
+    npu_input = cpu_input.clone().npu()
+
+    op_func_compiled = torch.compile(op_func_variadic, backend=backend)
+    cpu_output = op_func_variadic(cpu_input, *shape).detach().numpy()
+    npu_output = op_func_compiled(npu_input, *shape).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output)
