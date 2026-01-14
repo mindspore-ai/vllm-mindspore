@@ -34,6 +34,8 @@ OpsErrorCode AtenShape::Launch(const std::vector<const ir::Value *> &input, void
   return SUCCESS;
 }
 
+bool AtenShape::NeedLaunch() { return false; }
+
 MRT_REG_OP(shape, AtenShape, CPU);
 }  // namespace ops
 }  // namespace mrt

@@ -106,6 +106,8 @@ OpsErrorCode AclnnGetItemSlice::Launch(const std::vector<const ir::Value *> &inp
   return SUCCESS;
 }
 
+bool AclnnGetItemSlice::NeedLaunch() { return !skipLaunch_; }
+
 MRT_REG_OP(getitem_slice, AclnnGetItemSlice, Ascend);
 }  // namespace ops
 }  // namespace mrt

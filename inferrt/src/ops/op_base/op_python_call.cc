@@ -149,6 +149,8 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
   return SUCCESS;
 }
 
+bool OpPythonCall::NeedLaunch() { return false; }
+
 OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
   if (Py_IsInitialized() == 0) {

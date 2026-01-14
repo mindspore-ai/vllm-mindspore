@@ -52,5 +52,6 @@ OpsErrorCode OpEvalSymbolicExpr::Launch(const std::vector<const ir::Value *> &in
   return SUCCESS;
 }
 
+bool OpEvalSymbolicExpr::NeedLaunch() { return false; }
 }  // namespace ops
 }  // namespace mrt

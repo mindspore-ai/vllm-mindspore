@@ -42,6 +42,7 @@ class OpTorchCall : public Operator {
                              size_t *workspaceSize);
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream);
+  bool NeedLaunch() override;
 
  protected:
   void ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) const;

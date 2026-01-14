@@ -31,6 +31,8 @@ class AtenShape : public OpShape {
 
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
+
+  bool NeedLaunch() override;
 };
 }  // namespace ops
 }  // namespace mrt

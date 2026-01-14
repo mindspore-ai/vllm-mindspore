@@ -397,6 +397,11 @@ void Executor::Run(bool isDynamic) {
     }
     opRunner.AllocateWorkspaceMemory();
     opRunner.FreeMemory();
+
+    if (!opRunner.NeedLaunch()) {
+      continue;
+    }
+
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
       LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }

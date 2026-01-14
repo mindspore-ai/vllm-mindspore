@@ -65,6 +65,7 @@ OpsErrorCode AclnnSplitWithSizeView::CalcWorkspace(const std::vector<const ir::V
   const auto splitSize = input[kIndex1]->ToTuple()->ToIntList();
   const auto dim = input[kIndex2]->ToInt();
   UpdateOutputViewInfo(inputTensorPtr, output->ToTuple()->ToTensorList(), splitSize, dim);
+  CheckStorageMatch(input, output);
   return SUCCESS;
 }
 

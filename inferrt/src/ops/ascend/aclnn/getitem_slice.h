@@ -31,6 +31,7 @@ class AclnnGetItemSlice : public Operator {
                              size_t *workspaceSize) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
+  bool NeedLaunch() override;
 
  private:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};

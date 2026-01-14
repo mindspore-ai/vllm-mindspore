@@ -134,6 +134,14 @@ class DA_API Operator {
    *         that reference the same tensor. Returns empty vector by default.
    */
   virtual std::vector<std::pair<uint32_t, uint32_t>> GetOutputInputRefPairs() const { return {}; }
+
+  /**
+   * @brief This method indicates if the operator will be put into launch queue. If return true, this operator will be
+   * put into launch queue, otherwise not.
+   *
+   * @return Whether the operator will be put into launch queue.
+   */
+  virtual bool NeedLaunch() { return true; }
 };
 }  // namespace ops
 }  // namespace mrt
