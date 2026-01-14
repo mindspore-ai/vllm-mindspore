@@ -83,3 +83,19 @@ if(ENABLE_CPU)
 else()
   message("Note cpu backend is disabled")
 endif()
+
+# Profiler tests
+message(STATUS "Building profiler tests")
+include_directories(${PROJECT_SOURCE_DIR}/inferrt/src)
+add_executable(run_profiler_test ./profiler/profiler_test.cc)
+target_link_libraries(run_profiler_test PRIVATE
+  mrt_common
+  mrt_profiler
+  GTest::gtest_main
+  ${CMAKE_DL_LIBS}
+)
+enable_testing()
+add_test(NAME profiler_test COMMAND run_profiler_test)
+install(TARGETS run_profiler_test
+        RUNTIME DESTINATION bin/tests)
+
