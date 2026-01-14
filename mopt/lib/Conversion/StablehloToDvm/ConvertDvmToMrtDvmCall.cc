@@ -127,6 +127,7 @@ class DvmOpSerializer {
   }
 
   mlir::LogicalResult dispatch(Operation &op);
+  mlir::LogicalResult finalizeOutputIndicesFromReturn(mlir::func::ReturnOp returnOp);
 
   const llvm::SmallVector<int32_t, kInlineCapInputIndices> &getInputIndices() const { return inputIndices; }
   const llvm::SmallVector<int32_t, kInlineCapOutputIndices> &getOutputIndices() const { return outputIndices; }
@@ -229,7 +230,6 @@ mlir::LogicalResult DvmOpSerializer::handleLoad(mlir::dvm::LoadOp loadOp) {
 
 mlir::LogicalResult DvmOpSerializer::handleStore(mlir::dvm::StoreOp storeOp) {
   int32_t idx = assignIdxForResult(storeOp.getResult());
-  outputIndices.push_back(idx);
 
   auto srcIdx = requireValueIdx(storeOp.getInput(), "dvm.store input");
   if (mlir::failed(srcIdx)) return mlir::failure();
@@ -239,6 +239,17 @@ mlir::LogicalResult DvmOpSerializer::handleStore(mlir::dvm::StoreOp storeOp) {
   inst.idx = idx;
   inst.inputs.push_back(*srcIdx);
   insts.push_back(std::move(inst));
+  return mlir::success();
+}
+
+mlir::LogicalResult DvmOpSerializer::finalizeOutputIndicesFromReturn(mlir::func::ReturnOp returnOp) {
+  outputIndices.clear();
+  outputIndices.reserve(returnOp.getNumOperands());
+  for (Value ret : returnOp.getOperands()) {
+    auto idx = requireValueIdx(ret, "func.return operand");
+    if (mlir::failed(idx)) return mlir::failure();
+    outputIndices.push_back(*idx);
+  }
   return mlir::success();
 }
 
@@ -358,6 +369,9 @@ static bool containsDvmOps(Block &block) {
 
 // Validates return operands come from dvm.store
 static mlir::LogicalResult validateReturnOperands(mlir::func::ReturnOp returnOp) {
+  // Each func.return operand must come from a dvm.store.
+  // Multi-output is supported: the serializer will emit multiple output_indices and the
+  // runtime will pass multiple output addresses to dvm::Kernel::Launch.
   for (Value ret : returnOp.getOperands()) {
     auto *def = ret.getDefiningOp();
     if (!def || !mlir::isa<mlir::dvm::StoreOp>(def)) {
@@ -423,6 +437,11 @@ mlir::LogicalResult serializeDvmFuncToJson(FuncOp funcOp, llvm::StringRef kernel
   }
 
   if (mlir::failed(validateReturnOperands(returnOp))) {
+    return mlir::failure();
+  }
+
+  // Define output order by func.return operand order. This must match mrt.dvm_call results order.
+  if (mlir::failed(serializer.finalizeOutputIndicesFromReturn(returnOp))) {
     return mlir::failure();
   }
 

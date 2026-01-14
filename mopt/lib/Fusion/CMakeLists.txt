@@ -2,6 +2,10 @@
 add_mlir_library(MoptFusionPasses
   OutlineStablehloFusionRegions.cpp
   MarkTorchToStablehloOp.cpp
+  SymbolicShape.cpp
+  PropagateTorchSymbolicShape.cpp
+  RemoveRedundantDynamicBroadcast.cpp
+  VerifySymbolicShapeAttrs.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/mopt/Fusion
@@ -13,8 +17,12 @@ add_mlir_library(MoptFusionPasses
   MLIRFuncDialect
   MLIRIR
   MLIRPass
+  MLIRShapeDialect
   MLIRSupport
+  MLIRTransformUtils
   StablehloOps
+  TorchMLIRTorchDialect
+  TorchMLIRTorchConversionDialect
 )
 
 # Add generated include directory

@@ -15,16 +15,22 @@
  */
 
 #include <algorithm>
+#include <iterator>
+#include <numeric>
+#include <optional>
 
 #include "mopt/Fusion/FusionStrategy.h"
 #include "mopt/Fusion/Passes.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/Pass/Pass.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -55,6 +61,29 @@ using llvm::SetVector;
 namespace {
 
 //===----------------------------------------------------------------------===//
+// High-level algorithm overview (design notes)
+//===----------------------------------------------------------------------===//
+//
+// This pass outlines locally fusible StableHLO compute chains into separate `func.func`
+// functions, and replaces the original ops with a `func.call`.
+//
+// Overview:
+// - Step 0 (pre-clean): remove metadata-only Torch symbolic-shape bridge chains that
+//   would otherwise inflate cluster live-outs.
+// - Step 1 (cluster build): for each fusion-root (policy-defined), grow a cluster by:
+//   - fusing producers (operands) when it is "single-consumer within cluster" (with
+//     shape-auxiliary users ignored), and
+//   - fusing consumers (users) only when they do not depend on defining ops outside
+//     the current cluster (conservative, locally-connected growth).
+// - Step 2 (finalize IO): inputs are operands defined outside the cluster; outputs are
+//   results used outside the cluster.
+// - Step 3 (outline): clone cluster ops into a new function in topological order, return
+//   the cluster outputs, and replace original uses with call results.
+//
+// NOTE: This file intentionally keeps the fusion-growth rules conservative. This is a
+// readability-oriented pass; broader fusion requires extra dominance/legality checks.
+
+//===----------------------------------------------------------------------===//
 // FusionCluster - Data structure for a cluster of fusible operations
 //===----------------------------------------------------------------------===//
 
@@ -66,6 +95,221 @@ struct FusionCluster {
   SmallVector<Type> outputTypes;   // Types of outputs
   std::string parentFuncName;      // Name of the parent function containing this cluster
 };
+
+//===----------------------------------------------------------------------===//
+// Helper functions for fusion analysis
+//===----------------------------------------------------------------------===//
+
+/// Check if an operation is a shape-related auxiliary op that should be
+/// ignored when checking "all users in cluster" constraint.
+/// These ops don't participate in actual computation, they only extract
+/// shape info or perform type conversion for shape propagation.
+static bool isShapeAuxiliaryOp(Operation *op) {
+  return isa<mlir::shape::ShapeOfOp, mlir::torch::TorchConversion::FromBuiltinTensorOp,
+             mlir::torch::TorchConversion::ToBuiltinTensorOp, mlir::torch::Torch::BindSymbolicShapeOp>(op);
+}
+
+/// Returns true if `v` is a block argument (i.e., not produced by an op).
+static bool isBlockArgument(Value v) { return v && v.getDefiningOp() == nullptr; }
+
+/// Can we pull `producer` into the cluster as a producer of `consumer`?
+///
+/// This helper preserves the original (pre-refactor) rule used by this pass:
+/// - Fuse `producer` if ALL users of `producer->getResult(0)` are either:
+///   - the current `consumer`, or
+///   - already in the cluster, or
+///   - shape-auxiliary users (ignored for the single-consumer constraint), OR
+/// - `producer` is a stablehlo.constant.
+static bool canFuseProducer(Operation *producer, Operation *consumer, const SetVector<Operation *> &clusterOps) {
+  if (!producer || !consumer) return false;
+  if (isa<mlir::stablehlo::ConstantOp>(producer)) return true;
+  if (producer->getNumResults() == 0) return false;
+  Value result0 = producer->getResult(0);
+  for (Operation *user : result0.getUsers()) {
+    if (user == consumer) continue;
+    if (clusterOps.contains(user)) continue;
+    if (isShapeAuxiliaryOp(user)) continue;
+    return false;
+  }
+  return true;
+}
+
+/// Can we pull `user` into the cluster as a consumer of `edgeValue`?
+///
+/// Preserves the original conservative growth rule: we only fuse `user` when all
+/// of its other operands are either block arguments or produced by ops already in
+/// the cluster (i.e., we do not expand the cluster through "external defining op"
+/// edges).
+static bool canFuseConsumer(Operation *user, Value edgeValue, const SetVector<Operation *> &clusterOps) {
+  if (!user) return false;
+  for (Value opnd : user->getOperands()) {
+    if (opnd == edgeValue) continue;
+    if (isBlockArgument(opnd)) continue;
+    Operation *def = opnd.getDefiningOp();
+    if (def && clusterOps.contains(def)) continue;
+    return false;
+  }
+  return true;
+}
+
+/// Safely compare if operation a is before operation b in the same block.
+/// Returns false if they are in different blocks or if either is null.
+static bool safeIsBeforeInBlock(Operation *a, Operation *b) {
+  if (!a || !b) {
+    return false;
+  }
+  if (a->getBlock() != b->getBlock()) {
+    return false;
+  }
+  return a->isBeforeInBlock(b);
+}
+
+struct CallInsertionPlan {
+  Operation *insertionPoint = nullptr;
+  bool insertAfter = false;
+};
+
+static llvm::SmallPtrSet<Operation *, 16> buildClusterOpsSet(const FusionCluster &cluster) {
+  llvm::SmallPtrSet<Operation *, 16> set;
+  set.reserve(cluster.ops.size());
+  for (Operation *op : cluster.ops) {
+    set.insert(op);
+  }
+  return set;
+}
+
+static Operation *findLastInputDefOutsideCluster(const FusionCluster &cluster,
+                                                 const llvm::SmallPtrSetImpl<Operation *> &clusterOpsSet) {
+  Operation *lastInputDef = nullptr;
+  for (Value input : cluster.inputs) {
+    Operation *defOp = input.getDefiningOp();
+    if (!defOp || clusterOpsSet.contains(defOp)) continue;
+    if (!lastInputDef || safeIsBeforeInBlock(lastInputDef, defOp)) {
+      lastInputDef = defOp;
+    }
+  }
+  return lastInputDef;
+}
+
+static Operation *findFirstExternalUserOfOutputs(const FusionCluster &cluster,
+                                                 const llvm::SmallPtrSetImpl<Operation *> &clusterOpsSet) {
+  Operation *firstExternalUser = nullptr;
+  for (Value output : cluster.outputs) {
+    for (Operation *user : output.getUsers()) {
+      if (clusterOpsSet.contains(user)) continue;
+      if (!firstExternalUser || safeIsBeforeInBlock(user, firstExternalUser)) {
+        firstExternalUser = user;
+      }
+    }
+  }
+  return firstExternalUser;
+}
+
+static Operation *findLastOpInCluster(const FusionCluster &cluster) {
+  return std::accumulate(
+    cluster.ops.begin(), cluster.ops.end(), static_cast<Operation *>(nullptr),
+    [](Operation *best, Operation *op) { return (!best || safeIsBeforeInBlock(best, op)) ? op : best; });
+}
+
+static std::optional<CallInsertionPlan> computeCallInsertionPlan(
+  const FusionCluster &cluster, const llvm::SmallPtrSetImpl<Operation *> &clusterOpsSet) {
+  Operation *lastInputDef = findLastInputDefOutsideCluster(cluster, clusterOpsSet);
+  Operation *firstExternalUser = findFirstExternalUserOfOutputs(cluster, clusterOpsSet);
+
+  CallInsertionPlan plan;
+  if (lastInputDef && firstExternalUser) {
+    // Verify SSA property: lastInputDef must be before firstExternalUser.
+    if (!safeIsBeforeInBlock(lastInputDef, firstExternalUser)) {
+      LLVM_DEBUG(llvm::dbgs() << "[Fusion] SSA violation: input defined after user or in different blocks\n");
+      return std::nullopt;
+    }
+    plan.insertionPoint = lastInputDef;
+    plan.insertAfter = true;
+    return plan;
+  }
+
+  if (lastInputDef) {
+    plan.insertionPoint = lastInputDef;
+    plan.insertAfter = true;
+    return plan;
+  }
+
+  if (firstExternalUser) {
+    plan.insertionPoint = firstExternalUser;
+    plan.insertAfter = false;
+    return plan;
+  }
+
+  plan.insertionPoint = findLastOpInCluster(cluster);
+  plan.insertAfter = true;
+  if (!plan.insertionPoint) {
+    LLVM_DEBUG(llvm::dbgs() << "[Fusion] Could not find insertion point\n");
+    return std::nullopt;
+  }
+  return plan;
+}
+
+/// Remove Torch symbolic-shape modeling ops that only serve as metadata and
+/// would otherwise force outlined StableHLO clusters to return multiple values.
+///
+/// Pattern:
+///   %t = torch_c.from_builtin_tensor %x
+///   torch.bind_symbolic_shape %t, ...
+/// If %t is ONLY used by torch.bind_symbolic_shape, the bind has no runtime
+/// semantic effect and the bridge value %t is dead. We can erase both ops.
+///
+/// This is important for the DVM-call lowering path: even though runtime dvm_call
+/// can return multiple outputs, keeping metadata-only bridge values alive can
+/// unnecessarily increase outlined live-outs and hinder downstream lowering.
+/// In practice, this also improves robustness because some downstream runtimes
+/// still assume a single "primary" output shape when plumbing dyn-shape metadata.
+static void cleanupDeadTorchSymbolicShapeBinds(FuncOp funcOp) {
+  using mlir::torch::Torch::BindSymbolicShapeOp;
+  using mlir::torch::TorchConversion::FromBuiltinTensorOp;
+
+  SmallVector<Operation *> opsToErase;
+
+  funcOp.walk([&](FromBuiltinTensorOp fromOp) {
+    Value vt = fromOp.getResult();
+    if (vt.use_empty()) {
+      opsToErase.push_back(fromOp.getOperation());
+      return;
+    }
+
+    // Check if ALL users are bind_symbolic_shape.
+    for (Operation *user : vt.getUsers()) {
+      if (!isa<BindSymbolicShapeOp>(user)) {
+        return;
+      }
+    }
+
+    // Erase all bind ops first, then erase the bridge op.
+    auto users = llvm::make_early_inc_range(vt.getUsers());
+    std::copy(users.begin(), users.end(), std::back_inserter(opsToErase));
+    opsToErase.push_back(fromOp.getOperation());
+  });
+
+  if (opsToErase.empty()) return;
+
+  // Deterministic erase order: erase users first where possible.
+  // Also deduplicate in case multiple walks added the same op.
+  llvm::SmallDenseSet<Operation *, 16> seen;
+  SmallVector<Operation *> unique;
+  unique.reserve(opsToErase.size());
+  for (Operation *op : opsToErase) {
+    if (op && !seen.contains(op)) {
+      seen.insert(op);
+      unique.push_back(op);
+    }
+  }
+  std::sort(unique.begin(), unique.end(), [](Operation *a, Operation *b) { return safeIsBeforeInBlock(b, a); });
+
+  for (Operation *op : unique) {
+    if (op && op->use_empty()) {
+      op->erase();
+    }
+  }
+}
 
 //===----------------------------------------------------------------------===//
 // FusionClusterBuilder - Builds fusion clusters using a given strategy
@@ -160,16 +404,7 @@ class FusionClusterBuilder {
         continue;
       }
 
-      // Only fuse if all users of the producer are in the cluster or if it's a constant
-      bool allUsersInCluster = true;
-      for (Operation *user : defOp->getResult(0).getUsers()) {
-        if (user != root && !cluster.ops.contains(user)) {
-          allUsersInCluster = false;
-          break;
-        }
-      }
-
-      if (allUsersInCluster || isa<mlir::stablehlo::ConstantOp>(defOp)) {
+      if (canFuseProducer(defOp, root, cluster.ops)) {
         collectFusibleOps(defOp, cluster, visited);
       }
     }
@@ -182,17 +417,7 @@ class FusionClusterBuilder {
           continue;
         }
 
-        // Check if user only depends on ops already in the cluster
-        bool canFuseUser = true;
-        for (Value userOperand : user->getOperands()) {
-          Operation *userDefOp = userOperand.getDefiningOp();
-          if (userDefOp && !cluster.ops.contains(userDefOp) && userOperand != result) {
-            // Has operand from outside the cluster that's not the current result
-            canFuseUser = false;
-            break;
-          }
-        }
-        if (canFuseUser) {
+        if (canFuseConsumer(user, result, cluster.ops)) {
           collectFusibleOps(user, cluster, visited);
         }
       }
@@ -312,39 +537,29 @@ class FunctionOutliner {
       return;
     }
 
-    // Find the last operation in the cluster (for insertion point)
-    Operation *lastOp = nullptr;
-    for (Operation *op : cluster.ops) {
-      if (!lastOp || lastOp->isBeforeInBlock(op)) {
-        lastOp = op;
-      }
+    // Find insertion point with SSA dominance constraints.
+    llvm::SmallPtrSet<Operation *, 16> clusterOpsSet = buildClusterOpsSet(cluster);
+    auto plan = computeCallInsertionPlan(cluster, clusterOpsSet);
+    if (!plan) return;
+
+    // Create call at the insertion point
+    OpBuilder builder(plan->insertionPoint);
+    if (plan->insertAfter) {
+      builder.setInsertionPointAfter(plan->insertionPoint);
+    } else {
+      builder.setInsertionPoint(plan->insertionPoint);
     }
 
-    if (!lastOp) {
-      LLVM_DEBUG(llvm::dbgs() << "[Fusion] Could not find last op in cluster\n");
-      return;
-    }
-
-    // Create call after the last op
-    OpBuilder builder(lastOp);
-    builder.setInsertionPointAfter(lastOp);
-
-    auto callOp = mlir::func::CallOp::create(builder, lastOp->getLoc(), outlinedFunc, cluster.inputs);
+    auto callOp = mlir::func::CallOp::create(builder, plan->insertionPoint->getLoc(), outlinedFunc, cluster.inputs);
 
     // Replace uses of cluster outputs with call results
-    llvm::SmallPtrSet<Operation *, 16> clusterOpsSet;
-    for (Operation *op : cluster.ops) {
-      clusterOpsSet.insert(op);
-    }
     for (size_t i = 0; i < cluster.outputs.size(); ++i) {
       cluster.outputs[i].replaceAllUsesExcept(callOp.getResult(i), clusterOpsSet);
     }
 
     // Erase cluster operations in reverse order (last to first in block)
     SmallVector<Operation *> sortedOps(cluster.ops.begin(), cluster.ops.end());
-    std::sort(sortedOps.begin(), sortedOps.end(), [](Operation *a, Operation *b) {
-      return b->isBeforeInBlock(a);
-    });
+    std::sort(sortedOps.begin(), sortedOps.end(), [](Operation *a, Operation *b) { return safeIsBeforeInBlock(b, a); });
 
     for (Operation *op : sortedOps) {
       op->erase();
@@ -430,6 +645,10 @@ struct OutlineStablehloFusionRegionsPass
     ModuleOp module = getOperation();
 
     LLVM_DEBUG(llvm::dbgs() << "[Fusion] Running outline-stablehlo-fusion-regions pass\n");
+
+    // Pre-clean: remove dead Torch symbolic-shape modeling ops that only exist
+    // to carry metadata and would otherwise force multi-result clusters.
+    module.walk([&](FuncOp funcOp) { cleanupDeadTorchSymbolicShapeBinds(funcOp); });
 
     // Use configurable StableHLO fusion strategy.
     // Defaults keep existing behavior; options are provided via Passes.td.

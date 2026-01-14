@@ -23,6 +23,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
@@ -30,6 +31,7 @@
 #include "mlir/IR/Matchers.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
 #include "torch-mlir/Dialect/Torch/IR/TorchOps.h"
+#include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionDialect.h"
 #include "torch-mlir/Dialect/Torch/Utils/TorchUpstream.h"
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "torch-mlir/Dialect/TorchConversion/IR/TorchConversionOps.h"
@@ -48,6 +50,47 @@
 namespace {
 
 namespace TorchD = mlir::torch::Torch;
+namespace TorchC = mlir::torch::TorchConversion;
+
+//===----------------------------------------------------------------------===//
+// TorchConversion dialect bridging ops
+//===----------------------------------------------------------------------===//
+
+// The TorchConversion dialect contains "bridging" ops (torch_c.*) that adapt
+// Torch types to builtin types (e.g. !torch.vtensor -> tensor<...>) and vice
+// versa. In our pipeline, we convert both sides to MRT types, so these ops
+// become type-only artifacts and should be erased.
+
+/// Generic erasure for TorchConversion "bridge" ops that become pure no-ops
+/// after MRT type conversion.
+struct EraseTorchConversionNoOpBridge : public mlir::ConversionPattern {
+  EraseTorchConversionNoOpBridge(mlir::TypeConverter &typeConverter, mlir::MLIRContext *ctx)
+      : mlir::ConversionPattern(typeConverter, mlir::Pattern::MatchAnyOpTypeTag(), /*benefit=*/1, ctx) {}
+
+  mlir::LogicalResult matchAndRewrite(mlir::Operation *op, llvm::ArrayRef<mlir::Value> operands,
+                                      mlir::ConversionPatternRewriter &rewriter) const override {
+    if (!op) return mlir::failure();
+    if (op->getName().getDialectNamespace() != TorchC::TorchConversionDialect::getDialectNamespace()) {
+      return mlir::failure();
+    }
+
+    // Be conservative: only erase ops that MLIR considers memory-effect-free.
+    // This is more robust than relying on a specific OpTrait name across MLIR versions.
+    if (!mlir::isMemoryEffectFree(op)) return mlir::failure();
+    if (!op->getRegions().empty()) return mlir::failure();
+    if (op->getNumOperands() != 1 || operands.size() != 1) return mlir::failure();
+    if (op->getNumResults() != 1) return mlir::failure();
+
+    auto *tc = getTypeConverter();
+    if (!tc) return mlir::failure();
+    mlir::Type convertedResTy = tc->convertType(op->getResult(0).getType());
+    if (!convertedResTy) return mlir::failure();
+    if (operands[0].getType() != convertedResTy) return mlir::failure();
+
+    rewriter.replaceOp(op, operands[0]);
+    return mlir::success();
+  }
+};
 
 // Populate Torch-specific type conversions to MRT types
 void populateTorchToMrtTypeConversions(mlir::TypeConverter &converter) {
@@ -123,6 +166,7 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
 
   void getDependentDialects(mlir::DialectRegistry &registry) const override {
     registry.insert<TorchD::TorchDialect>();
+    registry.insert<TorchC::TorchConversionDialect>();
     registry.insert<mrt::MrtDialect>();
     registry.insert<mlir::func::FuncDialect>();
     registry.insert<mlir::pdl::PDLDialect>();
@@ -147,6 +191,9 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
     // TorchConversion ops
     patternList.add<TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::ToBuiltinTensorOp>,
                     TorchConversionOpToMrtPattern<mlir::torch::TorchConversion::FromBuiltinTensorOp>>(converter_, ctx);
+    // TorchConversion bridging ops (torch_c.*): erase generically when they become no-ops
+    // under MRT type conversion (see EraseTorchConversionNoOpBridge).
+    patternList.add<EraseTorchConversionNoOpBridge>(converter_, ctx);
 
     // Add a generic pattern to convert any remaining Torch operations to custom_call.
     mlir::populateCustomToMrtConversionPatterns(converter_, patternList);
@@ -161,8 +208,10 @@ struct ConvertTorchToMRTPass : public mlir::PassWrapper<ConvertTorchToMRTPass, m
 
     mlir::ConversionTarget target(*ctx);
     target.addIllegalDialect<TorchD::TorchDialect>();
-    target.addIllegalOp<mlir::torch::TorchConversion::ToBuiltinTensorOp,
-                        mlir::torch::TorchConversion::FromBuiltinTensorOp>();
+    // TorchConversion dialect contains bridging ops (torch_c.*). We require them
+    // to be eliminated here; leaving any torch_c op in the final module is a
+    // contract violation and should fail loudly.
+    target.addIllegalDialect<TorchC::TorchConversionDialect>();
     target.addLegalDialect<mrt::MrtDialect>();
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(

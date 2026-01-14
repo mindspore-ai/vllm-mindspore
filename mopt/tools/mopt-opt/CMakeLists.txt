@@ -12,6 +12,7 @@ set(LIBS
   MoptConversionStablehloToMrt
   MoptStablehloToDvm
   StablehloRegister
+  MoptFusionPasses
 )
 
 add_llvm_executable(mopt-opt

@@ -129,6 +129,225 @@ def test_dvm_call_mul_add_fused_staticshape_e2e():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_dvm_call_two_outputs_staticshape_e2e():
+    """
+    Feature: mrt.dvm_call (static shape, multi-output)
+    Description: Fused graph with two outputs:
+      out0 = x + y
+      out1 = x * y
+    Expectation: DVM kernel executes and returns a tuple(Tensor, Tensor) matching eager results.
+    """
+    if not torch.npu.is_available():
+        pytest.skip("Ascend NPU not available")
+
+    op_name = "dvm_two_outputs_staticshape_mock"
+    payload_json = '''{
+        "version": 1,
+        "kernel_type": "static_shape",
+        "instructions": [
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "Add"}},
+            {"op": "binary", "idx": 3, "inputs": [0, 1], "attrs": {"type": "Mul"}},
+            {"op": "store", "idx": 4, "inputs": [2], "attrs": {}},
+            {"op": "store", "idx": 5, "inputs": [3], "attrs": {}}
+        ],
+        "input_indices": [0, 1],
+        "output_indices": [4, 5]
+    }'''
+    register_dvm_op(op_name, payload_json)
+
+    lib = _get_mrt_dvm_lib()
+    lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
+
+    impl_name = f"mrt_dvm::{op_name}"
+
+    @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
+    def dvm_two_outputs_impl(x, y):
+        return (x + y, x * y)
+
+    @torch.library.register_fake(impl_name)
+    def dvm_two_outputs_fake(x, y):
+        return (torch.empty_like(x), torch.empty_like(x))
+
+    def test_func(x, y):
+        return torch.ops.mrt_dvm.dvm_two_outputs_staticshape_mock(x, y)
+
+    compiled_func = torch.compile(test_func, backend=backend)
+
+    x = torch.randn(4, 4, device="npu", dtype=torch.float16)
+    y = torch.randn(4, 4, device="npu", dtype=torch.float16)
+
+    out0, out1 = compiled_func(x, y)
+    torch.testing.assert_close(out0, x + y, rtol=1e-2, atol=1e-2)
+    torch.testing.assert_close(out1, x * y, rtol=1e-2, atol=1e-2)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
+    """
+    Feature: mrt.dvm_call multi-output output ordering.
+    Description: Construct a payload where store(Add) appears before store(Mul) in the instruction stream,
+    but output_indices order is [store(Mul), store(Add)]. This guards against mapping outputs by store
+    appearance order instead of payload.output_indices.
+    Expectation: Output tuple order follows payload.output_indices (out0==x*y, out1==x+y); no swap.
+    """
+    if not torch.npu.is_available():
+        pytest.skip("Ascend NPU not available")
+
+    op_name = "dvm_two_outputs_output_indices_order_guard_staticshape_mock"
+    payload_json = '''{
+        "version": 1,
+        "kernel_type": "static_shape",
+        "instructions": [
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "load", "idx": 1, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "binary", "idx": 2, "inputs": [0, 1], "attrs": {"type": "Add"}},
+            {"op": "binary", "idx": 3, "inputs": [0, 1], "attrs": {"type": "Mul"}},
+            {"op": "store", "idx": 4, "inputs": [2], "attrs": {}},
+            {"op": "store", "idx": 5, "inputs": [3], "attrs": {}}
+        ],
+        "input_indices": [0, 1],
+        "output_indices": [5, 4]
+    }'''
+    register_dvm_op(op_name, payload_json)
+
+    lib = _get_mrt_dvm_lib()
+    lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
+
+    impl_name = f"mrt_dvm::{op_name}"
+
+    @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
+    def dvm_two_outputs_impl(x, y):
+        # Must match payload.output_indices order: [Mul, Add]
+        return (x * y, x + y)
+
+    @torch.library.register_fake(impl_name)
+    def dvm_two_outputs_fake(x, y):
+        return (torch.empty_like(x), torch.empty_like(x))
+
+    def test_func(x, y):
+        return getattr(torch.ops.mrt_dvm, op_name)(x, y)
+
+    compiled_func = torch.compile(test_func, backend=backend)
+
+    x = torch.randn(4, 4, device="npu", dtype=torch.float16)
+    y = torch.randn(4, 4, device="npu", dtype=torch.float16)
+
+    out0, out1 = compiled_func(x, y)
+    torch.testing.assert_close(out0, x * y, rtol=1e-2, atol=1e-2)
+    torch.testing.assert_close(out1, x + y, rtol=1e-2, atol=1e-2)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
+    """
+    Feature: mrt.dvm_call multi-output output-shape ref selection for reshape/broadcast.
+    Description:
+      In multi-output graphs, reshape/broadcast need a *target output shape* (ShapeRef).
+      output_indices only defines which stored values map to outputs; it does NOT tell which output
+      shape a given intermediate op should use (because store produces a new value idx).
+      We extend schema with attrs.shape_ref (mutually exclusive fields) to explicitly bind
+      reshape/broadcast target shape source.
+    Expectation:
+      out0 == x.reshape(-1) (shape [m*k]), out1 == x (shape [m,k]).
+    """
+    if not torch.npu.is_available():
+        pytest.skip("Ascend NPU not available")
+
+    op_name = "dvm_two_outputs_shape_ref_out_pos_staticshape_mock"
+    payload_json = '''{
+        "version": 1,
+        "kernel_type": "static_shape",
+        "instructions": [
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "reshape", "idx": 1, "inputs": [0], "attrs": {"shape_ref": {"output_pos": 0}}},
+            {"op": "store", "idx": 2, "inputs": [1], "attrs": {}},
+
+            {"op": "load", "idx": 3, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "broadcast", "idx": 4, "inputs": [0], "attrs": {"shape_ref": {"output_pos": 1}}},
+            {"op": "store", "idx": 5, "inputs": [4], "attrs": {}}
+        ],
+        "input_indices": [0, 3],
+        "output_indices": [2, 5]
+    }'''
+    register_dvm_op(op_name, payload_json)
+
+    lib = _get_mrt_dvm_lib()
+    lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
+    impl_name = f"mrt_dvm::{op_name}"
+
+    @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
+    def impl(x, y):
+        # out0: flatten; out1: identity
+        return (x.reshape(-1), x)
+
+    @torch.library.register_fake(impl_name)
+    def fake(x, y):
+        # Shapes must match the intended outputs to provide correct ShapeRefs to DVM build.
+        return (torch.empty((x.numel(),), device=x.device, dtype=x.dtype), torch.empty_like(x))
+
+    def test_func(x, y):
+        return getattr(torch.ops.mrt_dvm, op_name)(x, y)
+
+    compiled_func = torch.compile(test_func, backend=backend)
+
+    x = torch.randn(2, 3, device="npu", dtype=torch.float16)
+    y = torch.randn(2, 3, device="npu", dtype=torch.float16)
+    out0, out1 = compiled_func(x, y)
+    torch.testing.assert_close(out0, x.reshape(-1), rtol=1e-2, atol=1e-2)
+    torch.testing.assert_close(out1, x, rtol=1e-2, atol=1e-2)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_dvm_call_shape_ref_const_dims_e2e():
+    """
+    Feature: mrt.dvm_call shape_ref const dims.
+    Description:
+      reshape target shape is a constant carried by payload (attrs.shape_ref.dims), i.e. not an output shape.
+    Expectation:
+      out == x.reshape(2, 3) for a 2x3 input.
+    """
+    if not torch.npu.is_available():
+        pytest.skip("Ascend NPU not available")
+
+    op_name = "dvm_shape_ref_const_dims_staticshape_mock"
+    payload_json = '''{
+        "version": 1,
+        "kernel_type": "static_shape",
+        "instructions": [
+            {"op": "load", "idx": 0, "inputs": [], "attrs": {"dtype": "f16"}},
+            {"op": "reshape", "idx": 1, "inputs": [0], "attrs": {"shape_ref": {"dims": [2, 3]}}},
+            {"op": "store", "idx": 2, "inputs": [1], "attrs": {}}
+        ],
+        "input_indices": [0],
+        "output_indices": [2]
+    }'''
+    register_dvm_op(op_name, payload_json)
+
+    lib = _get_mrt_dvm_lib()
+    lib.define(f"{op_name}(Tensor x) -> Tensor")
+    impl_name = f"mrt_dvm::{op_name}"
+
+    @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
+    def impl(x):
+        return x.reshape(2, 3)
+
+    @torch.library.register_fake(impl_name)
+    def fake(x):
+        return torch.empty((2, 3), device=x.device, dtype=x.dtype)
+
+    def test_func(x):
+        return getattr(torch.ops.mrt_dvm, op_name)(x)
+
+    compiled_func = torch.compile(test_func, backend=backend)
+
+    x = torch.randn(2, 3, device="npu", dtype=torch.float16)
+    out = compiled_func(x)
+    torch.testing.assert_close(out, x.reshape(2, 3), rtol=1e-2, atol=1e-2)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("m,k,n", [(1, 32, 256), (16, 128, 64)])
 def test_dvm_call_matmul_dynshape_e2e(m, k, n):
     """

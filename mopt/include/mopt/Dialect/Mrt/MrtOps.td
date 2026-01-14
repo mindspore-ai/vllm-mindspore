@@ -182,6 +182,32 @@ def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
   let genAclnnOp = "aclnnBitwiseNot";
 }
 
+def Mrt_BroadcastShapeOp : Mrt_Op<"broadcast_shape", [Pure]> {
+  let summary = "Compute broadcasted shape of two tensors";
+  let description = [{
+    Computes the broadcasted shape (as an i64 list) of two tensors following
+    standard broadcasting rules (PyTorch/NumPy style).
+
+    This is primarily used to preserve dynamic broadcast shape information when
+    lowering StableHLO dynamic_broadcast_in_dim graphs to MRT, so that the target
+    expand size is computed at runtime instead of being materialized as a constant
+    with dynamic sentinels.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$lhs,
+    MrtAnyTensor:$rhs
+  );
+
+  let results = (outs
+    Mrt_I64ArrayType:$out
+  );
+
+  let assemblyFormat = [{
+    $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
   let summary = "aclnnCast";
   let description = [{
@@ -463,8 +489,6 @@ def Mrt_ExpandOp : Mrt_Op<"expand", [Pure]> {
   let assemblyFormat = [{
     $self `,` $size attr-dict `:` functional-type(operands, results)
   }];
-
-  let genAclnnOp = "aclnnExpand";
 }
 
 def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
@@ -1336,6 +1360,27 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSigmoid";
+}
+
+def Mrt_ShapeOp : Mrt_Op<"shape", [Pure]> {
+  let summary = "Get tensor shape as i64 list";
+  let description = [{
+    Returns the runtime shape of a tensor as an i64 list (tuple).
+    This is a lightweight metadata op (host-side) and is used by dynamic-shape
+    lowering to preserve shape computation chains.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input
+  );
+
+  let results = (outs
+    Mrt_I64ArrayType:$shape
+  );
+
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type(operands, results)
+  }];
 }
 
 def Mrt_SizeOp : Mrt_Op<"size", [Pure]> {

@@ -89,8 +89,26 @@ struct DvmInstruction {
   int32_t aux_int;                     // Auxiliary parameter (opType/dtype/axis etc)
   bool aux_flags[kMaxAuxFlags];        // Boolean parameters (trans_a, trans_b, keepdims etc)
   std::vector<int64_t> aux_params;     // Variable-length params (reduce axes, transpose perms etc)
+  // Optional: target shape reference for shape-driven ops like reshape/broadcast.
+  //
+  // JSON schema:
+  //   "attrs": {
+  //     "shape_ref": {
+  //       "output_pos": <int>   // use output tuple position as target shape
+  //       OR
+  //       "input_pos":  <int>   // use input tensor position as target shape
+  //       OR
+  //       "dims": [<int>, ...]  // constant target shape
+  //     }
+  //   }
+  //
+  // Exactly one of (shape_ref_output_pos, shape_ref_input_pos, shape_ref_dims) should be specified.
+  int32_t shape_ref_output_pos;
+  int32_t shape_ref_input_pos;
+  std::vector<int64_t> shape_ref_dims;
 
-  DvmInstruction() : opcode(kLoad), result_idx(-1), aux_int(0) {
+  DvmInstruction()
+      : opcode(kLoad), result_idx(-1), aux_int(0), shape_ref_output_pos(-1), shape_ref_input_pos(-1), shape_ref_dims() {
     for (size_t i = 0; i < kMaxOperands; ++i) {
       operand_idxs[i] = -1;
     }

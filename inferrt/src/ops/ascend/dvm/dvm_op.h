@@ -75,8 +75,8 @@ class DvmOp : public Operator {
   // persistent ShapeRef pointers owned by DvmKernelExecutor into buildFunc.
   using BuildFunc = std::function<void(dvm::Kernel &, const std::vector<const ir::Value *> &, const ir::Value *,
                                        const std::vector<dvm::ShapeRef *> & /*inputShapeRefs*/,
-                                       const dvm::ShapeRef * /*outputShapeRef*/, std::vector<dvm::NDObject *> *,
-                                       std::vector<dvm::NDObject *> *)>;
+                                       const std::vector<dvm::ShapeRef *> & /*outputShapeRefs*/,
+                                       std::vector<dvm::NDObject *> *, std::vector<dvm::NDObject *> *)>;
 
   /**
    * @brief Construct DVM operator

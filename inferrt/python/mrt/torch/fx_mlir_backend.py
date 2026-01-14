@@ -20,6 +20,10 @@ This module provides:
 """
 
 import os
+import io
+import re
+import datetime
+from contextlib import redirect_stdout
 from collections import namedtuple
 from dataclasses import dataclass
 from typing import Mapping, Optional
@@ -39,6 +43,36 @@ from mrt.torch._executor_builder import ExecutorBuilder
 def _is_print_ir_enabled() -> bool:
     return os.environ.get("MOPT_PRINT_IR") == "1"
 
+def _sanitize_filename(s: str) -> str:
+    s = s.strip().lower()
+    s = re.sub(r"\s+", "_", s)
+    s = re.sub(r"[^a-z0-9_.-]+", "_", s)
+    s = re.sub(r"_+", "_", s)
+    return s[:180] if len(s) > 180 else s
+
+
+class _DumpContext:
+    """Per-compilation dump manager (stores per-stage IR/graphs to disk)."""
+
+    def __init__(self, root_dir: str):
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = os.path.join(os.path.abspath(root_dir), f"run_{ts}_pid{os.getpid()}")
+        os.makedirs(run_dir, exist_ok=True)
+        self.run_dir = run_dir
+        self._counter = 0
+        self._index_path = os.path.join(run_dir, "index.txt")
+
+    def dump_text(self, stage_title: str, text: str, *, ext: str):
+        self._counter += 1
+        base = f"{self._counter:02d}_{_sanitize_filename(stage_title)}"
+        path = os.path.join(self.run_dir, f"{base}.{ext}")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
+        with open(self._index_path, "a", encoding="utf-8") as f:
+            f.write(f"{self._counter:02d}\t{stage_title}\t{os.path.basename(path)}\n")
+
 
 @dataclass(frozen=True)
 class BackendOptions:
@@ -51,6 +85,8 @@ class BackendOptions:
     print_ir: bool
     # Default fusion lowering is mrt.dvm_call. Set env var to opt into linalg_call.
     enable_linalg_call: bool
+    # If set, dump IR/graphs of each stage to files under this directory.
+    dump_dir: Optional[str]
 
     @staticmethod
     def _flag(env: Mapping[str, str], name: str, default: bool = False) -> bool:
@@ -67,10 +103,19 @@ class BackendOptions:
         return cls(
             print_ir=cls._flag(env, "MOPT_PRINT_IR", default=False),
             enable_linalg_call=cls._flag(env, "MOPT_ENABLE_LINALG_CALL", default=False),
+            dump_dir=env.get("MOPT_DUMP_DIR"),
         )
 
 
-def _print_verbose(stage_title: str, content=None, dump_func=None, *, enabled: Optional[bool] = None):
+def _print_verbose(
+    stage_title: str,
+    content=None,
+    dump_func=None,
+    *,
+    enabled: Optional[bool] = None,
+    dump_ctx: Optional[_DumpContext] = None,
+    dump_ext: Optional[str] = None,
+):
     """Print verbose information with formatting.
 
     Args:
@@ -78,7 +123,23 @@ def _print_verbose(stage_title: str, content=None, dump_func=None, *, enabled: O
         content: Content to print (if provided)
         dump_func: Optional callable that prints to stdout (if provided, called after printing content)
         enabled: If set, overrides MOPT_PRINT_IR.
+        dump_ctx: If set, dump stage content to files.
+        dump_ext: File extension hint for dumping (e.g., "mlir", "txt").
     """
+    # Always dump if dump_ctx is provided (independent of print flag).
+    if dump_ctx is not None:
+        parts = []
+        if content is not None:
+            parts.append(str(content))
+        if dump_func is not None:
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                dump_func()
+            parts.append(buf.getvalue())
+        text = "\n".join(p for p in parts if p is not None and p != "")
+        ext = dump_ext or ("mlir" if content is not None else "txt")
+        dump_ctx.dump_text(stage_title, text, ext=ext)
+
     if enabled is None:
         enabled = _is_print_ir_enabled()
     if not enabled:
@@ -93,12 +154,16 @@ def _print_verbose(stage_title: str, content=None, dump_func=None, *, enabled: O
     print()
 
 
-def _run_pipeline(mlir_module, pass_manager, pipeline: str, *, stage: str, verbose: bool):
+def _run_pipeline(
+    mlir_module, pass_manager, pipeline: str, *, stage: str, verbose: bool, dump_ctx: Optional[_DumpContext]
+):
     """Run an MLIR pass pipeline and optionally dump the IR."""
     with mlir_module.context:
         pm = pass_manager.parse(pipeline)
         pm.run(mlir_module.operation)
-    _print_verbose(stage, mlir_module, enabled=verbose)
+    if dump_ctx is not None:
+        dump_ctx.dump_text(f"{stage} (pipeline)", pipeline, ext="pipeline.txt")
+    _print_verbose(stage, mlir_module, enabled=verbose, dump_ctx=dump_ctx, dump_ext="mlir")
 
 
 def _pipeline_outline_stablehlo_fusion_regions(*, enable_dvm_call: bool) -> str:
@@ -207,12 +272,20 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
     Environment Variables:
         MOPT_PRINT_IR: Set to 1 to print IR at each stage
         MOPT_ENABLE_LINALG_CALL: Set to 1 to lower outlined fusion regions to mrt.linalg_call (default is mrt.dvm_call)
+        MOPT_DUMP_DIR: If set, dump per-stage IR/graphs to this directory.
     """
     opts = BackendOptions.from_env()
+    dump_ctx = _DumpContext(opts.dump_dir) if opts.dump_dir else None
     get_collective_info_from_torch(gm)
     set_device_context()
 
-    _print_verbose("Original FX Graph", dump_func=gm.print_readable, enabled=opts.print_ir)
+    _print_verbose(
+        "Original FX Graph",
+        dump_func=gm.print_readable,
+        enabled=opts.print_ir,
+        dump_ctx=dump_ctx,
+        dump_ext="fx.txt",
+    )
 
     # Apply decompositions to FX GraphModule
     fake_inputs = [
@@ -221,7 +294,13 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
         if node.op == "placeholder"
     ]
     m = apply_decompositions(gm, fake_inputs)
-    _print_verbose("FX Graph After Decompositions", dump_func=m.print_readable, enabled=opts.print_ir)
+    _print_verbose(
+        "FX Graph After Decompositions",
+        dump_func=m.print_readable,
+        enabled=opts.print_ir,
+        dump_ctx=dump_ctx,
+        dump_ext="fx.txt",
+    )
 
     # Convert FX GraphModule to torch dialect MLIR module.
     # We re-parse the MLIR text here to let mopt use its own MLIR context,
@@ -232,7 +311,13 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
     # later operations and resources are managed in mopt's context.
     mlir_module = _convert_to_torch_mlir(m)
     mlir_module = _parse_mlir_module_from_text(str(mlir_module))
-    _print_verbose("Torch-MLIR Raw Module (Re-parsed)", mlir_module, enabled=opts.print_ir)
+    _print_verbose(
+        "Torch-MLIR Raw Module (Re-parsed)",
+        mlir_module,
+        enabled=opts.print_ir,
+        dump_ctx=dump_ctx,
+        dump_ext="mlir",
+    )
 
     # Run pass pipeline to convert torch_mlir RAW to TORCH backend
     # pylint: disable=import-outside-toplevel
@@ -246,6 +331,28 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
             pipeline,
             stage=stage,
             verbose=opts.print_ir,
+            dump_ctx=dump_ctx,
+        )
+
+    def _pipeline_partial_torch_to_stablehlo_for_fusion() -> str:
+        """Phase 1: Torch Backend -> Partial StableHLO (keep non-fusible Torch ops for later Torch->MRT)."""
+        return (
+            "builtin.module(func.func("
+            "convert-torch-to-stablehlo,"
+            "propagate-torch-symbolic-shape,"
+            "chlo-legalize-to-stablehlo,"
+            "canonicalize,cse"
+            "))"
+        )
+
+    def _pipeline_prepare_stablehlo_for_fusion_dynamic_shape() -> str:
+        """Phase 2: Cleanup dynamic-shape artifacts so fusion/outlining can see clean compute chains."""
+        return (
+            "builtin.module(func.func("
+            "remove-shape-constraints,"
+            "remove-redundant-dynamic-broadcast,"
+            "canonicalize"
+            "))"
         )
 
     # ===== Conversion Pipeline =====
@@ -267,49 +374,63 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
 
     # Check if any op is marked. If not, skip StableHLO conversion entirely.
     if _has_fusible_ops(mlir_module):
-        # Torch Backend -> StableHLO
+        # ===== Fusion Pipeline =====
+        # We intentionally do NOT run the full torch-backend-to-stablehlo-backend-pipeline
+        # because that pipeline enforces full StableHLO backend contract (no Torch ops).
+        # Here we only lower the subset of ops marked by whitelist that can be converted
+        # to StableHLO for fusion, while leaving non-fusible Torch ops (including symbolic
+        # shape modeling ops) to be handled later by Torch->MRT.
+
+        # Phase 1: Torch Backend -> Partial StableHLO
+        # - convert-torch-to-stablehlo: Lower fusible Torch ops to StableHLO/CHLO
+        # - propagate-torch-symbolic-shape: Propagate symbolic shape metadata onto tensor producers
+        # - chlo-legalize-to-stablehlo: Lower CHLO ops to StableHLO
         run_pipeline(
-            "builtin.module(torch-backend-to-stablehlo-backend-pipeline)",
-            stage="StableHLO IR (from whitelisted ops)",
+            _pipeline_partial_torch_to_stablehlo_for_fusion(),
+            stage="StableHLO IR (partial)",
         )
 
-        # Fusion pipeline:
-        # Outline fusible regions (DVM-call mode enables advanced outlining).
+        # Phase 2: Prepare for fusion by cleaning up dynamic shape artifacts
+        # - remove-shape-constraints: Replace shape.cstr_* with const_witness(true)
+        # - remove-redundant-dynamic-broadcast: Eliminate no-op broadcasts using symbolic shape info
+        # - canonicalize: Inline shape.assuming regions (AssumingWithTrue pattern)
+        run_pipeline(
+            _pipeline_prepare_stablehlo_for_fusion_dynamic_shape(),
+            stage="StableHLO IR (ready for fusion)",
+        )
+
+        # Phase 3: Outline fusible regions into separate functions
         use_dvm_outline = not opts.enable_linalg_call
         run_pipeline(
             _pipeline_outline_stablehlo_fusion_regions(enable_dvm_call=use_dvm_outline),
-            stage="StableHLO After Outlining Fusion Regions",
+            stage="StableHLO (after fusion outlining)",
         )
 
+        # Phase 4: Convert outlined fusion regions to runtime calls
         if opts.enable_linalg_call:
-            # Prepare outlined fusion calls:
-            # - Serialize outlined fusion functions to Linalg MLIR text (with hacc.entry / hacc.function_kind<HOST>)
-            # - Annotate corresponding func.call ops with the serialized text
-            # - convert to mrt.linalg_call.
             run_pipeline(
                 "builtin.module(convert-outlined-fusion-call,symbol-dce)",
-                stage="After Annotating Outlined Fusion Calls",
+                stage="After converting to linalg_call",
             )
         else:
-            # Alternative lowering for outlined StableHLO clusters:
-            # StableHLO (outlined) -> DVM -> mrt.dvm_call (payload JSON)
             run_pipeline(
                 "builtin.module(convert-stablehlo-to-dvm,convert-dvm-to-mrt-dvm-call,symbol-dce)",
-                stage="After Converting Outlined Regions to mrt.dvm_call",
+                stage="After converting to dvm_call",
             )
 
-        # Convert remaining StableHLO to MRT dialect
+        # Phase 5: Convert remaining StableHLO ops to MRT dialect
         run_pipeline(
             "builtin.module(convert-stablehlo-to-mrt)",
-            stage="MRT Dialect Module (after convert-stablehlo-to-mrt)",
+            stage="After convert-stablehlo-to-mrt",
         )
 
-    # Convert remaining Torch backend ops to MRT dialect.
+    # ===== Final Conversion =====
+    # Convert remaining Torch backend ops to MRT dialect and reconcile type casts.
     # This is always needed: in fusion mode, StableHLO conversion only covers a subset of ops,
     # so the module can still contain Torch backend dialect operations.
     run_pipeline(
         "builtin.module(convert-torch-to-mrt,reconcile-unrealized-casts,canonicalize)",
-        stage="MRT Dialect Module (after convert-torch-to-mrt)",
+        stage="MRT Dialect Module",
     )
 
     # Run pass with device information via PassOptions
@@ -322,7 +443,13 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
 
     # Build MRT dialect module into GraphExecutor
     executor, param_nodes = ExecutorBuilder().build(mlir_module, fake_inputs)
-    _print_verbose("Executor Graph", dump_func=executor.dump_graph, enabled=opts.print_ir)
+    _print_verbose(
+        "Executor Graph",
+        dump_func=executor.dump_graph,
+        enabled=opts.print_ir,
+        dump_ctx=dump_ctx,
+        dump_ext="executor.txt",
+    )
 
     # Create compiled callable from GraphExecutor
     executor.build()

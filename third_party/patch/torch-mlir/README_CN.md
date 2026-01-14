@@ -170,3 +170,21 @@ Torch-MLIR 默认会在形状、dtype 全确定时将这些算子折叠为 `Dens
 - `lib/Dialect/TorchConversion/Transforms/BackendTypeConversionPasses.cpp`
 - `lib/Dialect/TorchConversion/Transforms/Passes.cpp`
 - `lib/Dialect/TorchConversion/Transforms/VerifyStablehloBackendContract.cpp`
+
+### 009-allow-symbolic-shape-ops-in-torch-to-stablehlo.patch
+
+**描述：**
+允许 `convert-torch-to-stablehlo` 在转换过程中保留 TorchDynamo 的符号形状建模算子（`torch.symbolic_int` / `torch.bind_symbolic_shape`），用于"部分 Torch→StableHLO（做融合/outline）+ 剩余 Torch→MRT"的混合路径。
+
+**问题：**
+当 FX Importer 导入符号 shape 表达式时，Torch dialect 会出现 `torch.symbolic_int`。默认的 Torch→StableHLO 转换会尝试完全消除 Torch dialect，导致在 fusion 路径中直接报错 `failed to legalize operation 'torch.symbolic_int'`。
+
+**解决方案：**
+
+- 将 `torch.symbolic_int` 与 `torch.bind_symbolic_shape` 标记为合法 op，允许它们在 `convert-torch-to-stablehlo` 之后继续存在
+- 上层编译流程可以对可融合子图进行 StableHLO outlining/fusion，而符号形状与剩余 Torch op 留给后续 `convert-torch-to-mrt` 处理
+
+**修改的文件：**
+
+- `lib/Conversion/TorchToStablehlo/TorchToStablehlo.cpp`
+
