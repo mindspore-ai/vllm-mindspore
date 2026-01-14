@@ -208,7 +208,7 @@ def test_grouped_matmul_dynamic(pipeline, monkeypatch):
     x1 = torch.randn(size=(1792, 256), dtype=torch.float16)
     weight1 = torch.randn(size=(3, 256, 128), dtype=torch.float16)
     bias1 = torch.randn(size=(3, 128), dtype=torch.float16)
-    group_list_npu = torch.cumsum(torch.tensor([256, 1280, 1792]), dim=0).npu()
+    group_list_npu = torch.tensor([256, 1280, 1792]).npu()
     split_item = 3
 
     compiled_func = get_op_func_compiled()
@@ -221,7 +221,7 @@ def test_grouped_matmul_dynamic(pipeline, monkeypatch):
     x2 = torch.randn(size=(256, 256), dtype=torch.float16)
     weight2 = torch.randn(size=(3, 256, 256), dtype=torch.float16)
     bias2 = torch.randn(size=(3, 256), dtype=torch.float16)
-    group_list_npu = torch.cumsum(torch.tensor([64, 128, 256]), dim=0).npu()
+    group_list_npu = torch.tensor([64, 128, 256]).npu() 
     output2 = compiled_func([x2.clone().npu()], [weight2.clone().npu()], bias=[bias2.clone().npu()],
                             group_list=group_list_npu, split_item=split_item, group_type=0, tuning_config = [256])
     expected2 = grouped_matmul_func([x2.clone().npu()], [weight2.clone().npu()], bias=[bias2.clone().npu()], 

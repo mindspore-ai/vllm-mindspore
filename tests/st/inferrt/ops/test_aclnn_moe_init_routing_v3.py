@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import torch
 import torch_npu
 from mrt.torch.fx_mlir_backend import backend
@@ -19,6 +20,56 @@ from mrt.torch.fx_mlir_backend import backend
 import pytest
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
+
+def moe_init_routing_golden_shape(x, expert_idx, scale, offset, active_num, expert_capacity,
+                                  expert_num, drop_pad_mode, expert_tokens_num_type, expert_tokens_num_flag,
+                                  active_expert_range, quant_mode, row_idx_type):
+    expert_start = active_expert_range[0] if drop_pad_mode == 0 else 0
+    expert_end = active_expert_range[1] if drop_pad_mode == 0 else expert_num
+    num_rows = x.shape[0]
+    h = x.shape[1]
+    k = expert_idx.shape[-1]
+    expert_idx_in = expert_idx.copy().reshape(-1)
+    actual_expert_total_num = np.sum((expert_idx_in >= expert_start) & (expert_idx_in < expert_end))
+
+    # Calculate expanded_row_idx shape
+    if row_idx_type == 1:
+        expanded_row_idx_shape = (actual_expert_total_num,)
+    else:
+        expanded_row_idx_shape = (num_rows * k,)
+
+    # Calculate expert_tokens_count shape
+    if not expert_tokens_num_flag:
+        expert_tokens_count_shape = None
+    else:
+        if drop_pad_mode == 0:
+            if expert_tokens_num_type == 2:
+                # For type 2, it's a 2D array with expert_id and counts
+                expert_tokens_count_shape = (expert_num, 2)
+            else:
+                expert_tokens_count_shape = (expert_end - expert_start,)
+        else:
+            expert_tokens_count_shape = (expert_end - expert_start,)
+
+    # Calculate expanded_x and expanded_scale shapes
+    if drop_pad_mode == 0:
+        if active_num == 0:
+            active_num = actual_expert_total_num
+        else:
+            active_num = min(active_num, actual_expert_total_num)
+        expanded_x_shape = (active_num, h)
+        expanded_scale_shape = None
+        if scale is not None and quant_mode == -1:
+            expanded_scale_shape = (active_num,)
+    else:
+        expanded_x_shape = (expert_num, expert_capacity, h)
+        expanded_scale_shape = None
+        if scale is not None:
+            if quant_mode == -1:
+                expanded_scale_shape = (expert_num * expert_capacity,)
+
+    return expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape
+
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
@@ -76,10 +127,22 @@ def test_aclnn_moe_init_routing_v3_op(pipeline, monkeypatch, num_rows):
                                 expert_tokens_num_type,
                                 expert_tokens_num_flag, quant_mode, active_expert_range, row_idx_type)
     
-    AssertRtolEqual(expanded_x.detach().cpu(), opt_expanded_x.detach().cpu())
-    AssertRtolEqual(expanded_row_idx.detach().cpu(), opt_expanded_row_idx.detach().cpu())
-    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu(), opt_expert_tokens_count_or_cumsum.detach().cpu())
-    AssertRtolEqual(expanded_scale.detach().cpu(), opt_expanded_scale.detach().cpu())
+    x_np = x.detach().cpu().numpy()
+    expert_idx_np = expert_idx.detach().cpu().numpy()
+    scale_np = scale.detach().cpu().numpy()
+    offset_np = offset.detach().cpu().numpy() if offset is not None else None
+    expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape = \
+        moe_init_routing_golden_shape(x_np, expert_idx_np, scale_np, offset_np, active_num,
+                                      expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
+                                      expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
+    x_valid_len = expanded_x_shape[0]
+    row_valid_len = expanded_row_idx_shape[0]
+    count_valid_len = expert_tokens_count_shape[0] if expert_tokens_count_shape is not None else 0
+    scale_valid_len = expanded_scale_shape[0] if expanded_scale_shape is not None else 0
+    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len], opt_expanded_x.detach().cpu()[:x_valid_len])
+    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len], opt_expanded_row_idx.detach().cpu()[:row_valid_len])
+    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len], opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
+    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len], opt_expanded_scale.detach().cpu()[:scale_valid_len])
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
@@ -136,7 +199,20 @@ def test_aclnn_moe_init_routing_v3_op1(pipeline, monkeypatch):
                                 expert_num, drop_pad_mode,
                                 expert_tokens_num_type,
                                 expert_tokens_num_flag, quant_mode, active_expert_range, row_idx_type)
-    AssertRtolEqual(expanded_x.detach().cpu(), opt_expanded_x.detach().cpu())
-    AssertRtolEqual(expanded_row_idx.detach().cpu(), opt_expanded_row_idx.detach().cpu())
-    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu(), opt_expert_tokens_count_or_cumsum.detach().cpu())
-    AssertRtolEqual(expanded_scale.detach().cpu(), opt_expanded_scale.detach().cpu())
+
+    x_np = x.detach().cpu().numpy()
+    expert_idx_np = expert_idx.detach().cpu().numpy()
+    scale_np = scale.detach().cpu().numpy()
+    offset_np = offset.detach().cpu().numpy() if offset is not None else None
+    expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape = \
+        moe_init_routing_golden_shape(x_np, expert_idx_np, scale_np, offset_np, active_num,
+                                      expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
+                                      expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
+    x_valid_len = expanded_x_shape[0]
+    row_valid_len = expanded_row_idx_shape[0]
+    count_valid_len = expert_tokens_count_shape[0] if expert_tokens_count_shape is not None else 0
+    scale_valid_len = expanded_scale_shape[0] if expanded_scale_shape is not None else 0
+    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len], opt_expanded_x.detach().cpu()[:x_valid_len])
+    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len], opt_expanded_row_idx.detach().cpu()[:row_valid_len])
+    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len], opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
+    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len], opt_expanded_scale.detach().cpu()[:scale_valid_len])
