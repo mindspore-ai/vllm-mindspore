@@ -20,9 +20,11 @@
 #include <utility>
 
 #ifdef ENABLE_TORCH_NPU
+#include "acl/acl.h"
 #include "torch_npu/csrc/aten/common/from_blob.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "torch_npu/csrc/core/npu/NPUFormat.h"
+#include "torch_npu/csrc/core/NPUStorageImpl.h"
 #endif
 
 #include "hardware/hardware_abstract/device_context.h"
@@ -66,6 +68,36 @@ static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap =
   {ir::DataType::Type::UInt8, at::kByte},
   {ir::DataType::Type::Bool, at::kBool},
 };
+
+#ifdef ENABLE_TORCH_NPU
+inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
+  static const std::map<ir::MemoryFormat, aclFormat> kMemoryFormatToAclFormatMap = {
+    {ir::MemoryFormat::FORMAT_UNDEFINED, ACL_FORMAT_UNDEFINED},
+    {ir::MemoryFormat::FORMAT_NCHW, ACL_FORMAT_NCHW},
+    {ir::MemoryFormat::FORMAT_NHWC, ACL_FORMAT_NHWC},
+    {ir::MemoryFormat::FORMAT_ND, ACL_FORMAT_ND},
+    {ir::MemoryFormat::FORMAT_NC1HWC0, ACL_FORMAT_NC1HWC0},
+    {ir::MemoryFormat::FORMAT_FRACTAL_Z, ACL_FORMAT_FRACTAL_Z},
+    {ir::MemoryFormat::FORMAT_NC1HWC0_C04, ACL_FORMAT_NC1HWC0_C04},
+    {ir::MemoryFormat::FORMAT_HWCN, ACL_FORMAT_HWCN},
+    {ir::MemoryFormat::FORMAT_NDHWC, ACL_FORMAT_NDHWC},
+    {ir::MemoryFormat::FORMAT_FRACTAL_NZ, ACL_FORMAT_FRACTAL_NZ},
+    {ir::MemoryFormat::FORMAT_NCDHW, ACL_FORMAT_NCDHW},
+    {ir::MemoryFormat::FORMAT_NDC1HWC0, ACL_FORMAT_NDC1HWC0},
+    {ir::MemoryFormat::FORMAT_FRACTAL_Z_3D, ACL_FRACTAL_Z_3D},
+    {ir::MemoryFormat::FORMAT_NC, ACL_FORMAT_NC},
+    {ir::MemoryFormat::FORMAT_NCL, ACL_FORMAT_NCL},
+  };
+
+  auto iter = kMemoryFormatToAclFormatMap.find(format);
+  if (iter == kMemoryFormatToAclFormatMap.end()) {
+    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    return ACL_FORMAT_UNDEFINED;
+  }
+
+  return iter->second;
+}
+#endif
 
 ir::DataType FromTorchDType(const at::ScalarType &type) {
   auto iter = kAtScalarTypeToDataTypeMap.find(type);
@@ -190,29 +222,29 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     return at::empty(tensor->Shape(), options);
   }
 
-  std::vector<int64_t> strides;
-  if (tensor->Strides().empty() && !tensor->Shape().empty()) {
-    // Create default strides for contiguous tensor
-    strides = tensor->Shape();
-    if (!strides.empty()) {
-      strides.erase(strides.begin());
-    }
-    strides.push_back(1);
-    for (int i = static_cast<int>(strides.size()) - 2; i >= 0; i--) {
-      strides[i] = strides[i] * strides[i + 1];
-    }
-  } else {
-    strides = tensor->Strides();
-  }
-
   switch (atDevice.type()) {
-    case at::DeviceType::CPU:
-      return at::from_blob(dataPtr, tensor->Shape(), strides, std::move(deleter), options);
+    case at::DeviceType::CPU: {
+      if (tensor->Strides().empty()) {
+        return at::from_blob(dataPtr, tensor->Shape(), std::move(deleter), options);
+      }
+      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+    }
 #ifdef ENABLE_TORCH_NPU
-    case at::DeviceType::PrivateUse1:
-      return at_npu::native::from_blob(
-        static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()), tensor->Shape(), strides,
-        0, std::move(deleter), options);
+    case at::DeviceType::PrivateUse1: {
+      at::Tensor out;
+      if (tensor->Strides().empty()) {
+        out = at_npu::native::from_blob(
+          static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()), tensor->Shape(),
+          std::move(deleter), options);
+      } else {
+        out = at_npu::native::from_blob(
+          static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()), tensor->Shape(),
+          tensor->Strides(), 0, std::move(deleter), options);
+      }
+      auto &desc = static_cast<torch_npu::NPUStorageImpl *>(out.storage().unsafeGetStorageImpl())->npu_desc_;
+      desc.npu_format_ = ConvertMemoryFormatToAclFormat(tensor->Format());
+      return out;
+    }
 #endif
     default:
       LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();

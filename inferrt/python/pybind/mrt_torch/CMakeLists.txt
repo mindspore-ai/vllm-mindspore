@@ -5,6 +5,14 @@ pybind11_add_module(_mrt_torch NO_EXTRAS pybind11_torch.cc)
 target_link_libraries(_mrt_torch PUBLIC inferrt ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 
 if(ENABLE_ASCEND)
+  if(DEFINED ENV{ASCEND_CUSTOM_PATH})
+  set(ASCEND_PATH $ENV{ASCEND_CUSTOM_PATH})
+  else()
+      set(ASCEND_PATH /usr/local/Ascend)
+  endif()
+
+  include_directories(${ASCEND_PATH}/latest/include/)
+
   add_compile_definitions(ENABLE_TORCH_NPU)
   include_directories(${TORCH_NPU_INCLUDE})
   target_link_directories(_mrt_torch PRIVATE ${TORCH_NPU_LIB_PATH})
