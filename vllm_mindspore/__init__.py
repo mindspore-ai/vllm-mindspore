@@ -209,6 +209,11 @@ vllm.model_executor.model_loader.default_loader.safetensors_weights_iterator = (
 vllm.model_executor.model_loader.weight_utils.get_quantization_config = (
     get_quantization_config)
 
+# Import golden_stick module to trigger sparse quantization support setup
+# The setup is done automatically in golden_stick/__init__.py
+from vllm_mindspore.model_executor.layers.quantization.golden_stick import (  # noqa: F401
+    GoldenStickConfig, ModelSlimConfig)
+
 from vllm_mindspore.executor.multiproc_worker_utils import (
     get_mp_context as ms_get_mp_context, )
 
@@ -341,7 +346,7 @@ from vllm_mindspore.v1.worker.gpu_model_runner import _get_num_input_tokens
 
 vllm.v1.worker.gpu_model_runner.GPUModelRunner.capture_model = capture_model
 vllm.v1.worker.gpu_model_runner.GPUModelRunner._get_num_input_tokens \
-                                                    = _get_num_input_tokens
+    = _get_num_input_tokens
 
 import vllm.v1.worker.block_table
 from vllm_mindspore.v1.worker.block_table import BlockTable__init__
@@ -417,7 +422,7 @@ import vllm.distributed.device_communicators.base_device_communicator
 
 vllm.distributed.device_communicators.base_device_communicator.\
     DeviceCommunicatorBase.prepare_communication_buffer_for_model = \
-        lambda self, model : None
+        lambda self, model: None
 
 from vllm_mindspore.v1.worker.gpu_worker import compile_or_warm_up_model
 
@@ -472,7 +477,7 @@ _ModelRegistry.inspect_model_cls = inspect_model_cls
 _ModelRegistry.resolve_model_cls = resolve_model_cls
 
 if is_dispatch_req_only_by_p0_for_dp:
-    # In v0.9.1, new requests were dispatched based on the processing status
+    # New requests are dispatched based on the processing status
     # reported by each EngineCore (p1) for previously published requests.
     # This approach was sensitive to inter-process latency, which led to load
     # imbalance and degraded performance. By recording request-processing status
