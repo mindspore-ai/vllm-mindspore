@@ -207,17 +207,25 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     storage = CopyStorage(storage);
   }
 
-  void *dataPtr = storage->Release();
+  void *dataPtr = storage->Data();
   CHECK_IF_NULL(dataPtr);
-  auto deleter = storage->GetDeleter();
-  if (deleter == nullptr) {
+  auto deleterFn = storage->GetDeleter();
+  std::function<void(void *)> deleter;
+  if (deleterFn == nullptr) {
     auto allocator = storage->GetAllocator();
     deleter = [allocator, dataPtr](void *) {
       if (dataPtr != nullptr) {
         allocator.Free(dataPtr);
       }
     };
+  } else {
+    deleter = [deleterFn, dataPtr](void *) {
+      if (dataPtr != nullptr) {
+        deleterFn(dataPtr);
+      }
+    };
   }
+  storage->Release();
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);

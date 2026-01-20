@@ -394,10 +394,11 @@ void Executor::Run(bool isDynamic) {
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
       LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
+    opRunner.AllocateMemory();
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
       LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
-    opRunner.AllocateMemory();
+    opRunner.AllocateWorkspaceMemory();
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
       LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
