@@ -55,6 +55,8 @@ def vllm_config_get_quantization_config(model_config, load_config):
 
 def vllm_config_post_init(self):
     """Verify configs are valid & consistent with each other."""
+    self.try_verify_and_update_config()
+
     if self.model_config is not None:
         self.model_config.verify_with_parallel_config(self.parallel_config)
 

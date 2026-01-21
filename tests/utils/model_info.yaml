@@ -102,3 +102,6 @@ Qwen3-32B-gs-A8W8:
   description: "Qwen3-32B with golden stick A8W8 quantilization, source from https://modelers.cn/models/MindSpore-Lab/Qwen3-32B-gs-A8W8"
   archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-32B-gs-A8W8"
   
+Qwen3-Reranker-0.6B:
+  description: "Qwen3-Reranker-0.6B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-Reranker-0.6B"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-Reranker-0.6B" 

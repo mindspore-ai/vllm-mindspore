@@ -21,5 +21,5 @@
 import mindspore as ms
 
 
-def ms_forward_chunk(self, pooled_data: ms.Tensor) -> ms.Tensor:
+def forward_chunk(self, pooled_data: ms.Tensor) -> ms.Tensor:
     return ms.mint.nn.functional.normalize(pooled_data, p=2, dim=-1)
