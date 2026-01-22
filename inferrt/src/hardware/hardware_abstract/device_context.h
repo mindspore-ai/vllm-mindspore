@@ -41,6 +41,8 @@ enum class KernelTaskType;
 }
 namespace device {
 using BindStreamFunc = std::function<void()>;
+using AllocateFunc = std::function<void *(size_t)>;
+using DeleteFunc = std::function<void(void *)>;
 constexpr size_t kSizeZero = 0;
 
 struct MRT_EXPORT DeviceContextKey {
@@ -207,6 +209,10 @@ class MRT_EXPORT DeviceResManager {
   // supported in graph mode.
   virtual bool singleOpMultiStreamEnable() const { return false; }
   virtual void set_single_op_multi_stream_enable(bool singleOpMultiStreamEnable) {}
+
+  virtual void SetAllocator(const AllocateFunc &allocator) {}
+
+  virtual void SetDeleter(const DeleteFunc &deleter) {}
 
   // Get the stream pointer by streamId.
   virtual void *GetStream(size_t streamId) const { return nullptr; }

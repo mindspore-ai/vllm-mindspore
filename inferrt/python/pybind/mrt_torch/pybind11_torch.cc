@@ -25,6 +25,7 @@
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include "torch_npu/csrc/core/npu/NPUFormat.h"
 #include "torch_npu/csrc/core/NPUStorageImpl.h"
+#include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
 #endif
 
 #include "hardware/hardware_abstract/device_context.h"
@@ -298,6 +299,18 @@ void SetDeviceContext() {
   auto currentStream = currentNPUStream.stream();
   CHECK_IF_NULL(currentStream);
   deviceContext->deviceResManager_->SetCurrentStream(currentStream);
+  auto ascend_allocator = [](size_t size) -> void * {
+    void *cur_alloc = c10_npu::NPUCachingAllocator::raw_alloc(size);
+    LOG_OUT << "Memory allocated via PyTorch, new addr: " << cur_alloc;
+    return cur_alloc;
+  };
+  deviceContext->deviceResManager_->SetAllocator(ascend_allocator);
+  auto ascend_deleter = [](void *dataPtr) {
+    if (dataPtr != nullptr) {
+      c10_npu::NPUCachingAllocator::raw_delete(dataPtr);
+    }
+  };
+  deviceContext->deviceResManager_->SetDeleter(ascend_deleter);
 #endif
 }
 }  // namespace

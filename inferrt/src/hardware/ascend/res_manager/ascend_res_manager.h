@@ -56,6 +56,8 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   void *AllocateStaticMemory(size_t size, uint32_t streamId = kDefaultStreamIndex) const;
   void *AllocateMemory(size_t size, uint32_t streamId = kDefaultStreamIndex) const override;
   void FreeMemory(void *ptr) const override;
+  void SetAllocator(const AllocateFunc &allocator) override;
+  void SetDeleter(const DeleteFunc &deleter) override;
   void FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
                        const std::vector<size_t> &keepAddrSizes) const override;
   void DefragMemory() override;
@@ -139,6 +141,8 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
   bool enableMemoryTracker_{false};
   bool initialized_ = false;
   BindStreamFunc bindStreamFunc_{nullptr};
+  AllocateFunc allocator_{nullptr};
+  DeleteFunc deleter_{nullptr};
 };
 }  // namespace ascend
 }  // namespace device
