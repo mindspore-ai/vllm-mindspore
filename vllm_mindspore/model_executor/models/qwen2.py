@@ -39,7 +39,9 @@ from mindspore import Parameter, Tensor, mint, nn
 
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
-from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
+from mindspore.communication import get_rank
+from vllm.distributed import (get_pp_group,
+                              get_tensor_model_parallel_world_size)
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.interfaces import SupportsLoRA, SupportsPP
 from vllm.sequence import IntermediateTensors
@@ -60,6 +62,8 @@ from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
     maybe_prefix)
+from vllm_mindspore.model_executor.models.sparse_quant_weight_loader import (
+    load_split_weights)
 from vllm_mindspore.utils import is_310p
 
 
@@ -359,8 +363,42 @@ class Qwen2Model(nn.Cell):
             hidden_states, residual = self.norm(hidden_states, residual)
         return hidden_states, residual
 
+    def _load_split_weights(self, weights: Iterable[tuple[str, Tensor]],
+                            params_dict: dict[str, Parameter]) -> set[str]:
+        """Load sparse quantized weights directly without sharding.
+        
+        Weights are already partitioned by rank folders, so load them
+        directly without any sharding operations. This method delegates
+        to the common sparse quantized weight loader utility.
+        
+        Args:
+            weights: Iterable of (name, weight) tuples
+            params_dict: Dictionary of parameter names to Parameter objects
+            
+        Returns:
+            Set of loaded parameter names
+        """
+        return load_split_weights(weights, params_dict, self.config,
+                                  self.quant_config)
+
     def load_weights(self, weights: Iterable[tuple[str, Tensor]],
                      params_dict: dict[str, Parameter]):
+        # Check if sparse quantization is enabled via rank-level config
+        # If yes, load weights directly without sharding
+        # (weights are already partitioned by rank folders)
+        if (self.quant_config is not None
+                and hasattr(self.quant_config, 'config')):
+            rank_id = get_rank()
+            rank_key = f'rank_{rank_id}'
+            if rank_key in self.quant_config.config:
+                sparse_config = self.quant_config.config[rank_key]
+                # Check if any layer uses W8A8S quantization
+                has_sparse_quant = any(
+                    isinstance(v, str) and v.lower() == "w8a8s"
+                    for v in sparse_config.values())
+                if has_sparse_quant:
+                    return self._load_split_weights(weights, params_dict)
+
         loaded_params: set[str] = set()
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id) # noqa: ERA001

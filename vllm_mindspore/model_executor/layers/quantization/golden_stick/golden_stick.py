@@ -14,17 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any
+
 import regex as re
 from mindspore import nn
 from mindspore.common import dtype as mstype
+from mindspore.communication import get_rank
 from vllm.model_executor.layers.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 
-from vllm_mindspore.model_executor.layers.linear import UnquantizedLinearMethod
+from vllm_mindspore.model_executor.layers.linear import (
+    LinearBase, UnquantizedLinearMethod)
+from vllm_mindspore.utils import is_310p
 
 # isort: off
 from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
     a8w8 import A8W8LinearMethod
+from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
+    a8w8sc import A8W8SCLinearMethod
 # isort: on
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
@@ -125,6 +132,7 @@ class GoldenStickConfig(QuantizationConfig):
     quantization_method_mapping = {
         "FLOAT": UnquantizedLinearMethod,
         "W8A8": A8W8LinearMethod,
+        "W8A8S": A8W8SCLinearMethod,
     }
 
     def __init__(self, config: dict[str, str]) -> None:
@@ -141,11 +149,21 @@ class GoldenStickConfig(QuantizationConfig):
     @staticmethod
     def get_config_filenames() -> list[str]:
         return [
-            "quantization_description.json", "quant_model_description.json"
+            "quantization_description.json", "quant_model_description.json",
+            "quant_model_description_w8a8sc.json"
+            # Added for sparse quantization config
         ]
 
     @classmethod
     def from_config(cls, config: dict[str, str]) -> "QuantizationConfig":
+        """Create a config class from the model's quantization config.
+        
+        Args:
+            config: Dictionary containing quantization configuration.
+            
+        Returns:
+            GoldenStickConfig instance with is_modelslim=False.
+        """
         _validate_quantization_consistency(config)
         return cls(config)
 
@@ -153,11 +171,44 @@ class GoldenStickConfig(QuantizationConfig):
                          prefix: str) -> QuantizeMethodBase:
         if isinstance(layer, VocabParallelEmbedding):
             return None
-        quant_strategy = None
 
         # replace prefix for multimodal model
         prefix = prefix.replace("language_model.model", "model.language_model")
+
+        # Parse quantization config (supports both flat and rank-level configs)
+        quant_strategy = None
         for key, value in self.config.items():
+            # Handle rank-level sparse quantization config (W8A8SC)
+            # Only 310P platform supports W8A8SC quantization
+            if key.startswith('rank_') and isinstance(
+                    layer, LinearBase) and is_310p():
+                rank_id = get_rank()
+                rank_key = f'rank_{rank_id}'
+                if key == rank_key:
+                    # sparse_config is a dict, not str, despite type annotation
+                    if not isinstance(value, dict):
+                        continue
+                    sparse_config: dict[str, Any] = value
+                    weight_key = f"{prefix}.weight"
+                    if weight_key in sparse_config:
+                        quant_type = sparse_config[weight_key]
+                        if (isinstance(quant_type, str)
+                                and quant_type.lower() == "w8a8s"):
+                            # Get compressed weight and index shapes
+                            # from rank-specific config
+                            weight_shape_key = f"{prefix}.weight.shape"
+                            index_shape_key = f"{prefix}.index.shape"
+                            if (weight_shape_key in sparse_config
+                                    and index_shape_key in sparse_config):
+                                compress_weight_size = sparse_config[
+                                    weight_shape_key]
+                                compress_index_size = sparse_config[
+                                    index_shape_key]
+                                # Return sparse quantization linear method
+                                return A8W8SCLinearMethod(
+                                    self, compress_weight_size,
+                                    compress_index_size)
+                continue
             for uncat_name, cat_name in self.concat_linear_mapping.items():
                 key = key.replace(uncat_name, cat_name)
             if "experts." in prefix:
@@ -184,7 +235,25 @@ class GoldenStickConfig(QuantizationConfig):
 
 
 class ModelSlimConfig(GoldenStickConfig):
+    """ModelSlimConfig for ModelSlim quantization.
+    
+    This class extends GoldenStickConfig with is_modelslim=True.
+    It uses AclnnQuantBatchMatMul and scalar quantization parameters.
+    """
 
     def __init__(self, config: dict[str, str]) -> None:
         super().__init__(config)
         self.is_modelslim = True
+
+    @classmethod
+    def from_config(cls, config: dict[str, str]) -> "QuantizationConfig":
+        """Create a config class from the model's quantization config.
+        
+        Args:
+            config: Dictionary containing quantization configuration.
+            
+        Returns:
+            ModelSlimConfig instance with is_modelslim=True.
+        """
+        _validate_quantization_consistency(config)
+        return cls(config)

@@ -39,7 +39,7 @@ from vllm.config.scheduler import SchedulerConfig
 from vllm.logger import init_logger
 from vllm.utils import random_uuid
 
-from vllm_mindspore.utils import is_310p
+from vllm_mindspore.utils import is_310p, is_sparse_quantization
 
 logger = init_logger(__name__)
 
@@ -71,6 +71,15 @@ def vllm_config_post_init(self):
         self.model_config is not None and self.load_config is not None:
         self.quant_config = VllmConfig._get_quantization_config(
             self.model_config, self.load_config)
+
+    # vllm-mindspore begin: Set load_format to 'sparse_quant' if load_format is
+    # 'auto' and sparse quantization is detected
+    if (self.model_config is not None and self.load_config is not None
+            and is_sparse_quantization(self.model_config)):
+        load_format_str = str(self.load_config.load_format).lower()
+        if load_format_str == "auto":
+            self.load_config.load_format = "sparse_quant"
+    # vllm-mindspore end
 
     from vllm.platforms import current_platform
     if self.scheduler_config is not None and \

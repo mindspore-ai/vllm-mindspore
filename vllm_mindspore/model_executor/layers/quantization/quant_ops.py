@@ -127,3 +127,32 @@ class AclnnQuantBatchMatMul(nn.Cell):
                   quant_bias: Parameter) -> Tensor:
         """Apply quantized matrix multiplication."""
         return self.quant_batch_matmul(qx, weight, deq_scale, None, quant_bias)
+
+
+class QuantLinearSparseOp(nn.Cell):
+    """
+    Quantized sparse linear operation wrapper.
+    
+    Args:
+        params_dtype: Output dtype (usually bfloat16).
+
+    Inputs:
+        qx (Tensor): Quantized input activation.
+        weight (Parameter): Quantized sparse weight parameter.
+        deq_scale (Parameter): Dequantization scale for output.
+        index (Parameter): Sparse index parameter.
+        quant_bias (Parameter): Quantized bias (may be None).
+
+    Returns:
+        Tensor: Output tensor after quantized sparse matrix multiplication.
+    """
+
+    def __init__(self, params_dtype):
+        super().__init__()
+        self.linear_sparse = ops.auto_generate.QuantLinearSparse()
+        self.params_dtype = params_dtype
+
+    def construct(self, qx: Tensor, weight: Parameter, deq_scale: Parameter,
+                  index: Parameter, quant_bias: Parameter) -> Tensor:
+        """Apply quantized sparse matrix multiplication."""
+        return self.linear_sparse(qx, weight, deq_scale, index, quant_bias)

@@ -42,7 +42,7 @@ __aicore__ inline void DataCopyCustom(const U &dstTensor, const R &srcTensor, co
 }
 
 class KernelAdvStepFlash {
- public:
+public:
   __aicore__ inline KernelAdvStepFlash(TPipe *pipe) { Ppipe = pipe; }
 
   __aicore__ inline void Init(GM_ADDR sampledTokenIds, GM_ADDR blockTables, GM_ADDR seqLensInput, GM_ADDR inputTokens,
@@ -88,7 +88,7 @@ class KernelAdvStepFlash {
     CopyOut();
   }
 
- private:
+private:
   __aicore__ inline void CopyIn() {
     LocalTensor<int32_t> sampledIdsLocal = sampledIdsQue.AllocTensor<int32_t>();
     LocalTensor<int32_t> seqLenInLocal = seqLenInQue.AllocTensor<int32_t>();
@@ -213,7 +213,7 @@ class KernelAdvStepFlash {
     WaitFlag<HardEvent::V_S>(event_V_S);
   }
 
- private:
+private:
   TPipe *Ppipe = nullptr;
   // create queues for input, in this case depth is equal to buffer num
   TQue<QuePosition::VECIN, 1> sampledIdsQue, seqLenInQue;

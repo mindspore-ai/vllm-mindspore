@@ -21,6 +21,7 @@
 import contextlib
 import functools
 import gc
+import json
 import os
 import subprocess
 import sys
@@ -36,6 +37,7 @@ import torch
 
 if TYPE_CHECKING:
     from torch.library import Library
+    from vllm.config import ModelConfig
 else:
     Library = None
 
@@ -500,3 +502,23 @@ class LazyDict(Mapping[str, T], Generic[T]):
 
     def __len__(self):
         return len(self._factory)
+
+
+def is_sparse_quantization(model_config: "ModelConfig") -> bool:
+    """Check if the model uses sparse quantization (W8A8SC)."""
+    try:
+        from vllm_mindspore.model_executor.layers.quantization.golden_stick.golden_stick import (  # noqa: E501
+            GoldenStickConfig)
+
+        if model_config.quantization != "golden_stick" or not os.path.isdir(
+                model_config.model):
+            return False
+        for config_file in GoldenStickConfig.get_config_filenames():
+            config_path = os.path.join(model_config.model, config_file)
+            if os.path.exists(config_path):
+                with open(config_path) as f:
+                    if any(k.startswith('rank_') for k in json.load(f)):
+                        return True
+    except Exception:
+        pass
+    return False
