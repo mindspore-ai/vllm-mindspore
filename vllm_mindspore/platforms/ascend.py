@@ -99,6 +99,16 @@ class AscendPlatform(Platform):
             logger.warning_once("current O3 is not support mtp")
             return False
 
+        if ((vllm_config.parallel_config.data_parallel_size > 1)
+                and ("expert_parallel" in vllm_config.additional_config) and
+            (int(vllm_config.additional_config.get("expert_parallel", None))
+             > 1)):
+            # current dp + ep will get different graph input for
+            # attn_padding_idx and ffn_paddind_idx shape, will
+            # cause graph capture not hit the graph inputs shape
+            logger.warning_once("dp and ep is not support")
+            return False
+
         not_support_model_type = [
             "Glm4vForConditionalGeneration", "Glm4ForCausalLM",
             "MiniCPMForCausalLM"
