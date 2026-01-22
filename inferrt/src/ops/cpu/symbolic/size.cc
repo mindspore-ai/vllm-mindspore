@@ -25,7 +25,6 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  // TODO(YzLi): Handle case where input[kIndex1] could be None and returns a tuple.
   // For now we implement the common case: `size(tensor, dim) -> i64`.
   // This is required by dynamic-shape graphs where expand/view shapes are built from `mrt.size`.
   if (input.size() != kInputSize2) {
@@ -39,6 +38,13 @@ OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::V
   if (!input[kIndex1]) {
     LOG_ERROR << "Size::InferShape expects input[1] (dim) not null";
     return INVALID_PARAM;
+  }
+
+  if (!input[kIndex1]->IsInt()) {
+    // Handle case where input[kIndex1] could be None and returns a tuple.
+    // Falls back to parent class Operator::InferShape (verified).
+    Operator::InferShape(input, output);
+    return SUCCESS;
   }
 
   const auto &shape = input[kIndex0]->ToTensor()->Shape();
