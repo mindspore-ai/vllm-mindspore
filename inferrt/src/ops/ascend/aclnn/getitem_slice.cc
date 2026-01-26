@@ -55,26 +55,13 @@ OpsErrorCode AclnnGetItemSlice::CalcWorkspace(const std::vector<const ir::Value 
     for (size_t i = 0; i < axes_.size(); i++) {
       shapes[axes_[i]] = sliceSizes[i];
     }
-
-    // Validate that shapes can be squeezed to dst->Shape()
-    // shapes should match dst after removing dimensions of size 1
-    size_t shapesIdx = 0;
     auto dstShape = dst->Shape();
-    bool ShapeValid = true;
-    for (size_t dstIdx = 0; dstIdx < dstShape.size() && ShapeValid; ++dstIdx) {
-      while (shapesIdx < shapes.size() && shapes[shapesIdx] == 1 && shapes[shapesIdx] != dstShape[dstIdx]) {
-        shapesIdx++;  // Skip dimensions of size 1
-      }
-      ShapeValid = shapesIdx < shapes.size() && shapes[shapesIdx] == dstShape[dstIdx];
-      shapesIdx++;
-    }
-    // Ensure remaining shapes dimensions are all 1 (can be squeezed)
-    while (ShapeValid && shapesIdx < shapes.size()) {
-      ShapeValid = shapes[shapesIdx++] == 1;
-    }
-    if (!ShapeValid) {
-      LOG_EXCEPTION << "For GetItemSlice, the shapes " << shapes << " cannot be squeezed to dst shape " << dstShape
-                    << ". starts: " << starts_ << ", ends: " << ends_ << ", axes: " << axes_ << ", steps: " << steps_;
+    auto srcSize = std::accumulate(shapes.begin(), shapes.end(), 1, std::multiplies<int64_t>());
+    auto dstSize = std::accumulate(dstShape.begin(), dstShape.end(), 1, std::multiplies<int64_t>());
+    if (srcSize != dstSize) {
+      LOG_EXCEPTION << "For GetItemSlice, the src shape " << src->Shape() << " cannot be slice to dst shape "
+                    << dstShape << ". With starts: " << starts_ << ", ends: " << ends_ << ", axes: " << axes_
+                    << ", steps: " << steps_;
     }
 
     std::vector<int64_t> strides(shapes.size());

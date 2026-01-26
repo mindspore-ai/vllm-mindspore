@@ -113,3 +113,21 @@ def test_tensor_getitem_by_tensor():
     out = compiled_op(x, indices)
     expected = x[indices]
     AssertRtolEqual(out, expected)
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("pipeline", (True, False))
+def test_tensor_getitem_by_tuple_with_none(pipeline, monkeypatch):
+    """
+    Feature: Test tensor_getitem_by_tuple
+    Description: Test tensor_getitem_by_tuple
+    Expectation: The result is correct
+    """
+    if pipeline:
+        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
+    def func(x):
+        return x[None, 1, None, ..., 1:4:2, None]
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(4, 4, 6).npu()
+    out = compiled_op(x)
+    expected = x[None, 1, None, ..., 1:4:2, None]
+    AssertRtolEqual(out, expected)

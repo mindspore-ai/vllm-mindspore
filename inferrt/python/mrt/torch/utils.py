@@ -212,30 +212,39 @@ def tuple_indices_to_slice_arg(indices: Tuple[int, ...], shape: Tuple[int, ...])
     axes = []
     steps = []
     processed_indices = []
+    none_nums = 0
+    # None in indices means expanding a dimension at the corresponding shape position, with size 1
+    for idx in indices:
+        if idx is None:
+            none_nums += 1
     for idx in indices:
         if idx is Ellipsis:
             # Insert missing dimensions after ellipsis
-            missing_dims = num_dims - len(indices) + 1
-            processed_indices.extend([None] * missing_dims)
+            missing_dims = num_dims - len(indices) + 1 + none_nums
+            processed_indices.extend(["ellipsis"] * missing_dims)
         else:
             processed_indices.append(idx)
 
-    for axis, idx in enumerate(processed_indices):
+    axis = 0
+    for idx in processed_indices:
         if isinstance(idx, slice):
             begin.append(idx.start if idx.start is not None else 0)
             end.append(idx.stop if idx.stop is not None else shape[axis])
             steps.append(idx.step if idx.step is not None else 1)
             axes.append(axis)
-        elif idx is None:
+        elif idx == "ellipsis":
             begin.append(0)
             end.append(shape[axis])
             steps.append(1)
             axes.append(axis)
+        elif idx is None:
+            continue
         else:
             begin.append(idx)
             end.append(idx + 1)
             steps.append(1)
             axes.append(axis)
+        axis += 1
     return begin, end, steps, axes
 
 
