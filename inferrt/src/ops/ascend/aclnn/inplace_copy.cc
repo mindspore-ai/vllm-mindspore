@@ -32,7 +32,10 @@ OpsErrorCode AclnnInplaceCopy::CalcWorkspace(const std::vector<const ir::Value *
 
   if (dstNpu && srcNpu) {
     copyMode_ = mrt::device::CopyType::D2D;
-    executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), dst, src);
+    srcContiguous_ = src->IsContiguous();
+    if (!srcContiguous_) {
+      executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), dst, src);
+    }
   } else if (dstNpu && !srcNpu) {
     copyMode_ = mrt::device::CopyType::H2D;
   } else if (!dstNpu && srcNpu) {
@@ -54,7 +57,18 @@ OpsErrorCode AclnnInplaceCopy::Launch(const std::vector<const ir::Value *> &inpu
   auto src = input[kIndex1]->ToTensor();
 
   if (copyMode_ == mrt::device::CopyType::D2D) {
-    executor_->Launch(workspace, workspaceSize, stream, dst, src);
+    if (!srcContiguous_) {
+      executor_->Launch(workspace, workspaceSize, stream, dst, src);
+      return SUCCESS;
+    }
+    // For D2D copy, if src is contiguous, use direct async copy for better performance
+    size_t srcSize = src->Numel() * static_cast<size_t>(dst->Dtype().GetSize());
+    auto ret = res_manager_->AsyncCopy(dst->DataPtr(), src->DataPtr(), srcSize, copyMode_, stream);
+
+    if (!ret) {
+      LOG_ERROR << "Call aclrtMemcpyAsync in Op InplaceCopy failed";
+      return UNKNOWN_ERROR;
+    }
     return SUCCESS;
   }
 

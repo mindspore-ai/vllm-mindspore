@@ -34,6 +34,7 @@ class AclnnContiguous : public Operator {
 
  private:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};
+  bool srcContiguous_{false};
 };
 
 }  // namespace ops
