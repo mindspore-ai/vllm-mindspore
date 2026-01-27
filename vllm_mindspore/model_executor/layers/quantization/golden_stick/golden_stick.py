@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -148,10 +148,10 @@ class GoldenStickConfig(QuantizationConfig):
 
     @staticmethod
     def get_config_filenames() -> list[str]:
+        # quant_model_description_w8a8sc.json is for sparse quant (W8A8SC)
         return [
             "quantization_description.json", "quant_model_description.json",
             "quant_model_description_w8a8sc.json"
-            # Added for sparse quantization config
         ]
 
     @classmethod
