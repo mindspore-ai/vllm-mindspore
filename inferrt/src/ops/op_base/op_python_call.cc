@@ -99,8 +99,8 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
   }
 }
 
-void AttachAtenTensorNoCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix,
-                            device::DeviceContext *devCtx) {
+void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix,
+                          device::DeviceContext *devCtx) {
   std::vector<int64_t> atenShape(atenTensor.sizes().begin(), atenTensor.sizes().end());
   if (atenShape != irTensor->Shape()) {
     LOG_EXCEPTION << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;
@@ -118,9 +118,12 @@ void AttachAtenTensorNoCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTenso
     return SUCCESS;
   };
 
-  auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
-  CHECK_IF_NULL(launchOpFunc);
-  launchOpFunc(logPrefix, launchTask, false);
+  const auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
+  if (launchOpFunc != nullptr) {
+    launchOpFunc(logPrefix, launchTask, false);
+  } else {
+    (void)launchTask();
+  }
 }
 }  // namespace
 
@@ -205,8 +208,7 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
       } catch (...) {
         LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple[" << i << "] is not a torch.Tensor";
       }
-      AttachAtenTensorNoCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]",
-                             dev_ctx_);
+      AttachAtenTensorCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]", dev_ctx_);
     }
     LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " tensors into output tuple.";
     return SUCCESS;
@@ -222,7 +224,7 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
   if (!irTensor) {
     LOG_EXCEPTION << "PythonCall op " << opName_ << " output tensor pointer is null.";
   }
-  AttachAtenTensorNoCopy(aten, irTensor, "PythonCall op " + opName_, dev_ctx_);
+  AttachAtenTensorCopy(aten, irTensor, "PythonCall op " + opName_, dev_ctx_);
   LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached single at::Tensor data ptr.";
   return SUCCESS;
 }

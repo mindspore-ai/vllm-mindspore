@@ -682,27 +682,6 @@ def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
   let genAclnnOp = "aclnnIndex";
 }
 
-def Mrt_RepeatOp : Mrt_Op<"repeat", [Pure]> {
-  let summary = "Repeats this tensor along the specified dimensions.";
-  let description = [{
-    Repeats this tensor along the specified dimensions.
-  }];
-
-  let arguments = (ins
-    MrtAnyTensor:$self,
-    Mrt_I64ArrayType:$repeats
-  );
-
-  let results = (outs MrtAnyTensor:$result);
-
-  let assemblyFormat = [{
-    $self `,` $repeats attr-dict `:` functional-type(operands, results)
-  }];
-
-  let genAclnnOp = "aclnnRepeat";
-}
-
-
 def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
   let summary = "Copy operation";
   let description = [{
@@ -1334,6 +1313,26 @@ def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnRemainderTensorTensor";
+}
+
+def Mrt_RepeatOp : Mrt_Op<"repeat", [Pure]> {
+  let summary = "Repeats this tensor along the specified dimensions.";
+  let description = [{
+    Repeats this tensor along the specified dimensions.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64ArrayType:$repeats
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $repeats attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnRepeat";
 }
 
 def Mrt_ReshapeOp : Mrt_Op<"reshape", [Pure]> {

@@ -1,3 +1,4 @@
+# pylint: disable=missing-module-docstring, pointless-string-statement, import-outside-toplevel, unused-import, wrong-import-position
 import os
 
 """
@@ -12,6 +13,15 @@ import pytest
 import mrt.torch.fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
+
+
+def missing_torch_mlir():
+    has_torch_mlir = True
+    try:
+        import torch_mlir
+    except ModuleNotFoundError:
+        has_torch_mlir = False
+    return not has_torch_mlir
 
 
 @pytest.mark.skip(reason="unsupported matmul op")
@@ -43,6 +53,7 @@ def test_reshape(pipeline, monkeypatch):
     print("The result is correct. 'mrt' backend has been installed successfully.")
 
 
+@pytest.mark.skipif(missing_torch_mlir(), reason="not install torch_mlir")
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_mul(pipeline, monkeypatch):

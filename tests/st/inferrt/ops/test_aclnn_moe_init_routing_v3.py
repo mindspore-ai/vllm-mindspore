@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring, line-too-long, unused-argument, missing-function-docstring
 # Copyright 2025 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -126,7 +127,7 @@ def test_aclnn_moe_init_routing_v3_op(pipeline, monkeypatch, num_rows):
                                 expert_num, drop_pad_mode,
                                 expert_tokens_num_type,
                                 expert_tokens_num_flag, quant_mode, active_expert_range, row_idx_type)
-    
+
     x_np = x.detach().cpu().numpy()
     expert_idx_np = expert_idx.detach().cpu().numpy()
     scale_np = scale.detach().cpu().numpy()

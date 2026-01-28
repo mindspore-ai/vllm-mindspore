@@ -73,7 +73,6 @@ void OpRunner::AllocateMemory() {
 
 void OpRunner::AllocateWorkspaceMemory() {
   if (workspaceSize_ > 0) {
-    // CHECK_IF_FAIL(workspace_ == nullptr);
     workspace_ = alloc_.Allocate(workspaceSize_);
     CHECK_IF_NULL(workspace_);
   }
@@ -93,7 +92,6 @@ void OpRunner::FreeMemory() {
 void OpRunner::FreeWorkspaceMemory() {
   if (workspaceSize_ > 0) {
     alloc_.Free(workspace_);
-    // workspace_ = nullptr;
   }
 }
 

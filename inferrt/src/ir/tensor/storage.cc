@@ -76,7 +76,6 @@ void Storage::FreeMemory() {
     }
     deleter_(nullptr);
     deleter_ = nullptr;
-    // data_ = nullptr;
     fromAten_ = false;
     ownsData_ = false;
     return;
@@ -84,7 +83,6 @@ void Storage::FreeMemory() {
 
   CHECK_IF_NULL(data_);
   alloc_.Free(data_);
-  // data_ = nullptr;
   ownsData_ = false;
 }
 
@@ -94,7 +92,6 @@ void *Storage::Release() {
                      "reference memory passed in from external sources.";
   }
   void *p = data_;
-  // data_ = nullptr;
   deleter_ = nullptr;
   fromAten_ = false;
   ownsData_ = false;

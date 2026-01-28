@@ -22,7 +22,6 @@ correspondence with GraphExecutor supported operators.
 from typing import Any, Dict, List, Optional
 
 import torch
-from mopt import ir
 from mrt.ir import (
     GraphExecutor,
     Node,
@@ -223,9 +222,11 @@ def _next_unique_graph_id():
 
 
 def _convert_affine_expr(
-    expr: ir.AffineExpr, symbol_vals: List[SymbolicExpr]
+    expr, symbol_vals: List[SymbolicExpr]
 ) -> List[SymbolicExpr]:
     """Convert MLIR affine expression to SymbolicExpr."""
+    # pylint: disable=import-outside-toplevel
+    from mopt import ir
     if ir.AffineSymbolExpr.isinstance(expr):
         expr = ir.AffineSymbolExpr(expr)
         return symbol_vals[expr.position]
@@ -354,11 +355,15 @@ class ExecutorBuilder:
 
     def _handle_symbolic_int(self, op):
         """Handle mrt.symbolic_int operation."""
+        # pylint: disable=import-outside-toplevel
+        from mopt import ir
         sym_name = ir.StringAttr(op.attributes["symbol_name"]).value
         self.symbol_env[op.result] = self.symbol_map[sym_name]
 
     def _handle_bind_symbolic_shape(self, op):
         """Handle mrt.bind_symbolic_shape operation."""
+        # pylint: disable=import-outside-toplevel
+        from mopt import ir
         target = op.operands[0]
         shape_symbols = list(op.operands)[1:]
         affine_map = ir.AffineMapAttr(op.attributes["shape_expressions"]).value
@@ -406,6 +411,8 @@ class ExecutorBuilder:
 
     def _handle_eval_symbolic_expr(self, op):
         """Handle mrt.eval_symbolic_expr operation."""
+        # pylint: disable=import-outside-toplevel
+        from mopt import ir
         input_nodes_for_op = self._get_input_nodes(op)
         results = list(op.results)
 

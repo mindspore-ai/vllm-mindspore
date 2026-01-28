@@ -203,6 +203,10 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto storage = tensor->GetStorage();
   if (!storage->CheckOwnsData()) {
+    auto &waitLaunchFinish = mrt::ops::OpAsync::GetWaitLaunchFinishFunc();
+    if (waitLaunchFinish != nullptr) {
+      waitLaunchFinish();
+    }
     // Parameter or tensor which references a parameter is graph output.
     storage = CopyStorage(storage);
   }
@@ -306,8 +310,10 @@ void SetDeviceContext() {
   auto bindStreamFunc = [currentNPUStream]() { c10_npu::setCurrentNPUStream(currentNPUStream); };
   deviceContext->deviceResManager_->SetBindStreamFunc(bindStreamFunc);
 
-  mrt::ops::OpAsync::SetLaunchOpFunc(at_npu::native::OpCommand::RunOpApiV2);
-  mrt::ops::OpAsync::SetWaitLaunchFinishFunc([]() { (void)c10_npu::getCurrentNPUStream().stream(true); });
+  if (mrt::ops::IsEnablePipeline()) {
+    mrt::ops::OpAsync::SetLaunchOpFunc(at_npu::native::OpCommand::RunOpApiV2);
+    mrt::ops::OpAsync::SetWaitLaunchFinishFunc([]() { (void)c10_npu::getCurrentNPUStream().stream(true); });
+  }
 
   auto currentStream = currentNPUStream.stream(false);
   CHECK_IF_NULL(currentStream);

@@ -17,7 +17,9 @@
 #ifndef __OPS_UTILS_ASYNC_H__
 #define __OPS_UTILS_ASYNC_H__
 
+#include <cstdlib>
 #include <string>
+#include <string_view>
 #include <functional>
 #include "common/visible.h"
 
@@ -37,6 +39,13 @@ class DA_API OpAsync {
   static void SetWaitLaunchFinishFunc(const WaitLaunchFinishFunc &waitLaunchFinishFunc);
   static WaitLaunchFinishFunc const &GetWaitLaunchFinishFunc();
 };
+
+static inline bool IsEnablePipeline() {
+  static const char enablePipelineEnv[] = "TASK_QUEUE_ENABLE";
+  const char *enablePipelineCStr = std::getenv(enablePipelineEnv);
+  const bool disablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "0");
+  return !disablePipeline;
+}
 
 }  // namespace ops
 }  // namespace mrt

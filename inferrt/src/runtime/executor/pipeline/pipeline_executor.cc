@@ -46,7 +46,7 @@ void PipelineExecutor::Initialize() {
 void PipelineExecutor::Run(bool isDynamic) {
   LOG_OUT << "Begin pipeline executor run.";
 
-  auto launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
+  auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
   if (launchOpFunc == nullptr) {
     std::ostringstream oss;
     for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
