@@ -484,6 +484,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
         torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
+        torch.ops.npu.npu_add_rms_norm_quant: Op.add_rms_norm_quant,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
@@ -562,6 +563,7 @@ def _is_shape_sequence(arg):
         example_value = arg.meta.get("example_value", None)
         return isinstance(example_value, (tuple, list, torch.Size))
     return False
+
 
 def _argument_to_real_value(value_type, value, arg_len):
     """
