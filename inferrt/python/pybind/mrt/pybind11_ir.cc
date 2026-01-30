@@ -67,6 +67,8 @@ PYBIND11_MODULE(_mrt_ir, m) {
     .value("Int32", ir::DataType::Type::Int32)
     .value("Int64", ir::DataType::Type::Int64)
     .value("UInt8", ir::DataType::Type::UInt8)
+    .value("QInt8", ir::DataType::Type::QInt8)
+    .value("QUInt4x2", ir::DataType::Type::QUInt4x2)
     .value("Bool", ir::DataType::Type::Bool)
     .export_values();
 

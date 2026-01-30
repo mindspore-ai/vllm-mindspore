@@ -42,7 +42,8 @@ static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap =
   {ir::DataType::Type::Float32, at::kFloat}, {ir::DataType::Type::Float64, at::kDouble},
   {ir::DataType::Type::Int8, at::kChar},     {ir::DataType::Type::Int16, at::kShort},
   {ir::DataType::Type::Int32, at::kInt},     {ir::DataType::Type::Int64, at::kLong},
-  {ir::DataType::Type::UInt8, at::kByte},    {ir::DataType::Type::Bool, at::kBool},
+  {ir::DataType::Type::UInt8, at::kByte},    {ir::DataType::Type::QInt8, at::kQInt8},
+  {ir::DataType::Type::Bool, at::kBool},     {ir::DataType::Type::QUInt4x2, at::kQUInt4x2},
 };
 
 inline at::ScalarType ToAtenDType(ir::DataType type) {

@@ -33,6 +33,8 @@ static const std::map<ir::DataType::Type, aclDataType> kDataTypeToAclDataTypeMap
   {ir::DataType::Type::Int64, ACL_INT64},
   {ir::DataType::Type::UInt8, ACL_UINT8},
   {ir::DataType::Type::Bool, ACL_BOOL},
+  {ir::DataType::Type::QInt8, ACL_DT_UNDEFINED},
+  {ir::DataType::Type::QUInt4x2, ACL_DT_UNDEFINED},
 };
 
 aclDataType Convert(ir::DataType::Type dtype) {

@@ -44,6 +44,8 @@ static const std::map<at::ScalarType, ir::DataType> kAtScalarTypeToDataTypeMap =
   {at::kInt, ir::DataType::Type::Int32},
   {at::kLong, ir::DataType::Type::Int64},
   {at::kByte, ir::DataType::Type::UInt8},
+  {at::kQInt8, ir::DataType::Type::QInt8},
+  {at::kQUInt4x2, ir::DataType::Type::QUInt4x2},
   {at::kBool, ir::DataType::Type::Bool},
 };
 
@@ -58,6 +60,8 @@ static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap =
   {ir::DataType::Type::Int32, at::kInt},
   {ir::DataType::Type::Int64, at::kLong},
   {ir::DataType::Type::UInt8, at::kByte},
+  {ir::DataType::Type::QInt8, at::kQInt8},
+  {ir::DataType::Type::QUInt4x2, at::kQUInt4x2},
   {ir::DataType::Type::Bool, at::kBool},
 };
 
