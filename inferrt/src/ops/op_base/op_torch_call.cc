@@ -200,7 +200,7 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) cons
   }
 }
 
-void OpTorchCall::ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack, void *stream) const {
+void OpTorchCall::ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack) const {
   if (stack.empty()) {
     return;
   }
@@ -293,22 +293,19 @@ void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::V
   }
 }
 
-OpsErrorCode OpTorchCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                        size_t *workspaceSize) {
+OpsErrorCode OpTorchCall::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                                 ir::Value *output, void *stream) {
   return SUCCESS;
 }
 
-OpsErrorCode OpTorchCall::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                 ir::Value *output, void *stream) {
+OpsErrorCode OpTorchCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                        size_t *workspaceSize) {
   torch::jit::Stack stack;
   // Inputs process, convert to aten tensor and push to stack.
   ConvertInputsToStack(input, stack);
   operation_(stack);
-#ifdef ENABLE_TORCH_NPU
-  (void)c10_npu::getCurrentNPUStream().stream(true);
-#endif
   // Outputs process. Convert aten tensor to ir::Value.
-  ConvertStackToOutput(output, std::move(stack), stream);
+  ConvertStackToOutput(const_cast<ir::Value *>(output), std::move(stack));
   CheckOutputInputRef(input, output, qualifiedOpName_);
   return SUCCESS;
 }

@@ -105,11 +105,37 @@ void Builder::UpdateRefNodeOutputValue() {
 }
 
 void Builder::RecordStorageFreePoint() {
-  if (graph_ == nullptr || graph_->nodes.empty()) {
+  if (graph_ == nullptr) {
     return;
   }
 
-  std::unordered_set<ir::StoragePtr> recordedStorages;
+  // Step 1.
+  // First, create a map to record the first node that sees each storage (the storage's owner)
+  std::unordered_map<ir::Storage *, ir::Node *> storageToOwner;  // key: storage pointer, value: owning node
+  // Visit all parameters in the graph
+  for (auto &param : graph_->parameters) {
+    ir::VisitAllTensors(param->output, [&](const ir::TensorPtr &tensor) {
+      auto storage = tensor->GetStorage().get();
+      CHECK_IF_NULL(storage);
+      (void)storageToOwner.insert({storage, param.get()});
+    });
+  }
+  // Visit all nodes in the graph
+  for (auto &node : graph_->nodes) {
+    CHECK_IF_NULL(node);
+    ir::VisitAllTensors(node->output, [&](const ir::TensorPtr &tensor) {
+      auto storage = tensor->GetStorage().get();
+      CHECK_IF_NULL(storage);
+      (void)storageToOwner.insert({storage, node.get()});
+    });
+  }
+
+  // Step 2.
+  // The storages that can be safely freed once the last consumer node is done.
+  std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToFree;
+  // The storages that should be allocated by each node.
+  std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToAlloc;
+  std::unordered_set<ir::Storage *> recordedStorages;
 
   // The output of graph should not be freed by any node.
   auto &graphOutput = graph_->nodes.back()->output;
@@ -135,13 +161,18 @@ void Builder::RecordStorageFreePoint() {
       ir::VisitAllTensors(inputNode->output, [&](const ir::TensorPtr &tensor) {
         auto storage = tensor->GetStorage().get();
         CHECK_IF_NULL(storage);
+        // No longer check storage->CheckOwnsData()
         // First encounter, meaning current node is the last consumer
         // and is responsible for freeing the storage.
         if (recordedStorages.find(storage) == recordedStorages.end()) {
           LOG_OUT << "Record node input Storage: " << storage;
           (void)recordedStorages.insert(storage);
-          if (storage->CheckOwnsData()) {
-            (void)storagesToFree_[currentNode].emplace_back(storage);
+          auto storageToOwnerIter = storageToOwner.find(storage);
+          CHECK_IF_FAIL(storageToOwnerIter != storageToOwner.end());
+          auto *ownerNode = storageToOwnerIter->second;
+          CHECK_IF_NULL(ownerNode);
+          if (ownerNode->op != ops::Op_End) {
+            (void)storagesToFree[currentNode].emplace_back(storage);
           }
         }
       });
@@ -154,14 +185,29 @@ void Builder::RecordStorageFreePoint() {
       if (recordedStorages.find(storage) == recordedStorages.end()) {
         LOG_OUT << "Record node output Storage: " << storage;
         (void)recordedStorages.insert(storage);
-        if (storage->CheckOwnsData()) {
-          (void)storagesToFree_[currentNode].emplace_back(storage);
+        auto storageToOwnerIter = storageToOwner.find(storage);
+        CHECK_IF_FAIL(storageToOwnerIter != storageToOwner.end());
+        auto *ownerNode = storageToOwnerIter->second;
+        CHECK_IF_NULL(ownerNode);
+        if (ownerNode->op != ops::Op_End) {
+          (void)storagesToFree[currentNode].emplace_back(storage);
         }
+      }
+    });
+
+    // Check if this node owns any of its output storages and record them for allocation
+    ir::VisitAllTensors(currentNode->output, [&](const ir::TensorPtr &tensor) {
+      auto storage = tensor->GetStorage().get();
+      CHECK_IF_NULL(storage);
+      // If the storage's owner is the current node, record it for allocation
+      if (storageToOwner[storage] == currentNode) {
+        (void)storagesToAlloc[currentNode].emplace_back(storage);
       }
     });
   }
 
-  for (auto &item : storagesToFree_) {
+  // Step 3.
+  for (auto &item : storagesToFree) {
     auto &node = item.first;
     auto &storages = item.second;
     auto iter = nodeToOpRunner_.find(node);
@@ -170,6 +216,17 @@ void Builder::RecordStorageFreePoint() {
     }
     auto *opRunner = iter->second;
     opRunner->SetStoragesToFree(std::move(storages));
+  }
+
+  for (auto &item : storagesToAlloc) {
+    auto &node = item.first;
+    auto &storages = item.second;
+    auto iter = nodeToOpRunner_.find(node);
+    if (iter == nodeToOpRunner_.end()) {
+      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+    }
+    auto *opRunner = iter->second;
+    opRunner->SetStoragesToAlloc(std::move(storages));
   }
 }
 

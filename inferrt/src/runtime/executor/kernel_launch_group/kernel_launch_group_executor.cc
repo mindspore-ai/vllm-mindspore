@@ -26,6 +26,7 @@
 #include "runtime/utils/exception.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
+#include "ops/utils/async.h"
 
 namespace mrt {
 namespace runtime {
@@ -59,6 +60,10 @@ KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
 KernelLaunchGroupExecutor::~KernelLaunchGroupExecutor() { memoryCache_.ClearAllCache(); }
 
 void KernelLaunchGroupExecutor::Run(bool isDynamic) {
+  auto &waitLaunchFinish = ops::OpAsync::GetWaitLaunchFinishFunc();
+  if (waitLaunchFinish != nullptr) {
+    waitLaunchFinish();
+  }
   bool shapeChange = CheckInputShapeChange();
   if (shapeChange) {
     ResetTensorCacheMemory();

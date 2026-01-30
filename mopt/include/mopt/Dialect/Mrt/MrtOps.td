@@ -555,6 +555,28 @@ def Mrt_GeOp : Mrt_Op<"ge", [Pure]> {
   let genAclnnOp = "aclnnGeTensor";
 }
 
+def Mrt_GeScalarOp : Mrt_Op<"ge_scalar", [Pure]> {
+  let summary = "Tensor greater-than-or-equal-to scalar comparison";
+  let description = [{
+    Tensor greater-than-or-equal-to scalar comparison.
+    Returns a boolean tensor where each element is true if the corresponding element in self is greater than or equal to the scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnGeScalar";
+}
+
+
 def Mrt_GetItemSliceOp : Mrt_Op<"getitem_slice", [Pure]> {
   let summary = "getitem use aclnnSliceV2";
   let description = [{
@@ -860,6 +882,27 @@ def Mrt_LtOp : Mrt_Op<"lt", [Pure]> {
   let genAclnnOp = "aclnnLtTensor";
 }
 
+def Mrt_LtScalarOp : Mrt_Op<"lt_scalar", [Pure]> {
+  let summary = "Tensor less-than scalar comparison";
+  let description = [{
+    Tensor less-than scalar omparison.
+    Returns a boolean tensor where each element is true if the corresponding element in self is less than the scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLtScalar";
+}
+
 def Mrt_MakeListOp : Mrt_Op<"make_list", [Pure]> {
   let summary = "Construct a list from elements";
   let description = [{
@@ -1123,6 +1166,26 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   let genAclnnOp = "aclnnMul";
 }
 
+def Mrt_MulsOp : Mrt_Op<"muls", [Pure]> {
+  let summary = "Tensor multiply scalar operation";
+  let description = [{
+    Element-wise multiplication of tensor and scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$lhs,
+    Mrt_ScalarType:$rhs
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $lhs `,` $rhs attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMuls";
+}
+
 def Mrt_NeOp : Mrt_Op<"ne", [Pure]> {
   let summary = "Element-wise not-equal comparison";
   let description = [{
@@ -1250,6 +1313,26 @@ def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnRemainderTensorTensor";
+}
+
+def Mrt_RepeatOp : Mrt_Op<"repeat", [Pure]> {
+  let summary = "Repeats this tensor along the specified dimensions.";
+  let description = [{
+    Repeats this tensor along the specified dimensions.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64ArrayType:$repeats
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $repeats attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnRepeat";
 }
 
 def Mrt_ReshapeOp : Mrt_Op<"reshape", [Pure]> {

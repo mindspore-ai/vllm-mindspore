@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring, wrong-import-position, pointless-string-statement
 import os
 """
 CI environment restriction: CPU-only testing available
@@ -28,9 +29,9 @@ def test_backend(pipeline, monkeypatch):
     def foo(x, y):
         a = torch.reshape(y, (x.shape[1], -1))
         return torch.matmul(x, a)
-    
+
     opt_foo = torch.compile(foo, backend=backend)
-    
+
     x = torch.randn(2, 2)
     y = torch.arange(4.0)
     bar = foo(x, y)
@@ -40,6 +41,3 @@ def test_backend(pipeline, monkeypatch):
 
     assert torch.equal(opt_bar, bar), f"\nopt_bar={opt_bar}\nbar={bar}"
     print("The result is correct. 'mrt' backend has been installed successfully.")
-
-
-test_backend(False, None)

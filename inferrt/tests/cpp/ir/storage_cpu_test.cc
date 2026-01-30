@@ -47,7 +47,7 @@ TEST_F(StorageTest, TestConstructor) {
   Storage storage(dataSize, device);
   EXPECT_EQ(storage.SizeBytes(), dataSize);
   EXPECT_EQ(storage.GetDevice().type, device.type);
-  EXPECT_TRUE(storage.CheckOwnsData());
+  EXPECT_FALSE(storage.CheckOwnsData());
   EXPECT_EQ(storage.Data(), nullptr);
 }
 
@@ -82,7 +82,7 @@ TEST_F(StorageTest, TestAllocate) {
   EXPECT_NE(storage.Data(), nullptr);
 
   storage.FreeMemory();
-  EXPECT_EQ(storage.Data(), nullptr);
+  EXPECT_FALSE(storage.CheckOwnsData());
 }
 
 /// Feature: Storage
@@ -116,7 +116,7 @@ TEST_F(StorageTest, TestRelease) {
   void *dataPtr = storage.Data();
   void *releasePtr = storage.Release();
   EXPECT_EQ(dataPtr, releasePtr);
-  EXPECT_EQ(storage.Data(), nullptr);
+  EXPECT_FALSE(storage.CheckOwnsData());
 
   free(releasePtr);
 }

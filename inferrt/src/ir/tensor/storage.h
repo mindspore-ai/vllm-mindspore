@@ -138,8 +138,6 @@ class MRT_EXPORT Storage : public RefCounted {
    */
   bool CheckOwnsData() const { return ownsData_; }
 
-  void DisableOwnData();
-
   /**
    * @brief Releases ownership of the managed pointer.
    * @return The raw data pointer.
@@ -151,7 +149,7 @@ class MRT_EXPORT Storage : public RefCounted {
   size_t sizeBytes_{0};  ///< Size of the memory in bytes.
   Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
-  bool ownsData_;            ///< Whether the storage can own data.
+  bool ownsData_{false};     ///< Whether the storage can own data.
 
   bool fromAten_{false};         ///< Whether the storage is from aten.
   DeleterFn deleter_ = nullptr;  ///< Deleter function pointer for external memory management.

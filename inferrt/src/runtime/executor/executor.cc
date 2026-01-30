@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "ops/kernel_lib.h"
+#include "ops/utils/async.h"
 #include "runtime/builder/builder.h"
 #include "runtime/builder/pipeline/pipeline_builder.h"
 #include "runtime/builder/kernel_launch_group/kernel_launch_group_builder.h"
@@ -48,16 +49,12 @@ static std::vector<BuilderCreationFunc> builderCreators = {
 
 namespace {
 ExecutionMode GetExecutionMode() {
-  static const char enablePipelineEnv[] = "MRT_ENABLE_PIPELINE";
-  const char *enablePipelineCStr = std::getenv(enablePipelineEnv);
-  const bool enablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "on");
-
   static const char kernelLaunchGroupNum[] = "MRT_KERNEL_LAUNCH_GROUP_NUM";
   const char *enableGroupLaunchCStr = std::getenv(kernelLaunchGroupNum);
   const bool enableGroupLaunch = (enableGroupLaunchCStr != nullptr) && !std::string_view(enableGroupLaunchCStr).empty();
 
   ExecutionMode executionMode = Base;
-  if (enablePipeline) {
+  if (ops::IsEnablePipeline()) {
     executionMode = Pipeline;
   }
   if (enableGroupLaunch) {
@@ -147,7 +144,6 @@ void GraphExecutor::BeginGraph(const std::string &name) {
 void GraphExecutor::EndGraph() {
   LOG_OUT << "End graph building";
   CHECK_IF_NULL(graph_);
-  DisableParamsOwnData();
 }
 
 // Finish building graph.
@@ -369,18 +365,6 @@ void GraphExecutor::DumpGraph() {
 }
 #endif
 
-void GraphExecutor::DisableParamsOwnData() {
-  for (auto &param : graph_->parameters) {
-    CHECK_IF_NULL(param);
-    auto &value = param->output;
-    CHECK_IF_NULL(value);
-    ir::VisitAllTensors(value, [&](const ir::TensorPtr &tensor) {
-      CHECK_IF_NULL(tensor);
-      tensor->GetStorage()->DisableOwnData();
-    });
-  }
-}
-
 void GraphExecutor::BuildExecutor() {
   CHECK_IF_FAIL(nullptr == builder_);
   CHECK_IF_FAIL(nullptr == executor_);
@@ -407,14 +391,15 @@ void Executor::Run(bool isDynamic) {
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
       LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
+    opRunner.AllocateMemory();
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
       LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
-    opRunner.AllocateMemory();
+    opRunner.AllocateWorkspaceMemory();
+    opRunner.FreeMemory();
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
       LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
-    opRunner.FreeMemory();
   }
 }
 }  // namespace runtime

@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include "ops/op_register.h"
+#include "hardware/hardware_abstract/device_context.h"
 
 namespace mrt {
 namespace ops {
@@ -32,16 +33,20 @@ class OpPythonCall : public Operator {
 
   void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output);
 
+  OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                             size_t *workspaceSize) override;
+
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream);
 
  protected:
   py::tuple PreprocessInputs(const std::vector<const ir::Value *> &input);
-  OpsErrorCode PostprocessOutputs(py::handle result, ir::Value *output, void *stream);
+  OpsErrorCode PostprocessOutputs(py::handle result, ir::Value *output);
   std::string opName_;
   std::string moduleName_;
   std::vector<const ir::Value *> inputs_;
   py::function pyFunc_;
+  device::DeviceContext *dev_ctx_{nullptr};
 };
 }  // namespace ops
 }  // namespace mrt

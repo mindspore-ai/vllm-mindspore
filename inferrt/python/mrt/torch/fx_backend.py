@@ -107,6 +107,12 @@ def embedding_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def muls_hook(node, input_nodes, executor):
+    """swap the first and second param position."""
+    return [input_nodes[1], input_nodes[0]]
+
+
+# pylint: disable=unused-argument
 def apply_rotary_pos_emb_hook(node, input_nodes, executor):
     """add layout parameter."""
     rope_layout_bsnd = 1
@@ -161,10 +167,12 @@ def fused_inter_attention_score_hook(node, input_nodes, executor):
 
 
 def _init_arg_mapping_hooks():
+    """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
     register_arg_mapping_hook(Op.fused_infer_attention_score, fused_inter_attention_score_hook)
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
+    register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook("long", long_hook)
@@ -303,6 +311,28 @@ def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def ge_op_hook(op, node, input_nodes, executor):
+    """Get the ge op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.ge_scalar
+    return Op.ge
+
+# pylint: disable=unused-argument
+def lt_op_hook(op, node, input_nodes, executor):
+    """Get the lt op for a given node."""
+    if isinstance(node.args[-1], (int, float)):
+        return Op.lt_scalar
+    return Op.lt
+
+# pylint: disable=unused-argument
+def mul_op_hook(op, node, input_nodes, executor):
+    """Get the mul op for a given node."""
+    if isinstance(node.args[0], (int, float)):
+        return Op.muls
+    return Op.mul
+
+
+# pylint: disable=unused-argument
 def copy_op_hook(op, node, input_nodes, executor):
     """Get the copy op for a given node."""
     if isinstance(node.args[-1], (int, float)):
@@ -324,6 +354,9 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.inplace_masked_fill_tensor, inplace_masked_fill_op_hook)
     register_ops_mapping_hook(Op.inplace_fill_tensor, fill_op_hook)
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
+    register_ops_mapping_hook(Op.ge, ge_op_hook)
+    register_ops_mapping_hook(Op.lt, lt_op_hook)
+    register_ops_mapping_hook(Op.mul, mul_op_hook)
 
 
 def _next_unique_graph_id():
@@ -453,6 +486,7 @@ _OP_MAP = {
     "to": Op.cast,
     "sigmoid": Op.sigmoid,
     "reshape": Op.view,
+    "repeat": Op.repeat,
     "cat": Op.cat,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
@@ -610,7 +644,7 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if node.target == "view" and not _is_shape_sequence(args[1]):
+    if node.target in ["view", "reshape", "repeat"] and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
 
     if len(args) + len(kwargs) > len(schema.arguments):

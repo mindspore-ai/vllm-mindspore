@@ -19,6 +19,7 @@
 #include <map>
 #include <utility>
 #include "runtime/executor/pipeline/async_task_queue_manager.h"
+#include "ops/utils/async.h"
 
 namespace mrt {
 namespace runtime {
@@ -44,42 +45,52 @@ void PipelineExecutor::Initialize() {
 
 void PipelineExecutor::Run(bool isDynamic) {
   LOG_OUT << "Begin pipeline executor run.";
-  auto &asyncTaskQueueManager = AsyncTaskQueueManager::GetInstance();
-  asyncTaskQueueManager.ContinueAll();
-  asyncTaskQueueManager.BindDevice();
 
-  AsyncTaskQueue *inferQeueue = asyncTaskQueueManager.GetInferQueue();
-  AsyncTaskQueue *launchQeueue = asyncTaskQueueManager.GetLaunchQueue();
+  auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
+  if (launchOpFunc == nullptr) {
+    std::ostringstream oss;
+    for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
+      iter->second->deviceResManager_->BindDeviceToCurrentThread(false);
+      oss << " " << hardware::GetDeviceNameByType(iter->first);
+    }
+    LOG_EXCEPTION << "Device" << oss.str() << " does not suppprt pipeline executor.";
+  }
+
+  auto bindTask = [this]() -> int {
+    for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
+      iter->second->deviceResManager_->BindDeviceToCurrentThread(false);
+      iter->second->deviceResManager_->BindCurrentStream();
+    }
+    return ops::SUCCESS;
+  };
+  launchOpFunc("bind_device", bindTask, false);
+
   OpRunner *opRunners = opRunners_->data();
   size_t opNum = opRunners_->size();
   for (size_t i = 0; i < opNum; ++i) {
     OpRunner &opRunner = opRunners[i];
 
-    auto inferTask = [&opRunner, launchQeueue]() {
-      // Do infer shape and calculate workspace size in infer queue.
-      if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-        LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
-      }
-      if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-        LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
-      }
+    // Do infer shape and calculate workspace size in infer queue.
+    if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
+      LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    }
+    opRunner.AllocateMemory();
+    if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
+      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    }
+    opRunner.AllocateWorkspaceMemory();
+    opRunner.FreeMemory();
 
-      // Push async launch task into launch queue.
-      auto launchTask = [&opRunner]() {
-        opRunner.AllocateMemory();
-        if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-          LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
-        }
-        opRunner.FreeMemory();
-      };
-      launchQeueue->Push(std::move(launchTask), TaskType::Launch);
+    // Push async launch task into launch queue.
+    auto launchTask = [&opRunner]() -> int {
+      if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
+        LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      }
+      return 0;
     };
-
-    inferQeueue->Push(std::move(inferTask), TaskType::Infer);
+    launchOpFunc(opRunner.GetOpName(), launchTask, false);
   }
 
-  asyncTaskQueueManager.WaitAll();
-  asyncTaskQueueManager.PauseAll();
   LOG_OUT << "End pipeline executor run.";
 }
 }  // namespace runtime

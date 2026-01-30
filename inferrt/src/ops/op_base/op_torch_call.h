@@ -45,7 +45,7 @@ class OpTorchCall : public Operator {
 
  protected:
   void ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) const;
-  void ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack, void *stream) const;
+  void ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack) const;
   void ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) const;
   bool MatchOpSchema(const std::vector<const ir::Value *> &inputs,
                      const std::shared_ptr<torch::jit::Operator> op) const;

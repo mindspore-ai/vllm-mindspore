@@ -118,10 +118,14 @@ class OpRunner {
    */
   void AllocateMemory();
 
+  void AllocateWorkspaceMemory();
+
   /**
    * @brief Free device memory for input tensors and workspace.
    */
   void FreeMemory();
+
+  void FreeWorkspaceMemory();
 
   /**
    * @brief Gets the IR node associated with this operator runner.
@@ -134,6 +138,14 @@ class OpRunner {
    * @param storagesToFree Vector of storages to free.
    */
   void SetStoragesToFree(std::vector<ir::Storage *> &&storagesToFree) { storagesToFree_ = std::move(storagesToFree); }
+
+  /**
+   * @brief Sets the storages that should be allocated by this operator.
+   * @param storagesToAlloc Vector of storages to allocate.
+   */
+  void SetStoragesToAlloc(std::vector<ir::Storage *> &&storagesToAlloc) {
+    storagesToAlloc_ = std::move(storagesToAlloc);
+  }
 
   hardware::Device GetDevice() const { return device_; }
 
@@ -152,6 +164,9 @@ class OpRunner {
  private:
   // Storages that should be freed after operator execution.
   std::vector<ir::Storage *> storagesToFree_;
+
+  // Storages that should be allocated by this operator.
+  std::vector<ir::Storage *> storagesToAlloc_;
 
   // Input values for the operator.
   std::vector<const ir::Value *> input_;

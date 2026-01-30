@@ -15,7 +15,6 @@
 """
 utils for converting between torch and mrt.ir.
 """
-import os
 from typing import Any, List, Tuple, Optional
 
 import torch
@@ -56,7 +55,6 @@ def _set_communication_info(ptd):
     """Get communication info from torch and set to CollectiveManager for a given process group."""
     pg = _resolve_process_group(ptd)
     rank = dist.get_rank() if dist.is_initialized() else 0
-    local_rank = int(os.getenv("LOCAL_RANK", "0"))
     world_size = dist.get_world_size()
 
     group_rank = dist.get_rank(pg)
@@ -65,7 +63,7 @@ def _set_communication_info(ptd):
     hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
     CollectiveManager.instance().set_global_rank_id(rank)
-    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_local_rank_id(rank)
     CollectiveManager.instance().set_global_rank_size(world_size)
 
     CollectiveManager.instance().create_communication_group(

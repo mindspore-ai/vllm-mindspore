@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring, line-too-long, invalid-name, missing-function-docstring
 # Copyright 2025 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -208,22 +209,22 @@ def test_grouped_matmul_dynamic(pipeline, monkeypatch):
     x1 = torch.randn(size=(1792, 256), dtype=torch.float16)
     weight1 = torch.randn(size=(3, 256, 128), dtype=torch.float16)
     bias1 = torch.randn(size=(3, 128), dtype=torch.float16)
-    group_list_npu = torch.cumsum(torch.tensor([256, 1280, 1792]), dim=0).npu()
+    group_list_npu = torch.tensor([256, 1280, 1792]).npu()
     split_item = 3
 
     compiled_func = get_op_func_compiled()
     output1 = compiled_func([x1.clone().npu()], [weight1.clone().npu()], bias=[bias1.clone().npu()],
                             group_list=group_list_npu, split_item=split_item, group_type=0, tuning_config = [1792])
-    expected1 = grouped_matmul_func([x1.clone().npu()], [weight1.clone().npu()], bias=[bias1.clone().npu()], 
+    expected1 = grouped_matmul_func([x1.clone().npu()], [weight1.clone().npu()], bias=[bias1.clone().npu()],
                                     group_list=group_list_npu, split_item=split_item, group_type=0, tuning_config = [1792])
     AssertRtolEqual(output1[0], expected1[0])
 
     x2 = torch.randn(size=(256, 256), dtype=torch.float16)
     weight2 = torch.randn(size=(3, 256, 256), dtype=torch.float16)
     bias2 = torch.randn(size=(3, 256), dtype=torch.float16)
-    group_list_npu = torch.cumsum(torch.tensor([64, 128, 256]), dim=0).npu()
+    group_list_npu = torch.tensor([64, 128, 256]).npu()
     output2 = compiled_func([x2.clone().npu()], [weight2.clone().npu()], bias=[bias2.clone().npu()],
                             group_list=group_list_npu, split_item=split_item, group_type=0, tuning_config = [256])
-    expected2 = grouped_matmul_func([x2.clone().npu()], [weight2.clone().npu()], bias=[bias2.clone().npu()], 
+    expected2 = grouped_matmul_func([x2.clone().npu()], [weight2.clone().npu()], bias=[bias2.clone().npu()],
                                     group_list=group_list_npu, split_item=split_item, group_type=0, tuning_config = [256])
     AssertRtolEqual(output2[0], expected2[0])

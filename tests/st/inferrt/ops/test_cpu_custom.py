@@ -1,3 +1,4 @@
+# pylint: disable=missing-module-docstring, wrong-import-position, import-outside-toplevel, unused-import, unused-argument
 import os
 os.environ["USE_NPU"] = "0"
 os.environ["USE_ASCEND"] = "0"
@@ -10,6 +11,16 @@ import pytest
 from tests.mark_utils import arg_mark
 
 
+def missing_torch_mlir():
+    has_torch_mlir = True
+    try:
+        import torch_mlir
+    except ModuleNotFoundError:
+        has_torch_mlir = False
+    return not has_torch_mlir
+
+
+@pytest.mark.skipif(missing_torch_mlir(), reason="not install torch_mlir")
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
@@ -29,7 +40,7 @@ def test_cpu_custom_add_op(pipeline, monkeypatch, backend):
     @torch.library.custom_op("mrt::custom_add", mutates_args=())
     def custom_add_op(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("This is a placeholder for the custom_add operator.")
-    
+
     @torch.library.register_fake("mrt::custom_add")
     def _(x, y):
         return x

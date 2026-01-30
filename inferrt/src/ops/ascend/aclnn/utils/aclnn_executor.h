@@ -33,6 +33,7 @@
 namespace mrt {
 namespace ops {
 inline constexpr const char *kNameGetWorkspaceSize = "GetWorkspaceSize";
+inline constexpr const char *kKernelLaunchGroupNum = "MRT_KERNEL_LAUNCH_GROUP_NUM";
 using RunOpApiFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStream);
 
 class AclnnExecutor {
@@ -41,8 +42,27 @@ class AclnnExecutor {
     getWorkspaceSizeApiName_ = opApiName_ + kNameGetWorkspaceSize;
     cacheEntryManager_ = ir::MakeIntrusive<CacheEntryManager>();
     AclnnInit();
+
+    const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
+    if (opApiFuncPtr == nullptr) {
+      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
+    }
+    opApiFunc_ = reinterpret_cast<RunOpApiFunc>(opApiFuncPtr);
+
+    opGetWorkspaceSizeApiFunc_ = GET_ACLNN_OP_FUNC(getWorkspaceSizeApiName_);
+    if (opGetWorkspaceSizeApiFunc_ == nullptr) {
+      LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
+    }
   }
   ~AclnnExecutor() { AclnnFinalize(); }
+
+  static inline bool IsEnableGroupLaunch() {
+    static const bool enableGroupLaunch = []() -> bool {
+      const char *enableGroupLaunchCStr = std::getenv(kKernelLaunchGroupNum);
+      return (enableGroupLaunchCStr != nullptr) && !std::string_view(enableGroupLaunchCStr).empty();
+    }();
+    return enableGroupLaunch;
+  }
 
   template <typename... Args>
   void GetWorkspaceSize(uint64_t *workspaceSize, const Args &...args) {
@@ -50,6 +70,9 @@ class AclnnExecutor {
     cacheEntry_ = cacheEntryManager_->GetCacheEntry(hashId);
     if (cacheEntry_ != nullptr) {
       LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId;
+      if (!IsEnableGroupLaunch()) {
+        CallUpdateAddr(cacheEntry_, args...);
+      }
       *workspaceSize = cacheEntry_->GetWorkspaceSize();
       return;
     }
@@ -63,35 +86,33 @@ class AclnnExecutor {
       LOG_OUT << opApiName_ << " cache the params with hashId: " << hashId;
       return;
     }
-    ReleaseConvertedParams(convertedParams);
-    ReleaseExecutor(opExecutor);
+
+    opExecutor_ = opExecutor;
+    releaseParamsFunc_ = [convertedParams, this]() { ReleaseConvertedParams(convertedParams); };
   }
 
   template <typename... Args>
   void Launch(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
     if (cacheEntry_ != nullptr) {
-      CallUpdateAddr(cacheEntry_, args...);
+      if (IsEnableGroupLaunch()) {
+        CallUpdateAddr(cacheEntry_, args...);
+      }
       RunOpApi(workspace, workspaceSize, cacheEntry_->GetExecutor(), stream);
       return;
     }
     // For the opExecutor that can not be cached, we don't need release it, because the second stage interface
     // automatically release the opExecutor.
-    uint64_t workspaceSizeTmp = 0;
-    auto [convertedParams, opExecutor] = GenerateOpExecutor(&workspaceSizeTmp, args...);
-    RunOpApi(workspace, workspaceSize, opExecutor, stream);
-    ReleaseConvertedParams(convertedParams);
+    CHECK_IF_NULL(opExecutor_);
+    RunOpApi(workspace, workspaceSize, opExecutor_, stream);
+    CHECK_IF_NULL(releaseParamsFunc_);
+    releaseParamsFunc_();
   }
 
   template <typename... Args>
   auto GenerateOpExecutor(uint64_t *workspaceSize, const Args &...args) {
-    const auto getWorkspaceSizeFuncPtr = GET_ACLNN_OP_FUNC(getWorkspaceSizeApiName_);
-    if (getWorkspaceSizeFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
-    }
-
     aclOpExecutor *opExecutor = nullptr;
     auto convertedParams = ConvertParams(args..., workspaceSize, &opExecutor);
-    auto getWorkspaceSizeFunc = ConvertToOpApiFunc(convertedParams, getWorkspaceSizeFuncPtr);
+    auto getWorkspaceSizeFunc = ConvertToOpApiFunc(convertedParams, opGetWorkspaceSizeApiFunc_);
     CHECK_IF_NULL(getWorkspaceSizeFunc);
     auto ret = CallOpApiFunc(getWorkspaceSizeFunc, convertedParams);
     if (ret != 0) {
@@ -118,12 +139,7 @@ class AclnnExecutor {
   }
 
   void RunOpApi(void *workspace, size_t workspaceSize, aclOpExecutor *opExecutor, void *stream) {
-    const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
-    if (opApiFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
-    }
-    auto opApiFunc = reinterpret_cast<RunOpApiFunc>(opApiFuncPtr);
-    auto opApiFuncRet = opApiFunc(workspace, workspaceSize, opExecutor, stream);
+    auto opApiFuncRet = opApiFunc_(workspace, workspaceSize, opExecutor, stream);
     if (opApiFuncRet != 0) {
       LOG_EXCEPTION << "Call " << opApiName_ << " failed, ret=" << opApiFuncRet;
     }
@@ -134,6 +150,10 @@ class AclnnExecutor {
   std::string getWorkspaceSizeApiName_;
   CacheEntryPtr cacheEntry_{nullptr};
   CacheEntryManagerPtr cacheEntryManager_{nullptr};
+  aclOpExecutor *opExecutor_{nullptr};
+  std::function<void()> releaseParamsFunc_{nullptr};
+  RunOpApiFunc opApiFunc_{nullptr};
+  void *opGetWorkspaceSizeApiFunc_{nullptr};
 };
 
 }  // namespace ops

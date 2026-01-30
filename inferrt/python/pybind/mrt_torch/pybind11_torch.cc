@@ -26,6 +26,7 @@
 #include "torch_npu/csrc/core/npu/NPUFormat.h"
 #include "torch_npu/csrc/core/NPUStorageImpl.h"
 #include "torch_npu/csrc/core/npu/NPUCachingAllocator.h"
+#include "torch_npu/csrc/framework/OpCommand.h"
 #endif
 
 #include "hardware/hardware_abstract/device_context.h"
@@ -33,6 +34,7 @@
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
+#include "ops/utils/async.h"
 #include "common/logger.h"
 
 namespace py = pybind11;
@@ -201,21 +203,33 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto storage = tensor->GetStorage();
   if (!storage->CheckOwnsData()) {
+    auto &waitLaunchFinish = mrt::ops::OpAsync::GetWaitLaunchFinishFunc();
+    if (waitLaunchFinish != nullptr) {
+      waitLaunchFinish();
+    }
     // Parameter or tensor which references a parameter is graph output.
     storage = CopyStorage(storage);
   }
 
-  void *dataPtr = storage->Release();
+  void *dataPtr = storage->Data();
   CHECK_IF_NULL(dataPtr);
-  auto deleter = storage->GetDeleter();
-  if (deleter == nullptr) {
+  auto deleterFn = storage->GetDeleter();
+  std::function<void(void *)> deleter;
+  if (deleterFn == nullptr) {
     auto allocator = storage->GetAllocator();
     deleter = [allocator, dataPtr](void *) {
       if (dataPtr != nullptr) {
         allocator.Free(dataPtr);
       }
     };
+  } else {
+    deleter = [deleterFn, dataPtr](void *) {
+      if (dataPtr != nullptr) {
+        deleterFn(dataPtr);
+      }
+    };
   }
+  storage->Release();
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
@@ -296,7 +310,12 @@ void SetDeviceContext() {
   auto bindStreamFunc = [currentNPUStream]() { c10_npu::setCurrentNPUStream(currentNPUStream); };
   deviceContext->deviceResManager_->SetBindStreamFunc(bindStreamFunc);
 
-  auto currentStream = currentNPUStream.stream();
+  if (mrt::ops::IsEnablePipeline()) {
+    mrt::ops::OpAsync::SetLaunchOpFunc(at_npu::native::OpCommand::RunOpApiV2);
+    mrt::ops::OpAsync::SetWaitLaunchFinishFunc([]() { (void)c10_npu::getCurrentNPUStream().stream(true); });
+  }
+
+  auto currentStream = currentNPUStream.stream(false);
   CHECK_IF_NULL(currentStream);
   deviceContext->deviceResManager_->SetCurrentStream(currentStream);
   auto ascend_allocator = [](size_t size) -> void * {

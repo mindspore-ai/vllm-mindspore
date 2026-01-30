@@ -62,21 +62,17 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
 
 void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
-  ir::VisitAllTensors(output_, [&](const ir::TensorPtr &tensor) {
-    const auto &storage = tensor->GetStorage();
-    if (tensor->CheckOwnsStorage() && storage->CheckOwnsData() && storage->Data() != nullptr) {
+  for (auto &storage : storagesToAlloc_) {
+    if (storage->CheckOwnsData()) {
       LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
     }
-    // For op output ref graph input tensor case.
-    bool need_alloc = storage->Data() == nullptr;
-    if (need_alloc) {
-      storage->AllocateMemory();
-    }
-  });
+    storage->AllocateMemory();
+    LOG_OUT << "alloc storage: " << storage;
+  }
+}
 
-  // Allocate workspace memory if needed.
+void OpRunner::AllocateWorkspaceMemory() {
   if (workspaceSize_ > 0) {
-    CHECK_IF_FAIL(workspace_ == nullptr);
     workspace_ = alloc_.Allocate(workspaceSize_);
     CHECK_IF_NULL(workspace_);
   }
@@ -85,13 +81,17 @@ void OpRunner::AllocateMemory() {
 void OpRunner::FreeMemory() {
   // Free input tensors that were marked to free.
   for (auto &storage : storagesToFree_) {
+    LOG_OUT << "Cur free storage: " << storage;
     storage->FreeMemory();
   }
 
   // Free workspace memory.
-  if (workspace_) {
+  FreeWorkspaceMemory();
+}
+
+void OpRunner::FreeWorkspaceMemory() {
+  if (workspaceSize_ > 0) {
     alloc_.Free(workspace_);
-    workspace_ = nullptr;
   }
 }
 

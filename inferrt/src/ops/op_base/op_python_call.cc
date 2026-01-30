@@ -15,10 +15,12 @@
  */
 
 #include "ops/op_base/op_python_call.h"
+#include <cstddef>
 #include "ops/utils/data_convert.h"
-#ifdef ENABLE_TORCH_NPU
-#include <torch_npu/csrc/core/npu/NPUStream.h>
-#endif
+#include "hardware/hardware_abstract/collective/collective_manager.h"
+#include "hardware/hardware_abstract/device_context.h"
+#include "hardware/hardware_abstract/device_context_manager.h"
+#include "ops/utils/async.h"
 
 namespace mrt {
 namespace ops {
@@ -97,20 +99,31 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
   }
 }
 
-void AttachAtenTensorNoCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix) {
+void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix,
+                          device::DeviceContext *devCtx) {
   std::vector<int64_t> atenShape(atenTensor.sizes().begin(), atenTensor.sizes().end());
   if (atenShape != irTensor->Shape()) {
     LOG_EXCEPTION << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;
   }
 
-  c10::DataPtr dataPtr = atenTensor.storage().set_data_ptr(std::move(c10::DataPtr()));
-  void *data = dataPtr.get();
-
-  auto dataPtrShared = std::make_shared<c10::DataPtr>(std::move(dataPtr));
-  auto deleter = [dataPtrShared](void *) mutable {
-    if (dataPtrShared) dataPtrShared->clear();
+  void *src = atenTensor.data_ptr();
+  void *dst = irTensor->DataPtr();
+  const size_t numBytes = irTensor->GetStorage()->SizeBytes();
+  auto launchTask = [dst, src, numBytes, devCtx]() -> int {
+    auto stream = devCtx->deviceResManager_->GetCurrentStream();
+    if (!devCtx->deviceResManager_->AsyncCopy(dst, src, numBytes, device::CopyType::D2D, stream)) {
+      LOG_EXCEPTION << "PythonCall device-to-device copy failed.";
+      return UNKNOWN_ERROR;
+    }
+    return SUCCESS;
   };
-  irTensor->GetStorage()->SetDataPtrFromAten(data, deleter);
+
+  const auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
+  if (launchOpFunc != nullptr) {
+    launchOpFunc(logPrefix, launchTask, false);
+  } else {
+    (void)launchTask();
+  }
 }
 }  // namespace
 
@@ -124,10 +137,20 @@ void OpPythonCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
     inputs_[i - kRealInputOffset] = inputs[i];
   }
   pyFunc_ = GetPythonCallable(moduleName_, opName_);
+  auto deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
+  mrt::device::DeviceContextKey deviceContextKey = {hardware::GetDeviceNameByType(hardware::DeviceType::NPU), deviceId};
+  dev_ctx_ = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
+  CHECK_IF_NULL(dev_ctx_);
+  CHECK_IF_NULL(dev_ctx_->deviceResManager_);
 }
 
 OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                   ir::Value *output, void *stream) {
+  return SUCCESS;
+}
+
+OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                         size_t *workspaceSize) {
   if (Py_IsInitialized() == 0) {
     LOG_EXCEPTION << "Python interpreter is not initialized.";
     return UNKNOWN_ERROR;
@@ -148,10 +171,7 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
     LOG_EXCEPTION << "Python function call failed: " << e.what();
     return UNKNOWN_ERROR;
   }
-#ifdef ENABLE_TORCH_NPU
-  (void)c10_npu::getCurrentNPUStream().stream(true);
-#endif
-  auto ret = PostprocessOutputs(result, output, stream);
+  auto ret = PostprocessOutputs(result, const_cast<ir::Value *>(output));
   CheckOutputInputRef(inputs_, output, opName_);
   return ret;
 }
@@ -165,7 +185,7 @@ py::tuple OpPythonCall::PreprocessInputs(const std::vector<const ir::Value *> &i
   return pyArgs;
 }
 
-OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output, void * /*stream*/) {
+OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output) {
   if (!output || output->IsNone()) {
     LOG_OUT << "PythonCall op " << opName_ << " has no output tensor; ";
     return SUCCESS;
@@ -188,7 +208,7 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
       } catch (...) {
         LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple[" << i << "] is not a torch.Tensor";
       }
-      AttachAtenTensorNoCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]");
+      AttachAtenTensorCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]", dev_ctx_);
     }
     LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " tensors into output tuple.";
     return SUCCESS;
@@ -204,7 +224,7 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
   if (!irTensor) {
     LOG_EXCEPTION << "PythonCall op " << opName_ << " output tensor pointer is null.";
   }
-  AttachAtenTensorNoCopy(aten, irTensor, "PythonCall op " + opName_);
+  AttachAtenTensorCopy(aten, irTensor, "PythonCall op " + opName_, dev_ctx_);
   LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached single at::Tensor data ptr.";
   return SUCCESS;
 }
