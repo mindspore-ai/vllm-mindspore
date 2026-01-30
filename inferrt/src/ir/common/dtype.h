@@ -44,6 +44,8 @@ struct DataType {
     Float64 = 7,     ///< 64-bit floating point
     Complex64 = 10,  ///< 64-bit complex floating point
     Bool = 11,       ///< Boolean
+    QInt8 = 12,      ///< 8-bit quantized integer
+    QUInt4x2 = 13,   ///< 8-bit quantized integer
     BFloat16 = 15,   ///< 16-bit bfloating point
   };
 
@@ -93,6 +95,10 @@ struct DataType {
         return 8;
       case UInt8:
         return 1;
+      case QInt8:
+        return 1;
+      case QUInt4x2:
+        return 1;
       case Bool:
         return 1;
       default:
@@ -127,6 +133,10 @@ struct DataType {
         return "int64";
       case UInt8:
         return "uint8";
+      case QInt8:
+        return "qint8";
+      case QUInt4x2:
+        return "quint4x2";
       case Bool:
         return "bool";
       case Unknown:
@@ -154,6 +164,8 @@ struct DataType {
       {"int32", Int32},         {"i32", Int32},     {"si32", Int32},  // int32
       {"int64", Int64},         {"i64", Int64},     {"si64", Int64},  // int64
       {"uint8", UInt8},         {"ui8", UInt8},                       // uint8
+      {"qint8", QInt8},                                               // qint8
+      {"quint4x2", QUInt4x2},                                         // quint4x2
       {"bool", Bool},           {"i1", Bool},                         // bool
       {"unknown", Unknown},                                           // unknown
     };
