@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/fused_moe/layer.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -174,10 +174,12 @@ class UnquantizedFusedMoEMethod(FusedMoEMethodBase, nn.Cell):
             renormalize=renormalize,
             topk_group=topk_group,
             num_expert_group=num_expert_group,
+            global_num_experts=global_num_experts,
             custom_routing_function=custom_routing_function,
             scoring_func=scoring_func,
             e_score_correction_bias=e_score_correction_bias,
-            indices_type=None)
+            indices_type=None,
+            fused_grouped_topk=layer.fused_grouped_topk)
 
         return self.fused_experts(
             hidden_states=x,
@@ -332,10 +334,11 @@ class FusedMoE(nn.Cell):
         self.e_score_correction_bias = e_score_correction_bias
         self.apply_router_weight_on_input = apply_router_weight_on_input
         self.activation = activation
-
-        if self.scoring_func != "softmax" and not self.use_grouped_topk:
-            raise ValueError("Only softmax scoring function is supported for "
-                             "non-grouped topk.")
+        # vllm_mindspore begin: the fused_add_topk_div is not supported
+        # when the part over 32
+        self.fused_grouped_topk = num_expert_group is not None and \
+            num_experts / num_expert_group <= 32
+        # vllm_mindspore end.
 
         moe = FusedMoEConfig(
             num_experts=self.global_num_experts,
@@ -635,10 +638,12 @@ class FusedMoE(nn.Cell):
                        renormalize: bool,
                        topk_group: Optional[int] = None,
                        num_expert_group: Optional[int] = None,
+                       global_num_experts: int = -1,
                        custom_routing_function: Optional[Callable] = None,
                        scoring_func: str = "softmax",
                        e_score_correction_bias: Optional[Tensor] = None,
-                       indices_type=None):
+                       indices_type=None,
+                       fused_grouped_topk=True):
 
         # DeekSeekv2 uses grouped_top_k
         if use_grouped_topk:
@@ -649,20 +654,20 @@ class FusedMoE(nn.Cell):
                 gating_output=router_logits,
                 topk=top_k,
                 renormalize=renormalize,
+                num_experts=global_num_experts,
                 num_expert_group=num_expert_group,
                 topk_group=topk_group,
                 scoring_func=scoring_func,
-                e_score_correction_bias=e_score_correction_bias)
+                e_score_correction_bias=e_score_correction_bias,
+                fused_grouped_topk=fused_grouped_topk)
             if indices_type is not None:
                 topk_ids = topk_ids.to(dtype=indices_type)
         elif custom_routing_function is None:
-            topk_weights, topk_ids = fused_topk(
-                hidden_states=hidden_states,
-                gating_output=router_logits,
-                topk=top_k,
-                renormalize=renormalize,
-                indices_type=indices_type,
-            )
+            topk_weights, topk_ids = fused_topk(hidden_states=hidden_states,
+                                                gating_output=router_logits,
+                                                topk=top_k,
+                                                renormalize=renormalize,
+                                                indices_type=indices_type)
         else:
             topk_weights, topk_ids = custom_routing_function(
                 hidden_states=hidden_states,
