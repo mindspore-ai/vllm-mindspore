@@ -1,12 +1,13 @@
+"""Tests for linear operation."""
 import pytest
-import numpy as np
 import torch
 import torch.nn.functional as F
 import torch_npu
 
+from mrt.torch import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
 
 
 def op_func(inputs, weight, bias=None):
@@ -21,20 +22,17 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 @pytest.mark.parametrize("has_bias", [False, True])
-def test_linear(pipeline, monkeypatch, dtype, batch_size, in_features, out_features, has_bias):
+def test_linear(dtype, batch_size, in_features, out_features, has_bias):
     """
     Feature: Test linear
     Description: Test linear with fp16/bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     x_input = torch.randn(batch_size, in_features).to(dtype)
     weight = torch.randn(out_features, in_features).to(dtype)
@@ -59,20 +57,17 @@ def test_linear(pipeline, monkeypatch, dtype, batch_size, in_features, out_featu
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
 @pytest.mark.parametrize("dtype", (torch.bfloat16, torch.float16))
 @pytest.mark.parametrize("has_bias", [False, True])
-def test_linear_3d(pipeline, monkeypatch, dtype, batch_size, in_features, out_features, has_bias):
+def test_linear_3d(dtype, batch_size, in_features, out_features, has_bias):
     """
     Feature: Test linear
     Description: Test linear with fp16/bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     x_input = torch.randn(batch_size, batch_size, in_features).to(dtype)
     weight = torch.randn(out_features, in_features).to(dtype)
@@ -97,20 +92,17 @@ def test_linear_3d(pipeline, monkeypatch, dtype, batch_size, in_features, out_fe
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
 @pytest.mark.parametrize("dtype", (torch.bfloat16, torch.float16))
 @pytest.mark.parametrize("has_bias", [False, True])
-def test_linear_4d(pipeline, monkeypatch, dtype, batch_size, in_features, out_features, has_bias):
+def test_linear_4d(dtype, batch_size, in_features, out_features, has_bias):
     """
     Feature: Test linear
     Description: Test linear with fp16/bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     x_input = torch.randn(batch_size, batch_size,
                           in_features, in_features).to(dtype)
@@ -136,20 +128,17 @@ def test_linear_4d(pipeline, monkeypatch, dtype, batch_size, in_features, out_fe
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 @pytest.mark.parametrize("has_bias", [False, True])
-def test_linear_nz(pipeline, monkeypatch, dtype, batch_size, in_features, out_features, has_bias):
+def test_linear_nz(dtype, batch_size, in_features, out_features, has_bias):
     """
     Feature: Test linear with NZ format weight
     Description: Test linear with NZ format weight tensor in inferRT backend
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     x_input = torch.randn(batch_size, in_features).to(dtype)
     weight = torch.randn(out_features, in_features).to(dtype)

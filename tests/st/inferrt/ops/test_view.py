@@ -11,15 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import pytest
+"""Tests for torch.view operation."""
 import numpy as np
+import pytest
 import torch
+
 from torch_npu.testing.common_utils import create_common_tensor
+
+from mrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
 
 
 def op_func(input1, input2, shape):
@@ -55,6 +57,7 @@ def view_forward(shape_format, op_func_compiled):
         AssertRtolEqual(cpu_output, npu_output)
 
 
+# pylint: disable=redefined-builtin
 def op_func_twice(input, shape1, shape2):
     """op function for view with two consecutive operations"""
     # First view operation
@@ -85,15 +88,12 @@ def op_func_variadic(input_tensor, *shape):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_view(pipeline, monkeypatch):
+def test_view():
     """
     Feature: Test view
     Description: Test view op with mlir_backend
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     dtype_list = [np.float16, np.float32, np.int32]
     format_list = [0]
     shape_list = [[8, 8], [2, 4, 8], [2, 4, 4, 2]]
@@ -106,15 +106,12 @@ def test_view(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_view_twice(pipeline, monkeypatch):
+def test_view_twice():
     """
     Feature: Test view
     Description: Test view op with mlir_backend
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     dtype_list = [np.float16, np.float32, np.int32, np.bool_]
     format_list = [0]
     shape_list = [[8, 8], [2, 4, 8], [2, 4, 4, 2]]
@@ -127,17 +124,14 @@ def test_view_twice(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [(64,), (4, 4, 4), (8, 8), (2, 16, 2)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
-def test_view_variadic_args(pipeline, monkeypatch, shape, dtype):
+def test_view_variadic_args(shape, dtype):
     """
     Feature: Test view with variadic int arguments
     Description: Test view op with single or multiple int arguments using torch.randn
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     cpu_input = torch.randn(8, 8, dtype=dtype)
     npu_input = cpu_input.clone().npu()

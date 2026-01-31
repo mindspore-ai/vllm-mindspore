@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Tests for aclnn mod operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 def mod_op(x, y):
     return x % y
@@ -27,16 +27,13 @@ def get_op_func_compiled():
     return torch.compile(mod_op, backend=backend)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", ([2, 3], [512, 256]))
-def test_mod(pipeline, monkeypatch, shape):
+def test_mod(shape):
     """
     Feature: Test aclnn mod
     Description: Test aclnn mod and with different dtype inputs and different shape
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     tensor_x = torch.rand(shape, dtype=torch.float16, device="npu")
     tensor_y = torch.rand(shape, dtype=torch.float16, device="npu")

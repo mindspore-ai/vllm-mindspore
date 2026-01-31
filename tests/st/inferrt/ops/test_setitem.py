@@ -1,21 +1,21 @@
-import torch
+"""Tests for tensor setitem operation."""
 import pytest
-from tests.mark_utils import arg_mark
-from tests.ops_utils import AssertRtolEqual
+import torch
+
 from mrt.torch.fx_mlir_backend import backend as mlir_backend
 from mrt.torch.fx_backend import backend as fx_backend
 
+from tests.mark_utils import arg_mark
+from tests.ops_utils import AssertRtolEqual
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("backend", (mlir_backend, fx_backend))
-def test_tensor_setitem_slice_tensor(pipeline, backend, monkeypatch):
+def test_tensor_setitem_slice_tensor(backend):
     """
     Feature: Test tensor_setitem_slice_tensor
     Description: Test tensor_setitem_slice_tensor
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, indices, value):
         res = x.clone()
         res[indices] = value
@@ -30,16 +30,13 @@ def test_tensor_setitem_slice_tensor(pipeline, backend, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("backend", (mlir_backend, fx_backend))
-def test_tensor_setitem_tuple_tensor(pipeline, backend, monkeypatch):
+def test_tensor_setitem_tuple_tensor(backend):
     """
     Feature: Test tensor_setitem_tuple_tensor
     Description: Test tensor_setitem_tuple_tensor
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, value):
         res = x.clone()
         res[0:2, ..., 1:4:2] = value

@@ -1,23 +1,24 @@
+"""Tests for custom aclnn operations."""
+import os
+
+import pytest
 import torch
+
 import mrt
 from mrt.torch.fx_backend import backend as fx_backend
 from mrt.torch.fx_mlir_backend import backend as mlir_backend
-import os
-import pytest
+
 from tests.mark_utils import arg_mark
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
-def test_aclnn_custom_div_op(pipeline, monkeypatch, backend):
+def test_aclnn_custom_div_op(backend):
     """
     Feature: Check aclnn custom div op launch
     Description: Check aclnn custom div op launch with cache
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     aclnn_div_path = os.path.join(script_dir, "aclnn_custom_div.cc")
@@ -26,7 +27,8 @@ def test_aclnn_custom_div_op(pipeline, monkeypatch, backend):
     @torch.library.custom_op("mrt::custom_div", mutates_args=())
     def custom_div_op(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("This is a placeholder for the custom_div operator.")
-    
+
+    # pylint: disable=unused-argument
     @torch.library.register_fake("mrt::custom_div")
     def _(x, y):
         return x

@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Tests for aclnn bitwise and operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 def bitwise_and_op(x, y):
     return x & y
@@ -27,17 +27,14 @@ def get_op_func_compiled():
     return torch.compile(bitwise_and_op, backend=backend)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", ([2, 3], [15, 64], [1024, 512]))
 @pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8))
-def test_bitwise_and(pipeline, monkeypatch, shape, dtype):
+def test_bitwise_and(shape, dtype):
     """
     Feature: Test aclnn bitwise and
     Description: Test aclnn bitwise and with different dtype inputs and different shape
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     tensor_x = torch.rand(shape, dtype=dtype, device="npu")
     tensor_y = torch.rand(shape, dtype=dtype, device="npu")

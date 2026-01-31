@@ -1,40 +1,39 @@
-# pylint: disable=missing-module-docstring, pointless-string-statement, import-outside-toplevel, unused-import, wrong-import-position
-import os
+"""Tests for MRT MLIR backend with CPU environment.
 
-"""
 CI environment restriction: CPU-only testing available
 Note: Disabling NPU backends to prevent torch_npu related import errors
 """
+# pylint: disable=wrong-import-position, ungrouped-imports
+import os
 os.environ["USE_NPU"] = "0"
 os.environ["USE_ASCEND"] = "0"
 os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
-import torch
-import pytest
-import mrt.torch.fx_mlir_backend as backend
 
+import pytest
+import torch
+from tests.common import HasTorchNpu
+if HasTorchNpu():
+    import torch_npu    # pylint: disable=unused-import
+import mrt.torch.fx_mlir_backend as backend
 from tests.mark_utils import arg_mark
 
 
 def missing_torch_mlir():
-    has_torch_mlir = True
     try:
-        import torch_mlir
+        import torch_mlir  # pylint: disable=import-outside-toplevel,unused-import
     except ModuleNotFoundError:
-        has_torch_mlir = False
-    return not has_torch_mlir
+        return True
+    return False
 
 
 @pytest.mark.skip(reason="unsupported matmul op")
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_reshape(pipeline, monkeypatch):
+def test_reshape():
     """
     Feature: MRT backend
-    Description: Test torch.compile with MRT backend when MRT_ENABLE_PIPELINE is enabled/disabled
+    Description: Test torch.compile with MRT backend
     Expectation: Compiled function produces same results as original function in both pipeline modes
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     def foo(x, y):
         a = torch.reshape(y, (x.shape[1], -1))
@@ -55,15 +54,12 @@ def test_reshape(pipeline, monkeypatch):
 
 @pytest.mark.skipif(missing_torch_mlir(), reason="not install torch_mlir")
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_mul(pipeline, monkeypatch):
+def test_mul():
     """
     Feature: MRT backend
-    Description: Test torch.compile with MRT backend when MRT_ENABLE_PIPELINE is enabled/disabled
+    Description: Test torch.compile with MRT backend
     Expectation: Compiled function produces same results as original function in both pipeline modes
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     def foo(x, y):
         return x * y

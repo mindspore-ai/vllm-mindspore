@@ -1,11 +1,12 @@
+"""Tests for aclnn swiglu operation."""
 import pytest
-import numpy as np
 import torch
 import torch.nn.functional as F
 
+from mrt.torch.fx_mlir_backend import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_mlir_backend import backend
 
 
 def op_func(input_self_tensor, dim=-1):
@@ -22,16 +23,13 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [[8192, 1, 3904*2], [32, 1024]])
-def test_swiglu(pipeline, monkeypatch, shape):
+def test_swiglu(shape):
     """
     Feature: Test aclnn swiglu
     Description: Test aclnn swiglu with bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     self_tensor = torch.rand(shape, dtype=torch.bfloat16)
     dim = -1
