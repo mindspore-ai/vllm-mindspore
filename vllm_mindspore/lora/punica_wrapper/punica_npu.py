@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm-ascend/blob/v0.7.3/vllm_ascend/lora/punica_wrapper/punica_npu.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,18 @@
 
 # isort: skip_file
 """Punica wrapper for NPU."""
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
-from mindspore import mint
+if TYPE_CHECKING:
+    from vllm.lora.lora import LoRAMapping
+
+from mindspore import mint, nn, Parameter, ops, dtype
 from mindspore.common import dtype as mstype
+from mindspore.common.initializer import initializer
+from mindspore.ops.auto_generate import grouped_matmul_v4
 from vllm.lora.punica_wrapper.punica_base import PunicaWrapperBase
+from vllm_mindspore.model_executor.utils import (get_model_context,
+                                                 set_model_context)
 
 from vllm_mindspore.lora.ops.torch_ops.lora_ops import (
     bgmv_expand, bgmv_expand_slice, bgmv_shrink, sgmv_expand,
@@ -357,3 +364,87 @@ class PunicaWrapperNPU(PunicaWrapperBase):
                     self.sampler_indices,
                     add_inputs=True)
         y.view_as(y_org)
+
+
+class GraphPunicaWrapperNPU(PunicaWrapperBase, nn.Cell):
+    """
+    GraphPunicaWrapperNPU is designed for static graph mode execution with
+    Multi-LoRA.
+
+    This wrapper utilizes a grouped matrix multiplication (groupedMatmul)
+    approach to handle concurrent execution of multiple LoRA adapters in
+    compiled graph mode, thereby enhancing the inference performance for
+    Multi-LoRA setups.
+
+    Key differences from PunicaWrapperNPU (eager mode):
+    - Uses Parameter instead of tuple for weights
+    - Implements __call__ method for graph compilation
+    - Uses grouped_matmul_v4 for efficient batch processing
+    """
+
+    def __init__(self, max_num_batched_tokens, max_batches, device, **kwargs):
+        nn.Cell.__init__(self)
+        PunicaWrapperBase.__init__(self, max_num_batched_tokens, max_batches,
+                                   device)
+        self.max_loras = kwargs["max_loras"]
+        self.group_list = Parameter(initializer("ones", self.max_loras + 1,
+                                                dtype.int64),
+                                    name="group_list")
+
+    def sgmv_shrink(
+        self,
+        inputs,
+        lora_a_weights,
+        group_list,
+        scaling,
+    ):
+        outputs = grouped_matmul_v4([inputs], [lora_a_weights],
+                                    group_list=group_list,
+                                    split_item=3,
+                                    group_type=0,
+                                    group_list_type=1)[0]
+        return outputs
+
+    def sgmv_expand_slice(self, y, inputs, lora_b_weights, group_list):
+        expand_outputs = grouped_matmul_v4([inputs], [lora_b_weights],
+                                           group_list=group_list,
+                                           split_item=3,
+                                           group_type=0,
+                                           group_list_type=1)[0]
+        outputs = ops.add(y, expand_outputs)
+        return outputs
+
+    def update_metadata(self, mapping: "LoRAMapping",
+                        lora_index_to_id: list[Optional[int]], max_loras: int,
+                        vocab_size: int, extra_vocab_size: int):
+        self._update_base_metadata(mapping, lora_index_to_id, max_loras,
+                                   vocab_size, extra_vocab_size)
+        # Update metadata required for prefill and decode operators.
+        self._update_prefill_metadata(self.token_lora_indices)
+        if mapping.is_prefill:
+            self.is_prefill = True
+        else:
+            self.is_prefill = False
+        _, seq_len, lora_indices, _, _, _ = self.prefill_metadata
+        new_tensor = ops.zeros(self.max_loras + 1, dtype=self.group_list.dtype)
+        lora_indices = lora_indices + 1
+        new_tensor[lora_indices] = seq_len
+        self.group_list.set_data(new_tensor.astype(dtype.int64))
+        set_model_context("no_lora", self.no_lora)
+
+    def construct(self, y, x, lora_a_stacked, lora_b_stacked,
+                  lora_bias_stacked, scale):
+        if get_model_context("no_lora"):
+            return y
+        x = x.reshape(-1, x.shape[-1])
+        orign_shape = y.shape
+        y = y.reshape(-1, y.shape[-1])
+        if lora_bias_stacked is not None:
+            selected_loras_bias = lora_bias_stacked[self.token_lora_indices]
+            y = ops.add(y, selected_loras_bias)
+        shrink_outputs = self.sgmv_shrink(x, lora_a_stacked, self.group_list,
+                                          scale)
+        outputs = self.sgmv_expand_slice(y, shrink_outputs, lora_b_stacked,
+                                         self.group_list)
+        outputs = outputs.reshape(orign_shape)
+        return outputs

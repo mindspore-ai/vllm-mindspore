@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/lora/models.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +33,7 @@ from vllm.model_executor.models.utils import WeightsMapper
 from vllm.utils import is_pin_memory_available
 
 from vllm_mindspore.lora.layers import BaseLayerWithLoRA
+from vllm_mindspore.utils import cast_weight_for_310p, is_310p
 
 _GLOBAL_LORA_ID = 0
 
@@ -195,7 +196,10 @@ def from_local_checkpoint(
             check_unexpected_modules(f)
             for module in f.keys():  # noqa
                 # vllm-mindspore add numpy to tensor
-                tensors[module] = mint.Tensor(f.get_tensor(module))
+                np_data = f.get_tensor(module)
+                if is_310p():
+                    np_data = cast_weight_for_310p(np_data)
+                tensors[module] = mint.Tensor(np_data)
     elif os.path.isfile(lora_bin_file_path):
         # When a bin file is provided, we rely on config to find unexpected
         # modules.

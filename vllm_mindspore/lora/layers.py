@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/lora/layers.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,14 +23,14 @@ import math
 from typing import TYPE_CHECKING, Optional, Union, cast
 
 import mindspore as ms
-from mindspore import mint
+from mindspore import Parameter, mint, ops
+from mindspore.common.initializer import initializer
 from transformers import PretrainedConfig
 from vllm.config import LoRAConfig
 from vllm.distributed import (get_tensor_model_parallel_rank,
                               get_tensor_model_parallel_world_size,
                               split_tensor_along_last_dim,
-                              tensor_model_parallel_all_gather,
-                              tensor_model_parallel_all_reduce)
+                              tensor_model_parallel_all_gather)
 from vllm.distributed.utils import divide
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.rotary_embedding import (
@@ -41,6 +41,8 @@ from vllm.model_executor.layers.vocab_parallel_embedding import (
 from vllm_mindspore.model_executor.layers.linear import (
     ColumnParallelLinear, LinearBase, MergedColumnParallelLinear,
     QKVParallelLinear, RowParallelLinear)
+from vllm_mindspore.model_executor.utils import get_model_context
+from vllm_mindspore.utils import FORMAT_TYPE, is_310p
 
 if TYPE_CHECKING:
     from vllm.lora.punica_wrapper import PunicaWrapperBase
@@ -81,6 +83,81 @@ def _not_fully_sharded_can_replace(can_replace):
         return can_replace(*args, **kwargs) and condition
 
     return dec
+
+
+def _format_cast_for_reset_lora_param(lora_param, index):
+    """
+    Reset a LoRA parameter at the specified index to zero in graph mode.
+    """
+    tmp_lora = lora_param.value()  # type: ignore[attr-defined]
+    tmp_lora[index + 1] = 0
+    if is_310p():
+        tmp_lora = ops.auto_generate.format_cast(tmp_lora, FORMAT_TYPE['nz'])
+    lora_param.set_data(  # type: ignore[attr-defined]
+        tmp_lora)
+    ms.runtime.empty_cache()
+
+
+def _format_cast_for_set_lora_param(lora_a_stacked,
+                                    lora_b_stacked,
+                                    index,
+                                    lora_a,
+                                    lora_b,
+                                    max_lora_rank,
+                                    is_merge=False):
+    """
+    Set LoRA weights at the specified index in graph mode.
+    """
+    tmp_lora_a = lora_a_stacked.value()  # type: ignore[attr-defined]
+    tmp_lora_b = lora_b_stacked.value()  # type: ignore[attr-defined]
+
+    if is_merge:
+        _set_lora_diagonal(
+            tmp_lora_a,
+            tmp_lora_b,
+            index,
+            lora_a,
+            lora_b,
+            max_lora_rank,
+        )
+    else:
+        tmp_lora_a[index + 1, :, :lora_a.shape[1]] = lora_a
+        tmp_lora_b[index + 1, :lora_b.shape[0], :] = lora_b
+
+    if is_310p():
+        tmp_lora_a = ops.auto_generate.format_cast(tmp_lora_a,
+                                                   FORMAT_TYPE['nz'])
+        tmp_lora_b = ops.auto_generate.format_cast(tmp_lora_b,
+                                                   FORMAT_TYPE['nz'])
+
+    lora_a_stacked.set_data(tmp_lora_a)  # type: ignore[attr-defined]
+    lora_b_stacked.set_data(tmp_lora_b)  # type: ignore[attr-defined]
+    ms.runtime.empty_cache()
+
+
+def _set_lora_diagonal(
+    tmp_lora_a: ms.Tensor,
+    tmp_lora_b: ms.Tensor,
+    index: int,
+    lora_a_list: list[ms.Tensor],
+    lora_b_list: list[ms.Tensor],
+    max_rank: int,
+) -> None:
+    """
+    Assign merged LoRA weights in diagonal block matrix form.
+    This function is applicable to MergedColumnParallelLinearWithLoRA and
+    MergedQKVParallelLinearWithLoRA, where multiple LoRA layers need to be
+    merged into a single diagonal block matrix.
+    """
+    for i, (la, lb) in enumerate(zip(lora_a_list, lora_b_list)):
+        # lora_a: each slice placed column-wise at different rank positions
+        tmp_lora_a[index + 1, :, max_rank * i:max_rank * i + la.shape[1]] = la
+
+        # lora_b: form block diagonal matrix
+        # Calculate cumulative offset for current slice in output dimension
+        col_offset = sum(lora_b_list[j].shape[1] for j in range(i))
+        tmp_lora_b[index + 1, max_rank * i:max_rank * i + lb.shape[0],
+                   col_offset:col_offset + lb.shape[1]] = lb
 
 
 # vllm-mindspore Inherits ms.nn.Cell
@@ -299,6 +376,8 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
         model_config: Optional[PretrainedConfig] = None,
     ) -> None:
         self.lora_config = lora_config
+        # Determine if using eager mode (dynamic graph) or graph mode
+        self._is_eager_mode = get_model_context("enforce_eager", False)
 
         if isinstance(self.base_layer, ColumnParallelLinear):
             lora_a_out_size = (lora_config.max_lora_rank if
@@ -314,48 +393,76 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
         else:
             raise NotImplementedError
 
-        self.lora_a_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_a_out_size,
-                    self.input_size,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
-        self.lora_b_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_b_out_size,
-                    lora_config.max_lora_rank,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
-        if lora_config.bias_enabled:
-            lora_bias_out_size = lora_b_out_size
-            self.lora_bias_stacked = tuple(
+        # Since the computation flow differs between dynamic graph (eager mode)
+        # and static graph (graph mode), the shapes and other parameters passed
+        # during initialization will be different.
+        if self._is_eager_mode:
+            self.lora_a_stacked = tuple(
                 mint.zeros(
                     (
                         max_loras,
                         1,
-                        lora_bias_out_size,
+                        lora_a_out_size,
+                        self.input_size,
                     ),
                     dtype=lora_config.lora_dtype,
                 ) for _ in range(self.n_slices))
-        self.output_slices = (self.lora_b_stacked[0].shape[2], )
+            self.lora_b_stacked = tuple(
+                mint.zeros(
+                    (
+                        max_loras,
+                        1,
+                        lora_b_out_size,
+                        lora_config.max_lora_rank,
+                    ),
+                    dtype=lora_config.lora_dtype,
+                ) for _ in range(self.n_slices))
+            if lora_config.bias_enabled:
+                lora_bias_out_size = lora_b_out_size
+                self.lora_bias_stacked = tuple(
+                    mint.zeros(
+                        (
+                            max_loras,
+                            1,
+                            lora_bias_out_size,
+                        ),
+                        dtype=lora_config.lora_dtype,
+                    ) for _ in range(self.n_slices))
+            else:
+                self.lora_bias_stacked = None
+            self.output_slices = (self.lora_b_stacked[0].shape[2], )
+        else:
+            self.lora_a_stacked = Parameter(
+                initializer('zeros',
+                            (max_loras + 1, self.input_size, lora_a_out_size),
+                            lora_config.lora_dtype))
+            self.lora_b_stacked = Parameter(
+                initializer('zeros',
+                            (max_loras + 1, lora_a_out_size, lora_b_out_size),
+                            lora_config.lora_dtype))
+            if lora_config.bias_enabled:
+                lora_bias_out_size = lora_b_out_size
+                self.lora_bias_stacked = Parameter(
+                    initializer('zeros', (max_loras + 1, lora_bias_out_size),
+                                lora_config.lora_dtype))
+            else:
+                self.lora_bias_stacked = None
 
     def reset_lora(self, index: int):
-        for s_index in range(self.n_slices):
-            self.lora_a_stacked[s_index][index] = 0
-            self.lora_b_stacked[s_index][index] = 0
-            if self.lora_config.bias_enabled:
-                # Make mypy happy
-                self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                              self.lora_bias_stacked)
-                self.lora_bias_stacked[s_index][index] = 0
+        if self._is_eager_mode:
+            for s_index in range(self.n_slices):
+                self.lora_a_stacked[s_index][index] = 0
+                self.lora_b_stacked[s_index][index] = 0
+                if self.lora_config.bias_enabled:
+                    self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
+                                                  self.lora_bias_stacked)
+                    self.lora_bias_stacked[s_index][index] = 0
+        else:
+            _format_cast_for_reset_lora_param(self.lora_a_stacked, index)
+            _format_cast_for_reset_lora_param(self.lora_b_stacked, index)
+            if self.lora_bias_stacked is not None:
+                self.lora_bias_stacked[  # type: ignore[attr-defined, index]
+                    index + 1] = 0
 
     def set_lora(
         self,
@@ -369,8 +476,6 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
         # MergedColumnParallelLinearWithLoRA, all other linear LoRA layers
         # store weights in a tuple of size 1. These two layers will
         # override this function.
-        assert (len(self.lora_a_stacked) == len(self.lora_b_stacked) ==
-                self.n_slices == 1)
 
         self.reset_lora(index)
         if self.tp_size > 1:
@@ -379,28 +484,50 @@ class BaseLinearLayerWithLoRA(BaseLayerWithLoRA):
             if lora_bias is not None:
                 lora_bias = self.slice_bias(lora_bias)
 
-        self.lora_a_stacked[0][index,
-                               0, :lora_a.shape[1], :lora_a.shape[0]].copy_(
-                                   lora_a.T, non_blocking=True)
-        self.lora_b_stacked[0][index,
-                               0, :lora_b.shape[1], :lora_b.shape[0]].copy_(
-                                   lora_b.T, non_blocking=True)
-        if lora_bias is not None:
+        if self._is_eager_mode:
+            assert (len(self.lora_a_stacked) == len(self.lora_b_stacked) ==
+                    self.n_slices == 1)
+            self.lora_a_stacked[0][
+                index,
+                0, :lora_a.shape[1], :lora_a.shape[0]].copy_(lora_a.T,
+                                                             non_blocking=True)
+            self.lora_b_stacked[0][
+                index,
+                0, :lora_b.shape[1], :lora_b.shape[0]].copy_(lora_b.T,
+                                                             non_blocking=True)
+            if lora_bias is not None:
+                self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
+                                              self.lora_bias_stacked)
+                assert len(self.lora_bias_stacked)
+                self.lora_bias_stacked[0][index, 0, :lora_bias.shape[0]].copy_(
+                    lora_bias.T, non_blocking=True)
+        else:
+            _format_cast_for_set_lora_param(self.lora_a_stacked,
+                                            self.lora_b_stacked,
+                                            index,
+                                            lora_a,
+                                            lora_b,
+                                            self.lora_config.max_lora_rank,
+                                            is_merge=False)
 
-            self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                          self.lora_bias_stacked)
-            assert len(self.lora_bias_stacked)
-            self.lora_bias_stacked[0][index, 0, :lora_bias.shape[0]].copy_(
-                lora_bias.T, non_blocking=True)
+            if self.lora_bias_stacked is not None:
+                self.lora_bias_stacked[  # type: ignore[attr-defined, index]
+                    index + 1] = lora_bias
 
     def apply(self,
               x: ms.Tensor,
               bias: Optional[ms.Tensor] = None) -> ms.Tensor:
         output = self.base_layer.quant_method.apply(self.base_layer, x, bias)
-        self.punica_wrapper.add_lora_linear(output, x, self.lora_a_stacked,
-                                            self.lora_b_stacked,
-                                            self.lora_bias_stacked, 1.0,
-                                            self.output_slices)
+
+        if self._is_eager_mode:
+            self.punica_wrapper.add_lora_linear(output, x, self.lora_a_stacked,
+                                                self.lora_b_stacked,
+                                                self.lora_bias_stacked, 1.0,
+                                                self.output_slices)
+        else:
+            output = self.punica_wrapper(output, x, self.lora_a_stacked,
+                                         self.lora_b_stacked,
+                                         self.lora_bias_stacked, 1.0)
         return output
 
 
@@ -533,44 +660,67 @@ class MergedColumnParallelLinearWithLoRA(ColumnParallelLinearWithLoRA):
         model_config: Optional[PretrainedConfig] = None,
     ) -> None:
         """
-        The main reason for overriding this function is to enhance  code 
+        The main reason for overriding this function is to enhance code
         maintainability.
         """
         self.lora_config = lora_config
+        self._is_eager_mode = get_model_context("enforce_eager", False)
 
         lora_a_output_size_per_partition = (
             lora_config.max_lora_rank if not lora_config.fully_sharded_loras
             else divide(lora_config.max_lora_rank, self.tp_size))
-        self.lora_a_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    lora_a_output_size_per_partition,
-                    self.input_size,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for _ in range(self.n_slices))
-        self.lora_b_stacked = tuple(
-            mint.zeros(
-                (
-                    max_loras,
-                    1,
-                    output_size,
-                    lora_config.max_lora_rank,
-                ),
-                dtype=lora_config.lora_dtype,
-            ) for output_size in self.output_slices)
-        if lora_config.bias_enabled:
-            self.lora_bias_stacked = tuple(
+        output_size = sum(self.output_slices)
+
+        if self._is_eager_mode:
+            self.lora_a_stacked = tuple(
+                mint.zeros(
+                    (
+                        max_loras,
+                        1,
+                        lora_a_output_size_per_partition,
+                        self.input_size,
+                    ),
+                    dtype=lora_config.lora_dtype,
+                ) for _ in range(self.n_slices))
+            self.lora_b_stacked = tuple(
                 mint.zeros(
                     (
                         max_loras,
                         1,
                         output_size,
+                        lora_config.max_lora_rank,
                     ),
                     dtype=lora_config.lora_dtype,
                 ) for output_size in self.output_slices)
+            if lora_config.bias_enabled:
+                self.lora_bias_stacked = tuple(
+                    mint.zeros(
+                        (
+                            max_loras,
+                            1,
+                            output_size,
+                        ),
+                        dtype=lora_config.lora_dtype,
+                    ) for output_size in self.output_slices)
+            else:
+                self.lora_bias_stacked = None
+        else:
+            self.lora_a_stacked = Parameter(
+                initializer('zeros',
+                            (max_loras + 1, self.input_size,
+                             lora_a_output_size_per_partition * self.n_slices),
+                            lora_config.lora_dtype))
+            self.lora_b_stacked = Parameter(
+                initializer('zeros',
+                            (max_loras + 1, lora_a_output_size_per_partition *
+                             self.n_slices, output_size),
+                            lora_config.lora_dtype))
+            if lora_config.bias_enabled:
+                self.lora_bias_stacked = Parameter(
+                    initializer('zeros', (max_loras + 1, output_size),
+                                lora_config.lora_dtype))
+            else:
+                self.lora_bias_stacked = None
 
     def slice_lora_a(
             self, lora_a: list[Union[ms.Tensor,
@@ -613,25 +763,41 @@ class MergedColumnParallelLinearWithLoRA(ColumnParallelLinearWithLoRA):
             if lora_bias is not None:
                 lora_bias = self.slice_bias(lora_bias)
 
-        for i in range(self.n_slices):
-            if (lora_a_i := lora_a[i]) is not None:
-                self.lora_a_stacked[i][
-                    index, 0, :lora_a_i.shape[1], :lora_a_i.shape[0]].copy_(
-                        lora_a_i.T, non_blocking=True)
-            if (lora_b_i := lora_b[i]) is not None:
-                self.lora_b_stacked[i][
-                    index, 0, :lora_b_i.shape[1], :lora_b_i.shape[0]].copy_(
-                        lora_b_i.T, non_blocking=True)
-
-        if lora_bias is not None:
-            self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
-                                          self.lora_bias_stacked)
+        if self._is_eager_mode:
             for i in range(self.n_slices):
-                if (lora_bias_i := lora_bias[i]) is not None:
-                    self.lora_bias_stacked[i][index,
-                                              0, :lora_bias_i.shape[0]].copy_(
-                                                  lora_bias_i.T,
-                                                  non_blocking=True)
+                if (lora_a_i := lora_a[i]) is not None:
+                    self.lora_a_stacked[i][
+                        index,
+                        0, :lora_a_i.shape[1], :lora_a_i.shape[0]].copy_(
+                            lora_a_i.T, non_blocking=True)
+                if (lora_b_i := lora_b[i]) is not None:
+                    self.lora_b_stacked[i][
+                        index,
+                        0, :lora_b_i.shape[1], :lora_b_i.shape[0]].copy_(
+                            lora_b_i.T, non_blocking=True)
+
+            if lora_bias is not None:
+                self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
+                                              self.lora_bias_stacked)
+                for i in range(self.n_slices):
+                    if (lora_bias_i := lora_bias[i]) is not None:
+                        self.lora_bias_stacked[i][
+                            index,
+                            0, :lora_bias_i.shape[0]].copy_(lora_bias_i.T,
+                                                            non_blocking=True)
+        else:
+            _format_cast_for_set_lora_param(self.lora_a_stacked,
+                                            self.lora_b_stacked,
+                                            index,
+                                            lora_a,
+                                            lora_b,
+                                            self.lora_config.max_lora_rank,
+                                            is_merge=True)
+
+            if self.lora_bias_stacked is not None:
+                lora_bias = ops.concat(lora_bias, axis=0)
+                self.lora_bias_stacked[  # type: ignore[attr-defined, index]
+                    index + 1] = lora_bias
 
     @classmethod
     @_not_fully_sharded_can_replace
@@ -750,17 +916,57 @@ class MergedQKVParallelLinearWithLoRA(MergedColumnParallelLinearWithLoRA):
             self.kv_shard_id,
         )
 
-    def create_lora_weights(
+    def set_lora(
         self,
-        max_loras: int,
-        lora_config: LoRAConfig,
-        model_config: Optional[PretrainedConfig] = None,
-    ) -> None:
-        """
-        The main reason for overloading this function is to handle inconsistent 
-        weight dimensions in qkv lora.
-        """
-        super().create_lora_weights(max_loras, lora_config, model_config)
+        index: int,
+        lora_a: ms.Tensor,
+        lora_b: ms.Tensor,
+        embeddings_tensor: Optional[ms.Tensor],
+        lora_bias: Optional[ms.Tensor] = None,
+    ):
+        self.reset_lora(index)
+
+        if self.tp_size > 1:
+            lora_a = self.slice_lora_a(lora_a)
+            lora_b = self.slice_lora_b(lora_b)
+            if lora_bias is not None:
+                lora_bias = self.slice_bias(lora_bias)
+
+        if self._is_eager_mode:
+            for i in range(self.n_slices):
+                if (lora_a_i := lora_a[i]) is not None:
+                    self.lora_a_stacked[i][
+                        index,
+                        0, :lora_a_i.shape[1], :lora_a_i.shape[0]].copy_(
+                            lora_a_i.T, non_blocking=True)
+                if (lora_b_i := lora_b[i]) is not None:
+                    self.lora_b_stacked[i][
+                        index,
+                        0, :lora_b_i.shape[1], :lora_b_i.shape[0]].copy_(
+                            lora_b_i.T, non_blocking=True)
+
+            if lora_bias is not None:
+                self.lora_bias_stacked = cast(tuple[ms.Tensor, ...],
+                                              self.lora_bias_stacked)
+                for i in range(self.n_slices):
+                    if (lora_bias_i := lora_bias[i]) is not None:
+                        self.lora_bias_stacked[i][
+                            index,
+                            0, :lora_bias_i.shape[0]].copy_(lora_bias_i.T,
+                                                            non_blocking=True)
+        else:
+            _format_cast_for_set_lora_param(self.lora_a_stacked,
+                                            self.lora_b_stacked,
+                                            index,
+                                            lora_a,
+                                            lora_b,
+                                            self.lora_config.max_lora_rank,
+                                            is_merge=True)
+
+            if self.lora_bias_stacked is not None:
+                lora_bias = ops.concat(lora_bias, axis=0)
+                self.lora_bias_stacked[  # type: ignore[attr-defined, index]
+                    index + 1] = lora_bias
 
     @classmethod
     @_not_fully_sharded_can_replace
@@ -829,7 +1035,8 @@ class RowParallelLinearWithLoRA(BaseLinearLayerWithLoRA):
         # Matrix multiply.
         output_parallel = self.apply(input_parallel)
         if self.base_layer.reduce_results and self.base_layer.tp_size > 1:
-            output_ = tensor_model_parallel_all_reduce(output_parallel)
+            output_ = self.base_layer.tensor_model_parallel_all_reduce(
+                output_parallel)
         else:
             output_ = output_parallel
 

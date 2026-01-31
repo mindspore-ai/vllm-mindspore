@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/v1/worker/gpu_model_runner.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -976,8 +976,74 @@ def _update_states(self, scheduler_output) -> None:
     self.input_batch.condense()
     # Allow attention backend to reorder the batch, potentially
     self._may_reorder_batch(scheduler_output)
+    # Reorder batch by lora_id for Multi-LoRA performance optimization
+    _reorder_batch_by_lora_id(self.input_batch)
     # Refresh batch metadata with any pending updates.
     self.input_batch.refresh_metadata()
+
+
+def _reorder_batch_by_lora_id(input_batch) -> None:
+    """
+    Reorder the batch by lora_id to group requests with the same LoRA together.
+    This improves Multi-LoRA performance by reducing context switches.
+
+    The lora_id mapping is:
+        - Base model requests: -1
+        - First LoRA: 0
+        - Second LoRA: 1
+        - etc.
+    """
+    if len(input_batch.lora_id_to_request_ids) == 0:
+        return
+
+    req_lora_ids = {}
+    lora_ids = []
+
+    # Build mapping from request to lora_id
+    for lora_id, requests in input_batch.lora_id_to_request_ids.items():
+        for request in requests:
+            req_lora_ids[request] = lora_id
+
+    # Build lora_ids list for all requests in the batch
+    for req_id in input_batch._req_ids:
+        if req_id is None:
+            continue
+        if req_id not in req_lora_ids:
+            lora_ids.append(-1)  # Base model request
+        else:
+            lora_ids.append(req_lora_ids[req_id])
+
+    # Check if batch is already sorted by lora_id
+    is_sorted = np.all(np.array(lora_ids[:-1]) <= np.array(lora_ids[1:]))
+    if is_sorted:
+        return
+
+    # Sort by lora_id
+    lora_id_sort = np.argsort(lora_ids)
+    cur_req_index = list(range(len(input_batch._req_ids)))
+    req_nums = len(cur_req_index)
+
+    # Reorder requests to match sorted order (optimized with position mapping)
+    # Build a mapping from value to its current position in cur_req_index
+    current_pos = {val: idx for idx, val in enumerate(cur_req_index)}
+
+    for i in range(req_nums):
+        target_val = lora_id_sort[i]
+        if cur_req_index[i] == target_val:
+            continue
+
+        # Find the current position of the value that should be at position i
+        j = current_pos[target_val]
+
+        # Swap in cur_req_index
+        cur_req_index[i], cur_req_index[j] = cur_req_index[j], cur_req_index[i]
+
+        # Update position mapping
+        current_pos[cur_req_index[j]] = j
+        current_pos[target_val] = i
+
+        # Swap input states of the two requests
+        input_batch.swap_states(i, j)
 
 
 def wrapper_gpu_model_runner_execute_model(func):

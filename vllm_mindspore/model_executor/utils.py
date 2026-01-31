@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/model_executor/utils.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +41,11 @@ def set_weight_attrs(
         setattr(weight, key, value)
 
 
-_native_model_context = {"is_prefill": True}
+_native_model_context = {
+    "is_prefill": True,
+    "no_lora": True,
+    "enforce_eager": False
+}
 
 
 def set_model_context(key, value):
@@ -49,5 +53,8 @@ def set_model_context(key, value):
     _native_model_context[key] = value
 
 
-def get_model_context(key):
+def get_model_context(key, default=None):
+    """Get model context value with optional default."""
+    if default is not None:
+        return _native_model_context.get(key, default)
     return _native_model_context[key]

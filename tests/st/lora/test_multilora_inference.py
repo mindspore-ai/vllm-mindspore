@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,7 +101,8 @@ def initialize_engine():
                              max_cpu_loras=2,
                              max_num_seqs=256,
                              max_model_len=256,
-                             max_num_batched_tokens=400)
+                             max_num_batched_tokens=400,
+                             enforce_eager=True)
     return LLMEngine.from_engine_args(engine_args)
 
 
@@ -125,9 +126,11 @@ def test_multilora_inference():
 
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @pytest.mark.env_onecard
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_offline_multilora_002():
+def test_vllm_ms_offline_multilora_002(enforce_eager):
     """
     Test Summary:
         For the offline native backend scenario with default mode,
@@ -147,7 +150,7 @@ def test_vllm_ms_offline_multilora_002():
                                      top_p=0.95,
                                      top_k=3,
                                      repetition_penalty=2.0)
-    llm = LLM(model=model, tensor_parallel_size=1)
+    llm = LLM(model=model, tensor_parallel_size=1, enforce_eager=enforce_eager)
     with pytest.raises(ValueError) as err:
         llm.generate(prompts,
                      sampling_params,
@@ -182,6 +185,7 @@ def test_vllm_ms_offline_multilora_003():
               max_lora_rank=64,
               max_loras=1,
               enable_lora=True,
+              enforce_eager=True,
               tensor_parallel_size=2)
     outputs = llm.generate(prompts,
                            sampling_params,
@@ -224,6 +228,7 @@ def test_vllm_ms_offline_multilora_004():
               max_lora_rank=64,
               max_loras=1,
               enable_lora=True,
+              enforce_eager=True,
               max_model_len=1024,
               max_num_batched_tokens=1024)
     outputs = llm.generate(prompts,
@@ -240,12 +245,14 @@ def test_vllm_ms_offline_multilora_004():
 
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @pytest.mark.env_onecard
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_offline_multilora_005():
+def test_vllm_ms_offline_multilora_005(enforce_eager):
     """
     Test Summary:
-        For the offline native backend scenario with default mode,
+        For the offline native backend scenario with eager mode,
         enable --enable-lora, and pass an invalid lora_path in
         LoRARequest.
     Expected Result:
@@ -281,6 +288,7 @@ def test_vllm_ms_offline_multilora_005():
                       max_lora_rank=64,
                       max_loras=1,
                       enable_lora=True,
+                      enforce_eager=enforce_eager,
                       max_model_len=1024,
                       max_num_batched_tokens=1024,
                       tensor_parallel_size=1)
@@ -303,11 +311,13 @@ def test_vllm_ms_offline_multilora_005():
 @pytest.mark.level0
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_001():
+def test_vllm_ms_server_multilora_001(enforce_eager):
     """
     Test Summary:
-        For the online native backend scenario with default mode,
+        For the online native backend scenario,
         enable --enable-lora --lora-modules
     Expected Result:
         Execution successful, executed on the native backend
@@ -316,13 +326,15 @@ def test_vllm_ms_server_multilora_001():
     """
     model = QWEN_7B_MODEL
     log_name = "test_vllm_ms_server_multilora_001.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        extra_params=f'--enable-lora --max_lora_rank=64 --max_loras=1 '
-        f'--max_model_len=1024 --max_num_batched_tokens=1024 '
-        f'--lora-modules lora1="{QWEN_7B_LORA_LAW}"')
+    extra_params = (f'--enable-lora --max_lora_rank=64 --max_loras=1 '
+                    f'--max_model_len=1024 --max_num_batched_tokens=1024 '
+                    f'--lora-modules lora1="{QWEN_7B_LORA_LAW}"')
+    if enforce_eager:
+        extra_params += ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=extra_params)
     serve_port = os.getenv("TEST_SERVE_PORT", None)
     if serve_port:
         url = f'http://localhost:{serve_port}/v1/completions'
@@ -342,9 +354,11 @@ def test_vllm_ms_server_multilora_001():
 
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @pytest.mark.env_onecard
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_002():
+def test_vllm_ms_server_multilora_002(enforce_eager):
     """
     Test Summary:
         For the online native backend scenario with default mode,
@@ -356,14 +370,16 @@ def test_vllm_ms_server_multilora_002():
     """
     model = QWEN_7B_MODEL
     log_name = "test_vllm_ms_server_multilora_002.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        normal_case=False,
-        extra_params='--max_lora_rank=64 --max_loras=1 --max_model_len=1024 '
-        '--max_num_batched_tokens=1024 '
-        '--lora-modules lora1="{QWEN_7B_LORA_LAW}"')
+    extra_params = (f'--max_lora_rank=64 --max_loras=1 '
+                    f'--max_model_len=1024 --max_num_batched_tokens=1024 '
+                    f'--lora-modules lora1="{QWEN_7B_LORA_LAW}"')
+    if enforce_eager:
+        extra_params = ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                normal_case=False,
+                                extra_params=extra_params)
     stop_vllm_server(process)
     result = get_key_counter_from_log(
         log_name, "ValueError: Call to add_lora method "
@@ -373,9 +389,11 @@ def test_vllm_ms_server_multilora_002():
 
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @pytest.mark.env_onecard
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_003():
+def test_vllm_ms_server_multilora_003(enforce_eager):
     """
     Test Summary:
         For the online native backend scenario with default mode,
@@ -388,14 +406,17 @@ def test_vllm_ms_server_multilora_003():
     """
     model = QWEN_7B_MODEL
     log_name = "test_vllm_ms_server_multilora_003.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        normal_case=False,
-        extra_params='--max_lora_rank=64 --max_loras=1 --max_model_len=1024 '
-        '--enable-lora --max_num_batched_tokens=1024 '
-        '--lora-modules lora1="/path/to/error/lora"')
+    extra_params = ('--max_lora_rank=64 --max_loras=1 '
+                    '--max_model_len=1024 --enable-lora '
+                    '--max_num_batched_tokens=1024 '
+                    '--lora-modules lora1="/path/to/error/lora"')
+    if enforce_eager:
+        extra_params += ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                normal_case=False,
+                                extra_params=extra_params)
     stop_vllm_server(process)
     result = get_key_counter_from_log(
         log_name, "ValueError: Call to add_lora method "
@@ -406,8 +427,10 @@ def test_vllm_ms_server_multilora_003():
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_004():
+def test_vllm_ms_server_multilora_004(enforce_eager):
     """
     Test Summary:
         For the online native backend scenario with default mode,
@@ -422,14 +445,17 @@ def test_vllm_ms_server_multilora_004():
     path = QWEN_7B_LORA_LAW
     path2 = QWEN_7B_LORA_MEDICAL
     log_name = "test_vllm_ms_server_multilora_004.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        normal_case=False,
-        extra_params=f'--max_lora_rank=64 --max_loras=1 --max_model_len=1024 '
-        f'--enable-lora --max_num_batched_tokens=1024 '
-        f'--lora-modules lora1="{path}" lora1="{path2}" ')
+    extra_params = (f'--max_lora_rank=64 --max_loras=1 '
+                    f'--max_model_len=1024 --enable-lora '
+                    f'--max_num_batched_tokens=1024 '
+                    f'--lora-modules lora1="{path}" lora1="{path2}"')
+    if enforce_eager:
+        extra_params += ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                normal_case=False,
+                                extra_params=extra_params)
     stop_vllm_server(process)
     result = get_key_counter_from_log(
         log_name,
@@ -440,11 +466,13 @@ def test_vllm_ms_server_multilora_004():
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_005():
+def test_vllm_ms_server_multilora_005(enforce_eager):
     """
     Test Summary:
-        For the online native backend scenario with default mode,
+        For the online native backend scenario,
         enable --enable-lora, and repeatedly set --lora-modules {name}={path}
         configurations with the same path.
     Expected Result:
@@ -455,13 +483,16 @@ def test_vllm_ms_server_multilora_005():
     model = QWEN_7B_MODEL
     path = QWEN_7B_LORA_LAW
     log_name = "test_vllm_ms_server_multilora_005.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        extra_params=f'--max_lora_rank=64 --max_loras=2 --max_model_len=1024 '
-        f'--enable-lora --max_num_batched_tokens=1024 '
-        f'--lora-modules lora1="{path}" lora2="{path}" ')
+    extra_params = (f'--max_lora_rank=64 --max_loras=2 '
+                    f'--max_model_len=1024 --enable-lora '
+                    f'--max_num_batched_tokens=1024 '
+                    f'--lora-modules lora1="{path}" lora2="{path}"')
+    if enforce_eager:
+        extra_params = ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=extra_params)
     serve_port = os.getenv("TEST_SERVE_PORT", None)
     if serve_port:
         url = f'http://localhost:{serve_port}/'
@@ -479,11 +510,13 @@ def test_vllm_ms_server_multilora_005():
 
 
 @pytest.mark.level1
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_007():
+def test_vllm_ms_server_multilora_007(enforce_eager):
     """
     Test Summary:
-        For the online native backend scenario with default mode,
+        For the online native backend scenario,
         testing the multi-LoRA, APC, and CP features.
     Expected Result:
         Execution successful, the prefix cache is expected to hit.
@@ -492,16 +525,18 @@ def test_vllm_ms_server_multilora_007():
     """
     model = QWEN_7B_MODEL
     log_name = "test_vllm_ms_server_multilora_007.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        extra_params=f'--tensor_parallel_size=2 --enable-lora '
-        f'--max_lora_rank=64 --max_model_len=4096 '
-        f'--lora-modules lora1={QWEN_7B_LORA_LAW} '
-        f'--enable-prefix-caching --block_size=16 '
-        f'--enable-chunked-prefill --max_num_seqs 16 '
-        f'--max-num-batched-tokens 32')
+    extra_params = (f'--tensor_parallel_size=2 --enable-lora '
+                    f'--max_lora_rank=64 --max_model_len=4096 '
+                    f'--lora-modules lora1={QWEN_7B_LORA_LAW} '
+                    f'--enable-prefix-caching --block_size=16 '
+                    f'--enable-chunked-prefill --max_num_seqs 16 '
+                    f'--max-num-batched-tokens 32')
+    if enforce_eager:
+        extra_params = ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=extra_params)
     test_results = run_combination_accuracy(model="lora1",
                                             is_service=True,
                                             batches=[3],
@@ -523,12 +558,14 @@ def test_vllm_ms_server_multilora_007():
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_offline_multilora_v1_001():
+def test_vllm_ms_offline_multilora_v1_001(enforce_eager):
     """
     Test Summary:
-        For the offline native backend scenario with default mode,
-        enable enable_lora, and pass a valid LoRARequest.
+        For the offline native backend scenario,
+        enable enable_lora, and pass multiple valid LoRARequests.
     Expected Result:
         Execution successful
     Model Info:
@@ -548,6 +585,7 @@ def test_vllm_ms_offline_multilora_v1_001():
               max_lora_rank=64,
               max_loras=2,
               enable_lora=True,
+              enforce_eager=enforce_eager,
               max_model_len=1024,
               max_num_batched_tokens=1024)
     outputs = llm.generate(prompts,
@@ -565,8 +603,10 @@ def test_vllm_ms_offline_multilora_v1_001():
 @pytest.mark.level1
 @pytest.mark.platform_arm_ascend910b_training
 @pytest.mark.env_onecard
+@pytest.mark.parametrize("enforce_eager", [True, False],
+                         ids=["eager", "graph"])
 @patch.dict(os.environ, env_vars)
-def test_vllm_ms_server_multilora_v1_001():
+def test_vllm_ms_server_multilora_v1_001(enforce_eager):
     """
     Test Summary:
         For the online native backend scenario with default mode,
@@ -579,13 +619,16 @@ def test_vllm_ms_server_multilora_v1_001():
     """
     model = QWEN_7B_MODEL
     log_name = "test_vllm_ms_server_multilora_006.log"
-    process = start_vllm_server(
-        model,
-        log_name,
-        start_mode='serve',
-        extra_params=f'--enable-log-requests --enable-lora --max_lora_rank=64 '
-        f'--max_model_len=4096 --lora-modules '
-        f'lora1={QWEN_7B_LORA_LAW} lora2={QWEN_7B_LORA_MEDICAL}')
+    extra_params = (f'--enable-log-requests --enable-lora '
+                    f'--max_lora_rank=64 --max_model_len=4096 '
+                    f'--lora-modules lora1={QWEN_7B_LORA_LAW} '
+                    f'lora2={QWEN_7B_LORA_MEDICAL}')
+    if enforce_eager:
+        extra_params = ' --enforce-eager'
+    process = start_vllm_server(model,
+                                log_name,
+                                start_mode='serve',
+                                extra_params=extra_params)
     serve_port = os.getenv("TEST_SERVE_PORT", None)
     if serve_port:
         url = f'http://localhost:{serve_port}/'
@@ -603,3 +646,44 @@ def test_vllm_ms_server_multilora_v1_001():
     assert result >= 1
     assert get_key_counter_from_log(log_name, "lora1") > 5
     assert get_key_counter_from_log(log_name, "lora2") > 5
+
+
+@pytest.mark.level0
+@pytest.mark.platform_arm_ascend910b_training
+@pytest.mark.env_onecard
+@patch.dict(os.environ, env_vars)
+def test_vllm_ms_offline_multilora_with_graph_mode():
+    """
+    Test Summary:
+        For the offline native backend scenario,
+        enable --enable-lora, and pass a single valid LoRARequest.
+    Expected Result:
+        Execution successful
+    Model Info:
+        Qwen2.5-7B-Instruct, Qwen2.5-7B-Lora-Law
+    """
+    import vllm_mindspore
+    from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
+
+    model = QWEN_7B_MODEL
+    prompts = ["违章停车与违法停车是否有区别？"]
+    sampling_params = SamplingParams(temperature=0.0,
+                                     top_p=1,
+                                     top_k=-1,
+                                     max_tokens=10)
+
+    llm = LLM(model=model,
+              max_lora_rank=64,
+              max_loras=1,
+              enable_lora=True,
+              max_model_len=1024,
+              max_num_batched_tokens=1024)
+
+    outputs = llm.generate(prompts,
+                           sampling_params,
+                           lora_request=LoRARequest("lora-law", 1,
+                                                    QWEN_7B_LORA_LAW))
+    assert len(outputs) == 1
+    assert outputs[0].finished is True
+    assert "从法律上来说" in outputs[0].outputs[0].text

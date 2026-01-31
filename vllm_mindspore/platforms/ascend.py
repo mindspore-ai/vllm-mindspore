@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/platforms/cuda.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 else:
     ModelConfig = None
     VllmConfig = None
+from vllm_mindspore.model_executor.utils import get_model_context
 
 logger = init_logger(__name__)
 
@@ -185,7 +186,12 @@ class AscendPlatform(Platform):
         return True
 
     def get_punica_wrapper(cls) -> str:
-        return "vllm_mindspore.lora.punica_wrapper.punica_npu.PunicaWrapperNPU"
+        if get_model_context("enforce_eager"):
+            return ("vllm_mindspore.lora.punica_wrapper.punica_npu."
+                    "PunicaWrapperNPU")
+        else:
+            return ("vllm_mindspore.lora.punica_wrapper.punica_npu."
+                    "GraphPunicaWrapperNPU")
 
     @classmethod
     def pre_register_and_update(cls, parser=None):
