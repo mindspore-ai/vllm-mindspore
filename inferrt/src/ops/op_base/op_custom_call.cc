@@ -34,10 +34,12 @@ void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   }
   std::string opName = opName_.substr(pos + 1);
   operatorPtr_ = CreateCustomOperator(opName);
+  SetOpType(OpType::CustomCallOp);
 #ifdef ENABLE_TORCH_FRONT
   if (operatorPtr_ == nullptr) {
     LOG_OUT << "Custom op " << opName_ << " not registered. Try to create operator from torch.";
     operatorPtr_ = std::make_shared<OpTorchCall>(opName_);
+    SetOpType(OpType::TorchCallOp);
   }
 #endif
   CHECK_IF_NULL(operatorPtr_);

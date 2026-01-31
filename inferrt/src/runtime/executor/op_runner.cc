@@ -69,6 +69,11 @@ void OpRunner::UpdateTensors() {
 }
 
 void OpRunner::AllocateMemory() {
+  // The output tensor will be allocated in torch op, skip allocate memory.
+  if (operator_->GetOpType() == ops::OpType::TorchCallOp || operator_->GetOpType() == ops::OpType::PythonCallOp) {
+    return;
+  }
+
   // Allocate memory for output tensor.
   for (auto &storage : storagesToAlloc_) {
     if (storage->CheckOwnsData()) {

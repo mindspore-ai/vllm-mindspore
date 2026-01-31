@@ -194,7 +194,7 @@ TEST_F(ProfilerTest, EnvironmentVariable) {
 
   // Reset initialization state
   ProfilerAnalyzer::GetInstance().Disable();
-  ProfilerAnalyzer::GetInstance().Clear();
+  ProfilerAnalyzer::GetInstance().Reset();
 
   // Calling StartStep triggers initialization
   ProfilerAnalyzer::GetInstance().StartStep();

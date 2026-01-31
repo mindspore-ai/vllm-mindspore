@@ -23,28 +23,46 @@
 #include <torch_npu/csrc/core/npu/NPUStream.h>
 #endif
 
-#include "ops/utils/aten_convert.h"
 #include "ops/utils/data_convert.h"
-
-#define CONVERT_TUPLE_TO_STACK(func) [this](const ir::TuplePtr tuple, torch::jit::Stack &stack) { func(tuple, stack); }
-
-#define CONVERT_INPUT_TO_STACK(func) [this](const ir::Value *value, torch::jit::Stack &stack) { func(value, stack); }
 
 namespace mrt {
 namespace ops {
 constexpr size_t kRealInputOffset = 1;
 
+void OpTorchCall::updateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor) {
+  CHECK_IF_NULL(mrtTensor);
+  auto tensor_impl = atTensor.unsafeGetTensorImpl();
+  at::DataPtr dataPtr = at::DataPtr(const_cast<void *>(mrtTensor->DataPtr()), atTensor.device());
+  atTensor.storage().unsafeGetStorageImpl()->set_data_ptr(std::move(dataPtr));
+  auto shape = mrtTensor->Shape();
+  auto strides = mrtTensor->Strides();
+  if (strides.empty()) {
+    tensor_impl->set_sizes_contiguous(shape);
+  } else {
+    tensor_impl->set_sizes_and_strides(shape, strides);
+  }
+}
+
 // Helper functions for ConvertTupleToStack
-void OpTorchCall::ConvertTensorTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertTensorTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   std::vector<at::Tensor> vec;
   vec.reserve(tuple->Size());
   for (size_t i = 0; i < tuple->Size(); i++) {
-    vec.push_back(ToAtenTensor((*tuple)[i].get()));
+    if (firstRun_) {
+      auto atTensor = ToTorchTensor((*tuple)[i]->ToTensor());
+      vec.push_back(atTensor);
+      atTensors_.push_back(atTensor);
+    } else {
+      CHECK_IF_FAIL(tensorIdx_ < atTensors_.size());
+      updateTorchTensor(atTensors_[tensorIdx_], (*tuple)[i]->ToTensor());
+      vec.push_back(atTensors_[tensorIdx_]);
+    }
+    tensorIdx_++;
   }
   torch::jit::push(stack, torch::jit::IValue(vec));
 }
 
-void OpTorchCall::ConvertIntTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertIntTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   std::vector<int64_t> vec;
   vec.reserve(tuple->Size());
   for (size_t i = 0; i < tuple->Size(); i++) {
@@ -53,7 +71,7 @@ void OpTorchCall::ConvertIntTupleToStack(const ir::TuplePtr tuple, torch::jit::S
   torch::jit::push(stack, torch::jit::IValue(vec));
 }
 
-void OpTorchCall::ConvertBoolTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertBoolTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   std::vector<bool> vec;
   vec.reserve(tuple->Size());
   for (size_t i = 0; i < tuple->Size(); i++) {
@@ -62,7 +80,7 @@ void OpTorchCall::ConvertBoolTupleToStack(const ir::TuplePtr tuple, torch::jit::
   torch::jit::push(stack, torch::jit::IValue(vec));
 }
 
-void OpTorchCall::ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   std::vector<double> vec;
   vec.reserve(tuple->Size());
   for (size_t i = 0; i < tuple->Size(); i++) {
@@ -71,7 +89,7 @@ void OpTorchCall::ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit
   torch::jit::push(stack, torch::jit::IValue(vec));
 }
 
-void OpTorchCall::ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   std::vector<std::string> vec;
   vec.reserve(tuple->Size());
   for (size_t i = 0; i < tuple->Size(); i++) {
@@ -80,11 +98,11 @@ void OpTorchCall::ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit
   torch::jit::push(stack, torch::jit::IValue(vec));
 }
 
-void OpTorchCall::ConvertNoneTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertNoneTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   torch::jit::push(stack, torch::jit::IValue());
 }
 
-void OpTorchCall::ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) {
   CHECK_IF_NULL(tuple);
   size_t size = tuple->Size();
   if (size == 0) {
@@ -96,107 +114,110 @@ void OpTorchCall::ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stac
   ir::Value::Tag tag = element->GetTag();
 
   // Define a map from Tag to tuple conversion function
-  static const std::unordered_map<ir::Value::Tag, std::function<void(const ir::TuplePtr, torch::jit::Stack &)>>
-    tuple_conversion_map = {{ir::Value::Tag::Tensor, CONVERT_TUPLE_TO_STACK(ConvertTensorTupleToStack)},
-                            {ir::Value::Tag::Int, CONVERT_TUPLE_TO_STACK(ConvertIntTupleToStack)},
-                            {ir::Value::Tag::Symbol, CONVERT_TUPLE_TO_STACK(ConvertIntTupleToStack)},
-                            {ir::Value::Tag::Bool, CONVERT_TUPLE_TO_STACK(ConvertBoolTupleToStack)},
-                            {ir::Value::Tag::Double, CONVERT_TUPLE_TO_STACK(ConvertDoubleTupleToStack)},
-                            {ir::Value::Tag::String, CONVERT_TUPLE_TO_STACK(ConvertStringTupleToStack)},
-                            {ir::Value::Tag::None, CONVERT_TUPLE_TO_STACK(ConvertNoneTupleToStack)}};
+  static const std::unordered_map<ir::Value::Tag, ConvertTupleFunc> tuple_conversion_map = {
+    {ir::Value::Tag::Tensor, &OpTorchCall::ConvertTensorTupleToStack},
+    {ir::Value::Tag::Int, &OpTorchCall::ConvertIntTupleToStack},
+    {ir::Value::Tag::Symbol, &OpTorchCall::ConvertIntTupleToStack},
+    {ir::Value::Tag::Bool, &OpTorchCall::ConvertBoolTupleToStack},
+    {ir::Value::Tag::Double, &OpTorchCall::ConvertDoubleTupleToStack},
+    {ir::Value::Tag::String, &OpTorchCall::ConvertStringTupleToStack},
+    {ir::Value::Tag::None, &OpTorchCall::ConvertNoneTupleToStack}};
 
   auto it = tuple_conversion_map.find(tag);
   if (it != tuple_conversion_map.end()) {
-    it->second(tuple, stack);
+    it->second(this, tuple, stack);
   } else {
     LOG_EXCEPTION << "Unsupported tuple element type: " << *element;
   }
 }
 
 // Helper functions for ConvertInputsToStack
-void OpTorchCall::ConvertTensorInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
-  torch::jit::push(stack, ToAtenTensor(value));
+void OpTorchCall::ConvertTensorInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
+  if (firstRun_) {
+    auto atTensor = ToTorchTensor(value->ToTensor());
+    atTensors_.push_back(atTensor);
+    torch::jit::push(stack, atTensor);
+  } else {
+    // update trensor
+    CHECK_IF_FAIL(tensorIdx_ < atTensors_.size());
+    auto &atTensor = atTensors_[tensorIdx_];
+    updateTorchTensor(atTensor, value->ToTensor());
+    torch::jit::push(stack, atTensor);
+  }
+  tensorIdx_++;
 }
 
-void OpTorchCall::ConvertDoubleInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertDoubleInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   torch::jit::push(stack, value->ToDouble());
 }
 
-void OpTorchCall::ConvertIntInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertIntInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   torch::jit::push(stack, value->ToInt());
 }
 
-void OpTorchCall::ConvertBoolInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertBoolInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   torch::jit::push(stack, value->ToBool());
 }
 
-void OpTorchCall::ConvertStringInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertStringInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   torch::jit::push(stack, value->ToString());
 }
 
-void OpTorchCall::ConvertTupleInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertTupleInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   ConvertTupleToStack(value->ToTuple(), stack);
 }
 
-void OpTorchCall::ConvertNoneInputToStack(const ir::Value *value, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertNoneInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
   torch::jit::push(stack, torch::jit::IValue());
 }
 
-void OpTorchCall::ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) const {
+void OpTorchCall::ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) {
   // Define a map from Tag to conversion function
-  static const std::unordered_map<ir::Value::Tag, std::function<void(const ir::Value *, torch::jit::Stack &)>>
-    conversion_map = {{ir::Value::Tag::Tensor, CONVERT_INPUT_TO_STACK(ConvertTensorInputToStack)},
-                      {ir::Value::Tag::Double, CONVERT_INPUT_TO_STACK(ConvertDoubleInputToStack)},
-                      {ir::Value::Tag::Int, CONVERT_INPUT_TO_STACK(ConvertIntInputToStack)},
-                      {ir::Value::Tag::Symbol, CONVERT_INPUT_TO_STACK(ConvertIntInputToStack)},
-                      {ir::Value::Tag::Bool, CONVERT_INPUT_TO_STACK(ConvertBoolInputToStack)},
-                      {ir::Value::Tag::String, CONVERT_INPUT_TO_STACK(ConvertStringInputToStack)},
-                      {ir::Value::Tag::Tuple, CONVERT_INPUT_TO_STACK(ConvertTupleInputToStack)},
-                      {ir::Value::Tag::None, CONVERT_INPUT_TO_STACK(ConvertNoneInputToStack)}};
+  static const std::unordered_map<ir::Value::Tag, ConvertInputsFunc> conversion_map = {
+    {ir::Value::Tag::Tensor, &OpTorchCall::ConvertTensorInputToStack},
+    {ir::Value::Tag::Double, &OpTorchCall::ConvertDoubleInputToStack},
+    {ir::Value::Tag::Int, &OpTorchCall::ConvertIntInputToStack},
+    {ir::Value::Tag::Symbol, &OpTorchCall::ConvertIntInputToStack},
+    {ir::Value::Tag::Bool, &OpTorchCall::ConvertBoolInputToStack},
+    {ir::Value::Tag::String, &OpTorchCall::ConvertStringInputToStack},
+    {ir::Value::Tag::Tuple, &OpTorchCall::ConvertTupleInputToStack},
+    {ir::Value::Tag::None, &OpTorchCall::ConvertNoneInputToStack}};
 
   for (auto value : inputs) {
     ir::Value::Tag tag = value->GetTag();
     auto it = conversion_map.find(tag);
     if (it != conversion_map.end()) {
-      it->second(value, stack);
+      it->second(this, value, stack);
     } else {
       LOG_EXCEPTION << "Unsupported value type: " << *value;
     }
   }
 }
 
-void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) const {
+void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) const {
   if (ivalue.isTensor() && output->IsTensor()) {
-    auto tensor = ivalue.toTensor();
-    auto outTensor = output->ToTensor();
-    std::vector<int64_t> atenShape(tensor.sizes().begin(), tensor.sizes().end());
-    if (atenShape != outTensor->Shape()) {
-      LOG_EXCEPTION << "For '" << qualifiedOpName_
-                    << "', The output tensor shape not match, expect: " << outTensor->Shape()
-                    << ", but got: " << atenShape;
-    }
+    auto &tensor = ivalue.toTensor();
+    auto &outTensor = output->ToTensor();
     if (!IsTorchTensorStandardLayout(tensor)) {
       LOG_EXCEPTION << "For '" << qualifiedOpName_ << "', The output tensor is not in standard layout.";
     }
     auto data_ptr = tensor.storage().set_data_ptr(std::move(c10::DataPtr()));  // return the original data ptr.
-    void *data = data_ptr.get();
-    auto data_ptr_shared = std::make_shared<c10::DataPtr>(std::move(data_ptr));
-    auto deleter = [data_ptr_shared](void *) mutable {
-      if (data_ptr_shared) {
-        data_ptr_shared->clear();
-      }
-    };
+    auto deleter = data_ptr.get_deleter();
+    auto *data = data_ptr.release_context();
     outTensor->GetStorage()->SetDataPtrFromAten(data, deleter);
   } else if (ivalue.isList()) {
     auto &tuple = output->ToTuple();
     CHECK_IF_NULL(tuple);
-    auto list = std::move(ivalue).toList();
+    auto list = ivalue.toList();
     if (list.size() != tuple->Size()) {
       LOG_EXCEPTION << "List size not match tuple size";
     }
     for (size_t i = 0; i < list.size(); i++) {
       ToMrtTensor((*tuple)[i].get(), torch::jit::IValue{list.get(i)});
     }
+  } else if (output->IsSymbol()) {
+    // If output is symbol, we just ignore it.
+    return;
   } else {
     LOG_EXCEPTION << "Output Only Support Tensor or List[Tensor], but got type: "
                   << c10::typeKindToString(ivalue.type()->kind());
@@ -306,12 +327,14 @@ bool OpTorchCall::NeedLaunch() { return false; }
 OpsErrorCode OpTorchCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                         size_t *workspaceSize) {
   torch::jit::Stack stack;
+  tensorIdx_ = 0;
   // Inputs process, convert to aten tensor and push to stack.
   ConvertInputsToStack(input, stack);
   operation_(stack);
   // Outputs process. Convert aten tensor to ir::Value.
   ConvertStackToOutput(const_cast<ir::Value *>(output), std::move(stack));
   CheckOutputInputRef(input, output, qualifiedOpName_);
+  firstRun_ = false;
   return SUCCESS;
 }
 }  // namespace ops
