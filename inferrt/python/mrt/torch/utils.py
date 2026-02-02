@@ -15,7 +15,7 @@
 """
 utils for converting between torch and mrt.ir.
 """
-from typing import Any, List, Tuple, Optional
+from typing import Any, List, Tuple
 
 import torch
 from torch import distributed as dist
@@ -40,9 +40,7 @@ def _extract_global_comm_info():
     """Extract distributed communication information (rank, world_size)."""
     rank = dist.get_rank() if dist.is_initialized() else 0
     if rank > 7:
-        raise ValueError(
-            f"Expected rank id between 0 and 7, but received {rank}"
-        )
+        raise ValueError(f"Expected rank id between 0 and 7, but received {rank}")
     world_size = dist.get_world_size()
 
     CollectiveManager.instance().set_global_rank_id(rank)
@@ -149,41 +147,6 @@ def set_device_context():
     _mrt_torch.set_device_context()
 
 
-def _update_mrt_value(mrt_value: Value, torch_value: Any) -> Optional[Value]:
-    """
-    Update mrt.ir.Value with input value.
-    Return None if the value is updated, otherwise return a new Value.
-    """
-    if mrt_value.is_tensor():
-        _mrt_torch.update_tensor_data(mrt_value.to_tensor(), torch_value)
-        return None
-    if mrt_value.is_tuple():
-        _update_tuple_data(mrt_value, torch_value)
-        return None
-    if mrt_value.is_symbol():
-        mrt_symbol = mrt_value.to_symbol()
-        if isinstance(mrt_symbol, SymbolicVar):
-            mrt_symbol.set_value(int(torch_value))
-        return None
-    return from_torch(torch_value)
-
-
-def _update_tuple_data(mrt_value: Value, torch_value: Any) -> None:
-    """
-    Update tuple data with input value.
-    """
-    mrt_tuple_items = mrt_value.to_tuple()
-    if len(mrt_tuple_items) != len(torch_value):
-        raise ValueError(
-            f"Expected {len(mrt_tuple_items)} items in tuple, but received {len(torch_value)}"
-        )
-    for i, torch_item in enumerate(torch_value):
-        mrt_item = mrt_tuple_items[i]
-        new_value = _update_mrt_value(mrt_item, torch_item)
-        if new_value is not None:
-            mrt_tuple_items[i] = new_value
-
-
 def update_runtime_inputs(
     param_nodes: List[Any],
     new_inputs: Tuple[Any, ...],
@@ -191,15 +154,7 @@ def update_runtime_inputs(
     """
     Update placeholder nodes with runtime input values and update symbolic variables.
     """
-    if len(new_inputs) != len(param_nodes):
-        raise ValueError(
-            f"Expected {len(param_nodes)} inputs, but received {len(new_inputs)}"
-        )
-
-    for param_node, input_val in zip(param_nodes, new_inputs):
-        new_value = _update_mrt_value(param_node.output, input_val)
-        if new_value is not None:
-            param_node.output = new_value
+    _mrt_torch.batch_update_runtime_inputs(param_nodes, new_inputs)
 
 
 def tuple_indices_to_slice_arg(indices: Tuple[int, ...], shape: Tuple[int, ...]):

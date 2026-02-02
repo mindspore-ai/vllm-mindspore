@@ -28,6 +28,16 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 # Set PIC option
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # add_compile_options(-fPIC)
 
+# nanobind and Python
+find_package(Python REQUIRED COMPONENTS Interpreter Development)
+execute_process(COMMAND "${Python_EXECUTABLE}" -c "import nanobind; print(nanobind.cmake_dir())"
+                OUTPUT_VARIABLE nanobind_DIR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "${Python_EXECUTABLE}" -c "import nanobind; print(nanobind.include_dir())"
+                OUTPUT_VARIABLE NANOBIND_INCLUDE_DIR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+find_package(nanobind CONFIG REQUIRED)
+
 # Add compiler, ir, runtime and kernels directories
 add_subdirectory(common)
 add_subdirectory(config)
@@ -43,12 +53,14 @@ set(OBJECTS mrt_common ops_utils mrt_config hardware_abstract lexer_obj parser_o
 
 # Create da execution file
 add_executable(da lang/cli/main.cc lang/cli/options.cc)
-target_link_libraries(da ${OBJECTS})
+target_include_directories(da PRIVATE ${NANOBIND_INCLUDE_DIR})
+target_link_libraries(da ${OBJECTS} nanobind-static Python::Python)
 set_property(TARGET da APPEND PROPERTY BUILD_RPATH "${TORCH_INSTALL_PREFIX}/../torch.libs")
 
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
 add_library(inferrt SHARED lang/api/c_api.cc)
-target_link_libraries(inferrt ${OBJECTS})
+target_include_directories(inferrt PRIVATE ${NANOBIND_INCLUDE_DIR})
+target_link_libraries(inferrt ${OBJECTS} nanobind-static Python::Python)
 
 set_target_properties(inferrt PROPERTIES
   INSTALL_RPATH "$ORIGIN"

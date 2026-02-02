@@ -164,7 +164,7 @@ void GraphExecutor::BuildKernels() {
   CHECK_IF_NULL(kernelLib);
   for (auto &node : graph_->nodes) {
     CHECK_IF_NULL(node);
-    if (IsSkipBuildDAKernel(node)) {
+    if (IsSkipBuildOpRunner(node)) {
       continue;
     }
     auto kernel = kernelLib->CreateKernel(node);
@@ -174,13 +174,26 @@ void GraphExecutor::BuildKernels() {
   }
 }
 
-// Add a node as parameter for graph.
-void GraphExecutor::AddParameter(ir::NodePtr param) {
-  LOG_OUT << "Add parameter: " << param;
+// Add a parameter node for graph.
+ir::NodePtr GraphExecutor::AddParameterNode(const ir::ValuePtr &value) {
+  LOG_OUT << "Add parameter node: " << value;
+  auto node = ir::MakeIntrusive<ir::Node>();
+  node->op = ops::Op_End;
+  node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
   CHECK_IF_NULL(graph_);
-  CHECK_IF_NULL(param);
-  CHECK_IF_FAIL(param->op == ops::Op_End);
-  (void)graph_->parameters.emplace_back(param);
+  (void)graph_->parameters.emplace_back(node);
+  return node;
+}
+
+// Add an input node for graph.
+ir::NodePtr GraphExecutor::AddInputNode(const ir::ValuePtr &value) {
+  LOG_OUT << "Add input node: " << value;
+  auto node = ir::MakeIntrusive<ir::Node>();
+  node->op = ops::Op_End;
+  node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
+  CHECK_IF_NULL(graph_);
+  (void)graph_->inputs.emplace_back(node);
+  return node;
 }
 
 // Add a value node.
@@ -189,9 +202,8 @@ ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
   auto node = ir::MakeIntrusive<ir::Node>();
   node->op = ops::Op_End;
   node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
-  if (graph_ != nullptr) {
-    (void)graph_->nodes.emplace_back(node);
-  }
+  CHECK_IF_NULL(graph_);
+  (void)graph_->nodes.emplace_back(node);
   return node;
 }
 
@@ -307,7 +319,16 @@ void GraphExecutor::DumpGraph() {
   CHECK_IF_NULL(graph_);
 
   constexpr auto paramPrefix = "param_";
+  constexpr auto inputPrefix = "input_";
   std::cout << "graph{" << name_ << "}(";
+  for (size_t i = 0; i < graph_->inputs.size(); ++i) {
+    auto input = graph_->inputs[i];
+    (void)inputNumMap_.emplace(input, i);
+    std::cout << inputPrefix << i;
+    if (i < graph_->inputs.size() - 1 || !graph_->parameters.empty()) {
+      std::cout << ", ";
+    }
+  }
   for (size_t i = 0; i < graph_->parameters.size(); ++i) {
     auto para = graph_->parameters[i];
     (void)paraNumMap_.emplace(para, i);
@@ -317,6 +338,9 @@ void GraphExecutor::DumpGraph() {
     }
   }
   std::cout << ")" << std::endl;
+  for (size_t i = 0; i < graph_->inputs.size(); ++i) {
+    std::cout << std::setw(10) << "// " << inputPrefix << i << " = " << graph_->inputs[i]->output << std::endl;
+  }
   for (size_t i = 0; i < graph_->parameters.size(); ++i) {
     std::cout << std::setw(10) << "// " << paramPrefix << i << " = " << graph_->parameters[i]->output << std::endl;
   }
@@ -335,17 +359,14 @@ void GraphExecutor::DumpGraph() {
     for (size_t j = 0; j < inputSize; ++j) {
       auto input = tensorNode->inputs[j];
       // Find node number firstly.
-      auto nodeIt = nodeNumMap_.find(input);
-      if (nodeIt != nodeNumMap_.cend()) {
+      if (auto nodeIt = nodeNumMap_.find(input); nodeIt != nodeNumMap_.cend()) {
         ss << "%" << nodeIt->second;
+      } else if (auto inputIt = inputNumMap_.find(input); inputIt != inputNumMap_.cend()) {
+        ss << inputPrefix << inputIt->second;
+      } else if (auto paraIt = paraNumMap_.find(input); paraIt != paraNumMap_.cend()) {
+        ss << paramPrefix << paraIt->second;
       } else {
-        // Find parameter number.
-        auto paraIt = paraNumMap_.find(input);
-        if (paraIt != paraNumMap_.cend()) {
-          ss << paramPrefix << paraIt->second;
-        } else {
-          ss << "<ERR>";
-        }
+        ss << "<ERR>";
       }
       if (j != inputSize - 1) {
         ss << ", ";
@@ -388,6 +409,7 @@ void Executor::Run(bool isDynamic) {
   size_t opNum = opRunners_->size();
   for (size_t i = 0; i < opNum; i++) {
     OpRunner &opRunner = opRunners[i];
+    opRunner.UpdateTensors();
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
       LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }

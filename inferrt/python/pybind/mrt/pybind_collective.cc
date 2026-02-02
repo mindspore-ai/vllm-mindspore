@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 #include <sstream>
 
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using CollectiveManager = mrt::collective::CollectiveManager;
 
-PYBIND11_MODULE(_mrt_collective, mod) {
-  (void)py::class_<CollectiveManager>(mod, "CollectiveManager")
-    .def_static("instance", &CollectiveManager::Instance, py::return_value_policy::reference)
+NB_MODULE(_mrt_collective, mod) {
+  (void)nb::class_<CollectiveManager>(mod, "CollectiveManager")
+    .def_static("instance", &CollectiveManager::Instance, nb::rv_policy::reference)
     .def("create_communication_group", &CollectiveManager::CreateCommunicationGroup)
     .def("is_group_exist", &CollectiveManager::IsGroupExist)
     .def("get_group_rank", &CollectiveManager::GetGroupRank)

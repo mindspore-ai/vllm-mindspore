@@ -49,8 +49,8 @@ class SymbolicShapeManager:
     }
 
     def __init__(self):
-        # Map from symbol name (str) to Value
-        self._symbol_map: Dict[str, Value] = {}
+        # Map from symbol name (str) to SymbolicVar
+        self._symbol_map: Dict[str, SymbolicVar] = {}
 
     def convert_sympy_expr_to_symbolic_expr(self, expr: sympy.Expr) -> SymbolicExpr:
         """
@@ -66,10 +66,21 @@ class SymbolicShapeManager:
             NotImplementedError: If the expression type is not supported
         """
         if expr.is_Symbol:
-            return self._symbol_map[str(expr)].to_symbol()
+            sym_name = str(expr)
+            if sym_name not in self._symbol_map:
+                self._symbol_map[sym_name] = SymbolicVar(sym_name)
+            return self._symbol_map[sym_name]
 
         if expr.is_Integer:
             return SymbolicConst(int(expr))
+
+        if expr.is_Pow:
+            base, exp = expr.as_base_exp()
+            if not exp.is_Integer:
+                raise NotImplementedError(
+                    f"Unsupported sympy expression: {expr} (type: {type(expr)})"
+                )
+            expr = sympy.Mul(*[base] * exp, evaluate=False)
 
         # Eliminate ops with float outputs
         if isinstance(expr, FloorToInt) and isinstance(expr.args[0], IntTrueDiv):
@@ -132,10 +143,8 @@ class SymbolicShapeManager:
         """
         # Handle SymInt case first - we need to create/retrieve SymbolicVar
         if isinstance(torch_value, torch.SymInt):
-            sym_str = str(torch_value.node.expr)
-            if sym_str not in self._symbol_map:
-                self._symbol_map[sym_str] = Value(SymbolicVar(sym_str))
-            return self._symbol_map[sym_str]
+            expr = torch_value.node.expr
+            return Value(self.convert_sympy_expr_to_symbolic_expr(expr))
 
         # Handle tensor case
         if isinstance(torch_value, torch.Tensor):

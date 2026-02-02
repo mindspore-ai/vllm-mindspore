@@ -290,12 +290,9 @@ class ExecutorBuilder:
         # Get function inputs and outputs
         func_inputs, func_outputs = _get_func_io(func_op)
 
-        # Create value node for each function parameter
-        input_nodes = self._create_input_nodes(func_inputs, fake_inputs)
-
         with self.executor:
-            for val_node in input_nodes:
-                self.executor.add_parameter(val_node)
+            # Create value node for each function parameter
+            self._create_input_nodes(func_inputs, fake_inputs)
 
             self._process_ops(func_op)
 
@@ -305,20 +302,21 @@ class ExecutorBuilder:
         placeholder_nodes = [self.env[arg] for arg in func_inputs]
         return self.executor, placeholder_nodes
 
-    def _create_input_nodes(self, func_inputs, fake_inputs) -> List[Node]:
+    def _create_input_nodes(self, func_inputs, fake_inputs):
         """Create input nodes for function parameters."""
-        input_nodes = []
         for arg, fake_input in zip(func_inputs, fake_inputs):
             if isinstance(fake_input, torch.SymInt):
                 sym_name = str(fake_input.node.expr)
                 self.symbol_map[sym_name] = SymbolicVar(sym_name)
                 mrt_value = Value(self.symbol_map[sym_name])
+                val_node = self.executor.add_input_node(mrt_value)
             else:
                 mrt_value = _create_mrt_value_from_mlir_type(arg.type)
-            val_node = self.executor.add_value_node(mrt_value)
+                if isinstance(fake_input, torch.nn.Parameter):
+                    val_node = self.executor.add_parameter_node(mrt_value)
+                else:
+                    val_node = self.executor.add_input_node(mrt_value)
             self.env[arg] = val_node
-            input_nodes.append(val_node)
-        return input_nodes
 
     def _process_ops(self, func_op):
         """Process all operations in the function."""

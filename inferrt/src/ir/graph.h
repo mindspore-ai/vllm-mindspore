@@ -44,7 +44,8 @@ struct Node : public RefCounted {
  * @brief Represents the entire computation graph.
  */
 struct Graph : public RefCounted {
-  std::vector<IntrusivePtr<Node>> nodes;  ///< The list of all nodes in the graph.
+  std::vector<IntrusivePtr<Node>> nodes;  ///< The list of all value nodes and op nodes in the graph.
+  std::vector<IntrusivePtr<Node>> inputs;
   std::vector<IntrusivePtr<Node>> parameters;
 };
 

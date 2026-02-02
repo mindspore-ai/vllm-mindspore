@@ -35,14 +35,15 @@ class DA_API KernelLaunchGroupBuilder : public Builder {
  private:
   void CheckGroupLaunchRequirements() const;
   void PartitionKernelLaunchGroups();
-  void RecordDynamicInputs();
+  void RecordGraphInputs();
   void RecordGraphOutputs();
 
   uint64_t parallelDispatchNum_;
   uint64_t parallelSliceNum_;
   std::shared_ptr<std::vector<std::pair<OpRunner *, size_t>>> opRunnerGroups_;
   std::shared_ptr<std::vector<OpRunner *>> serialLaunchOps_;
-  std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> graphInputsWithShape_;
+  std::shared_ptr<std::vector<ir::TensorPtr>> graphInputTensors_;
+  std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> graphInputTensorsWithDynamicShape_;
   std::shared_ptr<std::unordered_set<ir::Tensor *>> graphOutputs_;
 };
 

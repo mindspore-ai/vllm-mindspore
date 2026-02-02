@@ -178,11 +178,11 @@ TensorPtr Tensor::ShallowClone() const {
   auto clonedTensor = MakeIntrusive<Tensor>(storage_, shape_, dtype_);
 
   // Copy all metadata
-  clonedTensor->SetStrides(strides_);
-  clonedTensor->SetFormat(memoryFormat_);
-  clonedTensor->SetStorageShape(storageShape_);
-  clonedTensor->SetStorageOffset(storageOffset_);
-  clonedTensor->SetSymbolicShapeRaw(symbolicShape_);
+  clonedTensor->strides_ = strides_;
+  clonedTensor->memoryFormat_ = memoryFormat_;
+  clonedTensor->storageShape_ = storageShape_;
+  clonedTensor->storageOffset_ = storageOffset_;
+  clonedTensor->symbolicShape_ = symbolicShape_;
 
   // Verify that the cloned tensor shares the same storage
   // (This is a sanity check - the storage pointers should be the same)

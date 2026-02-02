@@ -28,8 +28,8 @@
 
 namespace da {
 namespace vm {
-using namespace compiler;
-using namespace mrt;
+using namespace compiler;  // NOLINT
+using namespace mrt;       // NOLINT
 
 class VM;
 using InstHandlerFunction = void (VM::*)(ssize_t);
@@ -214,7 +214,7 @@ class StringPool {
 class VM {
  public:
   VM() = delete;
-  VM(Compiler *compiler, bool singleFunctionMode = false)
+  explicit VM(Compiler *compiler, bool singleFunctionMode = false)
       : codes_{compiler->codes()}, filename_{compiler->filename()}, singleFunctionMode_{singleFunctionMode} {
     // Intern all constant string from Lexer.
     for (auto &code : codes()) {
@@ -320,9 +320,9 @@ class VM {
 
 #define BINARY_OP(OpName, OpSymbol)                                                                                  \
   void VM::InstBinary##OpName(ssize_t offset) {                                                                      \
-    const auto &rhs = std::move(CurrentStack().back());                                                              \
+    auto rhs = std::move(CurrentStack().back());                                                                     \
     CurrentStack().pop_back();                                                                                       \
-    const auto &lhs = std::move(CurrentStack().back());                                                              \
+    auto lhs = std::move(CurrentStack().back());                                                                     \
     CurrentStack().pop_back();                                                                                       \
     if (lhs.type == SlotInt && rhs.type == SlotInt) {                                                                \
       auto lhsVal = lhs.value.int_;                                                                                  \

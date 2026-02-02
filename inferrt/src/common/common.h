@@ -251,6 +251,8 @@ int FindNameIndex(const char *str, T *table, size_t tableSize) {
   return -1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 inline std::wstring StringToWString(const std::string &str) {
   std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
   return converter.from_bytes(str);
@@ -260,6 +262,7 @@ inline std::string WStringToString(const std::wstring &wstr) {
   std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
   return converter.to_bytes(wstr);
 }
+#pragma GCC diagnostic pop
 
 inline std::string ConvertEscapeString(const std::string &str) {
   std::stringstream ss;

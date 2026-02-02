@@ -17,11 +17,12 @@
 #ifndef __DALANG_PY_PYBIND11_API_H__
 #define __DALANG_PY_PYBIND11_API_H__
 
-#include "pybind11/pybind11.h"
-
+#include <nanobind/nanobind.h>
+#include <vector>
+#include <memory>
 #include "lang/api/c_api.h"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 class DALangPy {
  public:
@@ -34,12 +35,12 @@ class DALangPy {
 
   static std::shared_ptr<DALangPy> GetInstance();
 
-  void Compile(const py::object &source, bool graph, bool dump);
-  py::object Run(const py::tuple &args);
+  void Compile(const nb::object &source, bool graph, bool dump);
+  nb::object Run(const nb::tuple &args);
 
  private:
-  std::vector<Argument> ConvertPyArgs(const py::tuple &args);
-  py::object ConvertPyResult(const Result &res);
+  std::vector<Argument> ConvertPyArgs(const nb::tuple &args);
+  nb::object ConvertPyResult(const Result &res);
 
   Callable *callable_{nullptr};
 };

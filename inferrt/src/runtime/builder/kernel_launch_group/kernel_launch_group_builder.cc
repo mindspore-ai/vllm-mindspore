@@ -29,12 +29,12 @@ std::unique_ptr<Executor> KernelLaunchGroupBuilder::BuildExecutor() {
 
   CheckGroupLaunchRequirements();
   PartitionKernelLaunchGroups();
-  RecordDynamicInputs();
+  RecordGraphInputs();
   RecordGraphOutputs();
 
-  auto executor = std::make_unique<KernelLaunchGroupExecutor>(opRunners_, deviceContexts_, opRunnerGroups_,
-                                                              serialLaunchOps_, graphInputsWithShape_, graphOutputs_,
-                                                              parallelDispatchNum_, parallelSliceNum_);
+  auto executor = std::make_unique<KernelLaunchGroupExecutor>(
+    opRunners_, deviceContexts_, opRunnerGroups_, serialLaunchOps_, graphInputTensors_,
+    graphInputTensorsWithDynamicShape_, graphOutputs_, parallelDispatchNum_, parallelSliceNum_);
   executor->Initialize();
   LOG_OUT << "End build kernel launch group executor.";
   return executor;
@@ -111,20 +111,22 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
   serialLaunchOps_ = std::make_shared<std::vector<OpRunner *>>();
 }
 
-void KernelLaunchGroupBuilder::RecordDynamicInputs() {
-  graphInputsWithShape_ = std::make_shared<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>>();
-  const auto &nodes = graph_->parameters;
+void KernelLaunchGroupBuilder::RecordGraphInputs() {
+  graphInputTensorsWithDynamicShape_ = std::make_shared<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>>();
+  graphInputTensors_ = std::make_shared<std::vector<ir::TensorPtr>>();
+  const auto &nodes = graph_->inputs;
   for (const auto &node : nodes) {
     CHECK_IF_FAIL(node->op == ops::Op_End);
 
     const auto &output = node->output;
     CHECK_IF_NULL(output);
-    if (output->IsTensor()) {
-      const auto &tensor = output->ToTensor();
+    ir::VisitAllTensors(output, [&](const ir::TensorPtr &tensor) {
+      CHECK_IF_NULL(tensor);
+      (void)graphInputTensors_->emplace_back(tensor);
       if (tensor->HasDynamicShape()) {
-        graphInputsWithShape_->emplace_back(tensor, tensor->Shape());
+        (void)graphInputTensorsWithDynamicShape_->emplace_back(tensor, tensor->Shape());
       }
-    }
+    });
   }
 }
 

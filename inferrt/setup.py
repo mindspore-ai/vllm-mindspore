@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from setuptools import setup
@@ -68,6 +69,7 @@ class CMakeBuild(build_ext):
         # Set up CMake arguments
         cmake_args = [
             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
+            f"-DPython_EXECUTABLE={sys.executable}",
         ]
 
         # Add environment-based arguments

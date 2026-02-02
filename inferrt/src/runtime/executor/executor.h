@@ -93,8 +93,10 @@ class DA_API GraphExecutor {
   void OptGraph();
   // Build DAKernels for graph.
   void BuildKernels();
-  // Add a parameter for graph.
-  void AddParameter(ir::NodePtr param);
+  // Add a parameter node for graph.
+  ir::NodePtr AddParameterNode(const ir::ValuePtr &value = nullptr);
+  // Add an input node for graph.
+  ir::NodePtr AddInputNode(const ir::ValuePtr &value = nullptr);
   // Add a value node.
   ir::NodePtr AddValueNode(const ir::ValuePtr &value = nullptr);
   // Add an operation node.
@@ -137,6 +139,7 @@ class DA_API GraphExecutor {
   std::unique_ptr<Executor> executor_{nullptr};
 #ifdef DUMP
   std::unordered_map<ir::NodePtr, size_t> paraNumMap_;
+  std::unordered_map<ir::NodePtr, size_t> inputNumMap_;
   std::unordered_map<ir::NodePtr, size_t> nodeNumMap_;
 #endif
 };

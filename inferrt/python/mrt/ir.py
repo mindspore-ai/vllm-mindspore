@@ -39,7 +39,6 @@ class GraphExecutor:
     This class can be used as a context manager:
 
     with GraphExecutor("my_graph") as executor:
-        param = executor.add_parameter(node)
         ...
         executor.run()
     """
@@ -56,9 +55,13 @@ class GraphExecutor:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._executor.end_graph()
 
-    def add_parameter(self, node: Node) -> Node:
-        """Add a const node as parameter of the graph."""
-        self._executor.add_parameter(node)
+    def add_parameter_node(self, value: Value) -> Node:
+        """Add a parameter node to the graph."""
+        return self._executor.add_parameter_node(value)
+
+    def add_input_node(self, value: Value) -> Node:
+        """Add an input node to the graph."""
+        return self._executor.add_input_node(value)
 
     def add_op_node(self, op: Op, inputs: List[Node], output: Value) -> Node:
         """Add an operation node to the graph."""

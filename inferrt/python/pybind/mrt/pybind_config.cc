@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include "config/device/ascend/op_precision_conf.h"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 using OpPrecisionConf = mrt::config::ascend::OpPrecisionConf;
 
-PYBIND11_MODULE(_mrt_config, m) {
+NB_MODULE(_mrt_config, m) {
   m.doc() = "Python binding for MRT OpPrecisionConf";
-  (void)py::class_<OpPrecisionConf>(m, "OpPrecisionConf")
-    .def_static("Instance", &OpPrecisionConf::Instance, py::return_value_policy::reference)
+  (void)nb::class_<OpPrecisionConf>(m, "OpPrecisionConf")
+    .def_static("Instance", &OpPrecisionConf::Instance, nb::rv_policy::reference)
     .def("set_is_allow_matmul_hf32", &OpPrecisionConf::SetIsAllowMatmulHF32)
     .def("set_acl_precision_mode", &OpPrecisionConf::SetAclPrecisionMode);
 }

@@ -157,19 +157,56 @@ def permute_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def fused_inter_attention_score_hook(node, input_nodes, executor):
     """swap the first and second param position."""
-    return [input_nodes[0], [input_nodes[1]], [input_nodes[2]], input_nodes[3], input_nodes[4], input_nodes[5],
-            input_nodes[6], input_nodes[7], input_nodes[8], input_nodes[9], input_nodes[10], input_nodes[11],
-            input_nodes[12], input_nodes[13], input_nodes[18], input_nodes[19], input_nodes[20], input_nodes[14],
-            input_nodes[15], input_nodes[16], input_nodes[17], input_nodes[21], input_nodes[22], input_nodes[23],
-            input_nodes[24], input_nodes[25], input_nodes[26], input_nodes[27], input_nodes[28], input_nodes[29],
-            input_nodes[30], input_nodes[31], input_nodes[32], input_nodes[33], input_nodes[34], input_nodes[35],
-            input_nodes[36], input_nodes[39], input_nodes[37], input_nodes[38]]
+    return [
+        input_nodes[0],
+        [input_nodes[1]],
+        [input_nodes[2]],
+        input_nodes[3],
+        input_nodes[4],
+        input_nodes[5],
+        input_nodes[6],
+        input_nodes[7],
+        input_nodes[8],
+        input_nodes[9],
+        input_nodes[10],
+        input_nodes[11],
+        input_nodes[12],
+        input_nodes[13],
+        input_nodes[18],
+        input_nodes[19],
+        input_nodes[20],
+        input_nodes[14],
+        input_nodes[15],
+        input_nodes[16],
+        input_nodes[17],
+        input_nodes[21],
+        input_nodes[22],
+        input_nodes[23],
+        input_nodes[24],
+        input_nodes[25],
+        input_nodes[26],
+        input_nodes[27],
+        input_nodes[28],
+        input_nodes[29],
+        input_nodes[30],
+        input_nodes[31],
+        input_nodes[32],
+        input_nodes[33],
+        input_nodes[34],
+        input_nodes[35],
+        input_nodes[36],
+        input_nodes[39],
+        input_nodes[37],
+        input_nodes[38],
+    ]
 
 
 def _init_arg_mapping_hooks():
     """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
-    register_arg_mapping_hook(Op.fused_infer_attention_score, fused_inter_attention_score_hook)
+    register_arg_mapping_hook(
+        Op.fused_infer_attention_score, fused_inter_attention_score_hook
+    )
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(Op.muls, muls_hook)
@@ -289,7 +326,9 @@ def split_ops_hook(op, node, input_nodes, executor):
     if isinstance(input_nodes[1], (int, torch.SymInt)):
         return Op.split_tensor
     if hasattr(input_nodes[1], "meta") and input_nodes[1].meta is not None:
-        if isinstance(input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)):
+        if isinstance(
+            input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)
+        ):
             return Op.split_tensor
     return op
 
@@ -349,9 +388,12 @@ def fill_op_hook(op, node, input_nodes, executor):
 
 
 def _init_ops_mapping_hooks():
+    """Register ops mapping hooks for torch ops."""
     register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
     register_ops_mapping_hook(Op.masked_fill_tensor, masked_fill_op_hook)
-    register_ops_mapping_hook(Op.inplace_masked_fill_tensor, inplace_masked_fill_op_hook)
+    register_ops_mapping_hook(
+        Op.inplace_masked_fill_tensor, inplace_masked_fill_op_hook
+    )
     register_ops_mapping_hook(Op.inplace_fill_tensor, fill_op_hook)
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
     register_ops_mapping_hook(Op.ge, ge_op_hook)
@@ -369,9 +411,9 @@ def _match_node_by_name(node, op_type, name):
     """Check if a node matches the given op type and name."""
     if node.op != op_type:
         return False
-    if op_type == 'call_function' and hasattr(node.target, '__name__'):
+    if op_type == "call_function" and hasattr(node.target, "__name__"):
         return node.target.__name__ == name
-    if op_type == 'call_method' and isinstance(node.target, str):
+    if op_type == "call_method" and isinstance(node.target, str):
         return node.target == name
     return False
 
@@ -551,7 +593,7 @@ def _convert_operator_to_torch_op(op):
 
 
 _OP_MATCHERS = [
-    ('call_function', '_log_api_usage_once'),
+    ("call_function", "_log_api_usage_once"),
 ]
 
 
@@ -688,16 +730,23 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
             ops_ns = getattr(torch.ops, ns)
             if hasattr(ops_ns, target):
                 op_target = getattr(ops_ns, target)
-                return (op_target._qualified_op_name,
-                        [getattr(op_target, overload)._schema for overload in op_target.overloads()])
+                return (
+                    op_target._qualified_op_name,
+                    [
+                        getattr(op_target, overload)._schema
+                        for overload in op_target.overloads()
+                    ],
+                )
         return None, None
 
     if isinstance(target, OpOverload):
         return target._schema.name, [target._schema]
 
     if isinstance(target, OpOverloadPacket):
-        return (target._qualified_op_name,
-                [getattr(target, overload)._schema for overload in target.overloads()])
+        return (
+            target._qualified_op_name,
+            [getattr(target, overload)._schema for overload in target.overloads()],
+        )
 
     aten_fn = torch.jit._builtins._find_builtin(target)
     if aten_fn is not None:
@@ -734,7 +783,7 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
 
 
 def _map_args(
-        args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
+    args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
 ) -> List[Node]:
     """
     Map torch.fx node arguments to GraphExecutor nodes.
@@ -755,25 +804,28 @@ def _map_args(
     return [_map_arg(arg) for arg in args]
 
 
-def _handle_param_node(node, executor, sym_mgr, env):
-    """Handle param node processing."""
+def _handle_input_node(node, executor, sym_mgr, env):
+    """Handle input node processing."""
     example_value = node.meta.get("example_value", None)
     output_value = sym_mgr.from_torch_with_sym(example_value)
-    env[node] = executor.add_value_node(output_value)
+    if isinstance(example_value, torch.nn.Parameter):
+        env[node] = executor.add_parameter_node(output_value)
+    else:
+        env[node] = executor.add_input_node(output_value)
 
 
-def _handle_param_nodes(param_nodes, executor, env, sym_mgr):
-    """Handle param nodes processing."""
-    non_symbol_param_nodes = []
-    # handle sym int param nodes first to register symbols for later reference
-    for node in param_nodes:
+def _handle_input_nodes(input_nodes, executor, env, sym_mgr):
+    """Handle input nodes processing."""
+    non_symbol_input_nodes = []
+    # handle sym int input nodes first to register symbols for later reference
+    for node in input_nodes:
         if isinstance(node.meta.get("example_value"), torch.SymInt):
-            _handle_param_node(node, executor, sym_mgr, env)
+            _handle_input_node(node, executor, sym_mgr, env)
         else:
-            non_symbol_param_nodes.append(node)
-    # handle non sym int param nodes
-    for node in non_symbol_param_nodes:
-        _handle_param_node(node, executor, sym_mgr, env)
+            non_symbol_input_nodes.append(node)
+    # handle non sym int input nodes
+    for node in non_symbol_input_nodes:
+        _handle_input_node(node, executor, sym_mgr, env)
 
 
 def _handle_get_attr_node(node, gm, executor, env):
@@ -876,13 +928,13 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     get_collective_info_from_torch(gm)
     set_device_context()
 
-    fx_param_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
-    _handle_param_nodes(fx_param_nodes, executor, env, sym_mgr)
-
     with executor:
+        fx_input_nodes = [n for n in gm.graph.nodes if n.op == "placeholder"]
+        _handle_input_nodes(fx_input_nodes, executor, env, sym_mgr)
+
         for node in gm.graph.nodes:
             if node.op == "placeholder":
-                executor.add_parameter(env[node])
+                pass
             elif node.op == "get_attr":
                 _handle_get_attr_node(node, gm, executor, env)
             elif node.op in ("call_function", "call_method"):
@@ -900,11 +952,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.dump_graph()
     executor.build()
 
-    mrt_param_nodes = [env[n] for n in fx_param_nodes]
+    mrt_input_nodes = [env[n] for n in fx_input_nodes]
 
     def compiled_callable(*inputs: torch.Tensor):
         set_device_context()
-        update_runtime_inputs(mrt_param_nodes, inputs)
+        update_runtime_inputs(mrt_input_nodes, inputs)
         result = executor.run()
         return to_torch(result)
 

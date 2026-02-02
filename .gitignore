@@ -43,3 +43,5 @@ Makefile
 .mrtlib/
 third_party/torch-mlir
 third_party/llvm-project
+
+.venv
