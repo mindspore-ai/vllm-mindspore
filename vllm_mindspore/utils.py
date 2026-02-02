@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/v0.8.3/vllm/utils.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2024-2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -211,8 +211,7 @@ vllm.model_executor.model_loader.weight_utils.get_quantization_config = (
 
 # Import golden_stick module to trigger sparse quantization support setup
 # The setup is done automatically in golden_stick/__init__.py
-from vllm_mindspore.model_executor.layers.quantization.golden_stick import (  # noqa: F401
-    GoldenStickConfig, ModelSlimConfig)
+import vllm_mindspore.model_executor.layers.quantization.golden_stick  # noqa: F401
 
 from vllm_mindspore.executor.multiproc_worker_utils import (
     get_mp_context as ms_get_mp_context, )

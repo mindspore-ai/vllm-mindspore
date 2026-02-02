@@ -2,7 +2,7 @@
 
 # Adapted from
 # https://github.com/huggingface/transformers/blob/v4.28.0/src/transformers/models/qwen2/modeling_qwen2.py
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2024 The Qwen team.
 # Copyright 2023 The vLLM team.
 # Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
@@ -363,24 +363,6 @@ class Qwen2Model(nn.Cell):
             hidden_states, residual = self.norm(hidden_states, residual)
         return hidden_states, residual
 
-    def _load_split_weights(self, weights: Iterable[tuple[str, Tensor]],
-                            params_dict: dict[str, Parameter]) -> set[str]:
-        """Load sparse quantized weights directly without sharding.
-        
-        Weights are already partitioned by rank folders, so load them
-        directly without any sharding operations. This method delegates
-        to the common sparse quantized weight loader utility.
-        
-        Args:
-            weights: Iterable of (name, weight) tuples
-            params_dict: Dictionary of parameter names to Parameter objects
-            
-        Returns:
-            Set of loaded parameter names
-        """
-        return load_split_weights(weights, params_dict, self.config,
-                                  self.quant_config)
-
     def load_weights(self, weights: Iterable[tuple[str, Tensor]],
                      params_dict: dict[str, Parameter]):
         # Check if sparse quantization is enabled via rank-level config
@@ -397,7 +379,8 @@ class Qwen2Model(nn.Cell):
                     isinstance(v, str) and v.lower() == "w8a8s"
                     for v in sparse_config.values())
                 if has_sparse_quant:
-                    return self._load_split_weights(weights, params_dict)
+                    return load_split_weights(weights, params_dict,
+                                              self.config, self.quant_config)
 
         loaded_params: set[str] = set()
         stacked_params_mapping = [
