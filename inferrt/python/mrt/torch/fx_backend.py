@@ -520,6 +520,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
         torch.ops.npu.npu_add_rms_norm_quant: Op.add_rms_norm_quant,
         torch.ops.npu.npu_quantize: Op.npu_quantize,
+        torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
