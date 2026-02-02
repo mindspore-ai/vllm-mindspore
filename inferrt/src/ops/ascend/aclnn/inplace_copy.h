@@ -43,6 +43,7 @@ class AclnnInplaceCopy : public Operator {
   std::unique_ptr<device::ascend::AscendResManager> res_manager_{nullptr};
   std::unique_ptr<device::ascend::AscendStreamMng> stream_mng_{nullptr};
   bool non_blocking_{false};
+  bool srcContiguous_{false};
 };
 
 }  // namespace ops
