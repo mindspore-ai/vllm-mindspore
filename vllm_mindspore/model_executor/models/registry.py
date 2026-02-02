@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ _NATIVE_MODELS = {
     ("glm4_1v", "Glm4vForConditionalGeneration"),
     "Glm4ForCausalLM": ("glm4", "Glm4ForCausalLM"),
     "DeepseekV3ForCausalLM": ("deepseekv3", "DeepseekV3ForCausalLM"),
+    "Glm4MoeForCausalLM": ("glm4_moe", "Glm4MoeForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {
