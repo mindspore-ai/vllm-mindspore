@@ -21,11 +21,15 @@
 
 #include "common/common.h"
 #include "ir/tensor/tensor.h"
+#include "ir/tensor/format.h"
 
 namespace mrt {
 namespace ops {
-void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int64_t> &yShape,
-                       std::vector<int64_t> *broadcastShape);
+using ir::MemoryFormat;
+MRT_EXPORT void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int64_t> &yShape,
+                                  std::vector<int64_t> *broadcastShape);
+MRT_EXPORT bool IsBaseFormat(MemoryFormat format);
+MRT_EXPORT bool IsTensorBaseFormat(const ir::TensorPtr &tensor);
 }  // namespace ops
 }  // namespace mrt
 

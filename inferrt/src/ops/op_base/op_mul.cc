@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "ops/op_base/op_mul.h"
-#include "ops/op_base/utils.h"
+#include "ops/utils/utils.h"
 
 namespace mrt {
 namespace ops {
