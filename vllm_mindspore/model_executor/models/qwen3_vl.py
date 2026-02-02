@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-# Copyright 2025 Huawei Technologites Co., Ltd
+# Copyright 2025-2026 Huawei Technologites Co., Ltd
 # Copyright 2025 The vLLM team.
 # Copyright 2025 The Qwen Team.
 # Copyright 2025 The HuggingFace Inc. team.
@@ -133,6 +133,7 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
                 input_layout="TH")
         self.apply_rope = (self._custom_ops_rope if is_custom_rope_available
                            and not is_310p() else self._native_rope)
+        self.split = ops.auto_generate.SplitWithSize()
 
     def _native_rope(self, q, k, cos, sin, batch_valid_length):
         seq_length = q.shape[0]
@@ -161,7 +162,7 @@ class Qwen3_VisionAttention(Qwen2_5_VisionAttention):
                   position_embeddings: tuple[ms.Tensor, ms.Tensor],
                   q_seq_lens: Tensor) -> Tensor:
         qkv, _ = self.qkv(x)
-        q, k, v = mint.split(
+        q, k, v = self.split(
             qkv, (self.num_attention_heads_per_partition * self.head_dim,
                   self.num_attention_heads_per_partition * self.head_dim,
                   self.num_attention_heads_per_partition * self.head_dim), -1)
@@ -1165,6 +1166,7 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         self._rot_pos_ids_cache_max_size = int(
             vllm_config.additional_config.get("mm_rot_pos_ids_cache_max_size",
                                               256))
+        self.split = ops.auto_generate.SplitWithSize()
 
     def common_preprocess(self, vllm_config, prefix=""):
         # override the common_preprocess method to
@@ -1414,16 +1416,16 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
         (
             multimodal_embeddings_main,
             multimodal_embeddings_multiscale,
-        ) = mint.split(
+        ) = self.split(
             multimodal_embeddings_cat,
             [self.visual_dim, self.multiscale_dim],
             dim=-1,
         )
 
-        multimodal_embeddings = mint.split(multimodal_embeddings_main,
+        multimodal_embeddings = self.split(multimodal_embeddings_main,
                                            visual_lens,
                                            dim=0)
-        multimodal_embeddings_multiscale = mint.split(
+        multimodal_embeddings_multiscale = self.split(
             multimodal_embeddings_multiscale, visual_lens, dim=0)
 
         deepstack_input_embeds = inputs_embeds.new_zeros(

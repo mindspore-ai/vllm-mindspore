@@ -4,7 +4,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/deepseek_v2.py
 #
-# Copyright 2025 Huawei Technologites Co., Ltd
+# Copyright 2025-2026 Huawei Technologites Co., Ltd
 # Copyright 2024 The Deepseek team.
 # Copyright 2023 The vLLM team.
 # Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
@@ -364,6 +364,7 @@ class DeepseekV3Attention(nn.Cell):
         self.pe_concat = ops.Concat(2)
         self.qabsorb_k_matmul = ops.BatchMatMul()
         self.outabsorb_v_matmul = ops.BatchMatMul(transpose_b=True)
+        self.split = ops.auto_generate.SplitWithSize()
 
     def forward_absorb_prepare(
         self,
@@ -382,12 +383,12 @@ class DeepseekV3Attention(nn.Cell):
 
         # calculate k(v)
         latent_kv_all = self.kv_a_proj_with_mqa(hidden_states)
-        latent_kv, k_pe = mint.split(
+        latent_kv, k_pe = self.split(
             latent_kv_all, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         i_kv = self.kv_a_layernorm(latent_kv)
 
         # q， k rope
-        q_nope, q_pe = mint.split(
+        q_nope, q_pe = self.split(
             q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
         q_pe = q_pe.view((-1, self.local_num_heads * self.qk_rope_head_dim))
         q_pe, k_pe = self.rotary_emb(positions, q_pe, k_pe, batch_valid_length,
