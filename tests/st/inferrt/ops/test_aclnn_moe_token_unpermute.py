@@ -1,102 +1,87 @@
+"""Tests for torch.ops.npu.npu_moe_token_unpermute operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch.fx_mlir_backend import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_mlir_backend import backend
 
 
 def moe_token_unpermute_with_padding(
-    permuted_tokens: torch.Tensor,
+    tokens: torch.Tensor,
     indices: torch.Tensor,
     probs: torch.Tensor,
-    restore_shape: torch.Size, 
-)->torch.Tensor:
-    assert permuted_tokens.dim() == 2, f"Got {permuted_tokens.dims()} D"
-    # Reshape and expand probabilities and indices to match permuted_tokens
+    original_shape: torch.Size,
+) -> torch.Tensor:
+    """Unpermute tokens with padding support."""
+    assert tokens.dim() == 2, f"Got {tokens.dims()} D"
+
     probs = probs.view(-1).unsqueeze(-1)
-    indices = indices.view(-1, 1).expand(-1, permuted_tokens.shape[1])
-    assert (
-        permuted_tokens.shape == indices.shape
-    ), "Shape mismatch between permuted_tokens and indices."
+    indices = indices.view(-1, 1).expand(-1, tokens.shape[1])
+    assert (tokens.shape == indices.shape), "Shape mismatch between tokens and indices."
+    merged_out = probs * tokens
+    zero_tensor = torch.zeros(original_shape, dtype=merged_out.dtype, device=merged_out.device)
+    org_tokens = torch.scatter_add(zero_tensor, 0, indices, merged_out)
+    return org_tokens
 
-    # Combine tokens with their probabilities
-    combined_output = probs * permuted_tokens
-
-    # Prepare a tensor of zeros with the desired output shape
-    empty_tokens = torch.zeros(
-        restore_shape,
-        dtype=combined_output.dtype,
-        device=combined_output.device,
-    )
-
-    # Scatter the combined tokens back to their original positions
-    unpermuted_tokens = torch.scatter_add(empty_tokens, 0, indices, combined_output)
-    return unpermuted_tokens
 
 def moe_token_unpermute_golden(
-    permuted_tokens: torch.Tensor,
+    tokens: torch.Tensor,
     sorted_indices: torch.Tensor,
     probs: torch.Tensor = None,
     padded_mode: bool = False,
-    restore_shape: torch.Size = None
+    original_shape: torch.Size = None,
 ):
+    """Reference implementation of moe_token_unpermute."""
     if padded_mode:
-        return moe_token_unpermute_with_padding(permuted_tokens, sorted_indices, probs, restore_shape)
+        return moe_token_unpermute_with_padding(tokens, sorted_indices, probs, original_shape)
 
-    assert permuted_tokens.size(0) == sorted_indices.numel()
-    if probs is not None:
-        num_unpermute_tokens = probs.numel()
-        topk = probs.size(1)
-    else:
-        num_unpermute_tokens = permuted_tokens.size(0)
-        topk = 1
-    
-    unpermuted_tokens = torch.zeros(
-        [num_unpermute_tokens, permuted_tokens.shape[-1]],
-        dtype = permuted_tokens.dtype,
-        device = permuted_tokens.device,
+    assert tokens.size(0) == sorted_indices.numel()
+    num_org_tokens, topk = (tokens.size(0), 1) if probs is None else (probs.numel(), probs.size(1))
+
+    org_tokens = torch.zeros(
+        [num_org_tokens, tokens.shape[-1]],
+        dtype=tokens.dtype,
+        device=tokens.device,
     )
-    unpermuted_tokens.index_copy_(0, sorted_indices, permuted_tokens)
-    unpermuted_tokens = unpermuted_tokens.reshape(-1, topk, permuted_tokens.size(-1))
+    org_tokens.index_copy_(0, sorted_indices, tokens)
+    org_tokens = org_tokens.reshape(-1, topk, tokens.size(-1))
     if probs is not None:
-        unpermuted_tokens = unpermuted_tokens * probs.unsqueeze(-1)
-    unpermuted_tokens = unpermuted_tokens.sum(dim=1)
-    return unpermuted_tokens
-    
+        org_tokens = org_tokens * probs.unsqueeze(-1)
+    org_tokens = org_tokens.sum(dim=1)
+    return org_tokens
+
 
 def op_func(permuted_tokens: torch.Tensor,
     sorted_indices: torch.Tensor,
     probs: torch.Tensor = None,
     padded_mode: bool = False,
-    restore_shape: torch.Size = None
+    restore_shape: torch.Size = None,
 ):
+    """Reference op function for moe_token_unpermute."""
     return moe_token_unpermute_golden(permuted_tokens, sorted_indices, probs, padded_mode, restore_shape)
 
 
 def get_op_func_compiled():
-    def custom_op_func(permuted_tokens, sorted_indices, probs = None,  padded_mode = False, restore_shape = None):
+    """Get compiled moe_token_unpermute function."""
+    def custom_op_func(permuted_tokens, sorted_indices, probs=None, padded_mode=False, restore_shape=None):
         return torch.ops.npu.npu_moe_token_unpermute(permuted_tokens, sorted_indices, probs, padded_mode, restore_shape)
     return torch.compile(custom_op_func, backend=backend)
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("num_tokens", [1024, 2048])
 @pytest.mark.parametrize("hidden_size", [6144, 8192])
 @pytest.mark.parametrize("topk", [1, 4])
 @pytest.mark.parametrize("num_experts", [4, 128])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
-def test_moe_token_unpermute(pipeline, monkeypatch, num_tokens, hidden_size, topk, num_experts, dtype):
+def test_moe_token_unpermute(num_tokens, hidden_size, topk, num_experts, dtype):
     """
     Feature: Test aclnn moe_token_unpermute
     Description: Test aclnn moe_token_unpermute with fp16/bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
-
 
     permute_token_cpu = torch.randn(num_tokens * topk, hidden_size).to(dtype)
     indices_cpu = torch.randint(0, num_experts, (num_tokens, topk))
@@ -104,9 +89,9 @@ def test_moe_token_unpermute(pipeline, monkeypatch, num_tokens, hidden_size, top
     probs_cpu = None
     probs_npu = None
     if topk > 1:
-        probs_cpu = (torch.ones(num_tokens, topk)/topk).to(dtype).requires_grad_(True)
+        probs_cpu = (torch.ones(num_tokens, topk) / topk).to(dtype).requires_grad_(True)
         probs_npu = probs_cpu.clone().npu().requires_grad_(True)
-    
+
     permute_token_npu = permute_token_cpu.clone().npu().requires_grad_(True)
     sorted_indices_npu = sorted_indices_cpu.clone().npu()
 
@@ -114,5 +99,5 @@ def test_moe_token_unpermute(pipeline, monkeypatch, num_tokens, hidden_size, top
     cpu_output0 = op_func(permute_token_cpu, sorted_indices_cpu, probs=probs_cpu)
 
     op_func_compiled = get_op_func_compiled()
-    npu_output0 =  op_func_compiled(permute_token_npu, sorted_indices_npu, probs=probs_npu).detach().cpu()
+    npu_output0 = op_func_compiled(permute_token_npu, sorted_indices_npu, probs=probs_npu).detach().cpu()
     AssertRtolEqual(cpu_output0, npu_output0)

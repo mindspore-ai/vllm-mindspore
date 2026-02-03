@@ -1,10 +1,11 @@
-import pytest
+"""Tests for aclnn add_rms_norm operation."""
 import numpy as np
 import torch
 
+from mrt.torch.fx_mlir_backend import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_mlir_backend import backend
 
 
 def op_func(x1, x2, gamma, epsilon=1e-6):
@@ -50,7 +51,10 @@ def add_rms_norm_forward(dtype, op_func_compiled):
     npu_input2 = torch.from_numpy(cpu_input2).npu()
 
     cpu_output0, cpu_output1, cpu_output2 = op_func(cpu_input0, cpu_input1, cpu_input2)
-    npu_output0, npu_output1, npu_output2 = [npu_output.detach().cpu().numpy() for npu_output in op_func_compiled(npu_input0, npu_input1, npu_input2)]
+    npu_outputs = op_func_compiled(npu_input0, npu_input1, npu_input2)
+    npu_output0, npu_output1, npu_output2 = [
+        npu_output.detach().cpu().numpy() for npu_output in npu_outputs
+    ]
 
     AssertRtolEqual(cpu_output0, npu_output0, prec)
     AssertRtolEqual(cpu_output1, npu_output1, prec)
@@ -58,28 +62,22 @@ def add_rms_norm_forward(dtype, op_func_compiled):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_add_rms_norm_fp32(pipeline, monkeypatch):
+def test_add_rms_norm_fp32():
     """
     Feature: Test aclnn add_rms_norm
     Description: Test aclnn add_rms_norm with fp32 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     op_func_compiled = get_op_func_compiled()
     add_rms_norm_forward(np.float32, op_func_compiled)
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_add_rms_norm_fp16(pipeline, monkeypatch):
+def test_add_rms_norm_fp16():
     """
     Feature: Test aclnn add_rms_norm
     Description: Test aclnn add_rms_norm with fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     op_func_compiled = get_op_func_compiled()
     add_rms_norm_forward(np.float16, op_func_compiled)

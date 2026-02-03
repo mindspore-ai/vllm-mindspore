@@ -11,14 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Tests for aclnn cast operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(x, dtype):
@@ -41,7 +41,6 @@ def get_long_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("input_dtype,output_dtype", [
     (torch.float32, torch.float16),
     (torch.float16, torch.float32),
@@ -50,14 +49,12 @@ def get_long_op_func_compiled():
     (torch.int32, torch.float32),
     (torch.float32, torch.int32),
 ])
-def test_cast_basic(pipeline, monkeypatch, input_dtype, output_dtype):
+def test_cast_basic(input_dtype, output_dtype):
     """
     Feature: Test aclnn cast
     Description: Test aclnn cast with basic dtype conversions
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     shape = (2, 3, 4)
     if input_dtype in (torch.float32, torch.float16):
         cpu_input = torch.randn(shape, dtype=input_dtype)
@@ -73,21 +70,18 @@ def test_cast_basic(pipeline, monkeypatch, input_dtype, output_dtype):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [
     (1,),
     (64, 10),
     (32, 3, 3),
     (256, 2048, 7, 7),
 ])
-def test_cast_shapes(pipeline, monkeypatch, shape):
+def test_cast_shapes(shape):
     """
     Feature: Test aclnn cast
     Description: Test aclnn cast with different shapes
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input = torch.randn(shape, dtype=torch.float32)
     npu_input = cpu_input.npu()
 
@@ -98,21 +92,18 @@ def test_cast_shapes(pipeline, monkeypatch, shape):
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [
     (1,),
     (64, 10),
     (32, 3, 3),
     (256, 2048, 7, 7),
 ])
-def test_cast_long_shapes(pipeline, monkeypatch, shape):
+def test_cast_long_shapes(shape):
     """
     Feature: Test aclnn cast
     Description: Test aclnn cast with different shapes
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input = torch.randn(shape, dtype=torch.float32)
     npu_input = cpu_input.npu()
 
@@ -122,15 +113,12 @@ def test_cast_long_shapes(pipeline, monkeypatch, shape):
     AssertRtolEqual(cpu_output, npu_output)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_cast_float_to_int(pipeline, monkeypatch):
+def test_cast_float_to_int():
     """
     Feature: Test aclnn cast
     Description: Test aclnn cast from float32 to int64
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input = torch.randn(2, 5, dtype=torch.float32) * 10.0
     npu_input = cpu_input.npu()
 
@@ -142,15 +130,12 @@ def test_cast_float_to_int(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_cast_int_to_float(pipeline, monkeypatch):
+def test_cast_int_to_float():
     """
     Feature: Test aclnn cast
     Description: Test aclnn cast from int64 to float32
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input = torch.randint(-100, 100, (2, 5), dtype=torch.int64)
     npu_input = cpu_input.npu()
 

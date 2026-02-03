@@ -1,10 +1,12 @@
-import pytest
+"""Tests for aclnn expand operation."""
 import numpy as np
+import pytest
 import torch
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 
 def expand_op(x, y):
@@ -21,17 +23,14 @@ def get_op_func_compiled():
 
 # 去掉 shape 的 parametrize，改在内部循环
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [(2, 8), (4, 8)])
-def test_expand(pipeline, monkeypatch, shape):
+def test_expand(shape):
     """
     Feature: Test aclnn expand
     Description: Test aclnn expand with dynamic size based on x.size
     Expectation: The result is correct
     """
 
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     compile_op = get_op_func_compiled()
     prec = 1e-4

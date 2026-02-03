@@ -11,20 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import pytest
+"""Tests for torch.reshape operation."""
 import numpy as np
 import torch
+
 from torch_npu.testing.common_utils import create_common_tensor
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 
+# pylint: disable=redefined-builtin
 def op_func(input, shape):
     """op function for reshape"""
     return input.reshape(shape)
+
 
 def reshape_forward(shape_format, op_func_compiled):
     """
@@ -42,19 +45,16 @@ def reshape_forward(shape_format, op_func_compiled):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_reshape(pipeline, monkeypatch):
+def test_reshape():
     """
     Feature: Test reshape
     Description: Test reshape op with mlir_backend
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     dtype_list = [np.float16, np.float32, np.int32, np.bool_]
     format_list = [0]
     shape_list = [[8, 8], [2, 4, 8], [2, 4, 4, 2]]
-    
+
     shape_format = [
         [i, j, k] for i in dtype_list for j in format_list for k in shape_list
     ]

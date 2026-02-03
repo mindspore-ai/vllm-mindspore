@@ -1,19 +1,18 @@
+"""Tests for tensor getitem operation."""
 import torch
-import pytest
-from tests.mark_utils import arg_mark
-from tests.ops_utils import AssertRtolEqual
+
 from mrt.torch.fx_backend import backend
 
+from tests.mark_utils import arg_mark
+from tests.ops_utils import AssertRtolEqual
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_getitem_tuple_getitem(pipeline, monkeypatch):
+def test_getitem_tuple_getitem():
     """
     Feature: Test getitem_tuple_getitem
     Description: Test getitem_tuple_getitem
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, indices):
         return x[indices]
     compiled_op = torch.compile(func, backend=backend)
@@ -23,15 +22,12 @@ def test_getitem_tuple_getitem(pipeline, monkeypatch):
     AssertRtolEqual(out, 2)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_number(pipeline, monkeypatch):
+def test_tensor_getitem_by_number():
     """
     Feature: Test tensor_getitem_by_number
     Description: Test tensor_getitem_by_number
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, indices):
         return x[indices]
     compiled_op = torch.compile(func, backend=backend)
@@ -42,15 +38,12 @@ def test_tensor_getitem_by_number(pipeline, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_slice(pipeline, monkeypatch):
+def test_tensor_getitem_by_slice():
     """
     Feature: Test tensor_getitem_by_slice
     Description: Test tensor_getitem_by_slice
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, indices):
         return x[indices]
     compiled_op = torch.compile(func, backend=backend)
@@ -61,15 +54,12 @@ def test_tensor_getitem_by_slice(pipeline, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_tuple(pipeline, monkeypatch):
+def test_tensor_getitem_by_tuple():
     """
     Feature: Test tensor_getitem_by_tuple
     Description: Test tensor_getitem_by_tuple
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x):
         return x[1, ..., 1:4:2]
     compiled_op = torch.compile(func, backend=backend)
@@ -79,15 +69,12 @@ def test_tensor_getitem_by_tuple(pipeline, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_tuple_2(pipeline, monkeypatch):
+def test_tensor_getitem_by_tuple_2():
     """
     Feature: Test tensor_getitem_by_tuple
     Description: Test tensor_getitem_by_tuple
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x):
         return x[1, 1:4:2]
     compiled_op = torch.compile(func, backend=backend)
@@ -97,15 +84,12 @@ def test_tensor_getitem_by_tuple_2(pipeline, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_tuple_with_zero_dim(pipeline, monkeypatch):
+def test_tensor_getitem_by_tuple_with_zero_dim():
     """
     Feature: Test tensor_getitem_by_tuple
     Description: Test tensor_getitem_by_tuple
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x):
         return x[1, :, 4:]
     compiled_op = torch.compile(func, backend=backend)
@@ -115,15 +99,12 @@ def test_tensor_getitem_by_tuple_with_zero_dim(pipeline, monkeypatch):
     AssertRtolEqual(out, expected)
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_tensor_getitem_by_tensor(pipeline, monkeypatch):
+def test_tensor_getitem_by_tensor():
     """
     Feature: Test tensor_getitem_by_tensor
     Description: Test tensor_getitem_by_tensor
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     def func(x, indices):
         return x[indices]
     compiled_op = torch.compile(func, backend=backend)

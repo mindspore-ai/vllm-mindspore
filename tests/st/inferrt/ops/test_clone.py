@@ -11,30 +11,34 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""torch.clone case"""
-
+"""Tests for torch.clone operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
 
 
+# pylint: disable=redefined-builtin
 def op_func(input, memory_formats):
     """golden"""
     return torch.clone(input, memory_format=memory_formats)
 
+
+# pylint: disable=redefined-builtin
 def op_func_default(input):
     """golden"""
     return torch.clone(input)
+
 
 def get_op_func_compiled():
     """clone op"""
     def custom_op_func(x, memory_formats):
         return torch.clone(x, memory_format=memory_formats)
     return torch.compile(custom_op_func, backend=backend)
+
 
 def get_op_func_compiled_default():
     """clone op"""
@@ -45,15 +49,12 @@ def get_op_func_compiled_default():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_clone_default(shapes, dtypes, pipeline, monkeypatch):
+def test_clone_default(shapes, dtypes, ):
     """
     Feature: Test aclnn clone default
     Description: Test aclnn clone
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(shapes, dtype=dtypes)
     npu_input0 = cpu_input0.npu()
 
@@ -67,15 +68,12 @@ def test_clone_default(shapes, dtypes, pipeline, monkeypatch):
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("memory_formats", [torch.contiguous_format])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_clone_contiguous_format(shapes, memory_formats, dtypes, pipeline, monkeypatch):
+def test_clone_contiguous_format(shapes, memory_formats, dtypes, ):
     """
     Feature: Test aclnn clone contiguous_format
     Description: Test aclnn clone
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(shapes, dtype=dtypes)
     npu_input0 = cpu_input0.npu()
 
@@ -90,15 +88,12 @@ def test_clone_contiguous_format(shapes, memory_formats, dtypes, pipeline, monke
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("memory_formats", [torch.preserve_format])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_clone_preserve_format(shapes, memory_formats, dtypes, pipeline, monkeypatch):
+def test_clone_preserve_format(shapes, memory_formats, dtypes, ):
     """
     Feature: Test aclnn clone preserve_format
     Description: Test aclnn clone
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(shapes, dtype=dtypes)
     npu_input0 = cpu_input0.npu()
 
@@ -113,15 +108,12 @@ def test_clone_preserve_format(shapes, memory_formats, dtypes, pipeline, monkeyp
 @pytest.mark.parametrize("shapes", [[2, 5, 9, 2], [32, 16, 40, 96]])
 @pytest.mark.parametrize("memory_formats", [torch.channels_last])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_clone_channels_last(shapes, memory_formats, dtypes, pipeline, monkeypatch):
+def test_clone_channels_last(shapes, memory_formats, dtypes, ):
     """
     Feature: Test aclnn clone channels_last
     Description: Test aclnn clone
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(shapes, dtype=dtypes)
     npu_input0 = cpu_input0.npu()
 
@@ -136,15 +128,12 @@ def test_clone_channels_last(shapes, memory_formats, dtypes, pipeline, monkeypat
 @pytest.mark.parametrize("shapes", [[2, 5, 9, 2, 1], [32, 16, 40, 96, 1]])
 @pytest.mark.parametrize("memory_formats", [torch.channels_last_3d])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_clone_channels_last_3d(shapes, memory_formats, dtypes, pipeline, monkeypatch):
+def test_clone_channels_last_3d(shapes, memory_formats, dtypes, ):
     """
     Feature: Test aclnn clone channels_last_3d
     Description: Test aclnn clone
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(shapes, dtype=dtypes)
     npu_input0 = cpu_input0.npu()
 

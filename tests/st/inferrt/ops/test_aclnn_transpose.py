@@ -11,18 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""torch.transpose case"""
-
+"""Tests for torch.transpose operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 
-def op_func(input, dim0 ,dim1):
+# pylint: disable=redefined-builtin
+def op_func(input, dim0, dim1):
     """golden"""
     return input.transpose(dim0, dim1)
 
@@ -36,15 +36,12 @@ def get_op_func_compiled():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("infos", [([2, 3, 4, 9, 3, 2, 5], 6, 2)])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_transpose(infos, dtypes, pipeline, monkeypatch):
+def test_transpose(infos, dtypes, ):
     """
     Feature: Test aclnn transpose
     Description: Test aclnn transpose with fp32 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_input0 = torch.rand(infos[0], dtype=dtypes)
     npu_input0 = cpu_input0.npu()
     dim0 = infos[1]

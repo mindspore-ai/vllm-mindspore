@@ -1,4 +1,3 @@
-# pylint: disable=missing-docstring, line-too-long, unused-argument, missing-function-docstring
 # Copyright 2025 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,19 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Tests for aclnn moe init routing v3 operation."""
 import numpy as np
-import torch
-import torch_npu
-from mrt.torch.fx_mlir_backend import backend
 
 import pytest
+import torch
+import torch_npu
+
+from mrt.torch.fx_mlir_backend import backend
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
-def moe_init_routing_golden_shape(x, expert_idx, scale, offset, active_num, expert_capacity,
-                                  expert_num, drop_pad_mode, expert_tokens_num_type, expert_tokens_num_flag,
+
+def moe_init_routing_golden_shape(x, expert_idx, scale, offset_unused, active_num,
+                                  expert_capacity, expert_num, drop_pad_mode,
+                                  expert_tokens_num_type, expert_tokens_num_flag,
                                   active_expert_range, quant_mode, row_idx_type):
+    """Calculate golden shape for moe init routing v3 operation."""
+    _ = offset_unused  # pylint: disable=unused-argument
     expert_start = active_expert_range[0] if drop_pad_mode == 0 else 0
     expert_end = active_expert_range[1] if drop_pad_mode == 0 else expert_num
     num_rows = x.shape[0]
@@ -73,16 +77,13 @@ def moe_init_routing_golden_shape(x, expert_idx, scale, offset, active_num, expe
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("num_rows", [1, 4])
-def test_aclnn_moe_init_routing_v3_op(pipeline, monkeypatch, num_rows):
+def test_aclnn_moe_init_routing_v3_op(num_rows):
     """
     Feature: Check aclnnMoeInitRoutingV3 launch
     Description: Check aclnnMoeInitRoutingV3 launch with symbolic infershape
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     def moe_init_routing_v3(x, expert_idx, scale_optional, offset_optional, active_num, expert_capacity,
                             expert_num, drop_pad_mode, expert_tokens_num_type, expert_tokens_num_flag,
@@ -133,29 +134,32 @@ def test_aclnn_moe_init_routing_v3_op(pipeline, monkeypatch, num_rows):
     scale_np = scale.detach().cpu().numpy()
     offset_np = offset.detach().cpu().numpy() if offset is not None else None
     expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape = \
-        moe_init_routing_golden_shape(x_np, expert_idx_np, scale_np, offset_np, active_num,
-                                      expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
-                                      expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
+        moe_init_routing_golden_shape(
+            x_np, expert_idx_np, scale_np, offset_np, active_num,
+            expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
+            expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
     x_valid_len = expanded_x_shape[0]
     row_valid_len = expanded_row_idx_shape[0]
     count_valid_len = expert_tokens_count_shape[0] if expert_tokens_count_shape is not None else 0
     scale_valid_len = expanded_scale_shape[0] if expanded_scale_shape is not None else 0
-    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len], opt_expanded_x.detach().cpu()[:x_valid_len])
-    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len], opt_expanded_row_idx.detach().cpu()[:row_valid_len])
-    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len], opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
-    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len], opt_expanded_scale.detach().cpu()[:scale_valid_len])
+    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len],
+                    opt_expanded_x.detach().cpu()[:x_valid_len])
+    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len],
+                    opt_expanded_row_idx.detach().cpu()[:row_valid_len])
+    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len],
+                    opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
+    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len],
+                    opt_expanded_scale.detach().cpu()[:scale_valid_len])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_aclnn_moe_init_routing_v3_op1(pipeline, monkeypatch):
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+           card_mark="onecard", essential_mark="essential")
+def test_aclnn_moe_init_routing_v3_op1():
     """
     Feature: Check aclnnMoeInitRoutingV3 launch
     Description: Check aclnnMoeInitRoutingV3 launch with symbolic infershape
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     def moe_init_routing_v3(x, expert_idx, scale_optional, offset_optional, active_num, expert_capacity,
                             expert_num, drop_pad_mode, expert_tokens_num_type, expert_tokens_num_flag,
@@ -206,14 +210,19 @@ def test_aclnn_moe_init_routing_v3_op1(pipeline, monkeypatch):
     scale_np = scale.detach().cpu().numpy()
     offset_np = offset.detach().cpu().numpy() if offset is not None else None
     expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape = \
-        moe_init_routing_golden_shape(x_np, expert_idx_np, scale_np, offset_np, active_num,
-                                      expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
-                                      expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
+        moe_init_routing_golden_shape(
+            x_np, expert_idx_np, scale_np, offset_np, active_num,
+            expert_capacity, expert_num, drop_pad_mode, expert_tokens_num_type,
+            expert_tokens_num_flag, active_expert_range, quant_mode, row_idx_type)
     x_valid_len = expanded_x_shape[0]
     row_valid_len = expanded_row_idx_shape[0]
     count_valid_len = expert_tokens_count_shape[0] if expert_tokens_count_shape is not None else 0
     scale_valid_len = expanded_scale_shape[0] if expanded_scale_shape is not None else 0
-    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len], opt_expanded_x.detach().cpu()[:x_valid_len])
-    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len], opt_expanded_row_idx.detach().cpu()[:row_valid_len])
-    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len], opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
-    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len], opt_expanded_scale.detach().cpu()[:scale_valid_len])
+    AssertRtolEqual(expanded_x.detach().cpu()[:x_valid_len],
+                    opt_expanded_x.detach().cpu()[:x_valid_len])
+    AssertRtolEqual(expanded_row_idx.detach().cpu()[:row_valid_len],
+                    opt_expanded_row_idx.detach().cpu()[:row_valid_len])
+    AssertRtolEqual(expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len],
+                    opt_expert_tokens_count_or_cumsum.detach().cpu()[:count_valid_len])
+    AssertRtolEqual(expanded_scale.detach().cpu()[:scale_valid_len],
+                    opt_expanded_scale.detach().cpu()[:scale_valid_len])

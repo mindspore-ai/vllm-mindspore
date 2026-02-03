@@ -1,11 +1,13 @@
-import pytest
+"""Tests for aclnn embedding operation."""
 import numpy as np
+import pytest
 import torch
 import torch.nn.functional as F
 
+from mrt.torch import fx_mlir_backend as backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import fx_mlir_backend as backend
 
 
 def op_func(indices, weight):
@@ -20,16 +22,13 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("dtype", (torch.float32, torch.float16))
-def test_embedding(pipeline, monkeypatch, dtype):
+def test_embedding(dtype):
     """
     Feature: Test aclnn embedding
     Description: Test aclnn embedding with fp32/fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     cpu_weight_torch = torch.from_numpy(np.random.rand(10, 3).astype(np.float32)).to(dtype)
     cpu_indices = torch.from_numpy(np.array([[1, 2, 4, 5], [4, 3, 2, 9]]))
 

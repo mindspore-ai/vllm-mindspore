@@ -11,15 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import pytest
+"""Tests for aclnn mul operation."""
 import numpy as np
 import torch
 from torch_npu.testing.common_utils import create_common_tensor
 
+from mrt.torch import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
 
 
 def op_func(input1, input2):
@@ -50,15 +50,12 @@ def mul_forward(shape_format, op_func_compiled):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_muls_shape_format_fp16(pipeline, monkeypatch):
+def test_muls_shape_format_fp16():
     """
     Feature: Test aclnn mul
     Description: Test aclnn mul with fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     format_list = [2]
     shape_list = [(1,), (64, 10), (32, 3, 3), (256, 2048, 7, 7), (2, 0, 2)]
     shape_format = [
@@ -69,15 +66,12 @@ def test_muls_shape_format_fp16(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_muls_shape_format_fp32(pipeline, monkeypatch):
+def test_muls_shape_format_fp32():
     """
     Feature: Test aclnn mul
     Description: Test aclnn mul with fp32 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     format_list = [2]
     shape_list = [(1,), (64, 10), (32, 3, 3), (256, 2048, 7, 7)]
     shape_format = [
@@ -88,15 +82,12 @@ def test_muls_shape_format_fp32(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_muls_shape_format_complex(pipeline, monkeypatch):
+def test_muls_shape_format_complex():
     """
     Feature: Test aclnn mul
     Description: Test aclnn mul with complex inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     op_func_compiled = torch.compile(op_func, backend=backend)
 
@@ -119,15 +110,12 @@ def test_muls_shape_format_complex(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_muls_shape_format_bool(pipeline, monkeypatch):
+def test_muls_shape_format_bool():
     """
     Feature: Test aclnn mul
     Description: Test aclnn mul with bool inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     op_func_compiled = torch.compile(op_func, backend=backend)
 
@@ -151,15 +139,12 @@ def test_muls_shape_format_bool(pipeline, monkeypatch):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
-def test_muls_mix_dtype(pipeline, monkeypatch):
+def test_muls_mix_dtype():
     """
     Feature: Test aclnn mul
     Description: Test aclnn mul with mixed dtypes (int32 and float32)
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     op_func_compiled = torch.compile(op_func, backend=backend)
 

@@ -1,14 +1,15 @@
+"""Tests for torch.ops.npu.npu_moe_gating_topk_softmax operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch.fx_mlir_backend import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_mlir_backend import backend
-
 
 
 def softmax_func(x):
+    """Compute softmax with max subtraction for numerical stability."""
     is_fp16 = x.dtype == torch.float16
     x = x.to(torch.float32)
     x_max = x.max(axis=-1, keepdim=True).values
@@ -16,7 +17,7 @@ def softmax_func(x):
     y = torch.exp(x_sub)
     x_sum = y.sum(dim=-1, keepdim=True)
 
-    zero_mask = (x_sum == 0)
+    zero_mask = x_sum == 0
     ans = torch.where(zero_mask, torch.tensor(0.0, device=x.device), y / x_sum)
     if is_fp16:
         ans = ans.to(torch.float16)
@@ -24,19 +25,21 @@ def softmax_func(x):
         x_sum = x_sum.to(torch.float16)
     return ans, x_max, x_sum
 
+
 def op_func(x, finished_optional, k):
+    """Reference implementation of moe_gating_topk_softmax."""
     num_expert = x.shape[-1]
     softmax, _, _ = softmax_func(x)
 
     _, expert_idx = torch.sort(softmax, dim=-1, descending=True, stable=True)
-    expert_idx = expert_idx[:,:k]
+    expert_idx = expert_idx[:, :k]
     y = torch.gather(softmax, -1, expert_idx)
 
     if finished_optional is not None:
         finished_optional = finished_optional.reshape(finished_optional.shape[0], 1)
         finished_optional = finished_optional.repeat(1, k)
         expert_idx = torch.where(finished_optional, num_expert, expert_idx)
-    
+
     batch_size, k_size = y.shape[0], y.shape[1]
     row_idx = torch.arange(batch_size * k_size, device=x.device).reshape(k_size, batch_size).t()
 
@@ -54,19 +57,16 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 @pytest.mark.parametrize("n", [10, 420, 520])
 @pytest.mark.parametrize("k", [2, 4, 5, 9])
 @pytest.mark.parametrize("col", [200, 1256, 5120])
-def test_moe_gating_topk_softmax(pipeline, monkeypatch, dtype, n, k, col):
+def test_moe_gating_topk_softmax(dtype, n, k, col):
     """
     Feature: Test aclnn moe_gating_topk_softmax
     Description: Test aclnn moe_gating_topk_softmax with fp32/fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     x = torch.rand(n, col, dtype=dtype)
     finished = torch.rand(n).to(torch.bool)

@@ -30,15 +30,12 @@ from tests.mark_utils import arg_mark
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
-def test_npu_add_rms_norm_quant(monkeypatch, backend, dtype):
+def test_npu_add_rms_norm_quant(backend, dtype):
     """
     Feature: Check npu_add_rms_norm_quant op launch
     Description: Check npu_add_rms_norm_quant op launch with float16 and bfloat16
     Expectation: The result is correct
     """
-    # Explicitly reference monkeypatch to avoid unused-argument warning
-    _ = monkeypatch
-
     def npu_add_rms_norm_quant_func(x1, x2, gamma, scales1, zero_points1):
         return torch_npu.npu_add_rms_norm_quant(x1, x2, gamma, scales1, zero_points1)
 

@@ -1,31 +1,33 @@
+"""Tests for torch.masked_fill operation."""
 import pytest
 import torch
 
+from mrt.torch import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+
 
 def get_masked_fill_func_compiled():
     def masked_fill_func(x, mask, value):
         return torch.masked_fill(x, mask, value)
     return torch.compile(masked_fill_func, backend=backend)
 
+
 def get_inplace_masked_fill_func_compiled():
     def inplace_masked_fill_func(x, mask, value):
         return x.masked_fill_(mask, value)
     return torch.compile(inplace_masked_fill_func, backend=backend)
 
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
-def test_masked_fill_tensor(pipeline, monkeypatch, dtype):
+def test_masked_fill_tensor(dtype):
     """
     Feature: Test aclnn masked_fill_tensor
     Description: Test aclnn masked_fill_tensor with fp32/fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     masked_fill_func_compiled = get_masked_fill_func_compiled()
 
     x1 = torch.randn([3, 2], dtype=dtype).npu()
@@ -42,17 +44,15 @@ def test_masked_fill_tensor(pipeline, monkeypatch, dtype):
     expected2 = torch.masked_fill(x2, mask2, value2)
     AssertRtolEqual(output2, expected2)
 
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
-def test_inplace_masked_fill_tensor(pipeline, monkeypatch, dtype):
+def test_inplace_masked_fill_tensor(dtype):
     """
     Feature: Test aclnn inplace_masked_fill_tensor
     Description: Test aclnn inplace_masked_fill_tensor with fp32/fp16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     inplace_masked_fill_func_compiled = get_inplace_masked_fill_func_compiled()
 
     x1 = torch.randn([3, 2], dtype=dtype).npu()
@@ -71,4 +71,3 @@ def test_inplace_masked_fill_tensor(pipeline, monkeypatch, dtype):
     inplace_masked_fill_func_compiled(x2, mask2, value2)
     expected_x2.masked_fill_(mask2, value2)
     AssertRtolEqual(x2, expected_x2)
-

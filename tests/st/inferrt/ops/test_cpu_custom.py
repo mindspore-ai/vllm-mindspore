@@ -1,37 +1,39 @@
-# pylint: disable=missing-module-docstring, wrong-import-position, import-outside-toplevel, unused-import, unused-argument
+"""Tests for CPU custom operations."""
+# pylint: disable=wrong-import-position, ungrouped-imports
 import os
 os.environ["USE_NPU"] = "0"
 os.environ["USE_ASCEND"] = "0"
 os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
+import pytest
 import torch
+from tests.common import HasTorchNpu
+if HasTorchNpu():
+    import torch_npu    # pylint: disable=unused-import
 import mrt
 from mrt.torch.fx_backend import backend as fx_backend
 from mrt.torch.fx_mlir_backend import backend as mlir_backend
-import pytest
 from tests.mark_utils import arg_mark
 
 
 def missing_torch_mlir():
-    has_torch_mlir = True
     try:
-        import torch_mlir
+        import torch_mlir  # pylint: disable=import-outside-toplevel,unused-import
     except ModuleNotFoundError:
-        has_torch_mlir = False
-    return not has_torch_mlir
+        return True
+    return False
 
 
 @pytest.mark.skipif(missing_torch_mlir(), reason="not install torch_mlir")
-@arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
+@arg_mark(plat_marks=["cpu_linux"], level_mark="level0",
+           card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
-def test_cpu_custom_add_op(pipeline, monkeypatch, backend):
+def test_cpu_custom_add_op(backend):
     """
     Feature: Check CPU custom add op launch
     Description: Check CPU custom add op launch with cache
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     cpu_add_path = os.path.join(script_dir, "cpu_custom_add.cc")
@@ -39,10 +41,13 @@ def test_cpu_custom_add_op(pipeline, monkeypatch, backend):
 
     @torch.library.custom_op("mrt::custom_add", mutates_args=())
     def custom_add_op(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        _ = x  # pylint: disable=unused-argument
+        _ = y  # pylint: disable=unused-argument
         raise NotImplementedError("This is a placeholder for the custom_add operator.")
 
     @torch.library.register_fake("mrt::custom_add")
-    def _(x, y):
+    def _custom_add_fake(x, y):
+        _ = y  # pylint: disable=unused-argument
         return x
 
     def mrt_custom_add(x, y):

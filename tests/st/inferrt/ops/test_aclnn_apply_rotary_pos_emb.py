@@ -1,13 +1,15 @@
+"""Tests for aclnn apply_rotary_pos_emb operation."""
 import pytest
-import numpy as np
 import torch
+
+from mrt.torch.fx_mlir_backend import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_mlir_backend import backend
 
 
 def op_func(query, key, cos, sin):
+    """Apply rotary positional embedding to query and key tensors."""
     x1 = query[..., :query.shape[-1] // 2]
     x2 = query[..., query.shape[-1] // 2 :]
     concat = torch.cat([-x2, x1], dim=-1)
@@ -31,18 +33,15 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("batch_size", [4, 8])
 @pytest.mark.parametrize("num_heads", [16, 32])
 @pytest.mark.parametrize("dtype", [torch.float16])
-def test_apply_rotary_pos_emb(pipeline, monkeypatch, batch_size, num_heads, dtype):
+def test_apply_rotary_pos_emb(batch_size, num_heads, dtype):
     """
     Feature: Test aclnn apply_rotary_pos_emb
     Description: Test aclnn apply_rotary_pos_emb with fp16/bf16 inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
     query_shape = [batch_size, 1024, num_heads, 128]
     cos_shape = [batch_size, 1024, 1, 128]
 

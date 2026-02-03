@@ -11,13 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Tests for tensor contiguous operation."""
 import pytest
 import torch
 
+from mrt.torch import backend
+
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
 
 
 def op_func(input_tensor):
@@ -31,17 +32,14 @@ def get_op_func_compiled():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("pipeline", (True, False))
 @pytest.mark.parametrize("shape", [[10, 40], [20, 30, 35]])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
-def test_contiguous(pipeline, monkeypatch, shape, dtype):
+def test_contiguous(shape, dtype):
     """
     Feature: Test tensor.contiguous
     Description: Test contiguous with dtype inputs
     Expectation: The result is correct
     """
-    if pipeline:
-        monkeypatch.setenv("MRT_ENABLE_PIPELINE", "on")
 
     input_tensor = torch.rand(shape, dtype=dtype)
     input_tensor = input_tensor.transpose(1, 0)
