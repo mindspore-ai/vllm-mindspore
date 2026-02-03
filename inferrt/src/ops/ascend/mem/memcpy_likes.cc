@@ -29,13 +29,8 @@ namespace mrt {
 namespace ops {
 OpsErrorCode MemcpyOpBase::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
-  return SUCCESS;
-}
-
-OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                  ir::Value *output, void *stream) {
-  auto inputTensor = input[kIndex0]->ToTensor();
-  auto outTensor = output->ToTensor();
+  const auto &inputTensor = input[kIndex0]->ToTensor();
+  const auto &outTensor = output->ToTensor();
   if (!inputTensor->IsContiguous() || inputTensor->StorageOffset() != 0 || !IsTensorBaseFormat(inputTensor) ||
       !IsTensorBaseFormat(outTensor)) {
     LOG_EXCEPTION << "memcpy_likes operator does not support non-standard tensor memory layout, "
@@ -43,23 +38,16 @@ OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, v
                   << ", inputTensor format: " << FormatEnumToStr(inputTensor->Format())
                   << ", outTensor format: " << FormatEnumToStr(outTensor->Format());
   }
-  auto srcSize = inputTensor->Numel() * inputTensor->Dtype().GetSize();
-  auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
-  if (srcSize > dstSize) {
-    LOG_EXCEPTION << "unexpected input and output, src size is " << srcSize << ", dst size is " << dstSize;
-  }
-
-  if (outTensor->DataPtr() != inputTensor->DataPtr()) {
-    auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
-                                                                           inputTensor->DataPtr(), dstSize, stream);
-    if (ret == false) {
-      LOG_ERROR << " call aclrtMemcpyAsync in Op TensorCopy failed";
-      return UNKNOWN_ERROR;
-    }
-  }
 
   return SUCCESS;
 }
+
+OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                                  ir::Value *output, void *stream) {
+  return SUCCESS;
+}
+
+bool MemcpyOpBase::NeedLaunch() { return false; }
 
 MRT_REG_OP(flatten, Flatten, Ascend);
 MRT_REG_OP(unsqueeze, Unsqueeze, Ascend);
