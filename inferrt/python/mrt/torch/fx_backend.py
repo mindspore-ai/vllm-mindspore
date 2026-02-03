@@ -109,7 +109,9 @@ def embedding_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def muls_hook(node, input_nodes, executor):
     """swap the first and second param position."""
-    return [input_nodes[1], input_nodes[0]]
+    if isinstance(node.args[0], (int, float)):
+        return [input_nodes[1], input_nodes[0]]
+    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -327,9 +329,17 @@ def lt_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def mul_op_hook(op, node, input_nodes, executor):
     """Get the mul op for a given node."""
-    if isinstance(node.args[0], (int, float)):
+    if isinstance(node.args[0], (int, float)) or isinstance(node.args[1], (int, float)):
         return Op.muls
     return Op.mul
+
+
+# pylint: disable=unused-argument
+def inplace_add_op_hook(op, node, input_nodes, executor):
+    """Get the inplace_add op for a given node."""
+    if isinstance(node.args[1], (int, float, bool)):
+        return Op.inplace_add_scalar
+    return Op.inplace_add
 
 
 # pylint: disable=unused-argument
@@ -357,6 +367,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
+    register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
 
 
 def _next_unique_graph_id():
@@ -455,6 +466,7 @@ _OP_MAP = {
     operator.getitem: Op.tuple_getitem,
     operator.setitem: Op.setitem,
     operator.add: Op.add,
+    operator.iadd: Op.inplace_add,
     operator.sub: Op.sub,
     operator.mul: Op.mul,
     operator.truediv: Op.div,
@@ -473,6 +485,7 @@ _OP_MAP = {
     # tensor methods (as strings)
     "size": Op.size,
     "add": Op.add,
+    "add_": Op.inplace_add,
     "sub": Op.sub,
     "mul": Op.mul,
     "div": Op.div,
@@ -529,6 +542,7 @@ def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""
     operator_map = {
         operator.add: torch.add,
+        operator.iadd: "add_",
         operator.sub: torch.sub,
         operator.mul: torch.mul,
         operator.truediv: torch.div,
