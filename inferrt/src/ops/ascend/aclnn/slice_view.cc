@@ -67,6 +67,7 @@ OpsErrorCode AclnnSliceView::CalcWorkspace(const std::vector<const ir::Value *> 
   const auto step = input[kIndex4]->ToInt();
   CHECK_IF_FAIL_MSG(step > 0, "step must be positive");
   UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dim, start, end, step);
+  CheckStorageMatch(input, output);
   return SUCCESS;
 }
 

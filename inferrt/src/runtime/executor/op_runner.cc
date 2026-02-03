@@ -60,6 +60,8 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
   return ret;
 }
 
+bool OpRunner::NeedLaunch() { return operator_->NeedLaunch(); }
+
 void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
   for (auto &storage : storagesToAlloc_) {

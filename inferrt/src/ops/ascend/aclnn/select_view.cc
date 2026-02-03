@@ -53,6 +53,7 @@ OpsErrorCode AclnnSelectView::CalcWorkspace(const std::vector<const ir::Value *>
   const auto dim = input[kIndex1]->ToInt();
   const auto index = input[kIndex2]->ToInt();
   UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dim, index);
+  CheckStorageMatch(input, output);
   return SUCCESS;
 }
 

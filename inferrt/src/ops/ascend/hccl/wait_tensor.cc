@@ -46,6 +46,9 @@ OpsErrorCode HcclWaitTensor::Launch(const std::vector<const ir::Value *> &input,
                                     ir::Value *output, void *stream) {
   return SUCCESS;
 }
+
+bool HcclWaitTensor::NeedLaunch() { return false; }
+
 MRT_REG_OP(wait_tensor, HcclWaitTensor, Ascend);
 }  // namespace ops
 }  // namespace mrt

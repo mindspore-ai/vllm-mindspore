@@ -39,6 +39,8 @@ class OpPythonCall : public Operator {
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream);
 
+  bool NeedLaunch() override;
+
  protected:
   py::tuple PreprocessInputs(const std::vector<const ir::Value *> &input);
   OpsErrorCode PostprocessOutputs(py::handle result, ir::Value *output);

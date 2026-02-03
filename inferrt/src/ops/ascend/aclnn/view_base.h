@@ -37,6 +37,15 @@ class AclnnViewBase : public Operator {
 
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override {
+    return SUCCESS;
+  }
+
+  std::vector<std::pair<uint32_t, uint32_t>> GetOutputInputRefPairs() const override { return refPairs_; }
+
+  bool NeedLaunch() override { return false; }
+
+ protected:
+  void CheckStorageMatch(const std::vector<const ir::Value *> &input, const ir::Value *output) {
     for (auto [outputIndex, inputIndex] : refPairs_) {
       auto &inputTensor = input[inputIndex]->ToTensor();
 
@@ -58,11 +67,7 @@ class AclnnViewBase : public Operator {
                       << ", inputIndex: " << inputIndex << ", input storage: " << inputTensor->GetStorage()->Data();
       }
     }
-
-    return SUCCESS;
   }
-
-  std::vector<std::pair<uint32_t, uint32_t>> GetOutputInputRefPairs() const override { return refPairs_; }
 
  private:
   std::vector<std::pair<uint32_t, uint32_t>> refPairs_;

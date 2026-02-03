@@ -113,6 +113,8 @@ class OpRunner {
 
   ops::OpsErrorCode Launch(void *stream);
 
+  bool NeedLaunch();
+
   /**
    * @brief Allocate device memory for output tensor and workspace.
    */

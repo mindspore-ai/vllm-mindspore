@@ -144,6 +144,7 @@ OpsErrorCode AclnnView::CalcWorkspace(const std::vector<const ir::Value *> &inpu
     LOG_EXCEPTION << "For View the component of shape can't be less than -1";
   }
   UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), shape);
+  CheckStorageMatch(input, output);
   return SUCCESS;
 }
 

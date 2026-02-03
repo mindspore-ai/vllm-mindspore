@@ -298,6 +298,8 @@ OpsErrorCode OpTorchCall::Launch(const std::vector<const ir::Value *> &input, vo
   return SUCCESS;
 }
 
+bool OpTorchCall::NeedLaunch() { return false; }
+
 OpsErrorCode OpTorchCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                         size_t *workspaceSize) {
   torch::jit::Stack stack;

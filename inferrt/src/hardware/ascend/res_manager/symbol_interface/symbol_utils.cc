@@ -50,13 +50,19 @@ std::string GetAscendPath() {
     return "";
   }
   auto pathTmp = std::string(info.dli_fname);
-  const std::string kLatest = "latest";
-  auto pos = pathTmp.rfind(kLatest);
-  if (pos == std::string::npos) {
-    LOG_ERROR << "Get ascend path failed, please check whether CANN packages are installed correctly, \n"
-                 "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
+  const char kSlash[] = "/";
+  auto pos1 = pathTmp.rfind(kSlash);
+  if (pos1 != std::string::npos) {
+    auto pos2 = pathTmp.rfind(kSlash, pos1 - 1);
+    if (pos2 != std::string::npos) {
+      return pathTmp.substr(0, pos2) + kSlash;
+    }
   }
-  return pathTmp.substr(0, pos) + kLatest + "/";
+
+  LOG_ERROR << "Get ascend path based on aclrtMalloc file " << pathTmp
+            << " failed, please check whether CANN packages are installed correctly, \n"
+               "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
+  return "";
 }
 
 const char *GetAscendSocVersion() {

@@ -68,6 +68,8 @@ OpsErrorCode Size::Launch(const std::vector<const ir::Value *> &input, void *wor
   return SUCCESS;
 }
 
+bool Size::NeedLaunch() { return false; }
+
 MRT_REG_OP(size, Size, CPU);
 }  // namespace ops
 }  // namespace mrt

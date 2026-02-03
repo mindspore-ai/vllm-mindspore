@@ -81,6 +81,10 @@ void PipelineExecutor::Run(bool isDynamic) {
     opRunner.AllocateWorkspaceMemory();
     opRunner.FreeMemory();
 
+    if (!opRunner.NeedLaunch()) {
+      continue;
+    }
+
     // Push async launch task into launch queue.
     auto launchTask = [&opRunner]() -> int {
       if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
