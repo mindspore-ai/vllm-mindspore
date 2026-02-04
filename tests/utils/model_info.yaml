@@ -104,4 +104,11 @@ Qwen3-32B-gs-A8W8:
   
 Qwen3-Reranker-0.6B:
   description: "Qwen3-Reranker-0.6B, HF default configuration, source from https://huggingface.co/Qwen/Qwen3-Reranker-0.6B"
-  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-Reranker-0.6B" 
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-Reranker-0.6B"
+
+Qwen3-8B-W8A8SC-TP2:
+  description: "Qwen3-8B with W8A8SC sparse quantization from golden-stick. 
+                The model uses rank-level quantization configuration with pre-partitioned weights.
+                Tensor parallelism size must be 2.
+                Source from https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-8B-W8A8SC-TP2"
+  archive_addr: "https://tools.mindspore.cn/dataset/workspace/mindspore_dataset/weight/Qwen3-8B-W8A8SC-TP2"

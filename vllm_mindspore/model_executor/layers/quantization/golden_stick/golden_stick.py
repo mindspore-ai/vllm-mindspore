@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
-
 import regex as re
 from mindspore import nn
 from mindspore.common import dtype as mstype
@@ -25,7 +23,6 @@ from vllm.model_executor.layers.quantization.base_config import (
 
 from vllm_mindspore.model_executor.layers.linear import (
     LinearBase, UnquantizedLinearMethod)
-from vllm_mindspore.utils import is_310p
 
 # isort: off
 from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
@@ -35,6 +32,7 @@ from vllm_mindspore.model_executor.layers.quantization.golden_stick.\
 # isort: on
 from vllm_mindspore.model_executor.layers.vocab_parallel_embedding import (
     VocabParallelEmbedding)
+from vllm_mindspore.utils import is_310p
 
 WEIGHT_PARTS = 2
 
@@ -139,6 +137,9 @@ class GoldenStickConfig(QuantizationConfig):
         super().__init__()
         self.is_modelslim = False
         self.config = config
+        # Check if device_type is "310P" in the config
+        # This is read from quant_model_description.json
+        self.quant_device_type = config.get("device_type", "910")
 
     def get_name(self) -> str:
         return "golden_stick"
@@ -175,45 +176,50 @@ class GoldenStickConfig(QuantizationConfig):
         # replace prefix for multimodal model
         prefix = prefix.replace("language_model.model", "model.language_model")
 
-        # Parse quantization config (supports both flat and rank-level configs)
+        # Pre-compute common values
+        is_linear_base = isinstance(layer, LinearBase)
+        weight_key = f"{prefix}.weight"
+
+        # Handle rank-level sparse quantization config (W8A8SC)
+        if is_linear_base:
+            rank_id = get_rank()
+            rank_key = f'rank_{rank_id}'
+            rank_config = self.config.get(rank_key)
+
+            if isinstance(rank_config, dict):
+                quant_type = rank_config.get(weight_key)
+                # Early check: if sparse quantization detected and not 310P
+                if (isinstance(quant_type, str)
+                        and quant_type.lower() == "w8a8s"):
+                    if not is_310p():
+                        raise RuntimeError(
+                            "Sparse quantization (W8A8SC) is only "
+                            "supported on 310P platform. Current "
+                            "device is not 310P.")
+
+                    # Get compressed weight and index shapes
+                    weight_shape_key = f"{prefix}.weight.shape"
+                    index_shape_key = f"{prefix}.index.shape"
+                    compress_weight_size = rank_config.get(weight_shape_key)
+                    compress_index_size = rank_config.get(index_shape_key)
+
+                    if (compress_weight_size is not None
+                            and compress_index_size is not None):
+                        return A8W8SCLinearMethod(self, compress_weight_size,
+                                                  compress_index_size)
+
+        # Handle flat quantization config
         quant_strategy = None
         for key, value in self.config.items():
-            # Handle rank-level sparse quantization config (W8A8SC)
-            # Only 310P platform supports W8A8SC quantization
-            if key.startswith('rank_') and isinstance(
-                    layer, LinearBase) and is_310p():
-                rank_id = get_rank()
-                rank_key = f'rank_{rank_id}'
-                if key == rank_key:
-                    # sparse_config is a dict, not str, despite type annotation
-                    if not isinstance(value, dict):
-                        continue
-                    sparse_config: dict[str, Any] = value
-                    weight_key = f"{prefix}.weight"
-                    if weight_key in sparse_config:
-                        quant_type = sparse_config[weight_key]
-                        if (isinstance(quant_type, str)
-                                and quant_type.lower() == "w8a8s"):
-                            # Get compressed weight and index shapes
-                            # from rank-specific config
-                            weight_shape_key = f"{prefix}.weight.shape"
-                            index_shape_key = f"{prefix}.index.shape"
-                            if (weight_shape_key in sparse_config
-                                    and index_shape_key in sparse_config):
-                                compress_weight_size = sparse_config[
-                                    weight_shape_key]
-                                compress_index_size = sparse_config[
-                                    index_shape_key]
-                                # Return sparse quantization linear method
-                                return A8W8SCLinearMethod(
-                                    self, compress_weight_size,
-                                    compress_index_size)
+            if key.startswith('rank_'):
                 continue
+
+            matched_key = key
             for uncat_name, cat_name in self.concat_linear_mapping.items():
-                key = key.replace(uncat_name, cat_name)
+                matched_key = matched_key.replace(uncat_name, cat_name)
             if "experts." in prefix:
-                key = re.sub(r"experts\.\d+", "exports", key)
-            if prefix in key:
+                matched_key = re.sub(r"experts\.\d+", "experts", matched_key)
+            if prefix in matched_key:
                 quant_strategy = value
                 break
 

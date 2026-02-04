@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ weights (W8A8SC) that can be shared across different model implementations
 
 from collections.abc import Iterable
 
+import mindspore as ms
 from mindspore import Parameter, Tensor, ops
-from vllm.distributed import get_tensor_model_parallel_rank
 
-from vllm_mindspore.utils import FORMAT_TYPE, is_310p
+from vllm_mindspore.utils import FORMAT_TYPE, cast_weight_for_310p, is_310p
 
 
 def is_sparse_quant_weight(name: str, quant_config) -> bool:
@@ -140,17 +140,21 @@ def load_split_weights(weights: Iterable[tuple[str, Tensor]],
     """
     weights_dict = dict(weights)
     loaded_params: set[str] = set()
-
     for name, loaded_weight in weights_dict.items():
-        # Skip quant_bias for non-zero ranks in tensor parallelism
-        if (get_tensor_model_parallel_rank() > 0
-                and "o_proj.quant_bias" in name):
-            continue
         if name not in params_dict:
             continue
         param = params_dict[name]
-        # Load full weight directly using [:] to avoid any slicing
-        param.set_data(Tensor(loaded_weight[:]).contiguous())
+        # Weights are already partitioned by rank folders
+        # loaded_weight[:] returns numpy array from safetensors (framework="np")
+        weight_np = loaded_weight[:]
+        # Only do dtype conversion for 310P platform
+        # This avoids unnecessary memory copies for non-310P platforms
+        if is_310p():
+            weight_np = cast_weight_for_310p(weight_np)
+        # Use from_numpy for better performance
+        # since numpy arrays are already contiguous
+        weight_data = ms.from_numpy(weight_np)
+        param.set_data(weight_data)
         loaded_params.add(name)
 
         # Handle tie_word_embeddings
