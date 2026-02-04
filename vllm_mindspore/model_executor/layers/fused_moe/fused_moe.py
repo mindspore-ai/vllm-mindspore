@@ -70,15 +70,43 @@ def fused_topk(
     renormalize: bool,
     indices_type=None,
 ) -> tuple[Tensor, Tensor]:
-    if is_310p():
-        scores = softmax_score_function(gating_output)
-        topk_weights, topk_ids = mint.topk(scores, k=topk, dim=-1)
+
+    if is_310p() and ms_custom_ops_is_available and renormalize:
+        expert_nums = gating_output.shape[1]
+        expert_bias = mint.zeros((expert_nums, ), dtype=ms.float32)
+        gating_output = ops.cast(gating_output, ms.float32)
+        # Expert scores for each token, shape: [tokens, 128]
+        # Bias weights for each expert score, shape: [128]
+        # Number of groups, currently only supports 1
+        # Number of groups to select, currently only supports 1
+        # Number of top values to sum within each group, supports 8
+        # Top-k selection, currently only supports 8
+        # Activation type: 0 for softmax
+        # Whether to enable normalization, currently only supports True
+        # Scaling factor after normalization, currently only supports 1.0
+        topk_weights, topk_ids = ms_custom_ops.fused_add_topk_div_moe(
+            logits=gating_output,
+            bias=expert_bias,
+            num_groups=1,
+            group_topk=1,
+            topk_div_group_topk=8,
+            topk=8,
+            activate_type=0,
+            is_norm=True,
+            scale=1.0)
+        topk_ids = ops.cast(topk_ids, ms.int64)
     else:
-        moe_topk_softmax = MoeGatingTopKSoftmax()
-        topk_weights, topk_ids, _ = moe_topk_softmax(gating_output, None, topk)
-    if renormalize:
-        topk_weights = mint.div(
-            topk_weights, mint.add(mint.sum(topk_weights, -1, True), 1e-20))
+        if is_310p():
+            scores = softmax_score_function(gating_output)
+            topk_weights, topk_ids = mint.topk(scores, k=topk, dim=-1)
+        else:
+            moe_topk_softmax = MoeGatingTopKSoftmax()
+            topk_weights, topk_ids, _ = moe_topk_softmax(
+                gating_output, None, topk)
+        if renormalize:
+            topk_weights = mint.div(
+                topk_weights, mint.add(mint.sum(topk_weights, -1, True),
+                                       1e-20))
 
     if indices_type is not None:
         topk_ids = topk_ids.to(indices_type)
