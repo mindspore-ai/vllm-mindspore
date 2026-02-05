@@ -47,6 +47,18 @@ void GatherHash(const std::vector<T> &values) {
   MemcpyToBuf(values.data(), values.size() * sizeof(T));
 }
 
+template <typename T>
+void GatherHash(std::vector<T> &values) {
+  MemcpyToBuf(values.data(), values.size() * sizeof(T));
+}
+
+// Gather pair.
+template <typename K, typename V>
+void GatherHash(const std::pair<K, V> &value) {
+  GatherHash(value.first);
+  GatherHash(value.second);
+}
+
 inline void GatherHash(const std::string &str) { MemcpyToBuf(str.c_str(), str.size()); }
 
 // Gather value
