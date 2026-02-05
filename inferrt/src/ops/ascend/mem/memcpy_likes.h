@@ -31,6 +31,10 @@ class MemcpyOpBase : public Operator {
                              size_t *workspaceSize) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override;
+  std::vector<std::pair<uint32_t, uint32_t>> GetOutputInputRefPairs() const override {
+    return {std::pair<uint32_t, uint32_t>(0, 0)};
+  }
+  bool NeedLaunch() override;
 };
 
 #define DefineMemcpyOp(op_name)         \
