@@ -16,6 +16,7 @@
 
 #include "ops/op_base/op_python_call.h"
 #include <cstddef>
+#include <cstring>
 #include "ops/utils/data_convert.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "hardware/hardware_abstract/device_context.h"
@@ -31,41 +32,32 @@ constexpr size_t kRealInputOffset = 2;
 constexpr auto kTorchOpsModule = "torch.ops";
 constexpr auto kTorchOpsInnerModule = "torch._ops";
 
-py::object ValueToPyData(const ir::Value *input) {
-  try {
-    if (input == nullptr || input->IsNone()) {
-      return py::none();
-    }
-    if (input->IsTensor()) {
-      return py::cast(ToTorchTensor(input->ToTensor()));
-    }
-    if (input->IsDouble()) {
-      return py::cast(input->ToDouble());
-    }
-    if (input->IsInt()) {
-      return py::cast(input->ToInt());
-    }
-    if (input->IsBool()) {
-      return py::cast(input->ToBool());
-    }
-    if (input->IsString()) {
-      return py::cast(input->ToString());
-    }
-    if (input->IsTuple()) {
-      const auto &tuple = input->ToTuple();
-      py::list pyList(tuple->Size());
-      for (size_t i = 0; i < tuple->Size(); ++i) {
-        pyList[i] = ValueToPyData(tuple->operator[](i).get());
-      }
-      return pyList;
-    }
-    if (input->IsSymbol()) {
-      return py::cast(input->ToInt());
-    }
-  } catch (const std::exception &e) {
-    LOG_EXCEPTION << "Failed to convert Value to Python object: " << e.what();
+/**
+ * @brief Update ATen tensor metadata and data pointer without creating new Python object
+ */
+void UpdateAtenTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor) {
+  CHECK_IF_NULL(mrtTensor);
+
+  void *newDataPtr = const_cast<void *>(mrtTensor->DataPtr());
+  void *oldDataPtr = atTensor.data_ptr();
+  const auto &newShape = mrtTensor->Shape();
+  const auto &oldShape = atTensor.sizes();
+
+  if (newDataPtr == oldDataPtr && newShape.size() == oldShape.size() &&
+      std::equal(newShape.begin(), newShape.end(), oldShape.begin())) {
+    return;
   }
-  return py::none();
+
+  auto tensor_impl = atTensor.unsafeGetTensorImpl();
+  at::DataPtr dataPtr(newDataPtr, atTensor.device());
+  atTensor.storage().unsafeGetStorageImpl()->set_data_ptr(std::move(dataPtr));
+
+  auto strides = mrtTensor->Strides();
+  if (strides.empty()) {
+    tensor_impl->set_sizes_contiguous(newShape);
+  } else {
+    tensor_impl->set_sizes_and_strides(newShape, strides);
+  }
 }
 
 py::function GetPythonCallable(const std::string &moduleName, const std::string &funcName) {
@@ -94,7 +86,7 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
     }
     return func.cast<py::function>();
   } catch (const std::exception &e) {
-    LOG_EXCEPTION << "Failed to get Python callable [" + moduleName + "." << funcName + "]: " + e.what();
+    LOG_EXCEPTION << "Failed to get Python callable [" + moduleName + "." << funcName + "]: " << e.what();
     return {};
   }
 }
@@ -127,21 +119,43 @@ void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor,
 }
 }  // namespace
 
+// Jump Table definition: None(0), Tensor(1), Double(2), Int(3), Bool(4), String(5), Tuple(6), Symbol(7)
+const OpPythonCall::ConvertFunc OpPythonCall::kInputConverterTable[] = {
+  &OpPythonCall::ConvertNoneToPy,    // Tag::None = 0
+  &OpPythonCall::ConvertTensorToPy,  // Tag::Tensor = 1
+  &OpPythonCall::ConvertDoubleToPy,  // Tag::Double = 2
+  &OpPythonCall::ConvertIntToPy,     // Tag::Int = 3
+  &OpPythonCall::ConvertBoolToPy,    // Tag::Bool = 4
+  &OpPythonCall::ConvertStringToPy,  // Tag::String = 5
+  &OpPythonCall::ConvertTupleToPy,   // Tag::Tuple = 6
+  &OpPythonCall::ConvertIntToPy      // Tag::Symbol = 7 (treated as Int)
+};
+
 void OpPythonCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   LOG_OUT << "Input size: " << inputs.size();
   moduleName_ = inputs[kInputModuleNameIndex]->ToString();
   opName_ = inputs[kInputFuncNameIndex]->ToString();
+
   auto inputSize = inputs.size() - kRealInputOffset;
   inputs_.resize(inputSize, nullptr);
+  inputTagIndices_.reserve(inputSize);
+
   for (size_t i = kRealInputOffset; i < inputs.size(); i++) {
     inputs_[i - kRealInputOffset] = inputs[i];
+    inputTagIndices_.push_back(static_cast<size_t>(inputs[i]->GetTag()));
   }
+
   pyFunc_ = GetPythonCallable(moduleName_, opName_);
   auto deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
   mrt::device::DeviceContextKey deviceContextKey = {hardware::GetDeviceNameByType(hardware::DeviceType::NPU), deviceId};
   dev_ctx_ = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
   CHECK_IF_NULL(dev_ctx_);
   CHECK_IF_NULL(dev_ctx_->deviceResManager_);
+
+  // Reset state for new initialization
+  firstRun_ = true;
+  atTensors_.clear();
+  tensorIdx_ = 0;
 }
 
 OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
@@ -151,15 +165,67 @@ OpsErrorCode OpPythonCall::Launch(const std::vector<const ir::Value *> &input, v
 
 bool OpPythonCall::NeedLaunch() { return false; }
 
+py::object OpPythonCall::ConvertNoneToPy(const ir::Value *value) { return py::none(); }
+
+py::object OpPythonCall::ConvertTensorToPy(const ir::Value *value) {
+  if (firstRun_) {
+    auto atTensor = ToTorchTensor(value->ToTensor());
+    atTensors_.push_back(atTensor);
+    tensorIdx_++;
+    return py::cast(atTensor);
+  } else {
+    CHECK_IF_FAIL(tensorIdx_ < atTensors_.size());
+    auto &atTensor = atTensors_[tensorIdx_];
+    UpdateAtenTensor(atTensor, value->ToTensor());
+    tensorIdx_++;
+    return py::cast(atTensor);
+  }
+}
+
+py::object OpPythonCall::ConvertIntToPy(const ir::Value *value) { return py::cast(value->ToInt()); }
+
+py::object OpPythonCall::ConvertDoubleToPy(const ir::Value *value) { return py::cast(value->ToDouble()); }
+
+py::object OpPythonCall::ConvertBoolToPy(const ir::Value *value) { return py::cast(value->ToBool()); }
+
+py::object OpPythonCall::ConvertStringToPy(const ir::Value *value) { return py::cast(value->ToString()); }
+
+py::object OpPythonCall::ConvertTupleToPy(const ir::Value *value) {
+  const auto &tuple = value->ToTuple();
+  py::list pyList(tuple->Size());
+  for (size_t i = 0; i < tuple->Size(); ++i) {
+    auto *elem = tuple->operator[](i).get();
+    auto tagIdx = static_cast<size_t>(elem->GetTag());
+    if (tagIdx < kConverterCount) {
+      pyList[i] = (this->*kInputConverterTable[tagIdx])(elem);
+    } else {
+      LOG_EXCEPTION << "Invalid tuple element tag: " << static_cast<int>(elem->GetTag());
+    }
+  }
+  return std::move(pyList);
+}
+
 OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
   if (Py_IsInitialized() == 0) {
     LOG_EXCEPTION << "Python interpreter is not initialized.";
     return UNKNOWN_ERROR;
   }
+
   py::gil_scoped_acquire gilAcquire;
-  py::tuple pyArgs = PreprocessInputs(inputs_);
-  py::object result;
+  tensorIdx_ = 0;
+
+  // Use Jump Table for O(1) dispatch based on cached type indices
+  py::tuple pyArgs(inputs_.size());
+  for (size_t i = 0; i < inputs_.size(); i++) {
+    auto tagIdx = inputTagIndices_[i];
+    if (tagIdx < kConverterCount) {
+      pyArgs[i] = (this->*kInputConverterTable[tagIdx])(inputs_[i]);
+    } else {
+      LOG_EXCEPTION << "Invalid input tag: " << tagIdx << " at index " << i;
+    }
+  }
+
   LOG_OUT << "input size: " << pyArgs.size();
 
   if (pyFunc_.is_none()) {
@@ -167,24 +233,18 @@ OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &i
     return UNKNOWN_ERROR;
   }
 
+  py::object result;
   try {
     result = inputs_.empty() ? pyFunc_() : pyFunc_(*pyArgs);
   } catch (const std::exception &e) {
     LOG_EXCEPTION << "Python function call failed: " << e.what();
     return UNKNOWN_ERROR;
   }
+
   auto ret = PostprocessOutputs(result, const_cast<ir::Value *>(output));
   CheckOutputInputRef(inputs_, output, opName_);
+  firstRun_ = false;
   return ret;
-}
-
-py::tuple OpPythonCall::PreprocessInputs(const std::vector<const ir::Value *> &input) {
-  pybind11::tuple pyArgs(input.size());
-  for (size_t i = 0; i < input.size(); i++) {
-    pyArgs[i] = ValueToPyData(input[i]);
-  }
-
-  return pyArgs;
 }
 
 OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output) {
