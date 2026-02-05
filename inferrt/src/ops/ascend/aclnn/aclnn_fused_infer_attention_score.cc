@@ -94,7 +94,7 @@ OpsErrorCode AclnnFusedInferAttentionScore::CalcWorkspace(const std::vector<cons
   executor_->GetWorkspaceSize(
     static_cast<uint64_t *>(workspaceSize), input[kQueryIdx]->ToTensor(), GetTensorList(input[kKeyIdx]),
     GetTensorList(input[kValueIdx]), GetOptionalTensor(input[kPseShiftIdx]), GetOptionalTensor(input[kAttenMaskIdx]),
-    GetOptionalIntList(input[kActualSeqLengthsIdx]), GetOptionalIntList(input[kActualSeqLengthsKvIdx]),
+    GetIntListPair(input[kActualSeqLengthsIdx]), GetIntListPair(input[kActualSeqLengthsKvIdx]),
     GetOptionalTensor(input[kDeqScale1Idx]), GetOptionalTensor(input[kQuantScale1Idx]),
     GetOptionalTensor(input[kDeqScale2Idx]), GetOptionalTensor(input[kQuantScale2Idx]),
     GetOptionalTensor(input[kQuantOffset2Idx]), GetOptionalTensor(input[kAntiquantScaleIdx]),
