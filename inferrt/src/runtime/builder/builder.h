@@ -87,6 +87,17 @@ class DA_API Builder {
   void UpdateRefNodeOutputValue();
 
   /**
+   * @brief Records tensor update points to update tensor lazily.
+   *
+   * This method analyzes the computational graph to mark the following tensors
+   * to be updated lazily right before its first consumer op:
+   * 1. Tensors in graph inputs: to reduce stall at the beginning of graph execution.
+   * 2. Tensors of torch op output: to reduce stall at the end of op launch.
+   * 3. Tensors of other situations has conversion cost to delay.
+   */
+  void RecordTensorUpdatePoint();
+
+  /**
    * @brief Records storage free points to optimize memory management.
    *
    * This method analyzes the computational graph to determine when storages

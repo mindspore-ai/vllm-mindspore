@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+
+#include <pybind11/pybind11.h>  // Bridge
 #include <torch/extension.h>
 #include <vector>
 #include <utility>
@@ -29,17 +32,22 @@
 #include "torch_npu/csrc/framework/OpCommand.h"
 #endif
 
+#include "common/intrusive_ptr_caster.h"
+#include "common/logger.h"
+#include "ir/common/intrusive_ptr.h"
+#include "ir/tensor/tensor.h"
+#include "ir/value/value.h"
+#include "ir/graph.h"
+#include "ops/utils/async.h"
 #include "hardware/hardware_abstract/device_context.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
-#include "ir/common/intrusive_ptr.h"
-#include "ir/tensor/tensor.h"
-#include "ops/utils/async.h"
-#include "common/logger.h"
 
-namespace py = pybind11;
+namespace nb = nanobind;
 namespace ir = mrt::ir;
 namespace hardware = mrt::hardware;
+
+PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 
 namespace {
 // DataType conversion utilities
@@ -266,36 +274,106 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   }
 }
 
-void UpdateTensorData(const ir::TensorPtr &self, const at::Tensor &atTensor) {
-  ir::DataType type = FromTorchDType(atTensor.scalar_type());
-  std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
-  void *data = atTensor.data_ptr();
+void UpdateTensor(const ir::TensorPtr &self, nb::handle h) {
+  self->SetUpdater([h](ir::Tensor *tensor) {
+    pybind11::handle ph(h.ptr());
+    at::Tensor atTensor = ph.cast<at::Tensor>();
 
-  auto device = self->GetDevice();
-  if (device != FromTorchDevice(atTensor.device())) {
-    LOG_EXCEPTION << "Device mismatch in update_tensor_data";
-  }
+    ir::DataType type = FromTorchDType(atTensor.scalar_type());
+    std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
+    void *data = atTensor.data_ptr();
+
+    auto device = tensor->GetDevice();
+    if (device != FromTorchDevice(atTensor.device())) {
+      LOG_EXCEPTION << "Device mismatch in update_tensor";
+    }
 
 #ifdef ENABLE_TORCH_NPU
-  if (device.type == hardware::DeviceType::NPU) {
-    auto npuFormat = at_npu::native::get_npu_format(atTensor);
-    self->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
-    self->SetStrides(atTensor.strides().vec());
-    self->SetStorageOffset(atTensor.storage_offset());
-    self->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
-    LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(self->Format()) << ", strides=" << self->Strides()
-            << ", storageOffset=" << self->StorageOffset() << ", storageShape=" << self->StorageShape()
-            << ", isView=" << atTensor.is_view() << " at.tensor.shape: " << atTensor.sizes();
-  }
+    if (device.type == hardware::DeviceType::NPU) {
+      auto npuFormat = at_npu::native::get_npu_format(atTensor);
+      tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
+      tensor->SetStrides(atTensor.strides().vec());
+      tensor->SetStorageOffset(atTensor.storage_offset());
+      tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
+      LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format()) << ", strides=" << tensor->Strides()
+              << ", storageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
+              << ", isView=" << atTensor.is_view() << " at.tensor.shape: " << atTensor.sizes();
+    }
 #endif
 
-  self->SetOwnsStorage(false);
-  self->SetDtype(type);
-  self->SetShape(std::move(shape));
-  self->Resize();
-  CHECK_IF_NULL(data);
-  self->UpdateData(data);
-  self->GetStorage()->Resize(atTensor.storage().nbytes());
+    tensor->SetOwnsStorage(false);
+    tensor->SetDtype(type);
+    tensor->SetShape(std::move(shape));
+    tensor->Resize();
+    CHECK_IF_NULL(data);
+    tensor->UpdateData(data);
+    tensor->GetStorage()->Resize(atTensor.storage().nbytes());
+  });
+}
+
+void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h) {
+  CHECK_IF_NULL(mrtValue);
+
+  switch (mrtValue->GetTag()) {
+    case ir::Value::Tag::Tensor: {
+      UpdateTensor(mrtValue->ToTensor(), h);
+      return;
+    }
+    case ir::Value::Tag::Symbol: {
+      const int64_t value = nb::cast<int64_t>(h);
+      auto symbolicExpr = mrtValue->ToSymbol();
+      if (symbolicExpr->GetKind() == ir::SymbolicExpr::Kind::Variable) {
+        auto symbolicVar = static_cast<ir::SymbolicVar *>(symbolicExpr.get());
+        symbolicVar->SetValue(value);
+      }
+      return;
+    }
+    case ir::Value::Tag::Tuple: {
+      auto mrtTuple = mrtValue->ToTuple();
+      auto pyTuple = nb::cast<nb::tuple>(h);
+      if (mrtTuple->Size() != pyTuple.size()) {
+        LOG_EXCEPTION << "Expected " << mrtTuple->Size() << " items in tuple, but received " << pyTuple.size();
+      }
+      auto it = mrtTuple->begin();
+      for (size_t i = 0; i < mrtTuple->Size(); ++i, ++it) {
+        UpdateMrtValue(*it, pyTuple[i]);
+      }
+      return;
+    }
+    case ir::Value::Tag::Int: {
+      *mrtValue = ir::Value(nb::cast<int64_t>(h));
+      return;
+    }
+    case ir::Value::Tag::Double: {
+      *mrtValue = ir::Value(nb::cast<double>(h));
+      return;
+    }
+    case ir::Value::Tag::Bool: {
+      *mrtValue = ir::Value(nb::cast<bool>(h));
+      return;
+    }
+    case ir::Value::Tag::String: {
+      *mrtValue = ir::Value(nb::cast<std::string>(h));
+      return;
+    }
+    case ir::Value::Tag::None: {
+      return;
+    }
+    default:
+      LOG_EXCEPTION << "Unsupported Value Tag";
+      return;
+  }
+}
+
+void BatchUpdateRuntimeInputs(const nb::list &paramNodes, const nb::tuple &newInputs) {
+  if (paramNodes.size() != newInputs.size()) {
+    LOG_EXCEPTION << "Expected " << paramNodes.size() << " inputs, but received " << newInputs.size();
+  }
+
+  for (size_t i = 0; i < paramNodes.size(); ++i) {
+    const auto &mrtNode = nb::cast<ir::NodePtr>(paramNodes[i]);
+    UpdateMrtValue(mrtNode->output, newInputs[i]);
+  }
 }
 
 void SetDeviceContext() {
@@ -332,14 +410,25 @@ void SetDeviceContext() {
   deviceContext->deviceResManager_->SetDeleter(ascend_deleter);
 #endif
 }
+
+// Wrappers for nanobind
+ir::TensorPtr FromTorchTensorWrapper(nb::handle h, bool isFake) {
+  pybind11::handle ph(h.ptr());
+  at::Tensor t = ph.cast<at::Tensor>();
+  return FromTorchTensor(t, isFake);
+}
+
+nb::object ToTorchTensorWrapper(const ir::TensorPtr &tensor) {
+  at::Tensor t = ToTorchTensor(tensor);
+  pybind11::object po = pybind11::cast(t);
+  return nb::steal(po.release().ptr());
+}
 }  // namespace
 
-PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
-
-PYBIND11_MODULE(_mrt_torch, m) {
+NB_MODULE(_mrt_torch, m) {
   m.doc() = "PyTorch extension for MRT";
-  m.def("from_torch", &FromTorchTensor, py::arg("tensor"), py::arg("is_fake") = false);
-  m.def("to_torch", &ToTorchTensor, py::return_value_policy::reference);
-  m.def("update_tensor_data", &UpdateTensorData);
+  m.def("from_torch", &FromTorchTensorWrapper, nb::arg("tensor"), nb::arg("is_fake") = false);
+  m.def("to_torch", &ToTorchTensorWrapper, nb::rv_policy::reference);
   m.def("set_device_context", &SetDeviceContext);
+  m.def("batch_update_runtime_inputs", &BatchUpdateRuntimeInputs, "Batch update runtime inputs for nodes");
 }

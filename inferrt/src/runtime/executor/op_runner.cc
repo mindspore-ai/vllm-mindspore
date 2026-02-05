@@ -62,6 +62,12 @@ ops::OpsErrorCode OpRunner::Launch(void *stream) {
 
 bool OpRunner::NeedLaunch() { return operator_->NeedLaunch(); }
 
+void OpRunner::UpdateTensors() {
+  for (auto &tensor : tensorsToUpdate_) {
+    tensor->Update();
+  }
+}
+
 void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
   for (auto &storage : storagesToAlloc_) {

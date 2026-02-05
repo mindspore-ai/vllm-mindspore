@@ -47,7 +47,7 @@ inline bool IsDummyNode(ir::NodePtr node) {
   return dummyOpsSet.find(node->op) != dummyOpsSet.end();
 }
 
-inline bool IsSkipBuildDAKernel(ir::NodePtr node) {
+inline bool IsSkipBuildOpRunner(ir::NodePtr node) {
   CHECK_IF_NULL(node);
   return (IsNodeOutputFromInput(node) || node->op == ops::Op_End || node->op == ops::Op_make_tuple ||
           node->op == ops::Op_tuple_getitem);

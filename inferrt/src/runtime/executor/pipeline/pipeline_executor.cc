@@ -70,6 +70,7 @@ void PipelineExecutor::Run(bool isDynamic) {
   for (size_t i = 0; i < opNum; ++i) {
     OpRunner &opRunner = opRunners[i];
 
+    opRunner.UpdateTensors();
     // Do infer shape and calculate workspace size in infer queue.
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
       LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;

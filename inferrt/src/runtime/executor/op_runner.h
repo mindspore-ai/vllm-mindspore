@@ -116,6 +116,11 @@ class OpRunner {
   bool NeedLaunch();
 
   /**
+   * @brief Updates the tensors recorded in tensorsToUpdate_.
+   */
+  void UpdateTensors();
+
+  /**
    * @brief Allocate device memory for output tensor and workspace.
    */
   void AllocateMemory();
@@ -149,6 +154,14 @@ class OpRunner {
     storagesToAlloc_ = std::move(storagesToAlloc);
   }
 
+  /**
+   * @brief Sets the tensors that should be updated before operator execution.
+   * @param tensorsToUpdate Vector of tensors to update.
+   */
+  void SetTensorsToUpdate(std::vector<ir::Tensor *> &&tensorsToUpdate) {
+    tensorsToUpdate_ = std::move(tensorsToUpdate);
+  }
+
   hardware::Device GetDevice() const { return device_; }
 
   void *GetWorkspace() const { return workspace_; }
@@ -164,6 +177,9 @@ class OpRunner {
   void UpdateRefNodeOutputValue();
 
  private:
+  // Tensors that should be updated before operator execution.
+  std::vector<ir::Tensor *> tensorsToUpdate_;
+
   // Storages that should be freed after operator execution.
   std::vector<ir::Storage *> storagesToFree_;
 

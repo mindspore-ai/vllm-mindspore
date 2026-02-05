@@ -122,6 +122,12 @@ python -c "import build" 2>/dev/null || {
     pip install build
 }
 
+# nanobind >= 2.9
+python -c "import nanobind" 2>/dev/null || {
+    echo "Installing Python nanobind package..."
+    pip install "nanobind>=2.9"
+}
+
 # packaging>=24.2
 python -c "
 import packaging

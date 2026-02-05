@@ -25,12 +25,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
 check_debug_log_out()
 
-# Link against pybind11 libraries
-execute_process(COMMAND python -c "import pybind11; print(pybind11.__path__[0])"
-OUTPUT_VARIABLE PYBIND11_INSTALL_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-set(CMAKE_PREFIX_PATH "${PYBIND11_INSTALL_PATH}")
-find_package(pybind11 CONFIG REQUIRED)
+# Link against nanobind libraries
+find_package(Python REQUIRED COMPONENTS Interpreter Development)
+execute_process(COMMAND "${Python_EXECUTABLE}" -c "import nanobind; print(nanobind.cmake_dir())"
+OUTPUT_VARIABLE nanobind_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+find_package(nanobind CONFIG REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 

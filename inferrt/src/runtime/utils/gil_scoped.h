@@ -17,9 +17,9 @@
 #ifndef __RUNTIME_UTILS_GIL_SCOPED_H__
 #define __RUNTIME_UTILS_GIL_SCOPED_H__
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 namespace mrt {
 namespace runtime {
@@ -27,14 +27,14 @@ class GilReleaseWithCheck {
  public:
   GilReleaseWithCheck() {
     if (Py_IsInitialized() != 0 && PyGILState_Check() != 0) {
-      release_ = std::make_unique<py::gil_scoped_release>();
+      release_ = std::make_unique<nb::gil_scoped_release>();
     }
   }
 
   ~GilReleaseWithCheck() { release_ = nullptr; }
 
  private:
-  std::unique_ptr<py::gil_scoped_release> release_;
+  std::unique_ptr<nb::gil_scoped_release> release_;
 };
 }  // namespace runtime
 }  // namespace mrt

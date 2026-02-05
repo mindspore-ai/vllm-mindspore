@@ -13,7 +13,6 @@
 # limitations under the License.
 # pylint: disable=missing-docstring
 
-from mrt.api import dag, jit
 from mrt import ops
 
-__all__ = ['dag', 'jit', 'ops']
+__all__ = ['ops']

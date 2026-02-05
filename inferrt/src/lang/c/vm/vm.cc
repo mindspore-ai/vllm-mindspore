@@ -549,9 +549,9 @@ COMPARE_OP(<=)
 
 void VM::InstCompare(ssize_t offset) {
   LOG_OUT << "offset: " << offset;
-  const auto &rhs = std::move(CurrentStack().back());
+  auto rhs = std::move(CurrentStack().back());
   CurrentStack().pop_back();
-  const auto &lhs = std::move(CurrentStack().back());
+  auto lhs = std::move(CurrentStack().back());
   CurrentStack().pop_back();
 
   bool res;
@@ -785,7 +785,6 @@ void VM::AddGraphParameter(const Code &code, const Slot &arg) {
   // If call a graph.
   if (code.type == CodeGraph) {
     LOG_OUT << "Add parameter " << ToString(arg);
-    graphExecutor_.AddParameter(arg.tensor_);
   }
 }
 

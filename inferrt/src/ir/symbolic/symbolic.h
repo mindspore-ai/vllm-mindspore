@@ -34,7 +34,7 @@ class SymbolicExpr : public RefCounted {
  public:
   enum class Kind {
     Constant,
-    Symbol,
+    Variable,
     Add,
     Mul,
     TrueDiv,
@@ -68,13 +68,13 @@ class SymbolicConst : public SymbolicExpr {
 
 class SymbolicVar : public SymbolicExpr {
  public:
-  explicit SymbolicVar(const std::string &name) : SymbolicExpr(Kind::Symbol), name_(name), value_(-1) {}
+  explicit SymbolicVar(const std::string &name) : SymbolicExpr(Kind::Variable), name_(name), value_(-1) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return name_; }
   void SetValue(int64_t value) { value_ = value; }
   const std::string &GetName() const { return name_; }
 
-  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Symbol; }
+  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Variable; }
 
  private:
   std::string name_;

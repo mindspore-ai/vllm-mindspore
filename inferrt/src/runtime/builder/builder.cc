@@ -84,6 +84,18 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
   // CPU for any other output type.
   return {hardware::DeviceType::CPU, 0};
 }
+
+void VisitAllNodes(const ir::GraphPtr &graph, std::function<void(const ir::NodePtr &)> visitor) {
+  for (auto &input : graph->inputs) {
+    visitor(input);
+  }
+  for (auto &param : graph->parameters) {
+    visitor(param);
+  }
+  for (auto &node : graph->nodes) {
+    visitor(node);
+  }
+}
 }  // namespace
 
 std::unique_ptr<Executor> Builder::BuildExecutor() {
@@ -94,6 +106,7 @@ std::unique_ptr<Executor> Builder::BuildExecutor() {
 void Builder::SetupOpRunners() {
   CreateOpRunners();
   UpdateRefNodeOutputValue();
+  RecordTensorUpdatePoint();
   RecordStorageFreePoint();
 }
 
@@ -101,6 +114,49 @@ void Builder::UpdateRefNodeOutputValue() {
   auto &opRunners = *opRunners_;
   for (auto &opRunner : opRunners) {
     opRunner.UpdateRefNodeOutputValue();
+  }
+}
+
+void Builder::RecordTensorUpdatePoint() {
+  if (graph_ == nullptr || graph_->nodes.empty()) {
+    return;
+  }
+
+  std::unordered_set<ir::TensorPtr> inputTensors;
+  for (auto &node : graph_->inputs) {
+    ir::VisitAllTensors(node->output, [&](const ir::TensorPtr &tensor) { (void)inputTensors.insert(tensor); });
+  }
+  for (auto &node : graph_->parameters) {
+    ir::VisitAllTensors(node->output, [&](const ir::TensorPtr &tensor) { (void)inputTensors.insert(tensor); });
+  }
+
+  std::unordered_map<ir::Node *, std::vector<ir::Tensor *>> tensorsToUpdate;
+  for (auto &node : graph_->nodes) {
+    if (IsSkipBuildOpRunner(node.get())) {
+      continue;
+    }
+
+    // Tensors should be updated lazily right before its first consumer op.
+    for (auto &inputNode : node->inputs) {
+      ir::VisitAllTensors(inputNode->output, [&](const ir::TensorPtr &tensor) {
+        if (inputTensors.find(tensor) == inputTensors.end()) {
+          return;
+        }
+        (void)inputTensors.erase(tensor);
+        (void)tensorsToUpdate[node.get()].emplace_back(tensor.get());
+      });
+    }
+  }
+
+  for (auto &item : tensorsToUpdate) {
+    auto &node = item.first;
+    auto &tensors = item.second;
+    auto iter = nodeToOpRunner_.find(node);
+    if (iter == nodeToOpRunner_.end()) {
+      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+    }
+    auto *opRunner = iter->second;
+    opRunner->SetTensorsToUpdate(std::move(tensors));
   }
 }
 
@@ -112,23 +168,15 @@ void Builder::RecordStorageFreePoint() {
   // Step 1.
   // First, create a map to record the first node that sees each storage (the storage's owner)
   std::unordered_map<ir::Storage *, ir::Node *> storageToOwner;  // key: storage pointer, value: owning node
-  // Visit all parameters in the graph
-  for (auto &param : graph_->parameters) {
-    ir::VisitAllTensors(param->output, [&](const ir::TensorPtr &tensor) {
-      auto storage = tensor->GetStorage().get();
-      CHECK_IF_NULL(storage);
-      (void)storageToOwner.insert({storage, param.get()});
-    });
-  }
-  // Visit all nodes in the graph
-  for (auto &node : graph_->nodes) {
-    CHECK_IF_NULL(node);
+                                                                 // Visit all inputs and parameters in the graph
+
+  VisitAllNodes(graph_, [&](const ir::NodePtr &node) {
     ir::VisitAllTensors(node->output, [&](const ir::TensorPtr &tensor) {
       auto storage = tensor->GetStorage().get();
       CHECK_IF_NULL(storage);
       (void)storageToOwner.insert({storage, node.get()});
     });
-  }
+  });
 
   // Step 2.
   // The storages that can be safely freed once the last consumer node is done.
@@ -151,7 +199,7 @@ void Builder::RecordStorageFreePoint() {
     LOG_OUT << "Node: " << *iter;
     auto currentNode = iter->get();
     CHECK_IF_NULL(currentNode);
-    if (IsSkipBuildDAKernel(currentNode)) {
+    if (IsSkipBuildOpRunner(currentNode)) {
       continue;
     }
 
@@ -236,7 +284,7 @@ void Builder::CreateOpRunners() {
   opRunners_->reserve(nodeNum);
   for (auto &node : graph_->nodes) {
     CHECK_IF_NULL(node);
-    if (IsSkipBuildDAKernel(node)) {
+    if (IsSkipBuildOpRunner(node)) {
       continue;
     }
 

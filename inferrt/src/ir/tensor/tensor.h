@@ -144,11 +144,6 @@ class Tensor : public RefCounted {
    */
   void SetSymbolicShape(const std::vector<SymbolicExprPtr> &shape);
   /**
-   * @brief Sets the symbolic shape without recomputing shape.
-   * @param shape The symbolic shape to set.
-   */
-  void SetSymbolicShapeRaw(const std::vector<SymbolicExprPtr> &shape) { symbolicShape_ = shape; }
-  /**
    * @brief Gets the device where the tensor data is stored.
    * @return The device.
    */
@@ -239,6 +234,28 @@ class Tensor : public RefCounted {
 
   IntrusivePtr<Tensor> ShallowClone() const;
 
+  /**
+   * @brief Function type for updating a tensor.
+   * @param tensor The tensor to update.
+   */
+  using TensorUpdater = std::function<void(Tensor *)>;
+
+  /**
+   * @brief Sets a tensor updater function.
+   * @param updater The tensor updater function.
+   */
+  void SetUpdater(TensorUpdater &&updater) { updater_ = std::move(updater); }
+
+  /**
+   * @brief Updates the tensor using the updater function.
+   */
+  void Update() {
+    if (updater_ != nullptr) {
+      updater_(this);
+      updater_ = nullptr;
+    }
+  }
+
  private:
   /**
    * @brief Computes the strides from the dimensions.
@@ -255,6 +272,7 @@ class Tensor : public RefCounted {
   std::vector<int64_t> storageShape_;           ///< The underlying storage shape of the tensor.
   int64_t storageOffset_ = 0;                   ///< The offset in the storage, in number of elements.
   bool ownsStorage_{true};                      ///< Whether the tensor owns the storage.
+  TensorUpdater updater_{nullptr};              ///< The tensor updater function.
 };
 
 using TensorPtr = IntrusivePtr<Tensor>;

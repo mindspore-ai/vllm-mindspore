@@ -37,6 +37,7 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
     const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
     const std::shared_ptr<std::vector<std::pair<OpRunner *, size_t>>> &opRunnerGroups,
     const std::shared_ptr<std::vector<OpRunner *>> &serialLaunchOps,
+    const std::shared_ptr<std::vector<ir::TensorPtr>> &graphInputTensors,
     const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputsWithShape,
     const std::shared_ptr<std::unordered_set<ir::Tensor *>> &graphOutputs, uint64_t parallelDispatchNum,
     uint64_t parallelSliceNum);
@@ -48,6 +49,7 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
   void Run(bool isDynamic) override;
 
  private:
+  void UpdateInputTensors();
   bool CheckInputShapeChange();
   void ResetTensorCacheMemory();
   void RunWithRecordCacheMemory();
@@ -80,7 +82,8 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
   std::shared_ptr<std::vector<std::pair<OpRunner *, size_t>>> opRunnerGroups_;
   std::shared_ptr<std::vector<OpRunner *>> serialLaunchOps_;
 
-  std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> graphInputsWithShape_;
+  std::shared_ptr<std::vector<ir::TensorPtr>> graphInputTensors_;
+  std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> graphInputTensorsWithDynamicShape_;
   std::shared_ptr<std::unordered_set<ir::Tensor *>> graphOutputs_;
 
   uint64_t parallelDispatchNum_{0};

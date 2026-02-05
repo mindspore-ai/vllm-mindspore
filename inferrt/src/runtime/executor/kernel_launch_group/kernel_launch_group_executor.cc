@@ -40,13 +40,15 @@ KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
   const std::shared_ptr<std::vector<std::pair<OpRunner *, size_t>>> &opRunnerGroups,
   const std::shared_ptr<std::vector<OpRunner *>> &serialLaunchOps,
-  const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputsWithShape,
+  const std::shared_ptr<std::vector<ir::TensorPtr>> &graphInputTensors,
+  const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputTensorsWithDynamicShape,
   const std::shared_ptr<std::unordered_set<ir::Tensor *>> &graphOutputs, uint64_t parallelDispatchNum,
   uint64_t parallelSliceNum)
     : PipelineExecutor(opRunners, deviceContexts),
       opRunnerGroups_(opRunnerGroups),
       serialLaunchOps_(serialLaunchOps),
-      graphInputsWithShape_(graphInputsWithShape),
+      graphInputTensors_(graphInputTensors),
+      graphInputTensorsWithDynamicShape_(graphInputTensorsWithDynamicShape),
       graphOutputs_(graphOutputs),
       parallelDispatchNum_(parallelDispatchNum),
       parallelSliceNum_(parallelSliceNum),
@@ -64,6 +66,7 @@ void KernelLaunchGroupExecutor::Run(bool isDynamic) {
   if (waitLaunchFinish != nullptr) {
     waitLaunchFinish();
   }
+  UpdateInputTensors();
   bool shapeChange = CheckInputShapeChange();
   if (shapeChange) {
     ResetTensorCacheMemory();
@@ -144,18 +147,26 @@ void KernelLaunchGroupExecutor::Initialize() {
   LOG_OUT << "End initialize";
 }
 
+void KernelLaunchGroupExecutor::UpdateInputTensors() {
+  CHECK_IF_NULL(graphInputTensors_);
+  for (auto &tensor : *graphInputTensors_) {
+    CHECK_IF_NULL(tensor);
+    tensor->Update();
+  }
+}
+
 bool KernelLaunchGroupExecutor::CheckInputShapeChange() {
   bool shapeChange = false;
-  CHECK_IF_NULL(graphInputsWithShape_);
-  auto &graphInputsWithShape = *graphInputsWithShape_;
-  LOG_OUT << "Dynamic input tensor number: " << graphInputsWithShape.size();
+  CHECK_IF_NULL(graphInputTensorsWithDynamicShape_);
+  auto &graphInputTensorsWithDynamicShape = *graphInputTensorsWithDynamicShape_;
+  LOG_OUT << "Dynamic input tensor number: " << graphInputTensorsWithDynamicShape.size();
 
   // Disable parallel dispatch for static shape case.
-  if (graphInputsWithShape.empty()) {
+  if (graphInputTensorsWithDynamicShape.empty()) {
     return true;
   }
 
-  for (auto &[tensor, shape] : graphInputsWithShape) {
+  for (auto &[tensor, shape] : graphInputTensorsWithDynamicShape) {
     if (!shapeChange && (tensor->Shape() != shape || tensor->Shape().empty())) {
       shapeChange = true;
     }
@@ -197,6 +208,7 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
     OpRunner &opRunner = opRunners[i];
 
     auto inferTask = [&opRunner, launchQueue, this]() {
+      opRunner.UpdateTensors();
       // Do infer shape and calculate workspace size in infer queue.
       if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
         LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
@@ -300,6 +312,7 @@ void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
         continue;
       }
 
+      opRunner->UpdateTensors();
       SetOutputAndWsCacheMemory(opRunner);
       SetInputCacheMemory(opRunner);
       if (auto errNo = opRunner->Launch(realStream) != ops::SUCCESS) {
@@ -322,6 +335,7 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
       LOG_EXCEPTION << "Not find event for operator  : " << opRunner->GetOpName();
     }
 
+    opRunner->UpdateTensors();
     SetOutputAndWsCacheMemory(opRunner);
     SetInputCacheMemory(opRunner);
 

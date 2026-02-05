@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-#include "mrt/pybind11_api.h"
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/shared_ptr.h>
+
+#include "mrt/pybind_api.h"
 #include "ops/custom_op_register.h"
 
 DALangPy::~DALangPy() {
@@ -29,29 +32,31 @@ std::shared_ptr<DALangPy> DALangPy::GetInstance() {
   return dalangPy;
 }
 
-std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
+std::vector<Argument> DALangPy::ConvertPyArgs(const nb::tuple &args) {
   std::vector<Argument> arguments;
   for (const auto &arg : args) {
-    if (py::isinstance<py::bool_>(arg)) {
+    if (nb::isinstance<nb::bool_>(arg)) {
       Argument argument = Argument({.type = da::vm::SlotBool});
-      argument.value.bool_ = py::cast<bool>(arg);
+      argument.value.bool_ = nb::cast<bool>(arg);
       arguments.emplace_back(std::move(argument));
-    } else if (py::isinstance<py::int_>(arg)) {
+    } else if (nb::isinstance<nb::int_>(arg)) {
       Argument argument = Argument({.type = da::vm::SlotInt});
-      argument.value.int_ = py::cast<int>(arg);
+      argument.value.int_ = nb::cast<int>(arg);
       arguments.emplace_back(std::move(argument));
-    } else if (py::isinstance<py::float_>(arg)) {
+    } else if (nb::isinstance<nb::float_>(arg)) {
       Argument argument = Argument({.type = da::vm::SlotFloat});
-      argument.value.float_ = py::cast<double>(arg);
+      argument.value.float_ = nb::cast<double>(arg);
       arguments.emplace_back(std::move(argument));
-    } else if (py::isinstance<py::str>(arg)) {
+    } else if (nb::isinstance<nb::str>(arg)) {
       Argument argument = Argument({.type = da::vm::SlotString});
-      argument.value.str_ = py::cast<std::string>(arg).c_str();
+      // Potential dangling pointer if Argument stores char* and not std::string
+      // Preserving original logic structure
+      argument.value.str_ = nb::cast<std::string>(arg).c_str();
       arguments.emplace_back(std::move(argument));
     } else {
       Argument argument = Argument({.type = da::vm::SlotTensor});
       // get tensor data from ms tensor
-      auto tensor = callable_->graphExecutor().AddValueNode();
+      auto tensor = callable_->graphExecutor().AddInputNode();
       argument.tensor_ = tensor;
       arguments.emplace_back(std::move(argument));
     }
@@ -59,55 +64,55 @@ std::vector<Argument> DALangPy::ConvertPyArgs(const py::tuple &args) {
   return arguments;
 }
 
-py::object DALangPy::ConvertPyResult(const Result &res) {
+nb::object DALangPy::ConvertPyResult(const Result &res) {
   if (res.type == da::vm::SlotBool) {
-    return py::bool_(res.value.bool_);
+    return nb::bool_(res.value.bool_);
   } else if (res.type == da::vm::SlotInt) {
-    return py::int_(res.value.int_);
+    return nb::int_(res.value.int_);
   } else if (res.type == da::vm::SlotFloat) {
-    return py::float_(res.value.float_);
+    return nb::float_(res.value.float_);
   } else if (res.type == da::vm::SlotString) {
-    return py::str(res.value.str_);
+    return nb::str(res.value.str_);
   } else if (res.type == da::vm::SlotTensor) {
-    return py::object();
+    return nb::object();
   } else if (res.type == da::vm::SlotVoid) {
-    return py::none();
+    return nb::none();
   } else {
-    return py::none();
+    return nb::none();
   }
 }
 
-void DALangPy::Compile(const py::object &source, bool graph, bool dump) {
+void DALangPy::Compile(const nb::object &source, bool graph, bool dump) {
   // Check if the function or net is valid.
-  if ((!py::isinstance<py::str>(source))) {
+  if ((!nb::isinstance<nb::str>(source))) {
     LOG_ERROR << "error: the source must be string.";
     exit(EXIT_FAILURE);
   }
-  const auto srcStr = py::cast<std::string>(source);
+  const auto srcStr = nb::cast<std::string>(source);
   callable_ = DA_API_Compile(srcStr.c_str(), graph, dump);
 }
 
-py::object DALangPy::Run(const py::tuple &args) {
+nb::object DALangPy::Run(const nb::tuple &args) {
   CHECK_IF_NULL(callable_);
   auto res = DA_API_Run(callable_, ConvertPyArgs(args));
   auto pyres = ConvertPyResult(res);
   if (pyres.ptr() == nullptr) {
-    return py::none();
+    return nb::none();
   }
-  LOG_OUT << "res: " << da::vm::ToString(res) << ", pyres: " << py::str(pyres).cast<std::string>();
+  LOG_OUT << "res: " << da::vm::ToString(res) << ", pyres: " << nb::cast<std::string>(nb::str(pyres));
   return pyres;
 }
 
 // Interface with python
-PYBIND11_MODULE(_mrt_api, mod) {
-  (void)py::class_<DALangPy, std::shared_ptr<DALangPy>>(mod, "DALangPy_")
+NB_MODULE(_mrt_api, mod) {
+  (void)nb::class_<DALangPy>(mod, "DALangPy_")
     .def_static("get_instance", &DALangPy::GetInstance, "DALangPy single instance.")
-    .def("__call__", &DALangPy::Run, py::arg("args") = py::list(), "Run with arguments.")
-    .def("compile", &DALangPy::Compile, py::arg("source"), py::arg("graph") = py::bool_(false),
-         py::arg("dump") = py::bool_(false), "Compile the source with arguments.");
+    .def("__call__", &DALangPy::Run, nb::arg("args") = nb::list(), "Run with arguments.")
+    .def("compile", &DALangPy::Compile, nb::arg("source"), nb::arg("graph") = nb::bool_(false),
+         nb::arg("dump") = nb::bool_(false), "Compile the source with arguments.");
 
   mod.def(
     "is_custom_op_registered",
     [](const std::string &op_name) { return mrt::ops::CustomOpRegistry::GetInstance().IsCustomOpRegistered(op_name); },
-    py::arg("op_name"), "Check if a custom operator is registered.");
+    nb::arg("op_name"), "Check if a custom operator is registered.");
 }
