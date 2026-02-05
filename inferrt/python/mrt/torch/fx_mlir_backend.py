@@ -15,7 +15,7 @@
 """FX-to-MLIR backend utilities.
 
 This module provides:
-- An FX backend entry that applies decompositions and imports to StableHLO.
+- An FX backend entry that applies decompositions and imports to MRT.
 - Integration with MRT dialect through the _executor_builder module.
 """
 
@@ -83,8 +83,6 @@ class BackendOptions:
     """
 
     print_ir: bool
-    # Default fusion lowering is mrt.dvm_call. Set env var to opt into linalg_call.
-    enable_linalg_call: bool
     # If set, dump IR/graphs of each stage to files under this directory.
     dump_dir: Optional[str]
 
@@ -102,7 +100,6 @@ class BackendOptions:
             env = os.environ
         return cls(
             print_ir=cls._flag(env, "MOPT_PRINT_IR", default=False),
-            enable_linalg_call=cls._flag(env, "MOPT_ENABLE_LINALG_CALL", default=False),
             dump_dir=env.get("MOPT_DUMP_DIR"),
         )
 
@@ -166,14 +163,6 @@ def _run_pipeline(
     _print_verbose(stage, mlir_module, enabled=verbose, dump_ctx=dump_ctx, dump_ext="mlir")
 
 
-def _pipeline_outline_stablehlo_fusion_regions(*, enable_dvm_call: bool) -> str:
-    outline_opts = ""
-    if enable_dvm_call:
-        # DVM-call mode: allow dot_general (matmul) and dynamic shapes to be outlined.
-        outline_opts = "{allow-dot-general=true allow-dynamic-shape=true}"
-    return f"builtin.module(outline-stablehlo-fusion-regions{outline_opts})"
-
-
 def _get_var_to_range(gm: torch.fx.GraphModule):
     """Get variable to range mapping from FX GraphModule.
 
@@ -235,28 +224,6 @@ def _parse_mlir_module_from_text(text: str):
     torch_d.register_dialect(ctx)
     register_mrt_dialect(ctx)
     return ir.Module.parse(text, ctx)
-
-
-def _has_fusible_ops(mlir_module) -> bool:
-    """Check if any op in the module is tagged for StableHLO conversion (fusible ops)."""
-    module_op = mlir_module.operation
-    for region in module_op.regions:
-        for block in region:
-            for op in block:
-                if _check_op_tag_recursive(op):
-                    return True
-    return False
-
-
-def _check_op_tag_recursive(op) -> bool:
-    if "mopt.torch_to_stablehlo" in op.attributes:
-        return True
-    for region in op.regions:
-        for block in region:
-            for child_op in block:
-                if _check_op_tag_recursive(child_op):
-                    return True
-    return False
 
 
 def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=invalid-name, unused-argument
@@ -334,27 +301,6 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
             dump_ctx=dump_ctx,
         )
 
-    def _pipeline_partial_torch_to_stablehlo_for_fusion() -> str:
-        """Phase 1: Torch Backend -> Partial StableHLO (keep non-fusible Torch ops for later Torch->MRT)."""
-        return (
-            "builtin.module(func.func("
-            "convert-torch-to-stablehlo,"
-            "propagate-torch-symbolic-shape,"
-            "chlo-legalize-to-stablehlo,"
-            "canonicalize,cse"
-            "))"
-        )
-
-    def _pipeline_prepare_stablehlo_for_fusion_dynamic_shape() -> str:
-        """Phase 2: Cleanup dynamic-shape artifacts so fusion/outlining can see clean compute chains."""
-        return (
-            "builtin.module(func.func("
-            "remove-shape-constraints,"
-            "remove-redundant-dynamic-broadcast,"
-            "canonicalize"
-            "))"
-        )
-
     # ===== Conversion Pipeline =====
     # Torch RAW -> Torch Backend IR
     run_pipeline(
@@ -365,69 +311,8 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
         stage="Torch Backend IR",
     )
 
-    # Mark Torch ops to be converted to StableHLO based on whitelist/rules.
-    # This pass identifies and marks operations that can be fused.
-    run_pipeline(
-        "builtin.module(mark-torch-to-stablehlo-op)",
-        stage="After Marking Torch To StableHLO Ops",
-    )
-
-    # Check if any op is marked. If not, skip StableHLO conversion entirely.
-    if _has_fusible_ops(mlir_module):
-        # ===== Fusion Pipeline =====
-        # We intentionally do NOT run the full torch-backend-to-stablehlo-backend-pipeline
-        # because that pipeline enforces full StableHLO backend contract (no Torch ops).
-        # Here we only lower the subset of ops marked by whitelist that can be converted
-        # to StableHLO for fusion, while leaving non-fusible Torch ops (including symbolic
-        # shape modeling ops) to be handled later by Torch->MRT.
-
-        # Phase 1: Torch Backend -> Partial StableHLO
-        # - convert-torch-to-stablehlo: Lower fusible Torch ops to StableHLO/CHLO
-        # - propagate-torch-symbolic-shape: Propagate symbolic shape metadata onto tensor producers
-        # - chlo-legalize-to-stablehlo: Lower CHLO ops to StableHLO
-        run_pipeline(
-            _pipeline_partial_torch_to_stablehlo_for_fusion(),
-            stage="StableHLO IR (partial)",
-        )
-
-        # Phase 2: Prepare for fusion by cleaning up dynamic shape artifacts
-        # - remove-shape-constraints: Replace shape.cstr_* with const_witness(true)
-        # - remove-redundant-dynamic-broadcast: Eliminate no-op broadcasts using symbolic shape info
-        # - canonicalize: Inline shape.assuming regions (AssumingWithTrue pattern)
-        run_pipeline(
-            _pipeline_prepare_stablehlo_for_fusion_dynamic_shape(),
-            stage="StableHLO IR (ready for fusion)",
-        )
-
-        # Phase 3: Outline fusible regions into separate functions
-        use_dvm_outline = not opts.enable_linalg_call
-        run_pipeline(
-            _pipeline_outline_stablehlo_fusion_regions(enable_dvm_call=use_dvm_outline),
-            stage="StableHLO (after fusion outlining)",
-        )
-
-        # Phase 4: Convert outlined fusion regions to runtime calls
-        if opts.enable_linalg_call:
-            run_pipeline(
-                "builtin.module(convert-outlined-fusion-call,symbol-dce)",
-                stage="After converting to linalg_call",
-            )
-        else:
-            run_pipeline(
-                "builtin.module(convert-stablehlo-to-dvm,convert-dvm-to-mrt-dvm-call,symbol-dce)",
-                stage="After converting to dvm_call",
-            )
-
-        # Phase 5: Convert remaining StableHLO ops to MRT dialect
-        run_pipeline(
-            "builtin.module(convert-stablehlo-to-mrt)",
-            stage="After convert-stablehlo-to-mrt",
-        )
-
     # ===== Final Conversion =====
     # Convert remaining Torch backend ops to MRT dialect and reconcile type casts.
-    # This is always needed: in fusion mode, StableHLO conversion only covers a subset of ops,
-    # so the module can still contain Torch backend dialect operations.
     run_pipeline(
         "builtin.module(convert-torch-to-mrt,reconcile-unrealized-casts,canonicalize)",
         stage="MRT Dialect Module",

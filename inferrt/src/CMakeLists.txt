@@ -43,23 +43,16 @@ add_subdirectory(common)
 add_subdirectory(config)
 add_subdirectory(hardware)
 add_subdirectory(ir)
-add_subdirectory(lang)
 add_subdirectory(ops)
 add_subdirectory(optimize)
 add_subdirectory(profiler)
 add_subdirectory(runtime)
 
-set(OBJECTS mrt_common ops_utils mrt_config hardware_abstract lexer_obj parser_obj ir_obj compiler_obj
-    vm_obj runtime_obj ops_obj pass_obj mrt_ir_obj mrt_profiler)
-
-# Create da execution file
-add_executable(da lang/cli/main.cc lang/cli/options.cc)
-target_include_directories(da PRIVATE ${NANOBIND_INCLUDE_DIR})
-target_link_libraries(da ${OBJECTS} nanobind-static Python::Python)
-set_property(TARGET da APPEND PROPERTY BUILD_RPATH "${TORCH_INSTALL_PREFIX}/../torch.libs")
+set(OBJECTS mrt_common mrt_config hardware_abstract runtime_obj ops_obj pass_obj mrt_ir_obj ops_utils mrt_profiler)
 
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
-add_library(inferrt SHARED lang/api/c_api.cc)
+add_library(inferrt SHARED common/common.h)
+set_target_properties(inferrt PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(inferrt PRIVATE ${NANOBIND_INCLUDE_DIR})
 target_link_libraries(inferrt ${OBJECTS} nanobind-static Python::Python)
 
@@ -69,7 +62,7 @@ set_target_properties(inferrt PROPERTIES
 )
 
 install(
-  TARGETS inferrt da
+  TARGETS inferrt
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )

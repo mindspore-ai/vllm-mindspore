@@ -1,3 +1,0 @@
-set(LLVM_TARGET_DEFINITIONS StablehloToDvm.td)
-mlir_tablegen(StablehloToDvm.inc -gen-rewriters)
-add_public_tablegen_target(MoptStablehloToDvmIncGen)

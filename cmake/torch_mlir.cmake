@@ -40,14 +40,11 @@ mrt_add_pkg(torch_mlir
     CUSTOM_CMAKE_GENERATOR Ninja
     SOURCEMODULES .
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/001-build-isolate-symbols.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/002-build-external-stablehlo.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/003-build-remove-tests.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/004-build-embedded.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/005-skip-operator-op-check.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/006-support-floordiv-ceildiv-symint.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/007-disable-folding-aten-ops.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/008-torch-to-stablehlo-whitelist-filter.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/009-allow-symbolic-shape-ops-in-torch-to-stablehlo.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/010-disable-decompose-aten-select-int.patch
 )
 

@@ -38,17 +38,8 @@ class Pass;
 /// Create a pass to convert Arith constant operations to MRT constant operations.
 std::unique_ptr<Pass> createConvertArithToMRTPass();
 
-/// Create a pass to convert StableHLO operations to MRT dialect operations.
-std::unique_ptr<Pass> createConvertStablehloToMRTPass();
-
-/// Create a pass to convert outlined fusion calls to mrt.linalg_call with serialized Linalg MLIR.
-std::unique_ptr<Pass> createConvertOutlinedFusionCallPass();
-
 /// Create a pass to convert Torch operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertTorchToMRTPass();
-
-/// Create a pass to convert StableHLO operations to DVM dialect operations.
-std::unique_ptr<Pass> createConvertStablehloToDvmPass();
 
 /// Create a pass to serialize DVM dialect graphs to JSON and replace with mrt.dvm_call.
 std::unique_ptr<Pass> createConvertDvmToMrtDvmCallPass();

@@ -17,13 +17,10 @@
 #include "mopt-c/Passes.h"
 #include "mopt/Conversion/Passes.h"
 #include "mopt/Dialect/Mrt/Transforms/Passes.h"
-#include "mopt/Fusion/Passes.h"
 
 void mlirRegisterMoptPasses() {
   // Register all conversion passes
   mlir::registerMoptConversionPasses();
   // Register all MRT transforms passes
   mlir::registerMrtTransformsPasses();
-  // Register all fusion passes
-  mlir::registerMoptFusionPasses();
 }

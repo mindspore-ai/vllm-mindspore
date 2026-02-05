@@ -21,7 +21,7 @@
 #include <utility>
 
 #include "mopt/Conversion/Passes.h"
-#include "mopt/Conversion/StablehloToMrt/StablehloToMrtTypeConverter.h"
+#include "mopt/Conversion/MrtTypeConverter.h"
 #include "mopt/Dialect/Dvm/DvmDialect.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Mrt/MrtDialect.h"
@@ -469,7 +469,10 @@ struct ConvertDvmToMrtDvmCallPass : public impl::ConvertDvmToMrtDvmCallBase<Conv
     ModuleOp module = getOperation();
     MLIRContext *ctx = module.getContext();
 
-    mopt::StablehloToMrtTypeConverter typeConverter(ctx);
+    mlir::TypeConverter typeConverter;
+    typeConverter.addConversion([](Type type) { return type; });
+    mrt::populateMrtTypeConversions(typeConverter);
+    mrt::populateMrtTypeMaterializations(typeConverter);
 
     // Phase 1: Serialize outlined DVM functions to JSON payloads.
     llvm::StringMap<std::string> payloadByFuncName;

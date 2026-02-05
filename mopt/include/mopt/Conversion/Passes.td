@@ -19,29 +19,6 @@
 
 include "mlir/Pass/PassBase.td"
 
-//===----------------------------------------------------------------------===//
-// StablehloToMrt conversion pass
-//===----------------------------------------------------------------------===//
-
-def ConvertStablehloToMRT : Pass<"convert-stablehlo-to-mrt", "::mlir::ModuleOp"> {
-  let summary = "Convert StableHLO operations to MRT dialect operations";
-
-  let description = [{
-    This pass converts StableHLO dialect operations to the MRT dialect.
-    It uses pattern rewriting to match StableHLO operations and
-    replace them with equivalent MRT operations, including proper attribute
-    mapping and type conversion.
-  }];
-
-  let constructor = "mlir::createConvertStablehloToMRTPass()";
-
-  let dependentDialects = [
-    "::mlir::stablehlo::StablehloDialect",
-    "::mrt::MrtDialect",
-    "::mlir::arith::ArithDialect"
-  ];
-}
-
 def ConvertTorchToMRT : Pass<"convert-torch-to-mrt", "::mlir::ModuleOp"> {
   let summary = "Convert Torch operations to MRT dialect operations";
 
@@ -54,61 +31,6 @@ def ConvertTorchToMRT : Pass<"convert-torch-to-mrt", "::mlir::ModuleOp"> {
   let dependentDialects = [
     "::mlir::torch::TorchDialect",
     "::mrt::MrtDialect"
-  ];
-}
-
-//===----------------------------------------------------------------------===//
-// ConvertOutlinedFusionCall pass
-//===----------------------------------------------------------------------===//
-
-def ConvertOutlinedFusionCall : Pass<"convert-outlined-fusion-call", "::mlir::ModuleOp"> {
-  let summary = "Serialize outlined fusion functions to Linalg MLIR text and annotate call sites";
-
-  let description = [{
-    This pass processes outlined fusion functions (marked with {fusion.outlined}
-    attribute) and their call sites:
-
-    1. Convert StableHLO operations in outlined functions to Linalg dialect
-    2. Add hacc attributes (hacc.entry, hacc.function_kind<HOST>) for BiSheng compiler
-    3. Serialize the Linalg function to MLIR text format
-    4. Attach the serialized MLIR text to corresponding func.call ops as an attribute
-       (mrt.outlined_fusion_mlir_text)
-
-    This pass should run after {outline-stablehlo-fusion-regions} and before
-    {convert-stablehlo-to-mrt}. The actual replacement of func.call with
-    mrt.linalg_call is performed during {convert-stablehlo-to-mrt}, where types
-    are converted to MRT tensor types.
-  }];
-
-  let constructor = "mlir::createConvertOutlinedFusionCallPass()";
-
-  let dependentDialects = [
-    "::mlir::stablehlo::StablehloDialect",
-    "::mlir::func::FuncDialect",
-    "::mlir::linalg::LinalgDialect",
-    "::mlir::arith::ArithDialect",
-    "::mlir::math::MathDialect",
-    "::mlir::tensor::TensorDialect"
-  ];
-}
-
-//===----------------------------------------------------------------------===//
-// StablehloToDvm conversion pass
-//===----------------------------------------------------------------------===//
-
-def ConvertStablehloToDvm : Pass<"convert-stablehlo-to-dvm", "::mlir::ModuleOp"> {
-  let summary = "Convert StableHLO operations to DVM dialect operations";
-
-  let description = [{
-    This pass converts StableHLO dialect operations to the DVM dialect.
-  }];
-
-  let constructor = "mlir::createConvertStablehloToDvmPass()";
-
-  let dependentDialects = [
-    "::mlir::stablehlo::StablehloDialect",
-    "::mlir::dvm::DvmDialect",
-    "::mlir::func::FuncDialect"
   ];
 }
 

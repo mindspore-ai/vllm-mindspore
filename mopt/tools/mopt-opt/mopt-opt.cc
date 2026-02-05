@@ -33,14 +33,12 @@
 #include "llvm/Support/ToolOutputFile.h"
 
 // External dialect registrations
-#include "stablehlo/dialect/Register.h"
 #include "torch-mlir/InitAll.h"
 
 // Mopt project specific includes
 #include "mopt/Dialect/Mrt/Mrt.h"
 #include "mopt/Dialect/Dvm/DvmDialect.h"
 #include "mopt/Conversion/Passes.h"
-#include "mopt/Fusion/Passes.h"
 #include "mopt/Dialect/Mrt/Transforms/Passes.h"
 
 namespace {
@@ -51,7 +49,6 @@ constexpr int kMoptOptMinorVersion = 0;
 // Helper function to initialize the registry
 void initializeDialectRegistry(mlir::DialectRegistry &registry) {
   mlir::registerAllDialects(registry);
-  mlir::stablehlo::registerAllDialects(registry);
   mlir::torch::registerAllDialects(registry);
   mlir::torch::registerAllExtensions(registry);
   registry.insert<mrt::MrtDialect>();
@@ -68,9 +65,6 @@ int main(int argc, char **argv) {
 
   // Register custom conversion passes for Mopt
   mlir::registerMoptConversionPasses();
-
-  // Register Mopt fusion passes (StableHLO outlining, symbolic shape propagation, etc.)
-  mlir::registerMoptFusionPasses();
 
   // Register MRT transforms passes
   mlir::registerMrtTransformsPasses();

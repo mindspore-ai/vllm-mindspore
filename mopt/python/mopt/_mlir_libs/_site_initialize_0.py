@@ -35,12 +35,8 @@ def context_init_hook(context):
     """
 
     from ._mopt import register_mrt_dialect
-    from ._stablehlo import (register_stablehlo_passes,
-                             register_dialect as register_stablehlo_dialect)
 
     register_mrt_dialect(context)
-    register_stablehlo_dialect(context)
-    register_stablehlo_passes()
 
     # Allow unregistered dialects for flexibility
     context.allow_unregistered_dialects = True
