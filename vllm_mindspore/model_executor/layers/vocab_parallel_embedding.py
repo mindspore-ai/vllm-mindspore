@@ -359,12 +359,6 @@ class VocabParallelEmbedding(nn.Cell):
         shard_size = self.shard_indices.org_vocab_end_index - start_idx
         loaded_weight = split_loaded_weight(loaded_weight, output_dim,
                                             start_idx, shard_size)
-        org_vocab_size_per_rank = self.org_vocab_size // self.tp_size
-        if loaded_weight.shape[output_dim] != org_vocab_size_per_rank:
-            raise ValueError(
-                f"'loaded_weight.shape[output_dim]' should be equal to "
-                f"'org_vocab_size', but got {loaded_weight.shape[output_dim]} "
-                f"and {self.org_vocab_size}")
 
         param[:loaded_weight.shape[0]] = ms.from_numpy(loaded_weight)
         param[loaded_weight.shape[0]:] = 0
