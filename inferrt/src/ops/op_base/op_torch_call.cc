@@ -175,6 +175,9 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) cons
                     << "', The output tensor shape not match, expect: " << outTensor->Shape()
                     << ", but got: " << atenShape;
     }
+    if (!IsTorchTensorStandardLayout(tensor)) {
+      LOG_EXCEPTION << "For '" << qualifiedOpName_ << "', The output tensor is not in standard layout.";
+    }
     auto data_ptr = tensor.storage().set_data_ptr(std::move(c10::DataPtr()));  // return the original data ptr.
     void *data = data_ptr.get();
     auto data_ptr_shared = std::make_shared<c10::DataPtr>(std::move(data_ptr));

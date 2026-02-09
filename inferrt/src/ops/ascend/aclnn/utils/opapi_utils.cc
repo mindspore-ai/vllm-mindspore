@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 
-#include <set>
-#include <unordered_map>
-
 #include "common/logger.h"
 #include "config/device/ascend/op_precision_conf.h"
-#include "ir/tensor/format.h"
 #include "ops/ascend/aclnn/utils/opapi_utils.h"
 
 namespace mrt {
@@ -27,7 +23,6 @@ namespace ops {
 namespace {
 using config::ascend::AclCubeMathType;
 using config::ascend::OpPrecisionConf;
-using ir::MemoryFormat;
 constexpr auto AclCubeMathTypeArraySize = 4;
 
 constexpr AclCubeMathType AclCubeMathTypeArray[AclCubeMathTypeArraySize] = {
@@ -35,13 +30,6 @@ constexpr AclCubeMathType AclCubeMathTypeArray[AclCubeMathTypeArraySize] = {
   AclCubeMathType::USE_FP16,
   AclCubeMathType::USE_HF32,
   AclCubeMathType::ALLOW_FP32_DOWN_PRECISION,
-};
-
-const std::set<MemoryFormat> BaseFormatSet = {
-  MemoryFormat::FORMAT_ND,
-  MemoryFormat::FORMAT_NCHW,
-  MemoryFormat::FORMAT_NHWC,
-  MemoryFormat::FORMAT_NCDHW,
 };
 }  // namespace
 
@@ -56,8 +44,6 @@ int8_t GetCubeMathType() {
   }
   return static_cast<int8_t>(AclCubeMathTypeArray[cubeMathTypeIndex]);
 }
-
-bool IsTensorBaseFormat(const ir::TensorPtr &tensor) { return BaseFormatSet.count(tensor->Format()) != 0; }
 
 }  // namespace ops
 }  // namespace mrt

@@ -14,10 +14,23 @@
  * limitations under the License.
  */
 
-#include "ops/op_base/utils.h"
+#include "ops/utils/utils.h"
+#include <unordered_set>
 
 namespace mrt {
 namespace ops {
+
+static const std::unordered_set<MemoryFormat> BaseFormatSet = {
+  MemoryFormat::FORMAT_ND,
+  MemoryFormat::FORMAT_NCHW,
+  MemoryFormat::FORMAT_NHWC,
+  MemoryFormat::FORMAT_NCDHW,
+};
+
+bool IsBaseFormat(MemoryFormat format) { return BaseFormatSet.count(format) != 0; }
+
+bool IsTensorBaseFormat(const ir::TensorPtr &tensor) { return IsBaseFormat(tensor->Format()); }
+
 void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int64_t> &yShape,
                        std::vector<int64_t> *broadcastShape) {
   if (xShape == yShape) {

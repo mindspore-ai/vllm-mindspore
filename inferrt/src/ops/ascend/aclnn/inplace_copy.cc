@@ -16,7 +16,6 @@
 #include "ops/ascend/aclnn/inplace_copy.h"
 #include <vector>
 #include "ops/ascend/aclnn/utils/opapi_utils.h"
-#include "ops/op_base/utils.h"
 #include "ops/op_register.h"
 
 namespace mrt {

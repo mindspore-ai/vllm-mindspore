@@ -17,7 +17,7 @@
 #include <vector>
 
 #include "ops/ascend/mem/memcpy_likes.h"
-#include "ops/ascend/aclnn/utils/opapi_utils.h"
+#include "ops/utils/utils.h"
 #include "ops/op_register.h"
 #include "acl/acl_rt.h"
 #include "ir/tensor/tensor.h"

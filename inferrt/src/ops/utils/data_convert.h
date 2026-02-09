@@ -27,5 +27,6 @@ MRT_EXPORT at::Tensor ToTorchTensor(const ir::TensorPtr &tensor);
 MRT_EXPORT ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false);
 MRT_EXPORT void CheckOutputInputRef(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                     const std::string &opName);
+MRT_EXPORT bool IsTorchTensorStandardLayout(const at::Tensor &tensor);
 }  // namespace mrt::ops
 #endif  // INFERRT_INFERRT_SRC_OPS_ASCEND_CUSTOM_UTILS_H_

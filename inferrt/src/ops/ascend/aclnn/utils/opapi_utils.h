@@ -29,8 +29,6 @@ namespace mrt {
 namespace ops {
 DA_API int8_t GetCubeMathType();
 
-DA_API bool IsTensorBaseFormat(const ir::TensorPtr &tensor);
-
 }  // namespace ops
 }  // namespace mrt
 #endif  // __OPS_ASCEND_ACLNN_UTILS_OPAPI_UTILS_H__

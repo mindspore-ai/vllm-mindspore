@@ -26,12 +26,15 @@
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ir/tensor/tensor.h"
+#include "ir/tensor/format.h"
 #include "ops/utils/data_convert.h"
+#include "ops/utils/utils.h"
 #include "common/logger.h"
 
 namespace ir = mrt::ir;
 
 namespace mrt::ops {
+using ir::MemoryFormat;
 
 static const std::map<at::ScalarType, ir::DataType> kAtScalarTypeToDataTypeMap = {
   {at::kHalf, ir::DataType::Type::Float16},
@@ -208,6 +211,16 @@ void CheckOutputInputRef(const std::vector<const ir::Value *> &input, const ir::
                     << "Output DataPtr: " << output->ToTensor()->DataPtr();
     }
   }
+}
+
+bool IsTorchTensorStandardLayout(const at::Tensor &atTensor) {
+  if (!atTensor.is_contiguous() || atTensor.storage_offset() != 0) {
+    return false;
+  }
+#ifdef ENABLE_TORCH_NPU
+  return IsBaseFormat(static_cast<ir::MemoryFormat>(at_npu::native::get_npu_format(atTensor)));
+#endif
+  return true;
 }
 
 }  // namespace mrt::ops

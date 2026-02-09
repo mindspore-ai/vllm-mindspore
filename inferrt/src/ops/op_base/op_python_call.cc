@@ -101,6 +101,9 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
 
 void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix,
                           device::DeviceContext *devCtx) {
+  if (!IsTorchTensorStandardLayout(atenTensor)) {
+    LOG_EXCEPTION << logPrefix + " output is not in standard layout.";
+  }
   std::vector<int64_t> atenShape(atenTensor.sizes().begin(), atenTensor.sizes().end());
   if (atenShape != irTensor->Shape()) {
     LOG_EXCEPTION << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;

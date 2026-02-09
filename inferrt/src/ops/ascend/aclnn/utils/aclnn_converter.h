@@ -28,7 +28,7 @@
 
 #include "ir/value/value.h"
 #include "ops/utils/op_constants.h"
-#include "ops/ascend/aclnn/utils/opapi_utils.h"
+#include "ops/utils/utils.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
 #include "ops/ascend/aclnn/utils/opapi_lib_loader.h"
 
