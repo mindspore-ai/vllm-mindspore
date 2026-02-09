@@ -159,6 +159,10 @@
   ],
   "registered_310p_tests": [
     {
+      "test_node_id": "st/quantization/test_vllm_qwen3_8b_w8a8sc_tp2.py::test_qwen3_8b_w8a8sc_tp2",
+      "card_num": 2
+    },
+    {
       "test_node_id": "st/models/qwen3/test_vllm_mf_qwen3_8b.py::test_mf_qwen3_v1",
       "card_num": 2
     },

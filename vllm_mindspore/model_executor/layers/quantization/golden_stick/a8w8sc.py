@@ -39,6 +39,11 @@ class A8W8SCLinearMethod(LinearMethodBase):
         self.compress_weight_size = compress_weight_size
         self.compress_index_size = compress_index_size
         self.is_310p = is_310p()
+        # Get quant_device_type from config
+        # read from quant_model_description.json
+        # Default to "910", only "310P" when device_type="310P" in JSON file
+        self.quant_device_type = getattr(quant_config, 'quant_device_type',
+                                         "910")
         # Get weight dtype from config, default to int8 for W8A8SC
         self.weight_dtype = getattr(quant_config, 'weight_dtype', mstype.int8)
         self.index_dtype = getattr(quant_config, 'index_dtype', mstype.int8)
@@ -66,9 +71,13 @@ class A8W8SCLinearMethod(LinearMethodBase):
                                       self.index_dtype),
                           requires_grad=False)
         # Dequantization scale (int64)
+        # Use quant_device_type to determine dtype:
+        # if quantized on 310P, use int64
+        deq_scale_dtype = (mstype.int64 if self.quant_device_type == "310P"
+                           else mstype.float32)
         deq_scale = Parameter(initializer('ones',
                                           (output_size_per_partition, ),
-                                          mstype.int64),
+                                          deq_scale_dtype),
                               name="deq_scale",
                               requires_grad=False)
         # Quantization bias (int32)
@@ -140,9 +149,16 @@ class A8W8SCLinearMethod(LinearMethodBase):
                                            name=layer.input_offset.name,
                                            requires_grad=False)
 
-        # Note: Sparse quantized weights should NOT be converted to Nz format
-        # The weight_loader already handles this
-        # by loading weights without sharding
+        # Convert deq_scale to int64 on 310P platform
+        # When model was quantized by 310P, deq_scale should be int64.
+        # If deq_scale is float32, this model was quantized by 910B.
+        # So when we run on 310P, convert it to int64 for compatibility.
+        if layer.deq_scale.dtype == mstype.float32 and self.is_310p:
+            deq_scale = layer.deq_scale.asnumpy().view(np.int32).astype(
+                np.int64)
+            layer.deq_scale = Parameter(Tensor(deq_scale, dtype=mstype.int64),
+                                        name=layer.deq_scale.name,
+                                        requires_grad=False)
 
     def apply(self,
               layer: nn.Cell,
