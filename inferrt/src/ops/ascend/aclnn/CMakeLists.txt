@@ -11,7 +11,8 @@ list(APPEND OPS_ACLNN_SRC_FILES ${OPS_ACLNN_AUTO_GEN_FILES})
 
 add_library(ops_ascend_aclnn SHARED ${OPS_ACLNN_SRC_FILES})
 include_directories(${AUTO_GEN_DIR})
-target_link_libraries(ops_ascend_aclnn PRIVATE ops_ascend_aclnn_common ops_base_obj hardware_ascend kernel mrt::securec)
+target_link_libraries(ops_ascend_aclnn PRIVATE ops_ascend_aclnn_common ops_base_obj
+                      hardware_ascend kernel mrt_profiler mrt::securec)
 
 set_target_properties(ops_ascend_aclnn PROPERTIES
   INSTALL_RPATH "$ORIGIN"

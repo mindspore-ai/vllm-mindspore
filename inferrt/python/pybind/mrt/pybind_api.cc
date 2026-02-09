@@ -19,6 +19,7 @@
 
 #include "mrt/pybind_api.h"
 #include "ops/custom_op_register.h"
+#include "profiler/profiler.h"
 
 DALangPy::~DALangPy() {
   if (callable_ != nullptr) {
@@ -115,4 +116,23 @@ NB_MODULE(_mrt_api, mod) {
     "is_custom_op_registered",
     [](const std::string &op_name) { return mrt::ops::CustomOpRegistry::GetInstance().IsCustomOpRegistered(op_name); },
     nb::arg("op_name"), "Check if a custom operator is registered.");
+
+  // Profiler functions
+  mod.def(
+    "mrt_profiler_start_step", []() { mrt::profiler::ProfilerAnalyzer::GetInstance().StartStep(); },
+    "Start a profiling step.");
+  mod.def(
+    "mrt_profiler_end_step", []() { mrt::profiler::ProfilerAnalyzer::GetInstance().EndStep(); },
+    "End a profiling step.");
+  mod.def(
+    "mrt_profiler_clear", []() { mrt::profiler::ProfilerAnalyzer::GetInstance().Clear(); },
+    "Clear all profiling data.");
+  mod.def(
+    "mrt_profiler_enable", []() { mrt::profiler::ProfilerAnalyzer::GetInstance().Enable(); }, "Enable the profiler.");
+  mod.def(
+    "mrt_profiler_disable", []() { mrt::profiler::ProfilerAnalyzer::GetInstance().Disable(); },
+    "Disable the profiler.");
+  mod.def(
+    "mrt_profiler_is_enabled", []() { return mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled(); },
+    "Check if the profiler is enabled.");
 }
