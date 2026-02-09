@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -180,8 +180,8 @@ main() {
     log "Starting dependency installation"
     
     local vllm_url=$(get_package_url "vllm" "any")
-    local mindspore_url=$(get_obs_package_url "mindspore" "2.7.1" "${ARCH}")
-    local msadapter_url=$(get_obs_package_url "msadapter" "0.3.0" "any")
+    local mindspore_url=$(get_obs_package_url "mindspore" "2.8.0" "${ARCH}")
+    local msadapter_url=$(get_obs_package_url "msadapter" "0.4.0" "any")
     local mindformers_url=$(get_obs_package_url "mindformers" "1.7.0" "any")
     local mindone_url=$(get_package_url "mindone" "any")
     local ms_custom_ops_url=$(get_package_url "ms_custom_ops" "ascend/${ARCH}")

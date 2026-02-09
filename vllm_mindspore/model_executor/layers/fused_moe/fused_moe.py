@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/fused_moe/fused_moe.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2025 The vLLM team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -236,6 +236,7 @@ class FusedExperts(nn.Cell):
             # the start index of experts for current ep rank
             self.expert_start_index = 0 if self.ep_rank == 0 else int(
                 experts_num_map_cu_np[self.ep_rank - 1])
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(self,
                   hidden_states: Tensor,
@@ -290,7 +291,7 @@ class FusedExperts(nn.Cell):
 
     def _ffn(self, hidden_state, w1, w2, group_list, activation):
         gate_hidden_out = self._group_matmul(hidden_state, w1, group_list)
-        gate, hidden = mint.split(gate_hidden_out,
+        gate, hidden = self.split(gate_hidden_out,
                                   (w1.shape[2] // 2, w1.shape[2] // 2), -1)
         gate = self._gate_activation(gate, activation)
         hidden = mint.mul(hidden, gate)

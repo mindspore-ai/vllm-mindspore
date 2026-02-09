@@ -308,7 +308,7 @@ pytest tests -v --forked
 
 ```
 
-注:依赖安装pytest-xdist，`--forked`可保证每次用例执行环境变量正确初始化，不受前置用例影响。
+注:依赖安装pytest-forked，`--forked`可保证每次用例执行环境变量正确初始化，不受前置用例影响。
 
 Case2: 本地执行单卡用例
 

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 else:
     Qwen2Config = None
 
-from mindspore import Parameter, Tensor, mint, nn
+from mindspore import Parameter, Tensor, nn, ops
 
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
@@ -169,6 +169,7 @@ class Qwen2Attention(nn.Cell):
                               quant_config=quant_config,
                               prefix=f"{prefix}.attn",
                               attn_type=attn_type)
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(
         self,
@@ -183,7 +184,7 @@ class Qwen2Attention(nn.Cell):
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
-        q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
+        q, k, v = self.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
         q, k = self.rotary_emb(positions, q, k, batch_valid_length)
         attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,

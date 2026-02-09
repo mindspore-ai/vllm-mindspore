@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-# Copyright 2025 Huawei Technologies Co., Ltd
+# Copyright 2025-2026 Huawei Technologies Co., Ltd
 # Copyright 2025 The Zhipu AI team.
 # Copyright 2023 The vLLM team.
 # Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
@@ -26,7 +26,7 @@
 from collections.abc import Iterable
 from typing import Optional, Union
 
-from mindspore import Tensor, mint, nn
+from mindspore import Tensor, nn, ops
 from transformers import Glm4Config
 from vllm.attention.backends.abstract import AttentionType
 from vllm.config import CacheConfig, VllmConfig
@@ -123,6 +123,7 @@ class Glm4Attention(nn.Cell):
                               quant_config=quant_config,
                               prefix=f"{prefix}.attn",
                               attn_type=attn_type)
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(
         self,
@@ -137,7 +138,7 @@ class Glm4Attention(nn.Cell):
         block_tables: Tensor,
     ) -> Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
-        q, k, v = mint.split(qkv, (self.q_size, self.kv_size, self.kv_size),
+        q, k, v = self.split(qkv, (self.q_size, self.kv_size, self.kv_size),
                              -1)
         q, k = self.rotary_emb(positions, q, k, batch_valid_length)
         attn_output = self.attn(q, k, v, key_cache, value_cache, slot_mapping,

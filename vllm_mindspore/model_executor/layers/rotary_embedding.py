@@ -3,7 +3,7 @@
 # Adapted from
 # https://github.com/huggingface/transformers/blob/v4.33.2/src/transformers/models/llama/modeling_llama.py
 #
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 # Copyright 2023 The vLLM team.
 # Copyright 2022 EleutherAI and the HuggingFace Inc. team. All rights reserved.
 #
@@ -1226,6 +1226,7 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
         self.mrope_section = mrope_section
         if self.mrope_section:
             assert sum(self.mrope_section) == rotary_dim // 2
+        self.split = ops.auto_generate.SplitWithSize()
 
     def construct(  # type: ignore[override]
         self,
@@ -1250,8 +1251,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
             sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
             if positions.ndim == 2:
-                cos_l = mint.split(cos, self.mrope_section, dim=-1)
-                sin_l = mint.split(sin, self.mrope_section, dim=-1)
+                cos_l = self.split(cos, self.mrope_section, dim=-1)
+                sin_l = self.split(sin, self.mrope_section, dim=-1)
                 cos, sin = (), ()
                 for i in range(len(
                         self.mrope_section)):  # type: ignore[arg-type]
@@ -1286,8 +1287,8 @@ class InferMRotaryEmbedding(InferRotaryEmbedding):
             cos, sin = self.freqs_cos[positions], self.freqs_sin[positions]
             cos = SliceExt()(cos, -1, 0, half_rotary_dim, 1)
             sin = SliceExt()(sin, -1, 0, half_rotary_dim, 1)
-            cos_l = mint.split(cos, self.mrope_section, dim=-1)
-            sin_l = mint.split(sin, self.mrope_section, dim=-1)
+            cos_l = self.split(cos, self.mrope_section, dim=-1)
+            sin_l = self.split(sin, self.mrope_section, dim=-1)
             cos, sin = (), ()
             for i in range(len(self.mrope_section)):  # type: ignore[arg-type]
                 cos_l_select = mint.index_select(cos_l[i], 0,
@@ -1715,7 +1716,10 @@ def get_rope(
     if key in _ROPE_DICT:
         return _ROPE_DICT[key]
     if rope_scaling is None:
-        cls = InferRotaryEmbedding if is_neox_style else RotaryEmbedding
+        # InferRotaryEmbedding uses ApplyRotaryPosEmb op which doesn't support
+        # rotary_dim < head_size (partial_rotary_factor < 1.0).
+        use_fused_op = is_neox_style and partial_rotary_factor == 1.0
+        cls = InferRotaryEmbedding if use_fused_op else RotaryEmbedding
         rotary_emb = cls(
             head_size,
             rotary_dim,
