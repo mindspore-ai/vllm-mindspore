@@ -173,6 +173,9 @@ class GoldenStickConfig(QuantizationConfig):
         if isinstance(layer, VocabParallelEmbedding):
             return None
 
+        # replace prefix for multimodal model
+        prefix = prefix.replace("language_model.model", "model.language_model")
+
         # Pre-compute common values
         is_linear_base = isinstance(layer, LinearBase)
         weight_key = f"{prefix}.weight"

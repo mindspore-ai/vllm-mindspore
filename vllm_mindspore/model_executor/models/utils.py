@@ -31,7 +31,8 @@ from vllm.sequence import IntermediateTensors
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader)
 from vllm_mindspore.multimodal.inputs import NestedTensors
-from vllm_mindspore.utils import get_valid_dtype, is_310p
+from vllm_mindspore.utils import (get_valid_dtype, is_310p,
+                                  set_weight_format_to_nz)
 
 WeightsMapping = Mapping[str, Optional[str]]
 """If a key maps to a value of `None`, the corresponding weight is ignored."""
@@ -348,18 +349,34 @@ def is_use_ringmla(vllm_config, mf_config=None):
 
 class AutoWeightsLoaderMS:
     """
-    Helper class to load weights into a [`nn.Cell`][]. It is able
-    to automatically detect child modules and parameters while iterating over
-    the weights only once.
+    A helper class for loading weights into a MindSpore `nn.Cell`, adapted from
+    the native `AutoWeightsLoader` in vLLM. It automatically detects child
+    modules and parameters, iterating over the weights only once.
 
-    The weight loading logic for individual modules can be overridden
-    by defining a ``load_weights`` method.
-
-    Similarly, the weight loading logic for individual parameters can be
-    overridden by defining a ``weight_loader`` method.
+    The weight loading logic for individual modules can be overridden by 
+    defining a `load_weights` method. Similarly, the logic for individual 
+    parameters can be customized by defining a `weight_loader` method.
 
     Detailed weight loading information can be viewed by setting the
-    environment variable ``VLLM_LOGGING_LEVEL=DEBUG``.
+    environment variable `VLLM_LOGGING_LEVEL=DEBUG`.
+
+    MindSpore Adaptation Notes:
+    - **Non-Recursive Loading**: Unlike vLLM's recursive approach with
+      `nn.Module`, this class uses a non-recursive method. This is because
+      MindSpore `Cell` objects have different submodule handling. Weights are
+      loaded by calling a submodule's `load_weights` method or by direct
+      parameter assignment.
+    - **Submodule Discovery**: Since the base model (`NativeModel`) is not a
+      `Cell`, submodule discovery relies on the list populated by `set_modules`.
+      This class groups weights by prefix to match them with the correct
+      submodules.
+    - **Batchnorm Handling**: vLLM's native loader has special logic for
+      `running_mean` and `running_var` in batch normalization layers because 
+      they are tensors in PyTorch. In MindSpore, they are `Parameter`s, 
+      so no special handling is required.
+    - **Weight Name Mapping**: It utilizes vLLM's `hf_to_vllm_mapper` mechanism
+      to map Hugging Face weight names to their corresponding vLLM names before
+      loading. This streamlines the process, especially for quantized models.
     """
 
     # Models trained using early version ColossalAI
@@ -476,6 +493,27 @@ class AutoWeightsLoaderMS:
                     memo.add(name)
                 yield from memo
 
+    def _process_weights_format(self, param_dict):
+        """
+        In 310p, weights are converted to the NZ format
+        to optimize MatMul performance.
+        """
+        special_nz_keywords = [".w13_weight", ".w2_weight"]
+
+        exclude_keywords = ["embed_tokens"]
+
+        for name, param in param_dict.items():
+            if any(name.endswith(key) for key in special_nz_keywords):
+                set_weight_format_to_nz(param)
+                continue
+
+            if name.endswith(".weight"):
+                if any(key in name for key in exclude_keywords):
+                    continue
+
+                if len(param.shape) > 1:
+                    set_weight_format_to_nz(param)
+
     def load_weights(
         self,
         weights: Iterable[tuple[str, Tensor]],
@@ -491,4 +529,6 @@ class AutoWeightsLoaderMS:
         param_dict = self.module.get_params_dict()
         autoloaded_weights = set(
             self._load_module("", self.module, weights, param_dict))
+        if is_310p():
+            self._process_weights_format(param_dict)
         return autoloaded_weights

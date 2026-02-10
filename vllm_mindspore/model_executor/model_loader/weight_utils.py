@@ -22,6 +22,7 @@ from collections.abc import Generator
 from typing import Any
 
 import mindspore as ms
+import numpy as np
 from mindspore import Parameter
 from safetensors import safe_open
 from tqdm.auto import tqdm
@@ -31,12 +32,23 @@ from vllm.model_executor.model_loader.weight_utils import (_BAR_FORMAT,
 from vllm_mindspore.utils import cast_weight_for_310p, is_310p
 
 
-def get_loaded_weight(loaded_weight):
-    """Get all loaded_weight value and dtype conversion on 310p"""
-    loaded_weight = loaded_weight[:]
+def _finalize_weight(loaded_weight):
+    """
+    1. Materializes the weight data into a concrete numpy array.
+    2. Cast weight to float16 for 310p.
+    """
+    if not isinstance(loaded_weight, np.ndarray):
+        loaded_weight = loaded_weight[:]
+
     if is_310p():
         loaded_weight = cast_weight_for_310p(loaded_weight)
+
     return loaded_weight
+
+
+def get_loaded_weight(loaded_weight):
+    """Get all loaded_weight value"""
+    return _finalize_weight(loaded_weight)
 
 
 def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
@@ -60,10 +72,8 @@ def split_loaded_weight(loaded_weight, shard_dim, start_idx, shard_size):
         loaded_weight = loaded_weight[:, :, start_idx:end_idx]
     else:
         raise ValueError("shard_dim:{} is not supported.".format(shard_dim))
-    if is_310p():
-        loaded_weight = cast_weight_for_310p(loaded_weight)
 
-    return loaded_weight
+    return _finalize_weight(loaded_weight)
 
 
 def safetensors_weights_iterator(
@@ -91,6 +101,4 @@ def safetensors_weights_iterator(
 def default_weight_loader(param: Parameter, loaded_weight: Any) -> None:
     """Default weight loader."""
     loaded_weight = get_loaded_weight(loaded_weight)
-    if is_310p():
-        loaded_weight = cast_weight_for_310p(loaded_weight)
     param.set_data(ms.Tensor(loaded_weight, dtype=param.dtype))

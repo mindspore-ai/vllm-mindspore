@@ -64,6 +64,7 @@ from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (AutoWeightsLoaderMS,
                                                         PPMissingLayer,
                                                         maybe_prefix)
+from vllm_mindspore.utils import is_310p
 from vllm_mindspore.v1.attention import Attention
 
 from vllm_mindspore.model_executor.layers.rotary_embedding import (  # type: ignore[attr-defined]   # isort: skip
@@ -288,7 +289,7 @@ class Qwen3ForCausalLM(NativeModel, SupportsPP):
                                 prefix=maybe_prefix(prefix, "model"))
 
         if get_pp_group().is_last_rank:
-            if config.tie_word_embeddings:
+            if config.tie_word_embeddings and not is_310p():
                 self.lm_head = self.model.embed_tokens
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,

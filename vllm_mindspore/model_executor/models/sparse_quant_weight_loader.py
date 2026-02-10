@@ -23,9 +23,9 @@ weights (W8A8SC) that can be shared across different model implementations
 from collections.abc import Iterable
 
 import mindspore as ms
-from mindspore import Parameter, Tensor, ops
+from mindspore import Parameter, Tensor
 
-from vllm_mindspore.utils import FORMAT_TYPE, cast_weight_for_310p, is_310p
+from vllm_mindspore.utils import cast_weight_for_310p, is_310p
 
 
 def is_sparse_quant_weight(name: str, quant_config) -> bool:
@@ -78,46 +78,6 @@ def handle_tie_word_embeddings(name: str, param: Parameter,
     return loaded_params
 
 
-def adjust_sparse_quant_weights_for_310p(params_dict: dict[str, Parameter],
-                                         quant_config,
-                                         target_keywords: list[str] = None):
-    """Adjust sparse quantized weight format for 310P platform.
-    
-    Note: Compressed sparse weights should NOT be converted to Nz format,
-    only regular weights need format conversion.
-    
-    Args:
-        params_dict: Dictionary of parameter names to Parameter objects
-        quant_config: Quantization configuration object
-        target_keywords: List of weight name keywords to adjust.
-                       Default: ["qkv_proj.weight", "o_proj.weight",
-                                "gate_up_proj.weight", "down_proj.weight",
-                                "lm_head.weight"]
-    """
-    if not is_310p():
-        return
-
-    if target_keywords is None:
-        target_keywords = [
-            "qkv_proj.weight",
-            "o_proj.weight",
-            "gate_up_proj.weight",
-            "down_proj.weight",
-            "lm_head.weight",
-        ]
-
-    for name, param in params_dict.items():
-        if any(name.endswith(keyword) for keyword in target_keywords):
-            # Check if this is a sparse quantized weight
-            # Compressed sparse weights should NOT be converted to Nz format
-            if is_sparse_quant_weight(name, quant_config):
-                continue
-            # Convert other weights to Nz format
-            cast_weight = ops.auto_generate.format_cast(
-                param, FORMAT_TYPE['nz'])
-            param.set_data(cast_weight)
-
-
 def load_split_weights(weights: Iterable[tuple[str, Tensor]],
                        params_dict: dict[str, Parameter], config,
                        quant_config) -> set[str]:
@@ -161,8 +121,5 @@ def load_split_weights(weights: Iterable[tuple[str, Tensor]],
         tie_params = handle_tie_word_embeddings(name, param, params_dict,
                                                 config)
         loaded_params.update(tie_params)
-
-    # 310P platform format adjustment
-    adjust_sparse_quant_weights_for_310p(params_dict, quant_config)
 
     return loaded_params

@@ -1527,15 +1527,6 @@ class Qwen3VLForConditionalGeneration(NativeModel, SupportsMultiModal,
 
     def load_weights(self, weights: Iterable[tuple[str,
                                                    ms.Tensor]]) -> set[str]:
-        if is_310p() and self.config.tie_word_embeddings:
-            lm_head_weight = None
-            for name, weight in weights:
-                if "embed_tokens.weight" in name:
-                    lm_head_weight = weight
-                    break
-            if lm_head_weight is not None:
-                weights = list(weights)
-                weights.append(("lm_head.weight", lm_head_weight))
         skip_prefixes = []
         if self.visual is None:
             skip_prefixes.extend(["visual."])

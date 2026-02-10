@@ -60,8 +60,8 @@ from vllm_mindspore.model_executor.models.interfaces import (MixtureOfExperts,
                                                              SupportsMoeDpTp)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
-    is_pp_missing_parameter, make_empty_intermediate_tensors_factory,
-    make_layers, maybe_prefix)
+    AutoWeightsLoaderMS, is_pp_missing_parameter,
+    make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
 from vllm_mindspore.model_executor.utils import (get_model_context,
                                                  set_weight_attrs)
 
@@ -855,5 +855,9 @@ class DeepseekV3ForCausalLM(NativeModel, SupportsMoeDpTp, MixtureOfExperts):
         return self.logits_processor(self.lm_head, hidden_states)
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        return self.model.load_weights(weights, params_dict)
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)

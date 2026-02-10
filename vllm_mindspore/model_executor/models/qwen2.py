@@ -431,6 +431,14 @@ class Qwen2Model(nn.Cell):
                                             default_weight_loader)
                     weight_loader(param, loaded_weight)
                     loaded_params.add(name)
+                    if (is_310p() and self.config.tie_word_embeddings
+                            and "embed_tokens" in name
+                            and "lm_head.weight" in params_dict):
+                        lm_head_param = params_dict["lm_head.weight"]
+                        weight_loader = getattr(lm_head_param, "weight_loader",
+                                                default_weight_loader)
+                        weight_loader(lm_head_param, loaded_weight)
+                        loaded_params.add("lm_head.weight")
 
         return loaded_params
 
@@ -507,16 +515,6 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        if is_310p() and self.config.tie_word_embeddings:
-            lm_head_weight = None
-            for name, weight in weights:
-                if "embed_tokens.weight" in name:
-                    lm_head_weight = weight
-                    break
-            if lm_head_weight is not None:
-                weights = list(weights)
-                weights.append(("lm_head.weight", lm_head_weight))
-
         loader = AutoWeightsLoaderMS(
             self,
             skip_prefixes=(["lm_head."]
