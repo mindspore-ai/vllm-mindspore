@@ -126,10 +126,11 @@ vllm.engine.arg_utils.EngineArgs._set_default_args = _set_default_args
 import vllm.lora.utils
 
 from vllm_mindspore.model_executor.layers.linear import LinearBase
-from vllm_mindspore.lora.utils import _all_lora_classes
+from vllm_mindspore.lora.utils import _all_lora_classes, replace_submodule
 
 vllm.lora.utils._all_lora_classes = _all_lora_classes
 vllm.lora.utils.LinearBase = LinearBase
+vllm.lora.utils.replace_submodule = replace_submodule
 
 import vllm.lora.models
 from vllm_mindspore.lora.models import (register_module, from_local_checkpoint,

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,8 @@ from vllm_mindspore.model_executor.models.interfaces import (
     is_mixture_of_experts, supports_moe_dp_tp)
 from vllm_mindspore.model_executor.models.utils import (convert_pin,
                                                         is_use_ringmla)
-from vllm_mindspore.model_executor.utils import set_model_context
+from vllm_mindspore.model_executor.utils import (get_model_context,
+                                                 set_model_context)
 from vllm_mindspore.utils import (STR_DTYPE_TO_MS_DTYPE, create_kv_cache,
                                   is_310p)
 from vllm_mindspore.v1.attention.backends.ms_attn import MsAttentionMetadata
@@ -375,12 +376,13 @@ class NativeModel(MsModelBase):
     def __init__(self, *, vllm_config: VllmConfig, prefix: str = "") -> None:
         super().__init__(vllm_config=vllm_config, prefix=prefix)
         self.quant_config = vllm_config.quant_config
-        if vllm_config.lora_config is not None:
-            # native model lora only support pynative mode now
-            vllm_config.model_config.enforce_eager = True
         self.is_eager_mode = vllm_config.model_config.enforce_eager
+        if not self.is_eager_mode and vllm_config.lora_config is not None:
+            self.lora_prefill_graph = None
+            self.lora_decode_graph = None
         self.prefill_graph = None
         self.decode_graph = None
+        set_model_context("enforce_eager", self.is_eager_mode)
 
         if is_mixture_of_experts(self):
             ep_size = get_ep_group().world_size
@@ -667,6 +669,40 @@ class NativeModel(MsModelBase):
 
         return new_model_inputs, is_prefill
 
+    def _get_or_execute_graph(self, graph_attr: str, phase: str,
+                              graph_name: str, is_prefill: bool,
+                              input_ids: Tensor, positions: Tensor,
+                              intermediate_tensors: IntermediateTensors,
+                              inputs_embeds: Tensor, model_inputs: dict):
+        """
+        Get or create JIT graph and execute model inference.
+
+        Args:
+            graph_attr: Graph attribute name (e.g., "lora_prefill_graph",
+                "prefill_graph")
+            phase: Model phase name (e.g., "prefill_for_lora", "prefill")
+            graph_name: JIT graph name (e.g., "prefill_for_lora", "prefill")
+            is_prefill: Whether it's prefill stage
+            input_ids: Input token ids
+            positions: Position information
+            intermediate_tensors: Intermediate tensors
+            inputs_embeds: Input embeddings
+            model_inputs: Model input parameters
+
+        Returns:
+            Model output
+        """
+        graph = getattr(self, graph_attr)
+        if graph is None:
+            set_model_context("is_prefill", is_prefill)
+            self.model._set_jit_graph_name(graph_name)
+            self.set_model_inputs(input_ids, positions, intermediate_tensors,
+                                  inputs_embeds)
+            graph = ms.jit(function=self.model, jit_level="O0")
+            setattr(self, graph_attr, graph)
+        self.model.phase = phase
+        return graph(**model_inputs)
+
     def exec_model(self,
                    input_ids: Tensor,
                    positions: Tensor,
@@ -681,31 +717,28 @@ class NativeModel(MsModelBase):
         if is_prefill and not self.has_prefill_warmup:
             self.has_prefill_warmup = True
 
-        # eager mode
+        # eager mode: direct execution without graph
         if self.is_eager_mode:
             set_model_context("is_prefill", is_prefill)
-            model_output = self.model(**model_inputs)
-            return model_output
+            return self.model(**model_inputs)
 
-        # graph mode
-        if is_prefill:
-            self.model.phase = "prefill"
-            if self.prefill_graph is None:
-                set_model_context("is_prefill", True)
-                self.model._set_jit_graph_name("prefill")
-                self.set_model_inputs(input_ids, positions,
-                                      intermediate_tensors, inputs_embeds)
-                self.prefill_graph = ms.jit(function=self.model,
-                                            jit_level="O0")
-            model_output = self.prefill_graph(**model_inputs)
-        else:
-            self.model.phase = "increment"
-            if self.decode_graph is None:
-                set_model_context("is_prefill", False)
-                self.model._set_jit_graph_name("decode")
-                self.set_model_inputs(input_ids, positions,
-                                      intermediate_tensors, inputs_embeds)
-                self.decode_graph = ms.jit(function=self.model, jit_level="O0")
-            model_output = self.decode_graph(**model_inputs)
+        # graph mode: select corresponding graph configuration based on LoRA
+        # and stage
+        has_lora = not get_model_context("no_lora")
 
-        return model_output
+        # Graph configuration mapping: (has_lora, is_prefill) -> (graph_attr,
+        # phase, graph_name)
+        graph_configs = {
+            (True, True):
+            ("lora_prefill_graph", "prefill_for_lora", "prefill_for_lora"),
+            (True, False):
+            ("lora_decode_graph", "increment_for_lora", "decode_for_lora"),
+            (False, True): ("prefill_graph", "prefill", "prefill"),
+            (False, False): ("decode_graph", "increment", "decode"),
+        }
+
+        graph_attr, phase, graph_name = graph_configs[(has_lora, is_prefill)]
+        return self._get_or_execute_graph(graph_attr, phase, graph_name,
+                                          is_prefill, input_ids, positions,
+                                          intermediate_tensors, inputs_embeds,
+                                          model_inputs)

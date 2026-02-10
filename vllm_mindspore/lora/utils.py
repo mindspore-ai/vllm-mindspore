@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Copyright 2025 Huawei Technologies Co., Ltd.
+# Copyright 2025-2026 Huawei Technologies Co., Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,3 +50,41 @@ _all_lora_classes: set[type[BaseLayerWithLoRA]] = {
     RowParallelLinearWithShardedLoRA,
     LinearScalingRotaryEmbeddingWithLoRA,
 }
+
+
+def replace_submodule(model, module_name, new_module):
+    """Replace a submodule in a model with a new module.
+
+    Sets name attributes for base_layer weights and biases.
+    For LoRA weights, only sets names in graph mode (where they are
+    Parameters). In eager mode, LoRA weights are tuples of Tensors and
+    don't need name attributes.
+    """
+    from mindspore import Parameter
+
+    parent = model.get_submodule(".".join(module_name.split(".")[:-1]))
+    target_name = module_name.split(".")[-1]
+    setattr(parent, target_name, new_module)
+
+    def _set_param_name(obj, attr, suffix):
+        """Helper to set parameter name if attribute exists and is not None."""
+        param = getattr(obj, attr, None)
+        if param is not None:
+            param.name = f"{module_name}.{suffix}"
+
+    # Set base_layer weight and bias names
+    _set_param_name(new_module.base_layer, 'weight', 'weight')
+    _set_param_name(new_module.base_layer, 'bias', 'bias')
+
+    # Set LoRA weight names (only in graph mode where they are Parameters)
+    lora_params = [
+        ('lora_a_stacked', 'lora_a_weight'),
+        ('lora_b_stacked', 'lora_b_weight'),
+        ('lora_bias_stacked', 'lora_bias'),
+    ]
+    for attr, suffix in lora_params:
+        param = getattr(new_module, attr, None)
+        if param is not None and isinstance(param, Parameter):
+            param.name = f"{module_name}.{suffix}"
+
+    return new_module

@@ -217,7 +217,7 @@ class MsAttentionMetadataBuilder:
               common_attn_metadata,
               fast_build: bool = False):
         """
-        fast_build disables AOT scheduling, used when there will be few 
+        fast_build disables AOT scheduling, used when there will be few
         iterations i.e. spec-decode
         """
         num_actual_tokens = common_attn_metadata.num_actual_tokens
