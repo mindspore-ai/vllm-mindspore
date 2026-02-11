@@ -9,10 +9,7 @@ set(LIBS
   MLIRRegisterAllPasses
   MLIRMrtDialect
   MLIRDvmDialect
-  MoptConversionStablehloToMrt
-  MoptStablehloToDvm
-  StablehloRegister
-  MoptFusionPasses
+  MoptConversionCommonToMrt
 )
 
 add_llvm_executable(mopt-opt

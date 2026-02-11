@@ -56,6 +56,3 @@ index 7d7e47fc..e1e117a8 100644
 +if(NOT TORCH_MLIR_BUILD_EMBEDDED)
 +  list(APPEND _source_components TorchMLIRSiteInitialize)
 +endif()
- 
- if(TORCH_MLIR_ENABLE_STABLEHLO)
-   list(APPEND _source_components StablehloPythonExtensions)

@@ -189,7 +189,7 @@ def Mrt_BroadcastShapeOp : Mrt_Op<"broadcast_shape", [Pure]> {
     standard broadcasting rules (PyTorch/NumPy style).
 
     This is primarily used to preserve dynamic broadcast shape information when
-    lowering StableHLO dynamic_broadcast_in_dim graphs to MRT, so that the target
+    lowering dynamic_broadcast graphs to MRT, so that the target
     expand size is computed at runtime instead of being materialized as a constant
     with dynamic sentinels.
   }];

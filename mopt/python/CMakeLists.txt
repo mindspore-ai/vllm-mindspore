@@ -48,18 +48,6 @@ set(_mopt_capi_libs
   MLIRCAPIRegisterEverything
 )
 
-# StableHLO library configuration
-# StableHLO is compiled by Torch-MLIR (TORCH_MLIR_ENABLE_STABLEHLO=ON)
-# Add core StableHLO libraries from Torch-MLIR build
-list(APPEND _mopt_private_libs
-  StablehloOps
-  ChloOps
-  VhloOps
-  StablehloBase
-)
-
-# StableHLO registered via Python extension, no need to define MOPT_ENABLE_STABLEHLO in C++
-
 file(GLOB PYTHON_EXT_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 
 declare_mlir_python_extension(MoptPythonExtension
@@ -81,17 +69,6 @@ set(_source_components
     MoptPythonExtension
 )
 
-# Add StableHLO Python extensions (compiled by Torch-MLIR)
-# This includes StableHLO CAPI in MoptAggregateCAPI
-list(APPEND _source_components
-  StablehloPythonSources
-  StablehloPythonExtensions
-  ChloPythonSources
-  ChloPythonExtensions
-  VhloPythonSources
-  VhloPythonExtensions
-)
-
 # Add Torch-MLIR Python extensions
 list(APPEND _source_components
   TorchMLIRPythonSources
@@ -109,32 +86,10 @@ add_mlir_python_common_capi_library(MoptAggregateCAPI
     MoptCAPI
 )
 
-# Ensure StableHLO and Torch-MLIR Python bindings are built before MoptAggregateCAPI
+# Ensure Torch-MLIR Python bindings are built before MoptAggregateCAPI
 # These Python bindings are generated in torch-mlir build directory
 # Add dependencies for all Python binding targets and extensions
 foreach(target_name
-    # StableHLO Python bindings
-    StablehloPythonSources.Dialects.stablehlo.ops_gen
-    StablehloPythonSources.Dialects.chlo.ops_gen
-    StablehloPythonSources.Dialects.check.ops_gen
-    StablehloPythonSources.Dialects.vhlo.ops_gen
-    StablehloPythonSources.Dialects.stablehlo
-    StablehloPythonSources.Dialects.chlo
-    StablehloPythonSources.Dialects.check
-    StablehloPythonSources.Dialects.vhlo
-    StablehloPythonSources.Dialects
-    StablehloPythonSources
-    StablehloPythonExtensions
-    ChloPythonSources.Dialects.chlo.ops_gen
-    ChloPythonSources.Dialects.chlo
-    ChloPythonSources.Dialects
-    ChloPythonSources
-    ChloPythonExtensions
-    VhloPythonSources.Dialects.vhlo.ops_gen
-    VhloPythonSources.Dialects.vhlo
-    VhloPythonSources.Dialects
-    VhloPythonSources
-    VhloPythonExtensions
     # Torch-MLIR Python bindings
     TorchMLIRPythonSources.Dialects.torch.ops_gen
     TorchMLIRPythonSources.Dialects.torch

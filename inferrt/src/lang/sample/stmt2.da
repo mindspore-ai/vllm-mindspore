@@ -1,4 +1,0 @@
-res = x + y / z + 13
-res = res + 1
-<< res
-print(res)

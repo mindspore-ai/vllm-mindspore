@@ -1,4 +1,5 @@
 """Tests for tensor getitem operation."""
+import pytest
 import torch
 
 from mrt.torch.fx_backend import backend
