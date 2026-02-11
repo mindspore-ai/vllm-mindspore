@@ -207,6 +207,9 @@ def is_op_registered_by_custom_or_torch(full_op_name: str) -> bool:
     """
     Check if the full_op_name is registered in the custom operator registry or torch.ops registry.
     """
+    if full_op_name is None:
+        return False
+
     if "." in full_op_name:
         op_namespace, op_name = full_op_name.rsplit(".", 1)
     elif "::" in full_op_name:

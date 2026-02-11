@@ -208,29 +208,29 @@ struct StepInfo {
 using StepInfoPtr = std::shared_ptr<StepInfo>;
 
 // Profiler macros
-#define MRT_PROFILER_START(startTime)                                                       \
-  do {                                                                                      \
-    if (MS_UNLIKELY(!mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) { \
-      startTime = mrt::profiler::ProfilerAnalyzer::GetInstance().GetTimeStamp();            \
-    }                                                                                       \
+#define MRT_PROFILER_START(startTime)                                                      \
+  do {                                                                                     \
+    if (MS_UNLIKELY(mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) { \
+      startTime = mrt::profiler::ProfilerAnalyzer::GetInstance().GetTimeStamp();           \
+    }                                                                                      \
   } while (0);
 
 #define MRT_PROFILER_END(startTime, module, event, opName, isInnerEvent)                                         \
   do {                                                                                                           \
-    if (MS_UNLIKELY(!mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) {                      \
+    if (MS_UNLIKELY(mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) {                       \
       auto endTime = mrt::profiler::ProfilerAnalyzer::GetInstance().GetTimeStamp();                              \
       mrt::profiler::ProfilerAnalyzer::GetInstance().RecordData(                                                 \
         std::make_shared<mrt::profiler::ProfilerData>(module, event, opName, isInnerEvent, startTime, endTime)); \
     }                                                                                                            \
   } while (0);
 
-#define MRT_PROFILER_STAGE_END(startTime, stage)                                            \
-  do {                                                                                      \
-    if (MS_UNLIKELY(!mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) { \
-      auto endTime = mrt::profiler::ProfilerAnalyzer::GetInstance().GetTimeStamp();         \
-      mrt::profiler::ProfilerAnalyzer::GetInstance().RecordData(                            \
-        std::make_shared<mrt::profiler::ProfilerData>(stage, startTime, endTime));          \
-    }                                                                                       \
+#define MRT_PROFILER_STAGE_END(startTime, stage)                                           \
+  do {                                                                                     \
+    if (MS_UNLIKELY(mrt::profiler::ProfilerAnalyzer::GetInstance().IsProfilerEnabled())) { \
+      auto endTime = mrt::profiler::ProfilerAnalyzer::GetInstance().GetTimeStamp();        \
+      mrt::profiler::ProfilerAnalyzer::GetInstance().RecordData(                           \
+        std::make_shared<mrt::profiler::ProfilerData>(stage, startTime, endTime));         \
+    }                                                                                      \
   } while (0);
 
 // Profiler recorder class for automatic profiling using RAII
@@ -299,6 +299,7 @@ class MRT_EXPORT ProfilerAnalyzer {
   // Process and dump data
   void ProcessData();
   void Clear();
+  void Reset();
 
  private:
   ProfilerAnalyzer() = default;

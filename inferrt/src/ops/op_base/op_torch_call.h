@@ -45,33 +45,39 @@ class OpTorchCall : public Operator {
   bool NeedLaunch() override;
 
  protected:
-  void ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) const;
+  void ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack);
   void ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack) const;
-  void ToMrtTensor(ir::Value *output, torch::jit::IValue ivalue) const;
+  void ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) const;
   bool MatchOpSchema(const std::vector<const ir::Value *> &inputs,
                      const std::shared_ptr<torch::jit::Operator> op) const;
   bool HasSharedStorageWithInput(const ir::Value *output, const ir::Value *input) const;
   std::string GetOpsExpr(const std::vector<const ir::Value *> &inputs) const;
   std::string GetAvailableTorchOps() const;
 
-  void ConvertTensorInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertDoubleInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertIntInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertBoolInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertStringInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertTupleInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
-  void ConvertNoneInputToStack(const ir::Value *value, torch::jit::Stack &stack) const;
+  void ConvertTensorInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertDoubleInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertIntInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertBoolInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertStringInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertTupleInputToStack(const ir::Value *value, torch::jit::Stack &stack);
+  void ConvertNoneInputToStack(const ir::Value *value, torch::jit::Stack &stack);
 
-  void ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertTensorTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertIntTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertBoolTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
-  void ConvertNoneTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack) const;
+  void ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertTensorTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertIntTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertBoolTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void ConvertNoneTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
+  void updateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor);
 
+  using ConvertInputsFunc = std::function<void(OpTorchCall *, const ir::Value *, torch::jit::Stack &)>;
+  using ConvertTupleFunc = std::function<void(OpTorchCall *, const ir::TuplePtr, torch::jit::Stack &)>;
   std::string qualifiedOpName_;
   torch::jit::Operation operation_ = nullptr;
+  std::vector<at::Tensor> atTensors_;
+  size_t tensorIdx_ = 0;
+  bool firstRun_ = true;
 };
 }  // namespace ops
 }  // namespace mrt

@@ -54,6 +54,11 @@ enum OpsErrorCode {
   UNKNOWN_ERROR = 1000
 };
 
+/**
+ * @brief Enumeration of the possible types a Operator can hold.
+ */
+enum OpType { MrtOp, CustomCallOp, TorchCallOp, PythonCallOp };
+
 // @brief Abstract base class representing a computational kernel. A Operator encapsulates the core computation logic
 // for a specific operator. Derived classes must implement shape inference and launch operations. Kernels of different
 // device types share the InferShape function, but need to implement their respective Launch functions.
@@ -61,6 +66,11 @@ class DA_API Operator {
  public:
   Operator() = default;
   virtual ~Operator() = default;
+
+  // Get the operator type.
+  OpType GetOpType() const { return opType_; }
+  // Set the operator type.
+  void SetOpType(OpType opType) { opType_ = opType; }
 
   /**
    * @brief Initialize the operator with input and output.
@@ -142,6 +152,9 @@ class DA_API Operator {
    * @return Whether the operator will be put into launch queue.
    */
   virtual bool NeedLaunch() { return true; }
+
+ private:
+  OpType opType_ = OpType::MrtOp;
 };
 }  // namespace ops
 }  // namespace mrt

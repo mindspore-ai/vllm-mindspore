@@ -208,10 +208,20 @@ void ProfilerAnalyzer::Clear() {
 
   // Dump JSON data
   DumpJsonData();
-  jsonInfos_.clear();
   data_.clear();
   dataLine_.clear();
+}
+
+void ProfilerAnalyzer::Reset() {
   init_ = false;
+  step_ = 0;
+  stepStartTime_ = 0;
+  stepTime_ = 0;
+  moduleTotalTime_ = 0;
+  showTopNum_ = 10;
+  data_.clear();
+  dataLine_.clear();
+  jsonInfos_.clear();
 }
 
 void ProfilerAnalyzer::SaveJsonData(const ProfilerDataPtr &data) {
