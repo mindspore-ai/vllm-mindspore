@@ -69,15 +69,25 @@ class OpTorchCall : public Operator {
   void ConvertDoubleTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
   void ConvertStringTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
   void ConvertNoneTupleToStack(const ir::TuplePtr tuple, torch::jit::Stack &stack);
-  void updateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor);
+  void UpdateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor);
 
-  using ConvertInputsFunc = std::function<void(OpTorchCall *, const ir::Value *, torch::jit::Stack &)>;
-  using ConvertTupleFunc = std::function<void(OpTorchCall *, const ir::TuplePtr, torch::jit::Stack &)>;
+  using ConvertInputsFunc = void (OpTorchCall::*)(const ir::Value *, torch::jit::Stack &);
+  using ConvertTupleFunc = void (OpTorchCall::*)(const ir::TuplePtr, torch::jit::Stack &);
+
+  // Jump tables for O(1) type dispatch
+  static const ConvertInputsFunc inputConverterTable[];
+  static const ConvertTupleFunc tupleConverterTable[];
+  static constexpr size_t kInputConverterCount = 8;
+  static constexpr size_t kTupleConverterCount = 8;
+
   std::string qualifiedOpName_;
   torch::jit::Operation operation_ = nullptr;
   std::vector<at::Tensor> atTensors_;
   size_t tensorIdx_ = 0;
   bool firstRun_ = true;
+
+  // Cache input converters to avoid runtime tag lookup
+  std::vector<ConvertInputsFunc> cachedInputConverters_;
 };
 }  // namespace ops
 }  // namespace mrt
