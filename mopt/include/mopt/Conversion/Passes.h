@@ -41,9 +41,6 @@ std::unique_ptr<Pass> createConvertArithToMRTPass();
 /// Create a pass to convert Torch operations to MRT dialect operations.
 std::unique_ptr<Pass> createConvertTorchToMRTPass();
 
-/// Create a pass to serialize DVM dialect graphs to JSON and replace with mrt.dvm_call.
-std::unique_ptr<Pass> createConvertDvmToMrtDvmCallPass();
-
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

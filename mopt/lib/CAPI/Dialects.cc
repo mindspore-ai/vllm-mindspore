@@ -18,11 +18,13 @@
 
 #include "mopt/Dialect/Mrt/MrtDialect.h"
 #include "mopt/Dialect/Mrt/Mrt.h"
+#include "mopt/Dialect/Dvm/DvmDialect.h"
 #include "mlir/CAPI/Registration.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir-c/BuiltinAttributes.h"
 
 MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Mrt, mrt, mrt::MrtDialect)
+MLIR_DEFINE_CAPI_DIALECT_REGISTRATION(Dvm, dvm, mlir::dvm::DvmDialect)
 
 bool mlirTypeIsAMrtTensorType(MlirType type) { return llvm::isa<mrt::TensorType>(unwrap(type)); }
 
