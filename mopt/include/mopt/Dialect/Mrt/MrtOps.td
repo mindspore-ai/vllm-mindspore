@@ -682,6 +682,54 @@ def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
   let genAclnnOp = "aclnnIndex";
 }
 
+def Mrt_InplaceAddOp : Mrt_Op<"inplace_add", [Pure]> {
+  let summary = "InplaceAdd operation";
+  let description = [{
+    In-place version of Add Op.
+    Add a tensor to self tensor. If both alpha and other are specified, each element of other is scaled by alpha before being used.
+    Computes: selfRef = selfRef + alpha * other
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $other `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceAdd";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
+def Mrt_InplaceAddScalarOp : Mrt_Op<"inplace_add_scalar", [Pure]> {
+  let summary = "InplaceAddScalar operation";
+  let description = [{
+    In-place version of AddScalar Op.
+    Add a scalar to self tensor. If both alpha and other are specified, each element of other is scaled by alpha before being used.
+    Computes: selfRef = selfRef + alpha * other
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $other `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceAdds";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
 def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
   let summary = "Copy operation";
   let description = [{
