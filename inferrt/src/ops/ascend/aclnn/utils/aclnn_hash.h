@@ -81,6 +81,28 @@ inline void GatherHash(const ir::ValuePtr &value) {
   }
 }
 
+inline void GatherHash(const ir::Value *value) {
+  if (value == nullptr) return;
+  if (value->IsTensor()) {
+    GatherHash(value->ToTensor());
+  } else if (value->IsInt()) {
+    GatherHash(value->ToInt());
+  } else if (value->IsDouble()) {
+    GatherHash(value->ToDouble());
+  } else if (value->IsBool()) {
+    GatherHash(value->ToBool());
+  } else if (value->IsString()) {
+    GatherHash(value->ToString());
+  }
+}
+
+// GatherHash for vector of raw pointers
+inline void GatherHash(const std::vector<const ir::Value *> &values) {
+  for (const auto *value : values) {
+    GatherHash(value);
+  }
+}
+
 // Gather tuple
 inline void GatherHash(const ir::TuplePtr &tuple) {
   if (tuple == nullptr || tuple->Size() == 0) {

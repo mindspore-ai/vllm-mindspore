@@ -1,0 +1,179 @@
+/**
+ * Copyright 2026 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "ops/ascend/atb/atb_adapter.h"
+#include <iostream>
+#include <map>
+
+namespace mrt {
+namespace ops {
+
+namespace {
+
+aclDataType ConvertToAclDataType(ir::DataType::Type type) {
+  static const std::map<ir::DataType::Type, aclDataType> kDataTypeToAclDataTypeMap = {
+    {ir::DataType::Type::Unknown, ACL_DT_UNDEFINED},
+    {ir::DataType::Type::Float16, ACL_FLOAT16},
+    {ir::DataType::Type::BFloat16, ACL_BF16},
+    {ir::DataType::Type::Float32, ACL_FLOAT},
+    {ir::DataType::Type::Float64, ACL_DOUBLE},
+    {ir::DataType::Type::Complex64, ACL_COMPLEX64},
+    {ir::DataType::Type::Int8, ACL_INT8},
+    {ir::DataType::Type::Int16, ACL_INT16},
+    {ir::DataType::Type::Int32, ACL_INT32},
+    {ir::DataType::Type::Int64, ACL_INT64},
+    {ir::DataType::Type::UInt8, ACL_UINT8},
+    {ir::DataType::Type::Bool, ACL_BOOL},
+    {ir::DataType::Type::QInt8, ACL_DT_UNDEFINED},
+    {ir::DataType::Type::QUInt4x2, ACL_DT_UNDEFINED},
+  };
+
+  auto it = kDataTypeToAclDataTypeMap.find(type);
+  if (it != kDataTypeToAclDataTypeMap.end()) {
+    return it->second;
+  }
+
+  LOG_EXCEPTION << "Failed to convert data type " << static_cast<int>(type) << " to ACL data type";
+  return ACL_DT_UNDEFINED;
+}
+
+atb::Tensor GetAtbTensor(const ir::Value *value) {
+  if (value == nullptr) {
+    return atb::Tensor{};
+  }
+
+  auto tensor = value->ToTensor();
+  CHECK_IF_NULL(tensor);
+
+  atb::Tensor atb_tensor;
+  const auto &shape = tensor->Shape();
+  const auto shape_size = shape.size();
+
+  atb_tensor.desc.dtype = ConvertToAclDataType(tensor->Dtype());
+  atb_tensor.desc.format = ACL_FORMAT_ND;
+  atb_tensor.desc.shape.dimNum = shape_size;
+  for (size_t i = 0; i < shape_size; i++) {
+    atb_tensor.desc.shape.dims[i] = static_cast<int32_t>(shape[i]);
+  }
+
+  atb_tensor.dataSize = tensor->Numel() * tensor->Dtype().GetSize();
+  atb_tensor.deviceData = tensor->DataPtr();
+
+  if (!tensor->IsContiguous()) {
+    LOG_EXCEPTION << "Only contiguous tensor is supported in atb now.";
+  }
+
+  return atb_tensor;
+}
+
+void UpdateAddress(ir::Tensor *tensor, atb::Tensor *atb_tensor) {
+  CHECK_IF_NULL(tensor);
+  CHECK_IF_NULL(atb_tensor);
+  atb_tensor->deviceData = tensor->DataPtr();
+}
+
+}  // namespace
+
+ParamSetter &ParamSetter::Input(const ir::Value *value) {
+  atb::Tensor tensor = GetAtbTensor(value);
+  variant_pack.inTensors.push_back(std::move(tensor));
+  return *this;
+}
+
+ParamSetter &ParamSetter::Input(std::optional<const ir::Value *> value) {
+  if (value.has_value()) {
+    return Input(value.value());
+  }
+  return Input(nullptr);
+}
+
+ParamSetter &ParamSetter::Output(const ir::Value *value) {
+  atb::Tensor tensor = GetAtbTensor(value);
+  variant_pack.outTensors.push_back(std::move(tensor));
+  return *this;
+}
+
+ParamSetter &ParamSetter::Output(std::optional<const ir::Value *> value) {
+  if (value.has_value()) {
+    return Output(value.value());
+  }
+  return Output(nullptr);
+}
+
+void ParamSetter::Update(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
+  CHECK_IF_NULL(output);
+
+  for (size_t i = 0; i < input_ids.size(); ++i) {
+    if (input_ids[i] >= inputs.size()) {
+      LOG_EXCEPTION << "Input index out of range: " << input_ids[i];
+    }
+    auto tensor = inputs[input_ids[i]]->ToTensor();
+    CHECK_IF_NULL(tensor);
+    UpdateAddress(tensor.get(), &(variant_pack.inTensors[i]));
+  }
+
+  std::vector<ir::TensorPtr> output_tensors;
+  if (output->IsTuple()) {
+    output_tensors = output->ToTuple()->ToTensorList();
+  } else {
+    auto tensor = output->ToTensor();
+    CHECK_IF_NULL(tensor);
+    output_tensors = {tensor};
+  }
+
+  for (size_t i = 0; i < output_ids.size(); ++i) {
+    if (output_ids[i] >= output_tensors.size()) {
+      LOG_EXCEPTION << "Output index out of range: " << output_ids[i];
+    }
+    UpdateAddress(output_tensors[output_ids[i]].get(), &(variant_pack.outTensors[i]));
+  }
+}
+
+AtbContextManager &AtbContextManager::GetInstance() {
+  static AtbContextManager instance;
+  return instance;
+}
+
+atb::Context *AtbContextManager::GetContext(const aclrtStream &stream) {
+  auto &atb_context = context_map_[stream];
+  if (atb_context == nullptr) {
+    auto create_status = atb::CreateContext(&atb_context);
+    if (create_status != 0) {
+      LOG_EXCEPTION << "Create atb context failed.";
+    }
+    auto set_status = atb_context->SetExecuteStream(stream);
+    if (set_status != 0) {
+      LOG_EXCEPTION << "Set atb context stream failed.";
+    }
+  }
+  return atb_context;
+}
+
+AtbContextManager::~AtbContextManager() {
+  for (auto &item : context_map_) {
+    if (item.second != nullptr) {
+      auto destroy_status = atb::DestroyContext(item.second);
+      if (destroy_status != 0) {
+        std::cerr << "Destroy atb context failed: " << destroy_status << std::endl;
+      }
+    }
+  }
+}
+
+atb::Context *GetAtbContext(const aclrtStream &stream) { return AtbContextManager::GetInstance().GetContext(stream); }
+
+}  // namespace ops
+}  // namespace mrt
