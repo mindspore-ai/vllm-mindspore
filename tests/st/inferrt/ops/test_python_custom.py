@@ -1,15 +1,18 @@
+"""Test module for Python custom operations with torch.compile."""
+
+from typing import List
+
 import pytest
 import torch
-from typing import List
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 from mrt.torch.fx_backend import backend as fx_backend
 from mrt.torch.fx_mlir_backend import backend as mlir_backend
 
-
 try:
     from vllm.utils import direct_register_custom_op, supports_custom_op
+
     VLLM_INSTALLED = True
 except ImportError:
     VLLM_INSTALLED = False
@@ -21,18 +24,20 @@ def scale_and_bias(x: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
     return x * 1.5 + bias
 
 
+# pylint: disable=unused-argument
 def scale_and_bias_fake(x: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
     return torch.empty(x.shape, dtype=x.dtype, device=x.device)
 
 
 def mixed_types_op(
-    x: torch.Tensor,
-    scale: float,
-    shift: int,
-    flag: bool,
-    label: str,
-    in_shapes: List[int],
+        x: torch.Tensor,
+        scale: float,
+        shift: int,
+        flag: bool,
+        label: str,
+        in_shapes: List[int],
 ) -> torch.Tensor:
+    """Perform mixed type operations on input tensor with various parameters. """
     y = x * scale + shift
     if flag:
         y = y * scale + shift
@@ -44,13 +49,14 @@ def mixed_types_op(
     return y
 
 
+# pylint: disable=unused-argument
 def mixed_types_op_fake(
-    x: torch.Tensor,
-    scale: float,
-    shift: int,
-    flag: bool,
-    label: str,
-    in_shapes: List[int],
+        x: torch.Tensor,
+        scale: float,
+        shift: int,
+        flag: bool,
+        label: str,
+        in_shapes: List[int],
 ) -> torch.Tensor:
     return torch.empty(x.shape, dtype=x.dtype, device=x.device)
 
@@ -82,6 +88,7 @@ def _should_skip_test():
 def get_op_func_compiled(backend):
     def custom_op_func(x, bias):
         return torch.ops.vllm.scale_and_bias(x, bias)
+
     return torch.compile(custom_op_func, backend=backend)
 
 
@@ -114,6 +121,7 @@ def test_python_custom_op(shape, backend):
 def _get_mixed_types_compiled(backend):
     def custom_op_func(x, scale, shift, flag, label, in_shapes):
         return torch.ops.vllm.mixed_types_op(x, scale, shift, flag, label, in_shapes)
+
     return torch.compile(custom_op_func, backend=backend)
 
 
@@ -144,3 +152,79 @@ def test_python_custom_op_mixed_types(shape, scale, shift, flag, label, in_shape
     npu_output = op_func_compiled(x_npu, scale, shift, flag, label, in_shapes)
 
     AssertRtolEqual(cpu_output, npu_output.detach().cpu())
+
+
+@pytest.mark.skipif(
+    _should_skip_test(),
+    reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
+)
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
+@pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
+def test_python_custom_op_cache_hit(shape, backend):
+    """
+    Feature: Test python custom op with cache hit
+    Description: Test cache hit scenario when using same input shape repeatedly
+    Expectation: The result is correct when backend conversion cache is hit
+    """
+    x_cpu = torch.randn(shape, dtype=torch.float16)
+    bias_cpu = torch.randn(shape, dtype=torch.float16)
+
+    x_npu = x_cpu.clone().npu()
+    bias_npu = bias_cpu.clone().npu()
+
+    # Additional tensors with same shape for cache hit verification
+    x_npu_2 = torch.randn(shape, dtype=torch.float16).npu()
+    bias_npu_2 = torch.randn(shape, dtype=torch.float16).npu()
+
+    op_func_compiled = get_op_func_compiled(backend)
+
+    # First call: establishes cache entry for this shape
+    npu_output_1 = op_func_compiled(x_npu, bias_npu)
+
+    # Second call: same shape, should hit cache
+    npu_output_2 = op_func_compiled(x_npu_2, bias_npu_2)
+
+    # Verify both outputs against CPU reference
+    cpu_output_1 = scale_and_bias(x_cpu, bias_cpu)
+    cpu_output_2 = scale_and_bias(x_npu_2.cpu(), bias_npu_2.cpu())
+
+    AssertRtolEqual(cpu_output_1, npu_output_1.detach().cpu())
+    AssertRtolEqual(cpu_output_2, npu_output_2.detach().cpu())
+
+
+@pytest.mark.skipif(
+    _should_skip_test(),
+    reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
+)
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
+def test_python_custom_op_cache_miss(backend):
+    """
+    Feature: Test python custom op with cache miss
+    Description: Test cache miss scenario when input shapes change dynamically
+    Expectation: The result is correct when backend conversion cache misses
+    """
+    op_func_compiled = get_op_func_compiled(backend)
+
+    # First call: shape [128, 4096]
+    shape_1 = [128, 4096]
+    x_cpu_1 = torch.randn(shape_1, dtype=torch.float16)
+    bias_cpu_1 = torch.randn(shape_1, dtype=torch.float16)
+    x_npu_1 = x_cpu_1.clone().npu()
+    bias_npu_1 = bias_cpu_1.clone().npu()
+
+    npu_output_1 = op_func_compiled(x_npu_1, bias_npu_1)
+    cpu_output_1 = scale_and_bias(x_cpu_1, bias_cpu_1)
+    AssertRtolEqual(cpu_output_1, npu_output_1.detach().cpu())
+
+    # Second call: different shape [32, 1024], triggers cache miss
+    shape_2 = [32, 1024]
+    x_cpu_2 = torch.randn(shape_2, dtype=torch.float16)
+    bias_cpu_2 = torch.randn(shape_2, dtype=torch.float16)
+    x_npu_2 = x_cpu_2.clone().npu()
+    bias_npu_2 = bias_cpu_2.clone().npu()
+
+    npu_output_2 = op_func_compiled(x_npu_2, bias_npu_2)
+    cpu_output_2 = scale_and_bias(x_cpu_2, bias_cpu_2)
+    AssertRtolEqual(cpu_output_2, npu_output_2.detach().cpu())
