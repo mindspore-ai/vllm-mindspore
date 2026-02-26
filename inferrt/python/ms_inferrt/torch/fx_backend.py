@@ -112,7 +112,7 @@ def embedding_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def muls_hook(node, input_nodes, executor):
     """swap the first and second param position."""
-    if isinstance(node.args[0], (int, float)):
+    if _is_scalar_arg(node.args[0]):
         return [input_nodes[1], input_nodes[0]]
     return input_nodes
 
@@ -328,6 +328,16 @@ def chunk_arg_hook(node, input_nodes, executor):
     return [input_tensor, split_sizes, dim_int]
 
 
+def _is_scalar_arg(arg):
+    """Check if the argument is a scalar type (int, float, bool, torch.SymInt)."""
+    if isinstance(arg, (int, float, bool, torch.SymInt)):
+        return True
+    if isinstance(arg, Node):
+        if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
+            return True
+    return False
+
+
 # pylint: disable=unused-argument
 def split_ops_hook(op, node, input_nodes, executor):
     """
@@ -373,7 +383,7 @@ def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def ge_op_hook(op, node, input_nodes, executor):
     """Get the ge op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.ge_scalar
     return Op.ge
 
@@ -381,15 +391,23 @@ def ge_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def lt_op_hook(op, node, input_nodes, executor):
     """Get the lt op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.lt_scalar
     return Op.lt
 
 
 # pylint: disable=unused-argument
+def sub_op_hook(op, node, input_nodes, executor):
+    """Get the sub op for a given node."""
+    if _is_scalar_arg(node.args[1]):
+        return Op.sub_scalar
+    return Op.sub
+
+
+# pylint: disable=unused-argument
 def mul_op_hook(op, node, input_nodes, executor):
     """Get the mul op for a given node."""
-    if isinstance(node.args[0], (int, float)) or isinstance(node.args[1], (int, float)):
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
         return Op.muls
     return Op.mul
 
@@ -429,6 +447,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
+    register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
     register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
 

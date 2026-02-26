@@ -1753,6 +1753,28 @@ def Mrt_SubOp : Mrt_Op<"sub", [Pure]> {
   let genAclnnOp = "aclnnSub";
 }
 
+def Mrt_SubScalarOp : Mrt_Op<"sub_scalar", [Pure]> {
+  let summary = "aclnnSubs";
+  let description = [{
+    Element-wise subtraction of two tensors with an optional alpha scaling factor.
+    Computes: result = x - y * alpha
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_ScalarType:$y,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $y `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSubs";
+}
+
 def Mrt_SwiGluOp : Mrt_Op<"swiglu"> {
   let summary = "aclnnSwiGlu";
   let description = [{
