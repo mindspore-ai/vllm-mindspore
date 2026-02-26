@@ -331,7 +331,5 @@ ir::ValuePtr AclnnLinear::CreateScalarValueOne(ir::DataType dtype) {
   }
 }
 
-// Register the operator
-MRT_REG_OP(linear, AclnnLinear, Ascend);
 }  // namespace ops
 }  // namespace mrt

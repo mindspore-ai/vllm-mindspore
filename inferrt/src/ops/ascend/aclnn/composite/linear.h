@@ -23,7 +23,7 @@
 
 namespace mrt {
 namespace ops {
-class AclnnLinear : public Operator {
+class MRT_EXPORT AclnnLinear : public Operator {
  public:
   AclnnLinear() {
     // Initialize executors for different operations
