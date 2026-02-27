@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Mrt, mrt);
+MLIR_DECLARE_CAPI_DIALECT_REGISTRATION(Dvm, dvm);
 
 // Mrt TensorType CAPI
 MLIR_CAPI_EXPORTED bool mlirTypeIsAMrtTensorType(MlirType type);

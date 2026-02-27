@@ -39,9 +39,17 @@ from mrt.torch.utils import (
 from mrt.torch._decompositions import apply_decompositions
 from mrt.torch._executor_builder import ExecutorBuilder
 
+try:
+    import mfusion  # pylint: disable=import-outside-toplevel,unused-import
+
+    MFUSION_AVAILABLE = True
+except ImportError:
+    MFUSION_AVAILABLE = False
+
 
 def _is_print_ir_enabled() -> bool:
     return os.environ.get("MOPT_PRINT_IR") == "1"
+
 
 def _sanitize_filename(s: str) -> str:
     s = s.strip().lower()
@@ -152,7 +160,13 @@ def _print_verbose(
 
 
 def _run_pipeline(
-    mlir_module, pass_manager, pipeline: str, *, stage: str, verbose: bool, dump_ctx: Optional[_DumpContext]
+    mlir_module,
+    pass_manager,
+    pipeline: str,
+    *,
+    stage: str,
+    verbose: bool,
+    dump_ctx: Optional[_DumpContext],
 ):
     """Run an MLIR pass pipeline and optionally dump the IR."""
     with mlir_module.context:
@@ -160,7 +174,9 @@ def _run_pipeline(
         pm.run(mlir_module.operation)
     if dump_ctx is not None:
         dump_ctx.dump_text(f"{stage} (pipeline)", pipeline, ext="pipeline.txt")
-    _print_verbose(stage, mlir_module, enabled=verbose, dump_ctx=dump_ctx, dump_ext="mlir")
+    _print_verbose(
+        stage, mlir_module, enabled=verbose, dump_ctx=dump_ctx, dump_ext="mlir"
+    )
 
 
 def _get_var_to_range(gm: torch.fx.GraphModule):
@@ -218,15 +234,18 @@ def _parse_mlir_module_from_text(text: str):
     # Reason: mopt must be imported here to prevent default loading at module level
     from mopt import ir
     from mopt.dialects import torch as torch_d
-    from mopt import register_mrt_dialect
+    from mopt import register_mrt_dialect, register_dvm_dialect
 
     ctx = ir.Context()
     torch_d.register_dialect(ctx)
     register_mrt_dialect(ctx)
+    register_dvm_dialect(ctx)
     return ir.Module.parse(text, ctx)
 
 
-def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=invalid-name, unused-argument
+def backend(
+    gm: torch.fx.GraphModule, _example_inputs
+):  # pylint: disable=invalid-name, unused-argument
     """FX backend entry point: FX GraphModule -> StableHLO -> MRT dialect -> GraphExecutor.
 
     Args:
@@ -311,6 +330,20 @@ def backend(gm: torch.fx.GraphModule, _example_inputs):  # pylint: disable=inval
         stage="Torch Backend IR",
     )
 
+    # ===== MFusion Optimization =====
+    if MFUSION_AVAILABLE:
+        from mfusion.torch.inductor import fuse_and_optimize
+
+        optimized_mlir_str = fuse_and_optimize(str(mlir_module))
+        mlir_module = _parse_mlir_module_from_text(optimized_mlir_str)
+        _print_verbose(
+            "MFusion Processed Module",
+            mlir_module,
+            enabled=opts.print_ir,
+            dump_ctx=dump_ctx,
+            dump_ext="mlir",
+        )
+
     # ===== Final Conversion =====
     # Convert remaining Torch backend ops to MRT dialect and reconcile type casts.
     run_pipeline(
@@ -359,7 +392,9 @@ def _get_device_info_from_gm(gm: torch.fx.GraphModule):
                 device = val.device
                 device_type_str = str(device.type)
                 # Handle device type string
-                device_str = "npu" if device_type_str in ("npu", "privateuse1") else "cpu"
+                device_str = (
+                    "npu" if device_type_str in ("npu", "privateuse1") else "cpu"
+                )
                 device_index = getattr(device, "index", -1)
                 if device_index is None:
                     device_index = -1

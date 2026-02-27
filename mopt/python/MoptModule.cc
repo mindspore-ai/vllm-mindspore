@@ -42,6 +42,17 @@ PYBIND11_MODULE(_mopt, m) {
     },
     py::arg("context"), py::arg("load") = true, "Register MRT dialect");
 
+  m.def(
+    "register_dvm_dialect",
+    [](MlirContext context, bool load) {
+      MlirDialectHandle handle = mlirGetDialectHandle__dvm__();
+      mlirDialectHandleRegisterDialect(handle, context);
+      if (load) {
+        mlirDialectHandleLoadDialect(handle, context);
+      }
+    },
+    py::arg("context"), py::arg("load") = true, "Register DVM dialect");
+
   // Bind Mrt::DeviceAttr through CAPI
   auto deviceAttrClass =
     mlir_attribute_subclass(m, "DeviceAttr", mlirAttributeIsAMrtDeviceAttr, mlirMrtDeviceAttrGetTypeID)

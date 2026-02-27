@@ -34,34 +34,4 @@ def ConvertTorchToMRT : Pass<"convert-torch-to-mrt", "::mlir::ModuleOp"> {
   ];
 }
 
-//===----------------------------------------------------------------------===//
-// DvmToMrt conversion pass
-//===----------------------------------------------------------------------===//
-
-def ConvertDvmToMrtDvmCall : Pass<"convert-dvm-to-mrt-dvm-call", "::mlir::ModuleOp"> {
-  let summary = "Serialize DVM dialect graphs to JSON and replace with mrt.dvm_call";
-
-  let description = [{
-    This pass converts a func.func whose body consists of DVM dialect operations
-    (dvm.load/dvm.store/dvm.unary/dvm.binary/dvm.matmul/...) into a single
-    mrt.dvm_call operation with a JSON payload compatible with the runtime
-    OpDvmCall parser.
-  }];
-
-  let options = [
-    Option<"kernelType", "kernel-type", "std::string", "\"dyn_shape\"",
-           "kernel_type string emitted into the JSON payload (e.g. 'static_shape', 'dyn_shape')">,
-    Option<"indent", "indent", "unsigned", "4",
-           "JSON pretty-print indentation (0 for compact output)">
-  ];
-
-  let constructor = "mlir::createConvertDvmToMrtDvmCallPass()";
-
-  let dependentDialects = [
-    "::mlir::dvm::DvmDialect",
-    "::mrt::MrtDialect",
-    "::mlir::func::FuncDialect"
-  ];
-}
-
 #endif // MOPT_CONVERSION_PASSES
