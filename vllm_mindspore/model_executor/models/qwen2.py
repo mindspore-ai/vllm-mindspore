@@ -61,7 +61,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import \
 from vllm_mindspore.model_executor.models.model_base import (NativeModel)
 from vllm_mindspore.model_executor.models.utils import (
     PPMissingLayer, make_empty_intermediate_tensors_factory, make_layers,
-    maybe_prefix)
+    maybe_prefix, AutoWeightsLoaderMS)
 from vllm_mindspore.model_executor.models.sparse_quant_weight_loader import (
     load_split_weights)
 from vllm_mindspore.utils import is_310p
@@ -480,7 +480,7 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
                                 prefix=maybe_prefix(prefix, "model"))
 
         if get_pp_group().is_last_rank:
-            if config.tie_word_embeddings:
+            if config.tie_word_embeddings and not is_310p():
                 self.lm_head = self.model.embed_tokens
             else:
                 self.lm_head = ParallelLMHead(config.vocab_size,
@@ -515,8 +515,12 @@ class Qwen2ForCausalLM(NativeModel, SupportsLoRA, SupportsPP):
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        self.model.load_weights(weights, params_dict)
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)
 
     def compute_logits(
         self,

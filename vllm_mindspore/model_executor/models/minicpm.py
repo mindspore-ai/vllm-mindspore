@@ -64,7 +64,8 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
-    make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+    AutoWeightsLoaderMS, make_empty_intermediate_tensors_factory, make_layers,
+    maybe_prefix)
 from vllm_mindspore.v1.attention import Attention
 
 
@@ -519,11 +520,12 @@ class MiniCPMForCausalLM(NativeModel):
         return hidden_states
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        load_params = self.model.load_weights(weights, params_dict)
-        if self.config.tie_word_embeddings:
-            load_params.add("lm_head.weight")
-        return load_params
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)
 
     def compute_logits(
         self,

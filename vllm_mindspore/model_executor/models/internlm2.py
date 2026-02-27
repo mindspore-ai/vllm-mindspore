@@ -70,7 +70,7 @@ from vllm_mindspore.model_executor.model_loader.weight_utils import (
     default_weight_loader)
 from vllm_mindspore.model_executor.models.model_base import NativeModel
 from vllm_mindspore.model_executor.models.utils import (
-    PPMissingLayer, is_pp_missing_parameter,
+    AutoWeightsLoaderMS, PPMissingLayer, is_pp_missing_parameter,
     make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
 
 logger = init_logger(__name__)
@@ -581,8 +581,12 @@ class InternLM2ForCausalLM(NativeModel):
         return logits
 
     def load_weights(self, weights: Iterable[tuple[str, Tensor]]) -> set[str]:
-        params_dict = self.get_params_dict()
-        self.model.load_weights(weights, params_dict)
+        loader = AutoWeightsLoaderMS(
+            self,
+            skip_prefixes=(["lm_head."]
+                           if self.config.tie_word_embeddings else None),
+        )
+        return loader.load_weights(weights)
 
     def sample(self, logits: Tensor,
                sampling_metadata: SamplingMetadata) -> Optional[SamplerOutput]:

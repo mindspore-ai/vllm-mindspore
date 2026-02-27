@@ -37,7 +37,6 @@ from vllm_mindspore.distributed.communication_op import (
     ReduceFromModelParallelRegion)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     get_loaded_weight, split_loaded_weight)
-from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
 DEFAULT_VOCAB_PADDING_SIZE = 64
 
@@ -75,10 +74,6 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
 
     def embedding(self, layer: nn.Cell, input_: Tensor) -> Tensor:
         return mint.index_select(layer.weight, 0, input_)
-
-    def process_weights_after_loading(self, layer):
-        if isinstance(layer, ParallelLMHead) and is_310p():
-            set_weight_format_to_nz(layer.weight)
 
 
 def get_masked_input_and_mask(
@@ -239,6 +234,14 @@ class VocabParallelEmbedding(nn.Cell):
         if quant_method is None:
             quant_method = UnquantizedEmbeddingMethod()
 
+        self.is_sparse_quant = False
+        # Check if sparse quantization is enabled. Sparse quantized weights are
+        # partitioned and stored separately by device rank (e.g., 'rank_0').
+        if quant_config is not None and hasattr(
+                quant_config, 'config') and 'W8A8S' in quant_config.config.get(
+                    'rank_0', {}).values():
+            self.is_sparse_quant = True
+
         # If we are making an embedding layer, then our quantization linear
         # method must implement the embedding operation. If we are another
         # layer type like ParallelLMHead, this is not important.
@@ -339,6 +342,11 @@ class VocabParallelEmbedding(nn.Cell):
         return output
 
     def weight_loader(self, param: Parameter, loaded_weight: Tensor):
+        if self.is_sparse_quant:
+            loaded_weight = split_loaded_weight(loaded_weight, None, None,
+                                                None)
+            param.set_data(ms.from_numpy(loaded_weight))
+            return
         output_dim = getattr(param, "output_dim", None)
         get_tensor_model_parallel_rank()
         # If parameter does not have output dim, then it should

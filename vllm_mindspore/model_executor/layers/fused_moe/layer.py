@@ -41,7 +41,6 @@ from vllm_mindspore.model_executor.layers.fused_moe.fused_moe import (
     FusedExperts, fused_topk, grouped_topk)
 from vllm_mindspore.model_executor.model_loader.weight_utils import (
     get_loaded_weight, split_loaded_weight)
-from vllm_mindspore.utils import is_310p, set_weight_format_to_nz
 
 logger = init_logger(__name__)
 
@@ -107,11 +106,6 @@ class UnquantizedFusedMoEMethod(FusedMoEMethodBase, nn.Cell):
         layer.insert_param_to_cell("w2_weight", w2_weight)
         set_weight_attrs(w2_weight, extra_weight_attrs)
         set_weight_attrs(w2_weight, {"is_transposed": True})
-
-    def process_weights_after_loading(self, layer):
-        if is_310p():
-            set_weight_format_to_nz(layer.w13_weight)
-            set_weight_format_to_nz(layer.w2_weight)
 
     def apply(
         self,
