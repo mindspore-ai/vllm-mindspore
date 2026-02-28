@@ -17,6 +17,7 @@
 #include "ops/op_base/op_python_call.h"
 #include <cstddef>
 #include <cstring>
+#include "ir/value/value.h"
 #include "ops/utils/data_convert.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "hardware/hardware_abstract/device_context.h"
@@ -63,15 +64,13 @@ void UpdateAtenTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor) {
 py::function GetPythonCallable(const std::string &moduleName, const std::string &funcName) {
   py::gil_scoped_acquire gil;
   try {
-    py::module_ mod = py::module_::import(moduleName.c_str());
-    py::object func = mod.attr(funcName.c_str());
-    if (!func.is_none()) {
-      return func.cast<py::function>();
-    }
-
     if (moduleName.rfind(kTorchOpsInnerModule, 0) != 0) {
-      LOG_EXCEPTION << "Python callable only supports '" << kTorchOpsInnerModule << "' prefix, got: " << moduleName;
-      return {};
+      py::module_ mod = py::module_::import(moduleName.c_str());
+      py::object func = mod.attr(funcName.c_str());
+      if (func.is_none()) {
+        LOG_EXCEPTION << "attribute '" + funcName + "' is None";
+      }
+      return func.cast<py::function>();
     }
 
     std::string subModuleName = moduleName.substr(strlen(kTorchOpsInnerModule));
@@ -86,7 +85,7 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
 
     py::module_ torchOps = py::module_::import(kTorchOpsModule);
     py::object subMod = torchOps.attr(subModuleName.c_str());
-    func = subMod.attr(funcName.c_str());
+    auto func = subMod.attr(funcName.c_str());
     if (func.is_none()) {
       LOG_EXCEPTION << "attribute '" + funcName + "' is None";
     }
@@ -124,6 +123,143 @@ void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor,
     launchOpFunc(logPrefix, launchTask, false);
   } else {
     (void)launchTask();
+  }
+}
+
+OpsErrorCode CopyTensorOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix,
+                              device::DeviceContext *devCtx) {
+  at::Tensor aten;
+  try {
+    aten = pyElem.cast<at::Tensor>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " is not a torch.Tensor";
+    return UNKNOWN_ERROR;
+  }
+  ir::TensorPtr irTensor = const_cast<ir::TensorPtr &>(irElem->ToTensor());
+  if (!irTensor) {
+    LOG_EXCEPTION << logPrefix << " output tensor pointer is null.";
+    return UNKNOWN_ERROR;
+  }
+  AttachAtenTensorCopy(aten, irTensor, logPrefix, devCtx);
+  return SUCCESS;
+}
+
+OpsErrorCode CopyIntOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix) {
+  int64_t v;
+  try {
+    v = pyElem.cast<int64_t>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " cannot convert to int64";
+    return UNKNOWN_ERROR;
+  }
+  *irElem = ir::Value(v);
+  return SUCCESS;
+}
+
+OpsErrorCode CopyDoubleOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix) {
+  double v;
+  try {
+    v = pyElem.cast<double>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " cannot convert to double";
+    return UNKNOWN_ERROR;
+  }
+  *irElem = ir::Value(v);
+  return SUCCESS;
+}
+
+OpsErrorCode CopyBoolOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix) {
+  bool v;
+  try {
+    v = pyElem.cast<bool>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " cannot convert to bool";
+    return UNKNOWN_ERROR;
+  }
+  *irElem = ir::Value(v);
+  return SUCCESS;
+}
+
+OpsErrorCode CopyStringOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix) {
+  std::string v;
+  try {
+    v = pyElem.cast<std::string>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " cannot convert to string";
+    return UNKNOWN_ERROR;
+  }
+  *irElem = ir::Value(std::move(v));
+  return SUCCESS;
+}
+
+OpsErrorCode CopyNoneOutput(py::handle pyElem, const std::string &logPrefix) {
+  if (!pyElem.is_none()) {
+    LOG_EXCEPTION << logPrefix << " expects None but got non-None";
+    return UNKNOWN_ERROR;
+  }
+  return SUCCESS;
+}
+
+OpsErrorCode CopySymbolOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix) {
+  int64_t v;
+  try {
+    v = pyElem.cast<int64_t>();
+  } catch (...) {
+    LOG_EXCEPTION << logPrefix << " cannot convert to int64 for Symbol output";
+    return UNKNOWN_ERROR;
+  }
+  *irElem = ir::Value(ir::MakeIntrusive<ir::SymbolicConst>(v));
+  return SUCCESS;
+}
+
+OpsErrorCode CopyPyElemToIrOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix,
+                                  device::DeviceContext *devCtx);
+
+OpsErrorCode CopyTupleOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix,
+                             device::DeviceContext *devCtx) {
+  if (!py::isinstance<py::tuple>(pyElem)) {
+    LOG_EXCEPTION << logPrefix << " expects Python tuple";
+    return UNKNOWN_ERROR;
+  }
+  py::tuple pyTup = pyElem.cast<py::tuple>();
+  const auto &irTup = irElem->ToTuple();
+  if (irTup->Size() != pyTup.size()) {
+    LOG_EXCEPTION << logPrefix << " tuple size mismatch: expect " << irTup->Size() << ", got " << pyTup.size();
+    return UNKNOWN_ERROR;
+  }
+  for (size_t j = 0; j < pyTup.size(); ++j) {
+    auto elemLogPrefix = logPrefix + "[" + std::to_string(j) + "]";
+    auto ret = CopyPyElemToIrOutput(pyTup[j], (*irTup)[j].get(), elemLogPrefix, devCtx);
+    if (ret != SUCCESS) {
+      return ret;
+    }
+  }
+  return SUCCESS;
+}
+
+// Helper: copy Python value to IR output element based on expected IR type.
+OpsErrorCode CopyPyElemToIrOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix,
+                                  device::DeviceContext *devCtx) {
+  switch (irElem->GetTag()) {
+    case ir::Value::Tag::Tensor:
+      return CopyTensorOutput(pyElem, irElem, logPrefix, devCtx);
+    case ir::Value::Tag::Int:
+      return CopyIntOutput(pyElem, irElem, logPrefix);
+    case ir::Value::Tag::Double:
+      return CopyDoubleOutput(pyElem, irElem, logPrefix);
+    case ir::Value::Tag::Bool:
+      return CopyBoolOutput(pyElem, irElem, logPrefix);
+    case ir::Value::Tag::String:
+      return CopyStringOutput(pyElem, irElem, logPrefix);
+    case ir::Value::Tag::None:
+      return CopyNoneOutput(pyElem, logPrefix);
+    case ir::Value::Tag::Tuple:
+      return CopyTupleOutput(pyElem, irElem, logPrefix, devCtx);
+    case ir::Value::Tag::Symbol:
+      return CopySymbolOutput(pyElem, irElem, logPrefix);
+    default:
+      LOG_EXCEPTION << logPrefix << " unsupported IR output tag";
+      return UNKNOWN_ERROR;
   }
 }
 }  // namespace
@@ -267,36 +403,28 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
       LOG_EXCEPTION << "PythonCall op " << opName_ << " expects tuple but IR output is not tuple.";
     }
     py::tuple tup = result.cast<py::tuple>();
-    auto irList = output->ToTuple()->ToTensorList();
-    if (irList.size() != tup.size()) {
-      LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple size mismatch: expect " << irList.size() << ", got "
+    const auto &irTup = output->ToTuple();
+    if (irTup->Size() != tup.size()) {
+      LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple size mismatch: expect " << irTup->Size() << ", got "
                     << tup.size();
     }
     for (size_t i = 0; i < tup.size(); ++i) {
-      at::Tensor aten;
-      try {
-        aten = tup[i].cast<at::Tensor>();
-      } catch (...) {
-        LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple[" << i << "] is not a torch.Tensor";
+      auto ret = CopyPyElemToIrOutput(tup[i], (*irTup)[i].get(),
+                                      "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]", dev_ctx_);
+      if (ret != SUCCESS) {
+        return ret;
       }
-      AttachAtenTensorCopy(aten, irList[i], "PythonCall op " + opName_ + " tuple[" + std::to_string(i) + "]", dev_ctx_);
     }
-    LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " tensors into output tuple.";
+    LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " elements into output tuple.";
     return SUCCESS;
   }
 
-  at::Tensor aten;
-  try {
-    aten = result.cast<at::Tensor>();
-  } catch (...) {
-    LOG_EXCEPTION << "PythonCall op " << opName_ << " result is not a torch.Tensor";
+  // Single output: reuse CopyPyElemToIrOutput to support all types (Tensor, Int, Double, Bool, String, None)
+  auto ret = CopyPyElemToIrOutput(result, output, "PythonCall op " + opName_, dev_ctx_);
+  if (ret != SUCCESS) {
+    return ret;
   }
-  ir::TensorPtr irTensor = output->ToTensor();
-  if (!irTensor) {
-    LOG_EXCEPTION << "PythonCall op " << opName_ << " output tensor pointer is null.";
-  }
-  AttachAtenTensorCopy(aten, irTensor, "PythonCall op " + opName_, dev_ctx_);
-  LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached single at::Tensor data ptr.";
+  LOG_OUT << "PythonCall op " << opName_ << " copied single output to IR.";
   return SUCCESS;
 }
 
