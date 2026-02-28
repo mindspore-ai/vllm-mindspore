@@ -295,13 +295,14 @@ def Mrt_ContiguousOp : Mrt_Op<"contiguous", [Pure]> {
   }];
 
   let arguments = (ins
-    MrtAnyTensor:$input
+    MrtAnyTensor:$input,
+    Optional<Mrt_I64Type>:$memory_format
   );
 
   let results = (outs MrtAnyTensor:$result);
 
   let assemblyFormat = [{
-    $input
+    $input (`,` $memory_format^)?
     attr-dict `:` functional-type(operands, results)
   }];
 }

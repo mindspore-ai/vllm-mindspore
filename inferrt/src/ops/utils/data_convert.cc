@@ -253,10 +253,17 @@ bool IsTorchTensorStandardLayout(const at::Tensor &atTensor) {
   if (!atTensor.is_contiguous() || atTensor.storage_offset() != 0) {
     return false;
   }
+  switch (atTensor.device().type()) {
+    case at::DeviceType::CPU:
+      return true;
 #ifdef ENABLE_TORCH_NPU
-  return IsBaseFormat(static_cast<ir::MemoryFormat>(at_npu::native::get_npu_format(atTensor)));
+    case at::DeviceType::PrivateUse1:
+      return IsBaseFormat(static_cast<ir::MemoryFormat>(at_npu::native::get_npu_format(atTensor)));
 #endif
-  return true;
+    default:
+      LOG_EXCEPTION << "Unsupported DeviceType " << atTensor.device().str();
+  }
+  return false;
 }
 
 }  // namespace mrt::ops

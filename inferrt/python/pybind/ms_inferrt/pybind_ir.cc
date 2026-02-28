@@ -26,6 +26,7 @@
 
 #include "common/intrusive_ptr_caster.h"
 #include "runtime/executor/executor.h"
+#include "runtime/op_support.h"
 #include "ir/graph.h"
 #include "ir/value/value.h"
 #include "ir/tensor/tensor.h"
@@ -186,4 +187,12 @@ NB_MODULE(_ms_inferrt_ir, m) {  // #lizard forgives
     .def("add_op_node", &GraphExecutor::AddOpNode, nb::arg("op"), nb::arg("inputs"), nb::arg("output") = nullptr,
          nb::rv_policy::reference)
     .def("add_value_node", &GraphExecutor::AddValueNode, nb::arg("value") = nullptr, nb::rv_policy::reference);
+
+  m.def(
+    "check_op_support",
+    [](const std::string &opName, const ir::ValuePtr &outputValue, const std::vector<ir::ValuePtr> &inputValues) {
+      const auto result = mrt::runtime::checkOpSupport(opName, outputValue, inputValues);
+      return nb::make_tuple(static_cast<int32_t>(result.status), result.message);
+    },
+    nb::arg("op_name"), nb::arg("output_value"), nb::arg("input_values"));
 }

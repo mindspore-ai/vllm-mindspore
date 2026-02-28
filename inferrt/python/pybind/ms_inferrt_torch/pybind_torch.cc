@@ -423,6 +423,7 @@ nb::object ToTorchTensorWrapper(const ir::TensorPtr &tensor) {
   pybind11::object po = pybind11::cast(t);
   return nb::steal(po.release().ptr());
 }
+
 }  // namespace
 
 NB_MODULE(_ms_inferrt_torch, m) {
