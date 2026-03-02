@@ -129,10 +129,31 @@ def embedding_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
-def muls_hook(node, input_nodes, executor):
-    """swap the first and second param position."""
-    if _is_scalar_arg(node.args[0]):
-        return [input_nodes[1], input_nodes[0]]
+def binary_scalar_swap_hook(node, input_nodes, executor):
+    """Swap tensor and scalar arguments for binary operations.
+
+    When the first argument is a scalar and the second is a tensor,
+    swap their positions to match the expected (tensor, scalar) order.
+    """
+    if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
+        return [input_nodes[1], input_nodes[0]] + input_nodes[2:]
+    return input_nodes
+
+
+# pylint: disable=unused-argument
+def binary_scalar_order_hook(node, input_nodes, executor):
+    """Handle binary operations where argument order must be preserved.
+
+    For operators like sub and div, swapping scalar and tensor arguments
+    would produce incorrect results, so the (scalar, tensor) order is
+    not supported.
+    """
+    if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
+        raise NotImplementedError(
+            f"Operation '{node.target}' does not support (scalar, tensor) "
+            f"argument order: got {type(node.args[0]).__name__} and "
+            f"{type(node.args[1]).__name__}"
+        )
     return input_nodes
 
 
@@ -156,10 +177,19 @@ def moe_gating_top_k_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
-def floor_div_hook(node, input_nodes, executor):
+def div_mod_arg_hook(node, input_nodes, executor):
     """add div mode parameter."""
-    div_mode = 2
-    return [input_nodes[0], input_nodes[1], div_mode]
+    if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
+        raise NotImplementedError(
+            f"Operation '{node.target}' does not support (scalar, tensor) "
+            f"argument order: got {type(node.args[0]).__name__} and "
+            f"{type(node.args[1]).__name__}"
+        )
+    # Built-in div_mod: tensor-tensor or tensor-scalar requires mod param, scalar-scalar does not.
+    if not _is_scalar_arg(node.args[0]):
+        div_mode = 2
+        return [input_nodes[0], input_nodes[1], div_mode]
+    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -439,11 +469,14 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.permute_view, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
-    register_arg_mapping_hook(Op.muls, muls_hook)
+    register_arg_mapping_hook(Op.add_scalar, binary_scalar_swap_hook)
+    register_arg_mapping_hook(Op.sub_scalar, binary_scalar_order_hook)
+    register_arg_mapping_hook(Op.mul_scalar, binary_scalar_swap_hook)
+    register_arg_mapping_hook(Op.div_scalar, binary_scalar_order_hook)
+    register_arg_mapping_hook(Op.div_mod_scalar, div_mod_arg_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(Op.moe_gating_top_k, moe_gating_top_k_hook)
     register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
-    register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
@@ -729,9 +762,17 @@ def lt_op_hook(op, node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def add_op_hook(op, node, input_nodes, executor):
+    """Get the add op for a given node."""
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
+        return Op.add_scalar
+    return Op.add
+
+
+# pylint: disable=unused-argument
 def sub_op_hook(op, node, input_nodes, executor):
     """Get the sub op for a given node."""
-    if _is_scalar_arg(node.args[1]):
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
         return Op.sub_scalar
     return Op.sub
 
@@ -740,8 +781,24 @@ def sub_op_hook(op, node, input_nodes, executor):
 def mul_op_hook(op, node, input_nodes, executor):
     """Get the mul op for a given node."""
     if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
-        return Op.muls
+        return Op.mul_scalar
     return Op.mul
+
+
+# pylint: disable=unused-argument
+def div_op_hook(op, node, input_nodes, executor):
+    """Get the div op for a given node."""
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
+        return Op.div_scalar
+    return Op.div
+
+
+# pylint: disable=unused-argument
+def div_mod_op_hook(op, node, input_nodes, executor):
+    """Get the div_mod op for a given node."""
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
+        return Op.div_mod_scalar
+    return Op.div_mod
 
 
 # pylint: disable=unused-argument
@@ -779,8 +836,11 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
+    register_ops_mapping_hook(Op.add, add_op_hook)
     register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
+    register_ops_mapping_hook(Op.div, div_op_hook)
+    register_ops_mapping_hook(Op.div_mod, div_mod_op_hook)
     register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
     register_ops_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_op_hook)
 
