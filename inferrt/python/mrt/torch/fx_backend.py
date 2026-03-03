@@ -142,8 +142,20 @@ def clone_hook(node, input_nodes, executor):
 
 # pylint: disable=unused-argument
 def long_hook(node, input_nodes, executor):
-    """add long."""
+    """cast to int64 (long)."""
     return [input_nodes[0], torch.int64]
+
+
+# pylint: disable=unused-argument
+def float_hook(node, input_nodes, executor):
+    """cast to float32."""
+    return [input_nodes[0], torch.float32]
+
+
+# pylint: disable=unused-argument
+def int_hook(node, input_nodes, executor):
+    """cast to int32."""
+    return [input_nodes[0], torch.int32]
 
 
 # pylint: disable=unused-argument
@@ -214,7 +226,11 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
+    # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
+    register_arg_mapping_hook("float", float_hook)
+    register_arg_mapping_hook("int", int_hook)
+    # chunk lowering
     register_arg_mapping_hook(torch.chunk, chunk_arg_hook)
     register_arg_mapping_hook("chunk", chunk_arg_hook)
 
@@ -556,7 +572,10 @@ _OP_MAP = {
     "copy_": Op.inplace_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "fill_": Op.inplace_fill_tensor,
+    # dtype cast-like tensor methods
     "long": Op.cast,
+    "float": Op.cast,
+    "int": Op.cast,
     "split": Op.split_with_size,
     "chunk": Op.split_with_size,
     "flatten": Op.flatten,
