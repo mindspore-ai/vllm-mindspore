@@ -21,12 +21,37 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def _setup_batch_invariant_mode():
+    """
+    If VLLM_BATCH_INVARIANT is set to 1, enable deterministic mode
+    """
+    if os.environ.get("VLLM_BATCH_INVARIANT") == "1":
+        logger.warning("Batch invariant is experimental feature related to "
+                       "specific network implementations. Currently only "
+                       "supports tensor parallel for DeepSeek models with "
+                       "mindformers backend, and has no effect in other "
+                       "scenarios. Note that VLLM_BATCH_INVARIANT environment "
+                       "variable will enable the deterministic algorithm by "
+                       "default.")
+
+        batch_invariant_envs = {
+            "LCCL_DETERMINISTIC": "1",
+            "HCCL_DETERMINISTIC": "strict",
+            "ATB_MATMUL_SHUFFLE_K_ENABLE": "0",
+            "ATB_LLM_LCOC_ENABLE": "0"
+        }
+
+        for key, value in batch_invariant_envs.items():
+            logger.debug('Setting %s to "%s"', key, value)
+            os.environ[key] = value
+
+
 def env_setup(target_env_dict=None):
     if target_env_dict is None:
         target_env_dict = {
             "USE_TORCH": "FALSE",
             "USE_TF": "FALSE",
-            "RUN_MODE": "prefict",
+            "RUN_MODE": "predict",
             "CUSTOM_MATMUL_SHUFFLE": "on",
             "HCCL_DETERMINISTIC": "false",
             "ASCEND_LAUNCH_BLOCKING": "0",
@@ -56,6 +81,8 @@ def env_setup(target_env_dict=None):
         if key not in os.environ:
             logger.debug('Setting %s to "%s"', key, value)
             os.environ[key] = value
+
+    _setup_batch_invariant_mode()
 
 
 def main():
