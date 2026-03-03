@@ -329,7 +329,7 @@ def split_ops_hook(op, node, input_nodes, executor):
         return Op.split_tensor
     if hasattr(input_nodes[1], "meta") and input_nodes[1].meta is not None:
         if isinstance(
-            input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)
+                input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)
         ):
             return Op.split_tensor
     return op
@@ -358,12 +358,14 @@ def ge_op_hook(op, node, input_nodes, executor):
         return Op.ge_scalar
     return Op.ge
 
+
 # pylint: disable=unused-argument
 def lt_op_hook(op, node, input_nodes, executor):
     """Get the lt op for a given node."""
     if isinstance(node.args[-1], (int, float)):
         return Op.lt_scalar
     return Op.lt
+
 
 # pylint: disable=unused-argument
 def mul_op_hook(op, node, input_nodes, executor):
@@ -797,7 +799,7 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
 
 
 def _map_args(
-    args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
+        args, env, executor: GraphExecutor, sym_mgr: SymbolicShapeManager
 ) -> List[Node]:
     """
     Map torch.fx node arguments to GraphExecutor nodes.
@@ -886,6 +888,10 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
         op, flat_node_args = getitem_process(node, flat_node_args)
     elif op == Op.setitem:
         op, flat_node_args = setitem_process(node, flat_node_args)
+        if op == Op.python_call:
+            module_name = node.target.__module__
+            op_name = node.target.__name__
+            flat_node_args = [module_name, op_name] + flat_node_args
 
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:

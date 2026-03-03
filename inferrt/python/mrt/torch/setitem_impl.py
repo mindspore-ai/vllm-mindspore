@@ -45,6 +45,5 @@ def setitem_process(node, input_nodes):
             return tensor_setitem_slice_tensor(input_nodes[0], input_nodes[1], input_nodes[2])
         if isinstance(input_nodes[1], (list, tuple)):
             return tensor_setitem_tuple_tensor(input_nodes[0], input_nodes[1], input_nodes[2])
-        raise ValueError(f"For 'tensor_setitem', unsupported indices type: {type(input_nodes[1])}."
-                         f" Supported types: slice, tuple, list.")
+        return Op.python_call, [input_nodes[0], input_nodes[1], input_nodes[2]]
     raise ValueError("For 'setitem', the first input must be a tensor.")
