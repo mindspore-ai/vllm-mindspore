@@ -63,6 +63,12 @@ void UpdateAtenTensor(at::Tensor &atTensor, const ir::TensorPtr &mrtTensor) {
 py::function GetPythonCallable(const std::string &moduleName, const std::string &funcName) {
   py::gil_scoped_acquire gil;
   try {
+    py::module_ mod = py::module_::import(moduleName.c_str());
+    py::object func = mod.attr(funcName.c_str());
+    if (!func.is_none()) {
+      return func.cast<py::function>();
+    }
+
     if (moduleName.rfind(kTorchOpsInnerModule, 0) != 0) {
       LOG_EXCEPTION << "Python callable only supports '" << kTorchOpsInnerModule << "' prefix, got: " << moduleName;
       return {};
@@ -80,7 +86,7 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
 
     py::module_ torchOps = py::module_::import(kTorchOpsModule);
     py::object subMod = torchOps.attr(subModuleName.c_str());
-    py::object func = subMod.attr(funcName.c_str());
+    func = subMod.attr(funcName.c_str());
     if (func.is_none()) {
       LOG_EXCEPTION << "attribute '" + funcName + "' is None";
     }
