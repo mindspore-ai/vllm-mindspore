@@ -40,6 +40,26 @@ def get_long_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
+def float_method_op(input_tensor):
+    return input_tensor.float()
+
+
+def get_float_method_op_compiled():
+    def custom_op_func(input_tensor):
+        return input_tensor.float()
+    return torch.compile(custom_op_func, backend=backend)
+
+
+def int_method_op(input_tensor):
+    return input_tensor.int()
+
+
+def get_int_method_op_compiled():
+    def custom_op_func(input_tensor):
+        return input_tensor.int()
+    return torch.compile(custom_op_func, backend=backend)
+
+
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("input_dtype,output_dtype", [
     (torch.float32, torch.float16),
@@ -142,5 +162,39 @@ def test_cast_int_to_float():
     cpu_output = op_func(cpu_input, torch.float32)
     op_func_compiled = get_op_func_compiled()
     npu_output = op_func_compiled(npu_input, torch.float32).detach().cpu()
+
+    AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_cast_tensor_float_method():
+    """
+    Feature: Test aclnn cast
+    Description: Test tensor.float() method with compile backend
+    Expectation: The result is correct
+    """
+    cpu_input = torch.ones((3, 4), dtype=torch.float16)
+    npu_input = cpu_input.npu()
+
+    cpu_output = float_method_op(cpu_input)
+    op_func_compiled = get_float_method_op_compiled()
+    npu_output = op_func_compiled(npu_input).detach().cpu()
+
+    AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_cast_tensor_int_method():
+    """
+    Feature: Test aclnn cast
+    Description: Test tensor.int() method with compile backend
+    Expectation: The result is correct
+    """
+    cpu_input = torch.randn(2, 5, dtype=torch.float32) * 10.0
+    npu_input = cpu_input.npu()
+
+    cpu_output = int_method_op(cpu_input)
+    op_func_compiled = get_int_method_op_compiled()
+    npu_output = op_func_compiled(npu_input).detach().cpu()
 
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())

@@ -228,3 +228,31 @@ def test_python_custom_op_cache_miss(backend):
     npu_output_2 = op_func_compiled(x_npu_2, bias_npu_2)
     cpu_output_2 = scale_and_bias(x_cpu_2, bias_cpu_2)
     AssertRtolEqual(cpu_output_2, npu_output_2.detach().cpu())
+
+
+@pytest.mark.skipif(
+    _should_skip_test(),
+    reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
+)
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", [fx_backend, ])
+def test_python_custom_tensor_getitem_by_number(backend):
+    """
+    Feature: Test python custom op with Python list input
+    Description: Verify torch.compile backend supports Python list processing in custom function
+    Expectation: Compiled result is consistent with eager execution
+    """
+
+    def func(input_split_sizes):
+        send_displacements = [
+            sum(input_split_sizes[:i]) for i in range(len(input_split_sizes))
+        ]
+        return send_displacements
+
+    compiled_op = torch.compile(func, backend=backend, dynamic=True, fullgraph=False)
+    x = [1, 2, 3]
+
+    expected = func(x)
+    out = compiled_op(x)
+
+    assert out == expected
