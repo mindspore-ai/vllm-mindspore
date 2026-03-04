@@ -126,7 +126,12 @@ class CustomBuildExt(build_ext):
 
     def build_extension(self, ext):
         if ext.name == "vllm_mindspore._C_ops":
-            self.build_c_ops(ext)
+            # Check if this is a dummy module (has sources)
+            # or real custom ops (no sources)
+            if ext.sources:
+                self.build_dummy_ops(ext)
+            else:
+                self.build_c_ops(ext)
         else:
             raise ValueError(f"Unknown extension name: {ext.name}")
 
@@ -181,17 +186,41 @@ class CustomBuildExt(build_ext):
         shutil.copy(src_so_path, dst_so_path)
         logger.info("Build %s succeeded.", dst_so_path)
 
+    def build_dummy_ops(self, ext):
+        """Build dummy _C_ops module with minimal code."""
+        logger.info("Building dummy %s ...", ext.name)
+        # Use standard setuptools build_ext to build the dummy module
+        super().build_extension(ext)
+
 
 write_commit_id()
 
 package_data = {"": ["*.so", "lib/*.so", ".commit_id"]}
 
 
+def _should_build_custom():
+    """Check if BUILD_CUSTOM environment variable is set to 1."""
+    return os.environ.get("BUILD_CUSTOM") == "1"
+
+
 def _get_ext_modules():
     ext_modules = []
-    if os.path.exists(_get_ascend_home_path()):
-        # sources are specified in CMakeLists.txt
-        ext_modules.append(Extension("vllm_mindspore._C_ops", sources=[]))
+    if _should_build_custom():
+        if os.path.exists(_get_ascend_home_path()):
+            # sources are specified in CMakeLists.txt
+            ext_modules.append(Extension("vllm_mindspore._C_ops", sources=[]))
+        else:
+            logger.warning(
+                "BUILD_CUSTOM=1 is set but ASCEND_HOME_PATH is not found. "
+                "Skipping _C_ops extension build.")
+    else:
+        # Build dummy module with minimal code using Python C API
+        dummy_source = os.path.join("csrc", "module", "dummy_module.c")
+        ext_modules.append(
+            Extension(
+                "vllm_mindspore._C_ops",
+                sources=[dummy_source],
+            ))
     return ext_modules
 
 
