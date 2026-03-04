@@ -609,6 +609,15 @@ if TORCH_NPU_INSTALLED:
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
+    _ATB_OP_MAP = {
+        torch.ops.atb._npu_paged_attention: Op.paged_attention,
+    }
+    # FX node.target is OpOverload (e.g. .default); register so _OP_MAP.get(target) hits
+    _atb_paged = getattr(torch.ops.atb, "_npu_paged_attention", None)
+    if _atb_paged is not None and hasattr(_atb_paged, "default"):
+        _ATB_OP_MAP[getattr(_atb_paged, "default")] = Op.paged_attention
+    _OP_MAP.update(_ATB_OP_MAP)
+
 
 def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""

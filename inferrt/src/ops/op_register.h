@@ -150,7 +150,6 @@ class OpFactory : public OpFactoryBase {
     if (iter != opCreatorsMap_.cend()) {
       return (iter->second)();
     }
-    LOG_EXCEPTION << "Operator not registered: " << opName;
     return nullptr;
   }
 
