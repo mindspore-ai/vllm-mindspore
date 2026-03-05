@@ -21,7 +21,7 @@ include_directories(${ASCEND_ATB_PATH}/include)
 find_library(ATB_KERNEL atb ${ASCEND_ATB_PATH}/lib)
 add_library(ops_ascend_atb SHARED ${OPS_ATB_SRC_FILES})
 target_link_libraries(ops_ascend_atb PRIVATE ${ATB_KERNEL}
-        ops_ascend_aclnn ops_base_obj hardware_ascend kernel mrt::securec)
+        ops_ascend_aclnn ops_base_obj ops_utils hardware_ascend kernel mrt::securec)
 
 set_target_properties(ops_ascend_atb PROPERTIES
         INSTALL_RPATH "$ORIGIN"

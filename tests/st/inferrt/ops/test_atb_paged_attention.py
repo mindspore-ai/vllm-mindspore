@@ -23,7 +23,7 @@ import pytest
 import torch
 import torch_npu
 
-from mrt.torch.fx_backend import backend as fx_backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
