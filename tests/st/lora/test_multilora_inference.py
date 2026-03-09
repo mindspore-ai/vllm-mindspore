@@ -726,7 +726,7 @@ def test_vllm_ms_server_multilora_v1_001(enforce_eager):
     log_name = "test_vllm_ms_server_multilora_006.log"
     extra_params = (f'--enable-log-requests --enable-lora '
                     f'--max_lora_rank=64 --max_model_len=4096 '
-                    f'--lora-modules lora1={QWEN_7B_LORA_LAW} '
+                    f'--max_loras=2 --lora-modules lora1={QWEN_7B_LORA_LAW} '
                     f'lora2={QWEN_7B_LORA_MEDICAL}')
     if enforce_eager:
         extra_params += ' --enforce-eager'
