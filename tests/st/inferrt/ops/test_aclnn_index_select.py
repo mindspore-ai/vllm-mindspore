@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import torch
 
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
@@ -134,10 +134,10 @@ def test_index_select_tensor_method(dtype):
     npu_index = cpu_index.npu()
 
     cpu_output = cpu_input.index_select(0, cpu_index).numpy()
-    
+
     def tensor_method_func(input_tensor, index):
         return input_tensor.index_select(0, index)
-    
+
     compiled_func = torch.compile(tensor_method_func, backend=backend)
     npu_output = compiled_func(npu_input, npu_index).detach().cpu().numpy()
     AssertRtolEqual(cpu_output, npu_output)

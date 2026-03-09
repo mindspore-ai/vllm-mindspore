@@ -1092,6 +1092,44 @@ def Mrt_Mm : Mrt_Op<"mm", [Pure]> {
   }];
 }
 
+def Mrt_MoeGatingTopKOp : Mrt_Op<"moe_gating_top_k", [Pure]> {
+  let summary = "aclnnMoeGatingTopK";
+  let description = [{
+    Operation for Moe (Mixture of Experts) gating top-k computation.
+    Performs gating top-k selection with optional bias, group selection, and normalization.
+    Accepts input tensor, k value, and various configuration parameters.
+    Produces output tensor, expert indices, and optional output tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtOptional<MrtAnyTensor>:$bias,
+    Mrt_I64Type:$k,
+    Mrt_I64Type:$kGroup,
+    Mrt_I64Type:$groupCount,
+    Mrt_I64Type:$groupSelectMode,
+    Mrt_I64Type:$renorm,
+    Mrt_I64Type:$normType,
+    Mrt_BooleanType:$outFlag,
+    Mrt_F64Type:$routedScalingFactor,
+    Mrt_F64Type:$eps
+  );
+
+  let results = (outs
+    MrtAnyTensor:$y,
+    MrtAnyTensor:$expertIdx,
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $x `,` $bias `,` $k `,` $kGroup `,` $groupCount `,` $groupSelectMode `,`
+    $renorm `,` $normType `,` $outFlag `,` $routedScalingFactor `,` $eps
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMoeGatingTopK";
+}
+
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let summary = "moe calc for input do Softmax, and do topK selection";
   let description = [{
