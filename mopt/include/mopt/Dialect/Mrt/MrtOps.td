@@ -1253,6 +1253,31 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let genAclnnOp = "aclnnMoeInitRoutingV3";
 }
 
+def Mrt_InterleaveRopeOp : Mrt_Op<"interleave_rope", [Pure]> {
+  let summary = "aclnnInterleaveRope";
+  let description = [{
+    Operation for interleave rope computation.
+    Accepts x, cos and sin tensors.
+    Produces out tensor as result.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$cos,
+    MrtAnyTensor:$sin
+  );
+
+  let results = (outs
+    MrtAnyTensor:$Out
+  );
+
+  let assemblyFormat = [{
+    $x `,` $cos `,` $sin attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInterleaveRope";
+}
+
 def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure]> {
   let summary = "aclnnMoeTokenUnpermute";
   let description = [{

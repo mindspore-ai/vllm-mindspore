@@ -749,6 +749,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_quantize: Op.npu_quantize,
         torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
         torch.ops.npu.npu_dynamic_quant: Op.npu_dynamic_quant,
+        torch.ops.npu.npu_interleave_rope: Op.interleave_rope,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
