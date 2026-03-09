@@ -1997,4 +1997,31 @@ def Mrt_ZerosOp : Mrt_Op<"zeros", [
   }];
 }
 
+def Mrt_NpuDynamicQuantOp : Mrt_Op<"npu_dynamic_quant", []> {
+  let summary = "npu_dynamic_quant";
+  let description = [{
+    Operation for dynamic quant.
+    Accepts x, smooth_scales, group_index, dst_type.
+    Produces quant output and scale (and optional offset).
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtOptional<MrtAnyTensor>:$smooth_scales,
+    MrtOptional<MrtAnyTensor>:$group_index,
+    Mrt_DtypeType:$dst_type
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut,
+    MrtAnyTensor:$scaleOut,
+    MrtOptional<MrtAnyTensor>:$offsetOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $smooth_scales `,` $group_index `,` $dst_type
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 #endif // MRT_DIALECT_MRT_OPS_TD
