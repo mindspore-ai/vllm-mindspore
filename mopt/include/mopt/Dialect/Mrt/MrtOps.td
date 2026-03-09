@@ -682,6 +682,32 @@ def Mrt_GtOp : Mrt_Op<"gt", [Pure]> {
   let genAclnnOp = "aclnnGtTensor";
 }
 
+def Mrt_IndexSelectOp : Mrt_Op<"index_select", [Pure]> {
+  let summary = "Returns a new tensor which indexes the input tensor along dimension dim using the entries in index.";
+  let description = [{
+    Operation for index_select computation.
+    Accepts input tensor, dimension, and index tensor.
+    Produces a tensor containing elements selected from the input tensor at the specified indices along the given dimension.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$dim,
+    MrtAnyTensor:$index
+  );
+
+  let results = (outs
+    MrtAnyTensor:$result
+  );
+
+  let assemblyFormat = [{
+    $self `,` $dim `,` $index
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnIndexSelect";
+}
+
 def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
   let summary = "Indexes a tensor using a list of index tensors.";
   let description = [{

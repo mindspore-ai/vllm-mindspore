@@ -628,6 +628,7 @@ _OP_MAP = {
     torch.stack: Op.stack,
     torch.sum: Op.reduce_sum,
     torch.clone: Op.clone,
+    torch.index_select: Op.index_select,
     torch.neg: Op.neg,
     torch.square: Op.square,
     torch.rsqrt: Op.rsqrt,
@@ -711,6 +712,7 @@ _OP_MAP = {
     "copy_": Op.inplace_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "fill_": Op.inplace_fill_tensor,
+    "index_select": Op.index_select,
     # dtype cast-like tensor methods
     "long": Op.cast,
     "float": Op.cast,
