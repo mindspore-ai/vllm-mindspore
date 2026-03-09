@@ -44,9 +44,9 @@ class DA_API AclnnCustomOperator : public Operator {
    * @brief Constructor
    * @param aclnn_api_name Aclnn API name (e.g., "aclnnMul")
    */
-  explicit AclnnCustomOperator(const std::string &&aclnn_api_name) : aclnn_api_name_(aclnn_api_name) {
+  explicit AclnnCustomOperator(const std::string &aclnn_api_name) : aclnn_api_name_(aclnn_api_name) {
     // Initialize AclnnExecutor, need to pass API name
-    executor_ = std::make_unique<AclnnExecutor>(std::move(aclnn_api_name));
+    executor_ = std::make_unique<AclnnExecutor>(aclnn_api_name);
   }
 
   virtual ~AclnnCustomOperator() = default;

@@ -38,7 +38,7 @@ using RunOpApiFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStrea
 
 class AclnnExecutor {
  public:
-  explicit AclnnExecutor(const std::string &&opApiName) : opApiName_(std::move(opApiName)) {
+  explicit AclnnExecutor(const std::string &opApiName) : opApiName_(opApiName) {
     getWorkspaceSizeApiName_ = opApiName_ + kNameGetWorkspaceSize;
     cacheEntryManager_ = ir::MakeIntrusive<CacheEntryManager>();
     AclnnInit();

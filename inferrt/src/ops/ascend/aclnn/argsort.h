@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Huawei Technologies Co., Ltd
+ * Copyright 2026 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__
-#define __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__
+#ifndef __OPS_ASCEND_ACLNN_ARGSORT_H__
+#define __OPS_ASCEND_ACLNN_ARGSORT_H__
 
 #include "ops/operator.h"
 #include "ops/ascend/aclnn/utils/aclnn_executor.h"
 
 namespace mrt {
 namespace ops {
-class AclnnMatmul : public Operator {
+class AclnnArgsort : public Operator {
  public:
-  AclnnMatmul() { executor_ = std::make_unique<AclnnExecutor>("aclnnMatmul"); }
-  ~AclnnMatmul() override = default;
+  AclnnArgsort() { executor_ = std::make_unique<AclnnExecutor>("aclnnSort"); }
+  ~AclnnArgsort() override = default;
 
+  void Init(const std::vector<const ir::Value *> &input, const ir::Value *output) override;
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
@@ -34,9 +35,9 @@ class AclnnMatmul : public Operator {
 
  private:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};
-  int8_t cubeMathType_;
 };
 
 }  // namespace ops
 }  // namespace mrt
-#endif  // __OPS_ASCEND_ACLNN_ACLNN_MATMUL_H__
+
+#endif  // __OPS_ASCEND_ACLNN_ARGSORT_H__

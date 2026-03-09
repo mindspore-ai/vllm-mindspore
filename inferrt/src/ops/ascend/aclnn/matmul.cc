@@ -22,21 +22,21 @@
 
 namespace mrt {
 namespace ops {
-OpsErrorCode AclnnMatul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                       size_t *workspaceSize) {
+OpsErrorCode AclnnMatmul::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                        size_t *workspaceSize) {
   cubeMathType_ = GetCubeMathType();
   executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[kIndex0]->ToTensor(),
                               input[kIndex1]->ToTensor(), output->ToTensor(), cubeMathType_);
   return SUCCESS;
 }
 
-OpsErrorCode AclnnMatul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
-                                ir::Value *output, void *stream) {
+OpsErrorCode AclnnMatmul::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
+                                 ir::Value *output, void *stream) {
   executor_->Launch(workspace, workspaceSize, stream, input[kIndex0]->ToTensor(), input[kIndex1]->ToTensor(),
                     output->ToTensor(), cubeMathType_);
   return SUCCESS;
 }
 
-MRT_REG_OP(matmul, AclnnMatul, Ascend);
+MRT_REG_OP(matmul, AclnnMatmul, Ascend);
 }  // namespace ops
 }  // namespace mrt
