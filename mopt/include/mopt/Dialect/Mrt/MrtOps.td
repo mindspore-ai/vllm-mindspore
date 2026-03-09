@@ -1543,6 +1543,35 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   let genAclnnOp = "aclnnRmsNorm";
 }
 
+def Mrt_NormOp : Mrt_Op<"norm", [Pure]> {
+  let summary = "aclnnLayerNorm";
+  let description = [{
+    Operation for LayerNorm computation.
+    Accepts input tensor, normalized_shape, weight, bias, and epsilon value for numerical stability.
+    Produces normalized output tensor, and optional mean out and rstd out.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$normalized_shape,
+    MrtOptional<MrtAnyTensor>:$weight,
+    MrtOptional<MrtAnyTensor>:$bias,
+    Mrt_F64Type:$epsilon
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut,
+    MrtOptional<MrtAnyTensor>:$meanOut,
+    MrtOptional<MrtAnyTensor>:$rstdOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $normalized_shape `,` $weight `,` $bias `,` $epsilon
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+}
+
 def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
   let summary = "aclnnScatterNdUpdate";
   let description = [{

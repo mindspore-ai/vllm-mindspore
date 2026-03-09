@@ -32,6 +32,7 @@
 #include "ir/common/intrusive_ptr.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
 #include "ops/ascend/aclnn/utils/aclnn_deleter.h"
+#include "ops/utils/op_constants.h"
 
 namespace mrt {
 namespace ops {
