@@ -1278,6 +1278,38 @@ def Mrt_InterleaveRopeOp : Mrt_Op<"interleave_rope", [Pure]> {
   let genAclnnOp = "aclnnInterleaveRope";
 }
 
+def Mrt_MoeReRoutingOp : Mrt_Op<"moe_re_routing", [Pure]> {
+  let summary = "aclnnMoeReRouting";
+  let description = [{
+    Operation for Moe re-routing computation.
+    Accepts tokens, expert_token_num_per_rank, optional per_token_scales, expert_token_num_type and idx_type.
+    Produces permuted tokens, permuted per_token_scales, permute_token_idx and expert_token_num as results.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$tokens,
+    MrtAnyTensor:$expert_token_num_per_rank,
+    MrtOptional<MrtAnyTensor>:$per_token_scales,
+    Mrt_I64Type:$expert_token_num_type,
+    Mrt_I64Type:$idx_type
+  );
+
+  let results = (outs
+    MrtAnyTensor:$permute_tokens,
+    MrtAnyTensor:$permute_per_token_scales,
+    MrtAnyTensor:$permute_token_idx,
+    MrtAnyTensor:$expert_token_num
+  );
+
+  let assemblyFormat = [{
+    $tokens `,` $expert_token_num_per_rank `,` $per_token_scales `,`
+    $expert_token_num_type `,` $idx_type
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMoeReRouting";
+}
+
 def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure]> {
   let summary = "aclnnMoeTokenUnpermute";
   let description = [{
