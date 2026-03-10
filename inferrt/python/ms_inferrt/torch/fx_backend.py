@@ -1118,11 +1118,33 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
     return op, _map_args(flat_node_args, env, executor, sym_mgr)
 
 
+def _try_handle_symbolic_only_op(node, executor, env, sym_mgr) -> bool:
+    """
+    Try to handle ops that only manipulate symbolic integers/shapes and have no runtime kernel.
+
+    Returns:
+        bool: True if the node was handled and `env[node]` was updated, False otherwise.
+    """
+    target = node.target
+
+    # torch.sym_sum: produce a symbolic Value directly.
+    if getattr(target, "__name__", None) == "sym_sum" or target is getattr(torch, "sym_sum", None):
+        example_value = node.meta.get("example_value", None)
+        output_value = sym_mgr.from_torch_with_sym(example_value)
+        env[node] = executor.add_value_node(output_value)
+        return True
+
+    return False
+
+
 def _handle_call_node(node, executor, env, sym_mgr):
     """Handle call_function/call_method node processing."""
     op = _get_op(node.target)
     if op is None:
         raise NotImplementedError(f"Unsupported op: {node.target}")
+
+    if _try_handle_symbolic_only_op(node, executor, env, sym_mgr):
+        return
 
     ops_hook = get_ops_mapping_hook(op)
     if ops_hook is not None:
