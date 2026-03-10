@@ -28,7 +28,7 @@ from mrt.torch.fx_mlir_backend import backend as mlir_backend
 from tests.mark_utils import arg_mark
 
 
-def generate_input(input_shape, dtype="float16", use_smooth=False, group_num=1):
+def generate_input(input_shape, dtype="float16", use_smooth=False, group_num=1):  # pylint: disable=missing-function-docstring
     date_type = torch.float16 if dtype == "float16" else torch.bfloat16
     input_tensor = torch.randn(input_shape, dtype=date_type)
     group_index = None
@@ -56,6 +56,7 @@ def test_npu_dynamic_quant(backend, dtype):
     Description: Check npu_dynamic_quant op launch with fp16/bf16, default int8 dst_type
     Expectation: The result is correct
     """
+
     def npu_dynamic_quant_func(x):
         return torch_npu.npu_dynamic_quant(x)
 
@@ -80,23 +81,26 @@ def test_npu_dynamic_quant_smooth_group(backend, dtype):
     Description: Check npu_dynamic_quant op launch with smooth_scales and group_index
     Expectation: The result is correct
     """
+
     def npu_dynamic_quant_func(x, smooth_scales, group_index):
         return torch_npu.npu_dynamic_quant(x, smooth_scales=smooth_scales, group_index=group_index, dst_type=torch.int8)
 
     compiled_func = torch.compile(npu_dynamic_quant_func, backend=backend)
 
-    input_tensor, smooth_scales, group_index = generate_input(input_shape=[2, 32, 256], dtype=dtype, use_smooth=True, group_num=64)
+    input_tensor, smooth_scales, group_index = generate_input(input_shape=[2, 32, 256], dtype=dtype, use_smooth=True,
+                                                              group_num=64)
     input_tensor, smooth_scales, group_index = input_tensor.npu(), smooth_scales.npu(), group_index.npu()
 
     output, scale = compiled_func(input_tensor, smooth_scales, group_index)
-    expected_output, expected_scale = torch_npu.npu_dynamic_quant(input_tensor, smooth_scales=smooth_scales, group_index=group_index, dst_type=torch.int8)
+    expected_output, expected_scale = torch_npu.npu_dynamic_quant(input_tensor, smooth_scales=smooth_scales,
+                                                                  group_index=group_index, dst_type=torch.int8)
 
     assert torch.allclose(output, expected_output)
     assert torch.allclose(scale, expected_scale)
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("backend", (fx_backend, ))
+@pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant_int4(backend, dtype):
     """
@@ -104,6 +108,7 @@ def test_npu_dynamic_quant_int4(backend, dtype):
     Description: Check npu_dynamic_quant op launch with torch.quint4x2
     Expectation: The result is correct
     """
+
     def npu_dynamic_quant_func(x):
         return torch_npu.npu_dynamic_quant(x, dst_type=torch.quint4x2)
 
@@ -120,7 +125,7 @@ def test_npu_dynamic_quant_int4(backend, dtype):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("backend", (fx_backend, ))
+@pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant_int4_smooth_group(backend, dtype):
     """
@@ -128,16 +133,20 @@ def test_npu_dynamic_quant_int4_smooth_group(backend, dtype):
     Description: Check npu_dynamic_quant op launch with smooth_scales, group_index and torch.quint4x2
     Expectation: The result is correct
     """
+
     def npu_dynamic_quant_func(x, smooth_scales, group_index):
-        return torch_npu.npu_dynamic_quant(x, smooth_scales=smooth_scales, group_index=group_index, dst_type=torch.quint4x2)
+        return torch_npu.npu_dynamic_quant(x, smooth_scales=smooth_scales, group_index=group_index,
+                                           dst_type=torch.quint4x2)
 
     compiled_func = torch.compile(npu_dynamic_quant_func, backend=backend)
 
-    input_tensor, smooth_scales, group_index = generate_input(input_shape=[2, 32, 256], dtype=dtype, use_smooth=True, group_num=64)
+    input_tensor, smooth_scales, group_index = generate_input(input_shape=[2, 32, 256], dtype=dtype, use_smooth=True,
+                                                              group_num=64)
     input_tensor, smooth_scales, group_index = input_tensor.npu(), smooth_scales.npu(), group_index.npu()
 
     output, scale = compiled_func(input_tensor, smooth_scales, group_index)
-    expected_output, expected_scale = torch_npu.npu_dynamic_quant(input_tensor, smooth_scales=smooth_scales, group_index=group_index, dst_type=torch.quint4x2)
+    expected_output, expected_scale = torch_npu.npu_dynamic_quant(input_tensor, smooth_scales=smooth_scales,
+                                                                  group_index=group_index, dst_type=torch.quint4x2)
 
     assert torch.allclose(output.view(torch.int32), expected_output.view(torch.int32))
     assert torch.allclose(scale, expected_scale)

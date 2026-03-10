@@ -24,17 +24,18 @@ def test_layer_norm(backend):
     Description: Test aclnn layer_norm with fp32 inputs and different backends
     Expectation: The result is correct
     """
+
     def custom_op_func(x, normalized_shape, weight, bias, eps=1e-5):
         return F.layer_norm(x, normalized_shape, weight, bias, eps)
-        
+
     op_func_compiled = torch.compile(custom_op_func, backend=backend)
 
     normalized_shape = (4,)
-    
+
     cpu_input = np.random.randn(2, 3, 4).astype(np.float32)
     cpu_weight = np.random.randn(4).astype(np.float32)
     cpu_bias = np.random.randn(4).astype(np.float32)
-    
+
     cpu_tensor_input = torch.from_numpy(cpu_input)
     cpu_tensor_weight = torch.from_numpy(cpu_weight)
     cpu_tensor_bias = torch.from_numpy(cpu_bias)
@@ -44,10 +45,10 @@ def test_layer_norm(backend):
     npu_bias = cpu_tensor_bias.npu()
 
     cpu_output = op_func(cpu_tensor_input, normalized_shape, cpu_tensor_weight, cpu_tensor_bias)
-    
+
     npu_output = op_func_compiled(npu_input, normalized_shape, npu_weight, npu_bias)
-    
+
     cpu_output_np = cpu_output.detach().numpy()
     npu_output_np = npu_output.detach().cpu().numpy()
-    
+
     AssertRtolEqual(cpu_output_np, npu_output_np)
