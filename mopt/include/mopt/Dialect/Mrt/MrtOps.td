@@ -247,6 +247,28 @@ def Mrt_CatOp : Mrt_Op<"cat", [Pure]> {
   let genAclnnOp = "aclnnCat";
 }
 
+def Mrt_StackOp : Mrt_Op<"stack", [Pure]> {
+  let summary = "Stack tensors along a new dimension";
+  let description = [{
+    Stacks input tensors along a new dimension, similar to torch.stack.
+    Creates a new dimension at the given index and concatenates all input
+    tensors along that dimension.
+  }];
+
+  let arguments = (ins
+    MrtTensorList:$inputs,
+    Mrt_I64Type:$dim
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $inputs `,` $dim attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnStack";
+}
+
 def Mrt_CloneOp : Mrt_Op<"clone", [Pure]> {
   let summary = "Clone operation";
   let description = [{
