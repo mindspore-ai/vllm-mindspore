@@ -25,8 +25,13 @@ project(llvm_builder NONE)
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/llvm.cmake)
 EOF
 
+_CMAKE_ARGS=()
+if [[ -n "${CMAKE_PREFIX_PATH}" ]]; then
+    _CMAKE_ARGS+=("-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}")
+fi
+
 cd "${_TEMP_BUILD}"
-cmake .
+cmake . "${_CMAKE_ARGS[@]}"
 
 # Source the generated environment file
 if [[ -f "${_TEMP_BUILD}/set_env.sh" ]]; then

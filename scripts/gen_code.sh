@@ -18,10 +18,17 @@ else
     exit 1
 fi
 
-# Set up include paths for tablegen files
+# Set up include paths for tablegen files.
+# In CI machine, the llvm/mlir source include directories are not installed,
+# but it's necessary for tblgen to build json files, so we need to add the
+# source code directory to the include paths
+CI_LLVM_SOURCE_DIR="$(dirname "${LLVM_BUILD_DIR}")"
+echo "CI_LLVM_SOURCE_DIR: ${CI_LLVM_SOURCE_DIR}"
 INCLUDE_PATHS=(
     "-I${LLVM_BUILD_DIR}/include"
     "-I${PROJECT_DIR}/mopt/include"
+    "-I${CI_LLVM_SOURCE_DIR}/llvm/include"
+    "-I${CI_LLVM_SOURCE_DIR}/mlir/include"
 )
 
 # Input and output files

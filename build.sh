@@ -34,7 +34,7 @@ process_options()
     export BUILD_OPT=0 # Default disable optimizer for now
     export BUILD_JOBS=8 
 
-    while getopts 'Dd:hitf:b:eOj:' OPT; do
+    while getopts 'Dd:hitf:b:eOj:s:' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
@@ -53,6 +53,7 @@ process_options()
             t) export BUILD_TESTS=1;;
             O) export BUILD_OPT=1;;
             j) export BUILD_JOBS=$OPTARG;;
+            s) export CMAKE_PREFIX_PATH=$OPTARG;;
             h)
                 usage
                 exit 0
