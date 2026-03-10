@@ -100,11 +100,12 @@ class MRT_EXPORT Storage : public RefCounted {
     data_ = data;
   }
 
-  void SetDataPtrFromAten(void *data, const DeleterFn &&deleter) {
+  void SetDataPtrFromAten(void *data, void *data_to_release, const DeleterFn &&deleter) {
     if (data_ && ownsData_) {
       FreeMemory();  // free old memory
     }
     data_ = data;
+    dataToRelease_ = data_to_release;
     deleter_ = std::move(deleter);
     fromAten_ = true;
     ownsData_ = true;
@@ -144,8 +145,9 @@ class MRT_EXPORT Storage : public RefCounted {
   void *Release();
 
  private:
-  void *data_{nullptr};  ///< Pointer to the allocated memory.
-  size_t sizeBytes_{0};  ///< Size of the memory in bytes.
+  void *data_{nullptr};           ///< Pointer to the allocated memory.
+  void *dataToRelease_{nullptr};  ///< Pointer to the memory to release.
+  size_t sizeBytes_{0};           ///< Size of the memory in bytes.
   Allocator alloc_;
   hardware::Device device_;  ///< The device where the memory is allocated.
   bool ownsData_{false};     ///< Whether the storage can own data.

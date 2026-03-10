@@ -220,8 +220,9 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
 
     auto data_ptr = tensor.storage().set_data_ptr(std::move(c10::DataPtr()));  // return the original data ptr.
     auto deleter = data_ptr.get_deleter();
-    auto *data = data_ptr.release_context();
-    outTensor->GetStorage()->SetDataPtrFromAten(data, deleter);
+    auto *data_to_release = data_ptr.release_context();
+    auto *data = data_ptr.get();
+    outTensor->GetStorage()->SetDataPtrFromAten(data, data_to_release, deleter);
   } else if (ivalue.isList()) {
     auto &tuple = output->ToTuple();
     CHECK_IF_NULL(tuple);

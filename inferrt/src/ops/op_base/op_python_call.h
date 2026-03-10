@@ -30,7 +30,7 @@ namespace py = pybind11;
 
 class OpPythonCall : public Operator {
  public:
-  OpPythonCall() = default;
+  OpPythonCall() { SetOpType(OpType::PythonCallOp); }
   ~OpPythonCall() override = default;
 
   void Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output);

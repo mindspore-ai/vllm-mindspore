@@ -74,7 +74,7 @@ void Storage::FreeMemory() {
     if (deleter_ == nullptr) {
       LOG_EXCEPTION << "Deleter function is null, can not free memory from aten.";
     }
-    deleter_(nullptr);
+    deleter_(dataToRelease_);
     deleter_ = nullptr;
     fromAten_ = false;
     ownsData_ = false;
