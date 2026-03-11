@@ -14,7 +14,7 @@ import torch
 from tests.common import HasTorchNpu
 if HasTorchNpu():
     import torch_npu    # pylint: disable=unused-import
-import mrt.torch.fx_mlir_backend as backend
+import ms_inferrt.torch.fx_mlir_backend as backend
 from tests.mark_utils import arg_mark
 
 

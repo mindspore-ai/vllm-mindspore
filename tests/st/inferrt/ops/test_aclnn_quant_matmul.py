@@ -24,7 +24,7 @@ import torch_npu
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 
 
 def op_func(x1, x2, scale):

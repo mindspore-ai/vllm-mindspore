@@ -30,14 +30,14 @@ from typing import Mapping, Optional
 
 import torch
 
-from mrt.torch.utils import (
+from ms_inferrt.torch.utils import (
     get_collective_info_from_torch,
     set_device_context,
     to_torch,
     update_runtime_inputs,
 )
-from mrt.torch._decompositions import apply_decompositions
-from mrt.torch._executor_builder import ExecutorBuilder
+from ms_inferrt.torch._decompositions import apply_decompositions
+from ms_inferrt.torch._executor_builder import ExecutorBuilder
 
 try:
     import mfusion  # pylint: disable=import-outside-toplevel,unused-import

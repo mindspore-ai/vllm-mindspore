@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import torch
 
-from mrt.torch import fx_mlir_backend as backend
+from ms_inferrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual

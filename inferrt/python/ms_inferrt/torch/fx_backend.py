@@ -13,21 +13,22 @@
 # limitations under the License.
 
 """
-A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
+A simple torch.fx backend that converts a GraphModule to a ms_inferrt GraphExecutor.
 """
 from typing import Any, Dict, List, Optional
 
 import operator
+from typing import List, Dict, Any, Optional
 import torch
 from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
 from torch.fx.immutable_collections import immutable_list
 
-from mrt import config
-from mrt.ir import GraphExecutor, Op
-from mrt.torch.symbolic_shape import SymbolicShapeManager
-from mrt.torch.utils import (
+from ms_inferrt import config
+from ms_inferrt.ir import GraphExecutor, Op
+from ms_inferrt.torch.symbolic_shape import SymbolicShapeManager
+from ms_inferrt.torch.utils import (
     from_torch,
     to_torch,
     get_collective_info_from_torch,
@@ -35,9 +36,9 @@ from mrt.torch.utils import (
     update_runtime_inputs,
     is_op_registered_by_custom_or_torch,
 )
-from mrt.torch.getitem_impl import getitem_process
-from mrt.torch.setitem_impl import setitem_process
-from mrt.torch.decompose_impl import _decompose_ops_with_fake_mode
+from ms_inferrt.torch.getitem_impl import getitem_process
+from ms_inferrt.torch.setitem_impl import setitem_process
+from ms_inferrt.torch.decompose_impl import _decompose_ops_with_fake_mode
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -47,8 +48,8 @@ except ImportError:
     TORCH_NPU_INSTALLED = False
 
 
-def _init_mrt_config():
-    """Initialize the mrt configs."""
+def _init_ms_inferrt_config():
+    """Initialize the ms_inferrt configs."""
     if TORCH_NPU_INSTALLED:
         config.ascend.op_precision.set_is_allow_matmul_hf32(
             torch_npu.npu.matmul.allow_hf32
@@ -57,7 +58,7 @@ def _init_mrt_config():
         acl_precision_mode = torch_npu._C._npu_getOption("ACL_PRECISION_MODE")
         config.ascend.op_precision.set_acl_precision_mode(acl_precision_mode.decode())
     else:
-        print("torch_npu is not installed, using default mrt configs.")
+        print("torch_npu is not installed, using default ms_inferrt configs.")
 
 
 _GLOBAL_GRAPH_ID = 0
@@ -67,7 +68,7 @@ _ARG_MAPPING_HOOKS = {}
 _OPS_MAPPING_HOOKS = {}
 
 # Registry for dvm ops: maps op_name -> payload_json
-# todo(lmy) remove dvm op when mrt backend is ready
+# todo(lmy) remove dvm op when ms_inferrt backend is ready
 _DVM_OP_REGISTRY = {}
 
 
@@ -478,6 +479,7 @@ def _remove_matched_nodes(gm: GraphModule, matchers):
     if nodes_to_erase:
         gm.recompile()
 
+
 aten = torch.ops.aten
 # pylint: disable=protected-access
 # A comprehensive mapping from torch fx ops to our custom ops.
@@ -659,7 +661,7 @@ def _get_op(target):
 
         if isinstance(target, torch._ops.OpOverloadPacket):
             node_module = target.__module__
-            if node_module.startswith("torch._ops.mrt_dvm"):
+            if node_module.startswith("torch._ops.ms_inferrt_dvm"):
                 return Op.dvm_call
             if node_module.startswith("torch._ops.vllm"):
                 return Op.python_call
@@ -803,7 +805,7 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     Flatten the arguments of a given FX node into a flat list of Argument objects.
 
     Args:
-        op (Op): The mrt operation enumeration.
+        op (Op): The ms_inferrt operation enumeration.
         node (Node): The FX node whose arguments should be flattened.
 
     Returns:
@@ -964,11 +966,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
-
+    
     _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()
-    _init_mrt_config()
+    _init_ms_inferrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
     sym_mgr = SymbolicShapeManager()
@@ -1001,11 +1003,11 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.dump_graph()
     executor.build()
 
-    mrt_input_nodes = [env[n] for n in fx_input_nodes]
+    ms_inferrt_input_nodes = [env[n] for n in fx_input_nodes]
 
     def compiled_callable(*inputs: torch.Tensor):
         set_device_context()
-        update_runtime_inputs(mrt_input_nodes, inputs)
+        update_runtime_inputs(ms_inferrt_input_nodes, inputs)
         result = executor.run()
         return to_torch(result)
 

@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 
-from mrt.torch.fx_mlir_backend import backend
+from ms_inferrt.torch.fx_mlir_backend import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual

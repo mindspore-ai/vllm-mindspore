@@ -425,8 +425,8 @@ nb::object ToTorchTensorWrapper(const ir::TensorPtr &tensor) {
 }
 }  // namespace
 
-NB_MODULE(_mrt_torch, m) {
-  m.doc() = "PyTorch extension for MRT";
+NB_MODULE(_ms_inferrt_torch, m) {
+  m.doc() = "PyTorch extension for InferRT";
   m.def("from_torch", &FromTorchTensorWrapper, nb::arg("tensor"), nb::arg("is_fake") = false);
   m.def("to_torch", &ToTorchTensorWrapper, nb::rv_policy::reference);
   m.def("set_device_context", &SetDeviceContext);

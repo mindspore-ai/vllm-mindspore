@@ -18,7 +18,7 @@ PROJECT_PATH=${BASE_PATH}/../../inferrt
 if [ $BUILD_PATH ]; then
   echo "BUILD_PATH = $BUILD_PATH"
 else
-  BUILD_PATH=$(find ${PROJECT_PATH}/build/lib.* -maxdepth 0 -type d | head -n1)/mrt
+  BUILD_PATH=$(find ${PROJECT_PATH}/build/lib.* -maxdepth 0 -type d | head -n1)/ms_inferrt
   if [ -z "$BUILD_PATH" ]; then
     echo "Error: failed to locate build dir in ${PROJECT_PATH}/build/lib.*" >&2
     exit 1

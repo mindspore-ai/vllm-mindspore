@@ -61,7 +61,7 @@ class CMakeBuild(build_ext):
 
     def run(self):
         """Build C++ extensions using CMake."""
-        install_dir = Path(self.build_lib) / "mrt"
+        install_dir = Path(self.build_lib) / "ms_inferrt"
         if install_dir.exists():
             shutil.rmtree(install_dir)
         install_dir.mkdir(parents=True, exist_ok=True)

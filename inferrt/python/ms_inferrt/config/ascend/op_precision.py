@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# pylint: disable=missing-docstring
 
-from mrt import ops
+"""Ascend op precision config"""
 
-__all__ = ['ops']
+from ms_inferrt._ms_inferrt_config import OpPrecisionConf
+
+__all__ = ['OpPrecisionConf']

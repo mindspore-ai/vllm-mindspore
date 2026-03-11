@@ -7,8 +7,8 @@ import torch
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch.fx_backend import backend as fx_backend
-from mrt.torch.fx_mlir_backend import backend as mlir_backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
+from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
 
 try:
     from vllm.utils import direct_register_custom_op, supports_custom_op

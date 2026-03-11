@@ -22,7 +22,7 @@
 namespace nb = nanobind;
 
 // Interface with python
-NB_MODULE(_mrt_api, mod) {
+NB_MODULE(_ms_inferrt_api, mod) {
   mod.def(
     "is_custom_op_registered",
     [](const std::string &op_name) { return mrt::ops::CustomOpRegistry::GetInstance().IsCustomOpRegistered(op_name); },

@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import torch
-import mrt
-from mrt.torch import backend
 import os
-import pytest
+import torch
+
+import ms_inferrt
+from ms_inferrt.torch import backend
 from tests.mark_utils import arg_mark
 
 
@@ -35,19 +35,19 @@ def test_lowered_bias_add_static_shape():
     os.environ["TEST_DIR"] = script_dir
 
     op_source = os.path.join(script_dir, "lowered_add_custom_op.cc")
-    mrt.ops.load(name="lowered_bias_add", sources=[op_source], backend="Ascend",
+    ms_inferrt.ops.load(name="lowered_bias_add", sources=[op_source], backend="Ascend",
                  extra_ldflags=["-lops_ascend_lowered"])
 
-    @torch.library.custom_op("mrt::lowered_bias_add", mutates_args=())
+    @torch.library.custom_op("ms_inferrt::lowered_bias_add", mutates_args=())
     def lowered_bias_add_op(x: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("Placeholder for lowered_bias_add operator")
 
-    @torch.library.register_fake("mrt::lowered_bias_add")
-    def _(x, bias):
+    @torch.library.register_fake("ms_inferrt::lowered_bias_add")
+    def _(x, _bias):
         return x
 
     def bias_add_fn(x, bias):
-        return torch.ops.mrt.lowered_bias_add(x, bias)
+        return torch.ops.ms_inferrt.lowered_bias_add(x, bias)
 
     bias_add_compiled = torch.compile(bias_add_fn, backend=backend)
 
@@ -75,32 +75,32 @@ def test_lowered_bias_add_dynamic_shape():
     os.environ["TEST_DIR"] = script_dir
 
     op_source = os.path.join(script_dir, "lowered_add_custom_op.cc")
-    mrt.ops.load(name="lowered_bias_add", sources=[op_source], backend="Ascend",
+    ms_inferrt.ops.load(name="lowered_bias_add", sources=[op_source], backend="Ascend",
                  extra_ldflags=["-lops_ascend_lowered"])
 
-    @torch.library.custom_op("mrt::lowered_bias_add", mutates_args=())
+    @torch.library.custom_op("ms_inferrt::lowered_bias_add", mutates_args=())
     def lowered_bias_add_op(x: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("Placeholder")
 
-    @torch.library.register_fake("mrt::lowered_bias_add")
-    def _(x, bias):
+    @torch.library.register_fake("ms_inferrt::lowered_bias_add")
+    def _(x, _bias):
         return x
 
-    bias_add_compiled = torch.compile(
-        lambda x, b: torch.ops.mrt.lowered_bias_add(x, b),
-        backend=backend
-    )
+    def bias_add_fn(x, bias):
+        return torch.ops.ms_inferrt.lowered_bias_add(x, bias)
+
+    bias_add_compiled = torch.compile(bias_add_fn, backend=backend)
 
     test_shapes = [(1, 6144), (2, 4096), (4, 2048)]
 
-    for M, N in test_shapes:
-        x = torch.randn(M, N, dtype=torch.float16).npu()
-        bias = torch.randn(M, N, dtype=torch.float16).npu()
+    for rows, cols in test_shapes:
+        x = torch.randn(rows, cols, dtype=torch.float16).npu()
+        bias = torch.randn(rows, cols, dtype=torch.float16).npu()
 
         result = bias_add_compiled(x, bias)
         expected = x + bias
 
         assert torch.allclose(result, expected, rtol=5e-2, atol=5e-2), \
-            f"Shape [{M}x{N}] failed with max_diff={torch.max(torch.abs(result - expected)).item()}"
+            f"Shape [{rows}x{cols}] failed with max_diff={torch.max(torch.abs(result - expected)).item()}"
 
     print("All dynamic shape tests passed.")

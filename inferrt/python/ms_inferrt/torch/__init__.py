@@ -26,7 +26,7 @@ if torch_npu_path:
     os.environ["LD_LIBRARY_PATH"] = f"{lib_path}:{ld_lib_path}"
 
 # pylint: disable=wrong-import-position
-from mrt.torch.fx_backend import backend, register_dvm_op, get_dvm_payload
-from mrt.torch.fx_mlir_backend import backend as fx_mlir_backend
+from ms_inferrt.torch.fx_backend import backend, register_dvm_op, get_dvm_payload
+from ms_inferrt.torch.fx_mlir_backend import backend as fx_mlir_backend
 
 __all__ = ['backend', 'fx_mlir_backend', 'register_dvm_op', 'get_dvm_payload']

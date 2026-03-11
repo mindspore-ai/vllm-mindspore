@@ -33,10 +33,10 @@ find_package(nanobind CONFIG REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-# Add mrt pybind11 sub module
-add_subdirectory(mrt)
+# Add ms_inferrt pybind11 sub module
+add_subdirectory(ms_inferrt)
 
-# Add mrt_torch pybind11 sub module
+# Add ms_inferrt_torch pybind11 sub module
 if(ENABLE_TORCH_FRONT)
-    add_subdirectory(mrt_torch)
+    add_subdirectory(ms_inferrt_torch)
 endif()

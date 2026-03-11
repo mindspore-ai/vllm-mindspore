@@ -39,8 +39,8 @@ namespace ir = mrt::ir;
 namespace hardware = mrt::hardware;
 using mrt::runtime::GraphExecutor;
 
-NB_MODULE(_mrt_ir, m) {  // #lizard forgives
-  m.doc() = "Python binding for MRT";
+NB_MODULE(_ms_inferrt_ir, m) {  // #lizard forgives
+  m.doc() = "Python binding for InferRT";
 
   nb::enum_<mrt::ops::Op>(m, "Op")
 #define OP(O) .value(#O, mrt::ops::Op_##O)
