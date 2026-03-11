@@ -346,6 +346,23 @@ def is_use_ringmla(vllm_config, mf_config=None):
                    and vllm_config.parallel_config.tensor_parallel_size < 16)
     return use_ringmla
 
+def flatten_bn(
+    x: Union[list[ms.Tensor], ms.Tensor],
+    *,
+    concat: bool = False,
+) -> Union[list[ms.Tensor], ms.Tensor]:
+    """
+    Flatten the ``B`` and ``N`` dimensions of batched multimodal inputs.
+
+    The input tensor should have shape ``(B, N, ...)``.
+    """
+    if isinstance(x, ms.Tensor):
+        return x.flatten(0, 1)
+
+    if concat:
+        return mint.cat(x)
+
+    return [x_n for x_b in x for x_n in x_b]
 
 class AutoWeightsLoaderMS:
     """

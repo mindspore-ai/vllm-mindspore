@@ -134,12 +134,13 @@ vllm.lora.utils.replace_submodule = replace_submodule
 
 import vllm.lora.models
 from vllm_mindspore.lora.models import (register_module, from_local_checkpoint,
-                                        from_lora_tensors, is_moe_model)
+                                        from_lora_tensors, is_moe_model, _create_lora_modules)
 
 vllm.lora.models.LoRAModelManager.register_module = register_module
 vllm.lora.models.LoRAModel.from_local_checkpoint = from_local_checkpoint
 vllm.lora.models.LoRAModel.from_lora_tensors = from_lora_tensors
 vllm.lora.models.is_moe_model = is_moe_model
+vllm.lora.models.LoRAModelManager._create_lora_modules = _create_lora_modules
 
 from vllm_mindspore.lora.layers import (
     ColumnParallelLinearWithLoRA,

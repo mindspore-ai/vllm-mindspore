@@ -80,6 +80,7 @@ _NATIVE_MODELS = {
     "Glm4ForCausalLM": ("glm4", "Glm4ForCausalLM"),
     "DeepseekV3ForCausalLM": ("deepseekv3", "DeepseekV3ForCausalLM"),
     "Glm4MoeForCausalLM": ("glm4_moe", "Glm4MoeForCausalLM"),
+    "Phi4MMForCausalLM": ("phi4mm", "Phi4MMForCausalLM"),
 }
 
 _MINDFORMERS_MODELS = {
