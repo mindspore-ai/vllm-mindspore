@@ -114,18 +114,12 @@ void ProcessTupleGetItem(ir::NodePtr node) {
 }  // namespace
 
 GraphExecutor::GraphExecutor() {
-  recycler_ = new TensorDataRecycler();
-  CHECK_IF_NULL(recycler_);
-
   for (auto &&path : GetEnvKernelLibPaths()) {
     ops::KernelLibRegistry::Instance().Load(path);
   }
 }
 
 GraphExecutor::~GraphExecutor() {
-  CHECK_IF_NULL(recycler_);
-  delete recycler_;
-  recycler_ = nullptr;
   for (auto &kernelPair : kernels_) {
     CHECK_IF_NULL(kernelPair.second);
     delete kernelPair.second;
