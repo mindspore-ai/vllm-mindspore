@@ -326,8 +326,8 @@ class LlamaDecoderLayer(nn.Cell):
 
 
 class LlamaModel(nn.Cell):
-    SUPPORT_LORA = False
-    SUPPORT_PP = False
+    # SUPPORT_LORA = False
+    # SUPPORT_PP = False
 
     def __init__(
         self,
