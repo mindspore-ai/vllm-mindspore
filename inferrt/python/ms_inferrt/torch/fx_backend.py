@@ -111,7 +111,7 @@ def embedding_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def muls_hook(node, input_nodes, executor):
     """swap the first and second param position."""
-    if isinstance(node.args[0], (int, float)):
+    if _is_scalar_arg(node.args[0]):
         return [input_nodes[1], input_nodes[0]]
     return input_nodes
 
@@ -163,11 +163,20 @@ def int_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def permute_hook(node, input_nodes, executor):
     """transpose dims"""
-    dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
-    dim_inx[input_nodes[1]] = input_nodes[2]
-    dim_inx[input_nodes[2]] = input_nodes[1]
-
-    return [input_nodes[0], dim_inx]
+    if node.target == "transpose" or node.target is torch.transpose:
+        dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
+        dim_inx[input_nodes[1]] = input_nodes[2]
+        dim_inx[input_nodes[2]] = input_nodes[1]
+        return [input_nodes[0], dim_inx]
+    # For .t(), only tensors <= 2-D are expected, so no explicit dimension parameters are required
+    if node.target == "t" or node.target is torch.t:
+        dim = len(input_nodes[0].meta["example_value"].shape)
+        if not dim <= 2:
+            raise NotImplementedError(f".t() only supports tensors with <= 2 dimensions, but got {dim} dimensions")
+        dim0 = 0
+        dim1 = 1
+        return [input_nodes[0], [dim1, dim0]]
+    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -327,6 +336,16 @@ def chunk_arg_hook(node, input_nodes, executor):
     return [input_tensor, split_sizes, dim_int]
 
 
+def _is_scalar_arg(arg):
+    """Check if the argument is a scalar type (int, float, bool, torch.SymInt)."""
+    if isinstance(arg, (int, float, bool, torch.SymInt)):
+        return True
+    if isinstance(arg, Node):
+        if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
+            return True
+    return False
+
+
 # pylint: disable=unused-argument
 def split_ops_hook(op, node, input_nodes, executor):
     """
@@ -372,7 +391,7 @@ def inplace_masked_fill_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def ge_op_hook(op, node, input_nodes, executor):
     """Get the ge op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.ge_scalar
     return Op.ge
 
@@ -380,15 +399,23 @@ def ge_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def lt_op_hook(op, node, input_nodes, executor):
     """Get the lt op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.lt_scalar
     return Op.lt
 
 
 # pylint: disable=unused-argument
+def sub_op_hook(op, node, input_nodes, executor):
+    """Get the sub op for a given node."""
+    if _is_scalar_arg(node.args[1]):
+        return Op.sub_scalar
+    return Op.sub
+
+
+# pylint: disable=unused-argument
 def mul_op_hook(op, node, input_nodes, executor):
     """Get the mul op for a given node."""
-    if isinstance(node.args[0], (int, float)) or isinstance(node.args[1], (int, float)):
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
         return Op.muls
     return Op.mul
 
@@ -428,6 +455,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
+    register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
     register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
 
@@ -497,6 +525,7 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
+    torch.t: Op.permute,
     torch.transpose: Op.permute,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
@@ -572,6 +601,7 @@ _OP_MAP = {
     "cat": Op.cat,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
+    "t": Op.permute,
     "transpose": Op.permute,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,

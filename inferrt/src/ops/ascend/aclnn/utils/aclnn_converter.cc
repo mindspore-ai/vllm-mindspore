@@ -60,7 +60,7 @@ aclScalar *Convert(const ir::Value *value) {
   if (value == nullptr) {
     return nullptr;
   }
-  if (value->IsInt()) {
+  if (value->IsInt() || value->IsSymbol()) {
     return CreateAclScalar(value->ToInt(), ACL_INT64);
   }
   if (value->IsDouble()) {
@@ -69,7 +69,7 @@ aclScalar *Convert(const ir::Value *value) {
   if (value->IsBool()) {
     return CreateAclScalar(value->ToBool(), ACL_BOOL);
   }
-  LOG_EXCEPTION << "Invalid value: " << value;
+  LOG_EXCEPTION << "Invalid value, value: " << value << ", type: " << TagToString(value->GetTag());
   return nullptr;
 }
 }  // namespace ops
