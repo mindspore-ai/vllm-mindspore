@@ -15,8 +15,6 @@
 """
 A simple torch.fx backend that converts a GraphModule to a ms_inferrt GraphExecutor.
 """
-from typing import Any, Dict, List, Optional
-
 import operator
 from typing import List, Dict, Any, Optional
 import torch
@@ -25,6 +23,7 @@ from torch.fx.node import Argument, Node
 from torch.fx.graph_module import GraphModule
 from torch.fx.immutable_collections import immutable_list
 
+from ms_inferrt import _ms_inferrt_ir
 from ms_inferrt import config
 from ms_inferrt.ir import GraphExecutor, Op
 from ms_inferrt.torch.symbolic_shape import SymbolicShapeManager
@@ -669,6 +668,38 @@ def _get_op(target):
     return Op.custom_call
 
 
+def _check_and_fallback_op_by_backend_support(
+        op: Op, output_value: Any, input_nodes: List[Any]
+) -> Op:
+    """
+    Check whether the given op is supported by the target backend; if not, fall back to Op.custom_call.
+
+    Args:
+        op: The op enum to check.
+        output_value: The output value (shape/dtype) for the op.
+        input_nodes: List of input nodes.
+
+    Returns:
+        The same op if supported, or Op.custom_call when unsupported or on check failure.
+    """
+    if op in (Op.custom_call, Op.python_call, Op.dvm_call, Op.make_tuple):
+        return op
+    if not hasattr(op, "name"):
+        return op
+
+    try:
+        input_values = [n.output for n in input_nodes]
+        status, msg = _ms_inferrt_ir.check_op_support(op.name, output_value, input_values)
+        if int(status) != 0:
+            print(f"Op {op.name} not supported: {msg}, fallback to custom_call")
+            return Op.custom_call
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Failed to check op support: {e}")
+        return op
+
+    return op
+
+
 def _is_shape_sequence(arg):
     """
     Determines whether the given argument represents shape information,
@@ -945,6 +976,11 @@ def _handle_call_node(node, executor, env, sym_mgr):
     example_value = node.meta.get("example_value", None)
     output_value = sym_mgr.from_torch_with_sym(example_value)
 
+    original_op = op
+    op = _check_and_fallback_op_by_backend_support(op, output_value, input_nodes)
+    if op != original_op:
+        op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
+
     env[node] = executor.add_op_node(op, input_nodes, output_value)
 
 
@@ -966,7 +1002,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
-    
+
     _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()

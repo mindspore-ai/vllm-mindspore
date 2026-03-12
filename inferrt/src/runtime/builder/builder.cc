@@ -16,9 +16,11 @@
 
 #include "runtime/builder/builder.h"
 #include <algorithm>
+#include <iterator>
 #include <unordered_set>
 #include <memory>
 #include <utility>
+#include "runtime/device_inference.h"
 #include "runtime/executor/executor.h"
 #include "ops/op_register.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
@@ -28,61 +30,13 @@ namespace mrt {
 namespace runtime {
 
 namespace {
-/**
- * @brief Get the device type of an operation node.
- *  The function follows these rules:
- * 1. If the output is a single tensor, returns the device of that tensor.
- * 2. If the output is None:
- *    - If any input element is a tensor, returns the device of the first tensor.
- *    - If no input element is a tensor, defaults to CPU device.
- * 3. If the output is a tuple:
- *    - If all elements are tensors, returns the device of the first tensor.
- *    - If any element is not a tensor, defaults to CPU device.
- * 4. For any other case or if checks fail, defaults to CPU device.
- * Note: Need to select operator type as 'device' for the copy operator.
- */
+
 hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
-  const ir::ValuePtr &nodeOutput = opNode->output;
-  CHECK_IF_NULL(nodeOutput);
-  if (nodeOutput->IsTensor()) {
-    auto &tensor = nodeOutput->ToTensor();
-    CHECK_IF_NULL(tensor);
-    return tensor->GetDevice();
-  }
-
-  if (nodeOutput->IsNone()) {
-    auto &inputs = opNode->inputs;
-    auto it = std::find_if(inputs.begin(), inputs.end(), [](const auto &node) { return node->output->IsTensor(); });
-    if (it != inputs.end()) {
-      return (*it)->output->ToTensor()->GetDevice();
-    }
-  }
-
-  if (nodeOutput->IsTuple()) {
-    auto &tuple = nodeOutput->ToTuple();
-    CHECK_IF_NULL(tuple);
-
-    // Empty tuple (e.g., from mrt.shape on scalar tensors) - default to CPU.
-    if (tuple->Size() == 0) {
-      return {hardware::DeviceType::CPU, 0};
-    }
-
-    bool allTensor = std::all_of(tuple->begin(), tuple->end(), [](const ir::ValuePtr &elem) {
-      CHECK_IF_NULL(elem);
-      return elem->IsTensor();
-    });
-
-    if (!allTensor) {
-      // Mixed or non-tensor types in tuple - default to CPU.
-      return {hardware::DeviceType::CPU, 0};
-    } else {
-      // All elements are tensors - use first tensor's device.
-      return (*tuple->begin())->ToTensor()->GetDevice();
-    }
-  }
-
-  // CPU for any other output type.
-  return {hardware::DeviceType::CPU, 0};
+  std::vector<ir::ValuePtr> inputValues;
+  inputValues.reserve(opNode->inputs.size());
+  std::transform(opNode->inputs.begin(), opNode->inputs.end(), std::back_inserter(inputValues),
+                 [](const auto &in) { return in != nullptr ? in->output : nullptr; });
+  return getDeviceFromOutputAndInputs(opNode->output, inputValues);
 }
 
 void VisitAllNodes(const ir::GraphPtr &graph, std::function<void(const ir::NodePtr &)> visitor) {
