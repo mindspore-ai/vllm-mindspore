@@ -164,11 +164,20 @@ def int_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def permute_hook(node, input_nodes, executor):
     """transpose dims"""
-    dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
-    dim_inx[input_nodes[1]] = input_nodes[2]
-    dim_inx[input_nodes[2]] = input_nodes[1]
-
-    return [input_nodes[0], dim_inx]
+    if node.target == "transpose" or node.target is torch.transpose:
+        dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
+        dim_inx[input_nodes[1]] = input_nodes[2]
+        dim_inx[input_nodes[2]] = input_nodes[1]
+        return [input_nodes[0], dim_inx]
+    # For .t(), only tensors <= 2-D are expected, so no explicit dimension parameters are required
+    if node.target == "t" or node.target is torch.t:
+        dim = len(input_nodes[0].meta["example_value"].shape)
+        if not dim <= 2:
+            raise NotImplementedError(f".t() only supports tensors with <= 2 dimensions, but got {dim} dimensions")
+        dim0 = 0
+        dim1 = 1
+        return [input_nodes[0], [dim1, dim0]]
+    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -517,6 +526,7 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
+    torch.t: Op.permute,
     torch.transpose: Op.permute,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
@@ -592,6 +602,7 @@ _OP_MAP = {
     "cat": Op.cat,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
+    "t": Op.permute,
     "transpose": Op.permute,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
