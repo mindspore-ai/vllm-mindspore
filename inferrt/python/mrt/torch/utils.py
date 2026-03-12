@@ -106,11 +106,25 @@ def from_torch(obj: Any) -> Value:
     if isinstance(obj, (int, float, bool, str)):
         return Value(obj)
     if isinstance(obj, torch.device):
-        device_str = str(obj).rsplit(".", maxsplit=1)[-1]
-        return Value(device_str)
+        # Format: "device:index", device in ("cpu", "npu"), index must be int
+        type_str = str(obj.type).lower()
+        if type_str == "privateuse1":
+            type_str = "npu"
+        if type_str not in ("cpu", "npu"):
+            raise ValueError(
+                f"from_torch(torch.device): device must be 'cpu' or 'npu', got '{type_str}'"
+            )
+        index = obj.index if obj.index is not None else 0
+        if not isinstance(index, int):
+            raise ValueError(
+                f"from_torch(torch.device): device index must be int, got {type(index).__name__}"
+            )
+        return Value(f"{type_str}:{index}")
     if isinstance(obj, torch.dtype):
         dtype_str = str(obj).rsplit(".", maxsplit=1)[-1]  # "torch.float32" -> "float32"
         return Value(DataType.convert_str_to_int(dtype_str))
+    if isinstance(obj, torch.layout):
+        return Value()
     if obj is None:
         return Value()
     raise TypeError(

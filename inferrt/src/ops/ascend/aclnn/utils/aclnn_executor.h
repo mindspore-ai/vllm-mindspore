@@ -69,7 +69,7 @@ class AclnnExecutor {
     auto hashId = CalcAclnnHash(opApiName_, args...);
     cacheEntry_ = cacheEntryManager_->GetCacheEntry(hashId);
     if (cacheEntry_ != nullptr) {
-      LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId;
+      LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId << "  op" << opApiName_;
       if (!IsEnableGroupLaunch()) {
         CallUpdateAddr(cacheEntry_, args...);
       }
@@ -77,7 +77,7 @@ class AclnnExecutor {
       return;
     }
 
-    LOG_OUT << opApiName_ << " miss cache with hashId: " << hashId;
+    LOG_OUT << opApiName_ << " miss cache with hashId: " << hashId << "  op" << opApiName_;
     auto [convertedParams, opExecutor] = GenerateOpExecutor(workspaceSize, args...);
     if (CheckExecutorRepeatable(opExecutor)) {
       cacheEntry_ = ir::MakeIntrusive<CacheEntryImpl<CacheProcessor<decltype(convertedParams)>>>(
