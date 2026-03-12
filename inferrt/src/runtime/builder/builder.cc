@@ -20,8 +20,8 @@
 #include <unordered_set>
 #include <memory>
 #include <utility>
-#include "runtime/device_inference.h"
 #include "runtime/executor/executor.h"
+#include "ops/utils/op_support.h"
 #include "ops/op_register.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
@@ -36,7 +36,7 @@ hardware::Device GetOpDeviceType(const ir::NodePtr &opNode) {
   inputValues.reserve(opNode->inputs.size());
   std::transform(opNode->inputs.begin(), opNode->inputs.end(), std::back_inserter(inputValues),
                  [](const auto &in) { return in != nullptr ? in->output : nullptr; });
-  return getDeviceFromOutputAndInputs(opNode->output, inputValues);
+  return GetDeviceFromOutputAndInputs(opNode->output, inputValues);
 }
 
 void VisitAllNodes(const ir::GraphPtr &graph, std::function<void(const ir::NodePtr &)> visitor) {

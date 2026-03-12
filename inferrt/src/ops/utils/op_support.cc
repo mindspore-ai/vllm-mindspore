@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "runtime/op_support.h"
+#include "ops/utils/op_support.h"
 
 #include <algorithm>
 #include <fstream>
@@ -27,7 +27,6 @@
 #include "hardware/device.h"
 #include "nlohmann/json.hpp"
 #include "ops/op_register.h"
-#include "runtime/device_inference.h"
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <dlfcn.h>
@@ -40,7 +39,7 @@ using json = nlohmann::json;
 
 namespace {
 
-bool isOpSupportWhitelisted(const std::string &opName) {
+bool IsOpSupportWhitelisted(const std::string &opName) {
   static const std::unordered_set<std::string> whitelist = {
     "make_tuple", "tuple_getitem", "depend", "return", "update_state",
   };
@@ -49,16 +48,16 @@ bool isOpSupportWhitelisted(const std::string &opName) {
 
 // Dialect op info: for all-fixed-tensor ops only; we validate exact input count.
 struct DialectOpInfo {
-  size_t tensorInputCount{0};  // Exact tensor input count
+  size_t tensorInputCount{0};
 };
 
-std::unordered_map<std::string, DialectOpInfo> &dialectOpInfoMap() {
+std::unordered_map<std::string, DialectOpInfo> &DialectOpInfoMap() {
   static std::unordered_map<std::string, DialectOpInfo> m;
   return m;
 }
 
 // Fixed required tensor only (excludes Variadic and Optional).
-bool isMrtFixedTensorType(const std::string &defStr) {
+bool IsMrtFixedTensorType(const std::string &defStr) {
   if (defStr.empty()) {
     return false;
   }
@@ -70,7 +69,7 @@ bool isMrtFixedTensorType(const std::string &defStr) {
 }
 
 // Extract "def" from type spec; may be nested in tablegen output.
-std::string getDefString(const json &typeSpec) {
+std::string GetDefString(const json &typeSpec) {
   if (typeSpec.is_string()) {
     return typeSpec.get<std::string>();
   }
@@ -90,10 +89,10 @@ std::string getDefString(const json &typeSpec) {
 }
 
 // Find MrtDialect.json relative to lib (share/mrt/MrtDialect.json).
-std::string findMrtDialectJsonPath() {
+std::string FindMrtDialectJsonPath() {
 #if defined(__linux__) || defined(__APPLE__)
   Dl_info dlInfo;
-  if (dladdr(reinterpret_cast<void *>(&findMrtDialectJsonPath), &dlInfo) != 0 && dlInfo.dli_fname != nullptr) {
+  if (dladdr(reinterpret_cast<void *>(&FindMrtDialectJsonPath), &dlInfo) != 0 && dlInfo.dli_fname != nullptr) {
     std::string libPath(dlInfo.dli_fname);
     size_t slash = libPath.find_last_of("/\\");
     if (slash != std::string::npos) {
@@ -116,7 +115,7 @@ std::string findMrtDialectJsonPath() {
   return "";
 }
 
-void loadMrtDialectJson(const std::string &path) {
+void LoadMrtDialectJson(const std::string &path) {
   std::ifstream f(path);
   if (!f.is_open()) {
     LOG_ERROR << "Cannot open MrtDialect.json: " << path;
@@ -133,7 +132,7 @@ void loadMrtDialectJson(const std::string &path) {
     return;
   }
 
-  auto &dialectMap = dialectOpInfoMap();
+  auto &dialectMap = DialectOpInfoMap();
   for (auto it = j.begin(); it != j.end(); ++it) {
     const json &opDef = it.value();
     if (!opDef.is_object()) {
@@ -162,9 +161,9 @@ void loadMrtDialectJson(const std::string &path) {
         continue;
       }
       const json &typeSpec = argEntry[0];
-      std::string defStr = getDefString(typeSpec);
+      std::string defStr = GetDefString(typeSpec);
 
-      if (isMrtFixedTensorType(defStr)) {
+      if (IsMrtFixedTensorType(defStr)) {
         tensorCount += 1;
       } else {
         skipOp = true;
@@ -181,19 +180,19 @@ void loadMrtDialectJson(const std::string &path) {
   }
 }
 
-const std::unordered_map<std::string, DialectOpInfo> &getDialectOpInfoMap() {
+const std::unordered_map<std::string, DialectOpInfo> &GetDialectOpInfoMap() {
   static bool loaded = false;
   if (!loaded) {
     loaded = true;
-    std::string path = findMrtDialectJsonPath();
+    std::string path = FindMrtDialectJsonPath();
     if (!path.empty()) {
-      loadMrtDialectJson(path);
+      LoadMrtDialectJson(path);
     }
   }
-  return dialectOpInfoMap();
+  return DialectOpInfoMap();
 }
 
-bool isOpRegisteredOnDevice(const std::string &opName, const hardware::DeviceType deviceType) {
+bool IsOpRegisteredOnDevice(const std::string &opName, const hardware::DeviceType deviceType) {
   if (deviceType == hardware::DeviceType::NPU) {
     return mrt::ops::OpFactory<mrt::ops::Operator>::GetInstance().IsRegistered(opName);
   }
@@ -204,8 +203,8 @@ bool isOpRegisteredOnDevice(const std::string &opName, const hardware::DeviceTyp
 }
 
 // For all-tensor ops: verify all actual inputs are tensors and count matches prototype.
-OpSupportResult checkInputTypesSupported(const std::string &opName, const std::vector<ir::ValuePtr> &inputValues) {
-  const auto &dialectMap = getDialectOpInfoMap();
+OpSupportResult CheckInputTypesSupported(const std::string &opName, const std::vector<ir::ValuePtr> &inputValues) {
+  const auto &dialectMap = GetDialectOpInfoMap();
   auto dialIt = dialectMap.find(opName);
   if (dialIt == dialectMap.end()) {
     OpSupportResult r;
@@ -257,17 +256,55 @@ OpSupportResult checkInputTypesSupported(const std::string &opName, const std::v
 
 }  // namespace
 
-OpSupportResult checkOpSupport(const std::string &opName, const ir::ValuePtr &outputValue,
+hardware::Device GetDeviceFromOutputAndInputs(const ir::ValuePtr &output, const std::vector<ir::ValuePtr> &inputs) {
+  CHECK_IF_NULL(output);
+
+  if (output->IsTensor()) {
+    auto &tensor = output->ToTensor();
+    CHECK_IF_NULL(tensor);
+    return tensor->GetDevice();
+  }
+
+  if (output->IsNone()) {
+    auto it =
+      std::find_if(inputs.begin(), inputs.end(), [](const ir::ValuePtr &v) { return v != nullptr && v->IsTensor(); });
+    if (it != inputs.end()) {
+      return (*it)->ToTensor()->GetDevice();
+    }
+    return {hardware::DeviceType::CPU, 0};
+  }
+
+  if (output->IsTuple()) {
+    auto &tuple = output->ToTuple();
+    CHECK_IF_NULL(tuple);
+
+    if (tuple->Size() == 0) {
+      return {hardware::DeviceType::CPU, 0};
+    }
+
+    bool allTensor = std::all_of(tuple->begin(), tuple->end(),
+                                 [](const ir::ValuePtr &elem) { return elem != nullptr && elem->IsTensor(); });
+
+    if (allTensor) {
+      return (*tuple->begin())->ToTensor()->GetDevice();
+    }
+    return {hardware::DeviceType::CPU, 0};
+  }
+
+  return {hardware::DeviceType::CPU, 0};
+}
+
+OpSupportResult CheckOpSupport(const std::string &opName, const ir::ValuePtr &outputValue,
                                const std::vector<ir::ValuePtr> &inputValues) {
-  if (isOpSupportWhitelisted(opName)) {
+  if (IsOpSupportWhitelisted(opName)) {
     OpSupportResult r;
     r.status = OpSupportStatus::kOk;
     r.message.clear();
     return r;
   }
 
-  const hardware::Device device = getDeviceFromOutputAndInputs(outputValue, inputValues);
-  if (!isOpRegisteredOnDevice(opName, device.type)) {
+  const hardware::Device device = GetDeviceFromOutputAndInputs(outputValue, inputValues);
+  if (!IsOpRegisteredOnDevice(opName, device.type)) {
     OpSupportResult r;
     r.status = OpSupportStatus::kUnsupportedDevice;
     r.message =
@@ -275,7 +312,7 @@ OpSupportResult checkOpSupport(const std::string &opName, const ir::ValuePtr &ou
     return r;
   }
 
-  return checkInputTypesSupported(opName, inputValues);
+  return CheckInputTypesSupported(opName, inputValues);
 }
 
 }  // namespace runtime
