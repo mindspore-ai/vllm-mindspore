@@ -16,7 +16,7 @@
 utils for converting between torch and ms_inferrt.ir.
 """
 from typing import Any, List, Tuple
-
+import os
 import torch
 from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
@@ -42,6 +42,11 @@ def _extract_global_comm_info():
     if rank > 7:
         raise ValueError(f"Expected rank id between 0 and 7, but received {rank}")
     world_size = dist.get_world_size()
+    ray_local_devices = os.getenv('RAY_LOCAL_VISIBLE_DEVICES')
+    if ray_local_devices:
+        device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
+        print(f"Device list: {device_list}")
+        rank = device_list[rank]
 
     CollectiveManager.instance().set_global_rank_id(rank)
     # TODO: Multi-machine scenario needs verification, current implementation only supports single machine with 8 NPUs
@@ -57,6 +62,12 @@ def _set_communication_info(ptd):
 
     group_rank = dist.get_rank(pg)
     rank_list = dist.get_process_group_ranks(pg)
+
+    ray_local_devices = os.getenv('RAY_LOCAL_VISIBLE_DEVICES')
+    if ray_local_devices:
+        device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
+        print(f"Device list: {device_list}")
+        rank = device_list[rank]
 
     hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
@@ -96,6 +107,8 @@ def from_torch(obj: Any) -> Value:
         return obj
     if isinstance(obj, torch.SymInt):
         return Value(SymbolicVar(str(obj)))
+    if isinstance(obj, torch.SymFloat):
+        return Value(float(obj))
     if isinstance(obj, (list, tuple)):
         return Value(MrtTuple([from_torch(e) for e in obj]))
     # pylint: disable=protected-access
