@@ -1,5 +1,6 @@
 add_subdirectory(aclnn)
 add_subdirectory(atb)
+add_subdirectory(composite)
 add_subdirectory(dvm)
 add_subdirectory(hccl)
 add_subdirectory(lowered)
