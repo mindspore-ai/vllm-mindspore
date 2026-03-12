@@ -231,6 +231,7 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   os << ", strides: " << ShapeToString(tensor.Strides());
   os << ", dtype=" << tensor.Dtype().ToString();
   os << ", storageShape: " << ShapeToString(tensor.StorageShape());
+  os << ", offset: " << tensor.StorageOffset();
   os << ", device=[type=" << hardware::GetDeviceNameByType(tensor.GetDevice().type)
      << ", index:" << int(tensor.GetDevice().index) << "]";
   os << ", data=[";

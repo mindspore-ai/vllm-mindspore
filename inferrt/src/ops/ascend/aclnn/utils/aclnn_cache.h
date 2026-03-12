@@ -132,7 +132,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::pair<std::vec
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TensorPtr &tensor, size_t *irIndex,
                        size_t *tensorIndex) {
   if (tensor != nullptr) {
-    cacheEntry->UpdateTensorAddr(irIndex, tensorIndex, nullptr, tensor->DataPtr());
+    cacheEntry->UpdateTensorAddr(irIndex, tensorIndex, nullptr, tensor->GetStorage()->Data());
   }
   ++(*irIndex);
   ++(*tensorIndex);
@@ -151,7 +151,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::optional<ir::
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::vector<ir::TensorPtr> &tensorList, size_t *irIndex,
                        size_t *tensorIndex) {
   for (size_t i = 0; i < tensorList.size(); ++i) {
-    cacheEntry->UpdateTensorAddr(irIndex, nullptr, &i, tensorList[i]->DataPtr());
+    cacheEntry->UpdateTensorAddr(irIndex, nullptr, &i, tensorList[i]->GetStorage()->Data());
   }
   ++(*irIndex);
   *tensorIndex += tensorList.empty() ? 1 : tensorList.size();

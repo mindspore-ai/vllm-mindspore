@@ -15,8 +15,9 @@
 """
 A simple torch.fx backend that converts a GraphModule to a mrt GraphExecutor.
 """
+from typing import Any, Dict, List, Optional
+
 import operator
-from typing import List, Dict, Any, Optional
 import torch
 from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Argument, Node
@@ -36,6 +37,7 @@ from mrt.torch.utils import (
 )
 from mrt.torch.getitem_impl import getitem_process
 from mrt.torch.setitem_impl import setitem_process
+from mrt.torch.decompose_impl import _decompose_ops_with_fake_mode
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -476,7 +478,7 @@ def _remove_matched_nodes(gm: GraphModule, matchers):
     if nodes_to_erase:
         gm.recompile()
 
-
+aten = torch.ops.aten
 # pylint: disable=protected-access
 # A comprehensive mapping from torch fx ops to our custom ops.
 _OP_MAP = {
@@ -508,6 +510,12 @@ _OP_MAP = {
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
     torch.zeros: Op.zeros,
+    aten.select.int: Op.select_view,
+    aten.slice.Tensor: Op.slice_view,
+    aten.view.default: Op.view,
+    aten.copy_.default: Op.inplace_copy,
+    aten.expand.default: Op.expand,
+    aten.unsqueeze.default: Op.unsqueeze,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -956,6 +964,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
+
+    _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()
     _init_mrt_config()

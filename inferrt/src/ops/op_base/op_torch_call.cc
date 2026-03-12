@@ -15,6 +15,7 @@
  */
 
 #include "ops/op_base/op_torch_call.h"
+#include <cctype>
 #include <sstream>
 #include <unordered_map>
 #include <functional>
@@ -188,6 +189,28 @@ void OpTorchCall::ConvertBoolInputToStack(const ir::Value *value, torch::jit::St
 }
 
 void OpTorchCall::ConvertStringInputToStack(const ir::Value *value, torch::jit::Stack &stack) {
+  auto str = value->ToString();
+  // Format "device:index" with device in {"cpu", "npu"}, index integer -> c10::Device
+  size_t colon = str.find(':');
+  if (colon != std::string::npos && colon > 0 && colon + 1 < str.size()) {
+    std::string device_name = str.substr(0, colon);
+    std::string index_str = str.substr(colon + 1);
+    if (device_name == "cpu" || device_name == "npu") {
+      bool valid_index = !index_str.empty();
+      for (char c : index_str) {
+        if (!std::isdigit(static_cast<unsigned char>(c))) {
+          valid_index = false;
+          break;
+        }
+      }
+      if (valid_index) {
+        c10::DeviceType device_type = (device_name == "cpu") ? c10::DeviceType::CPU : c10::DeviceType::PrivateUse1;
+        c10::DeviceIndex device_index = static_cast<c10::DeviceIndex>(std::stoi(index_str));
+        torch::jit::push(stack, c10::Device(device_type, device_index));
+        return;
+      }
+    }
+  }
   torch::jit::push(stack, value->ToString());
 }
 
@@ -235,6 +258,9 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
     }
   } else if (output->IsSymbol()) {
     // If output is symbol, we just ignore it.
+    return;
+  } else if (output->IsNone()) {
+    // If output is none, like the aten.index_put op we just ignore it.
     return;
   } else {
     LOG_EXCEPTION << "Output Only Support Tensor or List[Tensor], but got type: "
@@ -292,7 +318,9 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
     // Check if type kind is in the map
     auto it = typeCheckMap.find(type->kind());
     bool match = (it != typeCheckMap.end()) ? it->second(inputs[j]) : false;
-    if (!match) {
+    if (!match && type->kind() != c10::TypeKind::DeviceObjType) {
+      LOG(ERROR) << "Invalid args " << i << ":" << args[i] << " type:" << type
+                 << " kind:" << typeid(type->kind()).name() << " input " << j << ":" << *inputs[j] << " ";
       return false;
     }
   }
