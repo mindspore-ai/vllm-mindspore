@@ -1,3 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+# Adapted from
+# https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/phi4mm_utils.py
+#
+# Copyright 2025-2026 Huawei Technologies Co., Ltd
+# Copyright 2025 The vLLM Team.
+# Copyright 2025 Microsoft Corporation.
+# All rights reserved.
+#
+# This file is adapted from the vLLM implementation of the Phi-4 multimodal utilities.
+# It has been modified to support the MindSpore/vLLM-MindSpore inference framework.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Utility functions for Phi-4-multimodal-instruct model compatible with HuggingFace weights."""
+# type: ignore
+# isort:skip_file
+
 import math
 from typing import Optional, Union
 
@@ -314,10 +341,10 @@ class ConvModule(nn.Cell):
 
         if depthwise_seperable_out_channel != 0:
             if input_dim != depthwise_seperable_out_channel:
-                self.ln2 = mint.nn.Linear(depthwise_seperable_out_channel, input_dim)  # 【修改5】nn.Linear->nn.Dense
+                self.ln2 = mint.nn.Linear(depthwise_seperable_out_channel, input_dim)  
         else:
             if depthwise_multiplier != 1:
-                self.ln2 = mint.nn.Linear(input_dim * depthwise_multiplier, input_dim)  # 【修改6】nn.Linear->nn.Dense
+                self.ln2 = mint.nn.Linear(input_dim * depthwise_multiplier, input_dim)  
 
     def _add_ext_pw_layer(self) -> None:
         self.ln1 = self.glu = self.bn_layer = self.ext_pw_conv_1d = mint.nn.Identity()
@@ -601,7 +628,7 @@ class AbsolutePositionalEncoding(nn.Cell):
         self.xscale = math.sqrt(self.d_model)
         self.dropout = mint.nn.Dropout(p=dropout_rate)  
         self.pe = None
-        self.extend_pe(ms.Tensor(ops.zeros((1, max_len)), ms.float32))  # 【修改3】初始化用ms.Tensor
+        self.extend_pe(ms.Tensor(ops.zeros((1, max_len)), ms.float32))  
         
 
     def extend_pe(self, x: ms.Tensor) -> None:  

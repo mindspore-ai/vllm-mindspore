@@ -1,10 +1,30 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT license.
-# Code copied from Microsoft/MoE by Jacob Platin (jacobplatin@microsoft.com)
-# but implemented by the Phi-Speech team
-#!/usr/bin/env python3
+# Adapted from
+# https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/phi4mm_audio.py
+#
+# Copyright 2025-2026 Huawei Technologies Co., Ltd
+# Copyright 2025 The vLLM Team.
+# Copyright 2025 Microsoft Corporation.
+# All rights reserved.
+#
+# This file is adapted from the vLLM implementation of the Phi-4 multimodal audio module.
+# It has been modified to support the MindSpore/vLLM-MindSpore inference framework.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Audio processing modules for Phi-4-multimodal-instruct model compatible with HuggingFace weights."""
+# type: ignore
+# isort:skip_file
+
 import abc
 import math
 from typing import Any, Literal, Optional, Union
@@ -462,7 +482,7 @@ class ConformerEncoder(TransformerEncoderBase):
         pad_mask = ops.logical_and(pad_mask, enc_streaming_mask)
         return pad_mask
 
-    def construct(self, xs_pad: ms.Tensor, masks: ms.Tensor) -> tuple[ms.Tensor, ms.Tensor]:  # 【修改6】forward->construct
+    def construct(self, xs_pad: ms.Tensor, masks: ms.Tensor) -> tuple[ms.Tensor, ms.Tensor]:  
         xs_pad = self.encoder_embedding(xs_pad)
         input_tensor, pos_k, pos_v, hs_mask, masks = self.forward_embeddings(xs_pad, masks)
 
