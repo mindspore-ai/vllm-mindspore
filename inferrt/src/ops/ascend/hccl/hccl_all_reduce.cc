@@ -30,6 +30,11 @@
 
 namespace mrt {
 namespace ops {
+
+void HcclAllReduce::Init(const std::vector<const ir::Value *> &input, const ir::Value *output) {
+  hcclOpType_ = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
+}
+
 OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                           size_t *workspaceSize) {
   LOG_OUT << "HcclAllReduce CalcWorkspace";
@@ -46,12 +51,11 @@ OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &
 OpsErrorCode HcclAllReduce::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                    ir::Value *output, void *stream) {
   LOG_OUT << "HcclAllReduce launch";
-  auto hcclOpType = HcomUtil::GetHcomReduceOpType(input[kIndex1]->ToString());
   auto outTensor = output->ToTensor();
 
   auto hcclResult = HcclAdapter::GetInstance().HcclAllReduce(
     const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()), outTensor->DataPtr(), hcclKernel_.hcclCount_,
-    hcclKernel_.hcclDataType_, hcclOpType, stream, hcclKernel_.comm_);
+    hcclKernel_.hcclDataType_, hcclOpType_, stream, hcclKernel_.comm_);
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
     LOG_ERROR << "HcclAllReduce failed, hcclResult: " << hcclResult;

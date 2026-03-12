@@ -29,6 +29,7 @@ class HcclReduceScatter : public OpReduceScatter {
   HcclReduceScatter() = default;
   ~HcclReduceScatter() = default;
 
+  void Init(const std::vector<const ir::Value *> &input, const ir::Value *output) override;
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                              size_t *workspaceSize) override;
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
@@ -36,6 +37,7 @@ class HcclReduceScatter : public OpReduceScatter {
 
  private:
   HcclKernel hcclKernel_;
+  HcclReduceOp hcclOpType_{HCCL_REDUCE_SUM};
 };
 }  // namespace ops
 }  // namespace mrt
