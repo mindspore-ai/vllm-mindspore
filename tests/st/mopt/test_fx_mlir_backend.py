@@ -11,12 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """test_fx_mlir_backend"""
 
 import torch
 import numpy as np
-from mrt.torch.fx_mlir_backend import backend
+from ms_inferrt.torch.fx_mlir_backend import backend
 
 
 def foo(x):
@@ -31,17 +30,17 @@ def run(input_shape, output_shape):
     """Test reshape operation"""
     x_np = np.random.randn(*input_shape).astype(np.float32)
     x_tensor = torch.tensor(x_np)
-    
+
     # Expected result using numpy
     expect = x_np.reshape(output_shape)
-    
+
     # Result from compiled backend
     out = opt_foo(x_tensor)
-    
+
     print(f"Input shape: {input_shape}")
     print(f"Output shape: {out.shape}")
     print(f"Expected shape: {output_shape}")
-    
+
     assert out.shape == output_shape, f"Shape mismatch: {out.shape} vs {output_shape}"
     assert np.allclose(out.numpy(), expect, 1e-5, 1e-5), f"\nout={out}\nexpect={expect}"
 

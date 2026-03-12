@@ -20,7 +20,7 @@ import torch
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 
 
 def op_func_alpha_2(x1, x2):

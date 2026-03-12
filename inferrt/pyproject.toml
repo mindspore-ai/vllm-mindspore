@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mrt"
-version = "1.0"
+name = "ms_inferrt"
+version = "0.1"
 description = "InferRT - High-performance inference runtime for machine learning models"
 readme = "README.md"
 license = "Apache-2.0"
-authors = [{name = "MRT Team", email = "mrt-team@example.com"}]
+authors = [{name = "InferRT Team", email = "inferrt-team@example.com"}]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -27,9 +27,9 @@ Homepage = "https://gitee.com/mindspore/vllm-mindspore"
 
 [tool.setuptools]
 package-dir = {"" = "python"}
-packages = ["mrt", "mrt.torch"]
+packages = ["ms_inferrt", "ms_inferrt.torch"]
 include-package-data = true
-package-data = { mrt = ["*.so", "lib/*.so", ".commit-id"] }
+package-data = { ms_inferrt = ["*.so", "lib/*.so", ".commit-id"] }
 ext-modules = [
-    {name = "mrt._mrt_ir", sources = ["python/pybind/mrt/pybind_ir.cc"]}
+    {name = "ms_inferrt._ms_inferrt_ir", sources = ["python/pybind/ms_inferrt/pybind_ir.cc"]}
 ]

@@ -4,9 +4,9 @@ import os
 import pytest
 import torch
 
-import mrt
-from mrt.torch.fx_backend import backend as fx_backend
-from mrt.torch.fx_mlir_backend import backend as mlir_backend
+import ms_inferrt
+from ms_inferrt.torch.fx_backend import backend as fx_backend
+from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
 
 from tests.mark_utils import arg_mark
 
@@ -22,25 +22,25 @@ def test_aclnn_custom_div_op(backend):
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     aclnn_div_path = os.path.join(script_dir, "aclnn_custom_div.cc")
-    mrt.ops.load(name="aclnn_custom_div", sources=[aclnn_div_path], backend="Ascend")
+    ms_inferrt.ops.load(name="aclnn_custom_div", sources=[aclnn_div_path], backend="Ascend")
 
-    @torch.library.custom_op("mrt::custom_div", mutates_args=())
+    @torch.library.custom_op("ms_inferrt::custom_div", mutates_args=())
     def custom_div_op(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("This is a placeholder for the custom_div operator.")
 
     # pylint: disable=unused-argument
-    @torch.library.register_fake("mrt::custom_div")
+    @torch.library.register_fake("ms_inferrt::custom_div")
     def _(x, y):
         return x
 
-    def mrt_custom_div(x, y):
-        return torch.ops.mrt.custom_div(x, y)
+    def ms_inferrt_custom_div(x, y):
+        return torch.ops.ms_inferrt.custom_div(x, y)
 
-    mrt_custom_div_compiled = torch.compile(mrt_custom_div, backend=backend)
+    ms_inferrt_custom_div_compiled = torch.compile(ms_inferrt_custom_div, backend=backend)
 
     x = torch.randn(2, 2).npu()
     y = torch.randn(2, 2).npu()
-    result = mrt_custom_div_compiled(x, y)
+    result = ms_inferrt_custom_div_compiled(x, y)
     expected = torch.div(x, y)
 
     assert torch.equal(result, expected), f"\nresult={result}\nexpected={expected}"
@@ -50,12 +50,12 @@ def test_aclnn_custom_div_op(backend):
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_custom_ops_api_with_ascend_backend():
     """
-    Feature: Test mrt.ops.compile and mrt.ops.load_library APIs
-    Description: Test mrt.ops.compile and mrt.ops.load_library APIs
+    Feature: Test ms_inferrt.ops.compile and ms_inferrt.ops.load_library APIs
+    Description: Test ms_inferrt.ops.compile and ms_inferrt.ops.load_library APIs
     Expectation: The result is correct
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     cpu_sub_path = os.path.join(script_dir, "aclnn_custom_div.cc")
-    lib_path = mrt.ops.compile(name="custom_div", sources=[cpu_sub_path], backend="Ascend")
-    result = mrt.ops.load_library(lib_path)
-    assert result is True, "mrt.ops.load_library failed"
+    lib_path = ms_inferrt.ops.compile(name="custom_div", sources=[cpu_sub_path], backend="Ascend")
+    result = ms_inferrt.ops.load_library(lib_path)
+    assert result is True, "ms_inferrt.ops.load_library failed"

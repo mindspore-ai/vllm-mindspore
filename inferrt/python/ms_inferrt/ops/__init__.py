@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''
-CollectiveManager is a class to manage communication groups and global distributed information.
-'''
-from mrt._mrt_collective import CollectiveManager
+# pylint: disable=missing-docstring
+# pylint: disable=redefined-builtin
 
-__all__ = ['CollectiveManager']
+# Export functions from load module
+from ms_inferrt.ops.load import compile, load, load_library, CustomOpLoader
+
+__all__ = ['compile', 'load', 'load_library', 'CustomOpLoader']

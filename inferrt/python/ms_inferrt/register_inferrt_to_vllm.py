@@ -13,12 +13,12 @@
 # limitations under the License.
 """
 One-click patch to add InferrtAdaptor support to vllm
-Usage: Add 'from mrt import register_inferrt_to_vllm' at the beginning of your code
+Usage: Add 'from ms_inferrt import register_inferrt_to_vllm' at the beginning of your code
 """
 
 from typing import Optional, Any, Callable
 from torch import fx
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 from vllm.compilation.compiler_interface import CompilerInterface
 from vllm.compilation.counter import compilation_counter
 from vllm.compilation import backends

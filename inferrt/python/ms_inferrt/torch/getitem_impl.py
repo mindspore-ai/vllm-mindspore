@@ -3,8 +3,8 @@
 from typing import Tuple
 import torch
 from torch.fx.node import Argument, Node
-from mrt.ir import Op
-from mrt.torch.utils import tuple_indices_to_slice_arg
+from ms_inferrt.ir import Op
+from ms_inferrt.torch.utils import tuple_indices_to_slice_arg
 
 
 def _tensor_getitem_by_tuple(x: Node, indices: Tuple[Argument, ...]):

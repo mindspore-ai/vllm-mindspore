@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-utils for converting between torch and mrt.ir.
+utils for converting between torch and ms_inferrt.ir.
 """
 from typing import Any, List, Tuple
 
@@ -21,10 +21,10 @@ import torch
 from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
 
-from mrt import _mrt_torch
-from mrt._mrt_api import is_custom_op_registered
-from mrt.ir import Value, Tuple as MrtTuple, DataType, SymbolicVar
-from mrt._mrt_collective import CollectiveManager
+from ms_inferrt import _ms_inferrt_torch
+from ms_inferrt._ms_inferrt_api import is_custom_op_registered
+from ms_inferrt.ir import Value, Tuple as MrtTuple, DataType, SymbolicVar
+from ms_inferrt._ms_inferrt_collective import CollectiveManager
 
 
 # pylint: disable=protected-access
@@ -90,7 +90,7 @@ def get_collective_info_from_torch(gm: torch.fx.GraphModule):
 
 def from_torch(obj: Any) -> Value:
     """
-    Convert a torch object to mrt.ir.Value.
+    Convert a torch object to ms_inferrt.ir.Value.
     """
     if isinstance(obj, Value):
         return obj
@@ -100,9 +100,9 @@ def from_torch(obj: Any) -> Value:
         return Value(MrtTuple([from_torch(e) for e in obj]))
     # pylint: disable=protected-access
     if isinstance(obj, torch._subclasses.FakeTensor):
-        return Value(_mrt_torch.from_torch(obj, is_fake=True))
+        return Value(_ms_inferrt_torch.from_torch(obj, is_fake=True))
     if isinstance(obj, torch.Tensor):
-        return Value(_mrt_torch.from_torch(obj))
+        return Value(_ms_inferrt_torch.from_torch(obj))
     if isinstance(obj, (int, float, bool, str)):
         return Value(obj)
     if isinstance(obj, torch.device):
@@ -128,20 +128,20 @@ def from_torch(obj: Any) -> Value:
     if obj is None:
         return Value()
     raise TypeError(
-        f"Unsupported python type for conversion to mrt.ir.Value: {type(obj)}"
+        f"Unsupported python type for conversion to ms_inferrt.ir.Value: {type(obj)}"
     )
 
 
 def to_torch(value: Value) -> Any:
     """
-    Convert a mrt.ir.Value to torch object.
+    Convert a ms_inferrt.ir.Value to torch object.
     """
     if not isinstance(value, Value):
         return value
     if value.is_none():
         return None
     if value.is_tensor():
-        return _mrt_torch.to_torch(value.to_tensor())
+        return _ms_inferrt_torch.to_torch(value.to_tensor())
     if value.is_tuple():
         return tuple(to_torch(item) for item in value.to_tuple())
     if value.is_int() or value.is_symbol():
@@ -153,12 +153,12 @@ def to_torch(value: Value) -> Any:
     if value.is_string():
         return value.to_string()
     raise TypeError(
-        f"Unsupported mrt.ir.Value for conversion to python object: {value}"
+        f"Unsupported ms_inferrt.ir.Value for conversion to python object: {value}"
     )
 
 
 def set_device_context():
-    _mrt_torch.set_device_context()
+    _ms_inferrt_torch.set_device_context()
 
 
 def update_runtime_inputs(
@@ -168,7 +168,7 @@ def update_runtime_inputs(
     """
     Update placeholder nodes with runtime input values and update symbolic variables.
     """
-    _mrt_torch.batch_update_runtime_inputs(param_nodes, new_inputs)
+    _ms_inferrt_torch.batch_update_runtime_inputs(param_nodes, new_inputs)
 
 
 def tuple_indices_to_slice_arg(indices: Tuple[int, ...], shape: Tuple[int, ...]):

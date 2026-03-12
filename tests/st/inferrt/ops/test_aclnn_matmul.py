@@ -17,7 +17,7 @@ import torch
 
 from torch_npu.testing.common_utils import create_common_tensor
 
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual

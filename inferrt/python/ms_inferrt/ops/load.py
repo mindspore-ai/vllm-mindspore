@@ -1,4 +1,4 @@
-﻿"""
+"""
 Custom operator loading module for MRT (MindSpore Runtime).
 """
 
@@ -28,7 +28,7 @@ import sysconfig
 from pathlib import Path
 from typing import List, Optional, Union, Dict, Any
 import logging
-import mrt
+import ms_inferrt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -68,16 +68,16 @@ class CustomOpLoader:
     def __init__(self):
         self._loaded_libraries = {}  # Cache for loaded libraries
         self._compiled_libraries = {}  # Cache for compiled libraries
-        self.mrt_path = os.path.dirname(os.path.realpath(mrt.__file__))
-        self.mrt_lib_path = os.path.join(self.mrt_path, 'lib')
-        self.mrt_include_path = os.path.join(self.mrt_path, 'include')
+        self.ms_inferrt_path = os.path.dirname(os.path.realpath(ms_inferrt.__file__))
+        self.ms_inferrt_lib_path = os.path.join(self.ms_inferrt_path, 'lib')
+        self.ms_inferrt_include_path = os.path.join(self.ms_inferrt_path, 'include')
         self.debug_mode = False  # Set to True to enable debug symbols
 
     def _get_cache_dir(self) -> Path:
         """
         Get the cache directory path and ensure it exists.
         """
-        cache_dir = Path.cwd() / ".mrt_custom_cache"
+        cache_dir = Path.cwd() / ".ms_inferrt_custom_cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir
 
@@ -210,8 +210,8 @@ class CustomOpLoader:
         backend_env = self._get_backend_environment(backend)
 
         # Combine include paths
-        all_include_paths = [self.mrt_include_path, os.path.join(self.mrt_include_path, 'src')]
-        thirdparty_path = os.path.join(self.mrt_include_path, 'third_party')
+        all_include_paths = [self.ms_inferrt_include_path, os.path.join(self.ms_inferrt_include_path, 'src')]
+        thirdparty_path = os.path.join(self.ms_inferrt_include_path, 'third_party')
         for subdir in os.listdir(thirdparty_path):
             all_include_paths.append(os.path.join(thirdparty_path, subdir))
         all_include_paths += extra_include_paths
@@ -219,7 +219,7 @@ class CustomOpLoader:
         include_flags = ' '.join([f'-I{path}' for path in all_include_paths])
 
         # Combine library directories
-        all_lib_dirs = [self.mrt_lib_path] + backend_env['LIB_DIRS']
+        all_lib_dirs = [self.ms_inferrt_lib_path] + backend_env['LIB_DIRS']
         lib_dir_flags = ' '.join([f'-L{path}' for path in all_lib_dirs])
 
         # Combine libraries
@@ -228,7 +228,7 @@ class CustomOpLoader:
         all_libs += [' '.join(extra_ldflags)]
         all_libs += ["-shared -Wl,-z,relro,-z,now,-z,noexecstack"]
         all_libs += ["-Wl,--disable-new-dtags"]
-        all_libs += [f"-Wl,--rpath,'{self.mrt_lib_path}' -s"]
+        all_libs += [f"-Wl,--rpath,'{self.ms_inferrt_lib_path}' -s"]
         lib_flags = ' '.join(all_libs)
 
         # Combine compiler flags
@@ -265,8 +265,8 @@ class CustomOpLoader:
         ninja_parts = []
 
         # Add header and variables
-        ninja_parts.append("# Ninja build file for MRT custom operator")
-        ninja_parts.append("# Generated automatically by mrt.ops.load()")
+        ninja_parts.append("# Ninja build file for InferRT custom operator")
+        ninja_parts.append("# Generated automatically by ms_inferrt.ops.load()")
         ninja_parts.append("")
         ninja_parts.append("# Variables")
         ninja_parts.append("cxx = g++")
@@ -401,7 +401,7 @@ class CustomOpLoader:
 
         Example:
             # Load a pre-compiled library
-            success = mrt.ops.load_library("/path/to/my_custom_ops.so")
+            success = ms_inferrt.ops.load_library("/path/to/my_custom_ops.so")
         """
         try:
             # Validate library path
@@ -451,7 +451,7 @@ class CustomOpLoader:
             Optional[str]: Path to the compiled dynamic library if successful, None otherwise
 
         Example:
-            lib_path = mrt.ops.compile(
+            lib_path = ms_inferrt.ops.compile(
                 name="my_custom_op",
                 sources="my_custom_op.cc",
                 extra_cflags=["-O2", "-std=c++17"],
@@ -495,7 +495,7 @@ class CustomOpLoader:
             bool: True if successful, False otherwise
 
         Example:
-            success = mrt.ops.load(
+            success = ms_inferrt.ops.load(
                 name="my_custom_lib",
                 sources=["my_custom_op.cc"],
                 build_directory="/tmp/my_build",
@@ -547,14 +547,14 @@ def compile(name: str, sources: Union[str, List[str]], extra_cflags: Optional[Li
         Optional[str]: Path to the compiled dynamic library if successful, None otherwise
 
     Example:
-        import mrt
+        import ms_inferrt
 
         # Compile a single source file for Ascend backend
-        lib_path = mrt.ops.compile("my_custom_op.cc", backend="Ascend")
+        lib_path = ms_inferrt.ops.compile("my_custom_op.cc", backend="Ascend")
         # Compile multiple source files
-        lib_path = mrt.ops.compile(["op1.cc", "op2.cc"])
+        lib_path = ms_inferrt.ops.compile(["op1.cc", "op2.cc"])
         # Compile with custom name and build directory
-        lib_path = mrt.ops.compile("my_custom_op.cc",
+        lib_path = ms_inferrt.ops.compile("my_custom_op.cc",
                           name="my_custom_lib",
                           build_directory="/tmp/my_build")
     """

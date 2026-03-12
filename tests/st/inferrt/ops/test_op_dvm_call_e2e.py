@@ -1,23 +1,24 @@
+"""Test DVM call end-to-end operations."""
 
 import pytest
 import torch
-from mrt.torch.fx_backend import backend, register_dvm_op
+from ms_inferrt.torch.fx_backend import backend, register_dvm_op
 from tests.mark_utils import arg_mark
 
 
-def _get_mrt_dvm_lib():
-    # torch.library.Library("mrt_dvm", "DEF") can only be created once per process.
+def _get_ms_inferrt_dvm_lib():
+    # torch.library.Library("ms_inferrt_dvm", "DEF") can only be created once per process.
     # If other tests already created it, fall back to "FRAGMENT".
     try:
-        return torch.library.Library("mrt_dvm", "DEF")
+        return torch.library.Library("ms_inferrt_dvm", "DEF")
     except Exception:
-        return torch.library.Library("mrt_dvm", "FRAGMENT")
+        return torch.library.Library("ms_inferrt_dvm", "FRAGMENT")
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_add_staticshape_e2e():
     """
-    Feature: mrt.dvm_call (static shape)
+    Feature: ms_inferrt.dvm_call (static shape)
     Description: Single-op graph: out = x + y
     Expectation: DVM kernel executes and matches eager result.
     """
@@ -42,11 +43,11 @@ def test_dvm_call_add_staticshape_e2e():
     register_dvm_op(op_name, payload_json)
 
     # 2. Define the custom op in torch
-    # Note: namespace must be 'mrt_dvm' to trigger the logic in fx_backend
-    lib = _get_mrt_dvm_lib()
+    # Note: namespace must be 'ms_inferrt_dvm' to trigger the logic in fx_backend
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor y) -> Tensor")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_add_impl(x, y):
@@ -54,12 +55,12 @@ def test_dvm_call_add_staticshape_e2e():
         return x + y
 
     @torch.library.register_fake(impl_name)
-    def dvm_add_fake(x, y):
+    def dvm_add_fake(x, _y):
         return torch.empty_like(x)
 
     # 3. Define the function to compile
     def test_func(x, y):
-        return torch.ops.mrt_dvm.dvm_add_staticshape_mock(x, y)
+        return torch.ops.ms_inferrt_dvm.dvm_add_staticshape_mock(x, y)
 
     # 4. Compile with mrt backend
     compiled_func = torch.compile(test_func, backend=backend)
@@ -79,7 +80,7 @@ def test_dvm_call_add_staticshape_e2e():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_mul_add_fused_staticshape_e2e():
     """
-    Feature: mrt.dvm_call (static shape)
+    Feature: ms_inferrt.dvm_call (static shape)
     Description: Fused graph: out = x * y + x
     Expectation: DVM kernel executes fused mul+add and matches eager result.
     """
@@ -102,21 +103,21 @@ def test_dvm_call_mul_add_fused_staticshape_e2e():
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor y) -> Tensor")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_mul_add_impl(x, y):
         return x * y + x
 
     @torch.library.register_fake(impl_name)
-    def dvm_mul_add_fake(x, y):
+    def dvm_mul_add_fake(x, _y):
         return torch.empty_like(x)
 
     def test_func(x, y):
-        return torch.ops.mrt_dvm.dvm_mul_add_fused_staticshape_mock(x, y)
+        return torch.ops.ms_inferrt_dvm.dvm_mul_add_fused_staticshape_mock(x, y)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -131,7 +132,7 @@ def test_dvm_call_mul_add_fused_staticshape_e2e():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_staticshape_e2e():
     """
-    Feature: mrt.dvm_call (static shape, multi-output)
+    Feature: ms_inferrt.dvm_call (static shape, multi-output)
     Description: Fused graph with two outputs:
       out0 = x + y
       out1 = x * y
@@ -157,21 +158,21 @@ def test_dvm_call_two_outputs_staticshape_e2e():
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_two_outputs_impl(x, y):
         return (x + y, x * y)
 
     @torch.library.register_fake(impl_name)
-    def dvm_two_outputs_fake(x, y):
+    def dvm_two_outputs_fake(x, _y):
         return (torch.empty_like(x), torch.empty_like(x))
 
     def test_func(x, y):
-        return torch.ops.mrt_dvm.dvm_two_outputs_staticshape_mock(x, y)
+        return torch.ops.ms_inferrt_dvm.dvm_two_outputs_staticshape_mock(x, y)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -186,7 +187,7 @@ def test_dvm_call_two_outputs_staticshape_e2e():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
     """
-    Feature: mrt.dvm_call multi-output output ordering.
+    Feature: ms_inferrt.dvm_call multi-output output ordering.
     Description: Construct a payload where store(Add) appears before store(Mul) in the instruction stream,
     but output_indices order is [store(Mul), store(Add)]. This guards against mapping outputs by store
     appearance order instead of payload.output_indices.
@@ -212,10 +213,10 @@ def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_two_outputs_impl(x, y):
@@ -223,11 +224,11 @@ def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
         return (x * y, x + y)
 
     @torch.library.register_fake(impl_name)
-    def dvm_two_outputs_fake(x, y):
+    def dvm_two_outputs_fake(x, _y):
         return (torch.empty_like(x), torch.empty_like(x))
 
     def test_func(x, y):
-        return getattr(torch.ops.mrt_dvm, op_name)(x, y)
+        return getattr(torch.ops.ms_inferrt_dvm, op_name)(x, y)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -242,7 +243,7 @@ def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
     """
-    Feature: mrt.dvm_call multi-output output-shape ref selection for reshape/broadcast.
+    Feature: ms_inferrt.dvm_call multi-output output-shape ref selection for reshape/broadcast.
     Description:
       In multi-output graphs, reshape/broadcast need a *target output shape* (ShapeRef).
       output_indices only defines which stored values map to outputs; it does NOT tell which output
@@ -273,9 +274,9 @@ def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor y) -> (Tensor, Tensor)")
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def impl(x, y):
@@ -283,12 +284,12 @@ def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
         return (x.reshape(-1), x)
 
     @torch.library.register_fake(impl_name)
-    def fake(x, y):
+    def fake(x, _y):
         # Shapes must match the intended outputs to provide correct ShapeRefs to DVM build.
         return (torch.empty((x.numel(),), device=x.device, dtype=x.dtype), torch.empty_like(x))
 
     def test_func(x, y):
-        return getattr(torch.ops.mrt_dvm, op_name)(x, y)
+        return getattr(torch.ops.ms_inferrt_dvm, op_name)(x, y)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -302,7 +303,7 @@ def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_shape_ref_const_dims_e2e():
     """
-    Feature: mrt.dvm_call shape_ref const dims.
+    Feature: ms_inferrt.dvm_call shape_ref const dims.
     Description:
       reshape target shape is a constant carried by payload (attrs.shape_ref.dims), i.e. not an output shape.
     Expectation:
@@ -325,9 +326,9 @@ def test_dvm_call_shape_ref_const_dims_e2e():
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x) -> Tensor")
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def impl(x):
@@ -338,7 +339,7 @@ def test_dvm_call_shape_ref_const_dims_e2e():
         return torch.empty((2, 3), device=x.device, dtype=x.dtype)
 
     def test_func(x):
-        return getattr(torch.ops.mrt_dvm, op_name)(x)
+        return getattr(torch.ops.ms_inferrt_dvm, op_name)(x)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -351,7 +352,7 @@ def test_dvm_call_shape_ref_const_dims_e2e():
 @pytest.mark.parametrize("m,k,n", [(1, 32, 256), (16, 128, 64)])
 def test_dvm_call_matmul_dynshape_e2e(m, k, n):
     """
-    Feature: mrt.dvm_call (dynamic shape)
+    Feature: ms_inferrt.dvm_call (dynamic shape)
     Description: Single-op graph: out = x @ w
     Expectation: DVM kernel executes MatMul and matches eager result for varying shapes.
     """
@@ -374,10 +375,10 @@ def test_dvm_call_matmul_dynshape_e2e(m, k, n):
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor w) -> Tensor")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_matmul_impl(x, w):
@@ -389,7 +390,7 @@ def test_dvm_call_matmul_dynshape_e2e(m, k, n):
         return torch.empty((x.shape[0], w.shape[1]), device=x.device, dtype=x.dtype)
 
     def test_func(x, w):
-        return getattr(torch.ops.mrt_dvm, op_name)(x, w)
+        return getattr(torch.ops.ms_inferrt_dvm, op_name)(x, w)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
@@ -405,7 +406,7 @@ def test_dvm_call_matmul_dynshape_e2e(m, k, n):
 @pytest.mark.parametrize("m,k,n", [(1, 32, 256), (16, 128, 64)])
 def test_dvm_call_dynshape_combo_with_matmul_e2e(m, k, n):
     """
-    Feature: mrt.dvm_call (dynamic shape)
+    Feature: ms_inferrt.dvm_call (dynamic shape)
     Description: Combo graph with MatMul + elementwise fusion:
       z = x @ w + y
       out = exp(z) * z
@@ -434,10 +435,10 @@ def test_dvm_call_dynshape_combo_with_matmul_e2e(m, k, n):
     }'''
     register_dvm_op(op_name, payload_json)
 
-    lib = _get_mrt_dvm_lib()
+    lib = _get_ms_inferrt_dvm_lib()
     lib.define(f"{op_name}(Tensor x, Tensor w, Tensor y) -> Tensor")
 
-    impl_name = f"mrt_dvm::{op_name}"
+    impl_name = f"ms_inferrt_dvm::{op_name}"
 
     @torch.library.impl(lib, op_name, "CompositeExplicitAutograd")
     def dvm_combo_impl(x, w, y):
@@ -445,18 +446,18 @@ def test_dvm_call_dynshape_combo_with_matmul_e2e(m, k, n):
         return torch.exp(z) * z
 
     @torch.library.register_fake(impl_name)
-    def dvm_combo_fake(x, w, y):
+    def dvm_combo_fake(x, w, _y):
         return torch.empty((x.shape[0], w.shape[1]), device=x.device, dtype=x.dtype)
 
     def test_func(x, w, y):
-        return getattr(torch.ops.mrt_dvm, op_name)(x, w, y)
+        return getattr(torch.ops.ms_inferrt_dvm, op_name)(x, w, y)
 
     compiled_func = torch.compile(test_func, backend=backend)
 
     # Use small magnitude to keep exp stable in float16.
-    x = (torch.randn(m, k, device="npu", dtype=torch.float16) * 0.1)
-    w = (torch.randn(k, n, device="npu", dtype=torch.float16) * 0.1)
-    y = (torch.randn(m, n, device="npu", dtype=torch.float16) * 0.1)
+    x = torch.randn(m, k, device="npu", dtype=torch.float16) * 0.1
+    w = torch.randn(k, n, device="npu", dtype=torch.float16) * 0.1
+    y = torch.randn(m, n, device="npu", dtype=torch.float16) * 0.1
 
     res = compiled_func(x, w, y)
     z = x @ w + y

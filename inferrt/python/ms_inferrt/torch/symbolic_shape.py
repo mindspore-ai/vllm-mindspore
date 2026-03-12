@@ -29,8 +29,8 @@ from torch.utils._sympy.functions import (
     FloorToInt,
     CeilToInt,
 )
-from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr, Value, Tuple
-from mrt.torch.utils import from_torch
+from ms_inferrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr, Value, Tuple
+from ms_inferrt.torch.utils import from_torch
 
 
 class SymbolicShapeManager:
@@ -133,7 +133,7 @@ class SymbolicShapeManager:
 
     def from_torch_with_sym(self, torch_value: Any) -> Value:
         """
-        Convert a torch object to mrt.ir.Value with symbolic shape binding.
+        Convert a torch object to ms_inferrt.ir.Value with symbolic shape binding.
 
         Args:
             torch_value: The value from torch (can be Tensor, list, tuple, or nested structures)

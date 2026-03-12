@@ -22,7 +22,7 @@ correspondence with GraphExecutor supported operators.
 from typing import Any, Dict, List, Optional
 
 import torch
-from mrt.ir import (
+from ms_inferrt.ir import (
     GraphExecutor,
     Node,
     Op,
@@ -33,8 +33,8 @@ from mrt.ir import (
     Device,
     DeviceType,
 )
-from mrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr
-from mrt.torch.utils import is_op_registered_by_custom_or_torch
+from ms_inferrt.ir import SymbolicVar, SymbolicConst, SymbolicExpr
+from ms_inferrt.torch.utils import is_op_registered_by_custom_or_torch
 
 # ===== MLIR Type Conversion Utilities =====
 

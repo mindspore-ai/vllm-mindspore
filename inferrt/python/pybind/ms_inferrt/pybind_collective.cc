@@ -24,7 +24,7 @@
 namespace nb = nanobind;
 using CollectiveManager = mrt::collective::CollectiveManager;
 
-NB_MODULE(_mrt_collective, mod) {
+NB_MODULE(_ms_inferrt_collective, mod) {
   (void)nb::class_<CollectiveManager>(mod, "CollectiveManager")
     .def_static("instance", &CollectiveManager::Instance, nb::rv_policy::reference)
     .def("create_communication_group", &CollectiveManager::CreateCommunicationGroup)

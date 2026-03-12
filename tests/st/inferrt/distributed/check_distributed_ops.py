@@ -19,8 +19,8 @@ import torch
 from torch import nn
 import torch.distributed as dist
 
-from mrt.collective import CollectiveManager
-from mrt.torch import backend
+from ms_inferrt.collective import CollectiveManager
+from ms_inferrt.torch import backend
 
 
 import pytest

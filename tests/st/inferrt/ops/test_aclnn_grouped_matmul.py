@@ -16,7 +16,7 @@ import numpy as np
 import torch
 import torch_npu
 
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual

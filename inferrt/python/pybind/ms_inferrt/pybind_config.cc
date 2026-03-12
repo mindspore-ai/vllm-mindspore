@@ -22,8 +22,8 @@
 namespace nb = nanobind;
 using OpPrecisionConf = mrt::config::ascend::OpPrecisionConf;
 
-NB_MODULE(_mrt_config, m) {
-  m.doc() = "Python binding for MRT OpPrecisionConf";
+NB_MODULE(_ms_inferrt_config, m) {
+  m.doc() = "Python binding for InferRT OpPrecisionConf";
   (void)nb::class_<OpPrecisionConf>(m, "OpPrecisionConf")
     .def_static("Instance", &OpPrecisionConf::Instance, nb::rv_policy::reference)
     .def("set_is_allow_matmul_hf32", &OpPrecisionConf::SetIsAllowMatmulHF32)

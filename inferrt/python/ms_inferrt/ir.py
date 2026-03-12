@@ -16,7 +16,7 @@
 A Python wrapper for the mrt C++ GraphExecutor to build and run computation graphs.
 """
 from typing import List
-from mrt._mrt_ir import (
+from ms_inferrt._ms_inferrt_ir import (
     GraphExecutor as _GraphExecutor,
     Node,
     Op,

@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Test kernel group launch functionality."""
 
 import torch
-from mrt.torch import backend
+from ms_inferrt.torch import backend
 from tests.mark_utils import arg_mark
+
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_kernel_group_launch(monkeypatch):
@@ -29,7 +31,7 @@ def test_kernel_group_launch(monkeypatch):
 
     def foo(x, y):
         out = torch.mul(x, y)
-        for i in range(20):
+        for _ in range(20):
             out = torch.mul(x, out)
             out = torch.mul(y, out)
         return torch.mul(x, out)
@@ -47,7 +49,7 @@ def test_kernel_group_launch(monkeypatch):
     _ = opt_foo(z, q)
     out = None
     # Run by parallel launch mode.
-    for i in range(10):
+    for _ in range(10):
         out = opt_foo(z, q)
 
     origin_out = foo(z, q)
