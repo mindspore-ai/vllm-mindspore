@@ -639,6 +639,21 @@ if TORCH_NPU_INSTALLED:
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
+    _ATB_OP_MAP = {}
+
+    def _register_atb_op(name, op_enum):
+        atb_op = getattr(torch.ops.atb, name, None)
+        if atb_op is None:
+            return
+        _ATB_OP_MAP[atb_op] = op_enum
+        overload = getattr(atb_op, "default", None)
+        if overload is not None:
+            _ATB_OP_MAP[overload] = op_enum
+
+    _register_atb_op("_npu_paged_attention", Op.paged_attention)
+    _register_atb_op("_npu_reshape_and_cache", Op.reshape_and_cache)
+    _OP_MAP.update(_ATB_OP_MAP)
+
 
 def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""

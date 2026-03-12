@@ -17,6 +17,7 @@
 #include "ops/ascend/atb/atb_adapter.h"
 #include <iostream>
 #include <map>
+#include "hardware/device.h"
 
 namespace mrt {
 namespace ops {
@@ -70,7 +71,16 @@ atb::Tensor GetAtbTensor(const ir::Value *value) {
   }
 
   atb_tensor.dataSize = tensor->Numel() * tensor->Dtype().GetSize();
-  atb_tensor.deviceData = tensor->DataPtr();
+
+  void *data_ptr = tensor->DataPtr();
+  auto device = tensor->GetDevice();
+  if (device.type == hardware::DeviceType::CPU) {
+    atb_tensor.hostData = data_ptr;
+    atb_tensor.deviceData = nullptr;
+  } else {
+    atb_tensor.deviceData = data_ptr;
+    atb_tensor.hostData = nullptr;
+  }
 
   if (!tensor->IsContiguous()) {
     LOG_EXCEPTION << "Only contiguous tensor is supported in atb now.";
@@ -82,7 +92,16 @@ atb::Tensor GetAtbTensor(const ir::Value *value) {
 void UpdateAddress(ir::Tensor *tensor, atb::Tensor *atb_tensor) {
   CHECK_IF_NULL(tensor);
   CHECK_IF_NULL(atb_tensor);
-  atb_tensor->deviceData = tensor->DataPtr();
+
+  void *data_ptr = tensor->DataPtr();
+  auto device = tensor->GetDevice();
+  if (device.type == hardware::DeviceType::CPU) {
+    atb_tensor->hostData = data_ptr;
+    atb_tensor->deviceData = nullptr;
+  } else {
+    atb_tensor->deviceData = data_ptr;
+    atb_tensor->hostData = nullptr;
+  }
 }
 
 }  // namespace
