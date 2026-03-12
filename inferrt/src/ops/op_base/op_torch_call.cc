@@ -256,6 +256,10 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
     for (size_t i = 0; i < list.size(); i++) {
       ToMrtTensor((*tuple)[i].get(), torch::jit::IValue{list.get(i)});
     }
+  } else if (output->IsInt()) {
+    *output = ir::Value(ivalue.toInt());
+  } else if (output->IsDouble()) {
+    *output = ir::Value(ivalue.toDouble());
   } else if (output->IsSymbol()) {
     // If output is symbol, we just ignore it.
     return;

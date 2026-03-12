@@ -526,7 +526,9 @@ _OP_MAP = {
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
     torch.t: Op.permute,
+    torch.permute: Op.permute,
     torch.transpose: Op.permute,
+    torch.squeeze: Op.squeeze,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
     torch.chunk: Op.split_with_size,
@@ -602,7 +604,9 @@ _OP_MAP = {
     "clone": Op.clone,
     "contiguous": Op.contiguous,
     "t": Op.permute,
+    "permute": Op.permute,
     "transpose": Op.permute,
+    "squeeze": Op.squeeze,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
     "square": Op.square,
@@ -626,6 +630,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
         torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
         torch.ops.npu.npu_rms_norm: Op.rms_norm,
+        torch.ops.npu.npu_scatter_nd_update_: Op.scatter_nd_update,
         torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
         torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
         torch.ops.npu.npu_swiglu: Op.swiglu,
@@ -809,7 +814,7 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if node.target in ["view", "reshape", "repeat"] and not _is_shape_sequence(args[1]):
+    if node.target in ["view", "reshape", "repeat", "permute"] and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
 
     if len(args) + len(kwargs) > len(schema.arguments):

@@ -47,6 +47,7 @@ class MemcpyOpBase : public Operator {
 // view memcpy ops
 DefineMemcpyOp(Flatten);
 DefineMemcpyOp(Unsqueeze);
+DefineMemcpyOp(Squeeze);
 }  // namespace ops
 }  // namespace mrt
 #endif  // __OPS_ASCEND_MEM_MEMCPY_LIKES_H__

@@ -349,5 +349,3 @@ def _decompose_ops_with_fake_mode(gm: GraphModule) -> None:
             continue
         node_map = _build_placeholder_node_map(node, traced_subgraph_gm)
         _inline_traced_subgraph(gm, node, traced_subgraph_gm, node_map)
-
-    _print_graph(gm.graph, "after replace graph")

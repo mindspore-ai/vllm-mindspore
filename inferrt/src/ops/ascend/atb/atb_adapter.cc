@@ -51,6 +51,34 @@ aclDataType ConvertToAclDataType(ir::DataType::Type type) {
   return ACL_DT_UNDEFINED;
 }
 
+aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
+  static const std::map<ir::MemoryFormat, aclFormat> kMemoryFormatToAclFormatMap = {
+    {ir::MemoryFormat::FORMAT_UNDEFINED, ACL_FORMAT_UNDEFINED},
+    {ir::MemoryFormat::FORMAT_NCHW, ACL_FORMAT_NCHW},
+    {ir::MemoryFormat::FORMAT_NHWC, ACL_FORMAT_NHWC},
+    {ir::MemoryFormat::FORMAT_ND, ACL_FORMAT_ND},
+    {ir::MemoryFormat::FORMAT_NC1HWC0, ACL_FORMAT_NC1HWC0},
+    {ir::MemoryFormat::FORMAT_FRACTAL_Z, ACL_FORMAT_FRACTAL_Z},
+    {ir::MemoryFormat::FORMAT_NC1HWC0_C04, ACL_FORMAT_NC1HWC0_C04},
+    {ir::MemoryFormat::FORMAT_HWCN, ACL_FORMAT_HWCN},
+    {ir::MemoryFormat::FORMAT_NDHWC, ACL_FORMAT_NDHWC},
+    {ir::MemoryFormat::FORMAT_FRACTAL_NZ, ACL_FORMAT_FRACTAL_NZ},
+    {ir::MemoryFormat::FORMAT_NCDHW, ACL_FORMAT_NCDHW},
+    {ir::MemoryFormat::FORMAT_NDC1HWC0, ACL_FORMAT_NDC1HWC0},
+    {ir::MemoryFormat::FORMAT_FRACTAL_Z_3D, ACL_FRACTAL_Z_3D},
+    {ir::MemoryFormat::FORMAT_NC, ACL_FORMAT_NC},
+    {ir::MemoryFormat::FORMAT_NCL, ACL_FORMAT_NCL},
+  };
+
+  auto iter = kMemoryFormatToAclFormatMap.find(format);
+  if (iter == kMemoryFormatToAclFormatMap.end()) {
+    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    return ACL_FORMAT_UNDEFINED;
+  }
+
+  return iter->second;
+}
+
 atb::Tensor GetAtbTensor(const ir::Value *value) {
   if (value == nullptr) {
     return atb::Tensor{};
@@ -64,7 +92,7 @@ atb::Tensor GetAtbTensor(const ir::Value *value) {
   const auto shape_size = shape.size();
 
   atb_tensor.desc.dtype = ConvertToAclDataType(tensor->Dtype());
-  atb_tensor.desc.format = ACL_FORMAT_ND;
+  atb_tensor.desc.format = ConvertMemoryFormatToAclFormat(tensor->Format());
   atb_tensor.desc.shape.dimNum = shape_size;
   for (size_t i = 0; i < shape_size; i++) {
     atb_tensor.desc.shape.dims[i] = static_cast<int32_t>(shape[i]);
