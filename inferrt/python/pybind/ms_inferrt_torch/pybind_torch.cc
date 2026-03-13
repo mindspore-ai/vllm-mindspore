@@ -248,9 +248,11 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   switch (atDevice.type()) {
     case at::DeviceType::CPU: {
       if (tensor->Strides().empty()) {
-        return at::from_blob(dataPtr, tensor->Shape(), std::move(deleter), options);
+        return at::from_blob(static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()),
+                             tensor->Shape(), std::move(deleter), options);
       }
-      return at::from_blob(dataPtr, tensor->Shape(), tensor->Strides(), std::move(deleter), options);
+      return at::from_blob(static_cast<char *>(dataPtr) + tensor->StorageOffset() * (tensor->Dtype().GetSize()),
+                           tensor->Shape(), tensor->Strides(), std::move(deleter), options);
     }
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1: {
@@ -293,7 +295,9 @@ void UpdateTensor(const ir::TensorPtr &self, nb::handle h) {
       auto npuFormat = at_npu::native::get_npu_format(atTensor);
       tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
       tensor->SetStrides(atTensor.strides().vec());
-      tensor->SetStorageOffset(atTensor.storage_offset());
+      // data_ptr() returns the offset-adjusted pointer, so set storage_offset to 0
+      // to avoid double-counting the offset in Tensor::DataPtr()
+      tensor->SetStorageOffset(0);
       tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
       LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format()) << ", strides=" << tensor->Strides()
               << ", storageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
