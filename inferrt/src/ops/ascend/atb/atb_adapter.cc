@@ -18,6 +18,7 @@
 #include <iostream>
 #include <map>
 #include "hardware/device.h"
+#include "ops/utils/utils.h"
 
 namespace mrt {
 namespace ops {
@@ -79,6 +80,12 @@ aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
   return iter->second;
 }
 
+aclFormat GetFormatForAtb(ir::MemoryFormat format) {
+  // For base layouts, normalize to ND so that ATB kernels do not
+  // rely on specific 4D/5D layout enums when the tensor is logically ND.
+  return ops::IsBaseFormat(format) ? ACL_FORMAT_ND : ConvertMemoryFormatToAclFormat(format);
+}
+
 atb::Tensor GetAtbTensor(const ir::Value *value) {
   if (value == nullptr) {
     return atb::Tensor{};
@@ -92,7 +99,7 @@ atb::Tensor GetAtbTensor(const ir::Value *value) {
   const auto shape_size = shape.size();
 
   atb_tensor.desc.dtype = ConvertToAclDataType(tensor->Dtype());
-  atb_tensor.desc.format = ConvertMemoryFormatToAclFormat(tensor->Format());
+  atb_tensor.desc.format = GetFormatForAtb(tensor->Format());
   atb_tensor.desc.shape.dimNum = shape_size;
   for (size_t i = 0; i < shape_size; i++) {
     atb_tensor.desc.shape.dims[i] = static_cast<int32_t>(shape[i]);
