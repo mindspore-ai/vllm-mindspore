@@ -16,7 +16,7 @@
 A simple torch.fx backend that converts a GraphModule to a ms_inferrt GraphExecutor.
 """
 import operator
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, NamedTuple
 import torch
 from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Argument, Node
@@ -646,6 +646,7 @@ if TORCH_NPU_INSTALLED:
 
     _ATB_OP_MAP = {}
 
+
     def _register_atb_op(name, op_enum):
         atb_op = getattr(torch.ops.atb, name, None)
         if atb_op is None:
@@ -654,6 +655,7 @@ if TORCH_NPU_INSTALLED:
         overload = getattr(atb_op, "default", None)
         if overload is not None:
             _ATB_OP_MAP[overload] = op_enum
+
 
     _register_atb_op("_npu_paged_attention", Op.paged_attention)
     _register_atb_op("_npu_reshape_and_cache", Op.reshape_and_cache)
@@ -795,6 +797,156 @@ def _argument_to_real_value(value_type, value, arg_len):
     return value
 
 
+def _get_example_value_if_node(value: Any) -> Any:
+    """
+    Helper to get runtime example_value from a torch.fx.Node if available.
+    Otherwise, return the value itself.
+    """
+    if isinstance(value, torch.fx.Node):
+        return value.meta.get("example_value", None)
+    return value
+
+
+class _SymTypeInfo(NamedTuple):
+    schema_int_types: Tuple[Any, ...]
+    schema_float_types: Tuple[Any, ...]
+    schema_bool_types: Tuple[Any, ...]
+    sym_int_vals: Tuple[Any, ...]
+    sym_float_vals: Tuple[Any, ...]
+    sym_bool_vals: Tuple[Any, ...]
+
+
+def _collect_sym_type_info() -> _SymTypeInfo:
+    """Collect symbolic schema/runtime types if available on this torch version."""
+    symint_type = getattr(torch, "SymIntType", None)
+    symfloat_type = getattr(torch, "SymFloatType", None)
+    symbool_type = getattr(torch, "SymBoolType", None)
+
+    sym_int_cls = getattr(torch, "SymInt", None)
+    sym_float_cls = getattr(torch, "SymFloat", None)
+    sym_bool_cls = getattr(torch, "SymBool", None)
+
+    schema_int_types: Tuple[Any, ...] = (torch.IntType,)
+    if symint_type is not None:
+        schema_int_types = schema_int_types + (symint_type,)
+
+    schema_float_types: Tuple[Any, ...] = (torch.FloatType,)
+    if symfloat_type is not None:
+        schema_float_types = schema_float_types + (symfloat_type,)
+
+    schema_bool_types: Tuple[Any, ...] = (torch.BoolType,)
+    if symbool_type is not None:
+        schema_bool_types = schema_bool_types + (symbool_type,)
+
+    sym_int_vals = tuple(t for t in (sym_int_cls,) if t is not None)
+    sym_float_vals = tuple(t for t in (sym_float_cls,) if t is not None)
+    sym_bool_vals = tuple(t for t in (sym_bool_cls,) if t is not None)
+
+    return _SymTypeInfo(
+        schema_int_types=schema_int_types,
+        schema_float_types=schema_float_types,
+        schema_bool_types=schema_bool_types,
+        sym_int_vals=sym_int_vals,
+        sym_float_vals=sym_float_vals,
+        sym_bool_vals=sym_bool_vals,
+    )
+
+
+def _check_runtime_value_against_type(value_type, runtime_v: Any) -> bool:
+    """
+    Check concrete runtime value against schema type. Caller ensures runtime_v is not None.
+
+    To avoid over-constraining schema resolution, we explicitly check common primitive
+    types and return True for unrecognized schema types.
+    """
+    info = _collect_sym_type_info()
+
+    # Standard ScalarType (e.g. dtype indicators)
+    if "ScalarType" in str(value_type):
+        return isinstance(runtime_v, (torch.dtype, int))
+
+    # Tensor types
+    if isinstance(value_type, torch.TensorType):
+        return isinstance(runtime_v, torch.Tensor)
+
+    # Int / SymInt
+    if isinstance(value_type, info.schema_int_types):
+        # Allow Python int and symbolic int
+        return isinstance(runtime_v, (int,) + info.sym_int_vals)
+
+    # Float / SymFloat
+    if isinstance(value_type, info.schema_float_types):
+        # Allow float / int / SymInt / SymFloat
+        return isinstance(
+            runtime_v, (float, int) + info.sym_int_vals + info.sym_float_vals
+        )
+
+    # Number (more generic numeric type)
+    if isinstance(value_type, torch.NumberType):
+        # Allow all number-like: int/float/bool + Sym*
+        return isinstance(
+            runtime_v,
+            (int, float, bool)
+            + info.sym_int_vals
+            + info.sym_float_vals
+            + info.sym_bool_vals,
+        )
+
+    # Bool / SymBool
+    if isinstance(value_type, info.schema_bool_types):
+        return isinstance(runtime_v, (bool,) + info.sym_bool_vals)
+
+    # String
+    if isinstance(value_type, torch.StringType):
+        return isinstance(runtime_v, str)
+
+    # Device / Layout / MemoryFormat like enum types
+    type_name = str(type(value_type).__name__) + str(value_type)
+    if "Device" in type_name:
+        return isinstance(runtime_v, torch.device)
+    if "Layout" in type_name:
+        return isinstance(runtime_v, torch.layout)
+    if "MemoryFormat" in type_name:
+        return isinstance(runtime_v, torch.memory_format)
+
+    # For other unknown types: to avoid incorrectly filtering schemas, we treat them as compatible
+    # and let higher-level logic further disambiguate if needed.
+    return True
+
+
+def _is_value_compatible_with_type(value_type, value: Any) -> bool:
+    """
+    Check whether a Python value (or FX Node) is compatible with a torch schema value_type.
+
+    This is used to disambiguate between multiple overload schemas, so we keep it intentionally
+    conservative: if we cannot confidently decide, we return True to avoid false negatives.
+    """
+    if isinstance(value_type, torch.OptionalType):
+        if value is None:
+            return True
+        return _is_value_compatible_with_type(value_type.getElementType(), value)
+
+    if isinstance(value_type, torch.ListType):
+        elem_type = value_type.getElementType()
+        if isinstance(value, torch.fx.Node):
+            example_value = value.meta.get("example_value", None)
+            if example_value is None:
+                return True
+            if isinstance(example_value, (list, tuple)):
+                return all(_is_value_compatible_with_type(elem_type, v) for v in example_value)
+            return _is_value_compatible_with_type(elem_type, example_value)
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return True
+            return all(_is_value_compatible_with_type(elem_type, v) for v in value)
+        return _is_value_compatible_with_type(elem_type, value)
+
+    runtime_v = _get_example_value_if_node(value)
+    if runtime_v is None:
+        return True
+    return _check_runtime_value_against_type(value_type, runtime_v)
+
+
 def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     """
     Create a list of Argument objects from a torch fx node.
@@ -823,6 +975,13 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     for arg in args:
         if schema.arguments[arg_idx].kwarg_only:
             return flat_args, False
+
+        # Additional type compatibility check to narrow down overloads.
+        if not _is_value_compatible_with_type(
+                schema.arguments[arg_idx].real_type, arg
+        ):
+            return flat_args, False
+
         real_arg = _argument_to_real_value(
             schema.arguments[arg_idx].real_type, arg, schema.arguments[arg_idx].N
         )
@@ -832,8 +991,13 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     consumed_kwargs = 0
     for argument in schema.arguments[arg_idx:]:
         if argument.name in kwargs:
+            kw_value = kwargs[argument.name]
+            # Additional type compatibility check for kwargs.
+            if not _is_value_compatible_with_type(argument.real_type, kw_value):
+                return flat_args, False
+
             real_arg = _argument_to_real_value(
-                argument.real_type, kwargs[argument.name], argument.N
+                argument.real_type, kw_value, argument.N
             )
             flat_args.append(real_arg)
             consumed_kwargs += 1
@@ -903,7 +1067,11 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
         if found:
             break
     if not found:
-        err_msg = f"Failed to find a valid schema for {node.target} with arguments {node.args} and kwargs {node.kwargs}"
+        schemas_str = "\n".join(f"  Schema[{idx}]: {schema}" for idx, schema in enumerate(schemas))
+        err_msg = (
+            f"Failed to find a valid schema for {node.target} with arguments {node.args} and kwargs {node.kwargs}. "
+            f"All schemas tried:\n{schemas_str}"
+        )
         raise ValueError(err_msg)
     return op_name, flat_args
 
