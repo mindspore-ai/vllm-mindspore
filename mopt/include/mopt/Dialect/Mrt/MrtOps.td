@@ -1454,6 +1454,35 @@ def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
   let genAclnnCfg = (AclnnConfig (IORef 0, 0));
 }
 
+def Mrt_IndexPutOp : Mrt_Op<"index_put"> {
+  let summary = "aclnnIndexPutImpl (in-place index_put_)";
+  let description = [{
+    In-place index assignment, matching aten.index_put_.default semantics:
+    input.index_put_(indices, updates, accumulate=False, unsafe=False).
+    This operation updates `input` in-place and returns the updated tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtTensorList:$indices,
+    MrtAnyTensor:$updates,
+    Mrt_BooleanType:$accumulate,
+    Mrt_BooleanType:$unsafe
+  );
+
+  let results = (outs
+    MrtAnyTensor:$output
+  );
+
+  let assemblyFormat = [{
+    $input `,` $indices `,` $updates `,` $accumulate `,` $unsafe
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnIndexPutImpl";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
 def Mrt_SelectViewOp : Mrt_Op<"select_view", [Pure]> {
   let summary = "Slices the input tensor along the selected dimension at the given index.";
   let description = [{

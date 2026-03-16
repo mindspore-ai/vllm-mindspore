@@ -38,6 +38,7 @@ from ms_inferrt.torch.utils import (
 from ms_inferrt.torch.getitem_impl import getitem_process
 from ms_inferrt.torch.setitem_impl import setitem_process
 from ms_inferrt.torch.decompose_impl import _decompose_ops_with_fake_mode
+from ms_inferrt.torch.copy_elimination import eliminate_redundant_copy_
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -244,6 +245,30 @@ def _init_arg_mapping_hooks():
     # chunk lowering
     register_arg_mapping_hook(torch.chunk, chunk_arg_hook)
     register_arg_mapping_hook("chunk", chunk_arg_hook)
+    # in-place index_put_: always materialize both accumulate and unsafe,
+    # defaulting to False when omitted by the frontend.
+    register_arg_mapping_hook(Op.index_put, index_put_arg_hook)
+
+
+def index_put_arg_hook(node, flat_args, executor):
+    """
+    Normalize arguments for index_put_ / aten.index_put_.default.
+
+    aten.index_put_.default schema (simplified):
+      self, indices, values, accumulate=False, unsafe=False
+    """
+    # flat_args: [self, indices, values, (accumulate)?, (unsafe)?]
+    args = list(flat_args)
+
+    # Ensure accumulate exists (position 3)
+    if len(args) < 4:
+        args.append(False)
+
+    # Ensure unsafe exists (position 4)
+    if len(args) < 5:
+        args.append(False)
+
+    return args
 
 
 def _get_chunk_example_outputs(node):
@@ -548,6 +573,7 @@ _OP_MAP = {
     aten.copy_.default: Op.inplace_copy,
     aten.expand.default: Op.expand,
     aten.unsqueeze.default: Op.unsqueeze,
+    aten.index_put_.default: Op.index_put,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -601,6 +627,7 @@ _OP_MAP = {
     "reshape": Op.view,
     "repeat": Op.repeat,
     "cat": Op.cat,
+    "index_put_": Op.index_put,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
     "t": Op.permute,
@@ -1052,7 +1079,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     gm.print_readable()
     print("======================fx graph======================")
     print(gm.graph)
-
+    eliminate_redundant_copy_(gm)
     _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()
