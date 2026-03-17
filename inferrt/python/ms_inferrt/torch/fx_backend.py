@@ -131,6 +131,12 @@ def apply_rotary_pos_emb_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def moe_gating_top_k_hook(node, input_nodes, executor):
+    """swap k and bias parameter."""
+    return [input_nodes[0]] + [input_nodes[2], input_nodes[1]] + input_nodes[3:]
+
+
+# pylint: disable=unused-argument
 def floor_div_hook(node, input_nodes, executor):
     """add div mode parameter."""
     div_mode = 2
@@ -237,6 +243,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
+    register_arg_mapping_hook(Op.moe_gating_top_k, moe_gating_top_k_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
@@ -628,6 +635,7 @@ _OP_MAP = {
     torch.stack: Op.stack,
     torch.sum: Op.reduce_sum,
     torch.clone: Op.clone,
+    torch.index_select: Op.index_select,
     torch.neg: Op.neg,
     torch.square: Op.square,
     torch.rsqrt: Op.rsqrt,
@@ -711,6 +719,7 @@ _OP_MAP = {
     "copy_": Op.inplace_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "fill_": Op.inplace_fill_tensor,
+    "index_select": Op.index_select,
     # dtype cast-like tensor methods
     "long": Op.cast,
     "float": Op.cast,
@@ -731,6 +740,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
         torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
         torch.ops.npu.npu_swiglu: Op.swiglu,
+        torch.ops.npu.npu_moe_gating_top_k: Op.moe_gating_top_k,
         torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,

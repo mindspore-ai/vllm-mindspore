@@ -682,6 +682,32 @@ def Mrt_GtOp : Mrt_Op<"gt", [Pure]> {
   let genAclnnOp = "aclnnGtTensor";
 }
 
+def Mrt_IndexSelectOp : Mrt_Op<"index_select", [Pure]> {
+  let summary = "Returns a new tensor which indexes the input tensor along dimension dim using the entries in index.";
+  let description = [{
+    Operation for index_select computation.
+    Accepts input tensor, dimension, and index tensor.
+    Produces a tensor containing elements selected from the input tensor at the specified indices along the given dimension.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$dim,
+    MrtAnyTensor:$index
+  );
+
+  let results = (outs
+    MrtAnyTensor:$result
+  );
+
+  let assemblyFormat = [{
+    $self `,` $dim `,` $index
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnIndexSelect";
+}
+
 def Mrt_IndexTensorOp : Mrt_Op<"index_tensor", [Pure]> {
   let summary = "Indexes a tensor using a list of index tensors.";
   let description = [{
@@ -1064,6 +1090,44 @@ def Mrt_Mm : Mrt_Op<"mm", [Pure]> {
   let assemblyFormat = [{
     $self `,` $other attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_MoeGatingTopKOp : Mrt_Op<"moe_gating_top_k", [Pure]> {
+  let summary = "aclnnMoeGatingTopK";
+  let description = [{
+    Operation for Moe (Mixture of Experts) gating top-k computation.
+    Performs gating top-k selection with optional bias, group selection, and normalization.
+    Accepts input tensor, k value, and various configuration parameters.
+    Produces output tensor, expert indices, and optional output tensor.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtOptional<MrtAnyTensor>:$bias,
+    Mrt_I64Type:$k,
+    Mrt_I64Type:$kGroup,
+    Mrt_I64Type:$groupCount,
+    Mrt_I64Type:$groupSelectMode,
+    Mrt_I64Type:$renorm,
+    Mrt_I64Type:$normType,
+    Mrt_BooleanType:$outFlag,
+    Mrt_F64Type:$routedScalingFactor,
+    Mrt_F64Type:$eps
+  );
+
+  let results = (outs
+    MrtAnyTensor:$y,
+    MrtAnyTensor:$expertIdx,
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $x `,` $bias `,` $k `,` $kGroup `,` $groupCount `,` $groupSelectMode `,`
+    $renorm `,` $normType `,` $outFlag `,` $routedScalingFactor `,` $eps
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMoeGatingTopK";
 }
 
 def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
