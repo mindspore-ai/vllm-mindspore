@@ -81,6 +81,18 @@ def _should_decompose_getitem(node: Node) -> bool:
             if has_none and has_ellipsis and has_slice:
                 return False
 
+    # Case 4: The slice selects the entire tensor (result shape == base shape).
+    # Decomposing a no-op slice adds unnecessary ops, so skip.
+    if isinstance(base, Node):
+        base_example = base.meta.get("example_value", None)
+        node_example = node.meta.get("example_value", None)
+        if (
+            isinstance(base_example, (torch.Tensor, FakeTensor))
+            and isinstance(node_example, (torch.Tensor, FakeTensor))
+            and base_example.shape == node_example.shape
+        ):
+            return False
+
     return True
 
 
