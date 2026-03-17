@@ -238,6 +238,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
+    register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -369,6 +370,71 @@ def _is_scalar_arg(arg):
         if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
             return True
     return False
+
+
+# pylint: disable=unused-argument
+def reduce_sum_arg_hook(node, flat_args, executor):
+    """
+    Normalize arguments for reduce_sum / sum:
+    - dim=None or [] -> all dimensions [0..rank-1]
+    - keepdim: use schema default
+    - dtype=None -> use input dtype (matches torch semantics when dtype is not specified)
+    flat_args layout (from aten::sum.dim_IntList schema):
+      [self, dim, keepdim, dtype]
+    """
+
+    # Unpack with safe defaults in case of unexpected arity
+    self_arg = flat_args[0] if len(flat_args) > 0 else None
+    dim = flat_args[1] if len(flat_args) > 1 else None
+    keepdim = flat_args[2] if len(flat_args) > 2 else False
+    dtype = flat_args[3] if len(flat_args) > 3 else None
+
+    # Get example tensor to infer rank / dtype
+    example = None
+    if isinstance(self_arg, Node):
+        example = self_arg.meta.get("example_value", None)
+    else:
+        example = self_arg
+
+    # Normalize dim: None or empty list -> reduce over all dims
+    if dim is None:
+        if hasattr(example, "dim"):
+            try:
+                rank = int(example.dim())
+                dims = list(range(rank))
+            except Exception:
+                dims = []
+        else:
+            dims = []
+    elif isinstance(dim, (list, tuple)) and len(dim) == 0:
+        if hasattr(example, "dim"):
+            try:
+                rank = int(example.dim())
+                dims = list(range(rank))
+            except Exception:
+                dims = []
+        else:
+            dims = []
+    else:
+        # Backend expects dimensions as Tuple (I64Array); single int/SymInt/Node -> [dim]
+        if isinstance(dim, (list, tuple)):
+            dims = dim
+        else:
+            dims = [dim]
+
+    # Normalize dtype: None -> use input dtype (Tensor or FakeTensor-like)
+    if dtype is None:
+        # Typical case: real Tensor
+        if isinstance(example, torch.Tensor):
+            dtype = example.dtype
+        # FakeTensor or other tensor-like with dtype attribute
+        elif hasattr(example, "dtype"):
+            try:
+                dtype = example.dtype
+            except Exception:
+                pass
+
+    return [self_arg, dims, keepdim, dtype]
 
 
 # pylint: disable=unused-argument
@@ -559,6 +625,8 @@ _OP_MAP = {
     torch.chunk: Op.split_with_size,
     torch.flatten: Op.flatten,
     torch.cat: Op.cat,
+    torch.stack: Op.stack,
+    torch.sum: Op.reduce_sum,
     torch.clone: Op.clone,
     torch.neg: Op.neg,
     torch.square: Op.square,
@@ -628,6 +696,7 @@ _OP_MAP = {
     "repeat": Op.repeat,
     "cat": Op.cat,
     "index_put_": Op.index_put,
+    "stack": Op.stack,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
     "t": Op.permute,
@@ -649,6 +718,7 @@ _OP_MAP = {
     "split": Op.split_with_size,
     "chunk": Op.split_with_size,
     "flatten": Op.flatten,
+    "sum": Op.reduce_sum,
 }
 
 if TORCH_NPU_INSTALLED:
