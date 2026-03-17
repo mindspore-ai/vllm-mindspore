@@ -1253,6 +1253,63 @@ def Mrt_MoeInitRoutingV3Op : Mrt_Op<"moe_init_routing_v3", [Pure]> {
   let genAclnnOp = "aclnnMoeInitRoutingV3";
 }
 
+def Mrt_InterleaveRopeOp : Mrt_Op<"interleave_rope", [Pure]> {
+  let summary = "aclnnInterleaveRope";
+  let description = [{
+    Operation for interleave rope computation.
+    Accepts x, cos and sin tensors.
+    Produces out tensor as result.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$cos,
+    MrtAnyTensor:$sin
+  );
+
+  let results = (outs
+    MrtAnyTensor:$Out
+  );
+
+  let assemblyFormat = [{
+    $x `,` $cos `,` $sin attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInterleaveRope";
+}
+
+def Mrt_MoeReRoutingOp : Mrt_Op<"moe_re_routing", [Pure]> {
+  let summary = "aclnnMoeReRouting";
+  let description = [{
+    Operation for Moe re-routing computation.
+    Accepts tokens, expert_token_num_per_rank, optional per_token_scales, expert_token_num_type and idx_type.
+    Produces permuted tokens, permuted per_token_scales, permute_token_idx and expert_token_num as results.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$tokens,
+    MrtAnyTensor:$expert_token_num_per_rank,
+    MrtOptional<MrtAnyTensor>:$per_token_scales,
+    Mrt_I64Type:$expert_token_num_type,
+    Mrt_I64Type:$idx_type
+  );
+
+  let results = (outs
+    MrtAnyTensor:$permute_tokens,
+    MrtAnyTensor:$permute_per_token_scales,
+    MrtAnyTensor:$permute_token_idx,
+    MrtAnyTensor:$expert_token_num
+  );
+
+  let assemblyFormat = [{
+    $tokens `,` $expert_token_num_per_rank `,` $per_token_scales `,`
+    $expert_token_num_type `,` $idx_type
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMoeReRouting";
+}
+
 def Mrt_MoeTokenUnpermuteOp : Mrt_Op<"moe_token_unpermute", [Pure]> {
   let summary = "aclnnMoeTokenUnpermute";
   let description = [{
@@ -1516,6 +1573,35 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnRmsNorm";
+}
+
+def Mrt_NormOp : Mrt_Op<"norm", [Pure]> {
+  let summary = "aclnnLayerNorm";
+  let description = [{
+    Operation for LayerNorm computation.
+    Accepts input tensor, normalized_shape, weight, bias, and epsilon value for numerical stability.
+    Produces normalized output tensor, and optional mean out and rstd out.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$normalized_shape,
+    MrtOptional<MrtAnyTensor>:$weight,
+    MrtOptional<MrtAnyTensor>:$bias,
+    Mrt_F64Type:$epsilon
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut,
+    MrtOptional<MrtAnyTensor>:$meanOut,
+    MrtOptional<MrtAnyTensor>:$rstdOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $normalized_shape `,` $weight `,` $bias `,` $epsilon
+    attr-dict `:` functional-type(operands, results)
+  }];
+
 }
 
 def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
@@ -1993,6 +2079,33 @@ def Mrt_ZerosOp : Mrt_Op<"zeros", [
 
   let assemblyFormat = [{
     $size `,` $dtype `,` $device
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+def Mrt_NpuDynamicQuantOp : Mrt_Op<"npu_dynamic_quant", []> {
+  let summary = "npu_dynamic_quant";
+  let description = [{
+    Operation for dynamic quant.
+    Accepts x, smooth_scales, group_index, dst_type.
+    Produces quant output and scale (and optional offset).
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtOptional<MrtAnyTensor>:$smooth_scales,
+    MrtOptional<MrtAnyTensor>:$group_index,
+    Mrt_DtypeType:$dst_type
+  );
+
+  let results = (outs
+    MrtAnyTensor:$yOut,
+    MrtAnyTensor:$scaleOut,
+    MrtOptional<MrtAnyTensor>:$offsetOut
+  );
+
+  let assemblyFormat = [{
+    $input `,` $smooth_scales `,` $group_index `,` $dst_type
     attr-dict `:` functional-type(operands, results)
   }];
 }

@@ -734,6 +734,7 @@ if TORCH_NPU_INSTALLED:
     _NPU_OP_MAP = {
         # torch.ops.npu functions
         torch.ops.npu.npu_moe_init_routing_v2: Op.moe_init_routing_v3,
+        torch.ops.npu.npu_moe_re_routing: Op.moe_re_routing,
         torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
         torch.ops.npu.npu_rms_norm: Op.rms_norm,
         torch.ops.npu.npu_scatter_nd_update_: Op.scatter_nd_update,
@@ -748,6 +749,8 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_add_rms_norm_quant: Op.add_rms_norm_quant,
         torch.ops.npu.npu_quantize: Op.npu_quantize,
         torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
+        torch.ops.npu.npu_dynamic_quant: Op.npu_dynamic_quant,
+        torch.ops.npu.npu_interleave_rope: Op.interleave_rope,
     }
     _OP_MAP.update(_NPU_OP_MAP)
 
