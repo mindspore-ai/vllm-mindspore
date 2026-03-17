@@ -150,12 +150,16 @@ def _set_lora_diagonal(
     merged into a single diagonal block matrix.
     """
     for i, (la, lb) in enumerate(zip(lora_a_list, lora_b_list)):
+        if la is None or lb is None:
+            continue
+
         # lora_a: each slice placed column-wise at different rank positions
         tmp_lora_a[index + 1, :, max_rank * i:max_rank * i + la.shape[1]] = la
 
         # lora_b: form block diagonal matrix
         # Calculate cumulative offset for current slice in output dimension
-        col_offset = sum(lora_b_list[j].shape[1] for j in range(i))
+        col_offset = sum(lora_b_list[j].shape[1] for j in range(i)
+                         if lora_b_list[j] is not None)
         tmp_lora_b[index + 1, max_rank * i:max_rank * i + lb.shape[0],
                    col_offset:col_offset + lb.shape[1]] = lb
 
