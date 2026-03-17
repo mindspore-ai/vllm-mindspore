@@ -245,3 +245,188 @@ def test_getitem_to_slice_view(backend):
     out2 = compiled_op(y)
     expected2 = func(y)
     AssertRtolEqual(out2, expected2)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_1d(backend):
+    """
+    Feature: Test getitem where slice covers the entire 1-D tensor
+    Description: x[:] produces a result with the same shape as x; decomposition
+                 should be skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[:]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(8).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_2d(backend):
+    """
+    Feature: Test getitem where slice covers all rows and columns of a 2-D tensor
+    Description: x[:, :] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[:, :]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(4, 6).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_3d(backend):
+    """
+    Feature: Test getitem where slice covers the entire 3-D tensor
+    Description: x[:, :, :] result shape equals x.shape; decomposition should
+                 be skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[:, :, :]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(2, 4, 8).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.skip("Not implemented.")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_ellipsis(backend):
+    """
+    Feature: Test getitem with bare ellipsis covering all dimensions
+    Description: x[...] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[...]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(3, 5, 7).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_ellipsis2(backend):
+    """
+    Feature: Test getitem with bare ellipsis covering all dimensions
+    Description: x[...] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[..., :7:]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(3, 5, 7).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_step1(backend):
+    """
+    Feature: Test getitem with explicit step=1 covering the full range
+    Description: x[::1] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[..., 0::1]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(6, 4).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_step2(backend):
+    """
+    Feature: Test getitem with explicit step=1 covering the full range
+    Description: x[::1] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[:6:]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(6, 4).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_step3(backend):
+    """
+    Feature: Test getitem with explicit step=1 covering the full range
+    Description: x[::1] result shape equals x.shape; decomposition should be
+                 skipped (Case 4 in _should_decompose_getitem).
+    Expectation: The result is numerically identical to the input
+    """
+
+    def func(x):
+        return x[::1]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(6, 4).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_full_slice_used_in_followup_ops(backend):
+    """
+    Feature: Test that a full-size getitem result can be used in subsequent ops
+    Description: x[:, :] selects the whole tensor (decomposition skipped), and
+                 the result is then multiplied and summed.  Verifies that
+                 skipping decomposition for the no-op slice does not break the
+                 downstream computation.
+    Expectation: The result is correct
+    """
+
+    def func(x, scale):
+        y = x[:, :]
+        return (y * scale).sum()
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(4, 8).npu()
+    scale = torch.tensor(3.0).npu()
+    out = compiled_op(x, scale)
+    expected = func(x, scale)
+    AssertRtolEqual(out, expected)

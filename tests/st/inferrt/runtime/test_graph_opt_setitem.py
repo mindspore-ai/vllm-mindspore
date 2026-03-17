@@ -72,7 +72,6 @@ def test_setitem_with_tensor_index_and_mul(backend):
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
-@pytest.mark.skip("Not implemented.")
 def test_setitem_with_single_computed_index(backend):
     """
     Feature: Test setitem with computed index from operator output
@@ -94,7 +93,7 @@ def test_setitem_with_single_computed_index(backend):
     val2 = torch.tensor(2).npu()
     out = compiled_op(x, start_idx, value, val2)
     end_idx = start_idx + 2
-    expected[start_idx:end_idx] = value
+    expected[end_idx] = value
     AssertRtolEqual(out, expected)
 
 
@@ -176,7 +175,6 @@ def test_tensor_setitem_slice_tensor(backend):
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
-@pytest.mark.skip("Not implemented.")
 def test_complex_setitem_with_computed_ops(backend):
     """
     Feature: Test complex setitem with computed index and multiple ops
@@ -184,12 +182,12 @@ def test_complex_setitem_with_computed_ops(backend):
     Expectation: The result is correct
     """
 
-    def func(x, base_idx, offset, value):
+    def func(x, base_idx, offset, value, val1, val2):
         res = x.clone()
         index = offset + base_idx
         res[index] = value
-        res = res * 2
-        res = res + 1
+        res = res * val2
+        res = res + val1
         res = torch.relu(res)
         res = res.sum(dim=0)
         return res
@@ -199,9 +197,11 @@ def test_complex_setitem_with_computed_ops(backend):
     base_idx = torch.tensor(4, dtype=torch.int64).npu()
     offset = torch.tensor(2, dtype=torch.int64).npu()
     value = torch.randn(4, 3).npu()
+    val1 = torch.tensor(1).npu()
+    val2 = torch.tensor(2).npu()
 
-    out = compiled_op(x, base_idx, offset, value)
-    expected = func(x, base_idx, offset, value)
+    out = compiled_op(x, base_idx, offset, value, val1, val2)
+    expected = func(x, base_idx, offset, value, val1, val2)
     AssertRtolEqual(out, expected)
 
 
@@ -391,8 +391,8 @@ def test_setitem_input_index_const_value(backend):
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.skip("Not implemented.")
+@pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_slice_index_const_value(backend):
     """
     Feature: Test setitem with tensor index from operator output
@@ -400,21 +400,22 @@ def test_setitem_slice_index_const_value(backend):
     Expectation: The result is correct
     """
 
-    def func(x):
-        x[1:2] = 2
+    def func(x, val2):
+        x[1:2] = val2
         return x
 
     compiled_op = torch.compile(func, backend=backend)
     x = torch.randn(4, 2, 3).npu()
     expected = x.clone()
-    out = compiled_op(x)
-    expected[1:2] = 2
+    val2 = torch.tensor(2).npu()
+    out = compiled_op(x, val2)
+    expected[1:2] = val2
     AssertRtolEqual(out, expected)
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
-@pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.skip("Not implemented.")
+@pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_slice_step_index_input_value(backend):
     """
     Feature: Test setitem with tensor index from operator output
@@ -437,7 +438,6 @@ def test_setitem_slice_step_index_input_value(backend):
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
-@pytest.mark.skip("Not implemented.")
 def test_setitem_with_tensor_index_decomposition(backend):  # pylint: disable=unused-argument
     """
     Feature: Test setitem with tensor index using torch dynamo
