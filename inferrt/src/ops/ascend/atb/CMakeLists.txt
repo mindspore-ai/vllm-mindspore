@@ -13,7 +13,8 @@ set(ASCEND_ATB_PATH ${ASCEND_PATH_BASE}/nnal/atb/latest/atb/cxx_abi_0)
 
 # TODO(jiaorui)
 if(NOT EXISTS ${ASCEND_ATB_PATH})
-    message(FATAL_ERROR "ATB not found at ${ASCEND_ATB_PATH}, stopping configuration")
+    message(WARNING "ATB not found at ${ASCEND_ATB_PATH}, skipping ATB configuration")
+    return()
 endif()
 
 file(GLOB_RECURSE OPS_ATB_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")

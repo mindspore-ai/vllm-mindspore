@@ -109,6 +109,31 @@ def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   let genAclnnCfg = (AclnnConfig (IORef 0, 0), (IORef 1, 1));
 }
 
+def Mrt_ArgsortOp : Mrt_Op<"argsort", [Pure]> {
+  let summary = "aclnnSort";
+  let description = [{
+    Sorts the input tensor along the specified dimension and returns both sorted values and indices.
+    Arguments follow aclnnSort signature: self, stable, dim, descending.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_BooleanType:$stable,
+    Mrt_I64Type:$dim,
+    Mrt_BooleanType:$descending
+  );
+
+  let results = (outs
+    MrtAnyTensor:$values,
+    MrtAnyTensor:$indices
+  );
+
+  let assemblyFormat = [{
+    $self `,` $stable `,` $dim `,` $descending
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_BatchNormOp : Mrt_Op<"batch_norm", [Pure]> {
   let summary = "Batch normalization operation";
   let description = [{
@@ -348,6 +373,41 @@ def Mrt_CustomCallOp : Mrt_Op<"custom_call"> {
   let assemblyFormat = [{
     $op_name `,` $inputs attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_DequantSwigluQuantOp : Mrt_Op<"dequant_swiglu_quant", [Pure]> {
+  let summary = "aclnnDequantSwigluQuant";
+  let description = [{
+    Dequantize + SwiGLU + quantize fused operation.
+    This op follows the aclnnDequantSwigluQuant(V1) signature.
+    quant_mode is passed as string ("static"/"dynamic").
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtOptional<MrtAnyTensor>:$weight_scale,
+    MrtOptional<MrtAnyTensor>:$activation_scale,
+    MrtOptional<MrtAnyTensor>:$bias,
+    MrtOptional<MrtAnyTensor>:$quant_scale,
+    MrtOptional<MrtAnyTensor>:$quant_offset,
+    MrtOptional<MrtAnyTensor>:$group_index,
+    Mrt_BooleanType:$activate_left,
+    Mrt_StringType:$quant_mode
+  );
+
+  let results = (outs
+    MrtAnyTensor:$y,
+    MrtAnyTensor:$scale
+  );
+
+  let assemblyFormat = [{
+    $x `,` $weight_scale `,` $activation_scale `,` $bias `,`
+    $quant_scale `,` $quant_offset `,` $group_index `,`
+    $activate_left `,` $quant_mode
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnDequantSwigluQuant";
 }
 
 def Mrt_DivOp : Mrt_Op<"div", [Pure]> {
@@ -1605,6 +1665,25 @@ def Mrt_NormOp : Mrt_Op<"norm", [Pure]> {
 }
 
 def Mrt_ScatterNdUpdateOp : Mrt_Op<"scatter_nd_update"> {
+  let summary = "aclnnScatterNdUpdate";
+  let description = [{
+    Operation for ScatterNDUpdate computation.
+    Accepts input, indices, updates tensors.
+    Return the updated input tensor as result, which is a in-place ops.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$indices,
+    MrtAnyTensor:$updates
+  );
+
+  let results = (outs
+    MrtAnyTensor:$outs
+  );
+}
+
+def Mrt_ScatterNdUpdateInplaceOp : Mrt_Op<"scatter_nd_update_"> {
   let summary = "aclnnScatterNdUpdate";
   let description = [{
     Operation for ScatterNDUpdate computation.

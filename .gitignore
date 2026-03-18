@@ -34,6 +34,7 @@ Makefile
 .idea
 .clangd
 .cursor
+CODEBUDDY.md
 
 # Python files
 *__pycache__*

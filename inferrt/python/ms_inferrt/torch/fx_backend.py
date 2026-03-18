@@ -67,6 +67,8 @@ _ARG_MAPPING_HOOKS = {}
 
 _OPS_MAPPING_HOOKS = {}
 
+_OUTPUT_MAPPING_HOOKS = {}
+
 # Registry for dvm ops: maps op_name -> payload_json
 # todo(lmy) remove dvm op when ms_inferrt backend is ready
 _DVM_OP_REGISTRY = {}
@@ -101,6 +103,14 @@ def register_ops_mapping_hook(op, hook_func):
 
 def get_ops_mapping_hook(op):
     return _OPS_MAPPING_HOOKS.get(op)
+
+
+def register_output_mapping_hook(op, hook_func):
+    _OUTPUT_MAPPING_HOOKS[op] = hook_func
+
+
+def get_output_mapping_hook(op):
+    return _OUTPUT_MAPPING_HOOKS.get(op)
 
 
 # pylint: disable=unused-argument
@@ -165,6 +175,19 @@ def float_hook(node, input_nodes, executor):
 def int_hook(node, input_nodes, executor):
     """cast to int32."""
     return [input_nodes[0], torch.int32]
+
+
+# pylint: disable=unused-argument
+def argsort_hook(node, input_nodes, executor):
+    """Normalize argsort inputs to [input, stable, dim, descending]."""
+    if len(input_nodes) == 4:
+        return input_nodes
+    if len(input_nodes) == 3:
+        # aten::argsort(Tensor self, int dim=-1, bool descending=False)
+        # -> aclnnSort expects stable before dim/descending.
+        return [input_nodes[0], False, input_nodes[1], input_nodes[2]]
+    err_msg = f"Unsupported argsort input size: {len(input_nodes)}"
+    raise ValueError(err_msg)
 
 
 # pylint: disable=unused-argument
@@ -233,9 +256,107 @@ def fused_inter_attention_score_hook(node, input_nodes, executor):
     ]
 
 
+def _resolve_scalar_arg(arg, name: str):
+    """Resolve scalar-like FX arg to python value."""
+    if isinstance(arg, Node):
+        arg = arg.meta.get("example_value", None)
+    if arg is None:
+        raise ValueError(f"Failed to resolve scalar argument '{name}'")
+    return arg
+
+
+# pylint: disable=unused-argument
+def dequant_swiglu_quant_hook(node, input_nodes, executor):
+    """Normalize npu_dequant_swiglu_quant args to aclnnDequantSwigluQuant(V1)."""
+    if len(input_nodes) < 13:
+        err_msg = f"Unsupported npu_dequant_swiglu_quant input size: {len(input_nodes)}"
+        raise ValueError(err_msg)
+
+    quant_mode = int(_resolve_scalar_arg(input_nodes[8], "quant_mode"))
+
+    if quant_mode not in (0, 1):
+        raise ValueError(f"quant_mode only supports 0(static) or 1(dynamic), but got {quant_mode}")
+
+    quant_mode_str = "static" if quant_mode == 0 else "dynamic"
+    return [
+        input_nodes[0],  # x
+        input_nodes[1],  # weight_scale
+        input_nodes[2],  # activation_scale
+        input_nodes[3],  # bias
+        input_nodes[4],  # quant_scale
+        input_nodes[5],  # quant_offset
+        input_nodes[6],  # group_index
+        input_nodes[7],  # activate_left
+        quant_mode_str,
+    ]
+
+
+# pylint: disable=unused-argument
+def dequant_swiglu_quant_op_hook(op, node, input_nodes, executor):
+    """Fallback to custom_call when V2-only controls are used."""
+    if len(input_nodes) < 13:
+        return Op.custom_call
+    try:
+        quant_mode = int(_resolve_scalar_arg(input_nodes[8], "quant_mode"))
+        swiglu_mode = int(_resolve_scalar_arg(input_nodes[9], "swiglu_mode"))
+        clamp_limit = float(_resolve_scalar_arg(input_nodes[10], "clamp_limit"))
+        glu_alpha = float(_resolve_scalar_arg(input_nodes[11], "glu_alpha"))
+        glu_bias = float(_resolve_scalar_arg(input_nodes[12], "glu_bias"))
+    except (TypeError, ValueError):
+        return Op.custom_call
+
+    if quant_mode not in (0, 1):
+        return Op.custom_call
+
+    if swiglu_mode != 0:
+        return Op.custom_call
+
+    if abs(clamp_limit - 7.0) > 1e-6 or abs(glu_alpha - 1.702) > 1e-6 or abs(glu_bias - 1.0) > 1e-6:
+        return Op.custom_call
+
+    return op
+
+
+def _extract_tensor_example(arg, err_msg: str):
+    """Resolve a tensor example_value from an FX node or eager value."""
+    if isinstance(arg, Node):
+        arg = arg.meta.get("example_value", None)
+    if not isinstance(arg, torch.Tensor):
+        raise RuntimeError(err_msg)
+    return arg
+
+
+def _add_tuple_getitem_node(executor, sym_mgr, tuple_node, index: int, output_value):
+    """Project one item from a tuple-valued op result."""
+    index_node = executor.add_value_node(sym_mgr.from_torch_with_sym(index))
+    return executor.add_op_node(Op.tuple_getitem, [tuple_node, index_node], output_value)
+
+
+def argsort_output_hook(node, op, input_nodes, executor, sym_mgr):
+    """Lower argsort to its tuple output and project the indices result."""
+    if not node.args:
+        raise RuntimeError("argsort requires at least one input tensor")
+
+    output_example = _extract_tensor_example(
+        node.meta.get("example_value", None),
+        "argsort example_value must be a tensor",
+    )
+    input_example = _extract_tensor_example(
+        node.args[0],
+        "argsort input example_value must be a tensor",
+    )
+
+    # Runtime argsort produces (values, indices), while FX argsort returns indices only.
+    tuple_output = sym_mgr.from_torch_with_sym((input_example, output_example))
+    tuple_node = executor.add_op_node(op, input_nodes, tuple_output)
+    output_value = sym_mgr.from_torch_with_sym(output_example)
+    return _add_tuple_getitem_node(executor, sym_mgr, tuple_node, 1, output_value)
+
+
 def _init_arg_mapping_hooks():
     """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
+    register_arg_mapping_hook(Op.argsort, argsort_hook)
     register_arg_mapping_hook(
         Op.fused_infer_attention_score, fused_inter_attention_score_hook
     )
@@ -244,6 +365,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(Op.moe_gating_top_k, moe_gating_top_k_hook)
+    register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
     register_arg_mapping_hook(operator.floordiv, floor_div_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
@@ -556,6 +678,12 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
     register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
+    register_ops_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_op_hook)
+
+
+def _init_output_mapping_hooks():
+    """Register output mapping hooks for runtime ops."""
+    register_output_mapping_hook(Op.argsort, argsort_output_hook)
 
 
 def _next_unique_graph_id():
@@ -611,6 +739,7 @@ aten = torch.ops.aten
 _OP_MAP = {
     # torch functions
     torch.add: Op.add,
+    torch.argsort: Op.argsort,
     torch.sub: Op.sub,
     torch.mul: Op.mul,
     torch.div: Op.div,
@@ -728,6 +857,8 @@ _OP_MAP = {
     "chunk": Op.split_with_size,
     "flatten": Op.flatten,
     "sum": Op.reduce_sum,
+    "argsort": Op.argsort,
+    "new_empty": Op.new_empty,
 }
 
 if TORCH_NPU_INSTALLED:
@@ -737,8 +868,8 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_moe_re_routing: Op.moe_re_routing,
         torch.ops.npu.npu_add_rms_norm: Op.add_rms_norm,
         torch.ops.npu.npu_rms_norm: Op.rms_norm,
-        torch.ops.npu.npu_scatter_nd_update_: Op.scatter_nd_update,
         torch.ops.npu.npu_scatter_nd_update: Op.scatter_nd_update,
+        torch.ops.npu.npu_scatter_nd_update_: Op.scatter_nd_update_,
         torch.ops.npu.npu_moe_token_unpermute: Op.moe_token_unpermute,
         torch.ops.npu.npu_swiglu: Op.swiglu,
         torch.ops.npu.npu_moe_gating_top_k: Op.moe_gating_top_k,
@@ -747,6 +878,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
         torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
         torch.ops.npu.npu_add_rms_norm_quant: Op.add_rms_norm_quant,
+        torch.ops.npu.npu_dequant_swiglu_quant: Op.dequant_swiglu_quant,
         torch.ops.npu.npu_quantize: Op.npu_quantize,
         torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
         torch.ops.npu.npu_dynamic_quant: Op.npu_dynamic_quant,
@@ -1155,6 +1287,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
         op = ops_hook(op, node, flat_node_args, executor)
 
     op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
+
     example_value = node.meta.get("example_value", None)
     output_value = sym_mgr.from_torch_with_sym(example_value)
 
@@ -1162,6 +1295,12 @@ def _handle_call_node(node, executor, env, sym_mgr):
     op = _check_and_fallback_op_by_backend_support(op, output_value, input_nodes)
     if op != original_op:
         op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
+
+    # For handle fx graph node has different output type with inferrt node.
+    output_hook = get_output_mapping_hook(op)
+    if output_hook is not None:
+        env[node] = output_hook(node, op, input_nodes, executor, sym_mgr)
+        return
 
     env[node] = executor.add_op_node(op, input_nodes, output_value)
 
@@ -1188,6 +1327,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()
+    _init_output_mapping_hooks()
     _init_ms_inferrt_config()
 
     executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")

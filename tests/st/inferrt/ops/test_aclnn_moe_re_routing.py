@@ -6,8 +6,8 @@ import pytest
 import torch
 import torch_npu  # noqa: F401  # pylint: disable=unused-import
 
-from mrt.torch.fx_mlir_backend import backend as mlir_backend
-from mrt.torch.fx_backend import backend as fx_backend
+from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
