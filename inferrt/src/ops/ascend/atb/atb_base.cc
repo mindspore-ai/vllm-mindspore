@@ -30,6 +30,41 @@ AtbBase::~AtbBase() {
   }
 }
 
+std::unordered_map<uint64_t, AtbCacheEntry>::iterator AtbBase::AppendCacheEntry(uint64_t hash) {
+  while (cache_.size() >= cache_capacity_) {
+    if (cache_fifo_.empty()) {
+      // Safety fallback: clear everything to prevent unbounded growth.
+      for (auto &item : cache_) {
+        if (item.second.op != nullptr) {
+          atb::DestroyOperation(item.second.op);
+        }
+      }
+      cache_.clear();
+      cache_fifo_.clear();
+      break;
+    }
+
+    uint64_t oldest_hash = cache_fifo_.front();
+    cache_fifo_.pop_front();
+
+    auto it = cache_.find(oldest_hash);
+    if (it == cache_.end()) {
+      continue;  // The FIFO queue may contain stale hashes; skip.
+    }
+
+    if (it->second.op != nullptr) {
+      atb::DestroyOperation(it->second.op);
+    }
+    cache_.erase(it);
+  }
+
+  auto [insert_it, inserted] = cache_.emplace(hash, AtbCacheEntry{});
+  if (inserted) {
+    cache_fifo_.push_back(hash);
+  }
+  return insert_it;
+}
+
 OpsErrorCode AtbBase::GetWorkspaceSize(AtbCacheEntry &entry, atb::VariantPack &variant_pack, size_t *workspace_size) {
   CHECK_IF_NULL(entry.op);
   CHECK_IF_NULL(workspace_size);

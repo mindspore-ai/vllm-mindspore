@@ -15,10 +15,36 @@
  */
 
 #include "ops/utils/utils.h"
+#include <string>
 #include <unordered_set>
 
 namespace mrt {
 namespace ops {
+
+size_t GetOpsCacheCapacity() {
+  static const size_t capacity = []() -> size_t {
+    constexpr const char *kEnvName = "MS_INFERRT_OPS_CACHE_CAPACITY";
+    constexpr size_t kDefaultCapacity = 64;
+
+    size_t resolved = kDefaultCapacity;
+    auto env = GetEnv(kEnvName);
+    if (!env.empty() && IsPositiveInteger(env)) {
+      try {
+        size_t value = std::stoull(env);
+        if (value != 0) {
+          resolved = value;
+        }
+      } catch (...) {
+        resolved = kDefaultCapacity;
+      }
+    }
+
+    LOG_OUT << "Ops cache capacity : " << resolved;
+    return resolved;
+  }();
+
+  return capacity;
+}
 
 static const std::unordered_set<MemoryFormat> BaseFormatSet = {
   MemoryFormat::FORMAT_ND,
