@@ -44,17 +44,17 @@ bool IsAllToAllV(const ir::TuplePtr &sendNumelList, const ir::TuplePtr &recvNume
 }
 
 void GetAllToAllVParam(const ir::TuplePtr &sendNumelList, const ir::TuplePtr &recvNumelList,
-                       HcclAllToAllVParams *params) {
+                       HcclAllToAllVParams *params, const uint64_t strideOfDim0) {
   uint64_t offset = 0;
   for (size_t i = 0; i < sendNumelList->Size(); i++) {
-    auto count = static_cast<uint64_t>(sendNumelList->operator[](i)->ToInt());
+    auto count = static_cast<uint64_t>(sendNumelList->operator[](i)->ToInt()) * strideOfDim0;
     params->sendCounts.push_back(count);
     params->sdispls.push_back(offset);
     offset += count;
   }
   offset = 0;
   for (size_t i = 0; i < recvNumelList->Size(); i++) {
-    auto count = static_cast<uint64_t>(recvNumelList->operator[](i)->ToInt());
+    auto count = static_cast<uint64_t>(recvNumelList->operator[](i)->ToInt()) * strideOfDim0;
     params->recvCounts.push_back(count);
     params->rdispls.push_back(offset);
     offset += count;
@@ -82,8 +82,13 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
   ::HcclResult hcclResult;
   if (useAllToAllV_) {
     LOG_OUT << "HcclAllToAll launch AllToAllV Kernel";
+    uint64_t strideOfDim0 = 1;
+    auto &inputShape = input[kIndex0]->ToTensor()->Shape();
+    for (size_t i = 1; i < inputShape.size(); ++i) {
+      strideOfDim0 *= inputShape[i];
+    }
     HcclAllToAllVParams params;
-    GetAllToAllVParam(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple(), &params);
+    GetAllToAllVParam(input[kIndex2]->ToTuple(), input[kIndex1]->ToTuple(), &params, strideOfDim0);
     hcclResult = HcclAdapter::GetInstance().HcclAlltoAllV(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
                                                           outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
                                                           stream, hcclKernel_.comm_);
@@ -97,6 +102,7 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
     LOG_ERROR << "HcclAllToAll failed, hcclResult: " << hcclResult;
+    return LAUNCH_OP_FAILED;
   }
 
   return SUCCESS;
