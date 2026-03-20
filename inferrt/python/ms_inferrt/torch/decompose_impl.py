@@ -186,6 +186,58 @@ def _collect_decompose_nodes(
     return selected
 
 
+def _collect_outer_graph_nodes_dfs(arg: Any, out: List[Node]) -> None:
+    """
+    Collect FX Nodes from arg in depth-first order (tuple/list/dict values only).
+
+    Must stay in sync with _materialize_arg_for_single_op_subgraph traversal order.
+    """
+    if isinstance(arg, Node):
+        out.append(arg)
+        return
+    if isinstance(arg, (tuple, list)):
+        for item in arg:
+            _collect_outer_graph_nodes_dfs(item, out)
+        return
+    if isinstance(arg, dict):
+        for v in arg.values():
+            _collect_outer_graph_nodes_dfs(v, out)
+
+
+def _materialize_arg_for_single_op_subgraph(
+    subgraph: torch.fx.Graph, arg: Any, placeholder_counter: List[int]
+) -> Any:
+    """
+    Copy arg into subgraph, replacing each outer-graph Node with a placeholder.
+
+    placeholder_counter is a single-element list used as a mutable int counter so
+    placeholder names are arg_0, arg_1, ... in creation order.
+    """
+    if isinstance(arg, Node):
+        example_value = arg.meta.get("example_value", None)
+        idx = placeholder_counter[0]
+        placeholder = subgraph.placeholder(f"arg_{idx}")
+        placeholder.meta = {"example_value": example_value}
+        placeholder_counter[0] = idx + 1
+        return placeholder
+    if isinstance(arg, tuple):
+        return tuple(
+            _materialize_arg_for_single_op_subgraph(subgraph, a, placeholder_counter)
+            for a in arg
+        )
+    if isinstance(arg, list):
+        return [
+            _materialize_arg_for_single_op_subgraph(subgraph, a, placeholder_counter)
+            for a in arg
+        ]
+    if isinstance(arg, dict):
+        return {
+            k: _materialize_arg_for_single_op_subgraph(subgraph, v, placeholder_counter)
+            for k, v in arg.items()
+        }
+    return arg
+
+
 def _build_single_op_subgraph(node: Node) -> tuple[GraphModule, list[Any]]:
     """
     For a single call_function node, build a tiny subgraph containing only this op,
@@ -200,18 +252,17 @@ def _build_single_op_subgraph(node: Node) -> tuple[GraphModule, list[Any]]:
         )
 
     subgraph = torch.fx.Graph()
-    arg_nodes: list[Any] = []
-    example_args: list[Any] = []
-
-    for i, arg in enumerate(node.args):
-        if isinstance(arg, Node):
-            example_value = arg.meta.get("example_value", None)
-            placeholder = subgraph.placeholder(f"arg_{i}")
-            placeholder.meta = {"example_value": example_value}
-            arg_nodes.append(placeholder)
-            example_args.append(example_value)
-        else:
-            arg_nodes.append(arg)
+    counter: List[int] = [0]
+    arg_nodes: list[Any] = [
+        _materialize_arg_for_single_op_subgraph(subgraph, arg, counter)
+        for arg in node.args
+    ]
+    outer_nodes: List[Node] = []
+    for arg in node.args:
+        _collect_outer_graph_nodes_dfs(arg, outer_nodes)
+    example_args = [
+        n.meta.get("example_value", None) for n in outer_nodes
+    ]
 
     single_op_node = subgraph.call_function(node.target, tuple(arg_nodes), {})
     single_op_node.meta = node.meta.copy()
@@ -250,19 +301,22 @@ def _build_placeholder_node_map(
     original_node: Node, traced_subgraph_gm: GraphModule
 ) -> dict[Node, Node]:
     """
-    Map placeholder nodes in traced_subgraph_gm back to the original node.args.
+    Map placeholder nodes in traced_subgraph_gm back to outer-graph Nodes.
+
+    Order matches _materialize_arg_for_single_op_subgraph (DFS over node.args).
     """
     node_map: dict[Node, Node] = {}
     placeholder_nodes = [
         n for n in traced_subgraph_gm.graph.nodes if n.op == "placeholder"
     ]
 
-    placeholder_idx = 0
+    outer_nodes: List[Node] = []
     for arg in original_node.args:
-        if isinstance(arg, Node):
-            if placeholder_idx < len(placeholder_nodes):
-                node_map[placeholder_nodes[placeholder_idx]] = arg
-                placeholder_idx += 1
+        _collect_outer_graph_nodes_dfs(arg, outer_nodes)
+
+    for placeholder_idx, outer in enumerate(outer_nodes):
+        if placeholder_idx < len(placeholder_nodes):
+            node_map[placeholder_nodes[placeholder_idx]] = outer
     return node_map
 
 
@@ -361,3 +415,6 @@ def _decompose_ops_with_fake_mode(gm: GraphModule) -> None:
             continue
         node_map = _build_placeholder_node_map(node, traced_subgraph_gm)
         _inline_traced_subgraph(gm, node, traced_subgraph_gm, node_map)
+
+    print("======================after decompose fx graph======================")
+    print(gm.graph)
