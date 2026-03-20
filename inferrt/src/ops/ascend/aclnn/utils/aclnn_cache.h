@@ -28,6 +28,7 @@
 #include <list>
 
 #include "common/common.h"
+#include "ops/utils/utils.h"
 #include "ir/value/value.h"
 #include "ir/common/intrusive_ptr.h"
 #include "ops/ascend/aclnn/utils/aclnn_common_meta.h"
@@ -102,8 +103,7 @@ class CacheEntryManager : public ir::RefCounted {
  private:
   DISABLE_COPY_AND_ASSIGN(CacheEntryManager)
 
-  // May be configured by user in the future
-  inline static size_t cacheCapacity_{64};
+  inline static size_t cacheCapacity_{GetOpsCacheCapacity()};
   uint64_t hashId_{0};
   CacheEntryPtr cacheEntry_{nullptr};
   std::list<CacheEntryPtr> cacheList_;
