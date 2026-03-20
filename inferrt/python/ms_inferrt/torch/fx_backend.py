@@ -779,6 +779,7 @@ _OP_MAP = {
     aten.expand.default: Op.expand,
     aten.unsqueeze.default: Op.unsqueeze,
     aten.index_put_.default: Op.index_put,
+    aten.add_.Scalar: Op.inplace_add,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
