@@ -162,7 +162,7 @@ def custom_op_exec_ntd_tnd(query, key, value, _head_dim, actseqlen, actseqlenkv,
     )
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score():
     """
@@ -183,7 +183,7 @@ def test_npu_fused_infer_attention_score():
     assert np.allclose(golden_output.cpu(), my_out.cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score_pfa_return_lse():
     """
@@ -211,7 +211,7 @@ def test_npu_fused_infer_attention_score_pfa_return_lse():
     assert np.allclose(golden_out_lse.cpu(), my_out_lse.cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score_ifa_return_lse():
     """
@@ -238,7 +238,7 @@ def test_npu_fused_infer_attention_score_ifa_return_lse():
     assert np.allclose(golden_out_lse.cpu(), my_out_lse.cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score_ntd_tnd():
     """
@@ -269,7 +269,7 @@ def test_npu_fused_infer_attention_score_ntd_tnd():
     )
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score_v3_fullquant():
     """
@@ -320,7 +320,7 @@ def test_npu_fused_infer_attention_score_v3_fullquant():
     assert res
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_infer_attention_score_pa():
     """
@@ -386,7 +386,7 @@ def run_npu_fused_infer_attention_score(
     )
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard",
           essential_mark="essential")
 def test_npu_fused_infer_attention_score_v3_antiquant():
     """

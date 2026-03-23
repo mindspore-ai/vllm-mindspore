@@ -50,7 +50,7 @@ def run_scatter_nd_update_inner(dtype, op_func_compiled):
     AssertRtolEqual(cpu_output0, npu_output_to_cpu, prec)
     AssertRtolEqual(npu_output_to_cpu, input_tensor_npu.cpu(), prec)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 def test_scatter_nd_update_(dtype):
     """

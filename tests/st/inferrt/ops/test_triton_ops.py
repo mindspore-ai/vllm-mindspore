@@ -43,7 +43,7 @@ def add_triton_func(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     out = add(z, x)
     return out
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_triton_add_dynamic_shape(backend):
     """

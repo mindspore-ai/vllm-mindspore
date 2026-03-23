@@ -72,7 +72,7 @@ def prepare_inputs(dtype):
     return key, value, key_cache, value_cache, slot_indices
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16,))
 def test_atb_reshape_and_cache_basic(dtype):
     """

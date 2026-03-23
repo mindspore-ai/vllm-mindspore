@@ -61,7 +61,7 @@ def add_rms_norm_forward(dtype, op_func_compiled):
     AssertRtolEqual(cpu_output2, npu_output2, prec)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_add_rms_norm_fp32():
     """
     Feature: Test aclnn add_rms_norm
@@ -72,7 +72,7 @@ def test_add_rms_norm_fp32():
     add_rms_norm_forward(np.float32, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_add_rms_norm_fp16():
     """
     Feature: Test aclnn add_rms_norm

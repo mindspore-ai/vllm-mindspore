@@ -96,7 +96,7 @@ def get_op_func_compiled(backend):
     _should_skip_test(),
     reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
 )
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
 @pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
 def test_python_custom_op(shape, backend):
@@ -129,7 +129,7 @@ def _get_mixed_types_compiled(backend):
     _should_skip_test(),
     reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
 )
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize(
     "shape,scale,shift,flag,label,in_shapes",
     [
@@ -158,7 +158,7 @@ def test_python_custom_op_mixed_types(shape, scale, shift, flag, label, in_shape
     _should_skip_test(),
     reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
 )
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
 @pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
 def test_python_custom_op_cache_hit(shape, backend):
@@ -197,7 +197,7 @@ def test_python_custom_op_cache_hit(shape, backend):
     _should_skip_test(),
     reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
 )
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", [fx_backend, mlir_backend])
 def test_python_custom_op_cache_miss(backend):
     """
@@ -234,7 +234,7 @@ def test_python_custom_op_cache_miss(backend):
     _should_skip_test(),
     reason="requires vllm installed and torch versions >=2.4.0 with custom op API"
 )
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", [fx_backend, ])
 def test_python_custom_tensor_getitem_by_number(backend):
     """

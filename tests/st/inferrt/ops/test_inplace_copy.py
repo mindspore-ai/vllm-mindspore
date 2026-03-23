@@ -13,7 +13,7 @@ def get_copy_func_compiled():
         return dst.copy_(src, non_blocking=non_blocking)
     return torch.compile(copy_func, backend=backend)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16, torch.float32))
 def test_copy_tensor_dynamic_shape(dtype):
     """
@@ -36,7 +36,7 @@ def test_copy_tensor_dynamic_shape(dtype):
     expected2_dst.copy_(src2)
     AssertRtolEqual(dst2, expected2_dst)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_copy_host_to_device(dtype):
     """
@@ -52,7 +52,7 @@ def test_copy_host_to_device(dtype):
     expected_dst.copy_(src)
     AssertRtolEqual(dst, expected_dst)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.int32))
 def test_copy_tensor_with_non_blocking(dtype):
     """

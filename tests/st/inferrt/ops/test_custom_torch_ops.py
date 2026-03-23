@@ -21,7 +21,7 @@ from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.skip(reason="Only for verifying successful interception; skip in regular runs")
 def test_tensor_ref(backend):
@@ -40,7 +40,7 @@ def test_tensor_ref(backend):
         compiled_func(x)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.skip(reason="Only for verifying successful interception; skip in regular runs")
 def test_tuple_first_element_ref(backend):
@@ -72,7 +72,7 @@ def test_tuple_first_element_ref(backend):
         compiled_func(x)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_aten_ldexp(backend):
     """
@@ -92,7 +92,7 @@ def test_aten_ldexp(backend):
     assert torch.allclose(z, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_npu_quant_matmul_with_nz_format(backend):
     """
@@ -114,7 +114,7 @@ def test_npu_quant_matmul_with_nz_format(backend):
     assert torch.allclose(z, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_aten_ldexp_cache_hit(backend):
     """
@@ -146,7 +146,7 @@ def test_aten_ldexp_cache_hit(backend):
     assert torch.allclose(z2, expected2), "Cache hit call result mismatch"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_aten_ldexp_cache_miss(backend):
     """

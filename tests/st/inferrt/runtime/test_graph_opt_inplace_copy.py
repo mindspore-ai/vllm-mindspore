@@ -110,7 +110,7 @@ def run():
     print("output shape 2:", y[1].shape)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_eliminate_inplacecopy():
     """
     Feature: Test inplace copy eliminate.

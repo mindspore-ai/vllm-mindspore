@@ -90,7 +90,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float32, torch.float16, torch.bfloat16))
 @pytest.mark.parametrize("n,k", [(8, 6), (128, 16), (1002, 1)])
 @pytest.mark.parametrize("group_select_mode", [0, 1])

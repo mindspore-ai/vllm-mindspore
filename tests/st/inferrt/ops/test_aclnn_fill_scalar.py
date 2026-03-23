@@ -20,7 +20,7 @@ def get_fill_func_compiled():
     return torch.compile(fill_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_copy_scalar(dtype):
     """
@@ -37,7 +37,7 @@ def test_copy_scalar(dtype):
     AssertRtolEqual(dst, expected_dst)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_fill_scalar(dtype):
     """

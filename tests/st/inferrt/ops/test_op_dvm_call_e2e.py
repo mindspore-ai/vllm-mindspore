@@ -15,7 +15,7 @@ def _get_ms_inferrt_dvm_lib():
         return torch.library.Library("ms_inferrt_dvm", "FRAGMENT")
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_add_staticshape_e2e():
     """
     Feature: ms_inferrt.dvm_call (static shape)
@@ -77,7 +77,7 @@ def test_dvm_call_add_staticshape_e2e():
     torch.testing.assert_close(res, expected, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_mul_add_fused_staticshape_e2e():
     """
     Feature: ms_inferrt.dvm_call (static shape)
@@ -129,7 +129,7 @@ def test_dvm_call_mul_add_fused_staticshape_e2e():
     torch.testing.assert_close(res, expected, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_staticshape_e2e():
     """
     Feature: ms_inferrt.dvm_call (static shape, multi-output)
@@ -184,7 +184,7 @@ def test_dvm_call_two_outputs_staticshape_e2e():
     torch.testing.assert_close(out1, x * y, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
     """
     Feature: ms_inferrt.dvm_call multi-output output ordering.
@@ -240,7 +240,7 @@ def test_dvm_call_two_outputs_output_indices_order_guard_e2e():
     torch.testing.assert_close(out1, x + y, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
     """
     Feature: ms_inferrt.dvm_call multi-output output-shape ref selection for reshape/broadcast.
@@ -300,7 +300,7 @@ def test_dvm_call_two_outputs_shape_ref_out_pos_e2e():
     torch.testing.assert_close(out1, x, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_dvm_call_shape_ref_const_dims_e2e():
     """
     Feature: ms_inferrt.dvm_call shape_ref const dims.
@@ -348,7 +348,7 @@ def test_dvm_call_shape_ref_const_dims_e2e():
     torch.testing.assert_close(out, x.reshape(2, 3), rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("m,k,n", [(1, 32, 256), (16, 128, 64)])
 def test_dvm_call_matmul_dynshape_e2e(m, k, n):
     """
@@ -402,7 +402,7 @@ def test_dvm_call_matmul_dynshape_e2e(m, k, n):
     torch.testing.assert_close(res, expected, rtol=1e-2, atol=1e-2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("m,k,n", [(1, 32, 256), (16, 128, 64)])
 def test_dvm_call_dynshape_combo_with_matmul_e2e(m, k, n):
     """

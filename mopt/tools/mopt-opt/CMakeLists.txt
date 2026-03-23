@@ -5,11 +5,15 @@ set(LIBS
   ${dialect_libs}
   ${conversion_libs}
   MLIROptLib
-  MLIRRegisterAllDialects
-  MLIRRegisterAllPasses
+  MLIRParser
+  MLIRPass
+  MLIRTransforms
+  MLIRSupport
+  MLIRIR
   MLIRMrtDialect
   MLIRDvmDialect
   MoptConversionCommonToMrt
+  MoptConversionTorchToMrt
 )
 
 add_llvm_executable(mopt-opt

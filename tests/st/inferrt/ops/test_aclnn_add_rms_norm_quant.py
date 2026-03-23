@@ -27,7 +27,7 @@ from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_npu_add_rms_norm_quant(backend, dtype):

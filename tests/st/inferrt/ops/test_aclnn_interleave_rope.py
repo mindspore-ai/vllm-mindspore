@@ -14,7 +14,7 @@ from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_interleave_rope(backend, dtype):

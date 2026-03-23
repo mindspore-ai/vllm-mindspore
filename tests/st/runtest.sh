@@ -32,7 +32,7 @@ run_tests() {
     if [ "$platform" = "cpu" ]; then
         TEST_PLAT='cpu_linux'
     else
-        TEST_PLAT='platform_ascend'
+        TEST_PLAT='platform_ascend910b'
     fi
 
     echo "${GREEN}=============== Running $TEST_PLAT Tests ===============${RESET}"

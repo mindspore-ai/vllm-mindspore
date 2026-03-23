@@ -7,7 +7,7 @@ from ms_inferrt.torch.fx_backend import backend
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_getitem_tuple_getitem():
     """
     Feature: Test getitem_tuple_getitem
@@ -22,7 +22,7 @@ def test_getitem_tuple_getitem():
     out = compiled_op(x, indices)
     AssertRtolEqual(out, 2)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_number():
     """
     Feature: Test tensor_getitem_by_number
@@ -38,7 +38,7 @@ def test_tensor_getitem_by_number():
     expected = x[0]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_slice():
     """
     Feature: Test tensor_getitem_by_slice
@@ -54,7 +54,7 @@ def test_tensor_getitem_by_slice():
     expected = x[0:4:2]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_tuple():
     """
     Feature: Test tensor_getitem_by_tuple
@@ -69,7 +69,7 @@ def test_tensor_getitem_by_tuple():
     expected = x[1, ..., 1:4:2]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_tuple_2():
     """
     Feature: Test tensor_getitem_by_tuple
@@ -84,7 +84,7 @@ def test_tensor_getitem_by_tuple_2():
     expected = x[1, 1:4:2]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_tuple_with_zero_dim():
     """
     Feature: Test tensor_getitem_by_tuple
@@ -99,7 +99,7 @@ def test_tensor_getitem_by_tuple_with_zero_dim():
     expected = x[1, :, 4:]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_by_tensor():
     """
     Feature: Test tensor_getitem_by_tensor
@@ -115,7 +115,7 @@ def test_tensor_getitem_by_tensor():
     expected = x[indices]
     AssertRtolEqual(out, expected)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_tensor_getitem_by_tuple_with_none(pipeline, monkeypatch):
     """

@@ -11,7 +11,7 @@ from ms_inferrt.torch.fx_mlir_backend import backend as mlir_backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_aclnn_custom_div_op(backend):
     """
@@ -47,7 +47,7 @@ def test_aclnn_custom_div_op(backend):
     print("The result is correct. Launch aclnn custom op [div] successfully.")
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_custom_ops_api_with_ascend_backend():
     """
     Feature: Test ms_inferrt.ops.compile and ms_inferrt.ops.load_library APIs

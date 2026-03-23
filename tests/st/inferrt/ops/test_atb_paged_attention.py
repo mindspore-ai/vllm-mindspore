@@ -77,7 +77,7 @@ def prepare_inputs(dtype):
     return query, key_cache, value_cache, block_tables, context_lens
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16,))
 def test_atb_paged_attention_basic(dtype):
     """

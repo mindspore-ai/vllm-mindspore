@@ -33,7 +33,7 @@ def get_op_func_compiled():
         return torch.cat(x, axis)
     return torch.compile(custom_op_func, backend=backend)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes,axis,dtypes", [
     ([2, 5], 0, torch.float16),
     ([3, 4, 5], 1, torch.bfloat16),

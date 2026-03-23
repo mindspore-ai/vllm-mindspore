@@ -62,7 +62,7 @@ def index_select_forward(dtype, shape, dim, index, compiled_func):
     AssertRtolEqual(cpu_output, npu_output, prec)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (np.float32, np.float16))
 @pytest.mark.parametrize("shape, dim, index", [
     ((3,), 0, torch.tensor([0, 1], dtype=torch.int64)),
@@ -82,7 +82,7 @@ def test_index_select_float(dtype, shape, dim, index):
     index_select_forward(dtype, shape, dim, index, compiled_op)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (np.int8, np.int16, np.int32, np.int64))
 @pytest.mark.parametrize("shape, dim, index", [
     ((3,), 0, torch.tensor([0, 1], dtype=torch.int64)),
@@ -102,7 +102,7 @@ def test_index_select_int(dtype, shape, dim, index):
     index_select_forward(dtype, shape, dim, index, compiled_op)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (np.float32, np.float16))
 @pytest.mark.parametrize("shape, dim, index", [
     ((3,), 0, torch.tensor(0, dtype=torch.int64)),
@@ -119,7 +119,7 @@ def test_index_select_single_index(dtype, shape, dim, index):
     index_select_forward(dtype, shape, dim, index, compiled_op)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (np.float32, np.float16))
 def test_index_select_tensor_method(dtype):
     """

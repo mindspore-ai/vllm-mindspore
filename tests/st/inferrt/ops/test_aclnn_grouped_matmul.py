@@ -42,7 +42,7 @@ def get_op_func_compiled():
     return torch.compile(grouped_matmul_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_grouped_matmul_a8w4():
     """
@@ -101,7 +101,7 @@ def test_grouped_matmul_a8w4():
     AssertRtolEqual(output[0][:num_experts], expected[0][:num_experts])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_grouped_matmul_a8w4_nz():
     """
@@ -160,7 +160,7 @@ def test_grouped_matmul_a8w4_nz():
     AssertRtolEqual(output[0][:num_experts], expected[0][:num_experts])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_grouped_matmul_base():
     """
@@ -187,7 +187,7 @@ def test_grouped_matmul_base():
     AssertRtolEqual(output[0], expected[0])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_grouped_matmul_multi_dim():
     """
@@ -233,7 +233,7 @@ def test_grouped_matmul_multi_dim():
     AssertRtolEqual(output[1], expected[1])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_grouped_matmul_dynamic():
     """

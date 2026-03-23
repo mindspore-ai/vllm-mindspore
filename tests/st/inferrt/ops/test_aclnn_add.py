@@ -58,7 +58,7 @@ def add_forward(dtype, shape, alpha, compiled_func):
     AssertRtolEqual(cpu_output, npu_output, prec)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
     (add_no_alpha, 1.0),
@@ -76,7 +76,7 @@ def test_add_fp32(shape, op_func, alpha):
     add_forward(np.float32, shape, alpha, compiled_op)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
     (add_no_alpha, 1),
