@@ -353,6 +353,47 @@ def argsort_output_hook(node, op, input_nodes, executor, sym_mgr):
     return _add_tuple_getitem_node(executor, sym_mgr, tuple_node, 1, output_value)
 
 
+def rms_norm_output_hook(node, op, input_nodes, executor, sym_mgr):
+    """
+    Adapt Op.rms_norm tuple output for torch.rms_norm single-tensor semantics.
+
+    - torch.rms_norm(...) returns one Tensor.
+    - Backend Op.rms_norm returns (y, rstd).
+
+    For torch.rms_norm target, materialize tuple output in IR and project y (index 0).
+    For other rms_norm targets (e.g. npu_rms_norm) keep original output shape.
+    """
+    target_name = getattr(node.target, "__name__", None)
+    is_torch_rms_norm = target_name == "rms_norm" and getattr(node.target, "__module__", "").startswith("torch")
+
+    example_value = node.meta.get("example_value", None)
+    if not is_torch_rms_norm:
+        output_value = sym_mgr.from_torch_with_sym(example_value)
+        return executor.add_op_node(op, input_nodes, output_value)
+
+    output_example = _extract_tensor_example(
+        example_value,
+        "rms_norm example_value must be a tensor",
+    )
+    x_example = _extract_tensor_example(
+        node.args[0] if len(node.args) > 0 else None,
+        "rms_norm input example_value must be a tensor",
+    )
+    gamma_example = _extract_tensor_example(
+        node.args[2] if len(node.args) > 2 else None,
+        "rms_norm gamma example_value must be a tensor",
+    )
+
+    rstd_dim = x_example.dim() - gamma_example.dim()
+    rstd_shape = [x_example.size(i) if i < rstd_dim else 1 for i in range(x_example.dim())]
+    rstd_example = output_example.new_empty(rstd_shape, dtype=torch.float32)
+
+    tuple_output = sym_mgr.from_torch_with_sym((output_example, rstd_example))
+    tuple_node = executor.add_op_node(op, input_nodes, tuple_output)
+    output_value = sym_mgr.from_torch_with_sym(output_example)
+    return _add_tuple_getitem_node(executor, sym_mgr, tuple_node, 0, output_value)
+
+
 def _init_arg_mapping_hooks():
     """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
@@ -378,6 +419,8 @@ def _init_arg_mapping_hooks():
     # in-place index_put_: always materialize both accumulate and unsafe,
     # defaulting to False when omitted by the frontend.
     register_arg_mapping_hook(Op.index_put, index_put_arg_hook)
+    # Normalize torch.rms_norm argument layout to backend Op.rms_norm layout.
+    register_arg_mapping_hook(Op.rms_norm, rms_norm_arg_hook)
 
 
 def index_put_arg_hook(node, flat_args, executor):
@@ -398,6 +441,31 @@ def index_put_arg_hook(node, flat_args, executor):
     if len(args) < 5:
         args.append(False)
 
+    return args
+
+
+def rms_norm_arg_hook(node, flat_args, executor):
+    """
+    Normalize arguments for rms_norm.
+
+    Supported input forms:
+    - torch.rms_norm(x, normalized_shape, weight, eps)
+    - torch.ops.npu.npu_rms_norm(x, gamma, epsilon)
+
+    Backend Op.rms_norm expects exactly:
+    [x, gamma, epsilon]
+    """
+    args = list(flat_args)
+    # torch.rms_norm path: [x, normalized_shape, weight, eps]
+    if len(args) >= 4:
+        x = args[0]
+        gamma = args[2]
+        epsilon = args[3]
+        return [x, gamma, epsilon]
+    # Already in expected form (e.g. npu_rms_norm)
+    if len(args) == 3:
+        return args
+    # Fallback: keep original args for better runtime diagnostics
     return args
 
 
@@ -684,6 +752,7 @@ def _init_ops_mapping_hooks():
 def _init_output_mapping_hooks():
     """Register output mapping hooks for runtime ops."""
     register_output_mapping_hook(Op.argsort, argsort_output_hook)
+    register_output_mapping_hook(Op.rms_norm, rms_norm_output_hook)
 
 
 def _next_unique_graph_id():
