@@ -22,6 +22,57 @@ from tests.mark_utils import arg_mark
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+@pytest.mark.skip(reason="Only for verifying successful interception; skip in regular runs")
+def test_tensor_ref(backend):
+    """
+    Feature: Check CheckOutputInputRef for tensor output with ref
+    Description: Custom op that returns tensor where ref shares storage with input should raise exception
+    Expectation: LOG_EXCEPTION is raised because output element shares storage with input
+    """
+    def test_func(x):
+        return x.exponential_()
+
+    compiled_func = torch.compile(test_func, backend=backend)
+    x = torch.randn([2, 16], dtype=torch.float32).npu()
+
+    with pytest.raises(RuntimeError):
+        compiled_func(x)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
+@pytest.mark.skip(reason="Only for verifying successful interception; skip in regular runs")
+def test_tuple_first_element_ref(backend):
+    """
+    Feature: Check CheckOutputInputRef for tuple output with first element as ref
+    Description: Custom op that returns tuple where first element shares storage with input should raise exception
+    Expectation: LOG_EXCEPTION is raised because first output element shares storage with input
+    """
+
+    @torch.library.custom_op("ref::split_op", mutates_args=())
+    def split_op(x: torch.Tensor, split_size: int) -> list[torch.Tensor]:
+        return torch.split(x, split_size, dim=0)
+
+    @torch.library.register_fake("ref::split_op")
+    def split_op_fake(x: torch.Tensor, split_size: int) -> list[torch.Tensor]:
+        num_splits = x.shape[0] // split_size
+        return [
+            torch.empty(x.shape[0] // num_splits, *x.shape[1:], dtype=x.dtype, device=x.device)
+            for _ in range(num_splits)
+        ]
+
+    def test_func(x):
+        return torch.ops.ref.split_op(x, 1)
+
+    compiled_func = torch.compile(test_func, backend=backend)
+    x = torch.randn([2, 16], dtype=torch.float32).npu()
+
+    with pytest.raises(RuntimeError):
+        compiled_func(x)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_aten_ldexp(backend):
     """
