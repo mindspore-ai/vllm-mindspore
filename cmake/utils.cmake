@@ -16,15 +16,15 @@ if(NOT DEFINED THNUM)
     endif()
 endif()
 
-if(DEFINED ENV{MRTLIBS_CACHE_PATH})
-    set(_MRT_LIB_CACHE $ENV{MRTLIBS_CACHE_PATH})
+if(DEFINED ENV{MSLIBS_CACHE_PATH})
+    set(_MRT_LIB_CACHE $ENV{MSLIBS_CACHE_PATH})
 else()
     # NOTE:
     #   Third-party packages downloaded by mrt_add_pkg must NOT live inside the
     #   current build directory. LLVM/CMake explicitly warns when an exported
     #   target's INTERFACE_INCLUDE_DIRECTORIES points into ${CMAKE_BINARY_DIR}
     #   (e.g. "path is prefixed in the build directory"). To avoid that, the
-    #   default cache path is set to <top>/​.mrtlib when MRTLIBS_CACHE_PATH is
+    #   default cache path is set to <top>/​.mrtlib when MSLIBS_CACHE_PATH is
     #   not provided.
     set(_MRT_LIB_CACHE ${TOP_DIR}/.mrtlib)
 endif()

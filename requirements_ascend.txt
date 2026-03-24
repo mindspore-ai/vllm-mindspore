@@ -1,10 +1,6 @@
-torch==2.8.0
-torch-npu==2.8.0
-typing_extensions>=4.13.1
-build
-setuptools==80.9.0
-packaging>=24.2
-wheel>=0.34.2
-pybind11
-nanobind >= 2.9
-expecttest>=0.3.0
+torch==2.9.0
+torch-npu==2.9.0
+numpy>=1.26.0
+pyyaml
+expecttest
+triton-ascend
