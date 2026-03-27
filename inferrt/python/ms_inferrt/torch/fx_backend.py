@@ -1126,7 +1126,8 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if node.target in ["view", "reshape", "repeat", "permute"] and not _is_shape_sequence(args[1]):
+    if (node.target in ["view", "reshape", "repeat", "permute"] or node.target is torch.functional.einsum) \
+        and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
 
     if len(args) + len(kwargs) > len(schema.arguments):

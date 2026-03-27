@@ -39,8 +39,6 @@ _DIST_OP_LIST = [
 def _extract_global_comm_info():
     """Extract distributed communication information (rank, world_size)."""
     rank = dist.get_rank() if dist.is_initialized() else 0
-    if rank > 7:
-        raise ValueError(f"Expected rank id between 0 and 7, but received {rank}")
     world_size = dist.get_world_size()
     ray_local_devices = os.getenv('RAY_LOCAL_VISIBLE_DEVICES')
     if ray_local_devices:

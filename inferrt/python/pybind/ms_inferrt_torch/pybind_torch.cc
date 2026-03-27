@@ -209,6 +209,8 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
+  // For input is used as output directly, should update tensor
+  tensor->Update();
   auto storage = tensor->GetStorage();
   if (!storage->CheckOwnsData()) {
     auto &waitLaunchFinish = mrt::ops::OpAsync::GetWaitLaunchFinishFunc();

@@ -1774,6 +1774,22 @@ def Mrt_SigmoidOp : Mrt_Op<"sigmoid", [Pure]> {
   let genAclnnOp = "aclnnSigmoid";
 }
 
+def Mrt_SiluOp : Mrt_Op<"silu", [Pure]> {
+  let summary = "Silu activation function";
+  let description = [{
+    Applies the silu activation function.
+  }];
+
+  let arguments = (ins MrtAnyTensor:$input);
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSilu";
+}
+
 def Mrt_ShapeOp : Mrt_Op<"shape", [Pure]> {
   let summary = "Get tensor shape as i64 list";
   let description = [{

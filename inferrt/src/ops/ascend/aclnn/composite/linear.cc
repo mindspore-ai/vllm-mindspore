@@ -228,6 +228,7 @@ OpsErrorCode AclnnLinear::CalcWorkspace(const std::vector<const ir::Value *> &in
                                        cubeMathType_);
     } else {
       // Case 4: Matmul first, then add bias separately
+      LOG_EXCEPTION << "Not support linear with bias.";
       std::vector<int64_t> matmulShape = xShape;
       matmulShape[xRank_ - 1] = weightTransposeShape[wRank - 1];
 
