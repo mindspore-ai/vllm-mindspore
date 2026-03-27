@@ -33,7 +33,6 @@ import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
-import mindspore.numpy as mnp
 import mindspore.mint as mint
 import mindspore.mint.nn.functional as F
 
@@ -48,7 +47,7 @@ _AUDIO_PLACEHOLDER_TOKEN_ID = 200011  # <|endoftext11|>
 
 
 class ConformerEncoderLayer(nn.Cell): 
-    """ConformerEncoder Layer module (MindSpore版)."""
+    """ConformerEncoder Layer module"""
 
     def __init__(
         self,
@@ -133,7 +132,7 @@ class ConformerEncoderLayer(nn.Cell):
     ) -> tuple[ms.Tensor, ms.Tensor, ms.Tensor, ms.Tensor]:  
         """
         x: (batch, max_time_in, size)
-        pos_k, pos_v: 位置编码
+        pos_k, pos_v: Positional Encoding
         mask: (batch, max_time_in)
         relative_attention_bias: (1, n_head, time1, time2)
         """
@@ -154,7 +153,7 @@ class ConformerEncoderLayer(nn.Cell):
         return out, pos_k, pos_v, mask
 
 class TransformerEncoderBase(abc.ABC, nn.Cell): 
-    """The Base class for Transformer based encoders (MindSpore版)"""
+    """The Base class for Transformer based encoders"""
 
     def __init__(
         self,
@@ -535,7 +534,7 @@ class ConformerEncoder(TransformerEncoderBase):
 
 
 class WindowQformer(nn.Cell): 
-    """Window-level Qformer (MindSpore版)"""
+    """Window-level Qformer"""
 
     def __init__(
         self,

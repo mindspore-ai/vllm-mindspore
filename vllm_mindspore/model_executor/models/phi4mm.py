@@ -37,8 +37,6 @@ import mindspore.numpy as mnp
 import mindspore.mint as mint
 import mindspore.mint.nn.functional as F
 from vllm_mindspore.model_executor.models.model_base import AttentionWrapper, NativeModel
-from vllm_mindspore.model_executor.models.attention_mask import (
-    MultiModalLowerTriangularMask)
 
 
 from mindone.transformers import BatchFeature, ProcessorMixin, SequenceFeatureExtractor
@@ -72,13 +70,11 @@ from vllm.multimodal.parse import (AudioProcessorItems, ImageEmbeddingItems,
                                    MultiModalDataItems, MultiModalDataParser)
 
 from vllm.multimodal.processing import (BaseMultiModalProcessor,
-                                        BaseProcessingInfo, PromptReplacement,
-                                        PromptUpdate, ResolvedPromptUpdate)
+                                        BaseProcessingInfo, PromptReplacement, ResolvedPromptUpdate)
 
 from vllm.multimodal.profiling import BaseDummyInputsBuilder
 from vllm.sequence import IntermediateTensors
 from vllm.utils import is_list_of
-from vllm.utils.tensor_schema import TensorSchema, TensorShape
 
 from .idefics2_vision_model import Idefics2VisionTransformer
 from vllm_mindspore.model_executor.models.interfaces import (
@@ -922,7 +918,7 @@ class Phi4MMForCausalLM(NativeModel, SupportsLoRA, SupportsMultiModal):
         self.set_modules({
             "model": self.language_model.model,
             "vision_encoder": self.vision_encoder,
-            "embed_tokens_extend": self.embed_tokens_extend,  # 建议加上
+            "embed_tokens_extend": self.embed_tokens_extend,  
             "lm_head": self.lm_head
         })
 

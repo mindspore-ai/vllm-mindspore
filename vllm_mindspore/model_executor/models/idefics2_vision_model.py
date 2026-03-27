@@ -26,6 +26,7 @@
 
 from collections.abc import Iterable
 from typing import Optional
+import warnings
 
 import mindspore as ms
 import mindspore.nn as nn
@@ -37,12 +38,8 @@ from transformers.models.idefics2.configuration_idefics2 import (
     Idefics2Config,
     Idefics2VisionConfig,
 )
-from mindspore.ops.operations.nn_ops import PromptFlashAttention,FlashAttentionScore
+from mindspore.ops.operations.nn_ops import FlashAttentionScore
 
-
-from vllm.attention.layer import MultiHeadAttention  
-
-from vllm.distributed import get_tensor_model_parallel_world_size 
 
 from vllm_mindspore.model_executor.layers.linear import (
     ColumnParallelLinear,
@@ -58,7 +55,7 @@ _ACTIVATION_REGISTRY = {"gelu_pytorch_tanh": nn.GELU(approximate=True),"silu": n
 
 class Idefics2VisionEmbeddings(nn.Cell):
     """
-    MindSpore版 Idefics2VisionEmbeddings，支持变分辨率图片。
+    Idefics2VisionEmbeddings
     """
 
     def __init__(self, config: Idefics2VisionConfig):
@@ -116,7 +113,7 @@ class Idefics2VisionEmbeddings(nn.Cell):
 
 
 class Idefics2VisionAttention(nn.Cell):
-    """Multi-headed attention from 'Attention Is All You Need' paper (MindSpore版)"""
+    """Multi-headed attention from 'Attention Is All You Need' paper"""
 
     def __init__(
         self,
@@ -137,7 +134,8 @@ class Idefics2VisionAttention(nn.Cell):
         self.scale = self.head_dim ** -0.5
         self.dropout = config.attention_dropout
 
-        tp_size = 1  
+        tp_size = 1
+        warnings.warn("Idefics2VisionAttention currently only supports tp_size=1.")
         self.num_heads_per_partition = self.num_heads // tp_size
 
         self.qkv_proj = QKVParallelLinear(
@@ -310,6 +308,9 @@ class Idefics2VisionTransformer(nn.Cell):
         prefix: str = "",
         use_data_parallel: bool = False,
     ):
+        if use_data_parallel:
+            raise NotImplementedError("Idefics2VisionTransformer does not support use_data_parallel=True currently.")
+        
         super().__init__()
 
         embed_dim = config.hidden_size

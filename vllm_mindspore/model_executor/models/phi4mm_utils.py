@@ -615,8 +615,8 @@ class T5RelativeAttentionLogitBias(nn.Cell):
 
 
 class AbsolutePositionalEncoding(nn.Cell): 
-    """Absolute Positional encoding module. (MindSpore版)
-    实现绝对正弦位置编码
+    """
+    Absolute Positional encoding module. 
     """
 
     def __init__(self,
@@ -669,7 +669,8 @@ class AbsolutePositionalEncoding(nn.Cell):
 
 
 class MeanVarianceNormLayer(nn.Cell):  
-    """Mean/variance normalization layer. (MindSpore版)
+    """
+    Mean/variance normalization layer. 
 
     Will subtract mean and multiply input by inverted standard deviation.
     Typically used as a very first layer in a model.
@@ -696,7 +697,7 @@ class MeanVarianceNormLayer(nn.Cell):
 
 class CausalConv1D(mint.nn.Conv1d):  
     """
-    MindSpore版：Causal 1D卷积
+    Causal 1D convolution
     """
 
     def __init__(
@@ -779,7 +780,7 @@ class CausalConv1D(mint.nn.Conv1d):
 
 class CausalConv2D(mint.nn.Conv2d):  
     """
-    MindSpore版：Causal 2D卷积
+    Causal 2D convolution
     """
 
     def __init__(
