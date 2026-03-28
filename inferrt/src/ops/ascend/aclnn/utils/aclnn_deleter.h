@@ -56,6 +56,14 @@ inline void Release(aclFloatArray *floatList) {
   aclDestroyFloatArray(floatList);
 }
 
+inline void Release(aclScalar *p) {
+  static const auto aclDestroyScalar = GET_ACLNN_COMMON_META_FUNC(aclDestroyScalar);
+  if (aclDestroyScalar == nullptr) {
+    return;
+  }
+  aclDestroyScalar(p);
+}
+
 template <typename T>
 void Release(T value) {
   (void)value;
