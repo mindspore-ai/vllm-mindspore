@@ -15,7 +15,9 @@
 """
 A simple torch.fx backend that converts a GraphModule to a ms_inferrt GraphExecutor.
 """
+import os
 import operator
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, NamedTuple
 import torch
 from torch._ops import OpOverload, OpOverloadPacket
@@ -46,6 +48,13 @@ try:
     TORCH_NPU_INSTALLED = True
 except ImportError:
     TORCH_NPU_INSTALLED = False
+
+
+def _debug_print(*args, **kwargs):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    pid = os.getpid()
+    kwargs["flush"] = True
+    print(f"[{timestamp}] [PID:{pid}]", *args, **kwargs)
 
 
 def _init_ms_inferrt_config():
@@ -1596,7 +1605,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
             else:
                 raise NotImplementedError(f"Unsupported node op: {node.op}")
 
-    print("Building Graph:")
+    _debug_print("Building Graph:")
     executor.dump_graph()
     executor.build()
 
