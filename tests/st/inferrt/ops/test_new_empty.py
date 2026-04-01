@@ -18,7 +18,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("self_shape", [[10, 10], [20, 30, 35]])
 @pytest.mark.parametrize("new_shape", [[5, 5], [10, 20, 25], [100]])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
@@ -37,7 +37,7 @@ def test_new_empty_basic(self_shape, new_shape, dtype):
     assert npu_output.device.type == 'npu', f"device should be npu, but got {npu_output.device.type}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("self_shape", [[64, 128], [256, 512]])
 @pytest.mark.parametrize("new_shape", [[32, 64], [128, 256, 128]])
 @pytest.mark.parametrize("dtype", [torch.int32, torch.int64])
@@ -56,7 +56,7 @@ def test_new_empty_int_dtype(self_shape, new_shape, dtype):
     assert npu_output.device.type == 'npu', f"device should be npu, but got {npu_output.device.type}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("self_shape", [[10], [20, 30]])
 @pytest.mark.parametrize("new_shape", [[], [1], [5, 6, 7]])
 def test_new_empty_same_dtype(self_shape, new_shape):
@@ -75,7 +75,7 @@ def test_new_empty_same_dtype(self_shape, new_shape):
     assert npu_output.device.type == 'npu', f"device should be npu, but got {npu_output.device.type}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("self_shape", [[10, 10], [128, 256]])
 @pytest.mark.parametrize("new_shape", [[20, 20], [64, 128, 64]])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])

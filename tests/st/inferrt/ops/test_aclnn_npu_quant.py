@@ -24,7 +24,7 @@ from ms_inferrt.torch.fx_backend import backend as fx_backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 def test_npu_quantize_per_channel_axis1(backend, dtype):
@@ -55,7 +55,7 @@ def test_npu_quantize_per_channel_axis1(backend, dtype):
     assert torch.allclose(output.cpu().float(), expected_output.cpu().float(), rtol=0.01, atol=0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_npu_quantize_per_tensor(backend):
     """
@@ -81,7 +81,7 @@ def test_npu_quantize_per_tensor(backend):
     assert torch.allclose(output.cpu().float(), expected_output.cpu().float(), rtol=0.01, atol=0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_npu_quantize_per_head(backend):
     """
@@ -107,7 +107,7 @@ def test_npu_quantize_per_head(backend):
     assert torch.allclose(output.cpu().float(), expected_output.cpu().float(), rtol=0.01, atol=0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_npu_quantize_without_zero_points(backend):
     """
@@ -130,7 +130,7 @@ def test_npu_quantize_without_zero_points(backend):
     assert torch.allclose(output.cpu().float(), expected_output.cpu().float(), rtol=0.01, atol=0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", (torch.quint4x2,))
 def test_npu_quantize_different_dtypes(backend, dtype):
@@ -155,7 +155,7 @@ def test_npu_quantize_different_dtypes(backend, dtype):
     assert torch.allclose(output.cpu().float(), expected_output.cpu().float(), rtol=0.01, atol=0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_npu_quantize_high_dim(backend):
     """

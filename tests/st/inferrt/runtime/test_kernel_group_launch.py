@@ -18,7 +18,7 @@ from ms_inferrt.torch import backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_kernel_group_launch(monkeypatch):
     """
     Feature: Test kernel group launch(parallel launch)

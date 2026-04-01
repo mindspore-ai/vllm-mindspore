@@ -22,7 +22,7 @@ from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_tensor_index(backend):
     """
@@ -45,7 +45,7 @@ def test_setitem_with_tensor_index(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_tensor_index_and_mul(backend):
     """
@@ -70,7 +70,7 @@ def test_setitem_with_tensor_index_and_mul(backend):
     AssertRtolEqual(out, expected * 2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_single_computed_index(backend):
     """
@@ -97,7 +97,7 @@ def test_setitem_with_single_computed_index(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_double_computed_index(backend):
     """
@@ -124,7 +124,7 @@ def test_setitem_with_double_computed_index(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_dynamic_slice(backend):
     """
@@ -149,7 +149,7 @@ def test_setitem_with_dynamic_slice(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_tensor_setitem_slice_tensor(backend):
     """
@@ -173,7 +173,7 @@ def test_tensor_setitem_slice_tensor(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_complex_setitem_with_computed_ops(backend):
     """
@@ -205,7 +205,7 @@ def test_complex_setitem_with_computed_ops(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_tensor_index_dynamo(backend):
     """
@@ -236,7 +236,7 @@ def test_setitem_with_tensor_index_dynamo(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_bool_mask(backend):
     """
@@ -261,7 +261,7 @@ def test_setitem_with_bool_mask(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_bool_mask2(backend):
     """
@@ -284,7 +284,7 @@ def test_setitem_with_bool_mask2(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_dynamic_shape(backend):
     """
@@ -325,7 +325,7 @@ def test_setitem_with_dynamic_shape(backend):
     AssertRtolEqual(out_2[1], expected_2[1])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_const_index_const_value(backend):
     """
@@ -346,7 +346,7 @@ def test_setitem_const_index_const_value(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_const_index_input_value(backend):
     """
@@ -368,7 +368,7 @@ def test_setitem_const_index_input_value(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_input_index_const_value(backend):
     """
@@ -390,7 +390,7 @@ def test_setitem_input_index_const_value(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.skip("Not implemented.")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_slice_index_const_value(backend):
@@ -413,7 +413,7 @@ def test_setitem_slice_index_const_value(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.skip("Not implemented.")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_slice_step_index_input_value(backend):
@@ -436,7 +436,7 @@ def test_setitem_slice_step_index_input_value(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_tensor_index_decomposition(backend):  # pylint: disable=unused-argument
     """
@@ -457,7 +457,7 @@ def test_setitem_with_tensor_index_decomposition(backend):  # pylint: disable=un
         return res, res[1]
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_setitem_with_tensor_index_decomposition2(backend):
     """

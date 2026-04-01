@@ -16,7 +16,7 @@ def op_func(x, normalized_shape, weight, bias, eps=1e-5):
     return F.layer_norm(x, normalized_shape, weight, bias, eps)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 def test_layer_norm(backend):
     """

@@ -107,7 +107,7 @@ def inplace_add_forward(dtype, shape, op_func, op_func_compiled, _, other_type, 
     AssertRtolEqual(cpu_output.detach().numpy(), npu_output.cpu().numpy(), prec)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("dtype,op_func,alpha", [
     (np.float32, op_func_alpha_2, 2),
@@ -128,7 +128,7 @@ def test_inplace_add_tensor_tensor(dtype, shape, op_func, alpha, other_type, oth
     inplace_add_forward(dtype, shape, op_func, op_func_compiled, alpha, other_type, other_value)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("dtype,op_func,alpha,other_value", [
     (np.float32, op_func_no_alpha_scalar_3_6, 1.0, 3.6),
@@ -145,7 +145,7 @@ def test_inplace_add_tensor_scalar(dtype, shape, op_func, alpha, other_type, oth
     inplace_add_forward(dtype, shape, op_func, op_func_compiled, alpha, other_type, other_value)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("dtype,op_func,alpha,other_value", [
     (np.float32, op_func_alpha_2, 2, 3.6),

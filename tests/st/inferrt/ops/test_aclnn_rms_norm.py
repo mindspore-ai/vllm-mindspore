@@ -31,7 +31,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_rms_norm():
     """
     Feature: Test aclnn rms_norm
@@ -51,7 +51,7 @@ def test_rms_norm():
     AssertRtolEqual(cpu_output1, npu_output1)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_rms_norm_mix_dtype():
     """
     Feature: Test aclnn rms_norm

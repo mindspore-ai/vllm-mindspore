@@ -52,7 +52,7 @@ def argsort_forward(dtype, shape, op_func, compiled_func):
     AssertRtolEqual(ori_output, npu_output, 0)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(128, 256, 64)])
 @pytest.mark.parametrize("op_func", [
     argsort_default, argsort_dim0_descending, argsort_stable_descending, argsort_method_stable_descending

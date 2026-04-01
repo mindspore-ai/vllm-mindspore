@@ -28,7 +28,7 @@ class TwoMulModule(torch.nn.Module):
 
 @pytest.mark.skipif(missing_mfusion(), reason="mfusion not installed")
 @arg_mark(
-    plat_marks=["platform_ascend"],
+    plat_marks=["platform_ascend910b"],
     level_mark="level0",
     card_mark="onecard",
     essential_mark="essential",

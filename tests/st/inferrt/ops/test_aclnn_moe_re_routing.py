@@ -76,7 +76,7 @@ def _run_eager_and_compiled(tokens, expert_token_num_per_rank, per_token_scales,
     return eager_out, compiled_out
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("tokens_num,tokens_length,rank_num,expert_num", [(512, 128, 4, 4), (1024, 256, 8, 8)])
 def test_aclnn_moe_re_routing(backend, tokens_num, tokens_length, rank_num, expert_num):

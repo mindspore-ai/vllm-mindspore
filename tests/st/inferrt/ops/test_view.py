@@ -87,7 +87,7 @@ def op_func_variadic(input_tensor, *shape):
     return input_tensor.view(*shape)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_view():
     """
     Feature: Test view
@@ -105,7 +105,7 @@ def test_view():
     view_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_view_twice():
     """
     Feature: Test view
@@ -123,7 +123,7 @@ def test_view_twice():
     view_forward_twice(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(64,), (4, 4, 4), (8, 8), (2, 16, 2)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 def test_view_variadic_args(shape, dtype):

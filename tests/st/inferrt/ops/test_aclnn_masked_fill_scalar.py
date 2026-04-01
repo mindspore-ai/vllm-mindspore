@@ -20,7 +20,7 @@ def get_inplace_masked_fill_func_compiled():
     return torch.compile(inplace_masked_fill_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 def test_masked_fill_scalar(dtype):
     """
@@ -45,7 +45,7 @@ def test_masked_fill_scalar(dtype):
     AssertRtolEqual(output2, expected2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 def test_inplace_masked_fill_scalar(dtype):
     """

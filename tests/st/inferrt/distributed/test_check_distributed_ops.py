@@ -16,7 +16,7 @@ import os
 
 from tests.mark_utils import arg_mark
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_all_gather_op():
     """
     Feature: Check all_gather op launch
@@ -28,7 +28,7 @@ def test_check_all_gather_op():
     assert return_code == 0
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_reduce_scatter_op():
     """
     Feature: Check reduce_scatter op launch
@@ -40,7 +40,7 @@ def test_check_reduce_scatter_op():
     assert return_code == 0
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_all_reduce_op():
     """
     Feature: Check all_reduce op launch
@@ -52,7 +52,7 @@ def test_check_all_reduce_op():
     assert return_code == 0
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_all_to_all_single_op():
     """
     Feature: Check all_to_all_single op launch
@@ -63,7 +63,8 @@ def test_check_all_to_all_single_op():
     return_code = os.system(command)
     assert return_code == 0
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_all_to_all_v_single_op():
     """
     Feature: Check all_to_all_v_single op launch

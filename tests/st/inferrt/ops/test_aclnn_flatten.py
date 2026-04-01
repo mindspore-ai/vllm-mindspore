@@ -17,7 +17,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[4, 5, 6, 7, 8], [7, 6, 8, 10]])
 @pytest.mark.parametrize("start_idx", [0, 1])
 @pytest.mark.parametrize("end_idx", [-1, 3])

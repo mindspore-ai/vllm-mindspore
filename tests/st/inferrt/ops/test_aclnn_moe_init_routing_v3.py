@@ -76,7 +76,7 @@ def moe_init_routing_golden_shape(x, expert_idx, scale, offset_unused, active_nu
     return expanded_x_shape, expanded_row_idx_shape, expert_tokens_count_shape, expanded_scale_shape
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("num_rows", [1, 4])
 def test_aclnn_moe_init_routing_v3_op(num_rows):
     """
@@ -152,7 +152,7 @@ def test_aclnn_moe_init_routing_v3_op(num_rows):
                     opt_expanded_scale.detach().cpu()[:scale_valid_len])
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0",
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0",
            card_mark="onecard", essential_mark="essential")
 def test_aclnn_moe_init_routing_v3_op1():
     """

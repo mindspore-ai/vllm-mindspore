@@ -1,0 +1,13 @@
+// This file defines various utilities for interacting with dialect conversion within PDLL.
+// NOTE: This file is copied from llvm-project/mlir/include/mlir/Transforms/
+//       DialectConversion.pdll because the original llvm-project does not
+//       include *.pdll files in its install rules. By copying it to our project,
+//       we can use it without patching llvm-project.
+
+Rewrite convertValue(value: Value) -> Value;
+
+Rewrite convertValues(values: ValueRange) -> ValueRange;
+
+Rewrite convertType(type: Type) -> Type;
+
+Rewrite convertTypes(types: TypeRange) -> TypeRange;

@@ -14,7 +14,7 @@ def func(input_split_sizes):
     return send_displacements
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("input_split_sizes", ([1, 2, 3], [0, 0, 5, 1], [7], [3, 0, 0, 2]))
 def test_sym_sum_list_comprehension(backend, input_split_sizes):

@@ -33,7 +33,7 @@ def get_op_func_compiled():
         return x.unsqueeze(dim)
     return torch.compile(custom_op_func, backend=backend)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("infos", [([2, 3, 4, 9], 2)])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
 def test_unsqueeze(infos, dtypes, ):

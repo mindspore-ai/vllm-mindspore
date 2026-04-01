@@ -22,7 +22,7 @@ def get_op_func_compiled():
 
 
 # 去掉 shape 的 parametrize，改在内部循环
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(2, 8), (4, 8)])
 def test_expand(shape):
     """

@@ -46,7 +46,7 @@ def get_op_func_compiled_default():
         return torch.clone(x)
     return torch.compile(custom_op_func, backend=backend)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
 def test_clone_default(shapes, dtypes, ):
@@ -64,7 +64,7 @@ def test_clone_default(shapes, dtypes, ):
     npu_output_cpu = npu_output.cpu()
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("memory_formats", [torch.contiguous_format])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
@@ -84,7 +84,7 @@ def test_clone_contiguous_format(shapes, memory_formats, dtypes, ):
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[9, 2], [32, 16, 4096], [2, 5, 9, 2]])
 @pytest.mark.parametrize("memory_formats", [torch.preserve_format])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
@@ -104,7 +104,7 @@ def test_clone_preserve_format(shapes, memory_formats, dtypes, ):
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[2, 5, 9, 2], [32, 16, 40, 96]])
 @pytest.mark.parametrize("memory_formats", [torch.channels_last])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])
@@ -124,7 +124,7 @@ def test_clone_channels_last(shapes, memory_formats, dtypes, ):
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shapes", [[2, 5, 9, 2, 1], [32, 16, 40, 96, 1]])
 @pytest.mark.parametrize("memory_formats", [torch.channels_last_3d])
 @pytest.mark.parametrize("dtypes", [torch.float16, torch.bfloat16, torch.float32])

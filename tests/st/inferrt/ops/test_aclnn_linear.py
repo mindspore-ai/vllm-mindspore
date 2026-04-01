@@ -21,7 +21,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
@@ -56,7 +56,7 @@ def test_linear(dtype, batch_size, in_features, out_features, has_bias):
     AssertRtolEqual(expected_output0_npu.detach().cpu(), npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
@@ -91,7 +91,7 @@ def test_linear_3d(dtype, batch_size, in_features, out_features, has_bias):
     AssertRtolEqual(expected_output0_npu.detach().cpu(), npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])
@@ -127,7 +127,7 @@ def test_linear_4d(dtype, batch_size, in_features, out_features, has_bias):
     AssertRtolEqual(expected_output0_npu.detach().cpu(), npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("batch_size", [10, 20, 30])
 @pytest.mark.parametrize("in_features", [15, 25, 35])
 @pytest.mark.parametrize("out_features", [24, 88, 108])

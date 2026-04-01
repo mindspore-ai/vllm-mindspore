@@ -10,7 +10,7 @@ from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="unessential")
 @pytest.mark.parametrize("backend", (fx_backend, ))
 def test_npu_dequant_swiglu_quant(backend):
     """

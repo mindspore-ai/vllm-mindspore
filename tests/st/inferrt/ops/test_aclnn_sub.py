@@ -58,7 +58,7 @@ def sub_forward(dtype, shape, alpha, op_func_compiled):
     AssertRtolEqual(cpu_output, npu_output, prec)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
     (sub_no_alpha, 1.0),
@@ -75,7 +75,7 @@ def test_sub_fp32(shape, op_func, alpha):
     sub_forward(np.float32, shape, alpha, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(1024, 1024), (256, 512)])
 @pytest.mark.parametrize("op_func,alpha", [
     (sub_no_alpha, 1),

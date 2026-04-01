@@ -11,18 +11,21 @@ endif()
 
 message(STATUS "Configuring Torch-MLIR (out-of-tree)...")
 
-set(TORCHMLIR_VERSION "2025.11.18" CACHE INTERNAL "Torch-MLIR daily version")
-set(TORCHMLIR_COMMIT "b834f94badeefcb046f60a2bda51b6c3591cb21b" CACHE INTERNAL "Torch-MLIR commit hash")
-set(TORCHMLIR_SHA256 "531e6841ad86a32eeb6da84165847379c290f34c4820823a821ad4c5f8efc1e4")
-set(TORCHMLIR_URL "https://gitee.com/dayschan/torch-mlir/repository/archive/${TORCHMLIR_COMMIT}.zip")
+set(TORCHMLIR_VERSION "2025.8.13" CACHE INTERNAL "Torch-MLIR 2025.8.13 daily version")
+set(TORCHMLIR_COMMIT "155680c08e08bff6d2e6883415e3f5a1b474d96e" CACHE INTERNAL "Torch-MLIR commit hash")
+set(TORCHMLIR_SHA256 "f39644fbaae44400da69862251d888bcee5c1fec54b62c77a1a8596958620705")
+set(TORCHMLIR_URL "https://gitee.com/mirrors_llvm/torch-mlir/repository/archive/${TORCHMLIR_COMMIT}.zip")
 
 set(_TORCHMLIR_CMAKE_OPTIONS
     -DCMAKE_BUILD_TYPE=Release
     -DTORCH_MLIR_OUT_OF_TREE_BUILD=ON
     -DPython3_FIND_VIRTUALENV=ONLY
     -DPython_FIND_VIRTUALENV=ONLY
+    -DTORCH_MLIR_ENABLE_TOSA=OFF
     -DTORCH_MLIR_ENABLE_STABLEHLO=OFF
+    -DTORCH_MLIR_ENABLE_LINALG=OFF
     -DTORCH_MLIR_ENABLE_ONLY_MLIR_PYTHON_BINDINGS=ON
+    -DTORCH_MLIR_ENABLE_REFBACKEND=OFF
     -DMLIR_BINDINGS_PYTHON_NB_DOMAIN=torch_mlir
     -DCMAKE_VISIBILITY_INLINES_HIDDEN=ON
     -DCMAKE_C_VISIBILITY_PRESET=hidden
@@ -40,12 +43,14 @@ mrt_add_pkg(torch_mlir
     CUSTOM_CMAKE_GENERATOR Ninja
     SOURCEMODULES .
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/001-build-isolate-symbols.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/002-build-embedded.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/003-build-remove-tests.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/004-build-embedded.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/005-skip-operator-op-check.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/004-disable-torch-to-linalg.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/005-fix-compilation-errors.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/006-support-floordiv-ceildiv-symint.patch
     PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/007-disable-folding-aten-ops.patch
-    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/010-disable-decompose-aten-select-int.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/008-skip-operator-op-check.patch
+    PATCHES ${TOP_DIR}/third_party/patch/torch-mlir/009-disable-decompose-aten-select-int.patch
 )
 
 set(TORCHMLIR_SOURCE_DIR ${torch_mlir_DIRPATH})

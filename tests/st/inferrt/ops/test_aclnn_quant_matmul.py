@@ -48,7 +48,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 @pytest.mark.parametrize("batch_size", [4096, 8192])
 @pytest.mark.parametrize("in_features", [160, 320])
@@ -76,7 +76,7 @@ def test_quant_matmul_a8w8(batch_size, in_features, out_features, dtype):
     AssertRtolEqual(expected_output.float().cpu().numpy(), custom_output.float().cpu().numpy(), 0.01)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 @pytest.mark.parametrize("batch_size", [4096, 8192])
 @pytest.mark.parametrize("in_features", [160, 320])

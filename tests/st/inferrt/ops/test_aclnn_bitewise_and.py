@@ -26,7 +26,7 @@ def bitwise_and_op(x, y):
 def get_op_func_compiled():
     return torch.compile(bitwise_and_op, backend=backend)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", ([2, 3], [15, 64], [1024, 512]))
 @pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8))
 def test_bitwise_and(shape, dtype):

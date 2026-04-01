@@ -49,7 +49,7 @@ def mul_forward(shape_format, op_func_compiled):
         AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_muls_shape_format_fp16():
     """
     Feature: Test aclnn mul
@@ -65,7 +65,7 @@ def test_muls_shape_format_fp16():
     mul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_muls_shape_format_fp32():
     """
     Feature: Test aclnn mul
@@ -81,7 +81,7 @@ def test_muls_shape_format_fp32():
     mul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_muls_shape_format_complex():
     """
     Feature: Test aclnn mul
@@ -109,7 +109,7 @@ def test_muls_shape_format_complex():
         AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_muls_shape_format_bool():
     """
     Feature: Test aclnn mul
@@ -138,7 +138,7 @@ def test_muls_shape_format_bool():
             AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_muls_mix_dtype():
     """
     Feature: Test aclnn mul

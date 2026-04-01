@@ -8,7 +8,7 @@ from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_const_index(backend):
     """
@@ -27,7 +27,7 @@ def test_getitem_const_index(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_tensor_index(backend):
     """
@@ -47,7 +47,7 @@ def test_getitem_tensor_index(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_tensor_index_composed(backend):
     """
@@ -69,7 +69,7 @@ def test_getitem_tensor_index_composed(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_slice_dynamic(backend):
     """
@@ -90,7 +90,7 @@ def test_getitem_slice_dynamic(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.skip("Not implemented.")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_bool_mask(backend):
@@ -111,7 +111,7 @@ def test_getitem_bool_mask(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_with_followup_ops(backend):
     """
@@ -134,7 +134,7 @@ def test_getitem_with_followup_ops(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_multi_output_rmsnorm_first_output(backend):
     """
@@ -157,7 +157,7 @@ def test_getitem_multi_output_rmsnorm_first_output(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_multi_output_from_tuple(backend):
     """
@@ -181,7 +181,7 @@ def test_getitem_multi_output_from_tuple(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_none_and_ellipsis_expand_dims(backend):
     """
@@ -203,7 +203,7 @@ def test_getitem_none_and_ellipsis_expand_dims(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_multiple_none_expand_dims(backend):
     """
@@ -222,7 +222,7 @@ def test_getitem_multiple_none_expand_dims(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_to_slice_view(backend):
     """
@@ -247,7 +247,7 @@ def test_getitem_to_slice_view(backend):
     AssertRtolEqual(out2, expected2)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_1d(backend):
     """
@@ -267,7 +267,7 @@ def test_getitem_full_slice_1d(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_2d(backend):
     """
@@ -287,7 +287,7 @@ def test_getitem_full_slice_2d(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_3d(backend):
     """
@@ -307,7 +307,7 @@ def test_getitem_full_slice_3d(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.skip("Not implemented.")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_ellipsis(backend):
@@ -328,7 +328,7 @@ def test_getitem_full_slice_ellipsis(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_ellipsis2(backend):
     """
@@ -348,7 +348,7 @@ def test_getitem_full_slice_ellipsis2(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_step1(backend):
     """
@@ -368,7 +368,7 @@ def test_getitem_full_slice_step1(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_step2(backend):
     """
@@ -388,7 +388,7 @@ def test_getitem_full_slice_step2(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_step3(backend):
     """
@@ -408,7 +408,7 @@ def test_getitem_full_slice_step3(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_full_slice_used_in_followup_ops(backend):
     """

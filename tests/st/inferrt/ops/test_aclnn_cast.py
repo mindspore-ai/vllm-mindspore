@@ -60,7 +60,7 @@ def get_int_method_op_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("input_dtype,output_dtype", [
     (torch.float32, torch.float16),
     (torch.float16, torch.float32),
@@ -89,7 +89,7 @@ def test_cast_basic(input_dtype, output_dtype):
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [
     (1,),
     (64, 10),
@@ -111,7 +111,7 @@ def test_cast_shapes(shape):
 
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [
     (1,),
     (64, 10),
@@ -132,7 +132,7 @@ def test_cast_long_shapes(shape):
     npu_output = op_func_compiled(npu_input).detach().cpu()
     AssertRtolEqual(cpu_output, npu_output)
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_cast_float_to_int():
     """
     Feature: Test aclnn cast
@@ -149,7 +149,7 @@ def test_cast_float_to_int():
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_cast_int_to_float():
     """
     Feature: Test aclnn cast
@@ -166,7 +166,7 @@ def test_cast_int_to_float():
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_cast_tensor_float_method():
     """
     Feature: Test aclnn cast
@@ -183,7 +183,7 @@ def test_cast_tensor_float_method():
     AssertRtolEqual(cpu_output.numpy(), npu_output.numpy())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_cast_tensor_int_method():
     """
     Feature: Test aclnn cast

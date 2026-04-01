@@ -47,7 +47,7 @@ def generate_input(input_shape, dtype="float16", use_smooth=False, group_num=1):
     return input_tensor, smooth_scales, group_index
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant(backend, dtype):
@@ -72,7 +72,7 @@ def test_npu_dynamic_quant(backend, dtype):
     assert torch.allclose(scale, expected_scale)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant_smooth_group(backend, dtype):
@@ -99,7 +99,7 @@ def test_npu_dynamic_quant_smooth_group(backend, dtype):
     assert torch.allclose(scale, expected_scale)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant_int4(backend, dtype):
@@ -124,7 +124,7 @@ def test_npu_dynamic_quant_int4(backend, dtype):
     assert torch.allclose(scale, expected_scale)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 @pytest.mark.parametrize("dtype", ("float16", "bfloat16"))
 def test_npu_dynamic_quant_int4_smooth_group(backend, dtype):

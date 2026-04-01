@@ -16,7 +16,7 @@ def get_sum_func_compiled():
     return torch.compile(sum_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 @pytest.mark.parametrize("shape", ([2,3,4], [12,13,14]))
 def test_sum_default(dtype, shape):
@@ -33,7 +33,7 @@ def test_sum_default(dtype, shape):
     AssertRtolEqual(output1, expected1)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
 def test_sum_with_dtype(dtype):
     """
@@ -50,7 +50,7 @@ def test_sum_with_dtype(dtype):
     AssertRtolEqual(output1, expected1)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 @pytest.mark.parametrize("shape", ([2,3,4], [12,13,14]))
 def test_sum_with_fx_backend(dtype, shape):
@@ -70,7 +70,7 @@ def test_sum_with_fx_backend(dtype, shape):
     AssertRtolEqual(output1, expected1)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 @pytest.mark.parametrize("shape", ([2,3,4], [12,13,14]))
 def test_tensor_sum_with_fx_backend(dtype, shape):

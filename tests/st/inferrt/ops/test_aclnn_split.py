@@ -20,7 +20,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
 def test_split_tensor(shape):
     """
@@ -43,7 +43,7 @@ def test_split_tensor(shape):
     AssertRtolEqual(cpu_output1, npu_output_opt1)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [[128, 4096], [32, 1024]])
 def test_split_with_size(shape):
     """

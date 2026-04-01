@@ -70,7 +70,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("num_tokens", [1024, 2048])
 @pytest.mark.parametrize("hidden_size", [6144, 8192])
 @pytest.mark.parametrize("topk", [1, 4])

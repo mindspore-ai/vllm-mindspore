@@ -25,7 +25,7 @@ class ReproModule(nn.Module):
         return out_f32.to(torch.bfloat16)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_rms_norm_runtime_lowering(backend):
     """

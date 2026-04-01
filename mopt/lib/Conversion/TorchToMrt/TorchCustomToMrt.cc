@@ -93,8 +93,7 @@ struct ConvertCustomOpToCustomCall : public OpConversionPattern<TorchD::Operator
                                 ConversionPatternRewriter &rewriter) const override {
     auto operands = adaptor.getOperands();
     std::string fullOpName = op.getNameAttr().str();
-    auto opNameAttr = StringAttr::get(op->getContext(), fullOpName);
-    auto opName = mrt::CreateStringOp::create(rewriter, op->getLoc(), opNameAttr);
+    auto opName = rewriter.create<mrt::CreateStringOp>(op->getLoc(), rewriter.getStringAttr(fullOpName));
 
     // Prepare operands for CustomCall (first operand is the op name)
     SmallVector<Value, 4> operandsForCustomCall;
@@ -122,8 +121,7 @@ class ConvertTorchOpToCustomCall : public mlir::ConversionPattern {
     }
 
     std::string fullOpName = op->getName().getStringRef().str();
-    auto opNameAttr = StringAttr::get(op->getContext(), fullOpName);
-    auto opName = mrt::CreateStringOp::create(rewriter, op->getLoc(), opNameAttr);
+    auto opName = rewriter.create<mrt::CreateStringOp>(op->getLoc(), rewriter.getStringAttr(fullOpName));
 
     // Prepare operands for CustomCall (first operand is the op name)
     SmallVector<Value, 4> operandsForCustomCall;

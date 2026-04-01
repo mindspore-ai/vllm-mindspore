@@ -97,7 +97,7 @@ def matmul_forward(shape_format, op_func_compiled):
         assert_rtol_equal_matmul(cpu_output.astype(npu_output.dtype), npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case1():
     """
     Feature: Test aclnn matmul
@@ -113,7 +113,7 @@ def test_matmul_shape_format_fp16_case1():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case2():
     """
     Feature: Test aclnn matmul
@@ -129,7 +129,7 @@ def test_matmul_shape_format_fp16_case2():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case3():
     """
     Feature: Test aclnn matmul
@@ -145,7 +145,7 @@ def test_matmul_shape_format_fp16_case3():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case4():
     """
     Feature: Test aclnn matmul
@@ -163,7 +163,7 @@ def test_matmul_shape_format_fp16_case4():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case5():
     """
     Feature: Test aclnn matmul
@@ -180,7 +180,7 @@ def test_matmul_shape_format_fp16_case5():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case6():
     """
     Feature: Test aclnn matmul
@@ -196,7 +196,7 @@ def test_matmul_shape_format_fp16_case6():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case7():
     """
     Feature: Test aclnn matmul
@@ -213,7 +213,7 @@ def test_matmul_shape_format_fp16_case7():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_format_fp16_case8():
     """
     Feature: Test aclnn matmul
@@ -228,7 +228,7 @@ def test_matmul_shape_format_fp16_case8():
     matmul_forward(shape_format, op_func_compiled)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_allow_hf32():
     """
     Feature: Test aclnn matmul with HF32 enabled
@@ -246,7 +246,7 @@ def test_matmul_allow_hf32():
     torch.npu.matmul.allow_hf32 = False
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_opapi():
     """
     Feature: Test aclnn matmul with allow_hf32=True
@@ -264,7 +264,7 @@ def test_matmul_opapi():
     torch.npu.matmul.allow_hf32 = False
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_matmul_shape_diff_input_types():
     """
     Feature: Test aclnn matmul with allow_hf32=True

@@ -20,8 +20,8 @@ rm -rf "${_TEMP_BUILD}"
 mkdir -p "${_TEMP_BUILD}"
 # Create minimal CMakeLists.txt to trigger cmake/llvm.cmake
 cat > "${_TEMP_BUILD}/CMakeLists.txt" << 'EOF'
-cmake_minimum_required(VERSION 3.20)
-project(llvm_builder NONE)
+cmake_minimum_required(VERSION 3.18.0)
+project(llvm_builder LANGUAGES CXX C)
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/llvm.cmake)
 EOF
 

@@ -20,7 +20,7 @@ from ms_inferrt.torch import fx_mlir_backend as backend
 from tests.mark_utils import arg_mark
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("ops", ("eq", "ne", "lt", "le", "gt", "ge"))
 @pytest.mark.parametrize("datatype", (torch.float16, torch.bfloat16, torch.float32, torch.float64))
 def test_compare_ops_float(ops, datatype):
@@ -53,7 +53,7 @@ def test_compare_ops_float(ops, datatype):
             f"\ncache_hit_actual={cache_hit_actual}\nexpected={expected}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("ops", ("eq", "ne", "lt", "le", "gt", "ge"))
 @pytest.mark.parametrize("datatype", (torch.int8, torch.uint8, torch.int16, torch.int32, torch.int64))
 def test_compare_ops_int(ops, datatype):
@@ -86,7 +86,7 @@ def test_compare_ops_int(ops, datatype):
             f"\ncache_hit_actual={cache_hit_actual}\nexpected={expected}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("ops", ("eq", "ne", "lt", "le", "gt", "ge"))
 @pytest.mark.parametrize("datatype", (torch.int8, torch.uint8, torch.int16, torch.int32, torch.int64))
 def test_compare_ops_float_broadcast(ops, datatype):
@@ -129,7 +129,7 @@ def test_compare_ops_float_broadcast(ops, datatype):
             f"\ncache_hit_actual={cache_hit_actual}\nexpected={expected}"
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("ops", ("eq", "ne", "lt", "le", "gt", "ge"))
 @pytest.mark.parametrize("datatype", (torch.float16, torch.bfloat16, torch.float32, torch.float64))
 def test_compare_ops_int_broadcast(ops, datatype):

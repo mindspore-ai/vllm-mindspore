@@ -9,7 +9,7 @@ from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (mlir_backend, fx_backend))
 def test_tensor_setitem_slice_tensor(backend):
     """
@@ -33,7 +33,7 @@ def test_tensor_setitem_slice_tensor(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (mlir_backend, fx_backend))
 def test_tensor_setitem_tuple_tensor(backend):
     """
@@ -56,7 +56,7 @@ def test_tensor_setitem_tuple_tensor(backend):
     AssertRtolEqual(out, expected)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_tensor_setitem_mask_tensor_scalar_value(backend):
     """

@@ -31,7 +31,7 @@ def add_func(x, y):
     return x + y
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(4, 5), (8, 16)])
 @pytest.mark.parametrize("split_idx", [0, 1])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
@@ -52,7 +52,7 @@ def test_input_offset_from_split(shape, split_idx, dtype):
     AssertRtolEqual(result_eager, result_compiled.cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 8), (16, 32)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 def test_input_offset_from_slice(shape, dtype):
@@ -71,7 +71,7 @@ def test_input_offset_from_slice(shape, dtype):
     AssertRtolEqual(result_eager, result_compiled.cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(6, 8), (12, 16)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 def test_input_offset_binary_op(shape, dtype):
