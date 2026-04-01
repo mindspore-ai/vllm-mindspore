@@ -313,10 +313,9 @@ def test_all_to_all_v_single():
 
 if __name__ == "__main__":
     import sys
-
     test_name = sys.argv[1] if len(sys.argv) > 1 else None
     assert test_name is not None, "test case name is None"
-    exit_code = pytest.main(
-        [f"tests/st/inferrt/distributed/check_distributed_ops.py::{test_name}"]
-    )
+
+    script_path = os.path.abspath(__file__)
+    exit_code = pytest.main([f"{script_path}::{test_name}"])
     sys.exit(exit_code)
