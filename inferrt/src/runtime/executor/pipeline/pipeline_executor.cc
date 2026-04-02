@@ -24,8 +24,9 @@
 namespace mrt {
 namespace runtime {
 PipelineExecutor::PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
-                                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts)
-    : Executor(opRunners, deviceContexts), initialized_(false) {}
+                                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
+                                   const ir::ValuePtr &output)
+    : Executor(opRunners, deviceContexts, output), initialized_(false) {}
 
 void PipelineExecutor::Initialize() {
   if (initialized_) {

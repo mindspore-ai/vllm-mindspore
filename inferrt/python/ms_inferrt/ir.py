@@ -46,7 +46,15 @@ class GraphExecutor:
     def __init__(self, name: str = "default_graph"):
         self._executor = _GraphExecutor()
         self._name = name
-        self._return_node = None
+
+    def __del__(self):
+        # Best-effort cleanup for input static cache keyed by this executor.
+        try:
+            from ms_inferrt import _ms_inferrt_torch  # pylint: disable=import-outside-toplevel
+
+            _ms_inferrt_torch.clear_graph_input_static_cache(id(self))
+        except Exception:  # pylint: disable=broad-except
+            pass
 
     def __enter__(self):
         self._executor.begin_graph(self._name)
@@ -87,15 +95,12 @@ class GraphExecutor:
 
     def add_return_node(self, node: Node):
         """Add a return node to the graph."""
-        self._return_node = node
         self._executor.add_return_node(node)
 
     def run(self, is_dynamic: bool = True) -> Value:
         """Run the built graph and return the output."""
         self._executor.run_graph(is_dynamic)
-        if self._return_node is None:
-            raise RuntimeError("Return node not set. Call add_return_node() before running.")
-        return self._return_node.output
+        return self._executor.get_output()
 
     def build(self):
         """Optimize the graph and build kernels."""

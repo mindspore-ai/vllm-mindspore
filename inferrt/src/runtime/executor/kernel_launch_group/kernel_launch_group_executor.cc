@@ -43,8 +43,8 @@ KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
   const std::shared_ptr<std::vector<ir::TensorPtr>> &graphInputTensors,
   const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputTensorsWithDynamicShape,
   const std::shared_ptr<std::unordered_set<ir::Tensor *>> &graphOutputs, uint64_t parallelDispatchNum,
-  uint64_t parallelSliceNum)
-    : PipelineExecutor(opRunners, deviceContexts),
+  uint64_t parallelSliceNum, const ir::ValuePtr &output)
+    : PipelineExecutor(opRunners, deviceContexts, output),
       opRunnerGroups_(opRunnerGroups),
       serialLaunchOps_(serialLaunchOps),
       graphInputTensors_(graphInputTensors),
@@ -62,10 +62,8 @@ KernelLaunchGroupExecutor::KernelLaunchGroupExecutor(
 KernelLaunchGroupExecutor::~KernelLaunchGroupExecutor() { memoryCache_.ClearAllCache(); }
 
 void KernelLaunchGroupExecutor::Run(bool isDynamic) {
-  auto &waitLaunchFinish = ops::OpAsync::GetWaitLaunchFinishFunc();
-  if (waitLaunchFinish != nullptr) {
-    waitLaunchFinish();
-  }
+  WaitLaunchTaskFinish();
+
   UpdateInputTensors();
   bool shapeChange = CheckInputShapeChange();
   if (shapeChange) {
@@ -392,7 +390,7 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
       e->ResetEvent();
     }
   }
-  // It must be ensured that the reset at the tail is executed within the step, or an event create via
+  // It must be ensured that the reset at the tail is executed within the step, an event create via
   // aclrtCreateEventExWithFlag is inserted between the parallel stream and the default stream.
   size_t parallelStreamSize = streams_.size();
   for (size_t i = 0; i < parallelStreamSize; ++i) {

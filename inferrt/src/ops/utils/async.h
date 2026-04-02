@@ -46,8 +46,14 @@ static inline bool IsEnablePipeline() {
   const bool disablePipeline = (enablePipelineCStr != nullptr) && (std::string_view(enablePipelineCStr) == "0");
   return !disablePipeline;
 }
-
 }  // namespace ops
+
+static inline void WaitLaunchTaskFinish() {
+  auto &waitLaunchFinish = mrt::ops::OpAsync::GetWaitLaunchFinishFunc();
+  if (waitLaunchFinish != nullptr) {
+    waitLaunchFinish();
+  }
+}
 }  // namespace mrt
 
 #endif  // __OPS_UTILS_ASYNC_H__

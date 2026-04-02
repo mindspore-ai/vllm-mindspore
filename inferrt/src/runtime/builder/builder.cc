@@ -54,7 +54,15 @@ void VisitAllNodes(const ir::GraphPtr &graph, std::function<void(const ir::NodeP
 
 std::unique_ptr<Executor> Builder::BuildExecutor() {
   SetupOpRunners();
-  return std::make_unique<Executor>(opRunners_, deviceContexts_);
+  return std::make_unique<Executor>(opRunners_, deviceContexts_, GetGraphOutput());
+}
+
+const ir::ValuePtr &Builder::GetGraphOutput() const {
+  CHECK_IF_FAIL(graph_->nodes.size() > 0);
+  auto &returnNode = graph_->nodes.back();
+  CHECK_IF_NULL(returnNode);
+  CHECK_IF_FAIL(returnNode->op == ops::Op_return);
+  return returnNode->output;
 }
 
 void Builder::SetupOpRunners() {
