@@ -18,6 +18,16 @@ install(
 # Add ms_inferrt_ir nanobind sub module
 nanobind_add_module(_ms_inferrt_ir pybind_ir.cc)
 target_link_libraries(_ms_inferrt_ir PUBLIC inferrt)
+set_target_properties(_ms_inferrt_ir PROPERTIES
+  INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
+  BUILD_WITH_INSTALL_RPATH TRUE
+)
+install(
+  TARGETS _ms_inferrt_ir
+  LIBRARY DESTINATION .
+  RUNTIME DESTINATION bin
+)
+
 
 # Add collective nanobind sub module
 nanobind_add_module(_ms_inferrt_collective pybind_collective.cc)
@@ -45,13 +55,16 @@ install(
   RUNTIME DESTINATION bin
 )
 
-set_target_properties(_ms_inferrt_ir PROPERTIES
+# Add aclgraph_config nanobind sub module
+nanobind_add_module(_aclgraph_config pybind_aclgraph_config.cc)
+target_link_libraries(_aclgraph_config PRIVATE mrt_aclgraph_config)
+set_target_properties(_aclgraph_config PROPERTIES
   INSTALL_RPATH "$ORIGIN:$ORIGIN/lib"
   BUILD_WITH_INSTALL_RPATH TRUE
 )
-
 install(
-  TARGETS _ms_inferrt_ir
+  TARGETS _aclgraph_config
   LIBRARY DESTINATION .
   RUNTIME DESTINATION bin
 )
+

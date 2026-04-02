@@ -33,7 +33,7 @@
 namespace mrt {
 namespace ops {
 inline constexpr const char *kNameGetWorkspaceSize = "GetWorkspaceSize";
-inline constexpr const char *kKernelLaunchGroupNum = "MRT_KERNEL_LAUNCH_GROUP_NUM";
+inline constexpr const char *kKernelLaunchGroupNum = "MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM";
 using RunOpApiFunc = int (*)(void *, uint64_t, aclOpExecutor *, const aclrtStream);
 
 class AclnnExecutor {

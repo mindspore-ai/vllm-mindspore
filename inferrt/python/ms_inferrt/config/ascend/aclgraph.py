@@ -12,12 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Mrt Ascend configs"""
+"""Ascend aclgraph config"""
 
-from .op_precision import OpPrecisionConf
-from .aclgraph import AclGraphConf
+from ms_inferrt._aclgraph_config import AclGraphConf
+import torch
 
-op_precision = OpPrecisionConf.Instance()
+
+__all__ = ['AclGraphConf']
 acl_graph = AclGraphConf.Instance()
+def begin_capture():
+    _get_or_create_pool_id()
+    acl_graph.begin_capture()
 
-__all__ = ['op_precision', 'acl_graph']
+def end_capture():
+    acl_graph.end_capture()
+
+def _get_or_create_pool_id():
+    if acl_graph.pool_id() == (-1, -1):
+        cur_pool_id = torch.npu.graph_pool_handle()
+        acl_graph.set_pool_id(cur_pool_id)
+
+def set_op_capture_skip(op_capture_skip: list):
+    acl_graph.set_op_capture_skip(op_capture_skip)

@@ -43,7 +43,6 @@ KernelCaptureExecutor::KernelCaptureExecutor(
 void KernelCaptureExecutor::Initialize(const ir::GraphPtr &graph) {
   PipelineExecutor::Initialize();
   graph_ = graph;
-  // graphCaptureManager_.FindSupportCaptureKernelPositions(*opRunners_, deviceContext_);
   graphCaptureManager_.Initialize(*opRunners_, deviceContext_);
 
   if (useFullGraphMode_) {
