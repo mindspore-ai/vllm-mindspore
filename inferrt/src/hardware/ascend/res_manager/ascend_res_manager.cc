@@ -403,10 +403,14 @@ void AscendResManager::SetDeleter(const DeleteFunc &deleter) { deleter_ = delete
 
 CaptureGraphPtr AscendResManager::CreateCaptureGraph() { return std::make_shared<AscendCaptureGraph>(); }
 
-DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) {
+DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool external, bool useExtensionalApi) {
   auto flag = enableTiming ? (ACL_EVENT_TIME_LINE | ACL_EVENT_SYNC) : ACL_EVENT_SYNC;
+  if (external) {
+    flag = ACL_EVENT_EXTERNAL;
+  }
   auto event = std::make_shared<AscendEvent>(flag, useExtensionalApi);
   CHECK_IF_NULL(event);
+  CHECK_IF_FAIL(event->IsReady());
   std::lock_guard<std::mutex> lock(deviceEventsMutex_);
   deviceEvents_.push_back(event);
   return event;
@@ -505,6 +509,7 @@ void AscendResManager::ResetStreamAndCtx() const {
 
 bool AscendResManager::AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const {
   CHECK_IF_NULL(stream);
+  LOG_OUT << "dst: " << dst << " src: " << src << " size: " << size << " stream: " << stream;
   auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, size, src, size, CopyTypeToAclType(kind), stream);
   if (ret != ACL_SUCCESS) {
     LOG_ERROR << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);

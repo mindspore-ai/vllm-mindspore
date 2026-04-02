@@ -33,6 +33,9 @@
 
 namespace mrt {
 namespace ir {
+class Tensor;  // Forward declaration
+using TensorPtr = IntrusivePtr<Tensor>;
+
 /**
  * @brief A multi-dimensional array (tensor).
  *
@@ -256,6 +259,13 @@ class Tensor : public RefCounted {
     }
   }
 
+  /**
+   * @brief Creates a deep copy of this Tensor object.
+   * @return A new Tensor object with copied data and metadata.
+   * The new Storage will own its data (ownsData_ = true).
+   */
+  TensorPtr DeepCopy() const;
+
  private:
   /**
    * @brief Computes the strides from the dimensions.
@@ -274,8 +284,6 @@ class Tensor : public RefCounted {
   bool ownsStorage_{true};                      ///< Whether the tensor owns the storage.
   TensorUpdater updater_{nullptr};              ///< The tensor updater function.
 };
-
-using TensorPtr = IntrusivePtr<Tensor>;
 
 std::ostream &operator<<(std::ostream &os, const Tensor &tensor);
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor);

@@ -61,7 +61,7 @@ aclmdlGetInputDynamicDimsFunObj aclmdlGetInputDynamicDims_ = nullptr;
 aclmdlGetInputDynamicGearCountFunObj aclmdlGetInputDynamicGearCount_ = nullptr;
 aclmdlGetDynamicBatchFunObj aclmdlGetDynamicBatch_ = nullptr;
 aclmdlSetDynamicHWSizeFunObj aclmdlSetDynamicHWSize_ = nullptr;
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
 aclmdlRICaptureBeginFunObj aclmdlRICaptureBegin_ = nullptr;
 aclmdlRICaptureGetInfoFunObj aclmdlRICaptureGetInfo_ = nullptr;
 aclmdlRICaptureEndFunObj aclmdlRICaptureEnd_ = nullptr;
@@ -124,7 +124,7 @@ void LoadAclMdlApiSymbol(const std::string &ascendPath) {
   aclmdlGetInputDynamicGearCount_ = DlsymAscendFuncObj(aclmdlGetInputDynamicGearCount, handler);
   aclmdlGetDynamicBatch_ = DlsymAscendFuncObj(aclmdlGetDynamicBatch, handler);
   aclmdlSetDynamicHWSize_ = DlsymAscendFuncObj(aclmdlSetDynamicHWSize, handler);
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
   aclmdlRICaptureBegin_ = DlsymAscendFuncObj(aclmdlRICaptureBegin, handler);
   aclmdlRICaptureGetInfo_ = DlsymAscendFuncObj(aclmdlRICaptureGetInfo, handler);
   aclmdlRICaptureEnd_ = DlsymAscendFuncObj(aclmdlRICaptureEnd, handler);
@@ -183,7 +183,7 @@ void LoadSimulationAclMdlApi() {
   ASSIGN_SIMU(aclmdlGetInputDynamicGearCount);
   ASSIGN_SIMU(aclmdlGetDynamicBatch);
   ASSIGN_SIMU(aclmdlSetDynamicHWSize);
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
   ASSIGN_SIMU(aclmdlRICaptureBegin);
   ASSIGN_SIMU(aclmdlRICaptureGetInfo);
   ASSIGN_SIMU(aclmdlRICaptureEnd);

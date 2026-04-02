@@ -36,12 +36,16 @@ AscendEvent::AscendEvent(uint32_t flag, bool useExtensionalApi) {
   aclError ret;
   if (useExtensionalApi) {
     ret = CALL_ASCEND_API(aclrtCreateEventExWithFlag, &event_, flag);
+    if (ret != ACL_SUCCESS) {
+      LOG_ERROR << "aclrtCreateEventExWithFlag failed, ret:" << ret;
+      event_ = nullptr;
+    }
   } else {
     ret = CALL_ASCEND_API(aclrtCreateEventWithFlag, &event_, flag);
-  }
-  if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "aclrtCreateEventExWithFlag failed, ret:" << ret;
-    event_ = nullptr;
+    if (ret != ACL_SUCCESS) {
+      LOG_ERROR << "aclrtCreateEventWithFlag failed, ret:" << ret;
+      event_ = nullptr;
+    }
   }
   hasFlag_ = true;
   LOG_OUT << "Create ascend event success, flag : " << flag << ".";

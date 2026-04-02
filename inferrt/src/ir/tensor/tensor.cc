@@ -191,6 +191,33 @@ TensorPtr Tensor::ShallowClone() const {
   return clonedTensor;
 }
 
+TensorPtr Tensor::DeepCopy() const {
+  // Create new Storage without copying data, but ensure ownsData_ is True
+  size_t sizeBytes = 0;
+  if (!HasDynamicShape()) {
+    sizeBytes = numel_ * dtype_.GetSize();
+  }
+
+  // Use constructor Storage(size_t sizeBytes, hardware::Device device), which sets ownsData_=true
+  auto new_storage = MakeIntrusive<Storage>(sizeBytes, GetDevice());
+
+  // Create new Tensor object
+  auto new_tensor = MakeIntrusive<Tensor>(new_storage, shape_, dtype_);
+
+  // Copy metadata
+  new_tensor->SetStrides(strides_);
+  new_tensor->SetFormat(memoryFormat_);
+  new_tensor->SetStorageShape(storageShape_);
+  new_tensor->SetStorageOffset(storageOffset_);
+
+  // Deep copy symbolic shape (recursively copy SymbolicExpr)
+  if (!symbolicShape_.empty()) {
+    new_tensor->SetSymbolicShape(symbolicShape_);
+  }
+
+  return new_tensor;
+}
+
 std::ostream &operator<<(std::ostream &os, const TensorPtr &tensor) {
   if (!tensor) {
     os << "Null";
@@ -237,7 +264,7 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   os << ", data=[";
   if (tensor.DataPtr()) {
     if (tensor.GetDevice().type != hardware::DeviceType::CPU) {
-      os << "...";
+      os << tensor.DataPtr();
     } else if (tensor.HasDynamicShape()) {
       os << "dynamic shape, not materialized";
     } else if (tensor.Numel() > 0) {
@@ -277,6 +304,8 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   }
   os << "]";
   os << ", format=" << FormatEnumToStr(tensor.Format()) << ")";
+  os << " storage: ";
+  os << tensor.GetStorage().get();
   return os;
 }
 }  // namespace ir

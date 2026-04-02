@@ -23,6 +23,17 @@
 #include <sstream>
 
 #include "ir/common/intrusive_ptr.h"
+
+// Forward declarations to avoid circular dependencies
+namespace mrt {
+namespace ir {
+class Value;
+using ValuePtr = IntrusivePtr<Value>;
+class Graph;
+using GraphPtr = IntrusivePtr<Graph>;
+}  // namespace ir
+}  // namespace mrt
+
 #include "ir/value/value.h"
 #include "ops/op_def/ops_name.h"
 
@@ -39,6 +50,7 @@ struct Node : public RefCounted {
   std::vector<IntrusivePtr<Node>> inputs;  ///< The input nodes to the operation.
   ValuePtr output{nullptr};                ///< The output value from the operation.
 };
+using NodePtr = IntrusivePtr<Node>;
 
 /**
  * @brief Represents the entire computation graph.
@@ -47,9 +59,24 @@ struct Graph : public RefCounted {
   std::vector<IntrusivePtr<Node>> nodes;  ///< The list of all value nodes and op nodes in the graph.
   std::vector<IntrusivePtr<Node>> inputs;
   std::vector<IntrusivePtr<Node>> parameters;
+
+  /**
+   * @brief Creates a deep copy of the graph, preserving node connections.
+   * @return A new Graph object with copied nodes and preserved connection relationships.
+   *
+   * Special handling:
+   * - Nodes with op == Op_End are shallow copied (shared between graphs)
+   * - make_tuple and tuple_getitem operations maintain value reference semantics
+   * - parameters list is shallow copied
+   * - For Tensor values, new Storage objects own their data (ownsData_ = true)
+   */
+  GraphPtr DeepCopy() const;
+
+  // void Dump();
+  // std::unordered_map<ir::NodePtr, size_t> paraNumMap_;
+  // std::unordered_map<ir::NodePtr, size_t> nodeNumMap_;
 };
 
-using NodePtr = IntrusivePtr<Node>;
 using GraphPtr = IntrusivePtr<Graph>;
 
 inline std::ostream &operator<<(std::ostream &os, const Node &node) {

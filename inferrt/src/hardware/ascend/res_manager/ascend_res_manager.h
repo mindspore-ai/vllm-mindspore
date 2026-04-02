@@ -104,7 +104,7 @@ class MRT_EXPORT AscendResManager : public DeviceResManager {
 
   DeviceEventPtr CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) override;
   CaptureGraphPtr CreateCaptureGraph() override;
-  DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi) override;
+  DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool external, bool useExtensionalApi) override;
   bool DestroyEvent(const DeviceEventPtr &event) override;
   bool DestroyAllEvents() override;
 
