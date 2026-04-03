@@ -857,6 +857,7 @@ _OP_MAP = {
     aten.expand.default: Op.expand,
     aten.unsqueeze.default: Op.unsqueeze,
     aten.index_put_.default: Op.index_put,
+    aten.index_copy_.default: Op.inplace_index_copy,
     aten.add_.Scalar: Op.inplace_add,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
@@ -925,6 +926,7 @@ _OP_MAP = {
     "rsqrt": Op.rsqrt,
     "view": Op.view,  # view is often used like reshape
     "copy_": Op.inplace_copy,
+    "index_copy_": Op.inplace_index_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "fill_": Op.inplace_fill_tensor,
     "index_select": Op.index_select,
