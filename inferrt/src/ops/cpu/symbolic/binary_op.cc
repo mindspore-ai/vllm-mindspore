@@ -25,7 +25,7 @@ namespace ops {
 OpsErrorCode BinaryOp::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   Operator::InferShape(input, output);
   if (!output->IsSymbol() && !output->IsInt() && !output->IsDouble()) {
-    LOG_EXCEPTION << "BinaryOp: output must be symbol";
+    LOG_EXCEPTION << "BinaryOp: output must be symbol/int/double";
   }
   return SUCCESS;
 }

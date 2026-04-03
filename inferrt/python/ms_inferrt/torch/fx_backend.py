@@ -78,6 +78,8 @@ _OPS_MAPPING_HOOKS = {}
 
 _OUTPUT_MAPPING_HOOKS = {}
 
+_PRE_FLATTEN_HOOKS = {}
+
 # Registry for dvm ops: maps op_name -> payload_json
 # todo(lmy) remove dvm op when ms_inferrt backend is ready
 _DVM_OP_REGISTRY = {}
@@ -122,22 +124,43 @@ def get_output_mapping_hook(op):
     return _OUTPUT_MAPPING_HOOKS.get(op)
 
 
+def register_pre_flatten_hook(op, hook_func):
+    _PRE_FLATTEN_HOOKS[op] = hook_func
+
+
+def get_pre_flatten_hook(op):
+    return _PRE_FLATTEN_HOOKS.get(op)
+
+
+def _is_scalar_arg(arg):
+    """Check if the argument is a scalar type (int, float, bool, torch.SymInt)."""
+    if isinstance(arg, (int, float, bool, torch.SymInt)):
+        return True
+    if isinstance(arg, Node):
+        if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
+            return True
+    return False
+
+
+def binary_scalar_pre_flatten_hook(node):
+    """Pre-flatten hook to swap scalar and tensor arguments before schema matching.
+    
+    For operations like add and mul, when the first argument is a scalar and the 
+    second is a tensor (e.g., 2 + x), swap them to match the expected schema 
+    (tensor, scalar) order. This ensures correct schema matching in _flatten_args.
+    """
+    if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
+        new_args = (node.args[1], node.args[0]) + node.args[2:]
+        print(f"Pre-flatten hook: swapping args for {node.target}, "
+              f"old args: {node.args}, new args: {new_args}")
+        return new_args
+    return node.args
+
+
 # pylint: disable=unused-argument
 def embedding_hook(node, input_nodes, executor):
     """swap the first and second param position."""
     return [input_nodes[1], input_nodes[0]]
-
-
-# pylint: disable=unused-argument
-def binary_scalar_swap_hook(node, input_nodes, executor):
-    """Swap tensor and scalar arguments for binary operations.
-
-    When the first argument is a scalar and the second is a tensor,
-    swap their positions to match the expected (tensor, scalar) order.
-    """
-    if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
-        return [input_nodes[1], input_nodes[0]] + input_nodes[2:]
-    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -469,9 +492,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.permute, permute_hook)
     register_arg_mapping_hook(Op.permute_view, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
-    register_arg_mapping_hook(Op.add_scalar, binary_scalar_swap_hook)
     register_arg_mapping_hook(Op.sub_scalar, binary_scalar_order_hook)
-    register_arg_mapping_hook(Op.mul_scalar, binary_scalar_swap_hook)
     register_arg_mapping_hook(Op.div_scalar, binary_scalar_order_hook)
     register_arg_mapping_hook(Op.div_mod_scalar, div_mod_arg_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
@@ -490,6 +511,12 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.index_put, index_put_arg_hook)
     # Normalize torch.rms_norm argument layout to backend Op.rms_norm layout.
     register_arg_mapping_hook(Op.rms_norm, rms_norm_arg_hook)
+
+
+def _init_pre_flatten_hooks():
+    """register hooks for pre-flatten argument adjustment"""
+    register_pre_flatten_hook(Op.add_scalar, binary_scalar_pre_flatten_hook)
+    register_pre_flatten_hook(Op.mul_scalar, binary_scalar_pre_flatten_hook)
 
 
 def index_put_arg_hook(node, flat_args, executor):
@@ -628,14 +655,6 @@ def chunk_arg_hook(node, input_nodes, executor):
     return [input_tensor, split_sizes, dim_int]
 
 
-def _is_scalar_arg(arg):
-    """Check if the argument is a scalar type (int, float, bool, torch.SymInt)."""
-    if isinstance(arg, (int, float, bool, torch.SymInt)):
-        return True
-    if isinstance(arg, Node):
-        if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
-            return True
-    return False
 
 
 # pylint: disable=unused-argument
@@ -1357,20 +1376,21 @@ def _is_value_compatible_with_type(value_type, value: Any) -> bool:
     return _check_runtime_value_against_type(value_type, runtime_v)
 
 
-def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
+def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> List[Argument]:
     """
     Create a list of Argument objects from a torch fx node.
 
     Args:
         schema (torch.FunctionSchema): The schema of the node.
         node (torch.fx.Node): The FX node whose arguments should be created.
+        custom_args: Optional custom args to use instead of node.args.
 
     Returns:
         List[Argument]: A list of Argument objects in the node's arguments, preserving order.
         Bool: Whether the arguments are valid.
     """
     flat_args = []
-    args = node.args
+    args = custom_args if custom_args is not None else node.args
     kwargs = node.kwargs
     arg_idx = 0
 
@@ -1470,11 +1490,23 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     flat_args = []
     torch_op = _convert_operator_to_torch_op(node.target)
     op_name, schemas = _get_op_schemas(torch_op)
+    # For binary ops with all scalar/symbol inputs (e.g., add_scalar, div_mod_scalar),
+    # return empty args list since these ops produce symbolic expressions
+    # that do not require schema matching or runtime args.
+    all_args = list(node.args) + list(node.kwargs.values())
+    if all(_is_scalar_arg(arg) for arg in all_args):
+        return op_name, []
     if not schemas:
-        return None, list(node.args) + list(node.kwargs.values())
+        return None, all_args
+
+    pre_flatten_hook = get_pre_flatten_hook(op) or get_pre_flatten_hook(node.target)
+    custom_args = None
+    if pre_flatten_hook is not None:
+        custom_args = pre_flatten_hook(node)
+
     found = False
     for schema in schemas:
-        flat_args, found = _create_args(schema, node)
+        flat_args, found = _create_args(schema, node, custom_args)
         if found:
             break
     if not found:
@@ -1700,6 +1732,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
         write_gm_graph(gm, graph_id, get_ir_file_name())
     eliminate_redundant_copy_(gm)
     _decompose_ops_with_fake_mode(gm)
+    _init_pre_flatten_hooks()
     _init_arg_mapping_hooks()
     _init_ops_mapping_hooks()
     _init_output_mapping_hooks()

@@ -52,7 +52,7 @@ def get_op_func_compiled():
     return torch.compile(custom_op_func, backend=backend)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 8, 512, 128), (2, 4, 256, 64)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
 @pytest.mark.parametrize("dims", _permute_dims_4d)
@@ -74,7 +74,7 @@ def test_permute_4d(shape, dtype, dims):
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(4, 8, 16), (2, 3, 4)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
 @pytest.mark.parametrize("dims", _permute_dims_3d)
@@ -93,7 +93,7 @@ def test_permute_3d(shape, dtype, dims):
     AssertRtolEqual(cpu_output, npu_output_cpu)
 
 
-@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (4, 32)])
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
 @pytest.mark.parametrize("dims", _permute_dims_2d)
