@@ -311,7 +311,10 @@ void UpdateTensor(const ir::TensorPtr &self, nb::handle h) {
     tensor->SetDtype(type);
     tensor->SetShape(std::move(shape));
     tensor->Resize();
-    CHECK_IF_NULL(data);
+    // PyTorch may return nullptr from data_ptr() for 0-element tensors; that is valid.
+    if (atTensor.numel() > 0) {
+      CHECK_IF_NULL(data);
+    }
     tensor->UpdateData(data);
     tensor->GetStorage()->Resize(atTensor.storage().nbytes());
   });

@@ -203,7 +203,10 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto storage = tensor->GetStorage();
   void *dataPtr = storage->Data();
-  CHECK_IF_NULL(dataPtr);
+  // Allow nullptr for 0-element tensors; PyTorch treats this as valid.
+  if (tensor->Numel() > 0) {
+    CHECK_IF_NULL(dataPtr);
+  }
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
   auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
