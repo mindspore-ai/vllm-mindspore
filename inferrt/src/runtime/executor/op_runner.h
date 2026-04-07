@@ -176,6 +176,8 @@ class OpRunner {
 
   void UpdateRefNodeOutputValue();
 
+  ops::OpType GetOpType() const { return operator_->GetOpType(); }
+
  private:
   // Tensors that should be updated before operator execution.
   std::vector<ir::Tensor *> tensorsToUpdate_;

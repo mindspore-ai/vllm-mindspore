@@ -34,7 +34,7 @@ std::unique_ptr<Executor> KernelLaunchGroupBuilder::BuildExecutor() {
 
   auto executor = std::make_unique<KernelLaunchGroupExecutor>(
     opRunners_, deviceContexts_, opRunnerGroups_, serialLaunchOps_, graphInputTensors_,
-    graphInputTensorsWithDynamicShape_, graphOutputs_, parallelDispatchNum_, parallelSliceNum_);
+    graphInputTensorsWithDynamicShape_, graphOutputs_, parallelDispatchNum_, parallelSliceNum_, GetGraphOutput());
   executor->Initialize();
   LOG_OUT << "End build kernel launch group executor.";
   return executor;
@@ -52,8 +52,8 @@ void KernelLaunchGroupBuilder::CheckGroupLaunchRequirements() const {
 }
 
 void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
-  static const char kernelLaunchThreadNum[] = "MRT_KERNEL_LAUNCH_THREAD_NUM";
-  static const char kernelLaunchGroupNum[] = "MRT_KERNEL_LAUNCH_GROUP_NUM";
+  static const char kernelLaunchThreadNum[] = "MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
+  static const char kernelLaunchGroupNum[] = "MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM";
 
   auto kernelLaunchThreadNumStr = GetEnv(kernelLaunchThreadNum);
   if (!IsPositiveInteger(kernelLaunchThreadNumStr)) {
@@ -64,7 +64,7 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
   if (parallelDispatchNum_ < 1) {
     LOG_EXCEPTION << "Invalid thread num: " << parallelDispatchNum_
                   << " for kernel launch group, please check the `thread_num` value of env: "
-                     "MRT_KERNEL_LAUNCH_THREAD_NUM";
+                     "MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
   }
   LOG_OUT << "The parallel dispatch thread number: " << parallelDispatchNum_;
 
@@ -75,9 +75,10 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
   uint64_t totalKernelGroupNum = std::stoull(kernelLaunchGroupNumStr);
   parallelSliceNum_ = totalKernelGroupNum / parallelDispatchNum_;
   if (parallelSliceNum_ < 1) {
-    LOG_EXCEPTION << "Invalid kernel group num: " << totalKernelGroupNum << " from env: MRT_KERNEL_LAUNCH_GROUP_NUM"
+    LOG_EXCEPTION << "Invalid kernel group num: " << totalKernelGroupNum
+                  << " from env: MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM"
                   << ", kernel group num must be greater than or equal to thread num: " << parallelDispatchNum_
-                  << " from env: MRT_KERNEL_LAUNCH_THREAD_NUM";
+                  << " from env: MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
   }
   LOG_OUT << "The kernel group per thread: " << parallelSliceNum_;
 

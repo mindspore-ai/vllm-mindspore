@@ -40,7 +40,7 @@ class DA_API KernelLaunchGroupExecutor : public PipelineExecutor {
     const std::shared_ptr<std::vector<ir::TensorPtr>> &graphInputTensors,
     const std::shared_ptr<std::vector<std::pair<ir::TensorPtr, std::vector<int64_t>>>> &graphInputsWithShape,
     const std::shared_ptr<std::unordered_set<ir::Tensor *>> &graphOutputs, uint64_t parallelDispatchNum,
-    uint64_t parallelSliceNum);
+    uint64_t parallelSliceNum, const ir::ValuePtr &output);
 
   ~KernelLaunchGroupExecutor() override;
 

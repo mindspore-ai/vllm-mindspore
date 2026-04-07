@@ -44,6 +44,7 @@ enum ExecutionMode : size_t {
   Base = 0,
   Pipeline = 1,
   GroupLaunch = 2,
+  AclGraph = 3,
 };
 
 /**
@@ -57,8 +58,8 @@ class DA_API Executor {
  public:
   Executor() = delete;
   Executor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
-           const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts)
-      : opRunners_(opRunners), deviceContexts_(deviceContexts) {}
+           const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts, const ir::ValuePtr &output)
+      : opRunners_(opRunners), deviceContexts_(deviceContexts), output_(output) {}
 
   virtual ~Executor() = default;
 
@@ -71,11 +72,15 @@ class DA_API Executor {
    */
   virtual void Run(bool isDynamic);
 
+  virtual const ir::ValuePtr &GetOutput() const;
+
  protected:
   // Shared pointer to the vector of OpRunners for all operators by execution order.
   std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
 
   std::map<hardware::DeviceType, device::DeviceContext *> deviceContexts_{};
+
+  ir::ValuePtr output_{nullptr};
 };
 
 class DA_API GraphExecutor {
@@ -125,6 +130,8 @@ class DA_API GraphExecutor {
   // Dump the built graph.
   void DumpGraph();
 #endif
+
+  ir::ValuePtr GetOutput() const;
 
  private:
   void RunNode(ir::NodePtr node);

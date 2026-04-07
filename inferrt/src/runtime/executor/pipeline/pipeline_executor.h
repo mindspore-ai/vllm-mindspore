@@ -25,7 +25,8 @@ class DA_API PipelineExecutor : public Executor {
  public:
   PipelineExecutor() = delete;
   PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
-                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts);
+                   const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
+                   const ir::ValuePtr &output);
   ~PipelineExecutor() override = default;
 
   void Initialize();

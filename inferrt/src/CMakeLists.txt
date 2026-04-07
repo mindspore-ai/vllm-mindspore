@@ -48,7 +48,7 @@ add_subdirectory(optimize)
 add_subdirectory(profiler)
 add_subdirectory(runtime)
 
-set(OBJECTS mrt_common mrt_config hardware_abstract runtime_obj ops_obj pass_obj mrt_ir_obj ops_utils mrt_profiler)
+set(OBJECTS mrt_common mrt_config hardware_abstract execution_engine ops_obj pass_obj mrt_ir_obj ops_utils mrt_profiler)
 
 # Create shared library. target_compile_options(inferrt PRIVATE -fPIC)
 add_library(inferrt SHARED common/common.h)

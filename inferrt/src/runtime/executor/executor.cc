@@ -36,6 +36,7 @@
 #include "runtime/builder/builder.h"
 #include "runtime/builder/pipeline/pipeline_builder.h"
 #include "runtime/builder/kernel_launch_group/kernel_launch_group_builder.h"
+#include "runtime/builder/kernel_capture/kernel_capture_builder.h"
 
 namespace mrt {
 namespace runtime {
@@ -43,15 +44,18 @@ using BuilderCreationFunc = std::function<std::unique_ptr<Builder>(const ir::Gra
 static std::vector<BuilderCreationFunc> builderCreators = {
   [](const ir::GraphPtr &graph) { return std::make_unique<Builder>(graph); },
   [](const ir::GraphPtr &graph) { return std::make_unique<PipelineBuilder>(graph); },
-  [](const ir::GraphPtr &graph) {
-    return std::make_unique<KernelLaunchGroupBuilder>(graph);
-  }};  // NOLINT(whitespace/indent)
+  [](const ir::GraphPtr &graph) { return std::make_unique<KernelLaunchGroupBuilder>(graph); },
+  [](const ir::GraphPtr &graph) { return std::make_unique<KernelCaptureBuilder>(graph); }};  // namespace runtime
 
 namespace {
 ExecutionMode GetExecutionMode() {
-  static const char kernelLaunchGroupNum[] = "MRT_KERNEL_LAUNCH_GROUP_NUM";
+  static const char kernelLaunchGroupNum[] = "MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM";
   const char *enableGroupLaunchCStr = std::getenv(kernelLaunchGroupNum);
   const bool enableGroupLaunch = (enableGroupLaunchCStr != nullptr) && !std::string_view(enableGroupLaunchCStr).empty();
+
+  static const char enableAclGraphEnv[] = "MS_INFERRT_ENABLE_ACLGRAPH";
+  const char *enableAclGraphCStr = std::getenv(enableAclGraphEnv);
+  const bool enableAclGraph = (enableAclGraphCStr != nullptr) && (std::string_view(enableAclGraphCStr) == "on");
 
   ExecutionMode executionMode = Base;
   if (ops::IsEnablePipeline()) {
@@ -59,6 +63,9 @@ ExecutionMode GetExecutionMode() {
   }
   if (enableGroupLaunch) {
     executionMode = GroupLaunch;
+  }
+  if (enableAclGraph) {
+    executionMode = AclGraph;
   }
   return executionMode;
 }
@@ -306,6 +313,8 @@ void GraphExecutor::RunGraph(bool isDynamic) {
   executor_->Run(isDynamic);
 }
 
+ir::ValuePtr GraphExecutor::GetOutput() const { return executor_->GetOutput(); }
+
 #ifdef DUMP
 // Run the built graph.
 void GraphExecutor::DumpGraph() {
@@ -423,5 +432,7 @@ void Executor::Run(bool isDynamic) {
     }
   }
 }
+
+const ir::ValuePtr &Executor::GetOutput() const { return output_; }
 }  // namespace runtime
 }  // namespace mrt

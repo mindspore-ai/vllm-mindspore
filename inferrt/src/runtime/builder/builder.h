@@ -56,7 +56,6 @@ class DA_API Builder {
    */
   virtual std::unique_ptr<Executor> BuildExecutor();
 
- protected:
   /**
    * @brief Sets up operation runners for the computational graph.
    *
@@ -67,6 +66,9 @@ class DA_API Builder {
    */
   void SetupOpRunners();
 
+  const ir::ValuePtr &GetGraphOutput() const;
+
+ protected:
   /**
    * @brief Creates operation runners for all nodes in the graph.
    *
@@ -111,8 +113,6 @@ class DA_API Builder {
   // Shared pointer to the vector of OpRunners for all operators by execution order in graph_.
   std::shared_ptr<std::vector<OpRunner>> opRunners_{nullptr};
 
-  // The storages that can be safely freed once the last consumer node is done.
-  std::unordered_map<ir::Node *, std::vector<ir::Storage *>> storagesToFree_;
   std::unordered_map<ir::Node *, OpRunner *> nodeToOpRunner_;
   std::map<hardware::DeviceType, device::DeviceContext *> deviceContexts_{};
 };
