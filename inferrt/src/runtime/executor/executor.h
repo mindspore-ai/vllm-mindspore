@@ -128,7 +128,7 @@ class DA_API GraphExecutor {
   void RecordTensorRefCount();
 #ifdef DUMP
   // Dump the built graph.
-  void DumpGraph();
+  std::string DumpGraph(bool printStdout = true);
 #endif
 
   ir::ValuePtr GetOutput() const;

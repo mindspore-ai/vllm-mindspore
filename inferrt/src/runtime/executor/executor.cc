@@ -317,75 +317,86 @@ ir::ValuePtr GraphExecutor::GetOutput() const { return executor_->GetOutput(); }
 
 #ifdef DUMP
 // Run the built graph.
-void GraphExecutor::DumpGraph() {
+std::string GraphExecutor::DumpGraph(bool printStdout) {
   LOG_OUT << "Run graph";
   CHECK_IF_NULL(graph_);
 
-  constexpr auto paramPrefix = "param_";
-  constexpr auto inputPrefix = "input_";
-  std::cout << "graph{" << name_ << "}(";
-  for (size_t i = 0; i < graph_->inputs.size(); ++i) {
-    auto input = graph_->inputs[i];
-    (void)inputNumMap_.emplace(input, i);
-    std::cout << inputPrefix << i;
-    if (i < graph_->inputs.size() - 1 || !graph_->parameters.empty()) {
-      std::cout << ", ";
-    }
-  }
-  for (size_t i = 0; i < graph_->parameters.size(); ++i) {
-    auto para = graph_->parameters[i];
-    (void)paraNumMap_.emplace(para, i);
-    std::cout << paramPrefix << i;
-    if (i < graph_->parameters.size() - 1) {
-      std::cout << ", ";
-    }
-  }
-  std::cout << ")" << std::endl;
-  for (size_t i = 0; i < graph_->inputs.size(); ++i) {
-    std::cout << std::setw(10) << "// " << inputPrefix << i << " = " << graph_->inputs[i]->output << std::endl;
-  }
-  for (size_t i = 0; i < graph_->parameters.size(); ++i) {
-    std::cout << std::setw(10) << "// " << paramPrefix << i << " = " << graph_->parameters[i]->output << std::endl;
-  }
-  std::cout << "{" << std::endl;
-
-  for (size_t i = 0; i < graph_->nodes.size(); ++i) {
-    (void)nodeNumMap_.emplace(graph_->nodes[i], i);
-  }
-
-  // Run all tensor nodes.
-  ir::NodePtr tensorNode{nullptr};
-  for (size_t i = 0; i < graph_->nodes.size(); ++i) {
-    tensorNode = graph_->nodes[i];
-    size_t inputSize = tensorNode->inputs.size();
-    std::stringstream ss;
-    for (size_t j = 0; j < inputSize; ++j) {
-      auto input = tensorNode->inputs[j];
-      // Find node number firstly.
-      if (auto nodeIt = nodeNumMap_.find(input); nodeIt != nodeNumMap_.cend()) {
-        ss << "%" << nodeIt->second;
-      } else if (auto inputIt = inputNumMap_.find(input); inputIt != inputNumMap_.cend()) {
-        ss << inputPrefix << inputIt->second;
-      } else if (auto paraIt = paraNumMap_.find(input); paraIt != paraNumMap_.cend()) {
-        ss << paramPrefix << paraIt->second;
-      } else {
-        ss << "<ERR>";
-      }
-      if (j != inputSize - 1) {
-        ss << ", ";
+  auto fnOutputGraph = [this](std::ostream &outStream) {
+    constexpr auto paramPrefix = "param_";
+    constexpr auto inputPrefix = "input_";
+    outStream << "graph{" << name_ << "}(";
+    for (size_t i = 0; i < graph_->inputs.size(); ++i) {
+      auto input = graph_->inputs[i];
+      (void)inputNumMap_.emplace(input, i);
+      outStream << inputPrefix << i;
+      if (i < graph_->inputs.size() - 1 || !graph_->parameters.empty()) {
+        outStream << ", ";
       }
     }
-
-    if (nodeNumMap_.count(tensorNode) == 0) {
-      LOG_ERROR << "Failed to find tensor number for " << tensorNode;
-      exit(EXIT_FAILURE);
+    for (size_t i = 0; i < graph_->parameters.size(); ++i) {
+      auto para = graph_->parameters[i];
+      (void)paraNumMap_.emplace(para, i);
+      outStream << paramPrefix << i;
+      if (i < graph_->parameters.size() - 1) {
+        outStream << ", ";
+      }
     }
-    std::cout << "  %" << nodeNumMap_[tensorNode];
-    std::cout << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str() << ")";
-    std::cout << std::setw(10) << "// " << tensorNode->output << std::endl;
-  }
+    outStream << ")" << std::endl;
+    for (size_t i = 0; i < graph_->inputs.size(); ++i) {
+      outStream << std::setw(10) << "// " << inputPrefix << i << " = " << graph_->inputs[i]->output << std::endl;
+    }
+    for (size_t i = 0; i < graph_->parameters.size(); ++i) {
+      outStream << std::setw(10) << "// " << paramPrefix << i << " = " << graph_->parameters[i]->output << std::endl;
+    }
+    outStream << "{" << std::endl;
 
-  std::cout << "}" << std::endl;
+    for (size_t i = 0; i < graph_->nodes.size(); ++i) {
+      (void)nodeNumMap_.emplace(graph_->nodes[i], i);
+    }
+
+    // Run all tensor nodes.
+    ir::NodePtr tensorNode{nullptr};
+    for (size_t i = 0; i < graph_->nodes.size(); ++i) {
+      tensorNode = graph_->nodes[i];
+      size_t inputSize = tensorNode->inputs.size();
+      std::stringstream ss;
+      for (size_t j = 0; j < inputSize; ++j) {
+        auto input = tensorNode->inputs[j];
+        // Find node number firstly.
+        if (auto nodeIt = nodeNumMap_.find(input); nodeIt != nodeNumMap_.cend()) {
+          ss << "%" << nodeIt->second;
+        } else if (auto inputIt = inputNumMap_.find(input); inputIt != inputNumMap_.cend()) {
+          ss << inputPrefix << inputIt->second;
+        } else if (auto paraIt = paraNumMap_.find(input); paraIt != paraNumMap_.cend()) {
+          ss << paramPrefix << paraIt->second;
+        } else {
+          ss << "<ERR>";
+        }
+        if (j != inputSize - 1) {
+          ss << ", ";
+        }
+      }
+
+      if (nodeNumMap_.count(tensorNode) == 0) {
+        LOG_ERROR << "Failed to find tensor number for " << tensorNode;
+        exit(EXIT_FAILURE);
+      }
+      outStream << "  %" << nodeNumMap_[tensorNode];
+      outStream << " = ops." << ops::ToStr(tensorNode->op) << "(" << ss.str() << ")";
+      outStream << std::setw(10) << "// " << tensorNode->output << std::endl;
+    }
+
+    outStream << "}" << std::endl;
+  };
+
+  if (printStdout) {
+    fnOutputGraph(std::cout);
+    return "";
+  } else {
+    std::ostringstream oss;
+    fnOutputGraph(oss);
+    return oss.str();
+  }
 }
 #endif
 
