@@ -77,5 +77,11 @@ SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return Make
 
 SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicCeilDiv>(lhs, rhs); }
 
+SymbolicExprPtr SymbolicVar::DeepCopy() const {
+  auto copy = MakeIntrusive<SymbolicVar>(name_);
+  copy->SetValue(value_);
+  return copy;
+}
+
 }  // namespace ir
 }  // namespace mrt

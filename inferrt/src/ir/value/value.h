@@ -36,6 +36,8 @@ namespace ir {
 
 class Value;
 using ValuePtr = IntrusivePtr<Value>;
+class Tuple;
+using TuplePtr = IntrusivePtr<Tuple>;
 
 /**
  * @brief A tuple of values.
@@ -87,14 +89,15 @@ class Tuple : public RefCounted {
   std::vector<uint8_t> ToBoolList();
   std::vector<double> ToDoubleList();
 
+  /**
+   * @brief Creates a deep copy of this Tuple object.
+   * @return A new Tuple object with copied elements.
+   */
+  TuplePtr DeepCopy() const;
+
  private:
   std::vector<ValuePtr> elements_;
 };
-
-/**
- * @brief A smart pointer for Tuple.
- */
-using TuplePtr = IntrusivePtr<Tuple>;
 
 /**
  * @brief A generic container for different types of values.
@@ -170,6 +173,12 @@ class DA_API Value : public RefCounted {
    * @throw runtime exception if the tag is different.
    */
   Value &operator=(const Value &other);
+
+  /**
+   * @brief Creates a deep copy of this Value object.
+   * @return A new Value object with copied data.
+   */
+  ValuePtr DeepCopy() const;
 
   /** @name Type checkers */
   ///@{

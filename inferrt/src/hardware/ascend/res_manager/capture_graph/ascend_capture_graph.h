@@ -26,18 +26,18 @@ class AscendCaptureGraph : public CaptureGraph {
  public:
   AscendCaptureGraph() = default;
   ~AscendCaptureGraph() override;
-  bool CaptureBegin(uint32_t stream_id) override;
-  void CaptureGetInfo(uint32_t stream_id) override;
-  void CaptureEnd(uint32_t stream_id) override;
-  void ExecuteCaptureGraph(uint32_t stream_id) override;
-  void CaptureTaskGrpBegin(uint32_t stream_id) override;
-  void CaptureTaskGrpEnd(uint32_t stream_id, void **task_grp) override;
-  void CaptureTaskUpdateBegin(uint32_t stream_id, void *task_grp) override;
-  void CaptureTaskUpdateEnd(uint32_t stream_id) override;
+  bool CaptureBegin(void *stream) override;
+  void CaptureGetInfo(void *stream) override;
+  void CaptureEnd(void *stream) override;
+  void ExecuteCaptureGraph(void *stream) override;
+  void CaptureTaskGrpBegin(void *stream) override;
+  void CaptureTaskGrpEnd(void *stream, void **task_grp) override;
+  void CaptureTaskUpdateBegin(void *updateStream, void *task_grp) override;
+  void CaptureTaskUpdateEnd(void *updateStream) override;
 
  protected:
   aclrtStream capture_stream_{nullptr};
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
   aclmdlRICaptureMode mode_{aclmdlRICaptureMode::ACL_MODEL_RI_CAPTURE_MODE_RELAXED};
   aclmdlRI model_ri_{nullptr};
 #endif

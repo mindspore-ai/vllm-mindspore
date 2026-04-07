@@ -315,5 +315,52 @@ void VisitAllTensors(const ir::ValuePtr &value, const std::function<void(const i
   }
 }
 
+TuplePtr Tuple::DeepCopy() const {
+  std::vector<ValuePtr> new_elements;
+  new_elements.reserve(elements_.size());
+  for (const auto &element : elements_) {
+    if (element) {
+      new_elements.push_back(element->DeepCopy());
+    } else {
+      new_elements.push_back(nullptr);
+    }
+  }
+  return MakeIntrusive<Tuple>(std::move(new_elements));
+}
+
+ValuePtr Value::DeepCopy() const {
+  switch (tag_) {
+    case Tag::Tensor:
+      if (tensor_) {
+        return MakeIntrusive<Value>(tensor_->DeepCopy());
+      } else {
+        return MakeIntrusive<Value>(TensorPtr{nullptr});
+      }
+    case Tag::Double:
+      return MakeIntrusive<Value>(double_);
+    case Tag::Int:
+      return MakeIntrusive<Value>(int_);
+    case Tag::Bool:
+      return MakeIntrusive<Value>(bool_);
+    case Tag::String:
+      return MakeIntrusive<Value>(std::string(string_));
+    case Tag::Tuple:
+      if (tuple_) {
+        return MakeIntrusive<Value>(tuple_->DeepCopy());
+      } else {
+        return MakeIntrusive<Value>(TuplePtr{nullptr});
+      }
+    case Tag::Symbol:
+      if (symbol_) {
+        return MakeIntrusive<Value>(symbol_->DeepCopy());
+      } else {
+        return MakeIntrusive<Value>(SymbolicExprPtr{nullptr});
+      }
+    case Tag::None:
+    default:
+      return MakeIntrusive<Value>();
+  }
+}
+
 }  // namespace ir
 }  // namespace mrt

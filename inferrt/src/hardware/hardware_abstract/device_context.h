@@ -39,7 +39,7 @@
 namespace mrt {
 namespace runtime {
 enum class KernelTaskType;
-}
+}  // namespace runtime
 namespace device {
 using BindStreamFunc = std::function<void()>;
 using AllocateFunc = std::function<void *(size_t)>;
@@ -265,7 +265,7 @@ class MRT_EXPORT DeviceResManager {
   virtual CaptureGraphPtr CreateCaptureGraph() { return nullptr; }
 
   // Create device event with flag.
-  virtual DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool blocking, bool useExtensionalApi = true) {
+  virtual DeviceEventPtr CreateEventWithFlag(bool enableTiming, bool external, bool useExtensionalApi = true) {
     return nullptr;
   }
 

@@ -107,7 +107,7 @@ ORIGIN_METHOD_WITH_SIMU(aclmdlGetInputDynamicGearCount, aclError, const aclmdlDe
 ORIGIN_METHOD_WITH_SIMU(aclmdlGetDynamicBatch, aclError, const aclmdlDesc *, aclmdlBatch *)
 // cppcheck-suppress unknownMacro
 ORIGIN_METHOD_WITH_SIMU(aclmdlSetDynamicHWSize, aclError, uint32_t, aclmdlDataset *, size_t, uint64_t, uint64_t)
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
 // cppcheck-suppress unknownMacro
 ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureBegin, aclError, aclrtStream, aclmdlRICaptureMode)
 // cppcheck-suppress unknownMacro
@@ -123,7 +123,7 @@ ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureTaskGrpBegin, aclError, aclrtStream)
 // cppcheck-suppress unknownMacro
 ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureTaskGrpEnd, aclError, aclrtStream, aclrtTaskGrp *)
 // cppcheck-suppress unknownMacro
-ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureTaskUpdateBegin, aclError, aclrtStream, aclrtTaskGrp *)
+ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureTaskUpdateBegin, aclError, aclrtStream, aclrtTaskGrp)
 // cppcheck-suppress unknownMacro
 ORIGIN_METHOD_WITH_SIMU(aclmdlRICaptureTaskUpdateEnd, aclError, aclrtStream)
 #endif
@@ -171,7 +171,7 @@ extern aclmdlGetInputDynamicDimsFunObj aclmdlGetInputDynamicDims_;
 extern aclmdlGetInputDynamicGearCountFunObj aclmdlGetInputDynamicGearCount_;
 extern aclmdlGetDynamicBatchFunObj aclmdlGetDynamicBatch_;
 extern aclmdlSetDynamicHWSizeFunObj aclmdlSetDynamicHWSize_;
-#if defined(__linux__) && defined(WITH_BACKEND)
+#if defined(__linux__)
 extern aclmdlRICaptureBeginFunObj aclmdlRICaptureBegin_;
 extern aclmdlRICaptureGetInfoFunObj aclmdlRICaptureGetInfo_;
 extern aclmdlRICaptureEndFunObj aclmdlRICaptureEnd_;

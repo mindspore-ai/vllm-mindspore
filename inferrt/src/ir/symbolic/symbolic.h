@@ -49,6 +49,12 @@ class SymbolicExpr : public RefCounted {
   virtual int64_t Evaluate() const = 0;
   virtual std::string ToString() const = 0;
 
+  /**
+   * @brief Creates a deep copy of this SymbolicExpr object.
+   * @return A new SymbolicExpr object with copied data.
+   */
+  virtual SymbolicExprPtr DeepCopy() const = 0;
+
  private:
   Kind kind_;
 };
@@ -59,6 +65,7 @@ class SymbolicConst : public SymbolicExpr {
   int64_t Evaluate() const override { return value_; }
   std::string ToString() const override { return std::to_string(value_); }
   int64_t GetValue() const { return value_; }
+  SymbolicExprPtr DeepCopy() const override { return MakeIntrusive<SymbolicConst>(value_); }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Constant; }
 
@@ -73,6 +80,7 @@ class SymbolicVar : public SymbolicExpr {
   std::string ToString() const override { return name_; }
   void SetValue(int64_t value) { value_ = value; }
   const std::string &GetName() const { return name_; }
+  SymbolicExprPtr DeepCopy() const override;
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Variable; }
 
@@ -98,6 +106,7 @@ class SymbolicAdd : public SymbolicBinaryOp {
   SymbolicAdd(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::Add, lhs, rhs) {}
   int64_t Evaluate() const override { return lhs_->Evaluate() + rhs_->Evaluate(); }
   std::string ToString() const override { return "(" + lhs_->ToString() + " + " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override { return MakeIntrusive<SymbolicAdd>(lhs_->DeepCopy(), rhs_->DeepCopy()); }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Add; }
 };
@@ -107,6 +116,7 @@ class SymbolicMul : public SymbolicBinaryOp {
   SymbolicMul(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::Mul, lhs, rhs) {}
   int64_t Evaluate() const override { return lhs_->Evaluate() * rhs_->Evaluate(); }
   std::string ToString() const override { return "(" + lhs_->ToString() + " * " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override { return MakeIntrusive<SymbolicMul>(lhs_->DeepCopy(), rhs_->DeepCopy()); }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Mul; }
 };
@@ -116,6 +126,9 @@ class SymbolicTrueDiv : public SymbolicBinaryOp {
   SymbolicTrueDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::TrueDiv, lhs, rhs) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return "(" + lhs_->ToString() + " / " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override {
+    return MakeIntrusive<SymbolicTrueDiv>(lhs_->DeepCopy(), rhs_->DeepCopy());
+  }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::TrueDiv; }
 };
@@ -125,6 +138,9 @@ class SymbolicFloorDiv : public SymbolicBinaryOp {
   SymbolicFloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::FloorDiv, lhs, rhs) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return "floor_div(" + lhs_->ToString() + ", " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override {
+    return MakeIntrusive<SymbolicFloorDiv>(lhs_->DeepCopy(), rhs_->DeepCopy());
+  }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::FloorDiv; }
 };
@@ -134,6 +150,9 @@ class SymbolicCeilDiv : public SymbolicBinaryOp {
   SymbolicCeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::CeilDiv, lhs, rhs) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return "ceil_div(" + lhs_->ToString() + ", " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override {
+    return MakeIntrusive<SymbolicCeilDiv>(lhs_->DeepCopy(), rhs_->DeepCopy());
+  }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::CeilDiv; }
 };
@@ -143,6 +162,7 @@ class SymbolicMod : public SymbolicBinaryOp {
   SymbolicMod(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::Mod, lhs, rhs) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return "(" + lhs_->ToString() + " % " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override { return MakeIntrusive<SymbolicMod>(lhs_->DeepCopy(), rhs_->DeepCopy()); }
 
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Mod; }
 };
