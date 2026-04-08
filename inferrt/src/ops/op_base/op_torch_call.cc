@@ -21,14 +21,117 @@
 #include <functional>
 
 #ifdef ENABLE_TORCH_NPU
-#include <torch_npu/csrc/core/npu/NPUStream.h>
+#include <c10/core/ScalarTypeToTypeMeta.h>
+#include <torch_npu/csrc/core/NPUStorageImpl.h>
 #endif
 
+#include "ops/utils/aten_convert.h"
 #include "ops/utils/data_convert.h"
 
 namespace mrt {
 namespace ops {
 constexpr size_t kRealInputOffset = 1;
+
+namespace {
+bool IsShapeUnchanged(const at::Tensor &atTensor, const std::vector<int64_t> &newShape) {
+  const auto &oldShape = atTensor.sizes();
+  return newShape.size() == oldShape.size() && std::equal(newShape.begin(), newShape.end(), oldShape.begin());
+}
+
+bool IsStridesUnchanged(const at::Tensor &atTensor, const std::vector<int64_t> &newShape,
+                        const std::vector<int64_t> &newStrides) {
+  if (newStrides.empty()) {
+    return atTensor.is_contiguous() && atTensor.strides().size() == newShape.size();
+  }
+
+  const auto &oldStrides = atTensor.strides();
+  return newStrides.size() == oldStrides.size() && std::equal(newStrides.begin(), newStrides.end(), oldStrides.begin());
+}
+
+bool IsBasicMetadataUnchanged(const at::Tensor &atTensor, void *newDataPtr, const std::vector<int64_t> &newShape,
+                              const std::vector<int64_t> &newStrides, size_t newStorageBytes,
+                              int64_t newStorageOffset) {
+  return newDataPtr == atTensor.data_ptr() && IsShapeUnchanged(atTensor, newShape) &&
+         IsStridesUnchanged(atTensor, newShape, newStrides) && newStorageBytes == atTensor.storage().nbytes() &&
+         newStorageOffset == atTensor.storage_offset();
+}
+
+void UpdateSizesAndStrides(at::Tensor &atTensor, const std::vector<int64_t> &newShape,
+                           const std::vector<int64_t> &newStrides) {
+  auto *tensorImpl = atTensor.unsafeGetTensorImpl();
+  if (newStrides.empty()) {
+    tensorImpl->set_sizes_contiguous(newShape);
+    return;
+  }
+  tensorImpl->set_sizes_and_strides(newShape, newStrides);
+}
+
+void UpdateBasicMetadata(at::Tensor &atTensor, void *newDataPtr, const std::vector<int64_t> &newShape,
+                         const std::vector<int64_t> &newStrides, size_t newStorageBytes, int64_t newStorageOffset) {
+  auto *tensorImpl = atTensor.unsafeGetTensorImpl();
+  at::DataPtr dataPtr(newDataPtr, atTensor.device());
+  atTensor.storage().unsafeGetStorageImpl()->set_data_ptr(std::move(dataPtr));
+  atTensor.storage().set_nbytes(newStorageBytes);
+  tensorImpl->set_storage_offset(newStorageOffset);
+  UpdateSizesAndStrides(atTensor, newShape, newStrides);
+}
+
+#ifdef ENABLE_TORCH_NPU
+torch_npu::NPUStorageDesc &GetNpuStorageDesc(at::Tensor &atTensor) {
+  return static_cast<torch_npu::NPUStorageImpl *>(atTensor.storage().unsafeGetStorageImpl())->npu_desc_;
+}
+
+bool IsNpuDescUnchanged(at::Tensor &atTensor, const std::vector<int64_t> &newShape,
+                        const std::vector<int64_t> &newStorageShape, int64_t newStorageOffset,
+                        ir::MemoryFormat newFormat) {
+  const auto newNpuFormat = ConvertMemoryFormatToAclFormat(newFormat);
+  const auto newTypeMeta = c10::scalarTypeToTypeMeta(atTensor.scalar_type());
+  const auto &curStrides = atTensor.strides();
+  auto &desc = GetNpuStorageDesc(atTensor);
+
+  if (desc.base_sizes_.size() != newShape.size()) {
+    return false;
+  }
+  if (!std::equal(newShape.begin(), newShape.end(), desc.base_sizes_.begin())) {
+    return false;
+  }
+  if (desc.base_strides_.size() != curStrides.size()) {
+    return false;
+  }
+  if (!std::equal(curStrides.begin(), curStrides.end(), desc.base_strides_.begin())) {
+    return false;
+  }
+  if (desc.storage_sizes_.size() != newStorageShape.size()) {
+    return false;
+  }
+  if (!std::equal(newStorageShape.begin(), newStorageShape.end(), desc.storage_sizes_.begin())) {
+    return false;
+  }
+  return desc.base_offset_ == newStorageOffset && desc.npu_format_ == newNpuFormat &&
+         desc.origin_format_ == newNpuFormat && desc.data_type_ == newTypeMeta;
+}
+
+void UpdateNpuDesc(at::Tensor &atTensor, const std::vector<int64_t> &newShape, const std::vector<int64_t> &newStrides,
+                   const std::vector<int64_t> &newStorageShape, int64_t newStorageOffset, ir::MemoryFormat newFormat) {
+  const auto newNpuFormat = ConvertMemoryFormatToAclFormat(newFormat);
+  const auto newTypeMeta = c10::scalarTypeToTypeMeta(atTensor.scalar_type());
+  auto &desc = GetNpuStorageDesc(atTensor);
+
+  desc.base_sizes_.assign(newShape.begin(), newShape.end());
+  desc.base_offset_ = newStorageOffset;
+  if (newStrides.empty()) {
+    const auto &curStrides = atTensor.strides();
+    desc.base_strides_.assign(curStrides.begin(), curStrides.end());
+  } else {
+    desc.base_strides_.assign(newStrides.begin(), newStrides.end());
+  }
+  desc.storage_sizes_.assign(newStorageShape.begin(), newStorageShape.end());
+  desc.npu_format_ = newNpuFormat;
+  desc.origin_format_ = newNpuFormat;
+  desc.data_type_ = newTypeMeta;
+}
+#endif
+}  // namespace
 
 // Jump table for input conversion functions indexed by Tag enum
 // Order: None(0), Tensor(1), Double(2), Int(3), Bool(4), String(5), Tuple(6), Symbol(7)
@@ -59,26 +162,32 @@ void OpTorchCall::UpdateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &m
   CHECK_IF_NULL(mrtTensor);
 
   void *newDataPtr = const_cast<void *>(mrtTensor->DataPtr());
-  void *oldDataPtr = atTensor.data_ptr();
-
   const auto &newShape = mrtTensor->Shape();
-  const auto &oldShape = atTensor.sizes();
+  const auto &newStrides = mrtTensor->Strides();
+  const auto newStorageBytes = mrtTensor->GetStorage()->SizeBytes();
+  const auto newStorageOffset = mrtTensor->StorageOffset();
+  const auto newStorageShape = mrtTensor->StorageShape().empty() ? mrtTensor->Shape() : mrtTensor->StorageShape();
+  LOG_OUT << "newStorageShape[" << newStorageShape << "]";
 
-  if (newDataPtr == oldDataPtr && newShape.size() == oldShape.size() &&
-      std::equal(newShape.begin(), newShape.end(), oldShape.begin())) {
+  bool metadataUnchanged =
+    IsBasicMetadataUnchanged(atTensor, newDataPtr, newShape, newStrides, newStorageBytes, newStorageOffset);
+
+#ifdef ENABLE_TORCH_NPU
+  if (metadataUnchanged && atTensor.device().type() == at::DeviceType::PrivateUse1) {
+    metadataUnchanged = IsNpuDescUnchanged(atTensor, newShape, newStorageShape, newStorageOffset, mrtTensor->Format());
+  }
+#endif
+  if (metadataUnchanged) {
     return;
   }
 
-  auto tensor_impl = atTensor.unsafeGetTensorImpl();
-  at::DataPtr dataPtr = at::DataPtr(newDataPtr, atTensor.device());
-  atTensor.storage().unsafeGetStorageImpl()->set_data_ptr(std::move(dataPtr));
+  UpdateBasicMetadata(atTensor, newDataPtr, newShape, newStrides, newStorageBytes, newStorageOffset);
 
-  auto strides = mrtTensor->Strides();
-  if (strides.empty()) {
-    tensor_impl->set_sizes_contiguous(newShape);
-  } else {
-    tensor_impl->set_sizes_and_strides(newShape, strides);
+#ifdef ENABLE_TORCH_NPU
+  if (atTensor.device().type() == at::DeviceType::PrivateUse1) {
+    UpdateNpuDesc(atTensor, newShape, newStrides, newStorageShape, newStorageOffset, mrtTensor->Format());
   }
+#endif
 }
 
 // Helper functions for ConvertTupleToStack
@@ -365,6 +474,10 @@ void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::V
     LOG_EXCEPTION << "Operator: " << GetOpsExpr(inputs) << " not found in torch plugin. The available operators are:\n"
                   << GetAvailableTorchOps();
   }
+
+  firstRun_ = true;
+  atTensors_.clear();
+  tensorIdx_ = 0;
 
   // Cache input converters during Init, SKIP the first input (op name) to match CalcWorkspace input
   cachedInputConverters_.clear();
