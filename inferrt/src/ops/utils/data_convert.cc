@@ -280,4 +280,24 @@ bool IsTorchTensorStandardLayout(const at::Tensor &atTensor) {
   return false;
 }
 
+void UpdateTensorFromTorch(const ir::TensorPtr &tensor, const at::Tensor &atTensor) {
+#ifdef ENABLE_TORCH_NPU
+  auto device = tensor->GetDevice();
+  if (device.type == hardware::DeviceType::NPU) {
+    auto npuFormat = at_npu::native::get_npu_format(atTensor);
+    tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
+    tensor->SetStrides(atTensor.strides().vec());
+    tensor->SetStorageOffset(atTensor.storage_offset());
+    tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
+    LOG_OUT << "Update tensor from torch, format=" << ir::FormatEnumToStr(tensor->Format())
+            << ", strides=" << tensor->Strides() << ", storageOffset=" << tensor->StorageOffset()
+            << ", storageShape=" << tensor->StorageShape() << ", isView=" << atTensor.is_view()
+            << " at.tensor.shape: " << atTensor.sizes();
+  }
+#else
+  (void)tensor;
+  (void)atTensor;
+#endif
+}
+
 }  // namespace mrt::ops
