@@ -178,6 +178,8 @@ class OpRunner {
 
   ops::OpType GetOpType() const { return operator_->GetOpType(); }
 
+  const ops::Operator *GetOperator() const { return operator_.get(); }
+
  private:
   // Tensors that should be updated before operator execution.
   std::vector<ir::Tensor *> tensorsToUpdate_;

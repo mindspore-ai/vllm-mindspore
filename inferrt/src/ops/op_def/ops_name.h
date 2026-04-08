@@ -17,6 +17,8 @@
 #ifndef __OPS_OPS_NAME_H__
 #define __OPS_OPS_NAME_H__
 
+#include "common/visible.h"
+
 namespace mrt {
 namespace ops {
 #define OP(O) Op_##O,
@@ -27,7 +29,7 @@ enum Op {
 #undef OP
 
 Op MatchOp(const char *op);
-const char *ToStr(Op op);
+MRT_EXPORT const char *ToStr(Op op);
 }  // namespace ops
 }  // namespace mrt
 

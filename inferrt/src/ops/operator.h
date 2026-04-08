@@ -93,8 +93,8 @@ class DA_API Operator {
    * @brief Calculate total workspace memory size requirements for the kernel computation.
    * @param input Vector of pointers to input data.
    * @param output Pointer to the output data.
-   * @param workspace_size Pointer to the workspace memory size, the workspace memory size in bytes needs to be updated
-   * to the variable pointed by `workspace_size`.
+   * @param workspaceSize Pointer to the workspace memory size, the workspace memory size in bytes needs to be updated
+   * to the variable pointed by `workspaceSize`.
    * @return OpsErrorCode Error code indicating success or failure of workspace calculation.
    */
   virtual OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,

@@ -278,6 +278,7 @@ const OpPythonCall::ConvertFunc OpPythonCall::kInputConverterTable[] = {
 
 void OpPythonCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   LOG_OUT << "Input size: " << inputs.size();
+  SetOpType(OpType::PythonCallOp);
   moduleName_ = inputs[kInputModuleNameIndex]->ToString();
   opName_ = inputs[kInputFuncNameIndex]->ToString();
 

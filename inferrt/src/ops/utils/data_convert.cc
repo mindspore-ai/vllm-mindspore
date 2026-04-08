@@ -177,27 +177,6 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake) {
   }
 }
 
-ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
-  LOG_OUT << "Begin copy storage: " << srcStorage.get();
-  auto device = srcStorage->GetDevice();
-  auto storage = ir::MakeIntrusive<ir::Storage>(srcStorage->SizeBytes(), device);
-  CHECK_IF_NULL(storage);
-  storage->AllocateMemory();
-
-  auto deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
-  mrt::device::DeviceContextKey deviceContextKey = {hardware::GetDeviceNameByType(device.type), deviceId};
-  auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
-  CHECK_IF_NULL(deviceContext);
-  CHECK_IF_NULL(deviceContext->deviceResManager_);
-  if (!deviceContext->deviceResManager_->AsyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
-                                                   mrt::device::CopyType::D2D,
-                                                   deviceContext->deviceResManager_->GetCurrentStream())) {
-    LOG_EXCEPTION << "Async copy for output storage failed";
-  }
-  LOG_OUT << "End copy storage: " << srcStorage.get();
-  return storage;
-}
-
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
