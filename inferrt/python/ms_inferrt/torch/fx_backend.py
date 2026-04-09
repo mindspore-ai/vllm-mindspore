@@ -1560,6 +1560,44 @@ def _handle_output_node(node, executor, env, sym_mgr):
     executor.add_return_node(env[node])
 
 
+def is_enable_dump_ir():
+    """
+    Return True if value of environment variable `MS_INFERRT_DEV_DUMP_IR` is `1`, otherwise False
+    """
+    return os.environ.get("MS_INFERRT_DEV_DUMP_IR", "") == "1"
+
+
+def get_ir_file_name():
+    """
+    Get dump ir file name, format is `graph_rank{rank_id}_{pid}.txt` when enable distributed, otherwise the format
+    is `graph_{pid}.txt`
+    """
+    if torch.distributed.is_initialized():
+        return f"graph_rank{torch.distributed.get_rank()}_{os.getpid()}.txt"
+    return f"graph_{os.getpid()}.txt"
+
+
+def write_gm_graph(gm, graph_id, file_name):
+    """
+    Dump graph module to file
+    """
+    with open(file_name, "a+", encoding="utf-8") as f:
+        f.write(f"======================fx graph {graph_id}======================\n")
+        f.write(gm.print_readable(print_output=False))
+        f.write("\n\n")
+        f.write(str(gm.graph))
+        f.write("\n\n\n")
+
+
+def write_inferrt_graph(text, file_name):
+    """
+    Dump inferrt ir to file
+    """
+    with open(file_name, "a+", encoding="utf-8") as f:
+        f.write(text)
+        f.write("\n\n")
+
+
 # pylint: disable=bad-continuation
 # pylint: disable=unused-argument
 def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
@@ -1567,10 +1605,10 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     A torch.fx backend that converts a GraphModule to a da.runtime.GraphExecutor,
     and returns a callable that executes the compiled graph.
     """
+    graph_id = _next_unique_graph_id()
     _remove_matched_nodes(gm, _OP_MATCHERS)
-    gm.print_readable()
-    print("======================fx graph======================")
-    print(gm.graph)
+    if is_enable_dump_ir():
+        write_gm_graph(gm, graph_id, get_ir_file_name())
     eliminate_redundant_copy_(gm)
     _decompose_ops_with_fake_mode(gm)
     _init_arg_mapping_hooks()
@@ -1578,7 +1616,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     _init_output_mapping_hooks()
     _init_ms_inferrt_config()
 
-    executor = GraphExecutor(f"fx_graph_{_next_unique_graph_id()}")
+    executor = GraphExecutor(f"fx_graph_{graph_id}")
     sym_mgr = SymbolicShapeManager()
     env: Dict[Node, Any] = {}
 
@@ -1606,7 +1644,8 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
                 raise NotImplementedError(f"Unsupported node op: {node.op}")
 
     _debug_print("Building Graph:")
-    executor.dump_graph()
+    if is_enable_dump_ir():
+        write_inferrt_graph(executor.dump_graph(print_stdout=False), get_ir_file_name())
     executor.build()
 
     ms_inferrt_input_nodes = [env[n] for n in fx_input_nodes]

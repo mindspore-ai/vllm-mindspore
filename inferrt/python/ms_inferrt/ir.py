@@ -107,9 +107,9 @@ class GraphExecutor:
         # self._executor.opt_graph()
         self._executor.build_executor()
 
-    def dump_graph(self):
+    def dump_graph(self, print_stdout=True):
         """Dump the graph definition."""
-        self._executor.dump_graph()
+        return self._executor.dump_graph(print_stdout)
 
 
 # Re-export for convenience

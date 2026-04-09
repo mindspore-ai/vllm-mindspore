@@ -180,7 +180,7 @@ NB_MODULE(_ms_inferrt_ir, m) {  // #lizard forgives
     .def("build_executor", &GraphExecutor::BuildExecutor)
     .def("run_graph", &GraphExecutor::RunGraph, nb::arg("is_dynamic") = false)
     .def("get_output", &GraphExecutor::GetOutput, nb::rv_policy::reference)
-    .def("dump_graph", &GraphExecutor::DumpGraph)
+    .def("dump_graph", &GraphExecutor::DumpGraph, nb::arg("print_stdout") = true)
     .def("record_tensor_ref_count", &GraphExecutor::RecordTensorRefCount)
     .def("add_return_node", &GraphExecutor::AddReturnNode)
     .def("add_parameter_node", &GraphExecutor::AddParameterNode, nb::arg("value") = nullptr, nb::rv_policy::reference)
