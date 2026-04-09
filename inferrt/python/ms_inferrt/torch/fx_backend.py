@@ -142,8 +142,55 @@ def apply_rotary_pos_emb_hook(node, input_nodes, executor):
 
 # pylint: disable=unused-argument
 def moe_gating_top_k_hook(node, input_nodes, executor):
-    """swap k and bias parameter."""
-    return [input_nodes[0]] + [input_nodes[2], input_nodes[1]] + input_nodes[3:]
+    """Normalize moe_gating_top_k inputs to backend order [x, bias, k, ...]."""
+    kwargs = node.kwargs
+
+    # Canonical target order in Mrt_MoeGatingTopKOp:
+    # [x, bias, k, k_group, group_count, group_select_mode, renorm, norm_type,
+    #  out_flag, routed_scaling_factor, eps]
+    if len(node.args) > 0:
+        x = node.args[0]
+    else:
+        x = input_nodes[0]
+
+    # Handle both npu frontend ("bias") and _C_ascend frontend ("bias_opt").
+    bias = kwargs.get("bias", kwargs.get("bias_opt", None))
+    if bias is None and len(node.args) > 2:
+        bias = node.args[2]
+
+    if "k" in kwargs:
+        k = kwargs["k"]
+    elif len(node.args) > 1:
+        k = node.args[1]
+    else:
+        k = 1
+
+    k_group = kwargs.get("k_group", 1)
+    group_count = kwargs.get("group_count", 1)
+    group_select_mode = kwargs.get("group_select_mode", 0)
+    renorm = kwargs.get("renorm", 0)
+    norm_type = kwargs.get("norm_type", 0)
+    # Mrt_MoeGatingTopKOp / aclnn expect Bool for out_flag, not int.
+    raw_out_flag = kwargs.get("out_flag", False)
+    if isinstance(raw_out_flag, Node):
+        raw_out_flag = _resolve_scalar_arg(raw_out_flag, "out_flag")
+    out_flag = bool(raw_out_flag)
+    routed_scaling_factor = kwargs.get("routed_scaling_factor", 1.0)
+    eps = kwargs.get("eps", 1e-20)
+
+    return [
+        x,
+        bias,
+        k,
+        k_group,
+        group_count,
+        group_select_mode,
+        renorm,
+        norm_type,
+        out_flag,
+        routed_scaling_factor,
+        eps,
+    ]
 
 
 # pylint: disable=unused-argument
@@ -1281,6 +1328,17 @@ def _create_args(schema: torch.FunctionSchema, node: Node) -> List[Argument]:
     if (node.target in ["view", "reshape", "repeat", "permute"] or node.target is torch.functional.einsum) \
         and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
+
+    # Some factory ops (e.g. torch.empty) accept varargs size in Python,
+    # while schema expects a single int[]/SymInt[] positional argument.
+    # Normalize positional varargs into one shape sequence before schema matching.
+    positional_schema_args = [a for a in schema.arguments if not a.kwarg_only]
+    if (
+        len(args) > 1
+        and len(positional_schema_args) == 1
+        and isinstance(positional_schema_args[0].real_type, torch.ListType)
+    ):
+        args = [list(args)]
 
     if len(args) + len(kwargs) > len(schema.arguments):
         return flat_args, False

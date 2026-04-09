@@ -5,3 +5,4 @@
 #
 
 vllm-mindspore/inferrt/src/ops/ascend/aclnn/aclnn_fused_infer_attention_score.cc:CalcWorkspace, Launch
+vllm-mindspore/inferrt/python/ms_inferrt/torch/fx_backend.py:_create_args
