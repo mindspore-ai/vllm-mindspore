@@ -215,6 +215,32 @@ def permute_hook(node, input_nodes, executor):
         dim0 = 0
         dim1 = 1
         return [input_nodes[0], [dim1, dim0]]
+    if node.target == "movedim" or node.target is torch.movedim:
+        ndim = len(input_nodes[0].meta["example_value"].shape)
+
+        def _normalize_dims(dims):
+            if isinstance(dims, int):
+                dims = [dims]
+            normalized = []
+            for dim in dims:
+                dim = dim + ndim if dim < 0 else dim
+                if dim < 0 or dim >= ndim:
+                    raise IndexError(f"Dimension out of range for movedim: got {dim}, ndim={ndim}")
+                normalized.append(dim)
+            if len(set(normalized)) != len(normalized):
+                raise ValueError(f"Repeated dims are not allowed in movedim: {normalized}")
+            return normalized
+
+        source = _normalize_dims(input_nodes[1])
+        destination = _normalize_dims(input_nodes[2])
+        if len(source) != len(destination):
+            raise ValueError(f"movedim expects source and destination to have the same length, got "
+                             f"{len(source)} and {len(destination)}")
+
+        dims = [dim for dim in range(ndim) if dim not in source]
+        for dst, src in sorted(zip(destination, source)):
+            dims.insert(dst, src)
+        return [input_nodes[0], dims]
     return input_nodes
 
 
@@ -411,6 +437,7 @@ def _init_arg_mapping_hooks():
         Op.fused_infer_attention_score, fused_inter_attention_score_hook
     )
     register_arg_mapping_hook(Op.permute, permute_hook)
+    register_arg_mapping_hook(Op.permute_view, permute_hook)
     register_arg_mapping_hook(Op.embedding, embedding_hook)
     register_arg_mapping_hook(Op.muls, muls_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
@@ -830,9 +857,10 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
-    torch.t: Op.permute,
+    torch.t: Op.permute_view,
     torch.permute: Op.permute,
     torch.transpose: Op.permute,
+    torch.movedim: Op.permute,
     torch.squeeze: Op.squeeze,
     torch.unsqueeze: Op.unsqueeze,
     torch.split: Op.split_with_size,
@@ -915,9 +943,10 @@ _OP_MAP = {
     "stack": Op.stack,
     "clone": Op.clone,
     "contiguous": Op.contiguous,
-    "t": Op.permute,
+    "t": Op.permute_view,
     "permute": Op.permute,
     "transpose": Op.permute,
+    "movedim": Op.permute,
     "squeeze": Op.squeeze,
     "unsqueeze": Op.unsqueeze,
     "neg": Op.neg,
