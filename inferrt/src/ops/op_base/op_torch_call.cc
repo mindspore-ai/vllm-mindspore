@@ -346,15 +346,12 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
   if (ivalue.isTensor() && output->IsTensor()) {
     auto &tensor = ivalue.toTensor();
     auto &outTensor = output->ToTensor();
-    if (!IsTorchTensorStandardLayout(tensor)) {
-      LOG_EXCEPTION << "For '" << qualifiedOpName_ << "', The output tensor is not in standard layout.";
-    }
-
     auto data_ptr = tensor.storage().set_data_ptr(std::move(c10::DataPtr()));  // return the original data ptr.
     auto deleter = data_ptr.get_deleter();
     auto *data_to_release = data_ptr.release_context();
     auto *data = data_ptr.get();
     outTensor->GetStorage()->SetDataPtrFromAten(data, data_to_release, deleter);
+    UpdateTensorFromTorch(outTensor, tensor);
   } else if (ivalue.isList()) {
     auto &tuple = output->ToTuple();
     CHECK_IF_NULL(tuple);
