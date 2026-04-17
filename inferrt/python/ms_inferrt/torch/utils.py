@@ -44,7 +44,7 @@ def _extract_global_comm_info():
     if ray_local_devices:
         device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
         print(f"Device list: {device_list}")
-        rank = device_list[rank]
+        rank = device_list[0] if len(device_list) == 1 else device_list[rank]
 
     CollectiveManager.instance().set_global_rank_id(rank)
     # TODO: Multi-machine scenario needs verification, current implementation only supports single machine with 8 NPUs
@@ -65,7 +65,7 @@ def _set_communication_info(ptd):
     if ray_local_devices:
         device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
         print(f"Device list: {device_list}")
-        rank = device_list[rank]
+        rank = device_list[0] if len(device_list) == 1 else device_list[rank]
 
     hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
