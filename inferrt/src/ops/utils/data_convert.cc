@@ -182,9 +182,11 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   auto storage = tensor->GetStorage();
   void *dataPtr = storage->Data();
+  void *blob_data_ptr = nullptr;
   // Allow nullptr for 0-element tensors; PyTorch treats this as valid.
   if (tensor->Numel() > 0) {
     CHECK_IF_NULL(dataPtr);
+    blob_data_ptr = tensor->DataPtr();
   }
 
   auto atDevice = ToTorchDevice(tensor->GetDevice());
@@ -193,17 +195,17 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   switch (atDevice.type()) {
     case at::DeviceType::CPU: {
       if (tensor->Strides().empty()) {
-        return at::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), options);
+        return at::from_blob(const_cast<void *>(blob_data_ptr), tensor->Shape(), options);
       }
-      return at::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), nullptr, options);
+      return at::from_blob(const_cast<void *>(blob_data_ptr), tensor->Shape(), tensor->Strides(), nullptr, options);
     }
 #ifdef ENABLE_TORCH_NPU
     case at::DeviceType::PrivateUse1: {
       at::Tensor out;
       if (tensor->Strides().empty()) {
-        out = at_npu::native::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), options);
+        out = at_npu::native::from_blob(const_cast<void *>(blob_data_ptr), tensor->Shape(), options);
       } else {
-        out = at_npu::native::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), tensor->Strides(), 0,
+        out = at_npu::native::from_blob(const_cast<void *>(blob_data_ptr), tensor->Shape(), tensor->Strides(), 0,
                                         nullptr, options);
       }
       auto &desc = static_cast<torch_npu::NPUStorageImpl *>(out.storage().unsafeGetStorageImpl())->npu_desc_;
