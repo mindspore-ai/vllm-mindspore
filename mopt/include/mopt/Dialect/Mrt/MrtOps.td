@@ -50,6 +50,28 @@ def Mrt_AddOp : Mrt_Op<"add", [Pure]> {
   let genAclnnOp = "aclnnAdd";
 }
 
+def Mrt_AddScalarOp : Mrt_Op<"add_scalar", [Pure]> {
+  let summary = "aclnnAdds";
+  let description = [{
+    Element-wise addition of tensor and scalar with an optional alpha scaling factor.
+    Computes: result = x + y * alpha
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    Mrt_ScalarType:$y,
+    Mrt_ScalarType:$alpha
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $x `,` $y `,` $alpha attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnAdds";
+}
+
 def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
   let summary = "aclnnAddRmsNorm";
   let description = [{
@@ -435,6 +457,30 @@ def Mrt_DivOp : Mrt_Op<"div", [Pure]> {
   let genAclnnOp = "aclnnDiv";
 }
 
+def Mrt_DivScalarOp : Mrt_Op<"div_scalar", [Pure]> {
+  let summary = "aclnnDivs";
+  let description = [{
+    Operation for element-wise division of tensor by scalar.
+    Performs division of tensor elements by a scalar value.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnDivs";
+}
+
 def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
   let summary = "aclnnDivMod";
   let description = [{
@@ -460,6 +506,32 @@ def Mrt_DivModOp : Mrt_Op<"div_mod", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnDivMod";
+}
+
+def Mrt_DivModScalarOp : Mrt_Op<"div_mod_scalar", [Pure]> {
+  let summary = "aclnnDivMods";
+  let description = [{
+    Operation for element-wise division and modulus computation between tensor and scalar.
+    Performs division and modulus operations on tensor elements with a scalar value.
+    The mode parameter controls the rounding behavior for integer division.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other,
+    Mrt_I64Type:$mode
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other `,` $mode
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnDivMods";
 }
 
 def Mrt_DvmCallOp : Mrt_Op<"dvm_call"> {
@@ -1418,7 +1490,7 @@ def Mrt_MulOp : Mrt_Op<"mul", [Pure, Commutative]> {
   let genAclnnOp = "aclnnMul";
 }
 
-def Mrt_MulsOp : Mrt_Op<"muls", [Pure]> {
+def Mrt_MulScalarOp : Mrt_Op<"mul_scalar", [Pure]> {
   let summary = "Tensor multiply scalar operation";
   let description = [{
     Element-wise multiplication of tensor and scalar.

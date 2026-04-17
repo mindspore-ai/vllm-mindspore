@@ -40,7 +40,7 @@ OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::V
     return INVALID_PARAM;
   }
 
-  if (!input[kIndex1]->IsInt()) {
+  if (!input[kIndex1]->IsInt() || output->IsSymbol()) {
     // Handle case where input[kIndex1] could be None and returns a tuple.
     // Falls back to parent class Operator::InferShape (verified).
     Operator::InferShape(input, output);

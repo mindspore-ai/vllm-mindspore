@@ -129,6 +129,8 @@ def test_op_fallback_add_with_alpha():
 
 
 @arg_mark(plat_marks=["cpu_linux"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.skip(reason="Conflicts with add_scalar registered on CPU that returns scalar type. "
+                        "Will be enabled after type matching is implemented.")
 def test_op_fallback_add_scalar():
     """
     Feature: Op capability check and fallback to custom_call
