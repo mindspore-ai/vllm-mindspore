@@ -44,6 +44,7 @@ class SymbolicShapeManager:
     _SYMPY_EXPR_TO_SYMBOLIC_OP = {
         sympy.Add: operator.add,
         sympy.Mul: operator.mul,
+        sympy.Mod: operator.mod,
         FloorDiv: operator.floordiv,
         CeilDiv: lambda a, b: a.__ceildiv__(b),
     }
@@ -91,6 +92,16 @@ class SymbolicShapeManager:
         if isinstance(expr, CeilToInt) and isinstance(expr.args[0], IntTrueDiv):
             return self.convert_sympy_expr_to_symbolic_expr(CeilDiv(*expr.args[0].args))
 
+        # Handle Mod explicitly to avoid exact-type lookup misses.
+        # Some runtimes may construct a Mod class object that is not `sympy.Mod`
+        # by identity, so also match by function/class name.
+        if (getattr(expr, "func", None) is sympy.Mod or getattr(getattr(expr, "func", None), "__name__",
+                                                                None) == "Mod" or type(expr).__name__ == "Mod"):
+            if len(expr.args) != 2:
+                raise NotImplementedError(f"Unsupported Mod args: {expr} (args: {expr.args})")
+            lhs, rhs = expr.args
+            return (self.convert_sympy_expr_to_symbolic_expr(lhs) % self.convert_sympy_expr_to_symbolic_expr(rhs))
+
         # Convert basic symbolic ops
         op = self._SYMPY_EXPR_TO_SYMBOLIC_OP.get(type(expr))
         if op:
@@ -100,7 +111,6 @@ class SymbolicShapeManager:
             if isinstance(expr, (sympy.Add, sympy.Mul)):
                 return reduce(op, converted_args)
             return op(*converted_args)
-
         raise NotImplementedError(
             f"Unsupported sympy expression: {expr} (type: {type(expr)})"
         )
