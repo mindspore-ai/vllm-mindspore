@@ -931,6 +931,31 @@ def Mrt_InplaceCopyOp : Mrt_Op<"inplace_copy"> {
   }];
 }
 
+def Mrt_InplaceIndexCopyOp : Mrt_Op<"inplace_index_copy", [Pure]> {
+  let summary = "InplaceIndexCopy operation";
+  let description = [{
+    In-place IndexCopy.
+    Uses `index` values as indices along dimension `dim` to copy `source` values into `selfRef`.
+    The result aliases `selfRef`.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$selfRef,
+    Mrt_I64Type:$dim,
+    MrtAnyTensor:$index,
+    MrtAnyTensor:$source
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $selfRef `,` $dim `,` $index `,` $source attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnInplaceIndexCopy";
+  let genAclnnCfg = (AclnnConfig (IORef 0, 0));
+}
+
 def Mrt_InplaceFillScalarOp : Mrt_Op<"inplace_fill_scalar"> {
   let summary = "Fill tensor with scalar value";
   let description = [{
