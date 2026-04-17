@@ -66,6 +66,7 @@ void UpdateTensorViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
   outputTensorPtr->SetStrides(newStrides);
   outputTensorPtr->SetStorageOffset(newStorageOffset);
   outputTensorPtr->SetStorageShape(inputTensorPtr->StorageShape());
+  outputTensorPtr->SetFormat(inputTensorPtr->Format());
 }
 
 std::vector<std::pair<uint32_t, uint32_t>> GenerateOutputInputRefPair(const ir::Value *output) {
