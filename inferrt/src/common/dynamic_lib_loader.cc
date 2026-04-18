@@ -113,5 +113,13 @@ void DynamicLibLoader::CloseDynamicLib(const std::string &dlName) {
   LOG_OUT << "Close dynamic library: " << dlName << " successfully.";
 }
 
+void *DynamicLibLoader::GetHandle(const std::string &dlName) const {
+  auto it = allHandles_.find(dlName);
+  if (it != allHandles_.end()) {
+    return it->second;
+  }
+  return nullptr;
+}
+
 }  // namespace common
 }  // namespace mrt

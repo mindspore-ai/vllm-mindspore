@@ -19,7 +19,7 @@
 
 #include "ops/operator.h"
 #include "ops/ascend/aclnn/composite/linear.h"
-#include "ops/ascend/atb/atb_linear.h"
+#include "common/dynamic_lib_loader.h"
 
 namespace mrt {
 namespace ops {
@@ -39,6 +39,9 @@ class UnifyLinear : public Operator {
 
   std::unique_ptr<Operator> linear_op_;
   bool use_atb_linear_;
+  bool atb_loaded_;
+  void *atb_handle_;
+  common::DynamicLibLoader lib_loader_;
 };
 
 }  // namespace ops

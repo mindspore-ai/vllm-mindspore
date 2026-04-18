@@ -38,6 +38,7 @@ class DA_API DynamicLibLoader {
 
   bool LoadDynamicLib(const std::string &dlName, std::stringstream *errMsg);
   void CloseDynamicLib(const std::string &dlName);
+  void *GetHandle(const std::string &dlName) const;
 
   const std::string &GetDynamicLibFilePath() const { return filePath_; }
 
