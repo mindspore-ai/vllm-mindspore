@@ -49,7 +49,6 @@ OpsErrorCode MemcpyOpBase::Launch(const std::vector<const ir::Value *> &input, v
 
 bool MemcpyOpBase::NeedLaunch() { return false; }
 
-MRT_REG_OP(flatten, Flatten, Ascend);
 MRT_REG_OP(unsqueeze, Unsqueeze, Ascend);
 MRT_REG_OP(squeeze, Squeeze, Ascend);
 }  // namespace ops
