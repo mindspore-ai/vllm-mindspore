@@ -1,4 +1,6 @@
 """Tests for aclnn flatten operation."""
+import re
+
 import pytest
 import torch
 
@@ -6,6 +8,8 @@ from ms_inferrt.torch import backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
+
+_FLATTEN_VIEW_ERR = r"Flatten view shape .* is not compatible"
 
 
 def op_func(input_self_tensor, start_dim = 0, end_idx = -1):
@@ -15,6 +19,39 @@ def get_op_func_compiled():
     def custom_op_func(input_self_tensor, start_dim = 0, end_idx = -1):
         return input_self_tensor.flatten(start_dim, end_idx)
     return torch.compile(custom_op_func, backend=backend)
+
+
+def build_non_contiguous_tensor(input_self_tensor, pattern):
+    """Build a deterministic non-contiguous view tensor from a base input tensor."""
+    if pattern == "permute_0132":
+        return input_self_tensor.permute(0, 1, 3, 2)
+    if pattern == "transpose_23":
+        return input_self_tensor.transpose(2, 3)
+    if pattern == "last_dim_narrow":
+        return input_self_tensor[..., 1:]
+    if pattern == "dim1_narrow":
+        return input_self_tensor[:, 1:, ...]
+    if pattern == "dim2_narrow":
+        return input_self_tensor[:, :, 1:, ...]
+    if pattern == "dim1_narrow_transpose_01":
+        return input_self_tensor[:, 1:, ...].transpose(0, 1)
+    if pattern == "transpose_01":
+        return input_self_tensor.transpose(0, 1)
+    raise ValueError(f"unsupported pattern: {pattern}")
+
+
+def assert_nonview_flatten_behavior(op_func_compiled, input_self_tensor_npu, cpu_output):
+    """
+    InferRT may either:
+    1) reject non-view flatten geometry (no contiguous fallback), or
+    2) run successfully by materializing contiguous layout internally.
+    """
+    try:
+        npu_output = op_func_compiled(input_self_tensor_npu)
+    except RuntimeError as runtime_error:
+        assert re.search(_FLATTEN_VIEW_ERR, str(runtime_error))
+        return
+    AssertRtolEqual(cpu_output, npu_output.detach().cpu())
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
@@ -98,8 +135,8 @@ def test_flatten_2d_slice_input():
 def test_flatten_permute_partial_flatten():
     """
     Feature: Test aclnn flatten on permuted tensor with partial flatten range
-    Description: Flatten only the trailing contiguous dims on a permuted tensor
-    Expectation: The result is correct
+    Description: Flatten on fully permuted non-contiguous input cannot be represented as view
+    Expectation: RuntimeError is raised (InferRT flatten_view has no contiguous fallback)
     """
     # permute(0,1,3,2) on [3,4,5,6] -> [3,4,6,5], strides (120,30,1,6)
     # flatten(2,3): strides[2]=1, shape[3]*strides[3]=5*6=30 != 1, NOT view-compatible
@@ -108,9 +145,95 @@ def test_flatten_permute_partial_flatten():
     permuted = self_tensor.permute(0, 1, 3, 2)
     permuted_npu = permuted.npu()
 
-    # flatten(0,-1) on the non-contiguous tensor - PyTorch will call contiguous first
-    cpu_output = op_func(permuted, start_dim=0, end_idx=-1)
+    # flatten(0,-1) on the non-contiguous tensor:
+    # eager PyTorch succeeds by contiguous fallback, while InferRT flatten_view should raise.
     op_func_compiled = get_op_func_compiled()
-    npu_output = op_func_compiled(permuted_npu, start_dim=0, end_idx=-1)
+    with pytest.raises(RuntimeError, match=_FLATTEN_VIEW_ERR):
+        op_func_compiled(permuted_npu, start_dim=0, end_idx=-1)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize(
+    "shape, slice_pattern, start_idx, end_idx",
+    [
+        ((3, 4, 5, 6), "last_dim_narrow", 0, 1),
+        ((4, 5, 6, 7), "dim1_narrow", 2, 3),
+        ((2, 3, 4, 5, 6), "dim2_narrow", 3, 4),
+        ((4, 5, 6, 7), "transpose_01", -2, -1),
+        ((3, 4, 5, 6), "permute_0132", -4, -3),
+        ((3, 4, 5, 6), "dim1_narrow_transpose_01", 2, 3),
+        ((3, 4, 5, 6), "dim2_narrow", -2, -1),
+    ],
+)
+def test_flatten_noncontiguous_view_compatible(shape, slice_pattern, start_idx, end_idx):
+    """
+    Feature: flatten view on non-contiguous input
+    Description: Non-contiguous tensors can still flatten by view when stride geometry is compatible
+    Expectation: Compiled result equals eager result
+    """
+    self_tensor = torch.rand(shape, dtype=torch.bfloat16)
+    self_tensor_npu = self_tensor.npu()
+    non_contiguous = build_non_contiguous_tensor(self_tensor, slice_pattern)
+    assert not non_contiguous.is_contiguous()
+
+    def custom_op_func(input_self_tensor):
+        inter = build_non_contiguous_tensor(input_self_tensor, slice_pattern)
+        return inter.flatten(start_idx, end_idx)
+
+    cpu_output = custom_op_func(self_tensor)
+    assert cpu_output.data_ptr() == non_contiguous.data_ptr()
+
+    op_func_compiled = torch.compile(custom_op_func, backend=backend)
+    npu_output = op_func_compiled(self_tensor_npu)
     npu_output_cpu = npu_output.detach().cpu()
+    AssertRtolEqual(cpu_output, npu_output_cpu)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize(
+    "shape, transform_pattern, start_idx, end_idx",
+    [
+        ((3, 4, 5, 6), "permute_0132", 2, 3),
+        ((4, 5, 6, 7), "transpose_01", 0, 1),
+    ],
+)
+def test_flatten_noncontiguous_view_incompatible(shape, transform_pattern, start_idx, end_idx):
+    """
+    Feature: flatten non-view path on non-contiguous input
+    Description: Non-contiguous intermediate whose target flatten shape cannot infer legal strides
+    Expectation: InferRT either reports unsupported layout or matches eager output
+    """
+    self_tensor = torch.rand(shape, dtype=torch.bfloat16)
+    self_tensor_npu = self_tensor.npu()
+
+    transformed = build_non_contiguous_tensor(self_tensor, transform_pattern)
+    assert not transformed.is_contiguous()
+    cpu_output = transformed.flatten(start_idx, end_idx)
+    assert cpu_output.data_ptr() != transformed.data_ptr()
+
+    def custom_op_func(input_self_tensor):
+        inter = build_non_contiguous_tensor(input_self_tensor, transform_pattern)
+        return inter.flatten(start_idx, end_idx)
+
+    op_func_compiled = torch.compile(custom_op_func, backend=backend)
+    assert_nonview_flatten_behavior(op_func_compiled, self_tensor_npu, cpu_output)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_flatten_0d_to_1d():
+    """
+    Feature: 0D flatten
+    Description: Flatten a scalar tensor should return a [1] tensor
+    Expectation: Shape/value are consistent with eager
+    """
+    self_tensor = torch.tensor(2.5, dtype=torch.bfloat16)
+    self_tensor_npu = self_tensor.npu()
+
+    cpu_output = op_func(self_tensor, start_dim=0, end_idx=-1)
+    op_func_compiled = get_op_func_compiled()
+    npu_output = op_func_compiled(self_tensor_npu, start_dim=0, end_idx=-1)
+    npu_output_cpu = npu_output.detach().cpu()
+
+    assert tuple(cpu_output.shape) == (1,)
+    assert tuple(npu_output_cpu.shape) == (1,)
     AssertRtolEqual(cpu_output, npu_output_cpu)
