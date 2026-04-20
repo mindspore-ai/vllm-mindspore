@@ -1,4 +1,4 @@
 [submodule "tests/mindformers"]
 	path = tests/mindformers
 	url = https://gitcode.com/mindspore/mindformers.git
-	branch = master
+	branch = r1.9.0
