@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <dlfcn.h>
 #include "ops/ascend/composite/unify_linear.h"
 #include "ops/op_register.h"
 #include "hardware/hardware_abstract/device_context.h"
@@ -25,7 +26,7 @@
 namespace mrt {
 namespace ops {
 
-UnifyLinear::UnifyLinear() : use_atb_linear_(false) {
+UnifyLinear::UnifyLinear() : use_atb_linear_(false), atb_loaded_(false), atb_handle_(nullptr) {
   auto soc = mrt::device::ascend::GetAscendSocVersion();
   if (soc != nullptr) {
     const std::string socName(soc);
@@ -39,11 +40,29 @@ UnifyLinear::UnifyLinear() : use_atb_linear_(false) {
 
 std::unique_ptr<Operator> UnifyLinear::CreateLinearOperator() {
   if (use_atb_linear_) {
-    LOG_OUT << "Device is Ascend 310 series, using AtbLinear operator.";
-    return std::make_unique<AtbLinear>();
+    std::stringstream errMsg;
+    if (lib_loader_.LoadDynamicLib("libops_ascend_atb.so", &errMsg)) {
+      atb_handle_ = lib_loader_.GetHandle("libops_ascend_atb.so");
+
+      if (atb_handle_ != nullptr) {
+        typedef void *(*CreateAtbLinearFunc)();
+        CreateAtbLinearFunc create_func = reinterpret_cast<CreateAtbLinearFunc>(dlsym(atb_handle_, "CreateAtbLinear"));
+
+        if (create_func != nullptr) {
+          void *atb_linear_ptr = create_func();
+          if (atb_linear_ptr != nullptr) {
+            atb_loaded_ = true;
+            LOG_OUT << "Device is Ascend 310 series, successfully loaded AtbLinear operator.";
+            return std::unique_ptr<Operator>(static_cast<Operator *>(atb_linear_ptr));
+          }
+        }
+      }
+    }
+
+    LOG_OUT << "Failed to load AtbLinear for Ascend 310, falling back to AclnnLinear. Error: " << errMsg.str();
   }
 
-  LOG_OUT << "Device is not Ascend 310 series, using AclnnLinear operator.";
+  LOG_OUT << "Using AclnnLinear operator.";
   return std::make_unique<AclnnLinear>();
 }
 

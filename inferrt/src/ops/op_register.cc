@@ -50,7 +50,7 @@ bool LoadOpLib(const std::string &opLibPrefix, std::stringstream *errMsg) {
   }
   for (const auto &opLibName : opLibs) {
     if (!dynamicLibLoader->LoadDynamicLib(opLibName, errMsg)) {
-      return false;
+      LOG_ERROR << "Failed to load dynamic op library: " << opLibName;
     }
   }
   (void)closedir(dir);
