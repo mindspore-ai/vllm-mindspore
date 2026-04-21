@@ -655,8 +655,6 @@ def chunk_arg_hook(node, input_nodes, executor):
     return [input_tensor, split_sizes, dim_int]
 
 
-
-
 # pylint: disable=unused-argument
 def reduce_sum_arg_hook(node, flat_args, executor):
     """
@@ -1378,6 +1376,34 @@ def _is_value_compatible_with_type(value_type, value: Any) -> bool:
     return _check_runtime_value_against_type(value_type, runtime_v)
 
 
+def _all_explicit_fx_inputs_are_scalars(args: Any, kwargs: Dict[str, Any]) -> bool:
+    """
+    True only when every positional argument and every kwarg value is a scalar runtime value
+    (Python int/float/bool or symbolic Sym*). Used to skip per-argument schema compatibility
+    checks in _create_args when the whole call is scalar-only.
+    """
+    info = _collect_sym_type_info()
+    scalar_types = (int, float, bool) + info.sym_int_vals + info.sym_float_vals + info.sym_bool_vals
+
+    for a in args:
+        if isinstance(a, Node):
+            ev = a.meta.get("example_value", None)
+            if ev is None or not isinstance(ev, scalar_types):
+                return False
+        elif not isinstance(a, scalar_types):
+            return False
+
+    for v in kwargs.values():
+        if isinstance(v, Node):
+            ev = v.meta.get("example_value", None)
+            if ev is None or not isinstance(ev, scalar_types):
+                return False
+        elif not isinstance(v, scalar_types):
+            return False
+
+    return True
+
+
 def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> List[Argument]:
     """
     Create a list of Argument objects from a torch fx node.
@@ -1399,18 +1425,20 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
     if (node.target in ["view", "reshape", "repeat", "permute"] or node.target is torch.functional.einsum) \
-        and not _is_shape_sequence(args[1]):
+            and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
 
     if len(args) + len(kwargs) > len(schema.arguments):
         return flat_args, False
+
+    skip_type_compat_check = _all_explicit_fx_inputs_are_scalars(args, kwargs)
 
     for arg in args:
         if schema.arguments[arg_idx].kwarg_only:
             return flat_args, False
 
         # Additional type compatibility check to narrow down overloads.
-        if not _is_value_compatible_with_type(
+        if not skip_type_compat_check and not _is_value_compatible_with_type(
                 schema.arguments[arg_idx].real_type, arg
         ):
             return flat_args, False
@@ -1426,7 +1454,9 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
         if argument.name in kwargs:
             kw_value = kwargs[argument.name]
             # Additional type compatibility check for kwargs.
-            if not _is_value_compatible_with_type(argument.real_type, kw_value):
+            if not skip_type_compat_check and not _is_value_compatible_with_type(
+                    argument.real_type, kw_value
+            ):
                 return flat_args, False
 
             real_arg = _argument_to_real_value(
@@ -1496,8 +1526,6 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
     # return empty args list since these ops produce symbolic expressions
     # that do not require schema matching or runtime args.
     all_args = list(node.args) + list(node.kwargs.values())
-    if all(_is_scalar_arg(arg) for arg in all_args):
-        return op_name, []
     if not schemas:
         return None, all_args
 
