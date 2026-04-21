@@ -8,6 +8,11 @@ Pattern ConvertNpuMoeGatingTopKSoftmax {
   replace root with op<mrt.moe_gating_top_k_softmax>(convertValues(operands)) -> (convertTypes(resTypes));
 }
 
+Pattern ConvertNpuMoeDistributeCombineV2 {
+  let root = op<torch.operator>(operands: ValueRange) { name = attr<"\"torch.npu.npu_moe_distribute_combine_v2\""> } -> (resTypes: TypeRange);
+  replace root with op<mrt.moe_distribute_combine_v2>(convertValues(operands)) -> (convertTypes(resTypes));
+}
+
 Pattern ConvertNpuMoeInitRoutingV3 {
   let root = op<torch.operator>(operands: ValueRange) { name = attr<"\"torch.npu.npu_moe_init_routing_v2\""> } -> (resTypes: TypeRange);
   replace root with op<mrt.moe_init_routing_v3>(convertValues(operands)) -> (convertTypes(resTypes));
