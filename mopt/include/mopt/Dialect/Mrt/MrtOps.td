@@ -1313,6 +1313,64 @@ def Mrt_MoeGatingTopKSoftmaxOp : Mrt_Op<"moe_gating_top_k_softmax", [Pure]> {
   let genAclnnOp = "aclnnMoeGatingTopKSoftmax";
 }
 
+def Mrt_MoeDistributeCombineV2Op : Mrt_Op<"moe_distribute_combine_v2", [Pure]> {
+  let summary = "aclnnMoeDistributeCombineV2/V3/V4";
+  let description = [{
+    Operation for distributed MoE combine.
+    Accepts expanded expert outputs and routing metadata from dispatch_v2,
+    then combines them back to the original token layout.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$expand_x,
+    MrtAnyTensor:$expert_ids,
+    MrtAnyTensor:$assist_info_for_combine,
+    MrtAnyTensor:$ep_send_counts,
+    MrtAnyTensor:$expert_scales,
+    MrtOptional<MrtAnyTensor>:$tp_send_counts,
+    MrtOptional<MrtAnyTensor>:$x_active_mask,
+    MrtOptional<MrtAnyTensor>:$expand_scales,
+    MrtOptional<MrtAnyTensor>:$shared_expert_x,
+    MrtOptional<MrtAnyTensor>:$elastic_info,
+    MrtOptional<MrtAnyTensor>:$ori_x,
+    MrtOptional<MrtAnyTensor>:$const_expert_alpha_1,
+    MrtOptional<MrtAnyTensor>:$const_expert_alpha_2,
+    MrtOptional<MrtAnyTensor>:$const_expert_v,
+    MrtOptional<MrtAnyTensor>:$performance_info,
+    Mrt_StringType:$group_ep,
+    Mrt_I64Type:$ep_world_size,
+    Mrt_I64Type:$ep_rank_id,
+    Mrt_I64Type:$moe_expert_num,
+    Mrt_StringType:$group_tp,
+    Mrt_I64Type:$tp_world_size,
+    Mrt_I64Type:$tp_rank_id,
+    Mrt_I64Type:$expert_shard_type,
+    Mrt_I64Type:$shared_expert_num,
+    Mrt_I64Type:$shared_expert_rank_num,
+    Mrt_I64Type:$global_bs,
+    Mrt_I64Type:$comm_quant_mode,
+    Mrt_StringType:$comm_alg,
+    Mrt_I64Type:$zero_expert_num,
+    Mrt_I64Type:$copy_expert_num,
+    Mrt_I64Type:$const_expert_num
+  );
+
+  let results = (outs
+    MrtAnyTensor:$x
+  );
+
+  let assemblyFormat = [{
+    $expand_x `,` $expert_ids `,` $assist_info_for_combine `,` $ep_send_counts `,` $expert_scales `,`
+    $tp_send_counts `,` $x_active_mask `,` $expand_scales `,` $shared_expert_x `,` $elastic_info `,`
+    $ori_x `,` $const_expert_alpha_1 `,` $const_expert_alpha_2 `,` $const_expert_v `,`
+    $performance_info `,` $group_ep `,` $ep_world_size `,` $ep_rank_id `,` $moe_expert_num `,`
+    $group_tp `,` $tp_world_size `,` $tp_rank_id `,` $expert_shard_type `,`
+    $shared_expert_num `,` $shared_expert_rank_num `,` $global_bs `,` $comm_quant_mode `,`
+    $comm_alg `,` $zero_expert_num `,` $copy_expert_num `,` $const_expert_num
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_FusedInferAttentionScoreOp : Mrt_Op<"fused_infer_attention_score", [Pure]> {
   let summary = "aclnnFusedInferAttentionScoreV3";
   let description = [{

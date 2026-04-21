@@ -200,6 +200,88 @@ def moe_gating_top_k_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def moe_distribute_combine_v2_hook(node, input_nodes, executor):
+    """Normalize npu_moe_distribute_combine_v2 args to backend schema order."""
+    kwargs = node.kwargs
+    args = node.args
+
+    def _kw_or_pos(name, pos, default):
+        if name in kwargs:
+            return kwargs[name]
+        if len(args) > pos:
+            return args[pos]
+        return default
+
+    expand_x = _kw_or_pos("expand_x", 0, input_nodes[0] if len(input_nodes) > 0 else None)
+    expert_ids = _kw_or_pos("expert_ids", 1, input_nodes[1] if len(input_nodes) > 1 else None)
+    assist_info_for_combine = _kw_or_pos(
+        "assist_info_for_combine", 2, input_nodes[2] if len(input_nodes) > 2 else None
+    )
+    ep_send_counts = _kw_or_pos("ep_send_counts", 3, input_nodes[3] if len(input_nodes) > 3 else None)
+    expert_scales = _kw_or_pos("expert_scales", 4, input_nodes[4] if len(input_nodes) > 4 else None)
+    group_ep = _kw_or_pos("group_ep", 5, "")
+    ep_world_size = _kw_or_pos("ep_world_size", 6, 0)
+    ep_rank_id = _kw_or_pos("ep_rank_id", 7, 0)
+    moe_expert_num = _kw_or_pos("moe_expert_num", 8, 0)
+    tp_send_counts = _kw_or_pos("tp_send_counts", 9, None)
+    x_active_mask = _kw_or_pos("x_active_mask", 10, None)
+    expand_scales = _kw_or_pos("expand_scales", 11, None)
+    shared_expert_x = _kw_or_pos("shared_expert_x", 12, None)
+    elastic_info = _kw_or_pos("elastic_info", 13, None)
+    ori_x = _kw_or_pos("ori_x", 14, None)
+    const_expert_alpha_1 = _kw_or_pos("const_expert_alpha_1", 15, None)
+    const_expert_alpha_2 = _kw_or_pos("const_expert_alpha_2", 16, None)
+    const_expert_v = _kw_or_pos("const_expert_v", 17, None)
+    performance_info = _kw_or_pos("performance_info", 18, None)
+    group_tp = _kw_or_pos("group_tp", 19, "")
+    tp_world_size = _kw_or_pos("tp_world_size", 20, 0)
+    tp_rank_id = _kw_or_pos("tp_rank_id", 21, 0)
+    expert_shard_type = _kw_or_pos("expert_shard_type", 22, 0)
+    shared_expert_num = _kw_or_pos("shared_expert_num", 23, 1)
+    shared_expert_rank_num = _kw_or_pos("shared_expert_rank_num", 24, 0)
+    global_bs = _kw_or_pos("global_bs", 25, 0)
+    comm_quant_mode = _kw_or_pos("comm_quant_mode", 26, 0)
+    comm_alg = _kw_or_pos("comm_alg", 27, "")
+    zero_expert_num = _kw_or_pos("zero_expert_num", 28, 0)
+    copy_expert_num = _kw_or_pos("copy_expert_num", 29, 0)
+    const_expert_num = _kw_or_pos("const_expert_num", 30, 0)
+
+    return [
+        expand_x,
+        expert_ids,
+        assist_info_for_combine,
+        ep_send_counts,
+        expert_scales,
+        tp_send_counts,
+        x_active_mask,
+        expand_scales,
+        shared_expert_x,
+        elastic_info,
+        ori_x,
+        const_expert_alpha_1,
+        const_expert_alpha_2,
+        const_expert_v,
+        performance_info,
+        group_ep,
+        ep_world_size,
+        ep_rank_id,
+        moe_expert_num,
+        group_tp,
+        tp_world_size,
+        tp_rank_id,
+        expert_shard_type,
+        shared_expert_num,
+        shared_expert_rank_num,
+        global_bs,
+        comm_quant_mode,
+        comm_alg,
+        zero_expert_num,
+        copy_expert_num,
+        const_expert_num,
+    ]
+
+
+# pylint: disable=unused-argument
 def div_mod_arg_hook(node, input_nodes, executor):
     """add div mode parameter."""
     if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
@@ -497,6 +579,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.div_mod_scalar, div_mod_arg_hook)
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(Op.moe_gating_top_k, moe_gating_top_k_hook)
+    register_arg_mapping_hook(Op.moe_distribute_combine_v2, moe_distribute_combine_v2_hook)
     register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
@@ -1061,6 +1144,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_swiglu: Op.swiglu,
         torch.ops.npu.npu_moe_gating_top_k: Op.moe_gating_top_k,
         torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
+        torch.ops.npu.npu_moe_distribute_combine_v2: Op.moe_distribute_combine_v2,
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
         torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
