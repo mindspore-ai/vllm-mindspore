@@ -40,7 +40,6 @@ class AclnnExecutor {
  public:
   explicit AclnnExecutor(const std::string &opApiName) : opApiName_(opApiName) {
     getWorkspaceSizeApiName_ = opApiName_ + kNameGetWorkspaceSize;
-    cacheEntryManager_ = ir::MakeIntrusive<CacheEntryManager>();
     AclnnInit();
 
     const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
@@ -70,9 +69,6 @@ class AclnnExecutor {
     cacheEntry_ = cacheEntryManager_->GetCacheEntry(hashId);
     if (cacheEntry_ != nullptr) {
       LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId << "  op" << opApiName_;
-      if (!IsEnableGroupLaunch()) {
-        CallUpdateAddr(cacheEntry_, args...);
-      }
       *workspaceSize = cacheEntry_->GetWorkspaceSize();
       return;
     }
@@ -94,9 +90,7 @@ class AclnnExecutor {
   template <typename... Args>
   void Launch(void *workspace, size_t workspaceSize, void *stream, const Args &...args) {
     if (cacheEntry_ != nullptr) {
-      if (IsEnableGroupLaunch()) {
-        CallUpdateAddr(cacheEntry_, args...);
-      }
+      CallUpdateAddr(cacheEntry_, args...);
       RunOpApi(workspace, workspaceSize, cacheEntry_->GetExecutor(), stream);
       return;
     }
@@ -149,7 +143,7 @@ class AclnnExecutor {
   std::string opApiName_;
   std::string getWorkspaceSizeApiName_;
   CacheEntryPtr cacheEntry_{nullptr};
-  CacheEntryManagerPtr cacheEntryManager_{nullptr};
+  static inline CacheEntryManagerPtr cacheEntryManager_{ir::MakeIntrusive<CacheEntryManager>()};
   aclOpExecutor *opExecutor_{nullptr};
   std::function<void()> releaseParamsFunc_{nullptr};
   RunOpApiFunc opApiFunc_{nullptr};

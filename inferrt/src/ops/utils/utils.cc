@@ -21,28 +21,36 @@
 namespace mrt {
 namespace ops {
 
-size_t GetOpsCacheCapacity() {
-  static const size_t capacity = []() -> size_t {
-    constexpr const char *kEnvName = "MS_INFERRT_OPS_CACHE_CAPACITY";
-    constexpr size_t kDefaultCapacity = 64;
+namespace {
+constexpr size_t kDefaultAtbCacheCapacity = 64;
+constexpr size_t kDefaultAclnnCacheCapacity = 10000;
 
-    size_t resolved = kDefaultCapacity;
-    auto env = GetEnv(kEnvName);
-    if (!env.empty() && IsPositiveInteger(env)) {
-      try {
-        size_t value = std::stoull(env);
-        if (value != 0) {
-          resolved = value;
-        }
-      } catch (...) {
-        resolved = kDefaultCapacity;
+size_t ResolveCacheCapacity(const char *envName, size_t defaultCapacity, const char *cacheNameForLog) {
+  size_t resolved = defaultCapacity;
+  auto env = GetEnv(envName);
+  if (!env.empty() && IsPositiveInteger(env)) {
+    try {
+      size_t value = std::stoull(env);
+      if (value != 0) {
+        resolved = value;
       }
+    } catch (...) {
+      resolved = defaultCapacity;
     }
+  }
+  LOG_OUT << cacheNameForLog << " cache capacity : " << resolved;
+  return resolved;
+}
+}  // namespace
 
-    LOG_OUT << "Ops cache capacity : " << resolved;
-    return resolved;
-  }();
+size_t GetAtbCacheCapacity() {
+  static const size_t capacity = ResolveCacheCapacity("MS_INFERRT_ATB_CACHE_CAPACITY", kDefaultAtbCacheCapacity, "ATB");
+  return capacity;
+}
 
+size_t GetAclnnCacheCapacity() {
+  static const size_t capacity =
+    ResolveCacheCapacity("MS_INFERRT_ACLNN_CACHE_CAPACITY", kDefaultAclnnCacheCapacity, "ACLNN");
   return capacity;
 }
 

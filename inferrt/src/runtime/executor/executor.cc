@@ -309,8 +309,9 @@ void GraphExecutor::RecordTensorRefCount() {
 // Run the built graph.
 void GraphExecutor::RunGraph(bool isDynamic) {
   CHECK_IF_NULL(executor_);
-  LOG_OUT << "Run graph: " << name_ << ", isDynamic: " << isDynamic;
+  LOG_OUT << "Start run graph: " << name_ << ", isDynamic: " << isDynamic;
   executor_->Run(isDynamic);
+  LOG_OUT << "End run graph: " << name_;
 }
 
 ir::ValuePtr GraphExecutor::GetOutput() const { return executor_->GetOutput(); }

@@ -69,10 +69,7 @@ class CacheEntryManager : public ir::RefCounted {
 
   void AddCacheEntry(uint64_t hashId, const CacheEntryPtr &cacheEntry) {
     CHECK_IF_NULL(cacheEntry);
-    if (cacheCapacity_ == 0) {
-      hashId_ = hashId;
-      cacheEntry_ = cacheEntry;
-      LOG_OUT << "Add cache entry for hashId: " << hashId;
+    if (cacheCapacity_ == 0 || hashId == 0) {
       return;
     }
     cacheList_.emplace_front(cacheEntry);
@@ -81,20 +78,17 @@ class CacheEntryManager : public ir::RefCounted {
       cacheMap_.erase(cacheList_.back()->GetHashId());
       cacheList_.pop_back();
     }
-    LOG_OUT << "Add cache entry for hashId: " << hashId;
+    LOG_OUT << "Add cache entry, hashId: " << hashId << ", cacheSize: " << cacheList_.size();
   }
 
   CacheEntryPtr GetCacheEntry(uint64_t hashId) {
-    if (cacheCapacity_ == 0) {
-      if (hashId == hashId_) {
-        LOG_OUT << "Get cache entry for hashId: " << hashId;
-        return cacheEntry_;
-      }
+    if (cacheCapacity_ == 0 || hashId == 0) {
+      LOG_OUT << "Get cache entry skipped, cacheCapacity: " << cacheCapacity_ << ", hashId: " << hashId;
       return nullptr;
     }
     auto it = cacheMap_.find(hashId);
     if (it != cacheMap_.end()) {
-      LOG_OUT << "Get cache entry for hashId: " << hashId;
+      LOG_OUT << "Get cache entry, hashId: " << hashId << ", cacheSize: " << cacheList_.size();
       return *it->second;
     }
     return nullptr;
@@ -102,10 +96,7 @@ class CacheEntryManager : public ir::RefCounted {
 
  private:
   DISABLE_COPY_AND_ASSIGN(CacheEntryManager)
-
-  inline static size_t cacheCapacity_{GetOpsCacheCapacity()};
-  uint64_t hashId_{0};
-  CacheEntryPtr cacheEntry_{nullptr};
+  inline static size_t cacheCapacity_{GetAclnnCacheCapacity()};
   std::list<CacheEntryPtr> cacheList_;
   std::unordered_map<uint64_t, std::list<CacheEntryPtr>::iterator> cacheMap_;
 };
