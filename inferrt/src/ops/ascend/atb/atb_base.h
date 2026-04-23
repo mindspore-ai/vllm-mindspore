@@ -40,7 +40,7 @@ struct AtbCacheEntry {
 class MRT_EXPORT AtbBase : public Operator {
  public:
   explicit AtbBase(const std::string &op_name)
-      : op_name_(op_name), current_hash_id_(0), op_(nullptr), cache_capacity_(GetOpsCacheCapacity()) {}
+      : op_name_(op_name), current_hash_id_(0), op_(nullptr), cache_capacity_(GetAtbCacheCapacity()) {}
   ~AtbBase() override;
 
   OpsErrorCode CalcWorkspace(const std::vector<const ir::Value *> &inputs, const ir::Value *output,

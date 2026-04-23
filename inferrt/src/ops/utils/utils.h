@@ -26,8 +26,10 @@
 namespace mrt {
 namespace ops {
 using ir::MemoryFormat;
-/// Ops cache capacity for OPS; from env MS_INFERRT_OPS_CACHE_CAPACITY, default 64.
-MRT_EXPORT size_t GetOpsCacheCapacity();
+/// Cache capacity for ATB; from env MS_INFERRT_ATB_CACHE_CAPACITY, default 64.
+MRT_EXPORT size_t GetAtbCacheCapacity();
+/// Cache capacity for ACLNN; from env MS_INFERRT_ACLNN_CACHE_CAPACITY, default 10000.
+MRT_EXPORT size_t GetAclnnCacheCapacity();
 MRT_EXPORT void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int64_t> &yShape,
                                   std::vector<int64_t> *broadcastShape);
 MRT_EXPORT bool IsBaseFormat(MemoryFormat format);
