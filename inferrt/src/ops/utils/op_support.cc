@@ -102,7 +102,8 @@ std::string FindMrtDialectJsonPath() {
       if (f.good()) {
         return candidate;
       }
-      LOG_ERROR << "MrtDialect.json not found or unreadable at: " << candidate;
+      // TODO(jiaorui): LOG LEVEL
+      LOG_OUT << "MrtDialect.json not found or unreadable at: " << candidate;
     } else {
       LOG_ERROR << "Cannot get lib directory from path (no directory separator): " << libPath;
     }

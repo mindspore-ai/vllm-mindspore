@@ -92,7 +92,7 @@ bool DynamicLibLoader::LoadDynamicLib(const std::string &dlName, std::stringstre
   void *handle = dlopen((filePath_ + "/" + dlName).c_str(), RTLD_LAZY | RTLD_LOCAL);
   if (handle == nullptr) {
     std::string errMsgStr = GetErrorMsg();
-    LOG_ERROR << "Load dynamic library: " << dlName << " failed. " << errMsgStr;
+    LOG_OUT << "Load dynamic library: " << dlName << " failed. " << errMsgStr;
     *errMsg << "Load dynamic library: " << dlName << " failed. " << errMsgStr << std::endl;
     return false;
   }
