@@ -768,7 +768,7 @@ def reduce_sum_arg_hook(node, flat_args, executor):
             try:
                 rank = int(example.dim())
                 dims = list(range(rank))
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 dims = []
         else:
             dims = []
@@ -777,7 +777,7 @@ def reduce_sum_arg_hook(node, flat_args, executor):
             try:
                 rank = int(example.dim())
                 dims = list(range(rank))
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 dims = []
         else:
             dims = []
@@ -797,7 +797,7 @@ def reduce_sum_arg_hook(node, flat_args, executor):
         elif hasattr(example, "dtype"):
             try:
                 dtype = example.dtype
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 pass
 
     return [self_arg, dims, keepdim, dtype]
@@ -1508,7 +1508,8 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if (node.target in ["view", "reshape", "repeat", "permute"] or node.target is torch.functional.einsum) \
+    if (node.target in ["view", "reshape", "repeat", "permute", "new_empty"]
+            or node.target is torch.functional.einsum) \
             and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
 
