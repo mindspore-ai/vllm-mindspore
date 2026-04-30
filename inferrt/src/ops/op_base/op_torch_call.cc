@@ -407,7 +407,8 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
   // Define type kind to check function map
   static const std::unordered_map<c10::TypeKind, std::function<bool(const ir::Value *)>> typeCheckMap = {
     {c10::TypeKind::TensorType, [](const ir::Value *val) { return val->IsTensor(); }},
-    {c10::TypeKind::NumberType, [](const ir::Value *val) { return val->IsDouble() || val->IsInt(); }},
+    {c10::TypeKind::NumberType,
+     [](const ir::Value *val) { return val->IsDouble() || val->IsInt() || val->IsSymbol(); }},
     {c10::TypeKind::IntType, [](const ir::Value *val) { return val->IsInt() || val->IsSymbol(); }},
     {c10::TypeKind::BoolType, [](const ir::Value *val) { return val->IsBool(); }},
     {c10::TypeKind::FloatType, [](const ir::Value *val) { return val->IsDouble(); }},
@@ -430,7 +431,8 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
     bool match = (it != typeCheckMap.end()) ? it->second(inputs[j]) : false;
     if (!match && type->kind() != c10::TypeKind::DeviceObjType) {
       LOG(ERROR) << "Invalid args " << i << ":" << args[i] << " type:" << type
-                 << " kind:" << typeid(type->kind()).name() << " input " << j << ":" << *inputs[j] << " ";
+                 << " kind:" << typeid(type->kind()).name() << " input " << j << ":"
+                 << TagToString(inputs[j]->GetTag());
       return false;
     }
   }
@@ -462,6 +464,7 @@ std::string OpTorchCall::GetAvailableTorchOps() const {
 void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   auto ops = torch::jit::getAllOperatorsFor(torch::jit::Symbol::fromQualString(qualifiedOpName_));
   for (auto &op : ops) {
+    LOG_OUT << "Start schema " << op->schema();
     if (MatchOpSchema(inputs, op)) {
       operation_ = op->getOperation();
       break;
