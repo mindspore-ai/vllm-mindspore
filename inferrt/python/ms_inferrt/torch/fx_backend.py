@@ -1307,6 +1307,12 @@ def _argument_to_real_value(value_type, value, arg_len):
         if not arg_len:
             return [value]
         return [value for _ in range(arg_len)]
+
+    # Handle Device string conversion
+    type_name = str(type(value_type).__name__) + str(value_type)
+    if "Device" in type_name and isinstance(value, str):
+        return torch.device(value)
+
     return value
 
 
@@ -1416,7 +1422,7 @@ def _check_runtime_value_against_type(value_type, runtime_v: Any) -> bool:
     # Device / Layout / MemoryFormat like enum types
     type_name = str(type(value_type).__name__) + str(value_type)
     if "Device" in type_name:
-        return isinstance(runtime_v, torch.device)
+        return isinstance(runtime_v, (torch.device, str))
     if "Layout" in type_name:
         return isinstance(runtime_v, torch.layout)
     if "MemoryFormat" in type_name:
