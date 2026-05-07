@@ -44,5 +44,13 @@ const std::set<ops::Op> forceResizeOpsSet = {
   ops::Op_paged_attention,
 };
 
+// Check whether AclGraph mode is enabled (result is cached after the first call).
+bool IsAclGraphEnabled() {
+  static bool ret = []() {
+    static const char *enable_acl_graph = std::getenv(mrt::runtime::kEnableAclGraphEnv);
+    return (enable_acl_graph != nullptr) && (std::string_view(enable_acl_graph) == "on");
+  }();
+  return ret;
+}
 }  // namespace runtime
 }  // namespace mrt

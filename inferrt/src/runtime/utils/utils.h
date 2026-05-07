@@ -21,16 +21,24 @@
 #include <unordered_map>
 
 #include "common/common.h"
+#include "common/visible.h"
 #include "ir/graph.h"
 
 namespace mrt {
 namespace runtime {
+// Environment variable config keys
+constexpr const char kEnableAclGraphEnv[] = "MS_INFERRT_ENABLE_ACLGRAPH";  // set value `on` to enable aclgraph
+
+// Canonical input position indices
 constexpr size_t kFirstInput = 0;
 constexpr size_t kSecondInput = 1;
 extern const std::unordered_map<ops::Op, size_t> opsOutputFromInputIndex;
 extern const std::unordered_map<ops::Op, size_t> opsOutputValueFromInputIndex;
 extern const std::set<ops::Op> dummyOpsSet;
 extern const std::set<ops::Op> forceResizeOpsSet;
+
+// Check whether AclGraph mode is enabled via environment variable (cached on first call).
+MRT_EXPORT bool IsAclGraphEnabled();
 
 inline bool IsSkipRecordRefCount(ir::NodePtr tensor) {
   CHECK_IF_NULL(tensor);

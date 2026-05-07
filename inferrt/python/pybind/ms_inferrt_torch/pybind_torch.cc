@@ -19,6 +19,13 @@
 
 #include <pybind11/pybind11.h>  // Bridge
 #include <torch/extension.h>
+#include <cstdint>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <utility>
 
@@ -42,6 +49,8 @@
 #include "hardware/hardware_abstract/device_context.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
+#include "runtime/executor/kernel_capture/kernel_capture_executor.h"
+#include "runtime/utils/utils.h"
 
 namespace nb = nanobind;
 namespace ir = mrt::ir;
@@ -50,6 +59,384 @@ namespace hardware = mrt::hardware;
 PYBIND11_DECLARE_HOLDER_TYPE(T, ir::IntrusivePtr<T>, true);
 
 namespace {
+using CaptureId_t = mrt::runtime::CaptureId_t;
+using MempoolId_t = mrt::runtime::MempoolId_t;
+using KernelCaptureExecutorManager = mrt::runtime::KernelCaptureExecutorManager;
+ir::DataType FromTorchDType(const at::ScalarType &type);
+hardware::Device FromTorchDevice(const at::Device &device);
+void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h);
+
+// Per-graph cache for AclGraph input staticization.
+// During capture, runtime inputs are cloned into stable tensors so that the
+// captured graph always sees the same device addresses.  During replay, new
+// inputs are copied into those stable tensors in-place.
+struct GraphInputStaticCache {
+  std::mutex mutex;
+  bool indices_initialized{false};
+  std::vector<size_t> tensor_input_indices;  // indices of non-parameter tensor inputs
+  std::vector<size_t> other_input_indices;   // indices of parameter / non-tensor inputs
+  std::unordered_map<std::string, std::vector<at::Tensor>> static_tensors_by_shape;
+};
+
+// Global registry of per-graph input caches, keyed by graph identity.
+std::mutex g_network_input_cache_mutex;
+std::unordered_map<uintptr_t, std::shared_ptr<GraphInputStaticCache>> g_network_input_static_cache;
+
+// Retrieve the IR input node at `index` from the Python-side param_nodes list.
+ir::NodePtr GetInputNode(const nb::list &param_nodes, size_t index) {
+  const auto &mrt_node = nb::cast<ir::NodePtr>(param_nodes[index]);
+  CHECK_IF_NULL(mrt_node);
+  CHECK_IF_NULL(mrt_node->output);
+  return mrt_node;
+}
+
+// Update a single input value at `index` from new_inputs into the IR graph.
+void UpdateInputValue(const nb::list &param_nodes, const nb::tuple &new_inputs, size_t index) {
+  auto mrt_node = GetInputNode(param_nodes, index);
+  UpdateMrtValue(mrt_node->output, new_inputs[index]);
+}
+
+// Update all inputs directly (non-AclGraph path).
+void UpdateInputsDirectly(const nb::list &param_nodes, const nb::tuple &new_inputs) {
+  for (size_t i = 0; i < param_nodes.size(); ++i) {
+    UpdateInputValue(param_nodes, new_inputs, i);
+  }
+}
+
+// Update only the inputs at the specified indices.
+void UpdateIndexedInputs(const nb::list &param_nodes, const nb::tuple &new_inputs, const std::vector<size_t> &indices) {
+  for (const auto input_idx : indices) {
+    UpdateInputValue(param_nodes, new_inputs, input_idx);
+  }
+}
+
+// Try to cast a Python handle to at::Tensor; returns false on failure.
+bool TryCastTorchTensor(nb::handle h, at::Tensor *tensor) {
+  try {
+    pybind11::handle ph(h.ptr());
+    *tensor = ph.cast<at::Tensor>();
+    return true;
+  } catch (const pybind11::cast_error &) {
+    return false;
+  }
+}
+
+// Parse the per-input "is parameter" flags from a Python list/tuple, or return all-false if None.
+std::vector<bool> ParseInputIsParameter(const nb::object &input_is_parameter, size_t expected_size) {
+  std::vector<bool> flags(expected_size, false);
+  if (input_is_parameter.is_none()) {
+    return flags;
+  }
+
+  if (nb::isinstance<nb::list>(input_is_parameter)) {
+    auto list = nb::cast<nb::list>(input_is_parameter);
+    if (list.size() != expected_size) {
+      LOG_EXCEPTION << "Expected " << expected_size << " parameter flags, but received " << list.size();
+    }
+    for (size_t i = 0; i < expected_size; ++i) {
+      flags[i] = nb::cast<bool>(list[i]);
+    }
+    return flags;
+  }
+
+  if (nb::isinstance<nb::tuple>(input_is_parameter)) {
+    auto tuple = nb::cast<nb::tuple>(input_is_parameter);
+    if (tuple.size() != expected_size) {
+      LOG_EXCEPTION << "Expected " << expected_size << " parameter flags, but received " << tuple.size();
+    }
+    for (size_t i = 0; i < expected_size; ++i) {
+      flags[i] = nb::cast<bool>(tuple[i]);
+    }
+    return flags;
+  }
+
+  LOG_EXCEPTION << "input_is_parameter must be a list, tuple, or None";
+  return flags;
+}
+
+// Parse the non-parameter tensor input indices from a Python list/tuple, or return empty if None.
+std::vector<size_t> ParseNonParameterTensorIndices(const nb::object &indices_object, size_t expected_size) {
+  std::vector<size_t> indices;
+  if (indices_object.is_none()) {
+    return indices;
+  }
+
+  auto push_index = [&](size_t idx) {
+    if (idx >= expected_size) {
+      LOG_EXCEPTION << "Non-parameter tensor input index out of range: " << idx << ", input size: " << expected_size;
+    }
+    indices.emplace_back(idx);
+  };
+
+  if (nb::isinstance<nb::list>(indices_object)) {
+    auto list = nb::cast<nb::list>(indices_object);
+    indices.reserve(list.size());
+    for (size_t i = 0; i < list.size(); ++i) {
+      push_index(nb::cast<size_t>(list[i]));
+    }
+    return indices;
+  }
+
+  if (nb::isinstance<nb::tuple>(indices_object)) {
+    auto tuple = nb::cast<nb::tuple>(indices_object);
+    indices.reserve(tuple.size());
+    for (size_t i = 0; i < tuple.size(); ++i) {
+      push_index(nb::cast<size_t>(tuple[i]));
+    }
+    return indices;
+  }
+
+  LOG_EXCEPTION << "non_parameter_tensor_indices must be a list, tuple, or None";
+  return indices;
+}
+
+// Derive a graph-identity key: use the explicitly provided key, or fall back to the first node's address.
+uintptr_t ParseGraphKey(const nb::object &graph_key_object, const nb::list &param_nodes) {
+  if (!graph_key_object.is_none()) {
+    return nb::cast<uintptr_t>(graph_key_object);
+  }
+  if (param_nodes.empty()) {
+    return 0;
+  }
+  auto first_node = nb::cast<ir::NodePtr>(param_nodes[0]);
+  return reinterpret_cast<uintptr_t>(first_node.get());
+}
+
+// Build a dash-separated shape key (e.g. "2-3-4-5") from tensor inputs for shape-based cache lookup.
+std::string BuildGraphInputShapeKey(const nb::tuple &new_inputs, const std::vector<size_t> &tensor_input_indices,
+                                    size_t *valid_tensor_count) {
+  std::stringstream ss;
+  bool first = true;
+  size_t valid_count = 0;
+  for (const auto input_idx : tensor_input_indices) {
+    at::Tensor runtime_tensor;
+    if (!TryCastTorchTensor(new_inputs[input_idx], &runtime_tensor)) {
+      continue;
+    }
+    ++valid_count;
+    const auto &shape = runtime_tensor.sizes();
+    for (const auto &dim : shape) {
+      if (!first) {
+        ss << "-";
+      }
+      ss << dim;
+      first = false;
+    }
+  }
+  if (valid_tensor_count != nullptr) {
+    *valid_tensor_count = valid_count;
+  }
+  return ss.str();
+}
+
+// One-time initialization of tensor/other input index partitioning for a graph cache.
+// Tensor inputs will be staticized (cloned + copy_); other inputs are updated directly.
+void InitializeGraphInputIndices(GraphInputStaticCache *graph_cache, size_t expected_size,
+                                 const nb::object &input_is_parameter, const nb::object &non_parameter_tensor_indices,
+                                 const nb::tuple &new_inputs) {
+  CHECK_IF_NULL(graph_cache);
+  if (graph_cache->indices_initialized) {
+    return;
+  }
+
+  // Determine tensor input indices from explicit hint or by inspecting parameter flags + types.
+  auto tensor_indices = ParseNonParameterTensorIndices(non_parameter_tensor_indices, expected_size);
+  if (tensor_indices.empty()) {
+    auto parameter_flags = ParseInputIsParameter(input_is_parameter, expected_size);
+    tensor_indices.reserve(expected_size);
+    for (size_t i = 0; i < expected_size; ++i) {
+      if (parameter_flags[i]) {
+        continue;
+      }
+      at::Tensor runtime_tensor;
+      if (TryCastTorchTensor(new_inputs[i], &runtime_tensor)) {
+        tensor_indices.emplace_back(i);
+      }
+    }
+  }
+
+  graph_cache->tensor_input_indices = std::move(tensor_indices);
+
+  // Derive the complement: non-tensor inputs that are updated directly each call.
+  std::vector<uint8_t> tensor_index_mask(expected_size, 0);
+  for (const auto idx : graph_cache->tensor_input_indices) {
+    if (idx >= expected_size) {
+      LOG_EXCEPTION << "Tensor input index out of range: " << idx << ", input size: " << expected_size;
+    }
+    tensor_index_mask[idx] = 1;
+  }
+
+  graph_cache->other_input_indices.clear();
+  graph_cache->other_input_indices.reserve(expected_size - graph_cache->tensor_input_indices.size());
+  for (size_t i = 0; i < expected_size; ++i) {
+    if (tensor_index_mask[i] == 0) {
+      graph_cache->other_input_indices.emplace_back(i);
+    }
+  }
+  graph_cache->indices_initialized = true;
+}
+
+// Check whether a cached static tensor must be re-created (metadata mismatch) instead of copy-in-place.
+bool NeedRecreateStaticTensor(const at::Tensor &cached_tensor, const at::Tensor &runtime_tensor) {
+  if (!cached_tensor.defined()) {
+    return true;
+  }
+  if (cached_tensor.scalar_type() != runtime_tensor.scalar_type() ||
+      cached_tensor.device() != runtime_tensor.device()) {
+    return true;
+  }
+  if (cached_tensor.sizes().vec() != runtime_tensor.sizes().vec()) {
+    return true;
+  }
+  if (cached_tensor.strides().vec() != runtime_tensor.strides().vec()) {
+    return true;
+  }
+  return false;
+}
+
+// Remove the static cache entry for a given graph key.
+void ClearGraphInputStaticCache(uintptr_t graph_key) {
+  std::lock_guard<std::mutex> lock(g_network_input_cache_mutex);
+  (void)g_network_input_static_cache.erase(graph_key);
+}
+
+// Get or create the per-graph input cache.
+std::shared_ptr<GraphInputStaticCache> GetOrCreateGraphCache(uintptr_t graph_key) {
+  std::lock_guard<std::mutex> lock(g_network_input_cache_mutex);
+  auto &graph_cache_slot = g_network_input_static_cache[graph_key];
+  if (graph_cache_slot == nullptr) {
+    graph_cache_slot = std::make_shared<GraphInputStaticCache>();
+  }
+  return graph_cache_slot;
+}
+
+// Update an IR tensor's metadata and data pointer from a PyTorch tensor.
+void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor) {
+  ir::DataType type = FromTorchDType(at_tensor.scalar_type());
+  std::vector<int64_t> shape(at_tensor.sizes().begin(), at_tensor.sizes().end());
+  void *data = at_tensor.data_ptr();
+
+  auto device = tensor->GetDevice();
+  if (device != FromTorchDevice(at_tensor.device())) {
+    LOG_EXCEPTION << "Device mismatch in update_tensor";
+  }
+
+#ifdef ENABLE_TORCH_NPU
+  if (device.type == hardware::DeviceType::NPU) {
+    auto npuFormat = at_npu::native::get_npu_format(at_tensor);
+    tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
+    tensor->SetStrides(at_tensor.strides().vec());
+    // data_ptr() returns the offset-adjusted pointer, so set storage_offset to 0
+    // to avoid double-counting the offset in Tensor::DataPtr()
+    tensor->SetStorageOffset(0);
+    tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(at_tensor));
+    LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format()) << ", strides=" << tensor->Strides()
+            << ", storageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
+            << ", isView=" << at_tensor.is_view() << " at.tensor.shape: " << at_tensor.sizes();
+  }
+#endif
+
+  tensor->SetOwnsStorage(false);
+  tensor->SetDtype(type);
+  tensor->SetShape(std::move(shape));
+  tensor->Resize();
+  // PyTorch may return nullptr from data_ptr() for 0-element tensors; that is valid.
+  if (at_tensor.numel() > 0) {
+    CHECK_IF_NULL(data);
+  }
+  tensor->UpdateData(data);
+  tensor->GetStorage()->Resize(at_tensor.storage().nbytes());
+}
+
+// Install a lazy updater that reads the current value of a Python-side tensor handle on each invocation.
+void UpdateTensorWithHandle(const ir::TensorPtr &self, nb::handle h) {
+  self->SetUpdater([h](ir::Tensor *tensor) {
+    pybind11::handle ph(h.ptr());
+    at::Tensor at_tensor = ph.cast<at::Tensor>();
+    UpdateTensorFromTorchTensor(tensor, at_tensor);
+  });
+}
+
+// Install a lazy updater that reads from a stable (cached) at::Tensor pointer.
+void UpdateTensorWithTorchTensor(const ir::TensorPtr &self, const at::Tensor *at_tensor) {
+  self->SetUpdater([at_tensor](ir::Tensor *tensor) {
+    CHECK_IF_NULL(at_tensor);
+    UpdateTensorFromTorchTensor(tensor, *at_tensor);
+  });
+}
+
+// Look up or create a cached tensor vector for the given shape key.
+// During capture, a new entry is always created; during replay, only existing entries are returned.
+std::vector<at::Tensor> *GetCachedTensorInputs(std::unordered_map<std::string, std::vector<at::Tensor>> *shape_cache,
+                                               const std::string &shape_key, size_t tensor_input_size,
+                                               bool in_capture) {
+  CHECK_IF_NULL(shape_cache);
+  if (in_capture) {
+    auto &capture_cached_inputs = (*shape_cache)[shape_key];
+    if (capture_cached_inputs.size() < tensor_input_size) {
+      capture_cached_inputs.resize(tensor_input_size);
+    }
+    return &capture_cached_inputs;
+  }
+
+  auto cache_it = shape_cache->find(shape_key);
+  if (cache_it == shape_cache->end()) {
+    return nullptr;
+  }
+  return &(cache_it->second);
+}
+
+// Update a single tensor input for AclGraph capture/replay.
+// In capture: clone or copy_ the runtime tensor into the cached slot.
+// In replay:  copy_ the runtime tensor into the already-allocated cached slot.
+void UpdateTensorInputForCaptureOrReplay(const nb::list &param_nodes, const nb::tuple &new_inputs, size_t input_idx,
+                                         at::Tensor *cached_tensor, bool in_capture) {
+  auto mrt_node = GetInputNode(param_nodes, input_idx);
+  CHECK_IF_NULL(cached_tensor);
+
+  at::Tensor runtime_tensor;
+  if (!TryCastTorchTensor(new_inputs[input_idx], &runtime_tensor)) {
+    // Non-tensor input (e.g. scalar): update directly.
+    UpdateMrtValue(mrt_node->output, new_inputs[input_idx]);
+    return;
+  }
+
+  if (in_capture) {
+    if (!cached_tensor->defined() || NeedRecreateStaticTensor(*cached_tensor, runtime_tensor)) {
+      *cached_tensor = runtime_tensor.clone();
+    } else {
+      cached_tensor->copy_(runtime_tensor, /*non_blocking=*/true);
+    }
+  } else {
+    if (!cached_tensor->defined()) {
+      LOG_EXCEPTION << "The cache tensor must be valid in replay phase.";
+    }
+    cached_tensor->copy_(runtime_tensor, /*non_blocking=*/true);
+  }
+
+  if (!mrt_node->output->IsTensor()) {
+    LOG_EXCEPTION << "Only support to staticize tensor input for copy, but got: " << mrt_node->output;
+  }
+  // Bind the IR tensor to the stable cached tensor so the captured graph sees a fixed address.
+  UpdateTensorWithTorchTensor(mrt_node->output->ToTensor(), cached_tensor);
+}
+
+// Update all tensor inputs for AclGraph capture/replay.
+void UpdateTensorInputsForCaptureOrReplay(const nb::list &param_nodes, const nb::tuple &new_inputs,
+                                          const std::vector<size_t> &tensor_input_indices,
+                                          std::vector<at::Tensor> *cached_inputs, bool in_capture) {
+  CHECK_IF_NULL(cached_inputs);
+  for (size_t pos = 0; pos < tensor_input_indices.size(); ++pos) {
+    const auto input_idx = tensor_input_indices[pos];
+    if (pos >= cached_inputs->size()) {
+      // No cached slot available; fall back to direct update.
+      UpdateInputValue(param_nodes, new_inputs, input_idx);
+      continue;
+    }
+    UpdateTensorInputForCaptureOrReplay(param_nodes, new_inputs, input_idx, &((*cached_inputs)[pos]), in_capture);
+  }
+}
+
 // DataType conversion utilities
 
 static const std::map<at::ScalarType, ir::DataType> kAtScalarTypeToDataTypeMap = {
@@ -186,6 +573,9 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
 }
 
 ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
+  // Need wait all ops launch task finish before launch async copy task for graph output to stream.
+  mrt::WaitLaunchTaskFinish();
+
   LOG_OUT << "Begin copy storage: " << srcStorage.get();
   auto device = srcStorage->GetDevice();
   auto storage = ir::MakeIntrusive<ir::Storage>(srcStorage->SizeBytes(), device);
@@ -213,12 +603,15 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   tensor->Update();
   auto storage = tensor->GetStorage();
   if (!storage->CheckOwnsData()) {
-    auto &waitLaunchFinish = mrt::ops::OpAsync::GetWaitLaunchFinishFunc();
-    if (waitLaunchFinish != nullptr) {
-      waitLaunchFinish();
-    }
     // Parameter or tensor which references a parameter is graph output.
     storage = CopyStorage(storage);
+  } else if (KernelCaptureExecutorManager::GetInstance().InCapture() ||
+             KernelCaptureExecutorManager::GetInstance().InReplay()) {
+    // Note: can refine by copy new output value of return node.
+    auto newStorage = CopyStorage(storage);
+    // Note: can not free output memory here after end alloc func(end capture.) or in peplay phase.
+    // storage->FreeMemory();
+    storage = newStorage;
   }
 
   void *dataPtr = storage->Data();
@@ -278,47 +671,7 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   }
 }
 
-void UpdateTensor(const ir::TensorPtr &self, nb::handle h) {
-  self->SetUpdater([h](ir::Tensor *tensor) {
-    pybind11::handle ph(h.ptr());
-    at::Tensor atTensor = ph.cast<at::Tensor>();
-
-    ir::DataType type = FromTorchDType(atTensor.scalar_type());
-    std::vector<int64_t> shape(atTensor.sizes().begin(), atTensor.sizes().end());
-    void *data = atTensor.data_ptr();
-
-    auto device = tensor->GetDevice();
-    if (device != FromTorchDevice(atTensor.device())) {
-      LOG_EXCEPTION << "Device mismatch in update_tensor";
-    }
-
-#ifdef ENABLE_TORCH_NPU
-    if (device.type == hardware::DeviceType::NPU) {
-      auto npuFormat = at_npu::native::get_npu_format(atTensor);
-      tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
-      tensor->SetStrides(atTensor.strides().vec());
-      // data_ptr() returns the offset-adjusted pointer, so set storage_offset to 0
-      // to avoid double-counting the offset in Tensor::DataPtr()
-      tensor->SetStorageOffset(0);
-      tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
-      LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format()) << ", strides=" << tensor->Strides()
-              << ", storageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
-              << ", isView=" << atTensor.is_view() << " at.tensor.shape: " << atTensor.sizes();
-    }
-#endif
-
-    tensor->SetOwnsStorage(false);
-    tensor->SetDtype(type);
-    tensor->SetShape(std::move(shape));
-    tensor->Resize();
-    // PyTorch may return nullptr from data_ptr() for 0-element tensors; that is valid.
-    if (atTensor.numel() > 0) {
-      CHECK_IF_NULL(data);
-    }
-    tensor->UpdateData(data);
-    tensor->GetStorage()->Resize(atTensor.storage().nbytes());
-  });
-}
+void UpdateTensor(const ir::TensorPtr &self, nb::handle h) { UpdateTensorWithHandle(self, h); }
 
 void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h) {
   CHECK_IF_NULL(mrtValue);
@@ -374,15 +727,68 @@ void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h) {
   }
 }
 
-void BatchUpdateRuntimeInputs(const nb::list &paramNodes, const nb::tuple &newInputs) {
+// Entry point called from Python to update all runtime inputs.
+// When AclGraph is enabled, tensor inputs are staticized (cloned + copy_) so that
+// the captured graph always reads from stable device addresses.  Otherwise, inputs
+// are updated directly.
+void BatchUpdateRuntimeInputs(const nb::list &paramNodes, const nb::tuple &newInputs,
+                              const nb::object &inputIsParameter = nb::none(), const nb::object &graphKey = nb::none(),
+                              const nb::object &nonParameterTensorIndices = nb::none()) {
   if (paramNodes.size() != newInputs.size()) {
     LOG_EXCEPTION << "Expected " << paramNodes.size() << " inputs, but received " << newInputs.size();
   }
 
-  for (size_t i = 0; i < paramNodes.size(); ++i) {
-    const auto &mrtNode = nb::cast<ir::NodePtr>(paramNodes[i]);
-    UpdateMrtValue(mrtNode->output, newInputs[i]);
+  // Fast path: without AclGraph, simply update all inputs directly.
+  if (!mrt::runtime::IsAclGraphEnabled()) {
+    UpdateInputsDirectly(paramNodes, newInputs);
+    return;
   }
+
+  const auto graph_key = ParseGraphKey(graphKey, paramNodes);
+  auto graph_cache = GetOrCreateGraphCache(graph_key);
+  CHECK_IF_NULL(graph_cache);
+
+  std::string shape_key;
+  size_t valid_tensor_count = 0;
+  {
+    std::lock_guard<std::mutex> cache_lock(graph_cache->mutex);
+    InitializeGraphInputIndices(graph_cache.get(), paramNodes.size(), inputIsParameter, nonParameterTensorIndices,
+                                newInputs);
+
+    shape_key = BuildGraphInputShapeKey(newInputs, graph_cache->tensor_input_indices, &valid_tensor_count);
+    KernelCaptureExecutorManager::GetInstance().SetShapeKey(shape_key);
+
+    bool in_capture = KernelCaptureExecutorManager::GetInstance().InCapture();
+    if (valid_tensor_count > 0) {
+      auto *cached_inputs = GetCachedTensorInputs(&(graph_cache->static_tensors_by_shape), shape_key,
+                                                  graph_cache->tensor_input_indices.size(), in_capture);
+      if (cached_inputs != nullptr) {
+        UpdateTensorInputsForCaptureOrReplay(paramNodes, newInputs, graph_cache->tensor_input_indices, cached_inputs,
+                                             in_capture);
+      } else {
+        // No cached entry for this shape (replay with unseen shape); fall back to direct update.
+        UpdateIndexedInputs(paramNodes, newInputs, graph_cache->tensor_input_indices);
+      }
+    }
+
+    // Non-tensor / parameter inputs are always updated directly.
+    UpdateIndexedInputs(paramNodes, newInputs, graph_cache->other_input_indices);
+  }
+}
+
+void SetAclgraphConf() {
+#ifdef ENABLE_TORCH_NPU
+  auto beginAllocFunc = [](MempoolId_t pool) {
+    c10_npu::NPUCachingAllocator::beginAllocateToPool(c10_npu::current_device(), pool,
+                                                      [](aclrtStream stream) { return true; });
+  };
+  KernelCaptureExecutorManager::GetInstance().SetCaptureBeginFunc(beginAllocFunc);
+  auto endAllocFunc = [](MempoolId_t pool_id) {
+    auto stream = c10_npu::getCurrentNPUStream();
+    c10_npu::NPUCachingAllocator::endAllocateToPool(c10_npu::current_device(), pool_id);
+  };
+  KernelCaptureExecutorManager::GetInstance().SetCaptureEndFunc(endAllocFunc);
+#endif
 }
 
 void SetDeviceContext() {
@@ -417,6 +823,7 @@ void SetDeviceContext() {
     }
   };
   deviceContext->deviceResManager_->SetDeleter(ascend_deleter);
+  SetAclgraphConf();
 #endif
 }
 
@@ -440,5 +847,8 @@ NB_MODULE(_ms_inferrt_torch, m) {
   m.def("from_torch", &FromTorchTensorWrapper, nb::arg("tensor"), nb::arg("is_fake") = false);
   m.def("to_torch", &ToTorchTensorWrapper, nb::rv_policy::reference);
   m.def("set_device_context", &SetDeviceContext);
-  m.def("batch_update_runtime_inputs", &BatchUpdateRuntimeInputs, "Batch update runtime inputs for nodes");
+  m.def("clear_graph_input_static_cache", &ClearGraphInputStaticCache, nb::arg("graph_key"));
+  m.def("batch_update_runtime_inputs", &BatchUpdateRuntimeInputs, nb::arg("param_nodes"), nb::arg("new_inputs"),
+        nb::arg("input_is_parameter") = nb::none(), nb::arg("graph_key") = nb::none(),
+        nb::arg("non_parameter_tensor_indices") = nb::none(), "Batch update runtime inputs for nodes");
 }

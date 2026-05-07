@@ -371,10 +371,29 @@ def backend(
 
     # Create compiled callable from GraphExecutor
     executor.build()
+    # AclGraph input staticization hints:
+    # - graph_key: unique identity for per-graph cache of static tensors
+    # - input_is_parameter: per-input flag so parameters are excluded from staticization
+    # - non_parameter_tensor_indices: explicit indices of non-parameter tensor inputs
+    graph_key = id(executor)
+    input_is_parameter = [
+        isinstance(fake_input, torch.nn.Parameter) for fake_input in fake_inputs
+    ]
+    non_parameter_tensor_indices = [
+        i
+        for i, fake_input in enumerate(fake_inputs)
+        if (not input_is_parameter[i]) and isinstance(fake_input, torch.Tensor)
+    ]
 
     def compiled_callable(*inputs: torch.Tensor):
         set_device_context()
-        update_runtime_inputs(param_nodes, inputs)
+        update_runtime_inputs(
+            param_nodes,
+            inputs,
+            input_is_parameter,
+            graph_key,
+            non_parameter_tensor_indices,
+        )
         result = executor.run()
         return to_torch(result)
 

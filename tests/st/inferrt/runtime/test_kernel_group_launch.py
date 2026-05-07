@@ -28,8 +28,8 @@ def test_kernel_group_launch(monkeypatch):
     Expectation: The result is correct
     """
 
-    monkeypatch.setenv("MRT_KERNEL_LAUNCH_THREAD_NUM", "2")
-    monkeypatch.setenv("MRT_KERNEL_LAUNCH_GROUP_NUM", "8")
+    monkeypatch.setenv("MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM", "2")
+    monkeypatch.setenv("MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM", "8")
 
     def foo(x, y):
         out = torch.mul(x, y)
