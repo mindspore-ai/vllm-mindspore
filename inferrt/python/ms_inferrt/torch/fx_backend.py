@@ -1995,10 +1995,30 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     executor.build()
 
     ms_inferrt_input_nodes = [env[n] for n in fx_input_nodes]
+    # AclGraph input staticization hints:
+    # - graph_key: unique identity for per-graph cache of static tensors
+    # - input_is_parameter: per-input flag so parameters are excluded from staticization
+    # - non_parameter_tensor_indices: explicit indices of non-parameter tensor inputs
+    graph_key = id(executor)
+    input_example_values = [node.meta.get("example_value", None) for node in fx_input_nodes]
+    input_is_parameter = [
+        isinstance(v, torch.nn.Parameter) for v in input_example_values
+    ]
+    non_parameter_tensor_indices = [
+        i
+        for i, v in enumerate(input_example_values)
+        if (not input_is_parameter[i]) and isinstance(v, torch.Tensor)
+    ]
 
     def compiled_callable(*inputs: torch.Tensor):
         set_device_context()
-        update_runtime_inputs(ms_inferrt_input_nodes, inputs)
+        update_runtime_inputs(
+            ms_inferrt_input_nodes,
+            inputs,
+            input_is_parameter,
+            graph_key,
+            non_parameter_tensor_indices,
+        )
         result = executor.run()
         return to_torch(result)
 

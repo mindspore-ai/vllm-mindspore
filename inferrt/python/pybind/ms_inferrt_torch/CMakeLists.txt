@@ -16,7 +16,7 @@ if(ENABLE_ASCEND)
   add_compile_definitions(ENABLE_TORCH_NPU)
   include_directories(${TORCH_NPU_INCLUDE})
   target_link_directories(_ms_inferrt_torch PRIVATE ${TORCH_NPU_LIB_PATH})
-  target_link_libraries(_ms_inferrt_torch PUBLIC torch_npu hardware_abstract)
+  target_link_libraries(_ms_inferrt_torch PUBLIC torch_npu hardware_abstract execution_engine)
 endif()
 
 set_target_properties(_ms_inferrt_torch PROPERTIES

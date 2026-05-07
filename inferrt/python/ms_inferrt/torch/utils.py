@@ -15,8 +15,9 @@
 """
 utils for converting between torch and ms_inferrt.ir.
 """
-from typing import Any, List, Tuple
 import os
+from typing import Any, List, Tuple, Optional
+
 import torch
 from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
@@ -175,11 +176,24 @@ def set_device_context():
 def update_runtime_inputs(
     param_nodes: List[Any],
     new_inputs: Tuple[Any, ...],
+    input_is_parameter: Optional[List[bool]] = None,
+    graph_key: Optional[int] = None,
+    non_parameter_tensor_indices: Optional[List[int]] = None,
 ) -> None:
     """
-    Update placeholder nodes with runtime input values and update symbolic variables.
+    Update placeholder nodes with runtime input values.
+
+    When AclGraph is enabled, non-parameter tensor inputs are staticized
+    (cloned during capture, copy_'d during replay) so the captured graph
+    always sees stable device addresses.
     """
-    _ms_inferrt_torch.batch_update_runtime_inputs(param_nodes, new_inputs)
+    _ms_inferrt_torch.batch_update_runtime_inputs(
+        param_nodes,
+        new_inputs,
+        input_is_parameter,
+        graph_key,
+        non_parameter_tensor_indices,
+    )
 
 
 def tuple_indices_to_slice_arg(indices: Tuple[int, ...], shape: Tuple[int, ...]):

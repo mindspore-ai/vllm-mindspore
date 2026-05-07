@@ -37,6 +37,7 @@
 #include "runtime/builder/pipeline/pipeline_builder.h"
 #include "runtime/builder/kernel_launch_group/kernel_launch_group_builder.h"
 #include "runtime/builder/kernel_capture/kernel_capture_builder.h"
+#include "runtime/utils/utils.h"
 
 namespace mrt {
 namespace runtime {
@@ -52,10 +53,7 @@ ExecutionMode GetExecutionMode() {
   static const char kernelLaunchGroupNum[] = "MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM";
   const char *enableGroupLaunchCStr = std::getenv(kernelLaunchGroupNum);
   const bool enableGroupLaunch = (enableGroupLaunchCStr != nullptr) && !std::string_view(enableGroupLaunchCStr).empty();
-
-  static const char enableAclGraphEnv[] = "MS_INFERRT_ENABLE_ACLGRAPH";
-  const char *enableAclGraphCStr = std::getenv(enableAclGraphEnv);
-  const bool enableAclGraph = (enableAclGraphCStr != nullptr) && (std::string_view(enableAclGraphCStr) == "on");
+  const bool enableAclGraph = IsAclGraphEnabled();
 
   ExecutionMode executionMode = Base;
   if (ops::IsEnablePipeline()) {
