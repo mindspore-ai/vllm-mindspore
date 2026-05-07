@@ -1371,6 +1371,60 @@ def Mrt_MoeDistributeCombineV2Op : Mrt_Op<"moe_distribute_combine_v2", [Pure]> {
   }];
 }
 
+def Mrt_MoeDistributeDispatchV2Op : Mrt_Op<"moe_distribute_dispatch_v2", [Pure]> {
+  let summary = "aclnnMoeDistributeDispatchV2/V3/V4";
+  let description = [{
+    Operation for distributed MoE dispatch.
+    Routes tokens to experts and emits dispatch metadata for combine_v2.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$expert_ids,
+    MrtOptional<MrtAnyTensor>:$scales,
+    MrtOptional<MrtAnyTensor>:$x_active_mask,
+    MrtOptional<MrtAnyTensor>:$expert_scales,
+    MrtOptional<MrtAnyTensor>:$elastic_info,
+    MrtOptional<MrtAnyTensor>:$performance_info,
+    Mrt_StringType:$group_ep,
+    Mrt_I64Type:$ep_world_size,
+    Mrt_I64Type:$ep_rank_id,
+    Mrt_I64Type:$moe_expert_num,
+    Mrt_StringType:$group_tp,
+    Mrt_I64Type:$tp_world_size,
+    Mrt_I64Type:$tp_rank_id,
+    Mrt_I64Type:$expert_shard_type,
+    Mrt_I64Type:$shared_expert_num,
+    Mrt_I64Type:$shared_expert_rank_num,
+    Mrt_I64Type:$quant_mode,
+    Mrt_I64Type:$global_bs,
+    Mrt_I64Type:$expert_token_nums_type,
+    Mrt_StringType:$comm_alg,
+    Mrt_I64Type:$zero_expert_num,
+    Mrt_I64Type:$copy_expert_num,
+    Mrt_I64Type:$const_expert_num
+  );
+
+  let results = (outs
+    MrtAnyTensor:$expand_x,
+    MrtAnyTensor:$dynamic_scales,
+    MrtAnyTensor:$assist_info_for_combine,
+    MrtAnyTensor:$expert_token_nums,
+    MrtAnyTensor:$ep_recv_counts,
+    MrtAnyTensor:$tp_recv_counts,
+    MrtAnyTensor:$expand_scales
+  );
+
+  let assemblyFormat = [{
+    $x `,` $expert_ids `,` $scales `,` $x_active_mask `,` $expert_scales `,` $elastic_info `,`
+    $performance_info `,` $group_ep `,` $ep_world_size `,` $ep_rank_id `,` $moe_expert_num `,`
+    $group_tp `,` $tp_world_size `,` $tp_rank_id `,` $expert_shard_type `,` $shared_expert_num `,`
+    $shared_expert_rank_num `,` $quant_mode `,` $global_bs `,` $expert_token_nums_type `,`
+    $comm_alg `,` $zero_expert_num `,` $copy_expert_num `,` $const_expert_num
+    attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_FusedInferAttentionScoreOp : Mrt_Op<"fused_infer_attention_score", [Pure]> {
   let summary = "aclnnFusedInferAttentionScoreV3";
   let description = [{

@@ -282,6 +282,72 @@ def moe_distribute_combine_v2_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def moe_distribute_dispatch_v2_hook(node, input_nodes, executor):
+    """Normalize npu_moe_distribute_dispatch_v2 args to backend schema order."""
+    kwargs = node.kwargs
+    args = node.args
+
+    def _kw_or_pos(name, pos, default):
+        if name in kwargs:
+            return kwargs[name]
+        if len(args) > pos:
+            return args[pos]
+        return default
+
+    x = _kw_or_pos("x", 0, input_nodes[0] if len(input_nodes) > 0 else None)
+    expert_ids = _kw_or_pos("expert_ids", 1, input_nodes[1] if len(input_nodes) > 1 else None)
+    scales = _kw_or_pos("scales", 2, None)
+    x_active_mask = _kw_or_pos("x_active_mask", 3, None)
+    expert_scales = _kw_or_pos("expert_scales", 4, None)
+    elastic_info = _kw_or_pos("elastic_info", 5, None)
+    performance_info = _kw_or_pos("performance_info", 6, None)
+    group_ep = _kw_or_pos("group_ep", 7, "")
+    ep_world_size = _kw_or_pos("ep_world_size", 8, 0)
+    ep_rank_id = _kw_or_pos("ep_rank_id", 9, 0)
+    moe_expert_num = _kw_or_pos("moe_expert_num", 10, 0)
+    group_tp = _kw_or_pos("group_tp", 11, "")
+    tp_world_size = _kw_or_pos("tp_world_size", 12, 0)
+    tp_rank_id = _kw_or_pos("tp_rank_id", 13, 0)
+    expert_shard_type = _kw_or_pos("expert_shard_type", 14, 0)
+    shared_expert_num = _kw_or_pos("shared_expert_num", 15, 1)
+    shared_expert_rank_num = _kw_or_pos("shared_expert_rank_num", 16, 0)
+    quant_mode = _kw_or_pos("quant_mode", 17, 0)
+    global_bs = _kw_or_pos("global_bs", 18, 0)
+    expert_token_nums_type = _kw_or_pos("expert_token_nums_type", 19, 0)
+    comm_alg = _kw_or_pos("comm_alg", 20, "")
+    zero_expert_num = _kw_or_pos("zero_expert_num", 21, 0)
+    copy_expert_num = _kw_or_pos("copy_expert_num", 22, 0)
+    const_expert_num = _kw_or_pos("const_expert_num", 23, 0)
+
+    return [
+        x,
+        expert_ids,
+        scales,
+        x_active_mask,
+        expert_scales,
+        elastic_info,
+        performance_info,
+        group_ep,
+        ep_world_size,
+        ep_rank_id,
+        moe_expert_num,
+        group_tp,
+        tp_world_size,
+        tp_rank_id,
+        expert_shard_type,
+        shared_expert_num,
+        shared_expert_rank_num,
+        quant_mode,
+        global_bs,
+        expert_token_nums_type,
+        comm_alg,
+        zero_expert_num,
+        copy_expert_num,
+        const_expert_num,
+    ]
+
+
+# pylint: disable=unused-argument
 def div_mod_arg_hook(node, input_nodes, executor):
     """add div mode parameter."""
     if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
@@ -564,6 +630,40 @@ def rms_norm_output_hook(node, op, input_nodes, executor, sym_mgr):
     return _add_tuple_getitem_node(executor, sym_mgr, tuple_node, 0, output_value)
 
 
+def moe_distribute_dispatch_v2_output_hook(node, op, input_nodes, executor, sym_mgr):
+    """
+    Adapt dispatch_v2 tuple output when fake/meta infers empty expand_scales.
+
+    Some torch_npu meta paths may produce expand_scales with shape [0], while
+    runtime eager returns a non-empty shape derived from expand_x and tp_world_size.
+    """
+    example_value = node.meta.get("example_value", None)
+    if not isinstance(example_value, (tuple, list)) or len(example_value) != 7:
+        output_value = sym_mgr.from_torch_with_sym(example_value)
+        return executor.add_op_node(op, input_nodes, output_value)
+
+    outputs = list(example_value)
+    expand_x = outputs[0]
+    expand_scales = outputs[6]
+
+    if hasattr(expand_scales, "numel") and int(expand_scales.numel()) == 0:
+        tp_world_size_arg = node.kwargs.get("tp_world_size", node.args[12] if len(node.args) > 12 else 0)
+        tp_world_size_val = _get_example_value_if_node(tp_world_size_arg)
+
+        try:
+            tp_world_size = int(tp_world_size_val)
+        except (TypeError, ValueError):
+            tp_world_size = 0
+        if tp_world_size == 0:
+            tp_world_size = 1
+
+        expand_scales_len = expand_x.shape[0] // tp_world_size
+        outputs[6] = expand_scales.new_empty((expand_scales_len,), dtype=expand_scales.dtype)
+
+    output_value = sym_mgr.from_torch_with_sym(tuple(outputs))
+    return executor.add_op_node(op, input_nodes, output_value)
+
+
 def _init_arg_mapping_hooks():
     """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
@@ -580,6 +680,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.apply_rotary_pos_emb, apply_rotary_pos_emb_hook)
     register_arg_mapping_hook(Op.moe_gating_top_k, moe_gating_top_k_hook)
     register_arg_mapping_hook(Op.moe_distribute_combine_v2, moe_distribute_combine_v2_hook)
+    register_arg_mapping_hook(Op.moe_distribute_dispatch_v2, moe_distribute_dispatch_v2_hook)
     register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
@@ -949,6 +1050,7 @@ def _init_output_mapping_hooks():
     """Register output mapping hooks for runtime ops."""
     register_output_mapping_hook(Op.argsort, argsort_output_hook)
     register_output_mapping_hook(Op.rms_norm, rms_norm_output_hook)
+    register_output_mapping_hook(Op.moe_distribute_dispatch_v2, moe_distribute_dispatch_v2_output_hook)
 
 
 def _next_unique_graph_id():
@@ -1145,6 +1247,7 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_moe_gating_top_k: Op.moe_gating_top_k,
         torch.ops.npu.npu_moe_gating_top_k_softmax: Op.moe_gating_top_k_softmax,
         torch.ops.npu.npu_moe_distribute_combine_v2: Op.moe_distribute_combine_v2,
+        torch.ops.npu.npu_moe_distribute_dispatch_v2: Op.moe_distribute_dispatch_v2,
         torch.ops.npu.npu_apply_rotary_pos_emb: Op.apply_rotary_pos_emb,
         torch.ops.npu.npu_grouped_matmul: Op.grouped_matmul,
         torch.ops.npu.npu_fused_infer_attention_score: Op.fused_infer_attention_score,
