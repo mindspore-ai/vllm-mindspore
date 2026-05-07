@@ -512,7 +512,8 @@ bool AscendResManager::AsyncCopy(void *dst, const void *src, uint64_t size, Copy
   LOG_OUT << "dst: " << dst << " src: " << src << " size: " << size << " stream: " << stream;
   auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, size, src, size, CopyTypeToAclType(kind), stream);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    LOG_ERROR << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret) << " dst:" << dst << " src:" << src
+              << " size:" << size << " kind:" << static_cast<int>(kind) << " stream:" << stream;
     return false;
   }
   return true;

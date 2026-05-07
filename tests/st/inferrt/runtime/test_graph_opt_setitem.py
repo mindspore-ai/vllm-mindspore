@@ -151,6 +151,115 @@ def test_setitem_with_dynamic_slice(backend):
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend,))
+@pytest.mark.skip("Not implemented.")
+def test_setitem_with_tuple_slice_step_and_ellipsis(backend):
+    """
+    Feature: Test setitem tuple-slice lowering with step and ellipsis
+    Description: Cover tuple_indices_to_slice_arg traversal when tuple contains
+                 dynamic slice bound, stepped slice and ellipsis
+    Expectation: The result is correct
+    """
+
+    def func(x, base, offset, value):
+        res = x.clone()
+        start = base + 1
+        end = start + offset
+        res[:, start:end:2, ...] = value
+        return res
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(2, 6, 4).npu()
+    expected = x.clone()
+    base = torch.tensor(0).npu()
+    offset = torch.tensor(4).npu()
+    value = torch.randn(2, 2, 4).npu()
+
+    out = compiled_op(x, base, offset, value)
+    start = base + 1
+    end = start + offset
+    expected[:, start:end:2, ...] = value
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_setitem_with_sub_slice_stop_from_op(backend):
+    """
+    Feature: Test setitem tuple index with stop from operator.sub
+    Description: Build index pattern aligned with IR:
+                 (mul_1, slice(None, sub, None), slice(None, None, None))
+    Expectation: The result is correct
+    """
+
+    def func(conv_state, batch_indices, mixed_qkv):
+        res = conv_state.clone()
+        # Align with qwen script pattern:
+        # neg = -sub
+        # getitem_4 = mixed_qkv[0, neg:, :]
+        # mul_1 = batch_indices * (1 + num_spec_tokens)
+        # conv_state[(mul_1, :sub, :)] = getitem_4
+        # Use SymInt/int for slice bounds; Dynamo does not support Tensor slice args.
+        sub = mixed_qkv.shape[1] - 1
+        neg = -sub
+        getitem_4 = mixed_qkv[0, neg:, :]
+        num_spec_tokens = mixed_qkv.shape[0] - 1
+        add_1 = 1 + num_spec_tokens
+        mul_1 = batch_indices * add_1
+        res[mul_1, :sub, :] = getitem_4
+        return res
+
+    compiled_op = torch.compile(func, backend=backend, fullgraph=True, dynamic=True)
+    conv_state = torch.randn(8, 6, 4).npu()
+    batch_indices = torch.tensor([1], dtype=torch.int32).npu()
+    mixed_qkv = torch.randn(1, 5, 4).npu()
+    torch._dynamo.mark_dynamic(mixed_qkv, 1)  # pylint: disable=protected-access
+
+    out = compiled_op(conv_state, batch_indices, mixed_qkv)
+    expected = func(conv_state, batch_indices, mixed_qkv)
+    AssertRtolEqual(out, expected)
+
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+@pytest.mark.skip("Not implemented.")
+def test_setitem_with_sub_slice_stop_from_op_2(backend):
+    """
+    Feature: Test setitem tuple index with stop from operator.sub
+    Description: Build index pattern aligned with IR:
+                 (mul_1, slice(None, sub, None), slice(None, None, None))
+    Expectation: The result is correct
+    """
+
+    def func(conv_state, batch_indices, num_spec_tokens, mixed_qkv):
+        res = conv_state.clone()
+        # Align with qwen script pattern:
+        # neg = -sub
+        # getitem_4 = mixed_qkv[0, neg:, :]
+        # mul_1 = batch_indices * (1 + num_spec_tokens)
+        # conv_state[(mul_1, :sub, :)] = getitem_4
+        # Use SymInt/int for slice bounds; Dynamo does not support Tensor slice args.
+        sub = mixed_qkv.shape[1] - 1
+        neg = -sub
+        getitem_4 = mixed_qkv[0, neg:, :]
+        add_1 = 1 + num_spec_tokens
+        mul_1 = batch_indices * add_1
+        res[mul_1, :sub, :] = getitem_4
+        return res
+
+    compiled_op = torch.compile(func, backend=backend, fullgraph=True)
+    conv_state = torch.randn(8, 6, 4).npu()
+    batch_indices = torch.tensor([1], dtype=torch.int32).npu()
+    num_spec_tokens = 0
+    mixed_qkv = torch.randn(1, 5, 4).npu()
+
+    out = compiled_op(conv_state, batch_indices, num_spec_tokens, mixed_qkv)
+    expected = func(conv_state, batch_indices, num_spec_tokens, mixed_qkv)
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
 def test_tensor_setitem_slice_tensor(backend):
     """
     Feature: Test tensor_setitem_slice_tensor

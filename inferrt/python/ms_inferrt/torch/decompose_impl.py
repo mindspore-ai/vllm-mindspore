@@ -130,10 +130,58 @@ def _should_decompose_setitem(node: Node) -> bool:
     if not is_tensor_like:
         return True
 
+    int_types = (int,)
+    symint_type = getattr(torch, "SymInt", None)
+    if symint_type is not None:
+        int_types = int_types + (symint_type,)
+
+    def _is_constant_scalar(value: Any) -> bool:
+        return isinstance(value, (int, float, bool, type(None)))
+
+    def _is_int_scalar(value: Any) -> bool:
+        return isinstance(value, int_types) and not isinstance(value, bool)
+
+    def _is_constant_node(value: Any) -> bool:
+        if not isinstance(value, Node):
+            return _is_constant_scalar(value)
+        # get_attr nodes are generally compile-time constants.
+        if value.op == "get_attr":
+            return True
+        example_value = value.meta.get("example_value", None)
+        return _is_constant_scalar(example_value)
+
+    def _slice_part_requires_decompose(value: Any) -> bool:
+        if _is_int_scalar(value):
+            return True
+        if not isinstance(value, Node):
+            return False
+
+        example_value = value.meta.get("example_value", None)
+        if _is_int_scalar(example_value):
+            return True
+
+        return not _is_constant_node(value)
+
+    def _slice_requires_decompose(value: Any) -> bool:
+        if isinstance(value, slice):
+            for part in (value.start, value.stop, value.step):
+                if _slice_part_requires_decompose(part):
+                    return True
+            return False
+        if isinstance(value, (list, tuple)):
+            return any(_slice_requires_decompose(item) for item in value)
+        return False
+
     # setitem_impl currently supports only slice and (list, tuple) indices.
+    # But when slice bounds contain int-like values or non-constant FX nodes,
+    # we force decomposition.
     if isinstance(index, slice):
+        if _slice_requires_decompose(index):
+            return True
         return False
     if isinstance(index, (list, tuple)):
+        if _slice_requires_decompose(index):
+            return True
         return False
 
     # Other index types (tensor index, bool mask, etc.) still go through decomposition.
@@ -188,12 +236,17 @@ def _collect_decompose_nodes(
 
 def _collect_outer_graph_nodes_dfs(arg: Any, out: List[Node]) -> None:
     """
-    Collect FX Nodes from arg in depth-first order (tuple/list/dict values only).
+    Collect FX Nodes from arg in depth-first order (tuple/list/dict/slice).
 
     Must stay in sync with _materialize_arg_for_single_op_subgraph traversal order.
     """
     if isinstance(arg, Node):
         out.append(arg)
+        return
+    if isinstance(arg, slice):
+        _collect_outer_graph_nodes_dfs(arg.start, out)
+        _collect_outer_graph_nodes_dfs(arg.stop, out)
+        _collect_outer_graph_nodes_dfs(arg.step, out)
         return
     if isinstance(arg, (tuple, list)):
         for item in arg:
@@ -235,6 +288,18 @@ def _materialize_arg_for_single_op_subgraph(
             k: _materialize_arg_for_single_op_subgraph(subgraph, v, placeholder_counter)
             for k, v in arg.items()
         }
+    if isinstance(arg, slice):
+        return slice(
+            _materialize_arg_for_single_op_subgraph(
+                subgraph, arg.start, placeholder_counter
+            ),
+            _materialize_arg_for_single_op_subgraph(
+                subgraph, arg.stop, placeholder_counter
+            ),
+            _materialize_arg_for_single_op_subgraph(
+                subgraph, arg.step, placeholder_counter
+            ),
+        )
     return arg
 
 
