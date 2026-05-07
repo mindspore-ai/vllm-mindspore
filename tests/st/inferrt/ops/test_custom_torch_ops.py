@@ -109,6 +109,12 @@ def test_npu_quant_matmul_with_nz_format(backend):
     y = torch.randint(-5, 5, (16, 32), dtype=torch.int8).npu()
     scale = torch.randn(1, dtype=torch.float32).npu()
     y_nz = torch_npu.npu_format_cast(y, 29).npu()
+    # Under mlir backend, quant_matmul is not registered as a matched op and falls back to
+    # custom call, which rejects non-base memory format inputs.
+    if backend == mlir_backend:
+        with pytest.raises(RuntimeError, match="Custom call input does not support non-base memory format"):
+            npu_quant_matmul_compiled(x, y_nz, scale, output_dtype=torch.bfloat16)
+        return
     z = npu_quant_matmul_compiled(x, y_nz, scale, output_dtype=torch.bfloat16)
     expected = torch_npu.npu_quant_matmul(x, y_nz, scale, output_dtype=torch.bfloat16)
     assert torch.allclose(z, expected)
