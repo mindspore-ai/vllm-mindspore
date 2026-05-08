@@ -181,7 +181,8 @@ void OpTorchCall::UpdateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &m
     return;
   }
 
-  UpdateBasicMetadata(atTensor, newDataPtr, newShape, newStrides, newStorageBytes, newStorageOffset);
+  UpdateBasicMetadata(atTensor, mrtTensor->GetStorage()->Data(), newShape, newStrides, newStorageBytes,
+                      newStorageOffset);
 
 #ifdef ENABLE_TORCH_NPU
   if (atTensor.device().type() == at::DeviceType::PrivateUse1) {

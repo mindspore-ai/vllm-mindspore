@@ -128,14 +128,11 @@ def test_t_to_permute_view(fmt: str, non_contiguous: bool, shape):
     x = _make_input_2d(fmt, non_contiguous, shape)
     eager_out = func(x)
     compiled_func = torch.compile(func, backend=backend)
-    compiled_out = compiled_func(x)
     if fmt == "NZ":
-        # Current graph output handling for NZ tensors is incomplete:
-        # metadata required for NZ->ND value materialization is not fully preserved.
-        # Therefore, we only check view metadata consistency here, and skip value equality
-        # comparison with eager output for NZ format.
-        _assert_view_metadata_matches_eager(x, eager_out, compiled_out)
+        with pytest.raises(RuntimeError, match="Network output does not support non-base memory format"):
+            compiled_func(x)
         return
+    compiled_out = compiled_func(x)
     _assert_view_matches_eager(x, eager_out, compiled_out)
 
 

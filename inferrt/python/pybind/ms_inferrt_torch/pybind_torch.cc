@@ -46,6 +46,7 @@
 #include "ir/value/value.h"
 #include "ir/graph.h"
 #include "ops/utils/async.h"
+#include "ops/utils/utils.h"
 #include "hardware/hardware_abstract/device_context.h"
 #include "hardware/hardware_abstract/collective/collective_manager.h"
 #include "hardware/hardware_abstract/device_context_manager.h"
@@ -345,7 +346,15 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
     CHECK_IF_NULL(data);
   }
   tensor->UpdateData(data);
-  tensor->GetStorage()->Resize(at_tensor.storage().nbytes());
+  // Track only the remaining accessible bytes from data_ptr() to the end of the underlying storage to keep view
+  // bounds valid.
+  const auto storageBytes = at_tensor.storage().nbytes();
+  const auto offsetBytes = static_cast<size_t>(at_tensor.storage_offset() * at_tensor.element_size());
+  if (offsetBytes > storageBytes) {
+    LOG_EXCEPTION << "storage_offset exceeds storage size: offsetBytes=" << offsetBytes
+                  << ", storageBytes=" << storageBytes;
+  }
+  tensor->GetStorage()->Resize(storageBytes - offsetBytes);
 }
 
 // Install a lazy updater that reads the current value of a Python-side tensor handle on each invocation.
@@ -599,6 +608,10 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
+  if (!mrt::ops::IsTensorBaseFormat(tensor)) {
+    LOG_EXCEPTION << "Network output does not support non-base memory format: "
+                  << ir::FormatEnumToStr(tensor->Format());
+  }
   // For input is used as output directly, should update tensor
   tensor->Update();
   auto storage = tensor->GetStorage();
