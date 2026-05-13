@@ -60,7 +60,6 @@ void PipelineExecutor::Run(bool isDynamic) {
   auto bindTask = [this]() -> int {
     for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
       iter->second->deviceResManager_->BindDeviceToCurrentThread(false);
-      iter->second->deviceResManager_->BindCurrentStream();
     }
     return ops::SUCCESS;
   };
