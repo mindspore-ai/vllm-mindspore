@@ -1899,7 +1899,6 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:
         flat_node_args = hook_func(node, flat_node_args, executor)
-        print(f"Applied arg mapping hook for {op}, new input nodes:{flat_node_args}")
 
     return op, _map_args(flat_node_args, env, executor, sym_mgr)
 

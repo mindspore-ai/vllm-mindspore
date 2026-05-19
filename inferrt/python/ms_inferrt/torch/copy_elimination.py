@@ -118,7 +118,7 @@ def eliminate_redundant_copy_(gm: GraphModule) -> None:
     output_nodes = _get_graph_output_nodes(gm)
 
     copy_nodes = [n for n in nodes_ordered if _is_copy_node(n)]
-    changed = False
+
     for copy_node in copy_nodes:
         if len(copy_node.args) < 2:
             continue
@@ -144,7 +144,3 @@ def eliminate_redundant_copy_(gm: GraphModule) -> None:
             user.kwargs = new_kwargs
 
         graph.erase_node(copy_node)
-        changed = True
-
-    if changed:
-        print(gm.graph)
