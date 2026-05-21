@@ -1189,7 +1189,6 @@ _OP_MAP = {
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
     torch.zeros: Op.zeros,
-    torch.select: Op.select_view,
     aten.select.int: Op.select_view,
     aten.slice.Tensor: Op.slice_view,
     aten.view.default: Op.view,
