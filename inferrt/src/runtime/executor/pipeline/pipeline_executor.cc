@@ -15,6 +15,7 @@
  */
 
 #include "runtime/executor/pipeline/pipeline_executor.h"
+#include <chrono>
 #include <memory>
 #include <map>
 #include <utility>
@@ -23,6 +24,16 @@
 
 namespace mrt {
 namespace runtime {
+
+#if defined(__aarch64__)
+#define CPU_RELAX() asm volatile("yield" ::: "memory")
+#elif defined(__x86_64__)
+#include <emmintrin.h>
+#define CPU_RELAX() _mm_pause()
+#else
+#define CPU_RELAX()
+#endif
+
 PipelineExecutor::PipelineExecutor(const std::shared_ptr<std::vector<OpRunner>> &opRunners,
                                    const std::map<hardware::DeviceType, device::DeviceContext *> &deviceContexts,
                                    const ir::ValuePtr &output)
@@ -44,14 +55,44 @@ void PipelineExecutor::Initialize() {
   initialized_ = true;
 }
 
+void PipelineExecutor::TryWaitLastRunFinish() {
+  constexpr size_t spinCount = 1000;
+  constexpr size_t waitLastRunMaxTime = 1000;
+
+  if (!waitLastRunFinish_.load(std::memory_order_acquire)) {
+    return;
+  }
+
+  for (size_t i = 0; i < spinCount && waitLastRunFinish_.load(std::memory_order_acquire); ++i) {
+    CPU_RELAX();
+  }
+  if (!waitLastRunFinish_.load(std::memory_order_acquire)) {
+    return;
+  }
+
+  std::unique_lock<std::mutex> lock(mtx_);
+  if (cv_.wait_for(lock, std::chrono::milliseconds(waitLastRunMaxTime),
+                   [this] { return !waitLastRunFinish_.load(std::memory_order_acquire); })) {
+    return;
+  }
+
+  try {
+    WaitLaunchTaskFinish();
+  } catch (...) {
+    waitLastRunFinish_.store(false, std::memory_order_release);
+    throw;
+  }
+  waitLastRunFinish_.store(false, std::memory_order_release);
+}
+
 void PipelineExecutor::Run(bool isDynamic) {
   LOG_OUT << "Begin pipeline executor run.";
+  TryWaitLastRunFinish();
 
   auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
   if (launchOpFunc == nullptr) {
     std::ostringstream oss;
     for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
-      iter->second->deviceResManager_->BindDeviceToCurrentThread(false);
       oss << " " << hardware::GetDeviceNameByType(iter->first);
     }
     LOG_EXCEPTION << "Device" << oss.str() << " does not suppprt pipeline executor.";
@@ -67,11 +108,13 @@ void PipelineExecutor::Run(bool isDynamic) {
 
   OpRunner *opRunners = opRunners_->data();
   size_t opNum = opRunners_->size();
+
+  waitLastRunFinish_.store(true, std::memory_order_release);
+
   for (size_t i = 0; i < opNum; ++i) {
     OpRunner &opRunner = opRunners[i];
 
     opRunner.UpdateTensors();
-    // Do infer shape and calculate workspace size in infer queue.
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
       LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
@@ -86,7 +129,6 @@ void PipelineExecutor::Run(bool isDynamic) {
       continue;
     }
 
-    // Push async launch task into launch queue.
     auto launchTask = [&opRunner]() -> int {
       if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
         LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
@@ -95,6 +137,14 @@ void PipelineExecutor::Run(bool isDynamic) {
     };
     launchOpFunc(opRunner.GetOpName(), launchTask, false);
   }
+
+  auto launchKernelsFinish = [this]() -> int {
+    waitLastRunFinish_.store(false, std::memory_order_release);
+    std::lock_guard<std::mutex> lock(mtx_);
+    cv_.notify_one();
+    return 0;
+  };
+  launchOpFunc("launch_kernels_finish", launchKernelsFinish, false);
 
   LOG_OUT << "End pipeline executor run.";
 }
