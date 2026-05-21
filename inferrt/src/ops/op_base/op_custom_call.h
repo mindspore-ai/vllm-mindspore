@@ -39,6 +39,8 @@ class OpCustomCall : public Operator {
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream);
 
+  bool NeedLaunch() override { return operatorPtr_->NeedLaunch(); }
+
  protected:
   std::string opName_;
   std::shared_ptr<ops::Operator> operatorPtr_;

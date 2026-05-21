@@ -11,6 +11,32 @@ from torch.fx.graph_module import GraphModule
 from torch.fx.node import Node
 
 
+def _has_dynamic_shape(tensor: torch.Tensor) -> bool:
+    """Print graph nodes in a formatted way for debugging."""
+    return any(not isinstance(dim, int) for dim in tensor.shape)
+
+
+def _same_shape_without_guard(lhs, rhs) -> bool:
+    """Print graph nodes in a formatted way for debugging."""
+    if len(lhs) != len(rhs):
+        return False
+
+    for lhs_dim, rhs_dim in zip(lhs, rhs):
+        if isinstance(lhs_dim, int) and isinstance(rhs_dim, int):
+            if lhs_dim != rhs_dim:
+                return False
+            continue
+
+        if isinstance(lhs_dim, torch.SymInt) and isinstance(rhs_dim, torch.SymInt):
+            if lhs_dim.node.expr != rhs_dim.node.expr:
+                return False
+            continue
+
+        return False
+
+    return True
+
+
 def _print_graph(graph: GraphModule, title: str = "Graph") -> None:
     """Print graph nodes in a formatted way for debugging."""
     # Access to _pretty_print_target is intentional for debug dumps.
@@ -89,9 +115,9 @@ def _should_decompose_getitem(node: Node) -> bool:
         if (
             isinstance(base_example, (torch.Tensor, FakeTensor))
             and isinstance(node_example, (torch.Tensor, FakeTensor))
-            and base_example.shape == node_example.shape
         ):
-            return False
+            if _same_shape_without_guard(base_example.shape, node_example.shape):
+                return False
 
     return True
 

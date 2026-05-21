@@ -102,10 +102,38 @@ def _is_copy_node(n: Node) -> bool:
     return False
 
 
+def _is_linear_node(n: Node) -> bool:
+    """
+    Check if node is a linear operation.
+
+    Args:
+        n: The FX node to check.
+
+    Returns:
+        bool: True if node is a linear operation, False otherwise.
+    """
+    if n.op != "call_function":
+        return False
+
+    # pylint: disable=protected-access
+    linear_targets = {
+        getattr(torch._C._nn, "linear", None),
+        getattr(torch.nn.functional, "linear", None),
+        getattr(getattr(torch._C, "nn", None), "linear", None),
+    }
+    aten_linear_default = getattr(torch.ops.aten, "linear", None)
+    if aten_linear_default is not None:
+        linear_targets.add(getattr(aten_linear_default, "default", None))
+    linear_targets.discard(None)
+
+    return n.target in linear_targets
+
+
 def eliminate_redundant_copy_(gm: GraphModule) -> None:
     """
-    Eliminate copy_ when the destination x is neither graph input nor output.
-    
+    Eliminate copy_ when the destination x is a linear result and is neither
+    graph input nor output.
+
     For every user of x that is topologically after the copy_ node, replace
     that use of x with y (the source), then remove the copy_ node.
     
@@ -129,6 +157,8 @@ def eliminate_redundant_copy_(gm: GraphModule) -> None:
         if x_node.op == "placeholder":
             continue
         if x_node in output_nodes:
+            continue
+        if not _is_linear_node(x_node):
             continue
 
         copy_index = node_to_index[copy_node]
