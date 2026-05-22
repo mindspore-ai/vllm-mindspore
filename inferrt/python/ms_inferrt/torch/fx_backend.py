@@ -880,8 +880,10 @@ def chunk_arg_hook(node, input_nodes, executor):
     if dim_int < 0:
         dim_int += rank
 
-    # Derive per-chunk sizes along `dim` directly from example_value.
-    split_sizes = [int(t.shape[dim_int]) for t in example_value]
+    # Derive per-chunk sizes along `dim` directly from example_value. Keep
+    # SymInt sizes symbolic; int(SymInt) would add value guards and specialize
+    # dynamic chunk lengths to the first example input.
+    split_sizes = [t.shape[dim_int] for t in example_value]
 
     return [input_tensor, split_sizes, dim_int]
 
@@ -1187,6 +1189,7 @@ _OP_MAP = {
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
     torch.zeros: Op.zeros,
+    torch.select: Op.select_view,
     aten.select.int: Op.select_view,
     aten.slice.Tensor: Op.slice_view,
     aten.view.default: Op.view,
