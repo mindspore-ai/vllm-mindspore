@@ -8,3 +8,4 @@ build
 nanobind>=2.9
 pybind11==3.0.1
 pyyaml
+ninja
