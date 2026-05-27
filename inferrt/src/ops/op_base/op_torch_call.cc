@@ -399,13 +399,21 @@ void OpTorchCall::ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&st
 }
 
 bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
-                                const std::shared_ptr<torch::jit::Operator> op) const {
+                                const std::shared_ptr<torch::jit::Operator> op, std::string *mismatch_reason) const {
+  auto fail = [mismatch_reason](const std::string &reason) {
+    if (mismatch_reason != nullptr) {
+      *mismatch_reason = reason;
+    }
+    return false;
+  };
+
   auto args = op->schema().arguments();
   // First input is op name
   if (args.size() != inputs.size() - kRealInputOffset) {
-    return false;
+    return fail("schema requires " + std::to_string(args.size()) + " args, but got " +
+                std::to_string(inputs.size() - kRealInputOffset));
   }
-  // Define type kind to check function map
+
   static const std::unordered_map<c10::TypeKind, std::function<bool(const ir::Value *)>> typeCheckMap = {
     {c10::TypeKind::TensorType, [](const ir::Value *val) { return val->IsTensor(); }},
     {c10::TypeKind::NumberType,
@@ -427,27 +435,29 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
       type = type->castRaw<c10::OptionalType>()->getElementType();
     }
 
-    // Check if type kind is in the map
+    if (type->kind() == c10::TypeKind::DeviceObjType) {
+      continue;
+    }
+
     auto it = typeCheckMap.find(type->kind());
-    bool match = (it != typeCheckMap.end()) ? it->second(inputs[j]) : false;
-    if (!match && type->kind() != c10::TypeKind::DeviceObjType) {
-      LOG(ERROR) << "Invalid args " << i << ":" << args[i] << " type:" << type
-                 << " kind:" << typeid(type->kind()).name() << " input " << j << ":"
-                 << TagToString(inputs[j]->GetTag());
-      return false;
+    if (it == typeCheckMap.end()) {
+      return fail("input[" + std::to_string(i) + "] type [" + type->str() + "] not supported for schema matching");
+    }
+    if (!it->second(inputs[j])) {
+      return fail("input[" + std::to_string(i) + "] expects [" + type->str() + "], but got [" +
+                  TagToString(inputs[j]->GetTag()) + "]");
     }
   }
   return true;
 }
 
-std::string OpTorchCall::GetOpsExpr(const std::vector<const ir::Value *> &inputs) const {
-  std::string expr = qualifiedOpName_ + "(";
+std::string OpTorchCall::GetInputTypesExpr(const std::vector<const ir::Value *> &inputs) const {
+  std::string expr = "(";
   for (size_t i = kRealInputOffset; i < inputs.size(); ++i) {
-    ir::Value::Tag tag = inputs[i]->GetTag();
-    expr += TagToString(tag);
-    if (i < inputs.size() - 1) {
+    if (i > kRealInputOffset) {
       expr += ", ";
     }
+    expr += TagToString(inputs[i]->GetTag());
   }
   expr += ")";
   return expr;
@@ -456,24 +466,35 @@ std::string OpTorchCall::GetOpsExpr(const std::vector<const ir::Value *> &inputs
 std::string OpTorchCall::GetAvailableTorchOps() const {
   auto ops = torch::jit::getAllOperatorsFor(torch::jit::Symbol::fromQualString(qualifiedOpName_));
   std::stringstream opsStr;
-  for (auto op : ops) {
-    opsStr << op->schema() << "\n";
+  for (size_t i = 0; i < ops.size(); ++i) {
+    opsStr << " Schema [" << (i + 1) << "]: " << ops[i]->schema() << "\n";
   }
   return opsStr.str();
 }
 
 void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
+  LOG_OUT << "Start init operator: " << qualifiedOpName_ << ", inputs: " << inputs.size();
   auto ops = torch::jit::getAllOperatorsFor(torch::jit::Symbol::fromQualString(qualifiedOpName_));
+  std::vector<std::pair<std::string, std::string>> schema_mismatch_reasons;
   for (auto &op : ops) {
-    LOG_OUT << "Start schema " << op->schema();
-    if (MatchOpSchema(inputs, op)) {
+    std::string mismatch_reason;
+    if (MatchOpSchema(inputs, op, &mismatch_reason)) {
       operation_ = op->getOperation();
       break;
+    } else {
+      schema_mismatch_reasons.emplace_back(c10::toString(op->schema()), mismatch_reason);
     }
   }
   if (!operation_) {
-    LOG_EXCEPTION << "Operator: " << GetOpsExpr(inputs) << " not found in torch plugin. The available operators are:\n"
-                  << GetAvailableTorchOps();
+    std::stringstream error_msg;
+    error_msg << "No matching schema found for operator: " << qualifiedOpName_ << "\n"
+              << "Input types: " << GetInputTypesExpr(inputs) << "\n"
+              << "Tried " << ops.size() << " schemas:\n";
+    for (size_t i = 0; i < schema_mismatch_reasons.size(); ++i) {
+      error_msg << "  [" << (i + 1) << "] " << schema_mismatch_reasons[i].first << " — "
+                << schema_mismatch_reasons[i].second << "\n";
+    }
+    LOG_EXCEPTION << error_msg.str();
   }
 
   firstRun_ = true;

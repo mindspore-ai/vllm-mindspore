@@ -48,10 +48,10 @@ class OpTorchCall : public Operator {
   void ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack);
   void ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&stack) const;
   void ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) const;
-  bool MatchOpSchema(const std::vector<const ir::Value *> &inputs,
-                     const std::shared_ptr<torch::jit::Operator> op) const;
+  bool MatchOpSchema(const std::vector<const ir::Value *> &inputs, const std::shared_ptr<torch::jit::Operator> op,
+                     std::string *mismatch_reason = nullptr) const;
   bool HasSharedStorageWithInput(const ir::Value *output, const ir::Value *input) const;
-  std::string GetOpsExpr(const std::vector<const ir::Value *> &inputs) const;
+  std::string GetInputTypesExpr(const std::vector<const ir::Value *> &inputs) const;
   std::string GetAvailableTorchOps() const;
 
   void ConvertTensorInputToStack(const ir::Value *value, torch::jit::Stack &stack);
