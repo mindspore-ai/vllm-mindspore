@@ -311,6 +311,7 @@ def test_all_to_all_v_single():
 
 
 def _check_hccl_non_contiguous_input_raises(op_name):
+    """Check that HCCL operators reject non-contiguous input tensors."""
     class ReduceScatterNetwork(nn.Module):
         """Network for testing reduce_scatter with non-contiguous input."""
 

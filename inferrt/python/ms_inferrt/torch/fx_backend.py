@@ -450,20 +450,20 @@ def argsort_hook(node, input_nodes, executor):
 # pylint: disable=unused-argument
 def permute_hook(node, input_nodes, executor):
     """transpose dims"""
-    if node.target == "transpose" or node.target is torch.transpose:
+    if node.target in ("transpose", torch.transpose, torch.ops.aten.transpose.int):
         dim_inx = list(range(0, len(input_nodes[0].meta["example_value"].shape), 1))
         dim_inx[input_nodes[1]] = input_nodes[2]
         dim_inx[input_nodes[2]] = input_nodes[1]
         return [input_nodes[0], dim_inx]
     # For .t(), only tensors <= 2-D are expected, so no explicit dimension parameters are required
-    if node.target == "t" or node.target is torch.t:
+    if node.target in ("t", torch.t, torch.ops.aten.t.default):
         dim = len(input_nodes[0].meta["example_value"].shape)
         if not dim <= 2:
             raise NotImplementedError(f".t() only supports tensors with <= 2 dimensions, but got {dim} dimensions")
         dim0 = 0
         dim1 = 1
         return [input_nodes[0], [dim1, dim0]]
-    if node.target == "movedim" or node.target is torch.movedim:
+    if node.target in ("movedim", torch.movedim, torch.ops.aten.movedim.int, torch.ops.aten.movedim.intlist):
         ndim = len(input_nodes[0].meta["example_value"].shape)
 
         def _normalize_dims(dims):
@@ -737,6 +737,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook("int", int_hook)
     # chunk lowering
     register_arg_mapping_hook(torch.chunk, chunk_arg_hook)
+    register_arg_mapping_hook(aten.chunk.default, chunk_arg_hook)
     register_arg_mapping_hook("chunk", chunk_arg_hook)
     # in-place index_put_: always materialize both accumulate and unsafe,
     # defaulting to False when omitted by the frontend.
@@ -986,9 +987,7 @@ def split_ops_hook(op, node, input_nodes, executor):
     is an integer or torch.SymInt, returns Op.split_tensor_view.
     Otherwise, returns the original op.
     """
-    if node.target is torch.chunk:
-        return op
-    if isinstance(node.target, str) and node.target == "chunk":
+    if _is_chunk_target(node.target):
         return op
 
     if isinstance(input_nodes[1], (int, torch.SymInt)):
@@ -1191,8 +1190,8 @@ _OP_MAP = {
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
     torch.t: Op.permute_view,
-    torch.permute: Op.permute,
-    torch.transpose: Op.permute,
+    torch.permute: Op.permute_view,
+    torch.transpose: Op.permute_view,
     torch.movedim: Op.permute_view,
     torch.squeeze: Op.squeeze_view,
     torch.unsqueeze: Op.unsqueeze_view,
@@ -1200,7 +1199,7 @@ _OP_MAP = {
     torch.unbind: Op.unbind_view,
     torch.split: Op.split_with_size_view,
     torch.chunk: Op.split_with_size_view,
-    torch.flatten: Op.flatten,
+    torch.flatten: Op.flatten_view,
     torch.cat: Op.cat,
     torch.stack: Op.stack,
     torch.sum: Op.reduce_sum,
@@ -1214,19 +1213,28 @@ _OP_MAP = {
     torch.empty: Op.empty,
     torch.zeros: Op.zeros,
     torch.select: Op.select_view,
+    aten.view.default: Op.view,
+    aten.permute.default: Op.permute_view,
+    aten.transpose.int: Op.permute_view,
+    aten.t.default: Op.permute_view,
+    aten.movedim.int: Op.permute_view,
+    aten.movedim.intlist: Op.permute_view,
+    aten.flatten.using_ints: Op.flatten_view,
     aten.select.int: Op.select_view,
     aten.slice.Tensor: Op.slice_view,
-    aten.view.default: Op.view,
-    aten.copy_.default: Op.inplace_copy,
-    aten.expand.default: Op.expand,
     aten.squeeze.default: Op.squeeze_view,
     aten.squeeze.dim: Op.squeeze_view,
     aten.squeeze.dims: Op.squeeze_view,
     aten.unsqueeze.default: Op.unsqueeze_view,
     aten.narrow.default: Op.narrow_view,
     aten.unbind.int: Op.unbind_view,
+    aten.chunk.default: Op.split_with_size_view,
     aten.split.Tensor: Op.split_with_size_view,
+    aten.split.sizes: Op.split_with_size_view,
+    aten.split.default: Op.split_with_size_view,
     aten.split_with_sizes.default: Op.split_with_size_view,
+    aten.copy_.default: Op.inplace_copy,
+    aten.expand.default: Op.expand,
     aten.index_put_.default: Op.index_put,
     aten.index_copy_.default: Op.inplace_index_copy,
     aten.add_.Scalar: Op.inplace_add,
@@ -1288,8 +1296,8 @@ _OP_MAP = {
     "clone": Op.clone,
     "contiguous": Op.contiguous,
     "t": Op.permute_view,
-    "permute": Op.permute,
-    "transpose": Op.permute,
+    "permute": Op.permute_view,
+    "transpose": Op.permute_view,
     "movedim": Op.permute_view,
     "squeeze": Op.squeeze_view,
     "unsqueeze": Op.unsqueeze_view,
@@ -1310,7 +1318,7 @@ _OP_MAP = {
     "int": Op.cast,
     "split": Op.split_with_size_view,
     "chunk": Op.split_with_size_view,
-    "flatten": Op.flatten,
+    "flatten": Op.flatten_view,
     "sum": Op.reduce_sum,
     "argsort": Op.argsort,
     "new_empty": Op.new_empty,
@@ -1390,6 +1398,90 @@ def _convert_operator_to_torch_op(op):
 _OP_MATCHERS = [
     ("call_function", "_log_api_usage_once"),
 ]
+
+_DISABLE_VIEW_OPS_ENV = "MS_INFERRT_DISABLE_VIEW_OPS"
+
+_VIEW_OP_SWITCH_NAMES = {
+    Op.view: frozenset(("view", "reshape")),
+    Op.permute_view: frozenset(("permute_view",)),
+    Op.flatten_view: frozenset(("flatten",)),
+    Op.slice_view: frozenset(("slice",)),
+    Op.select_view: frozenset(("select",)),
+    Op.squeeze_view: frozenset(("squeeze",)),
+    Op.unsqueeze_view: frozenset(("unsqueeze",)),
+    Op.narrow_view: frozenset(("narrow",)),
+    Op.unbind_view: frozenset(("unbind",)),
+    Op.split_with_size_view: frozenset(("split", "split_with_size")),
+    Op.split_tensor_view: frozenset(("split", "split_tensor")),
+    torch.transpose: frozenset(("transpose",)),
+    aten.transpose.int: frozenset(("transpose",)),
+    "transpose": frozenset(("transpose",)),
+    torch.movedim: frozenset(("movedim",)),
+    aten.movedim.int: frozenset(("movedim",)),
+    aten.movedim.intlist: frozenset(("movedim",)),
+    "movedim": frozenset(("movedim",)),
+    torch.t: frozenset(("t",)),
+    aten.t.default: frozenset(("t",)),
+    "t": frozenset(("t",)),
+    torch.permute: frozenset(("permute",)),
+    aten.permute.default: frozenset(("permute",)),
+    "permute": frozenset(("permute",)),
+    torch.chunk: frozenset(("chunk",)),
+    aten.chunk.default: frozenset(("chunk",)),
+    "chunk": frozenset(("chunk",)),
+}
+
+_VIEW_OP_FALLBACKS = {
+    Op.permute_view: Op.permute,
+    Op.split_with_size_view: Op.split_with_size,
+    Op.split_tensor_view: Op.split_tensor,
+}
+
+
+def _parse_disabled_view_ops():
+    """Return normalized view-op switch tokens from MS_INFERRT_DISABLE_VIEW_OPS."""
+    raw_value = os.environ.get(_DISABLE_VIEW_OPS_ENV, "")
+    return {token.strip().lower() for token in raw_value.split(",") if token.strip()}
+
+
+def _is_chunk_target(target):
+    return target in (torch.chunk, aten.chunk.default) or (isinstance(target, str) and target == "chunk")
+
+
+def _get_view_op_names(op, target):
+    """Return switch names matching the selected InferRT view op and FX target."""
+    if op == Op.permute_view:
+        return _VIEW_OP_SWITCH_NAMES.get(target, _VIEW_OP_SWITCH_NAMES[Op.permute_view])
+
+    if _is_chunk_target(target) and op in (Op.split_with_size_view, Op.split_tensor_view):
+        return _VIEW_OP_SWITCH_NAMES.get(op, frozenset()) | _VIEW_OP_SWITCH_NAMES[target]
+    return _VIEW_OP_SWITCH_NAMES.get(op, frozenset())
+
+
+def _get_view_op_fallback(op):
+    """Return the non-view fallback op where one exists."""
+    return _VIEW_OP_FALLBACKS.get(op)
+
+
+def _is_view_op(op):
+    return bool(_get_view_op_names(op, None))
+
+
+def _maybe_disable_view_op(op, target):
+    """Return fallback op when the requested view op is disabled by environment."""
+    disabled_view_ops = _parse_disabled_view_ops()
+    if not disabled_view_ops:
+        return op
+
+    view_op_names = _get_view_op_names(op, target)
+    if view_op_names and ("all" in disabled_view_ops or view_op_names & disabled_view_ops):
+        fallback_op = _get_view_op_fallback(op)
+        if fallback_op is None:
+            print(f"Disabling InferRT view op {op} for target {target} is ignored: "
+                  "no non-view implementation is registered, continue using view implementation.")
+            return op
+        return fallback_op
+    return op
 
 
 def _get_op(target):
@@ -1971,6 +2063,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
     if ops_hook is not None:
         _, flat_node_args = _flatten_args(op, node)
         op = ops_hook(op, node, flat_node_args, executor)
+    op = _maybe_disable_view_op(op, node.target)
 
     op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
 

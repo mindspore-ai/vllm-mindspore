@@ -47,8 +47,10 @@ namespace device {
 namespace ascend {
 namespace {
 constexpr uint32_t kDefaultHcclExecTimeout = 1800;
+constexpr char kAclnnFinalizeSymbol[] = "MrtAclnnFinalize";
 
 using Callback = std::function<void(void)>;
+using AclnnFinalizeFunc = void (*)();
 std::mutex set_opt_mutex;
 
 void AclrtLaunchCallback(void *userData) {
@@ -72,7 +74,18 @@ aclrtMemcpyKind CopyTypeToAclType(CopyType copyType) {
       return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_HOST;
   }
 }
+
+void TryAclnnFinalize() {
+#ifndef _WIN32
+  auto finalize = reinterpret_cast<AclnnFinalizeFunc>(dlsym(RTLD_DEFAULT, kAclnnFinalizeSymbol));
+  if (finalize != nullptr) {
+    finalize();
+  }
+#endif
+}
 }  // namespace
+
+AscendResManager::~AscendResManager() = default;
 
 void AscendResManager::Initialize() {
   deviceId_ = mrt::collective::CollectiveManager::Instance().local_rank_id();
@@ -112,6 +125,7 @@ void AscendResManager::Destroy() {
   // All unmap/free operations will fail after calling aclrtResetDevice in ResetDevice,
   // so it must be called before that.
   AscendVmmAdapter::GetInstance().ClearAllMemory();
+  TryAclnnFinalize();
   AscendHalManager::GetInstance().ResetDevice(deviceId_);
 
   initialized_ = false;

@@ -68,6 +68,6 @@ OpsErrorCode AclnnFlattenView::CalcWorkspace(const std::vector<const ir::Value *
   return SUCCESS;
 }
 
-MRT_REG_OP(flatten, AclnnFlattenView, Ascend);
+MRT_REG_OP(flatten_view, AclnnFlattenView, Ascend);
 }  // namespace ops
 }  // namespace mrt

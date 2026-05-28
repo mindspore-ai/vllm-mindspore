@@ -38,7 +38,7 @@ using DeviceMemInfo = std::unordered_map<device::DeviceMemPtr, std::unordered_ma
 class MRT_EXPORT AscendResManager : public DeviceResManager {
  public:
   AscendResManager() = default;
-  ~AscendResManager() override = default;
+  ~AscendResManager() override;
 
   void Initialize() override;
 

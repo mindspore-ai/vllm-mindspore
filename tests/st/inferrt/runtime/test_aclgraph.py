@@ -182,6 +182,7 @@ def test_aclgraph_operator_richness_reshape(monkeypatch):
     Expectation: The result is correct
     """
     monkeypatch.setenv("MS_INFERRT_ENABLE_ACLGRAPH", "on")
+    monkeypatch.setenv("MS_INFERRT_DISABLE_VIEW_OPS", "transpose")
 
     def model(x):
         # Reshape operations (10 ops)

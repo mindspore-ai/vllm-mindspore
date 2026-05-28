@@ -234,6 +234,7 @@ def _make_rotary_args() -> TensorArgs:
 
 
 def _rotary_query_after_split_view(out, cos, sin):
+    """Return rotary query output after splitting a packed tensor view."""
     q, k, _ = torch.split(out, [1024, 128, 128], dim=-1)
     q = q.view(out.shape[0], 8, 128)
     k = k.view(out.shape[0], 1, 128)
@@ -248,6 +249,7 @@ def _rotary_query_after_split_view(out, cos, sin):
 
 
 def _rotary_key_after_split_view(out, cos, sin):
+    """Return rotary key output after splitting a packed tensor view."""
     q, k, _ = torch.split(out, [1024, 128, 128], dim=-1)
     q = q.view(out.shape[0], 8, 128)
     k = k.view(out.shape[0], 1, 128)

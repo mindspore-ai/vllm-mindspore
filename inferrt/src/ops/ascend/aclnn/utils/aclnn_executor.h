@@ -53,7 +53,7 @@ class AclnnExecutor {
       LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
     }
   }
-  ~AclnnExecutor() { AclnnFinalize(); }
+  ~AclnnExecutor() = default;
 
   static inline bool IsEnableGroupLaunch() {
     static const bool enableGroupLaunch = []() -> bool {

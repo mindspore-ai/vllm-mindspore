@@ -140,13 +140,13 @@ def test_t_to_permute_view(fmt: str, non_contiguous: bool, shape):
 @pytest.mark.parametrize("fmt", ["ND", "NZ"])
 @pytest.mark.parametrize("non_contiguous", [False, True], ids=["contiguous", "non_contiguous"])
 @pytest.mark.parametrize("shape", TEST_SHAPES_3D, ids=["shape_2x16x32", "shape_3x12x24"])
-def test_movedim_to_permute(fmt: str, non_contiguous: bool, shape):
+def test_movedim_to_permute_view(fmt: str, non_contiguous: bool, shape):
     """
-    Feature: movedim lowered to permute
-    Description: Verify movedim is normalized in fx_backend and executes with builtin permute path for ND/NZ inputs
+    Feature: movedim lowered to permute_view
+    Description: Verify movedim is normalized in fx_backend and executes with builtin permute_view path for ND/NZ inputs
     Expectation:
         ND: Compiled result matches eager numerically with same logical shape
-        NZ: Lowering reaches builtin aclnnPermute path (current device may report unsupported with ret=561103)
+        NZ: Network output rejects non-base memory format explicitly
     """
     def func(x: torch.Tensor) -> torch.Tensor:
         return x.movedim((0, 2), (1, 0))
@@ -155,11 +155,32 @@ def test_movedim_to_permute(fmt: str, non_contiguous: bool, shape):
     eager_out = func(x)
     compiled_func = torch.compile(func, backend=backend)
     if fmt == "NZ":
-        with pytest.raises(RuntimeError, match="aclnnPermuteGetWorkspaceSize"):
+        with pytest.raises(RuntimeError, match="Network output does not support non-base memory format"):
             compiled_func(x)
         return
     compiled_out = compiled_func(x)
     _assert_tensor_matches_eager(eager_out, compiled_out)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_disable_movedim_view_fallback_keeps_aclnn_error(monkeypatch):
+    """
+    Feature: movedim view switch
+    Description: Disable movedim permute_view lowering and verify the old aclnn permute failure is preserved
+    Expectation: NZ input falls back to aclnn permute and raises aclnnPermuteGetWorkspaceSize error
+    """
+    monkeypatch.setenv("MS_INFERRT_DISABLE_VIEW_OPS", "movedim")
+
+    def func(x: torch.Tensor) -> torch.Tensor:
+        return x.movedim((0, 2), (1, 0))
+
+    x = _make_input("NZ", False, BASE_SHAPE)
+    compiled_func = torch.compile(func, backend=backend)
+    try:
+        with pytest.raises(RuntimeError, match="aclnnPermuteGetWorkspaceSize"):
+            compiled_func(x)
+    finally:
+        torch.compiler.reset()
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
