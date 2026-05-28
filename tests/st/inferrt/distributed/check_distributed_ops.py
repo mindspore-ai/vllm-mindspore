@@ -15,6 +15,7 @@
 
 import os
 
+import pytest
 import torch
 from torch import nn
 import torch.distributed as dist
@@ -22,8 +23,6 @@ import torch.distributed as dist
 from ms_inferrt.collective import CollectiveManager
 from ms_inferrt.torch import backend
 
-
-import pytest
 
 BACKEND_HCCL = "hccl"
 
@@ -309,6 +308,125 @@ def test_all_to_all_v_single():
     check_group_info(new_pg)
     check_op_output_with_mul(output, expect_out)
     dist.destroy_process_group()
+
+
+def _check_hccl_non_contiguous_input_raises(op_name):
+    class ReduceScatterNetwork(nn.Module):
+        """Network for testing reduce_scatter with non-contiguous input."""
+
+        def forward(self, tensor_out, tensor_in, pg=None):
+            dist.reduce_scatter_tensor(tensor_out, tensor_in, group=pg)
+            return tensor_out
+
+    class AllReduceNetwork(nn.Module):
+        """Network for testing all_reduce with non-contiguous input."""
+
+        def forward(self, tensor_in, pg=None):
+            dist.all_reduce(tensor_in, group=pg)
+            return tensor_in
+
+    class AllToAllNetwork(nn.Module):
+        """Network for testing all_to_all with non-contiguous input."""
+
+        def forward(self, tensor_out, tensor_in, pg=None):
+            dist.all_to_all_single(tensor_out, tensor_in, group=pg)
+            return tensor_out
+
+    class AllToAllVNetwork(nn.Module):
+        """Network for testing all_to_all_v with non-contiguous input."""
+
+        def forward(
+            self, tensor_out, tensor_in, output_split_sizes, input_split_sizes, pg=None
+        ):
+            dist.all_to_all_single(
+                tensor_out, tensor_in, output_split_sizes, input_split_sizes, group=pg
+            )
+            return tensor_out
+
+    def make_non_contiguous_1d(length, offset=0):
+        base = (torch.arange(length * 2, dtype=torch.int64).npu() + offset).reshape(
+            length, 2
+        )
+        tensor = base[:, 0]
+        assert not tensor.is_contiguous()
+        return tensor
+
+    setup_distributed()
+    try:
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        world_size = dist.get_world_size()
+        group_list = list(range(world_size))
+        new_pg = dist.new_group(group_list)
+
+        if op_name == "reduce_scatter":
+            model = ReduceScatterNetwork().npu()
+            tensor_in = make_non_contiguous_1d(world_size * 2, rank * 10)
+            tensor_out = torch.zeros(2, dtype=torch.int64).npu()
+            args = (tensor_out, tensor_in, new_pg)
+        elif op_name == "all_reduce":
+            model = AllReduceNetwork().npu()
+            tensor_in = make_non_contiguous_1d(world_size * 2, rank * 10)
+            args = (tensor_in, new_pg)
+        elif op_name == "all_to_all_single":
+            model = AllToAllNetwork().npu()
+            tensor_in = make_non_contiguous_1d(world_size, rank * world_size * 2)
+            tensor_out = torch.zeros(world_size, dtype=torch.int64).npu()
+            args = (tensor_out, tensor_in, new_pg)
+        else:
+            model = AllToAllVNetwork().npu()
+            if rank == 0:
+                tensor_in = make_non_contiguous_1d(6)
+                input_split_sizes = [2, 4]
+                output_split_sizes = [2, 3]
+            else:
+                tensor_in = make_non_contiguous_1d(4, 12)
+                input_split_sizes = [3, 1]
+                output_split_sizes = [4, 1]
+            tensor_out = torch.zeros(5, dtype=torch.int64).npu()
+            args = (tensor_out, tensor_in, output_split_sizes, input_split_sizes, new_pg)
+
+        compiled_model = torch.compile(model, backend=backend, fullgraph=True)
+        with pytest.raises(RuntimeError, match="non-contiguous input tensor"):
+            compiled_model(*args)
+    finally:
+        if dist.is_initialized():
+            dist.destroy_process_group()
+
+
+def test_hccl_reduce_scatter_non_contiguous_input_raises():
+    """
+    Feature: Check reduce_scatter input layout validation
+    Description: Verify InferRT HCCL reduce_scatter rejects non-contiguous input tensors before launch
+    Expectation: RuntimeError is raised with a clear non-contiguous input message
+    """
+    _check_hccl_non_contiguous_input_raises("reduce_scatter")
+
+
+def test_hccl_all_reduce_non_contiguous_input_raises():
+    """
+    Feature: Check all_reduce input layout validation
+    Description: Verify InferRT HCCL all_reduce rejects non-contiguous input tensors before launch
+    Expectation: RuntimeError is raised with a clear non-contiguous input message
+    """
+    _check_hccl_non_contiguous_input_raises("all_reduce")
+
+
+def test_hccl_all_to_all_non_contiguous_input_raises():
+    """
+    Feature: Check all_to_all input layout validation
+    Description: Verify InferRT HCCL all_to_all rejects non-contiguous input tensors before launch
+    Expectation: RuntimeError is raised with a clear non-contiguous input message
+    """
+    _check_hccl_non_contiguous_input_raises("all_to_all_single")
+
+
+def test_hccl_all_to_all_v_non_contiguous_input_raises():
+    """
+    Feature: Check all_to_all_v input layout validation
+    Description: Verify InferRT HCCL all_to_all_v rejects non-contiguous input tensors before launch
+    Expectation: RuntimeError is raised with a clear non-contiguous input message
+    """
+    _check_hccl_non_contiguous_input_raises("all_to_all_v_single")
 
 
 if __name__ == "__main__":

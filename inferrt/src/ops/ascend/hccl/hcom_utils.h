@@ -124,6 +124,7 @@ class HcomUtil {
 
   static std::pair<uint64_t, ::HcclDataType> GetHcclCountAndTypeFromTensor(
     const ir::TensorPtr &tensor, const std::optional<int64_t> rankSizeOpt = std::nullopt);
+  static void CheckHcclInputContiguous(const ir::TensorPtr &tensor, const std::string &opName);
   static CollectiveOpReduceType GetCollectiveOpReduceType(const std::string &reduceOp);
   static HcclReduceOp GetHcomReduceOpType(const std::string &reduceOp);
 };

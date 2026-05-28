@@ -142,6 +142,14 @@ std::pair<uint64_t, ::HcclDataType> HcomUtil::GetHcclCountAndTypeFromTensor(cons
   return std::make_pair(hcclCount, hcclType);
 }
 
+void HcomUtil::CheckHcclInputContiguous(const ir::TensorPtr &tensor, const std::string &opName) {
+  CHECK_IF_NULL(tensor);
+  if (!tensor->IsContiguous()) {
+    LOG_EXCEPTION << opName << " does not support non-contiguous input tensor, shape: " << tensor->Shape()
+                  << ", strides: " << tensor->Strides();
+  }
+}
+
 CollectiveOpReduceType HcomUtil::GetCollectiveOpReduceType(const std::string &reduceOp) {
   auto iter = kConstOpCollectiveOpReduceTypeMap.find(reduceOp);
   if (iter == kConstOpCollectiveOpReduceTypeMap.end()) {

@@ -35,7 +35,9 @@ OpsErrorCode HcclAllGather::CalcWorkspace(const std::vector<const ir::Value *> &
                                           size_t *workspaceSize) {
   LOG_OUT << "HcclAllGather CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
-  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
+  auto inputTensor = input[kIndex0]->ToTensor();
+  HcomUtil::CheckHcclInputContiguous(inputTensor, "HcclAllGather");
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(inputTensor);
   hcclKernel_.hcclCount_ = hcclCount;
   hcclKernel_.hcclDataType_ = hcclDataType;
   const string &groupName = input[kIndex2]->ToString();
