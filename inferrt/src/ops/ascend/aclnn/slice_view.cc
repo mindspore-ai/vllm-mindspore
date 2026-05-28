@@ -26,8 +26,13 @@ namespace ops {
 namespace {
 void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
                           const int64_t oriDim, const int64_t oriStart, const int64_t oriEnd, const int64_t step) {
+  (void)oriEnd;
   const auto &curShape = inputTensorPtr->Shape();
   const auto &curStrides = GetTensorStrides(inputTensorPtr);
+  const auto &inferredShape = outputTensorPtr->Shape();
+  CHECK_IF_FAIL_MSG(!outputTensorPtr->HasDynamicShape(),
+                    "Slice output shape should have been inferred before CalcWorkspace, but got " +
+                      std::to_string(inferredShape.size()) + " dimensions with unresolved values");
   const auto dimSize = curShape.size();
   CHECK_IF_FAIL_MSG(dimSize > 0, "slice can not be applied to a 0-dim tensor.");
   const auto dim = DynamicDimWrap(oriDim, dimSize);
@@ -40,21 +45,11 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
     start = dimValue;
   }
 
-  auto end = oriEnd < 0 ? oriEnd + dimValue : oriEnd;
-  if (end < start) {
-    end = start;
-  } else if (end > dimValue) {
-    end = dimValue;
-  }
-
-  const auto len = end - start;
-  auto newShape = curShape;
-  newShape[dim] = (len + step - 1) / step;
   auto newStrides = curStrides;
   newStrides[dim] *= step;
   const auto storageOffset = inputTensorPtr->StorageOffset();
   const size_t newStorageOffset = storageOffset + LongToSize(start * curStrides[dim]);
-  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, newShape, newStrides, newStorageOffset);
+  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, newStrides, newStorageOffset);
 }
 }  // namespace
 

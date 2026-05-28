@@ -32,10 +32,10 @@ ops::OpsErrorCode OpRunner::InferShape() {
 }
 
 ops::OpsErrorCode OpRunner::CalcWorkspace() {
-  LOG_OUT << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
+  LOG_ERROR << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
           << ", workspaceSize=" << workspaceSize_;
   auto ret = operator_->CalcWorkspace(input_, output_, &workspaceSize_);
-  LOG_OUT << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
+  LOG_ERROR << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
@@ -44,10 +44,10 @@ ops::OpsErrorCode OpRunner::Launch() {
   if (device_.type != hardware::DeviceType::CPU) {
     CHECK_IF_NULL(stream);
   }
-  LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
+  LOG_ERROR << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
           << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
-  LOG_OUT << "End launch op[" << ops::ToStr(opName_) << "]";
+  LOG_ERROR << "End launch op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 

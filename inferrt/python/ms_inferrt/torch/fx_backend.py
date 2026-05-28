@@ -730,6 +730,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.moe_distribute_dispatch_v2, moe_distribute_dispatch_v2_hook)
     register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
+    register_arg_mapping_hook(Op.squeeze_view, squeeze_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -889,6 +890,27 @@ def chunk_arg_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def squeeze_arg_hook(node, flat_args, executor):
+    """Normalize squeeze default/dim/dims forms to backend [self, dims]."""
+    args = list(flat_args)
+    if not args:
+        return args
+
+    self_arg = args[0]
+    dim = args[1] if len(args) > 1 else None
+    if dim is None:
+        example = self_arg.meta.get("example_value", None) if isinstance(self_arg, Node) else self_arg
+        rank = int(example.dim()) if hasattr(example, "dim") else 0
+        dims = list(range(rank))
+    elif isinstance(dim, (list, tuple)):
+        dims = list(dim)
+    else:
+        dims = [dim]
+
+    return [self_arg, dims]
+
+
+# pylint: disable=unused-argument
 def reduce_sum_arg_hook(node, flat_args, executor):
     """
     Normalize arguments for reduce_sum / sum:
@@ -958,10 +980,10 @@ def split_ops_hook(op, node, input_nodes, executor):
     """
     Hook to determine which split op to use for a given FX node.
 
-    If the target is torch.chunk or the string "chunk", returns the original op.
-    If the second input node is an integer or torch.SymInt, returns Op.split_tensor.
+    If the target is torch.chunk or the string "chunk", preserves the mapped op.
+    If the second input node is an integer or torch.SymInt, returns Op.split_tensor_view.
     If the second input node has a 'meta' attribute whose 'example_value'
-    is an integer or torch.SymInt, returns Op.split_tensor.
+    is an integer or torch.SymInt, returns Op.split_tensor_view.
     Otherwise, returns the original op.
     """
     if node.target is torch.chunk:
@@ -970,12 +992,12 @@ def split_ops_hook(op, node, input_nodes, executor):
         return op
 
     if isinstance(input_nodes[1], (int, torch.SymInt)):
-        return Op.split_tensor
+        return Op.split_tensor_view
     if hasattr(input_nodes[1], "meta") and input_nodes[1].meta is not None:
         if isinstance(
                 input_nodes[1].meta.get("example_value", None), (int, torch.SymInt)
         ):
-            return Op.split_tensor
+            return Op.split_tensor_view
     return op
 
 
@@ -1077,7 +1099,7 @@ def fill_op_hook(op, node, input_nodes, executor):
 
 def _init_ops_mapping_hooks():
     """Register ops mapping hooks for torch ops."""
-    register_ops_mapping_hook(Op.split_with_size, split_ops_hook)
+    register_ops_mapping_hook(Op.split_with_size_view, split_ops_hook)
     register_ops_mapping_hook(Op.masked_fill_tensor, masked_fill_op_hook)
     register_ops_mapping_hook(
         Op.inplace_masked_fill_tensor, inplace_masked_fill_op_hook
@@ -1171,11 +1193,13 @@ _OP_MAP = {
     torch.t: Op.permute_view,
     torch.permute: Op.permute,
     torch.transpose: Op.permute,
-    torch.movedim: Op.permute,
-    torch.squeeze: Op.squeeze,
-    torch.unsqueeze: Op.unsqueeze,
-    torch.split: Op.split_with_size,
-    torch.chunk: Op.split_with_size,
+    torch.movedim: Op.permute_view,
+    torch.squeeze: Op.squeeze_view,
+    torch.unsqueeze: Op.unsqueeze_view,
+    torch.narrow: Op.narrow_view,
+    torch.unbind: Op.unbind_view,
+    torch.split: Op.split_with_size_view,
+    torch.chunk: Op.split_with_size_view,
     torch.flatten: Op.flatten,
     torch.cat: Op.cat,
     torch.stack: Op.stack,
@@ -1195,7 +1219,14 @@ _OP_MAP = {
     aten.view.default: Op.view,
     aten.copy_.default: Op.inplace_copy,
     aten.expand.default: Op.expand,
-    aten.unsqueeze.default: Op.unsqueeze,
+    aten.squeeze.default: Op.squeeze_view,
+    aten.squeeze.dim: Op.squeeze_view,
+    aten.squeeze.dims: Op.squeeze_view,
+    aten.unsqueeze.default: Op.unsqueeze_view,
+    aten.narrow.default: Op.narrow_view,
+    aten.unbind.int: Op.unbind_view,
+    aten.split.Tensor: Op.split_with_size_view,
+    aten.split_with_sizes.default: Op.split_with_size_view,
     aten.index_put_.default: Op.index_put,
     aten.index_copy_.default: Op.inplace_index_copy,
     aten.add_.Scalar: Op.inplace_add,
@@ -1259,9 +1290,11 @@ _OP_MAP = {
     "t": Op.permute_view,
     "permute": Op.permute,
     "transpose": Op.permute,
-    "movedim": Op.permute,
-    "squeeze": Op.squeeze,
-    "unsqueeze": Op.unsqueeze,
+    "movedim": Op.permute_view,
+    "squeeze": Op.squeeze_view,
+    "unsqueeze": Op.unsqueeze_view,
+    "narrow": Op.narrow_view,
+    "unbind": Op.unbind_view,
     "neg": Op.neg,
     "square": Op.square,
     "rsqrt": Op.rsqrt,
@@ -1275,8 +1308,8 @@ _OP_MAP = {
     "long": Op.cast,
     "float": Op.cast,
     "int": Op.cast,
-    "split": Op.split_with_size,
-    "chunk": Op.split_with_size,
+    "split": Op.split_with_size_view,
+    "chunk": Op.split_with_size_view,
     "flatten": Op.flatten,
     "sum": Op.reduce_sum,
     "argsort": Op.argsort,

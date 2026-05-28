@@ -589,6 +589,10 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
   auto device = srcStorage->GetDevice();
   auto storage = ir::MakeIntrusive<ir::Storage>(srcStorage->SizeBytes(), device);
   CHECK_IF_NULL(storage);
+  if (srcStorage->SizeBytes() == 0) {
+    LOG_OUT << "Skip copy for empty storage";
+    return storage;
+  }
   storage->AllocateMemory();
 
   auto deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
@@ -627,6 +631,12 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     storage = newStorage;
   }
 
+  auto atDevice = ToTorchDevice(tensor->GetDevice());
+  auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
+  if (tensor->Numel() == 0) {
+    return at::empty(tensor->Shape(), options);
+  }
+
   void *dataPtr = storage->Data();
   CHECK_IF_NULL(dataPtr);
   auto deleterFn = storage->GetDeleter();
@@ -646,12 +656,6 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     };
   }
   storage->Release();
-
-  auto atDevice = ToTorchDevice(tensor->GetDevice());
-  auto options = at::TensorOptions().dtype(ToTorchDType(tensor->Dtype())).device(atDevice);
-  if (tensor->Numel() == 0) {
-    return at::empty(tensor->Shape(), options);
-  }
 
   switch (atDevice.type()) {
     case at::DeviceType::CPU: {

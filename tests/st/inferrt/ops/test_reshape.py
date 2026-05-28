@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for torch.reshape operation."""
 import numpy as np
+import pytest
 import torch
 
 from torch_npu.testing.common_utils import create_common_tensor
@@ -21,6 +22,8 @@ from ms_inferrt.torch import fx_mlir_backend as backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
+
+_VIEW_ERR = r"View shape .* is not compatible"
 
 
 # pylint: disable=redefined-builtin
@@ -60,3 +63,47 @@ def test_reshape():
     ]
     op_func_compiled = torch.compile(op_func, backend=backend)
     reshape_forward(shape_format, op_func_compiled)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize(
+    "shape, transform_pattern, target_shape",
+    [
+        ((3, 4, 5, 6), "permute_0132", (360,)),
+        ((3, 4, 5, 6), "permute_0132", (3, 4, 30)),
+        ((4, 5, 6, 7), "transpose_01", (20, 42)),
+    ],
+)
+def test_reshape_noncontiguous_view_incompatible(shape, transform_pattern, target_shape):
+    """
+    Feature: reshape on non-contiguous input with incompatible stride geometry
+    Description: Unlike view, reshape succeeds in eager mode (contiguous fallback), but InferRT's
+                 reshape (implemented via view.cc) rejects non-view-compatible stride geometry.
+                 Dynamo FakeTensor does NOT intercept reshape (eager always succeeds), so the
+                 error comes from InferRT at runtime.
+    Expectation: InferRT raises RuntimeError "View shape ... is not compatible"
+    """
+    self_tensor = torch.rand(shape, dtype=torch.bfloat16)
+
+    # Build non-contiguous tensor
+    if transform_pattern == "permute_0132":
+        transformed = self_tensor.permute(0, 1, 3, 2)
+    elif transform_pattern == "transpose_01":
+        transformed = self_tensor.transpose(0, 1)
+    else:
+        raise ValueError(f"unsupported transform pattern: {transform_pattern}")
+    assert not transformed.is_contiguous()
+
+    # Eager reshape succeeds (contiguous fallback)
+    eager_result = transformed.reshape(target_shape)
+    assert eager_result.data_ptr() != transformed.data_ptr()
+
+    # Pass non-contiguous tensor directly as input to compiled func
+    transformed_npu = transformed.npu()
+
+    def func(x):
+        return x.reshape(target_shape)
+
+    op_func_compiled = torch.compile(func, backend=backend, fullgraph=True)
+    with pytest.raises(RuntimeError, match=_VIEW_ERR):
+        op_func_compiled(transformed_npu)

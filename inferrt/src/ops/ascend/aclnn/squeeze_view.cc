@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "ops/ascend/aclnn/permute_view.h"
+#include "ops/ascend/aclnn/squeeze_view.h"
 
 #include <algorithm>
-#include <iterator>
 #include <vector>
 
 #include "common/common.h"
@@ -28,55 +27,60 @@ namespace mrt {
 namespace ops {
 namespace {
 std::vector<int64_t> NormalizeDims(const std::vector<int64_t> &dims, int64_t dimSize) {
-  CHECK_IF_FAIL_MSG(SizeToLong(dims.size()) == dimSize,
-                    "permute expects dims length equal to input rank, but got dims size " +
-                      std::to_string(dims.size()) + " and input rank " + std::to_string(dimSize));
-
   std::vector<int64_t> normalized;
   normalized.reserve(dims.size());
   std::transform(dims.begin(), dims.end(), std::back_inserter(normalized),
-                 [dimSize](int64_t dim) { return DynamicDimWrap(dim, dimSize); });
+                 [dimSize](int64_t dim) { return DynamicDimWrap(dim, dimSize, true); });
 
   auto sortedDims = normalized;
   std::sort(sortedDims.begin(), sortedDims.end());
   auto uniqueEnd = std::unique(sortedDims.begin(), sortedDims.end());
-  CHECK_IF_FAIL_MSG(uniqueEnd == sortedDims.end(), "permute dims must be unique");
+  CHECK_IF_FAIL_MSG(uniqueEnd == sortedDims.end(), "dim appears multiple times in the list of dims");
   return normalized;
 }
 
 void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
                           const std::vector<int64_t> &dims) {
   const auto &curShape = inputTensorPtr->Shape();
-  const auto dimSize = SizeToLong(curShape.size());
-  const auto normalizedDims = NormalizeDims(dims, dimSize);
+  const auto &curStrides = GetTensorStrides(inputTensorPtr);
   const auto &inferredShape = outputTensorPtr->Shape();
   CHECK_IF_FAIL_MSG(!outputTensorPtr->HasDynamicShape(),
-                    "Permute output shape should have been inferred before CalcWorkspace, but got " +
+                    "Squeeze output shape should have been inferred before CalcWorkspace, but got " +
                       std::to_string(inferredShape.size()) + " dimensions with unresolved values");
-  CHECK_IF_FAIL_MSG(inferredShape.size() == normalizedDims.size(),
-                    "Permute inferred output rank " + std::to_string(inferredShape.size()) +
-                      " does not match dims size " + std::to_string(normalizedDims.size()));
-  const auto &curStrides = GetTensorStrides(inputTensorPtr);
+
+  const auto normalizedDims = NormalizeDims(dims, SizeToLong(curShape.size()));
+  std::vector<bool> squeezeMask(curShape.size(), false);
+  for (auto dim : normalizedDims) {
+    if (LongToSize(dim) < squeezeMask.size()) {
+      squeezeMask[LongToSize(dim)] = true;
+    }
+  }
 
   std::vector<int64_t> newStrides;
   newStrides.reserve(curStrides.size());
-  std::transform(normalizedDims.begin(), normalizedDims.end(), std::back_inserter(newStrides),
-                 [&curStrides](int64_t dim) { return curStrides[LongToSize(dim)]; });
+  for (size_t i = 0; i < curShape.size(); ++i) {
+    if (squeezeMask[i] && curShape[i] == 1) {
+      continue;
+    }
+    newStrides.emplace_back(curStrides[i]);
+  }
 
+  CHECK_IF_FAIL_MSG(inferredShape.size() == newStrides.size(),
+                    "Squeeze inferred output rank " + std::to_string(inferredShape.size()) +
+                      " does not match computed stride rank " + std::to_string(newStrides.size()));
   UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, newStrides, inputTensorPtr->StorageOffset());
 }
 }  // namespace
 
-OpsErrorCode AclnnPermuteView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+OpsErrorCode AclnnSqueezeView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                              size_t *workspaceSize) {
   const auto inputTensorPtr = input[kIndex0]->ToTensor();
   const auto &dims = input[kIndex1]->ToTuple()->ToIntList();
   UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dims);
   CheckStorageMatch(input, output);
-  *workspaceSize = 0;
   return SUCCESS;
 }
 
-MRT_REG_OP(permute_view, AclnnPermuteView, Ascend);
+MRT_REG_OP(squeeze_view, AclnnSqueezeView, Ascend);
 }  // namespace ops
 }  // namespace mrt

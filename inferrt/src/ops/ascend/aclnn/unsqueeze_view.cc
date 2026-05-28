@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Huawei Technologies Co., Ltd
+ * Copyright 2026 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include "ops/ascend/aclnn/view.h"
+#include "ops/ascend/aclnn/unsqueeze_view.h"
 
 #include <vector>
-#include "ops/ascend/aclnn/utils/opapi_utils.h"
+
+#include "common/common.h"
 #include "ops/ascend/aclnn/utils/view_utils.h"
 #include "ops/op_register.h"
 
@@ -25,36 +26,35 @@ namespace mrt {
 namespace ops {
 namespace {
 void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorPtr &outputTensorPtr,
-                          const std::vector<int64_t> &viewShapeArg) {
+                          const int64_t oriDim) {
   const auto &curShape = inputTensorPtr->Shape();
   const auto &curStrides = GetTensorStrides(inputTensorPtr);
   const auto &inferredShape = outputTensorPtr->Shape();
   CHECK_IF_FAIL_MSG(!outputTensorPtr->HasDynamicShape(),
-                    "View output shape should have been inferred before CalcWorkspace, but got " +
+                    "Unsqueeze output shape should have been inferred before CalcWorkspace, but got " +
                       std::to_string(inferredShape.size()) + " dimensions with unresolved values");
+  CHECK_IF_FAIL_MSG(inferredShape.size() == curShape.size() + 1,
+                    "Unsqueeze inferred output rank " + std::to_string(inferredShape.size()) +
+                      " does not match input rank " + std::to_string(curShape.size()) + " plus one");
 
-  const auto strides = CalculateViewStrides(curShape, curStrides, inferredShape);
-  if (strides.has_value()) {
-    UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, strides.value());
-    return;
-  }
-  LOG_EXCEPTION << "View shape " << viewShapeArg << " (inferred as " << inferredShape
-                << ") is not compatible with input tensor's shape " << curShape << " and stride " << curStrides;
+  const auto dim = DynamicDimWrap(oriDim, SizeToLong(curShape.size()) + 1);
+  auto newStrides = curStrides;
+  const auto newStride =
+    LongToSize(dim) >= curShape.size() ? 1 : curShape[LongToSize(dim)] * curStrides[LongToSize(dim)];
+  newStrides.insert(newStrides.begin() + dim, newStride);
+  UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, newStrides, inputTensorPtr->StorageOffset());
 }
 }  // namespace
 
-OpsErrorCode AclnnView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
-                                      size_t *workspaceSize) {
+OpsErrorCode AclnnUnsqueezeView::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
+                                               size_t *workspaceSize) {
   const auto inputTensorPtr = input[kIndex0]->ToTensor();
-  const auto &shape = input[kIndex1]->ToTuple()->ToIntList();
-  if (std::any_of(shape.begin(), shape.end(), [](const int &shapeI) { return shapeI < -1; })) {
-    LOG_EXCEPTION << "For View the component of shape can't be less than -1";
-  }
-  UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), shape);
+  const auto dim = input[kIndex1]->ToInt();
+  UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), dim);
   CheckStorageMatch(input, output);
   return SUCCESS;
 }
 
-MRT_REG_OP(view, AclnnView, Ascend);
+MRT_REG_OP(unsqueeze_view, AclnnUnsqueezeView, Ascend);
 }  // namespace ops
 }  // namespace mrt

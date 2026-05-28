@@ -65,6 +65,45 @@ bool IsBaseFormat(MemoryFormat format) { return BaseFormatSet.count(format) != 0
 
 bool IsTensorBaseFormat(const ir::TensorPtr &tensor) { return IsBaseFormat(tensor->Format()); }
 
+MemoryFormat GetBaseFormat(MemoryFormat format) {
+  switch (format) {
+    case MemoryFormat::FORMAT_ND:
+      return MemoryFormat::FORMAT_ND;
+    case MemoryFormat::FORMAT_NCHW:
+      return MemoryFormat::FORMAT_NCHW;
+    case MemoryFormat::FORMAT_NHWC:
+      return MemoryFormat::FORMAT_NHWC;
+    case MemoryFormat::FORMAT_NC1HWC0:
+      return MemoryFormat::FORMAT_NCHW;
+    case MemoryFormat::FORMAT_FRACTAL_Z:
+      return MemoryFormat::FORMAT_NCHW;
+    case MemoryFormat::FORMAT_FRACTAL_NZ:
+      return MemoryFormat::FORMAT_ND;
+    case MemoryFormat::FORMAT_NCDHW:
+      return MemoryFormat::FORMAT_NCDHW;
+    case MemoryFormat::FORMAT_NDHWC:
+      return MemoryFormat::FORMAT_NCDHW;
+    case MemoryFormat::FORMAT_NDC1HWC0:
+      return MemoryFormat::FORMAT_NCDHW;
+    case MemoryFormat::FORMAT_FRACTAL_Z_3D:
+      return MemoryFormat::FORMAT_NCDHW;
+    default:
+      LOG_EXCEPTION << "unknown format type: " << static_cast<int>(format);
+      return MemoryFormat::FORMAT_ND;
+  }
+}
+
+bool IsDefiniteTensorWhenMetaDataChanges(const ir::TensorPtr &tensor, const std::vector<int64_t> &shape) {
+  const auto baseFormat = GetBaseFormat(tensor->Format());
+  if (baseFormat == MemoryFormat::FORMAT_NCHW && shape.size() >= 5) {
+    return true;
+  }
+  if (baseFormat == MemoryFormat::FORMAT_NCDHW && shape.size() != 5) {
+    return true;
+  }
+  return false;
+}
+
 void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int64_t> &yShape,
                        std::vector<int64_t> *broadcastShape) {
   if (xShape == yShape) {

@@ -34,6 +34,8 @@ MRT_EXPORT void CalBroadCastShape(const std::vector<int64_t> &xShape, const std:
                                   std::vector<int64_t> *broadcastShape);
 MRT_EXPORT bool IsBaseFormat(MemoryFormat format);
 MRT_EXPORT bool IsTensorBaseFormat(const ir::TensorPtr &tensor);
+MRT_EXPORT MemoryFormat GetBaseFormat(MemoryFormat format);
+MRT_EXPORT bool IsDefiniteTensorWhenMetaDataChanges(const ir::TensorPtr &tensor, const std::vector<int64_t> &shape);
 }  // namespace ops
 }  // namespace mrt
 

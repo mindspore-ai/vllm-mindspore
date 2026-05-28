@@ -51,9 +51,18 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const std::vector
                       " and the size of outputTensorVector is " + std::to_string(outputTensorVector.size()));
   for (size_t i = 0; i < splitSize.size(); ++i) {
     const auto splitIter = splitSize[i];
-    std::vector<int64_t> slice_shape(curShape);
-    slice_shape[wrapDim] = splitIter;
-    UpdateTensorViewInfo(inputTensorPtr, outputTensorVector[i], slice_shape, curStrides, curOffset);
+    const auto &inferredShape = outputTensorVector[i]->Shape();
+    CHECK_IF_FAIL_MSG(!outputTensorVector[i]->HasDynamicShape(),
+                      "SplitWithSize output shape should have been inferred before CalcWorkspace, but got " +
+                        std::to_string(inferredShape.size()) + " dimensions with unresolved values");
+    CHECK_IF_FAIL_MSG(inferredShape.size() == curShape.size(),
+                      "SplitWithSize inferred output rank " + std::to_string(inferredShape.size()) +
+                        " does not match input rank " + std::to_string(curShape.size()));
+    CHECK_IF_FAIL_MSG(inferredShape[wrapDim] == splitIter, "SplitWithSize inferred output shape " +
+                                                             ir::ShapeToString(inferredShape) +
+                                                             " does not match split size " + std::to_string(splitIter) +
+                                                             " at dim " + std::to_string(wrapDim));
+    UpdateTensorViewInfo(inputTensorPtr, outputTensorVector[i], inferredShape, curStrides, curOffset);
     curOffset += LongToSize(splitIter * curStrides[wrapDim]);
   }
 }
