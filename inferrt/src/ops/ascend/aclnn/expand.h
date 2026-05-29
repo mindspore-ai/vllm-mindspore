@@ -43,6 +43,7 @@ class AclnnExpand : public Operator {
 
  private:
   std::unique_ptr<AclnnExecutor> executor_{nullptr};
+  std::vector<int64_t> resolved_size_;  // resolved size from InferShape (with -1 replaced)
 };
 
 }  // namespace ops

@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from ms_inferrt.torch import fx_mlir_backend as backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
@@ -44,5 +45,31 @@ def test_expand(shape):
 
     cpu_output = expand_op(cpu_tensor0, cpu_tensor1).detach().cpu().numpy()
     npu_output = compile_op(npu_tensor0, npu_tensor1).detach().cpu().numpy()
+
+    AssertRtolEqual(cpu_output, npu_output, prec)
+
+
+def expand_with_neg1_op(x):
+    """Test expand with -1 in size via fx_backend (covers schema unpack, string 'expand' map, -1 handling)."""
+    return x.expand(1, -1, -1)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(29, 1), (8, 16)])
+def test_expand_neg1(shape):
+    """
+    Feature: Test expand with -1 size via fx_backend
+    Description: Test aten.expand with unpacked args and -1 size
+    Expectation: Correct result, no schema error, no aclnnExpand -1 mismatch
+    """
+    compile_op = torch.compile(expand_with_neg1_op, backend=fx_backend)
+    prec = 1e-4
+
+    cpu_input = np.random.uniform(-1, 1, shape).astype(np.float32)
+    cpu_tensor = torch.from_numpy(cpu_input)
+    npu_tensor = torch.from_numpy(cpu_input).npu()
+
+    cpu_output = expand_with_neg1_op(cpu_tensor).detach().cpu().numpy()
+    npu_output = compile_op(npu_tensor).detach().cpu().numpy()
 
     AssertRtolEqual(cpu_output, npu_output, prec)

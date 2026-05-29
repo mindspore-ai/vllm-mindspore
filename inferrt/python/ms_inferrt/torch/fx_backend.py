@@ -1241,11 +1241,17 @@ _OP_MAP = {
     "mul": Op.mul,
     "div": Op.div,
     "eq": Op.eq,
+    "__eq__": Op.eq,
     "ne": Op.ne,
+    "__ne__": Op.ne,
     "lt": Op.lt,
+    "__lt__": Op.lt,
     "le": Op.le,
+    "__le__": Op.le,
     "gt": Op.gt,
+    "__gt__": Op.gt,
     "ge": Op.ge,
+    "__ge__": Op.ge,
     "relu": Op.relu,
     "to": Op.cast,
     "sigmoid": Op.sigmoid,
@@ -1266,6 +1272,7 @@ _OP_MAP = {
     "square": Op.square,
     "rsqrt": Op.rsqrt,
     "view": Op.view,  # view is often used like reshape
+    "expand": Op.expand,
     "copy_": Op.inplace_copy,
     "index_copy_": Op.inplace_index_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
@@ -1667,7 +1674,7 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
 
     # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
     # allowing the shape to be specified as unpacked integers.
-    if (node.target in ["view", "reshape", "repeat", "permute", "new_empty"]
+    if (node.target in ["view", "reshape", "repeat", "permute", "new_empty", "expand"]
             or node.target is torch.functional.einsum) \
             and not _is_shape_sequence(args[1]):
         args = [args[0], args[1:]]
@@ -1734,17 +1741,19 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
     Retrieve torch schema(s) for a given op target. Returns None if unavailable.
     """
     if isinstance(target, str):
-        for ns in iter(torch.ops):
-            ops_ns = getattr(torch.ops, ns)
-            if hasattr(ops_ns, target):
-                op_target = getattr(ops_ns, target)
-                return (
-                    op_target._qualified_op_name,
-                    [
-                        getattr(op_target, overload)._schema
-                        for overload in op_target.overloads()
-                    ],
-                )
+        if not target.startswith("__"):
+            for ns in iter(torch.ops):
+                ops_ns = getattr(torch.ops, ns)
+                if hasattr(ops_ns, target):
+                    op_target = getattr(ops_ns, target)
+                    if isinstance(op_target, (OpOverload, OpOverloadPacket)):
+                        return (
+                            op_target._qualified_op_name,
+                            [getattr(op_target, overload)._schema for overload in op_target.overloads()],
+                        )
+        aten_fn = torch.jit._builtins._find_builtin(target)
+        if aten_fn is not None:
+            return aten_fn, torch._C._jit_get_schemas_for_operator(aten_fn)
         return None, None
 
     if isinstance(target, OpOverload):

@@ -91,6 +91,8 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
     outShape.push_back(target);
   }
 
+  resolved_size_ = outShape;  // save resolved size for CalcWorkspace/Launch
+
   auto &outTensor = output->ToTensor();
   outTensor->SetShape(std::move(outShape));
   outTensor->Resize();  // updates numel_ and storage sizeBytes_
@@ -100,16 +102,18 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
 OpsErrorCode AclnnExpand::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                         size_t *workspaceSize) {
   LOG_OUT << "Begin CalcWorkspace for op [expand]";
-  executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[0]->ToTensor(),
-                              input[1]->ToTuple()->ToIntList(), output->ToTensor());
+  // prefer resolved size from InferShape; fallback to raw input if empty
+  const std::vector<int64_t> &size_to_use = resolved_size_.empty() ? input[1]->ToTuple()->ToIntList() : resolved_size_;
+  executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[0]->ToTensor(), size_to_use,
+                              output->ToTensor());
   return SUCCESS;
 }
 
 OpsErrorCode AclnnExpand::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                  ir::Value *output, void *stream) {
   LOG_OUT << "Begin Launch for op [expand]";
-  executor_->Launch(workspace, workspaceSize, stream, input[0]->ToTensor(), input[1]->ToTuple()->ToIntList(),
-                    output->ToTensor());
+  const std::vector<int64_t> &size_to_use = resolved_size_.empty() ? input[1]->ToTuple()->ToIntList() : resolved_size_;
+  executor_->Launch(workspace, workspaceSize, stream, input[0]->ToTensor(), size_to_use, output->ToTensor());
   return SUCCESS;
 }
 
