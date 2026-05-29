@@ -1668,8 +1668,8 @@ def _check_runtime_value_against_type(value_type, runtime_v: Any) -> bool:
 
     # Int / SymInt
     if isinstance(value_type, info.schema_int_types):
-        # Allow Python int and symbolic int
-        return isinstance(runtime_v, (int,) + info.sym_int_vals)
+        # Allow Python int, symbolic int, and torch.dtype.
+        return isinstance(runtime_v, (int, torch.dtype) + info.sym_int_vals)
 
     # Float / SymFloat
     if isinstance(value_type, info.schema_float_types):
