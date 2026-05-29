@@ -28,30 +28,27 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const std::vector
                           const int64_t splitSize, int64_t dim) {
   const auto &curShape = inputTensorPtr->Shape();
   const auto &curStrides = GetTensorStrides(inputTensorPtr);
-  const auto curOffset = inputTensorPtr->StorageOffset();
+  auto curOffset = inputTensorPtr->StorageOffset();
   const auto ndim = curShape.size();
   CHECK_IF_FAIL_MSG(ndim > 0, "For SplitTensor, rank should > 0, but got" + std::to_string(ndim));
   const auto wrapDim = DynamicDimWrap(dim, ndim);
   CHECK_IF_FAIL_MSG(splitSize > 0, "For SplitTensor, splitSize must be positive, but got" + std::to_string(splitSize));
 
-  const auto numSplits = (curShape[wrapDim] + splitSize - 1) / splitSize;
-  if (numSplits <= 0) {
-    LOG_EXCEPTION << "For SplitTensor, given input shape: " << curShape << ", splitSize: " << splitSize << ", dim "
-                  << dim << ", the output num is 0.";
-  }
-
-  for (int64_t idx = 0; idx < numSplits; ++idx) {
-    // Calculate the shape and length of sub tensors
-    std::vector<int64_t> sliceShape = curShape;
-    // Calculate the size of a sub tensor in a specified dimension
-    int64_t sliceSize = splitSize;
-    if (MS_UNLIKELY(idx == numSplits - 1)) {
-      // For the last sub tensor, ensure that it contains all remaining elements in that dimension
-      sliceSize = curShape[wrapDim] - (idx * splitSize);
-    }
-    sliceShape[wrapDim] = sliceSize;
-    const size_t newStorageOffset = curOffset + LongToSize(idx * splitSize * curStrides[wrapDim]);
-    UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr[idx], sliceShape, curStrides, newStorageOffset);
+  CHECK_IF_FAIL_MSG(!outputTensorPtr.empty(), "For SplitTensor, output tensor size should be greater than 0");
+  for (const auto &outputTensor : outputTensorPtr) {
+    const auto &inferredShape = outputTensor->Shape();
+    CHECK_IF_FAIL_MSG(!outputTensor->HasDynamicShape(),
+                      "SplitTensor output shape should have been inferred before CalcWorkspace, but got " +
+                        std::to_string(inferredShape.size()) + " dimensions with unresolved values");
+    CHECK_IF_FAIL_MSG(inferredShape.size() == ndim, "SplitTensor inferred output rank " +
+                                                      std::to_string(inferredShape.size()) +
+                                                      " does not match input rank " + std::to_string(ndim));
+    CHECK_IF_FAIL_MSG(inferredShape[wrapDim] <= splitSize,
+                      "SplitTensor inferred output shape " + ir::ShapeToString(inferredShape) +
+                        " has size greater than splitSize " + std::to_string(splitSize) + " at dim " +
+                        std::to_string(wrapDim));
+    UpdateTensorViewInfo(inputTensorPtr, outputTensor, inferredShape, curStrides, curOffset);
+    curOffset += LongToSize(inferredShape[wrapDim] * curStrides[wrapDim]);
   }
 }
 }  // namespace

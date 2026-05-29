@@ -39,7 +39,9 @@ OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value 
   LOG_OUT << "HcclReduceScatter CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
   auto rankSize = input[kIndex2]->ToInt();
-  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor(), rankSize);
+  auto inputTensor = input[kIndex0]->ToTensor();
+  HcomUtil::CheckHcclInputContiguous(inputTensor, "HcclReduceScatter");
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(inputTensor, rankSize);
   hcclKernel_.hcclCount_ = hcclCount;
   hcclKernel_.hcclDataType_ = hcclDataType;
   const string &groupName = input[kIndex3]->ToString();

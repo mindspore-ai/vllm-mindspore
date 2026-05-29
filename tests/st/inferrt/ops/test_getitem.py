@@ -115,6 +115,46 @@ def test_tensor_getitem_by_tensor():
     expected = x[indices]
     AssertRtolEqual(out, expected)
 
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_torch_select_valid_metadata():
+    """
+    Feature: Test torch.select valid index
+    Description: Verify direct torch.select lowers to select_view and preserves eager metadata
+    Expectation: The result and observable view metadata are consistent with eager mode
+    """
+
+    def func(x):
+        return torch.select(x, 1, 2)
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(2, 4, 3).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    assert tuple(out.shape) == tuple(expected.shape)
+    assert tuple(out.stride()) == tuple(expected.stride())
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_tensor_getitem_slice_then_select_metadata():
+    """
+    Feature: Test slice/select view metadata
+    Description: Verify a chained getitem path preserves eager shape/stride metadata
+    Expectation: The result and observable view metadata are consistent with eager mode
+    """
+
+    def func(x):
+        return x[1:5:2, 1]
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(6, 4, 3).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    assert tuple(out.shape) == tuple(expected.shape)
+    assert tuple(out.stride()) == tuple(expected.stride())
+    AssertRtolEqual(out, expected)
+
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("pipeline", (True, False))
 def test_tensor_getitem_by_tuple_with_none(pipeline, monkeypatch):

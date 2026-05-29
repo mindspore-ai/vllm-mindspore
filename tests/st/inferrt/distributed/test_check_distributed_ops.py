@@ -77,3 +77,22 @@ def test_check_all_to_all_v_single_op():
     cmd = f"torchrun --nproc_per_node=2 {_SCRIPT_PATH} test_all_to_all_v_single"
     return_code = os.system(cmd)
     assert return_code == 0
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="allcards", essential_mark="essential")
+def test_check_hccl_non_contiguous_input_raises():
+    """
+    Feature: Check HCCL op input layout validation
+    Description: Check HCCL ops reject non-contiguous input tensors before launch
+    Expectation: RuntimeError is raised with a clear non-contiguous input message
+    """
+    test_names = [
+        "test_hccl_reduce_scatter_non_contiguous_input_raises",
+        "test_hccl_all_reduce_non_contiguous_input_raises",
+        "test_hccl_all_to_all_non_contiguous_input_raises",
+        "test_hccl_all_to_all_v_non_contiguous_input_raises",
+    ]
+    for test_name in test_names:
+        cmd = f"torchrun --nproc_per_node=2 {_SCRIPT_PATH} {test_name}"
+        return_code = os.system(cmd)
+        assert return_code == 0

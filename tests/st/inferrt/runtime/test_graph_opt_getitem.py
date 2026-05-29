@@ -91,6 +91,46 @@ def test_getitem_slice_dynamic(backend):
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_select_out_of_range_matches_eager(backend):
+    """
+    Feature: Test select_view invalid index
+    Description: Verify out-of-range select keeps failure semantics aligned with eager mode
+    Expectation: Eager and compiled execution both raise an out-of-range error
+    """
+
+    def func(x, idx):
+        return torch.select(x, 0, idx)
+
+    compiled_op = torch.compile(func, backend=backend, fullgraph=True)
+    x = torch.randn(4, 3).npu()
+    with pytest.raises(IndexError, match=r"out of range"):
+        func(x, 4)
+    with pytest.raises(RuntimeError, match=r"out of range|exceed range"):
+        compiled_op(x, 4)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend,))
+def test_getitem_slice_step_zero_matches_eager(backend):
+    """
+    Feature: Test slice_view invalid step
+    Description: Verify non-positive slice step keeps failure semantics aligned with eager mode
+    Expectation: Eager and compiled execution both raise RuntimeError
+    """
+
+    def func(x, step):
+        return torch.ops.aten.slice.Tensor(x, 0, 0, 4, step)
+
+    compiled_op = torch.compile(func, backend=backend, fullgraph=True)
+    x = torch.randn(4, 3).npu()
+    with pytest.raises(RuntimeError, match=r"slice step must be positive|step must be positive"):
+        func(x, 0)
+    with pytest.raises(RuntimeError, match=r"slice step must be positive|step must be positive"):
+        compiled_op(x, 0)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.skip("Not implemented.")
 @pytest.mark.parametrize("backend", (fx_backend,))
 def test_getitem_bool_mask(backend):

@@ -646,8 +646,8 @@ def Mrt_ExpandOp : Mrt_Op<"expand", [Pure]> {
   }];
 }
 
-def Mrt_FlattenOp : Mrt_Op<"flatten", [Pure]> {
-  let summary = "flatten operation";
+def Mrt_FlattenViewOp : Mrt_Op<"flatten_view", [Pure]> {
+  let summary = "flatten_view operation";
   let description = [{
     Flatten input tensor to the specified shape.
     Takes two operands: input tensor and shape.

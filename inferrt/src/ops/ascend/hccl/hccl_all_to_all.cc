@@ -67,7 +67,9 @@ OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &i
   const string &groupName = input[kIndex3]->ToString();
   auto rankSize = mrt::collective::CollectiveManager::Instance().GetGroupSize(groupName);
   HcclAdapter::GetInstance().InitHccl();
-  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(input[kIndex0]->ToTensor());
+  auto inputTensor = input[kIndex0]->ToTensor();
+  HcomUtil::CheckHcclInputContiguous(inputTensor, "HcclAllToAll");
+  auto [hcclCount, hcclDataType] = HcomUtil::GetHcclCountAndTypeFromTensor(inputTensor);
   hcclKernel_.hcclCount_ = hcclCount / rankSize;
   hcclKernel_.hcclDataType_ = hcclDataType;
   hcclKernel_.comm_ = HcomUtil::LoadHcclLibrary(groupName);

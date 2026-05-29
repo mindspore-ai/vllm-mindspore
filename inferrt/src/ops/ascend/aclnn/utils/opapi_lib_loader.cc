@@ -162,3 +162,5 @@ void AclnnFinalize() {
 
 }  // namespace ops
 }  // namespace mrt
+
+extern "C" DA_API void MrtAclnnFinalize() { mrt::ops::AclnnFinalize(); }

@@ -70,9 +70,7 @@ def _get_default_decomposition_ops() -> DecompositionOpsList:
         aten.select_backward,
         aten.slice_backward,
         aten.soft_margin_loss,
-        aten.squeeze.dims,
         aten.t,
-        aten.unbind.int,
         aten.unsafe_split.Tensor,
         aten.upsample_bilinear2d.vec,
     ]

@@ -17,6 +17,7 @@
 #include "runtime/executor/op_runner.h"
 #include "common/logger.h"
 #include "ops/op_def/ops_name.h"
+#include "ops/utils/utils.h"
 
 namespace mrt {
 namespace runtime {
@@ -34,6 +35,9 @@ ops::OpsErrorCode OpRunner::InferShape() {
 ops::OpsErrorCode OpRunner::CalcWorkspace() {
   LOG_OUT << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
           << ", workspaceSize=" << workspaceSize_;
+  if (!operator_->GetOutputInputRefPairs().empty()) {
+    UpdateRefNodeOutputMetadata();
+  }
   auto ret = operator_->CalcWorkspace(input_, output_, &workspaceSize_);
   LOG_OUT << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
   return ret;
@@ -108,14 +112,12 @@ void OpRunner::FreeWorkspaceMemory() {
   }
 }
 
-void OpRunner::UpdateRefNodeOutputValue() {
+void OpRunner::ForEachRefTensorPair(const RefTensorPairCallback &callback) const {
   const std::vector<std::pair<uint32_t, uint32_t>> &refPairs = operator_->GetOutputInputRefPairs();
   if (refPairs.empty()) {
     return;
   }
   for (auto [outputIndex, inputIndex] : refPairs) {
-    LOG_OUT << "Update op[" << GetOpName() << "] output value, outputIndex: " << outputIndex
-            << ", inputIndex: " << inputIndex;
     CHECK_IF_FAIL(inputIndex < input_.size());
     auto &inputValue = input_[inputIndex];
     CHECK_IF_NULL(inputValue);
@@ -124,28 +126,55 @@ void OpRunner::UpdateRefNodeOutputValue() {
     CHECK_IF_NULL(inputTensor);
 
     CHECK_IF_NULL(output_);
+    ir::TensorPtr outputTensor = nullptr;
     if (output_->IsTensor()) {
       CHECK_IF_FAIL(outputIndex == 0);
-      auto &outputTensor = output_->ToTensor();
-      CHECK_IF_NULL(outputTensor);
-      outputTensor->SetStorage(inputTensor->GetStorage());
-      outputTensor->SetOwnsStorage(false);
+      outputTensor = output_->ToTensor();
     } else if (output_->IsTuple()) {
       auto &outputTuple = output_->ToTuple();
       CHECK_IF_FAIL(outputIndex < outputTuple->Size());
       auto &output = (*outputTuple)[outputIndex];
       CHECK_IF_NULL(output);
       CHECK_IF_FAIL(output->IsTensor());
-      auto &outputTensor = output->ToTensor();
-      CHECK_IF_NULL(outputTensor);
-      outputTensor->SetStorage(inputTensor->GetStorage());
-      outputTensor->SetOwnsStorage(false);
+      outputTensor = output->ToTensor();
     } else {
-      LOG_EXCEPTION << "The output type of operator " << GetOpName()
-                    << " is not supported to ref input. The output index: " << outputIndex
-                    << ", input index: " << inputIndex << ", output info: " << *output_;
+      LOG_EXCEPTION << "Ref output of op[" << GetOpName() << "] must be tensor or tuple, outputIndex=" << outputIndex
+                    << ", inputIndex=" << inputIndex << ", output info: " << *output_;
     }
+    CHECK_IF_NULL(outputTensor);
+    callback(outputIndex, inputIndex, inputTensor, outputTensor);
   }
+}
+
+void OpRunner::UpdateRefNodeOutputValue() {
+  ForEachRefTensorPair([this](uint32_t outputIndex, uint32_t inputIndex, const ir::TensorPtr &inputTensor,
+                              const ir::TensorPtr &outputTensor) {
+    LOG_OUT << "Update op[" << GetOpName() << "] output value, outputIndex: " << outputIndex
+            << ", inputIndex: " << inputIndex;
+    outputTensor->SetStorage(inputTensor->GetStorage());
+    outputTensor->SetOwnsStorage(false);
+  });
+}
+
+void OpRunner::UpdateRefNodeOutputMetadata() {
+  ForEachRefTensorPair([this](uint32_t outputIndex, uint32_t inputIndex, const ir::TensorPtr &inputTensor,
+                              const ir::TensorPtr &outputTensor) {
+    if (inputTensor->Shape() != outputTensor->Shape()) {
+      return;
+    }
+    if (operator_->NeedLaunch() && (!ops::IsTensorBaseFormat(inputTensor) || !ops::IsTensorBaseFormat(outputTensor))) {
+      LOG_EXCEPTION << "Ref-like operator " << GetOpName()
+                    << " does not support special-format ref metadata sync. The generic ref metadata path only "
+                    << "syncs strides and storageOffset, but special formats may also require format/storageShape "
+                    << "updates. outputIndex: " << outputIndex << ", inputIndex: " << inputIndex
+                    << ", input format: " << ir::FormatEnumToStr(inputTensor->Format())
+                    << ", output format: " << ir::FormatEnumToStr(outputTensor->Format())
+                    << ", input storageShape: " << inputTensor->StorageShape()
+                    << ", output storageShape: " << outputTensor->StorageShape();
+    }
+    outputTensor->SetStrides(inputTensor->Strides());
+    outputTensor->SetStorageOffset(inputTensor->StorageOffset());
+  });
 }
 }  // namespace runtime
 }  // namespace mrt

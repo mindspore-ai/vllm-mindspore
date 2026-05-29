@@ -20,6 +20,7 @@
 #include <vector>
 #include <utility>
 #include <memory>
+#include <functional>
 
 #include "ops/operator.h"
 #include "ir/graph.h"
@@ -175,12 +176,17 @@ class OpRunner {
   const ir::Value *GetOutput() const { return output_; }
 
   void UpdateRefNodeOutputValue();
+  void UpdateRefNodeOutputMetadata();
 
   ops::OpType GetOpType() const { return operator_->GetOpType(); }
 
   const ops::Operator *GetOperator() const { return operator_.get(); }
 
  private:
+  using RefTensorPairCallback = std::function<void(uint32_t, uint32_t, const ir::TensorPtr &, const ir::TensorPtr &)>;
+
+  void ForEachRefTensorPair(const RefTensorPairCallback &callback) const;
+
   // Tensors that should be updated before operator execution.
   std::vector<ir::Tensor *> tensorsToUpdate_;
 
