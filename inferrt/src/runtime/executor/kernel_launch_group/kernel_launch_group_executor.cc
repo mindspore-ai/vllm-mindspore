@@ -165,10 +165,12 @@ bool KernelLaunchGroupExecutor::CheckInputShapeChange() {
   }
 
   for (auto &[tensor, shape] : graphInputTensorsWithDynamicShape) {
-    if (!shapeChange && (tensor->Shape() != shape || tensor->Shape().empty())) {
+    // tensor->Shape() is current input shape, shape is the recorded shape from last execution.
+    if (tensor->Shape() != shape || tensor->Shape().empty()) {
       shapeChange = true;
+      // Update recorded shape only when actually different, avoiding redundant vector deep-copy.
+      shape = tensor->Shape();
     }
-    shape = tensor->Shape();
   }
   LOG_OUT << "Input tensor shape changed: " << shapeChange;
   return shapeChange;
