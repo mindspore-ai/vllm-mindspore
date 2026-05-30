@@ -1113,6 +1113,12 @@ def div_op_hook(op, node, input_nodes, executor):
         return Op.div_scalar
     return Op.div
 
+# pylint: disable=unused-argument
+def mod_op_hook(op, node, input_nodes, executor):
+    """Get the div op for a given node."""
+    if _is_scalar_arg(node.args[1]):
+        return Op.remainder_tensor_scalar
+    return Op.remainder_tensor_tensor
 
 # pylint: disable=unused-argument
 def div_mod_op_hook(op, node, input_nodes, executor):
@@ -1162,6 +1168,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.mul, mul_op_hook)
     register_ops_mapping_hook(Op.div, div_op_hook)
     register_ops_mapping_hook(Op.div_mod, div_mod_op_hook)
+    register_ops_mapping_hook(Op.remainder_tensor_tensor, mod_op_hook)
     register_ops_mapping_hook(Op.inplace_add, inplace_add_op_hook)
     register_ops_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_op_hook)
 
@@ -1269,6 +1276,7 @@ _OP_MAP = {
     torch.zeros: Op.zeros,
     torch.arange: Op.arange,
     torch.select: Op.select_view,
+    torch.ops.aten.alias.default: Op.alias,
     aten.view.default: Op.view,
     aten.permute.default: Op.permute_view,
     aten.transpose.int: Op.permute_view,
