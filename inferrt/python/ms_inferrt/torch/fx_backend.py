@@ -137,6 +137,8 @@ def _is_scalar_arg(arg):
     if isinstance(arg, (int, float, bool, torch.SymInt)):
         return True
     if isinstance(arg, Node):
+        if arg.target == "item":
+            return True
         if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
             return True
     return False

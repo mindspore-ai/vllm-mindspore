@@ -26,6 +26,19 @@ def add_scalar(x):
     return x + 2
 
 
+class MeanAddEps(torch.nn.Module):
+    """
+    Mean add epsilon module for RMSNorm-like scalar add.
+    """
+
+    def __init__(self, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, x):
+        return x.pow(2).mean(-1, keepdim=True) + self.eps
+
+
 def sub_scalar(x):
     return x - 2
 
@@ -79,6 +92,25 @@ def test_add_tensor_scalar(shape):
     """
     compiled_op = torch.compile(add_scalar, backend=backend, dynamic=True, fullgraph=False)
     scalar_forward(add_scalar, np.float32, shape, compiled_op)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_add_tensor_rms_norm_eps_scalar():
+    """
+    Feature: Test tensor add scalar from RMSNorm epsilon
+    Description: Test tensor add with scalar produced from LLaMA-like mean plus module float epsilon
+    Expectation: The result is correct
+    """
+    cpu_model = MeanAddEps()
+    npu_model = MeanAddEps().npu()
+    compiled_op = torch.compile(npu_model, backend=backend, dynamic=True, fullgraph=False)
+    cpu_input = torch.randn((4, 8, 16), dtype=torch.float32)
+    npu_input = cpu_input.npu()
+
+    cpu_output = cpu_model(cpu_input).detach().numpy()
+    npu_output = compiled_op(npu_input).detach().cpu().numpy()
+
+    AssertRtolEqual(cpu_output, npu_output, 0.001)
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")

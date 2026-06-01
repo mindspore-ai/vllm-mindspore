@@ -180,10 +180,11 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake) {
 // Create a new torch Tensor by moving ownership of data from mrt Tensor
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
-  // if (!IsTensorBaseFormat(tensor)) {
-  //   LOG_EXCEPTION << "Custom call input does not support non-base memory format: "
-  //                 << ir::FormatEnumToStr(tensor->Format());
-  // }
+  if (!tensor->IsContiguous() && !IsTensorBaseFormat(tensor)) {
+    LOG_EXCEPTION << "Custom call input does not support non-contiguous tensor with non-base memory format, format: "
+                  << ir::FormatEnumToStr(tensor->Format()) << ", shape: " << tensor->Shape()
+                  << ", strides: " << tensor->Strides() << ", storageOffset: " << tensor->StorageOffset();
+  }
   auto storage = tensor->GetStorage();
   void *dataPtr = storage->Data();
   void *blob_data_ptr = nullptr;
