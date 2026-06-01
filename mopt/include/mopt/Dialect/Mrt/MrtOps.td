@@ -205,6 +205,31 @@ def Mrt_BitwiseAndTensorOp : Mrt_Op<"bitwise_and_tensor", [Pure]> {
   let genAclnnOp = "aclnnBitwiseAndTensor";
 }
 
+def Mrt_BitwiseOrTensorOp : Mrt_Op<"bitwise_or_tensor", [Pure]> {
+  let summary = "aclnnBitwiseOrTensor";
+  let description = [{
+    Operation for element-wise bitwise OR computation between two tensors.
+    Performs bitwise OR operation on corresponding elements of input tensors.
+    Both input tensors must have the same data type and compatible shapes for broadcasting.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnBitwiseOrTensor";
+}
+
 def Mrt_BitwiseNotOp : Mrt_Op<"bitwise_not", [Pure]> {
   let summary = "aclnnBitwiseNot";
   let description = [{
