@@ -733,6 +733,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.dequant_swiglu_quant, dequant_swiglu_quant_hook)
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     register_arg_mapping_hook(Op.squeeze_view, squeeze_arg_hook)
+    register_arg_mapping_hook(Op.reduce_mean, reduce_sum_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -746,12 +747,22 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.index_put, index_put_arg_hook)
     # Normalize torch.rms_norm argument layout to backend Op.rms_norm layout.
     register_arg_mapping_hook(Op.rms_norm, rms_norm_arg_hook)
+    register_arg_mapping_hook(Op.arange, arange_arg_hook)
+    register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
 
 
 def _init_pre_flatten_hooks():
     """register hooks for pre-flatten argument adjustment"""
     register_pre_flatten_hook(Op.add_scalar, binary_scalar_pre_flatten_hook)
     register_pre_flatten_hook(Op.mul_scalar, binary_scalar_pre_flatten_hook)
+
+
+def leaky_relu_arg_hook(node, flat_args, executor):
+    """Ensure negative_slope defaults to 0.01 when omitted for leaky_relu."""
+    args = list(flat_args)
+    if len(args) < 2:
+        args.append(0.01)
+    return args
 
 
 def index_put_arg_hook(node, flat_args, executor):
@@ -773,6 +784,43 @@ def index_put_arg_hook(node, flat_args, executor):
         args.append(False)
 
     return args
+
+
+# pylint: disable=unused-argument
+def arange_arg_hook(node, flat_args, executor):
+    """Normalize torch.arange arguments based on original call signature.
+
+    Handles:
+      - arange(end, **kw)
+      - arange(start, end, **kw)
+      - arange(start, end, step, **kw)
+    Ensures step defaults to 1 and returns (start, end, step, dtype?, device?, ...).
+    """
+    orig_args = node.args
+    orig_kwargs = node.kwargs
+
+    if len(orig_args) == 1:
+        # torch.arange(end, **kwargs)
+        start, end, step = 0, orig_args[0], orig_kwargs.get("step", 1)
+    elif len(orig_args) == 2:
+        # torch.arange(start, end, **kwargs)
+        start, end, step = orig_args[0], orig_args[1], orig_kwargs.get("step", 1)
+    elif len(orig_args) >= 3:
+        # torch.arange(start, end, step, **kwargs)
+        start, end, step = orig_args[0], orig_args[1], orig_args[2]
+    else:
+        return list(flat_args)
+
+    if step is None:
+        step = 1
+
+    new_args = [start, end, step]
+    # Preserve dtype/device and other kwargs that were explicitly passed
+    for k in ("dtype", "device", "out", "layout", "pin_memory"):
+        if k in orig_kwargs and orig_kwargs[k] is not None:
+            new_args.append(orig_kwargs[k])
+
+    return new_args
 
 
 def rms_norm_arg_hook(node, flat_args, executor):
@@ -1206,15 +1254,20 @@ _OP_MAP = {
     torch.cat: Op.cat,
     torch.stack: Op.stack,
     torch.sum: Op.reduce_sum,
+    torch.mean: Op.reduce_mean,
     torch.clone: Op.clone,
     torch.index_select: Op.index_select,
     torch.neg: Op.neg,
     torch.square: Op.square,
+    torch.pow: Op.pow_scalar,
     torch.rsqrt: Op.rsqrt,
+    aten.rsqrt: Op.rsqrt,
+    aten.rsqrt.default: Op.rsqrt,
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
     torch.zeros: Op.zeros,
+    torch.arange: Op.arange,
     torch.select: Op.select_view,
     aten.view.default: Op.view,
     aten.permute.default: Op.permute_view,
@@ -1241,6 +1294,16 @@ _OP_MAP = {
     aten.index_put_.default: Op.index_put,
     aten.index_copy_.default: Op.inplace_index_copy,
     aten.add_.Scalar: Op.inplace_add,
+    aten.arange: Op.arange,
+    aten.arange.default: Op.arange,
+    aten.arange.start: Op.arange,
+    aten.mean: Op.reduce_mean,
+    aten.mean.dim: Op.reduce_mean,
+    aten.pow: Op.pow_scalar,
+    aten.pow.Tensor_Scalar: Op.pow_scalar,
+    aten.pow.Tensor_Tensor: Op.pow_tensor,
+    aten.softmax: Op.softmax,
+    aten.softmax.int: Op.softmax,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -1251,7 +1314,9 @@ _OP_MAP = {
     torch.nn.functional.sigmoid: Op.sigmoid,
     torch.nn.functional.gelu: Op.gelu,
     torch.nn.functional.silu: Op.silu,
+    torch.nn.functional.leaky_relu: Op.leaky_relu,
     torch.nn.functional.softmax: Op.softmax,
+    torch.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
     torch.nn.functional.embedding: Op.embedding,
     torch.nn.functional.linear: Op.linear,
@@ -1321,6 +1386,8 @@ _OP_MAP = {
     "copy_": Op.inplace_copy,
     "index_copy_": Op.inplace_index_copy,
     "masked_fill_": Op.inplace_masked_fill_tensor,
+    "masked_fill": Op.masked_fill_tensor,
+    "softmax": Op.softmax,
     "fill_": Op.inplace_fill_tensor,
     "index_select": Op.index_select,
     "bitwise_or": Op.bitwise_or_tensor,
@@ -1333,6 +1400,8 @@ _OP_MAP = {
     "chunk": Op.split_with_size_view,
     "flatten": Op.flatten_view,
     "sum": Op.reduce_sum,
+    "mean": Op.reduce_mean,
+    "pow": Op.pow_scalar,
     "argsort": Op.argsort,
     "new_empty": Op.new_empty,
 }

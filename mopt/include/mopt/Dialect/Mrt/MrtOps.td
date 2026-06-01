@@ -101,6 +101,29 @@ def Mrt_AddRmsNormOp : Mrt_Op<"add_rms_norm", [Pure]> {
   let genAclnnOp = "aclnnAddRmsNorm";
 }
 
+def Mrt_ArangeOp : Mrt_Op<"arange", [Pure]> {
+  let summary = "aclnnArange";
+  let description = [{
+    Generates a 1-D tensor of size ceil((end - start) / step) with values
+    from the interval [start, end) taken with common difference step
+    starting from start.
+  }];
+
+  let arguments = (ins
+    Mrt_ScalarType:$start,
+    Mrt_ScalarType:$end,
+    Mrt_ScalarType:$step
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $start `,` $end `,` $step attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnArange";
+}
+
 def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   let summary = "aclnnApplyRotaryPosEmb";
   let description = [{
@@ -1116,6 +1139,27 @@ def Mrt_LinalgCallOp : Mrt_Op<"linalg_call"> {
   }];
 }
 
+def Mrt_LeakyReluOp : Mrt_Op<"leaky_relu", [Pure]> {
+  let summary = "aclnnLeakyRelu";
+  let description = [{
+    LeakyReLU activation function.
+    Computes: result = max(0, self) + negative_slope * min(0, self)
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$negative_slope
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $negative_slope attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLeakyRelu";
+}
+
 def Mrt_LinearOp : Mrt_Op<"linear", [Pure]> {
   let summary = "dense";
   let description = [{
@@ -1714,6 +1758,46 @@ def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {
   let genAclnnOp = "aclnnPermute";
 }
 
+def Mrt_PowScalarOp : Mrt_Op<"pow_scalar", [Pure]> {
+  let summary = "aclnnPowTensorScalar";
+  let description = [{
+    Element-wise power operation with scalar exponent: result = input ** exponent.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_ScalarType:$exponent
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $exponent attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnPowTensorScalar";
+}
+
+def Mrt_PowTensorOp : Mrt_Op<"pow_tensor", [Pure]> {
+  let summary = "aclnnPowTensorTensor";
+  let description = [{
+    Element-wise power operation with tensor exponent: result = input ** exponent.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$exponent
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $exponent attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnPowTensorTensor";
+}
+
 def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
   let summary = "Pooling operation";
   let description = [{
@@ -1734,6 +1818,30 @@ def Mrt_PoolOp : Mrt_Op<"pool", [Pure]> {
     $input `,` $kernel_size `,` $strides `,` $padding `,` $pool_type
     attr-dict `:` functional-type(operands, results)
   }];
+}
+
+def Mrt_ReduceMeanOp : Mrt_Op<"reduce_mean", [Pure]> {
+  let summary = "aclnnMean";
+  let description = [{
+    Computes the mean of tensor elements along specified dimensions.
+    Supports keepdim and optional dtype.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$dimensions,
+    Mrt_BooleanType:$keepdim,
+    Mrt_DtypeType:$dtype
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dimensions `,` $keepdim `,` $dtype
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnMean";
 }
 
 def Mrt_ReduceSumOp : Mrt_Op<"reduce_sum", [Pure]> {
@@ -1773,6 +1881,8 @@ def Mrt_ReluOp : Mrt_Op<"relu", [Pure]> {
   let assemblyFormat = [{
     $input attr-dict `:` functional-type(operands, results)
   }];
+
+  let genAclnnOp = "aclnnRelu";
 }
 
 def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
@@ -1867,6 +1977,22 @@ def Mrt_RmsNormOp : Mrt_Op<"rms_norm", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnRmsNorm";
+}
+
+def Mrt_RsqrtOp : Mrt_Op<"rsqrt", [Pure]> {
+  let summary = "aclnnRsqrt";
+  let description = [{
+    Computes the reciprocal of the square root of the input tensor element-wise.
+  }];
+
+  let arguments = (ins MrtAnyTensor:$input);
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnRsqrt";
 }
 
 def Mrt_NormOp : Mrt_Op<"norm", [Pure]> {
@@ -2134,6 +2260,8 @@ def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   let assemblyFormat = [{
     $input `,` $axis attr-dict `:` functional-type(operands, results)
   }];
+
+  let genAclnnOp = "aclnnSoftmax";
 }
 
 def Mrt_SplitOp : Mrt_Op<"split_with_size", [Pure]> {
