@@ -18,6 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch._dynamo.exc import BackendCompilerFailed
 
+
 from ms_inferrt.torch.fx_backend import backend
 
 from tests.mark_utils import arg_mark

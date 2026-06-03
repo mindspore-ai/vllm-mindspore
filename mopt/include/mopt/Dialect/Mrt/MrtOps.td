@@ -124,6 +124,52 @@ def Mrt_ArangeOp : Mrt_Op<"arange", [Pure]> {
   let genAclnnOp = "aclnnArange";
 }
 
+def Mrt_TrilOp : Mrt_Op<"tril", [Pure]> {
+  let summary = "aclnnTril";
+  let description = [{
+    Returns the lower triangular part of the matrix (2-D tensor) or batch of matrices.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$diagonal
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $diagonal attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnTril";
+}
+
+def Mrt_TopKOp : Mrt_Op<"topk", [Pure]> {
+  let summary = "aclnnTopk";
+  let description = [{
+    Returns the k largest elements of the given input tensor along a given dimension.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_I64Type:$k,
+    Mrt_I64Type:$dim,
+    Mrt_BooleanType:$largest,
+    Mrt_BooleanType:$sorted
+  );
+
+  let results = (outs
+    MrtAnyTensor:$values,
+    MrtAnyTensor:$indices
+  );
+
+  let assemblyFormat = [{
+    $self `,` $k `,` $dim `,` $largest `,` $sorted attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnTopk";
+}
+
 def Mrt_ApplyRotaryPosEmbOp : Mrt_Op<"apply_rotary_pos_emb"> {
   let summary = "aclnnApplyRotaryPosEmb";
   let description = [{
@@ -321,6 +367,49 @@ def Mrt_CastOp : Mrt_Op<"cast", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnCast";
+}
+
+def Mrt_WhereOp : Mrt_Op<"where", [Pure]> {
+  let summary = "aclnnWhere";
+  let description = [{
+    Returns elements selected from input or other based on condition.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$condition,
+    MrtAnyTensor:$input,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $condition `,` $input `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnSWhere";
+}
+
+def Mrt_VarMeanOp : Mrt_Op<"var_mean", [Pure]> {
+  let summary = "aclnnVarMean";
+  let description = [{
+    Computes variance and mean of input tensor along given dimensions.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$dim,
+    Mrt_I64Type:$correction,
+    Mrt_BooleanType:$keepdim
+  );
+
+  let results = (outs MrtAnyTensor:$mean, MrtAnyTensor:$var);
+
+  let assemblyFormat = [{
+    $input `,` $dim `,` $correction `,` $keepdim attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnVarMean";
 }
 
 def Mrt_CatOp : Mrt_Op<"cat", [Pure]> {

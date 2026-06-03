@@ -68,3 +68,17 @@ def test_stack(shape, dim, dtype, num_tensors):
     npu_out = compiled(npu_inputs, dim).cpu()
 
     AssertRtolEqual(cpu_out, npu_out)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_stack_default():
+    """
+    Feature: Test aten.stack.default via fx_backend
+    Description: Directly call torch.ops.aten.stack.default
+    Expectation: Result matches reference
+    """
+    inputs = [torch.randn(8, dtype=torch.float32).npu() for _ in range(8)]
+    op_func_compiled = torch.compile(torch.ops.aten.stack.default, backend=backend)
+    npu_out = op_func_compiled(inputs)
+    expected = torch.stack(inputs)
+    AssertRtolEqual(npu_out, expected)
