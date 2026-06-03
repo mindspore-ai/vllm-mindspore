@@ -50,9 +50,6 @@ def add_triton_func(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("backend", (fx_backend, mlir_backend))
-@pytest.mark.skip(
-    "CANN 9.0 requires Triton 3.2.1, which depends on pytest 8.3.2. This test will be enabled after pytest upgrade."
-)
 def test_triton_add_dynamic_shape(backend):
     """
     Feature: Test triton_ops::add
