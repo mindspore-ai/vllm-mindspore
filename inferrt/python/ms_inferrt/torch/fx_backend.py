@@ -749,6 +749,8 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.rms_norm, rms_norm_arg_hook)
     register_arg_mapping_hook(Op.arange, arange_arg_hook)
     register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
+    # Normalize torch.layer_norm / torch.nn.functional.layer_norm to backend Op.norm layout.
+    register_arg_mapping_hook(Op.norm, layer_norm_arg_hook)
 
 
 def _init_pre_flatten_hooks():
@@ -846,6 +848,23 @@ def rms_norm_arg_hook(node, flat_args, executor):
         return args
     # Fallback: keep original args for better runtime diagnostics
     return args
+
+
+def layer_norm_arg_hook(node, flat_args, executor):
+    """
+    Normalize torch.nn.functional.layer_norm arguments to backend Op.norm layout.
+
+    torch.nn.functional.layer_norm is mapped to torch.layer_norm for schema lookup.
+    aten::layer_norm has cudnn_enable as the sixth argument, but NPU does not
+    support or consume it. Backend Op.norm expects exactly:
+    [x, normalized_shape, weight, bias, eps]
+    """
+    args = list(flat_args)
+    if len(args) >= 6:
+        return args[:5]
+    if len(args) == 5:
+        return args
+    raise ValueError(f"Unexpected layer_norm argument count after schema flatten: {len(args)}")
 
 
 def _get_chunk_example_outputs(node):
@@ -1276,6 +1295,7 @@ _OP_MAP = {
     torch.zeros: Op.zeros,
     torch.arange: Op.arange,
     torch.select: Op.select_view,
+    torch.layer_norm: Op.norm,
     torch.ops.aten.alias.default: Op.alias,
     aten.view.default: Op.view,
     aten.permute.default: Op.permute_view,
@@ -1462,6 +1482,7 @@ if TORCH_NPU_INSTALLED:
 def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""
     operator_map = {
+        torch.nn.functional.layer_norm: torch.layer_norm,
         operator.add: torch.add,
         operator.iadd: "add_",
         operator.sub: torch.sub,
