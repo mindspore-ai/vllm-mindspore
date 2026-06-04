@@ -1911,6 +1911,32 @@ def Mrt_RemainderTensorTensorOp : Mrt_Op<"remainder_tensor_tensor", [Pure]> {
   let genAclnnOp = "aclnnRemainderTensorTensor";
 }
 
+def Mrt_RemainderTensorScalarOp : Mrt_Op<"remainder_tensor_scalar", [Pure]> {
+  let summary = "aclnnRemainderTensorScalar";
+  let description = [{
+    Operation for remainder computation between tensor and scalar.
+    Performs remainder operation on corresponding elements of input tensor.
+    Computes the remainder of division of elements in self tensor by scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs
+    MrtAnyTensor:$out
+  );
+
+  let assemblyFormat = [{
+    $self `,` $other
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnRemainderTensorScalar";
+}
+
+
 def Mrt_RepeatOp : Mrt_Op<"repeat", [Pure]> {
   let summary = "Repeats this tensor along the specified dimensions.";
   let description = [{

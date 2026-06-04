@@ -600,10 +600,18 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
   auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
   CHECK_IF_NULL(deviceContext);
   CHECK_IF_NULL(deviceContext->deviceResManager_);
-  if (!deviceContext->deviceResManager_->AsyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
-                                                   mrt::device::CopyType::D2D,
-                                                   deviceContext->deviceResManager_->GetCurrentStream())) {
-    LOG_EXCEPTION << "Async copy for output storage failed";
+  if (device.type == mrt::hardware::DeviceType::CPU) {
+    // CPU does not support async copy
+    if (!deviceContext->deviceResManager_->SyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
+                                                    mrt::device::CopyType::D2D)) {
+      LOG_EXCEPTION << "Async copy for output storage failed";
+    }
+  } else {
+    if (!deviceContext->deviceResManager_->AsyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
+                                                     mrt::device::CopyType::D2D,
+                                                     deviceContext->deviceResManager_->GetCurrentStream())) {
+      LOG_EXCEPTION << "Async copy for output storage failed";
+    }
   }
   LOG_OUT << "End copy storage: " << srcStorage.get();
   return storage;
