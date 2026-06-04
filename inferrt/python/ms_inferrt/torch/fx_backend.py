@@ -419,6 +419,12 @@ def clone_hook(node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def empty_like_hook(node, input_nodes, executor):
+    """empty_like only needs self; output metadata carries shape, dtype, and device."""
+    return [input_nodes[0]]
+
+
+# pylint: disable=unused-argument
 def long_hook(node, input_nodes, executor):
     """cast to int64 (long)."""
     return [input_nodes[0], torch.int64]
@@ -716,6 +722,7 @@ def moe_distribute_dispatch_v2_output_hook(node, op, input_nodes, executor, sym_
 def _init_arg_mapping_hooks():
     """register hooks for mapping input arguments"""
     register_arg_mapping_hook(Op.clone, clone_hook)
+    register_arg_mapping_hook(Op.empty_like, empty_like_hook)
     register_arg_mapping_hook(Op.argsort, argsort_hook)
     register_arg_mapping_hook(
         Op.fused_infer_attention_score, fused_inter_attention_score_hook
@@ -1273,6 +1280,7 @@ _OP_MAP = {
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
+    torch.empty_like: Op.empty_like,
     torch.zeros: Op.zeros,
     torch.arange: Op.arange,
     torch.select: Op.select_view,
@@ -1298,6 +1306,8 @@ _OP_MAP = {
     aten.split.default: Op.split_with_size_view,
     aten.split_with_sizes.default: Op.split_with_size_view,
     aten.copy_.default: Op.inplace_copy,
+    aten.empty_like: Op.empty_like,
+    aten.empty_like.default: Op.empty_like,
     aten.expand.default: Op.expand,
     aten.index_put_.default: Op.index_put,
     aten.index_copy_.default: Op.inplace_index_copy,

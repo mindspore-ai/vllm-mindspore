@@ -34,6 +34,7 @@ OpsErrorCode AtenEmpty::Launch(const std::vector<const ir::Value *> &input, void
 }
 
 MRT_REG_OP(empty, AtenEmpty, CPU);
+MRT_REG_OP(empty_like, AtenEmpty, CPU);
 MRT_REG_OP(new_empty, AtenEmpty, CPU);
 }  // namespace ops
 }  // namespace mrt
