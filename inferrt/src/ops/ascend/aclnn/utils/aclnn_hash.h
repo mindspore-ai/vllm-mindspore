@@ -70,6 +70,8 @@ inline void GatherHash(const ir::ValuePtr &value) {
     GatherHash(value->ToTensor());
   } else if (value->IsInt()) {
     GatherHash(value->ToInt());
+  } else if (value->IsSymbol()) {
+    GatherHash(value->ToInt());
   } else if (value->IsDouble()) {
     GatherHash(value->ToDouble());
   } else if (value->IsBool()) {
@@ -86,6 +88,8 @@ inline void GatherHash(const ir::Value *value) {
   if (value->IsTensor()) {
     GatherHash(value->ToTensor());
   } else if (value->IsInt()) {
+    GatherHash(value->ToInt());
+  } else if (value->IsSymbol()) {
     GatherHash(value->ToInt());
   } else if (value->IsDouble()) {
     GatherHash(value->ToDouble());

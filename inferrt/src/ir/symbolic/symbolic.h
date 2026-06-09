@@ -75,10 +75,13 @@ class SymbolicConst : public SymbolicExpr {
 
 class SymbolicVar : public SymbolicExpr {
  public:
-  explicit SymbolicVar(const std::string &name) : SymbolicExpr(Kind::Variable), name_(name), value_(-1) {}
+  explicit SymbolicVar(const std::string &name) : SymbolicExpr(Kind::Variable), name_(name) {}
   int64_t Evaluate() const override;
   std::string ToString() const override { return name_; }
-  void SetValue(int64_t value) { value_ = value; }
+  void SetValue(int64_t value) {
+    value_ = value;
+    hasValue_ = true;
+  }
   const std::string &GetName() const { return name_; }
   SymbolicExprPtr DeepCopy() const override;
 
@@ -86,7 +89,8 @@ class SymbolicVar : public SymbolicExpr {
 
  private:
   std::string name_;
-  int64_t value_;  // for evaluation
+  bool hasValue_{false};
+  int64_t value_{-1};  // for evaluation
 };
 
 class SymbolicBinaryOp : public SymbolicExpr {

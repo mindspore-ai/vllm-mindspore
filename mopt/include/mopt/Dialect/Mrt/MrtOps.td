@@ -1133,6 +1133,26 @@ def Mrt_InplaceMaskedFillTensorOp : Mrt_Op<"inplace_masked_fill_tensor"> {
   let genAclnnCfg = (AclnnConfig (IORef 0, 0));
 }
 
+def Mrt_IotaOp : Mrt_Op<"iota", [Pure]> {
+  let summary = "prims.iota lowered through aclnnArange";
+  let description = [{
+    Generates a 1-D tensor with a fixed length and scalar start/step values.
+    Internally calls aclnnArange with end = start + length * step.
+  }];
+
+  let arguments = (ins
+    Mrt_ScalarType:$length,
+    Mrt_ScalarType:$start,
+    Mrt_ScalarType:$step
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $length `,` $start `,` $step attr-dict `:` functional-type(operands, results)
+  }];
+}
+
 def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
   let summary = "Element-wise less-than-or-equal comparison";
   let description = [{
@@ -1971,6 +1991,28 @@ def Mrt_ReduceSumOp : Mrt_Op<"reduce_sum", [Pure]> {
   let genAclnnOp = "aclnnReduceSum";
 }
 
+def Mrt_AmaxOp : Mrt_Op<"amax", [Pure]> {
+  let summary = "Amax operation";
+  let description = [{
+    Computes the maximum value of tensor elements along specified dimensions.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64ArrayType:$dimensions,
+    Mrt_BooleanType:$keepdim
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $dimensions `,` $keepdim
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnAmax";
+}
+
 def Mrt_ReluOp : Mrt_Op<"relu", [Pure]> {
   let summary = "ReLU activation function";
   let description = [{
@@ -2390,6 +2432,25 @@ def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnSoftmax";
+}
+
+def Mrt_LogSoftmaxOp : Mrt_Op<"log_softmax", [Pure]> {
+  let summary = "LogSoftmax activation function";
+  let description = [{
+    Applies the log-softmax activation function along the specified axis.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input,
+    Mrt_I64Type:$axis
+  );
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input `,` $axis attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLogSoftmax";
 }
 
 def Mrt_SplitOp : Mrt_Op<"split_with_size", [Pure]> {

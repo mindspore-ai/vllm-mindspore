@@ -21,10 +21,16 @@ from typing import Any, List, Tuple, Optional
 import torch
 from torch import distributed as dist
 from torch._C._distributed_c10d import _resolve_process_group
+from torch.fx.node import Node
 
 from ms_inferrt import _ms_inferrt_torch
 from ms_inferrt._ms_inferrt_api import is_custom_op_registered
-from ms_inferrt.ir import Value, Tuple as MrtTuple, DataType, SymbolicVar
+from ms_inferrt.ir import (
+    Value,
+    Tuple as MrtTuple,
+    DataType,
+    SymbolicVar,
+)
 from ms_inferrt._ms_inferrt_collective import CollectiveManager
 
 # pylint: disable=protected-access
@@ -149,6 +155,14 @@ def from_torch(obj: Any) -> Value:
     raise TypeError(
         f"Unsupported python type for conversion to ms_inferrt.ir.Value: {type(obj)}"
     )
+
+
+def get_tensor_arg_dtype(arg):
+    """Resolve dtype from a tensor argument or FX tensor node."""
+    if isinstance(arg, Node):
+        example_value = arg.meta.get("example_value", None)
+        return getattr(example_value, "dtype", None)
+    return getattr(arg, "dtype", None)
 
 
 def to_torch(value: Value) -> Any:
