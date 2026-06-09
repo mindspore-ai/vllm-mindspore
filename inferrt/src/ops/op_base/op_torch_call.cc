@@ -254,7 +254,7 @@ void OpTorchCall::ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stac
   CHECK_IF_NULL(tuple);
   size_t size = tuple->Size();
   if (size == 0) {
-    // Handle empty tuple if needed
+    torch::jit::push(stack, std::vector<int64_t>{});
     return;
   }
 
@@ -409,7 +409,7 @@ bool OpTorchCall::MatchOpSchema(const std::vector<const ir::Value *> &inputs,
   static const std::unordered_map<c10::TypeKind, std::function<bool(const ir::Value *)>> typeCheckMap = {
     {c10::TypeKind::TensorType, [](const ir::Value *val) { return val->IsTensor(); }},
     {c10::TypeKind::NumberType,
-     [](const ir::Value *val) { return val->IsDouble() || val->IsInt() || val->IsSymbol(); }},
+     [](const ir::Value *val) { return val->IsDouble() || val->IsInt() || val->IsBool() || val->IsSymbol(); }},
     {c10::TypeKind::IntType, [](const ir::Value *val) { return val->IsInt() || val->IsSymbol(); }},
     {c10::TypeKind::BoolType, [](const ir::Value *val) { return val->IsBool(); }},
     {c10::TypeKind::FloatType, [](const ir::Value *val) { return val->IsDouble(); }},

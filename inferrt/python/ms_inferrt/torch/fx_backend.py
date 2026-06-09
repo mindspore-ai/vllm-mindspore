@@ -1362,6 +1362,7 @@ _OP_MAP = {
     aten.pow.Tensor_Tensor: Op.pow_tensor,
     aten.softmax: Op.softmax,
     aten.softmax.int: Op.softmax,
+    aten.reshape.default: Op.view,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -2001,6 +2002,25 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
     """
     Retrieve torch schema(s) for a given op target. Returns None if unavailable.
     """
+    aten_to_torch_map = {
+        "aten::add": torch.add,
+        "aten::sub": torch.sub,
+        "aten::mul": torch.mul,
+        "aten::div": torch.div,
+        "aten::eq": torch.eq,
+        "aten::ne": torch.ne,
+        "aten::lt": torch.lt,
+        "aten::le": torch.le,
+        "aten::gt": torch.gt,
+        "aten::ge": torch.ge,
+    }
+
+    if isinstance(target, OpOverload):
+        if hasattr(target, "_schema") and hasattr(target._schema, "name"):
+            schema_name = target._schema.name
+            base_name = schema_name.split(".")[0]
+            target = aten_to_torch_map.get(base_name, target)
+
     if isinstance(target, str):
         if not target.startswith("__"):
             for ns in iter(torch.ops):
