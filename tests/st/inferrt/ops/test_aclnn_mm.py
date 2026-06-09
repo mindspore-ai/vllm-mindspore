@@ -26,6 +26,11 @@ def op_func(x, weight):
     return torch.mm(x, weight)
 
 
+def aten_mm_default(x, weight):
+    """golden for aten.mm.default"""
+    return torch.ops.aten.mm.default(x, weight)
+
+
 def get_op_func_compiled():
     """mm op compiled"""
     def custom_op_func(x, w):
@@ -51,3 +56,22 @@ def test_mm(m, n, k, dtype):
     npu_output = op_func_compiled(npu_input, npu_weight)
     npu_output_cpu = npu_output.cpu()
     AssertRtolEqual(cpu_output, npu_output_cpu)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("m,n,k", [(8, 16, 32)])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_aten_mm_default(m, n, k, dtype):
+    """
+    Feature: Test aten.mm.default
+    Description: Verify exact aten mm overload through fx_backend.
+    Expectation: The result is correct
+    """
+    cpu_input = torch.rand(m, k, dtype=dtype)
+    cpu_weight = torch.rand(k, n, dtype=dtype)
+    npu_input = cpu_input.npu()
+    npu_weight = cpu_weight.npu()
+    cpu_output = aten_mm_default(cpu_input, cpu_weight)
+    op_func_compiled = torch.compile(aten_mm_default, backend=backend)
+    npu_output = op_func_compiled(npu_input, npu_weight)
+    AssertRtolEqual(cpu_output, npu_output.cpu())
