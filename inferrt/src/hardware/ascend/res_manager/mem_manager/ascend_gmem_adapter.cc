@@ -44,7 +44,7 @@ size_t AscendGmemAdapter::AllocDeviceMem(size_t size, DeviceMemPtr *addr) const 
   size_t alignSize = GetRoundUpAlignSize(size);
   uint8_t *allocAddr = MmapMemory(alignSize, nullptr);
   if (allocAddr == nullptr) {
-    LOG_OUT << "Malloc memory failed.";
+    RT_VLOG(VL_HARDWARE) << "Malloc memory failed.";
     return 0;
   }
   *addr = allocAddr;
@@ -53,9 +53,9 @@ size_t AscendGmemAdapter::AllocDeviceMem(size_t size, DeviceMemPtr *addr) const 
 
 size_t AscendGmemAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_t size) const {
   CHECK_IF_NULL(addr);
-  LOG_OUT << "Enter ascend eager free device mem, addr : " << addr << ", size : " << size << ".";
+  RT_VLOG(VL_HARDWARE) << "Enter ascend eager free device mem, addr : " << addr << ", size : " << size << ".";
   if (size == 0) {
-    LOG_OUT << "Eager free device mem, addr : " << addr << ", size is zero.";
+    RT_VLOG(VL_HARDWARE) << "Eager free device mem, addr : " << addr << ", size is zero.";
     return 0;
   }
   size_t addrSizeT = reinterpret_cast<size_t>(addr);
@@ -63,7 +63,7 @@ size_t AscendGmemAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size
   size_t fromAddr = GetRoundUpAlignSize(addrSizeT);
   size_t endAddr = GetRoundDownAlignSize(addrSizeT + size);
   if (endAddr <= fromAddr) {
-    LOG_OUT << "End addr : " << endAddr << " is not bigger than fromAddr : " << fromAddr << ".";
+    RT_VLOG(VL_HARDWARE) << "End addr : " << endAddr << " is not bigger than fromAddr : " << fromAddr << ".";
     return 0;
   }
   size_t realSize = endAddr - fromAddr;
@@ -72,9 +72,9 @@ size_t AscendGmemAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size
 }
 
 uint8_t *AscendGmemAdapter::MmapMemory(size_t size, void *addr) const {
-  LOG_OUT << "Enter mmap memory, size : " << size << ".";
+  RT_VLOG(VL_HARDWARE) << "Enter mmap memory, size : " << size << ".";
   if (size == 0) {
-    LOG_ERROR << "Mmap memory, addr : " << addr << ", size is zero.";
+    RT_GLOG(ERROR) << "Mmap memory, addr : " << addr << ", size is zero.";
     return nullptr;
   }
 
@@ -82,42 +82,42 @@ uint8_t *AscendGmemAdapter::MmapMemory(size_t size, void *addr) const {
   int prot = PROT_READ | PROT_WRITE;
   void *mappedAddr = mmap(addr, size, prot, flags, -1, 0);
   if (mappedAddr == MAP_FAILED) {
-    LOG_ERROR << "Mmap failed.";
+    RT_GLOG(ERROR) << "Mmap failed.";
   }
   return static_cast<uint8_t *>(mappedAddr);
 }
 
 bool AscendGmemAdapter::MunmapMemory(void *addr, const size_t size) const {
-  LOG_OUT << "Enter munmap memory, addr : " << addr << ", size : " << size << ".";
+  RT_VLOG(VL_HARDWARE) << "Enter munmap memory, addr : " << addr << ", size : " << size << ".";
   auto ret = munmap(addr, size);
   return ret != -1;
 }
 
 void AscendGmemAdapter::LoadGMemLib() noexcept {
-  LOG_OUT << "MS_ENABLE_GMEM is set, try to open gmem.";
+  RT_VLOG(VL_HARDWARE) << "MS_ENABLE_GMEM is set, try to open gmem.";
   gmemHandle_ = dlopen(kGMemLibName, RTLD_NOW);
   if (gmemHandle_ != nullptr) {
-    LOG_OUT << "Open GMem lib success, inferrt will use gmem to optimize memory usage.";
+    RT_VLOG(VL_HARDWARE) << "Open GMem lib success, inferrt will use gmem to optimize memory usage.";
     LIB_FUNC(GMEM_FREE_EAGER) gmemFreeEager = DlsymFuncObj(gmemFreeEager, gmemHandle_);
     if (gmemFreeEager != nullptr) {
       isEagerFreeEnabled_ = true;
       freeEager_ = gmemFreeEager;
     } else {
-      LOG_OUT << "Load gmem free eager failed.";
+      RT_VLOG(VL_HARDWARE) << "Load gmem free eager failed.";
       if (dlclose(gmemHandle_) != 0) {
-        LOG_ERROR << "Close GMem lib failed, detail : " << dlerror() << ".";
+        RT_GLOG(ERROR) << "Close GMem lib failed, detail : " << dlerror() << ".";
       }
     }
   } else {
-    LOG_OUT << "Open GMem lib failed.";
+    RT_VLOG(VL_HARDWARE) << "Open GMem lib failed.";
   }
 }
 
 void AscendGmemAdapter::UnloadGMemLib() noexcept {
   if (gmemHandle_ != nullptr) {
-    LOG_OUT << "Close GMem lib.";
+    RT_VLOG(VL_HARDWARE) << "Close GMem lib.";
     if (dlclose(gmemHandle_) != 0) {
-      LOG_ERROR << "Close GMem lib failed, detail : " << dlerror() << ".";
+      RT_GLOG(ERROR) << "Close GMem lib failed, detail : " << dlerror() << ".";
     }
     gmemHandle_ = nullptr;
   }

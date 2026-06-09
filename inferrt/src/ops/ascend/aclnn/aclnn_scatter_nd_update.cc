@@ -36,8 +36,8 @@ OpsErrorCode AclnnScatterNdUpdateNonInplace::Launch(const std::vector<const ir::
   auto dstSize = dstTensor->Numel() * dstTensor->Dtype().GetSize();
   auto srcSize = srcTensor->Numel() * srcTensor->Dtype().GetSize();
   if (srcSize > dstSize) {
-    LOG_EXCEPTION << "Unexpected input and output size mismatch for scatter_nd_update, src size is " << srcSize
-                  << ", dst size is " << dstSize;
+    RT_GLOG(EXCEPTION) << "Unexpected input and output size mismatch for scatter_nd_update, src size is " << srcSize
+                       << ", dst size is " << dstSize;
   }
   device::ascend::AscendResManager::MemcpyDeviceToDevice(dstTensor->DataPtr(), dstSize, srcTensor->DataPtr(), srcSize,
                                                          stream);

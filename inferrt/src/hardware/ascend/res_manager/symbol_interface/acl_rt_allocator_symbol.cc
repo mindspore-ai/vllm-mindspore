@@ -32,7 +32,7 @@ void LoadAclAllocatorApiSymbol(const std::string &ascendPath) {
   std::string allocatorPluginPath = ascendPath + "lib64/libascendcl.so";
   auto handler = GetLibHandler(allocatorPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << allocatorPluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << allocatorPluginPath << " failed!" << dlerror();
     return;
   }
   aclrtAllocatorCreateDesc_ = DlsymAscendFuncObj(aclrtAllocatorCreateDesc, handler);
@@ -45,7 +45,7 @@ void LoadAclAllocatorApiSymbol(const std::string &ascendPath) {
     DlsymAscendFuncObj(aclrtAllocatorSetGetAddrFromBlockFuncToDesc, handler);
   aclrtAllocatorSetObjToDesc_ = DlsymAscendFuncObj(aclrtAllocatorSetObjToDesc, handler);
   aclrtAllocatorUnregister_ = DlsymAscendFuncObj(aclrtAllocatorUnregister, handler);
-  LOG_OUT << "Load acl allocator api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl allocator api success!";
 }
 
 void LoadSimulationAclAllocatorApi() {

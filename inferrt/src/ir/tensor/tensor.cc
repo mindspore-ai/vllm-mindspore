@@ -40,7 +40,7 @@ int64_t CalculateNumel(const std::vector<int64_t> &shape, bool allow_dynamic) {
       if (allow_dynamic) {
         return -1;
       } else {
-        LOG_EXCEPTION << "Creating Tensor from existing data does not support dynamic shapes.";
+        RT_GLOG(EXCEPTION) << "Creating Tensor from existing data does not support dynamic shapes.";
       }
     }
     numel *= dim;
@@ -133,7 +133,7 @@ Tensor::Tensor(StoragePtr storage, const std::vector<int64_t> &shape, DataType d
   numel_ = CalculateNumel(shape_, true);
   if (!HasDynamicShape()) {
     if (storage_->SizeBytes() < numel_ * dtype_.GetSize()) {
-      LOG_EXCEPTION << "Storage size is smaller than required by tensor dimensions and data type.";
+      RT_GLOG(EXCEPTION) << "Storage size is smaller than required by tensor dimensions and data type.";
     }
   }
 }

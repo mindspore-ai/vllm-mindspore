@@ -28,7 +28,7 @@ void LoadAclOpCompilerApiSymbol(const std::string &ascendPath) {
   std::string complierPluginPath = ascendPath + "lib64/libacl_op_compiler.so";
   auto handler = GetLibHandler(complierPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << complierPluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << complierPluginPath << " failed!" << dlerror();
     return;
   }
   aclopCompileAndExecute_ = DlsymAscendFuncObj(aclopCompileAndExecute, handler);
@@ -36,7 +36,7 @@ void LoadAclOpCompilerApiSymbol(const std::string &ascendPath) {
   aclSetCompileopt_ = DlsymAscendFuncObj(aclSetCompileopt, handler);
   aclopSetCompileFlag_ = DlsymAscendFuncObj(aclopSetCompileFlag, handler);
   aclGenGraphAndDumpForOp_ = DlsymAscendFuncObj(aclGenGraphAndDumpForOp, handler);
-  LOG_OUT << "Load acl op compiler api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl op compiler api success!";
 }
 
 void LoadSimulationAclOpCompilerApi() {

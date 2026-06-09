@@ -26,10 +26,10 @@ OpsErrorCode Operator::InferShape(const std::vector<const ir::Value *> &input, i
       tensor->EvalSymbolicShape();
     }
     if (tensor->HasDynamicShape()) {
-      LOG_EXCEPTION << "Tensor shape still unknown before launch: " << tensor;
+      RT_GLOG(EXCEPTION) << "Tensor shape still unknown before launch: " << tensor;
     }
   });
-  LOG_OUT << "Operator output shape inferred: " << *output;
+  RT_VLOG(VL_OPS) << "Operator output shape inferred: " << *output;
   return SUCCESS;
 }
 

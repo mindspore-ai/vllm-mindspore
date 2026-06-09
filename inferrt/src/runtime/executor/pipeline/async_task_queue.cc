@@ -35,7 +35,7 @@ AsyncTaskQueue::~AsyncTaskQueue() {
   try {
     WorkerJoin();
   } catch (const std::exception &e) {
-    LOG_ERROR << "WorkerJoin failed, error msg:" << e.what();
+    RT_GLOG(ERROR) << "WorkerJoin failed, error msg:" << e.what();
   }
 }
 
@@ -53,7 +53,7 @@ void AsyncTaskQueue::WorkerLoop() {
       tasksQueue_.Pop();
     } catch (const std::exception &e) {
       MrtException::GetInstance().SetException();
-      LOG_ERROR << "Run task failed and catch exception: " << e.what();
+      RT_GLOG(ERROR) << "Run task failed and catch exception: " << e.what();
       while (!tasksQueue_.Empty()) {
         auto *remainingTask = tasksQueue_.Front();
         if (remainingTask != nullptr && remainingTask->type_ == TaskType::Wait) {

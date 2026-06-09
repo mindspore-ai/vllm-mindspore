@@ -35,7 +35,7 @@ bool OpPrecisionConf::IsAllowFP32ToFP16() {
     } else if (aclPrecisionMode_ == kAclAllowFP32ToFP16) {
       ret = true;
     } else {
-      LOG_OUT << "Unsupported precision mode: " << aclPrecisionMode_;
+      RT_VLOG(VL_CONFIG) << "Unsupported precision mode: " << aclPrecisionMode_;
     }
   }
   return ret;

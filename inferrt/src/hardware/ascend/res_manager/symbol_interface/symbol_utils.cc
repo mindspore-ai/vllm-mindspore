@@ -38,7 +38,7 @@ void *GetLibHandler(const std::string &libPath, bool ifGlobal) {
     handler = dlopen(libPath.c_str(), RTLD_LAZY | RTLD_LOCAL);
   }
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << libPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << libPath << " failed!" << dlerror();
   }
   return handler;
 }
@@ -46,7 +46,7 @@ void *GetLibHandler(const std::string &libPath, bool ifGlobal) {
 std::string GetAscendPath() {
   Dl_info info;
   if (dladdr(reinterpret_cast<void *>(aclrtMalloc), &info) == 0) {
-    LOG_ERROR << "Get dladdr failed.";
+    RT_GLOG(ERROR) << "Get dladdr failed.";
     return "";
   }
   auto pathTmp = std::string(info.dli_fname);
@@ -59,9 +59,9 @@ std::string GetAscendPath() {
     }
   }
 
-  LOG_ERROR << "Get ascend path based on aclrtMalloc file " << pathTmp
-            << " failed, please check whether CANN packages are installed correctly, \n"
-               "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
+  RT_GLOG(ERROR) << "Get ascend path based on aclrtMalloc file " << pathTmp
+                 << " failed, please check whether CANN packages are installed correctly, \n"
+                    "and environment variables are set by source ${LOCAL_ASCEND}/ascend-toolkit/set_env.sh.";
   return "";
 }
 
@@ -75,7 +75,7 @@ const char *GetAscendSocVersion() {
 
 void LoadAscendApiSymbols() {
   if (loadAscendApi) {
-    LOG_OUT << "Ascend api is already loaded.";
+    RT_VLOG(VL_HARDWARE) << "Ascend api is already loaded.";
     return;
   }
   std::string ascendPath = GetAscendPath();
@@ -88,12 +88,12 @@ void LoadAscendApiSymbols() {
   LoadAclApiSymbol(ascendPath);
   LoadAcltdtApiSymbol(ascendPath);
   loadAscendApi = true;
-  LOG_OUT << "Load ascend api success!";
+  RT_VLOG(VL_HARDWARE) << "Load ascend api success!";
 }
 
 void LoadSimulationApiSymbols() {
   if (loadSimulationApi) {
-    LOG_OUT << "Simulation api is already loaded.";
+    RT_VLOG(VL_HARDWARE) << "Simulation api is already loaded.";
     return;
   }
 
@@ -106,6 +106,6 @@ void LoadSimulationApiSymbols() {
   LoadSimulationAclAllocatorApi();
   LoadSimulationAclApi();
   loadSimulationApi = true;
-  LOG_OUT << "Load simulation api success!";
+  RT_VLOG(VL_HARDWARE) << "Load simulation api success!";
 }
 }  // namespace mrt::device::ascend

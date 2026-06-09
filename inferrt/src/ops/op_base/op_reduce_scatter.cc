@@ -21,7 +21,7 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode OpReduceScatter::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  LOG_OUT << "HcclReduceScatter InferShape";
+  RT_VLOG(VL_OPS) << "HcclReduceScatter InferShape";
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto rankSize = input[kIndex2]->ToInt();

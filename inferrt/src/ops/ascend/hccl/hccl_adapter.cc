@@ -24,10 +24,10 @@
 
 static constexpr const auto kHcclPluginFileName = "libhccl.so";
 
-#define CHECK_SYMBOL_NULL(symbol)                                              \
-  if ((symbol) == nullptr) {                                                   \
-    LOG_ERROR << #symbol << " is null, hccl has not been inited, do nothing."; \
-    return HcclResult::HCCL_E_RESERVED;                                        \
+#define CHECK_SYMBOL_NULL(symbol)                                                   \
+  if ((symbol) == nullptr) {                                                        \
+    RT_GLOG(ERROR) << #symbol << " is null, hccl has not been inited, do nothing."; \
+    return HcclResult::HCCL_E_RESERVED;                                             \
   }
 
 namespace mrt::ops {
@@ -49,7 +49,7 @@ void HcclAdapter::InitPlugin() {
   pluginHandle_ = dlopen(kHcclPluginFileName, RTLD_NOW | RTLD_LOCAL);
 #endif
   if (pluginHandle_ == nullptr) {
-    LOG_EXCEPTION << "Dlopen " << kHcclPluginFileName << " failed, result = " << GetDlErrorMsg();
+    RT_GLOG(EXCEPTION) << "Dlopen " << kHcclPluginFileName << " failed, result = " << GetDlErrorMsg();
   }
 
   launchHcclAllReduce_ = DlsymFuncObj(HcclAllReduce, pluginHandle_);
@@ -108,37 +108,35 @@ std::string HcclAdapter::GetHcclModeString(HcclMode hcclMode) {
 }
 
 bool HcclAdapter::InitHccl() {
-  LOG_OUT << "Start init hccl adapter.";
   std::lock_guard<std::mutex> lock(initMutex_);
   if (initFlag_) {
-    LOG_OUT << "Hccl has been inited, skip.";
     return true;
   }
   InitPlugin();
 
   initFlag_ = true;
-  LOG_OUT << "Init hccl adapter success.";
+  RT_VLOG(VL_OPS) << "Init hccl adapter success.";
   return true;
 }
 
 bool HcclAdapter::HcclWatchdogThread(HcclComm comm, std::string *errorInfo, bool *disable) {
   if (!initFlag_) {
-    LOG_OUT << "Hccl has never been inited, skip.";
+    RT_VLOG(VL_OPS) << "Hccl has never been inited, skip.";
     return true;
   }
   CHECK_IF_NULL(disable);
   if (hcclGetCommAsyncError_ == nullptr) {
-    LOG_OUT << "Hccl has never been inited, skip.";
+    RT_VLOG(VL_OPS) << "Hccl has never been inited, skip.";
     return true;
   }
   if (hcclGetErrorString_ == nullptr) {
-    LOG_OUT << "Hccl has never been inited, skip.";
+    RT_VLOG(VL_OPS) << "Hccl has never been inited, skip.";
     return true;
   }
   HcclResult hcclAsyncError;
   auto ret = hcclGetCommAsyncError_(comm, &hcclAsyncError);
   if (ret != HCCL_SUCCESS) {
-    LOG_OUT << "Call HcclGetCommAsyncError failed, close watchdog.";
+    RT_VLOG(VL_OPS) << "Call HcclGetCommAsyncError failed, close watchdog.";
     *disable = true;
     return true;
   }
@@ -154,9 +152,9 @@ bool HcclAdapter::HcclWatchdogThread(HcclComm comm, std::string *errorInfo, bool
 
 bool HcclAdapter::FinalizeHccl() {
   std::lock_guard<std::mutex> lock(initMutex_);
-  LOG_OUT << "Start destroy hccl adapter for " << GetHcclModeString(hcclMode_);
+  RT_VLOG(VL_OPS) << "Start destroy hccl adapter for " << GetHcclModeString(hcclMode_);
   if (!initFlag_) {
-    LOG_OUT << "Hccl has never been inited, skip.";
+    RT_VLOG(VL_OPS) << "Hccl has never been inited, skip.";
     return true;
   }
   (void)FinalizeHcclExec();
@@ -167,7 +165,7 @@ bool HcclAdapter::FinalizeHccl() {
   }
   FinalizePlugin();
   initFlag_ = false;
-  LOG_OUT << "Destroy hccl adapter success.";
+  RT_VLOG(VL_OPS) << "Destroy hccl adapter success.";
   return true;
 }
 
@@ -243,7 +241,7 @@ HcclResult HcclAdapter::HcclBatchISendIRecv(HcclSendRecvItem *sendRecvInfo, uint
 
 HcclResult HcclAdapter::HcclCommResume(HcclComm hcclComm) const {
   if (launchHcclCommResume_ == nullptr) {
-    LOG_EXCEPTION << "Dynamically load HcclCommResume failed.";
+    RT_GLOG(EXCEPTION) << "Dynamically load HcclCommResume failed.";
   }
   return launchHcclCommResume_(hcclComm);
 }
@@ -258,7 +256,7 @@ HcclResult HcclAdapter::HcclSetGlobalCommInfo(uint32_t masterIp, uint32_t master
   if (setHcclGlobalCommInfo_ == nullptr) {
     setHcclGlobalCommInfo_ = DlsymAscendFuncObj(HcclSetGlobalCommInfo, pluginHandle_);
     if (setHcclGlobalCommInfo_ == nullptr) {
-      LOG_OUT << "Func HcclSetGlobalCommInfo is not supported in CANN package.";
+      RT_VLOG(VL_OPS) << "Func HcclSetGlobalCommInfo is not supported in CANN package.";
       return HCCL_E_NOT_SUPPORT;
     }
   }
@@ -295,29 +293,29 @@ HcclResult HcclAdapter::HcclCreateSubCommConfig(HcclComm *globalComm, uint32_t r
 }
 
 bool HcclAdapter::InitHcclComm(std::string_view rankId, std::string_view rankFile) {
-  LOG_OUT << "Start init hccl comm.";
+  RT_VLOG(VL_OPS) << "Start init hccl comm.";
   int rankIdI = -1;
   try {
     rankIdI = std::stoi(rankId.data());
   } catch (std::invalid_argument &) {
-    LOG_EXCEPTION << "Invalid rank id env:" << rankId;
+    RT_GLOG(EXCEPTION) << "Invalid rank id env:" << rankId;
   }
   if (rankIdI < 0) {
-    LOG_ERROR << "rank_id cannot be negative";
+    RT_GLOG(ERROR) << "rank_id cannot be negative";
     return false;
   }
   CHECK_IF_NULL(initHcclComm_);
   auto hcclResult = initHcclComm_(rankFile.data(), rankIdI, &hcclComm_);
   if (hcclResult != HCCL_SUCCESS) {
-    LOG_ERROR << "HcclCommInitClusterInfo failed, ret:" << hcclResult;
+    RT_GLOG(ERROR) << "HcclCommInitClusterInfo failed, ret:" << hcclResult;
     return false;
   }
-  LOG_OUT << "InitHcclComm success";
+  RT_VLOG(VL_OPS) << "InitHcclComm success";
   return true;
 }
 
 bool HcclAdapter::FinalizeHcclComm() {
-  LOG_OUT << "Start finalize hccl comm.";
+  RT_VLOG(VL_OPS) << "Start finalize hccl comm.";
   if (hcclComm_ == nullptr) {
     return true;
   }
@@ -325,11 +323,11 @@ bool HcclAdapter::FinalizeHcclComm() {
   CHECK_IF_NULL(finalizeHcclComm_);
   auto hcclResult = finalizeHcclComm_(hcclComm_);
   if (hcclResult != HCCL_SUCCESS) {
-    LOG_ERROR << "HcclComm destroy failed, ret:" << hcclResult;
+    RT_GLOG(ERROR) << "HcclComm destroy failed, ret:" << hcclResult;
     return false;
   }
   hcclComm_ = nullptr;
-  LOG_OUT << "HcclComm destroy success";
+  RT_VLOG(VL_OPS) << "HcclComm destroy success";
   return true;
 }
 
@@ -369,7 +367,7 @@ HcclResult HcclAdapter::HcclGetLocalRankId(const std::string &group, uint32_t *l
 
 HcclResult HcclAdapter::HcclGetLocalRankSize(const std::string &group, uint32_t *localRankSize) const {
   if (hcclMode_ != HcclMode::kGraph) {
-    LOG_ERROR << "The pynative mode doesn't support get local rank size.";
+    RT_GLOG(ERROR) << "The pynative mode doesn't support get local rank size.";
     return HCCL_E_NOT_SUPPORT;
   } else {
     CHECK_SYMBOL_NULL(hcclGetLocalRankSize_);
@@ -380,7 +378,7 @@ HcclResult HcclAdapter::HcclGetLocalRankSize(const std::string &group, uint32_t 
 HcclResult HcclAdapter::HcclGetWorldRankFromGroupRank(const std::string &group, uint32_t localRank,
                                                       uint32_t *worldRank) const {
   if (hcclMode_ != HcclMode::kGraph) {
-    LOG_ERROR << "The pynative mode doesn't support get world rank by group rank.";
+    RT_GLOG(ERROR) << "The pynative mode doesn't support get world rank by group rank.";
     return HCCL_E_NOT_SUPPORT;
   } else {
     CHECK_SYMBOL_NULL(hcclGetWorldRankByGroupRank_);
@@ -391,7 +389,7 @@ HcclResult HcclAdapter::HcclGetWorldRankFromGroupRank(const std::string &group, 
 HcclResult HcclAdapter::HcclGetGroupRankFromWorldRank(uint32_t worldRank, const std::string &group,
                                                       uint32_t *localRank) const {
   if (hcclMode_ != HcclMode::kGraph) {
-    LOG_ERROR << "The pynative mode doesn't support get group rank by world rank.";
+    RT_GLOG(ERROR) << "The pynative mode doesn't support get group rank by world rank.";
     return HCCL_E_NOT_SUPPORT;
   } else {
     CHECK_SYMBOL_NULL(hcclGetGroupRankByWorldRank_);

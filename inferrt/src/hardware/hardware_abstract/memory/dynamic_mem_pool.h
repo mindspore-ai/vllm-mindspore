@@ -106,23 +106,23 @@ class MRT_EXPORT DynamicMemPool {
   virtual void Initialize(size_t initSize, size_t increaseSize, size_t maxSize) {}
 
   // Release the real device memory.
-  virtual void ReleaseDeviceRes() { LOG_ERROR << "Not implemented"; }
+  virtual void ReleaseDeviceRes() { RT_GLOG(ERROR) << "Not implemented"; }
 
   // The main program entry of memory alloc.
   virtual DeviceMemPtr AllocTensorMem(size_t size, bool fromPersistentMem = false, bool needRecycle = false,
                                       uint32_t streamId = kDefaultStreamIndex) {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return nullptr;
   }
 
   // The main program entry of continuous memory alloc.
   virtual std::vector<DeviceMemPtr> AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
                                                              uint32_t streamId = kDefaultStreamIndex) {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return {};
   }
   // The main program entry of memory free.
-  virtual void FreeTensorMem(const DeviceMemPtr &deviceAddr) { LOG_ERROR << "Not implemented"; }
+  virtual void FreeTensorMem(const DeviceMemPtr &deviceAddr) { RT_GLOG(ERROR) << "Not implemented"; }
 
   virtual bool DoFreeTensorMem(const DeviceMemPtr &deviceAddr) { return false; }
 
@@ -130,7 +130,7 @@ class MRT_EXPORT DynamicMemPool {
   virtual void FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
                                   const std::vector<DeviceMemPtr> &keepAddrs,
                                   const std::vector<size_t> &keepAddrSizes) {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
   }
 
   // Help method for dynamic memory proxy.
@@ -182,12 +182,12 @@ class MRT_EXPORT DynamicMemPool {
 
   // The related interface of device memory real operation, needs override by device type.
   virtual size_t AllocDeviceMem(size_t size, DeviceMemPtr *addr) {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual bool FreeDeviceMem(const DeviceMemPtr &addr) {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return false;
   }
 
@@ -210,75 +210,75 @@ class MRT_EXPORT DynamicMemPool {
 
   // The statistics information.
   virtual size_t TotalMemStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t TotalUsedMemStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t TotalUsedByEventMemStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t TotalIdleMemStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t TotalEagerFreeMemStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t UsedMemPeakStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t MaxMemAllocatedStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t MaxMemReservedStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual size_t ActualPeakStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return 0;
   }
 
   virtual std::unordered_map<std::string, std::size_t> BlockCountsStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return {};
   }
 
   virtual std::unordered_map<std::string, std::size_t> BlockUnitSizeStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return {};
   }
 
   virtual std::unordered_map<device::DeviceMemPtr, std::unordered_map<std::string, size_t>>
   CommonMemBlocksInfoStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return {};
   }
 
   virtual std::unordered_map<device::DeviceMemPtr, std::unordered_map<std::string, size_t>>
   PersistentMemBlocksInfoStatistics() const {
-    LOG_ERROR << "Not implemented";
+    RT_GLOG(ERROR) << "Not implemented";
     return {};
   }
 
-  virtual void ResetMaxMemReserved() { LOG_ERROR << "Not implemented"; }
+  virtual void ResetMaxMemReserved() { RT_GLOG(ERROR) << "Not implemented"; }
 
-  virtual void ResetMaxMemAllocated() { LOG_ERROR << "Not implemented"; }
+  virtual void ResetMaxMemAllocated() { RT_GLOG(ERROR) << "Not implemented"; }
 
   virtual std::string GetMemoryPoolType() const { return "Other"; }
 

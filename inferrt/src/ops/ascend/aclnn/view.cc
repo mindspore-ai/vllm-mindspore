@@ -38,10 +38,10 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
     UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, strides.value());
     return;
   }
-  LOG_EXCEPTION << "View encountered unsupported non-contiguous input tensor. output shape: " << viewShapeArg
-                << " (inferred as " << inferredShape << "), input shape: " << curShape
-                << ", input stride: " << curStrides
-                << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
+  RT_GLOG(EXCEPTION) << "View encountered unsupported non-contiguous input tensor. output shape: " << viewShapeArg
+                     << " (inferred as " << inferredShape << "), input shape: " << curShape
+                     << ", input stride: " << curStrides
+                     << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
 }
 }  // namespace
 
@@ -50,7 +50,7 @@ OpsErrorCode AclnnView::CalcWorkspace(const std::vector<const ir::Value *> &inpu
   const auto inputTensorPtr = input[kIndex0]->ToTensor();
   const auto &shape = input[kIndex1]->ToTuple()->ToIntList();
   if (std::any_of(shape.begin(), shape.end(), [](const int &shapeI) { return shapeI < -1; })) {
-    LOG_EXCEPTION << "For View the component of shape can't be less than -1";
+    RT_GLOG(EXCEPTION) << "For View the component of shape can't be less than -1";
   }
   UpdateOutputViewInfo(inputTensorPtr, output->ToTensor(), shape);
   CheckStorageMatch(input, output);

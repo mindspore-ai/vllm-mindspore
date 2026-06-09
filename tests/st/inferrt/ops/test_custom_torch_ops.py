@@ -28,7 +28,7 @@ def test_tensor_ref(backend):
     """
     Feature: Check CheckOutputInputRef for tensor output with ref
     Description: Custom op that returns tensor where ref shares storage with input should raise exception
-    Expectation: LOG_EXCEPTION is raised because output element shares storage with input
+    Expectation: RT_GLOG(EXCEPTION) is raised because output element shares storage with input
     """
     def test_func(x):
         return x.exponential_()
@@ -47,7 +47,7 @@ def test_tuple_first_element_ref(backend):
     """
     Feature: Check CheckOutputInputRef for tuple output with first element as ref
     Description: Custom op that returns tuple where first element shares storage with input should raise exception
-    Expectation: LOG_EXCEPTION is raised because first output element shares storage with input
+    Expectation: RT_GLOG(EXCEPTION) is raised because first output element shares storage with input
     """
 
     @torch.library.custom_op("ref::split_op", mutates_args=())

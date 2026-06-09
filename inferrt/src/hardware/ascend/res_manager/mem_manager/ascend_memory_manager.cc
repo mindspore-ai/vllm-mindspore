@@ -101,15 +101,15 @@ uint8_t *AscendMemoryManager::MallocStaticMem(size_t size, bool communicationMem
   } else {
     alignSize = GetCommonAlignSize(size);
   }
-  LOG_OUT << "Malloc Memory for Static: size[" << alignSize << "] communicationMem:" << communicationMem;
+  RT_VLOG(VL_HARDWARE) << "Malloc Memory for Static: size[" << alignSize << "] communicationMem:" << communicationMem;
 
   uint8_t *allocAddress = reinterpret_cast<uint8_t *>(AscendMemoryPool::GetInstance().AllocTensorMem(alignSize));
   if (allocAddress != nullptr) {
     // create protect area [kMemAlignSize -- data -- kMemAlignSize] for communication node memory
     return communicationMem ? allocAddress + kMemAlignSize : allocAddress;
   }
-  LOG_ERROR << "#umsg#Framework Error Message:#umsg#Fail to alloc memory, size: " << alignSize
-            << "B, memory statistics:" << AscendMemAdapter::GetInstance()->DevMemStatistics();
+  RT_GLOG(ERROR) << "#umsg#Framework Error Message:#umsg#Fail to alloc memory, size: " << alignSize
+                 << "B, memory statistics:" << AscendMemAdapter::GetInstance()->DevMemStatistics();
   return 0;
 }
 
@@ -120,7 +120,7 @@ uint8_t *AscendMemoryManager::MallocDynamicMem(size_t size, bool communicationMe
   } else {
     alignSize = GetCommonAlignSize(size);
   }
-  LOG_OUT << "Malloc Memory for Dynamic: size[" << alignSize << "] communicationMem: " << communicationMem;
+  RT_VLOG(VL_HARDWARE) << "Malloc Memory for Dynamic: size[" << alignSize << "] communicationMem: " << communicationMem;
 
   uint8_t *allocAddress = reinterpret_cast<uint8_t *>(AscendMemAdapter::GetInstance()->MallocDynamicDevMem(alignSize));
   CHECK_IF_NULL(allocAddress);
@@ -144,18 +144,18 @@ DynamicMemPool *AscendMemoryManager::GetMemoryPool() {
 
 void EnhancedAscendMemoryManager::Initialize() {
   AscendMemoryManager::Initialize();
-  LOG_OUT << "EnhancedAscendMemoryManager initialize.";
+  RT_VLOG(VL_HARDWARE) << "EnhancedAscendMemoryManager initialize.";
   allocCosts_.clear();
 }
 
 void EnhancedAscendMemoryManager::Finalize() {
   AscendMemoryManager::Finalize();
-  LOG_OUT << "EnhancedAscendMemoryManager finalize";
+  RT_VLOG(VL_HARDWARE) << "EnhancedAscendMemoryManager finalize";
   std::sort(allocCosts_.begin(), allocCosts_.end());
   // Calculate mean and median, then print them.
   auto totalSize = allocCosts_.size();
   if (totalSize == 0) {
-    LOG_OUT << "No memory operation.";
+    RT_VLOG(VL_HARDWARE) << "No memory operation.";
     return;
   }
   double median = 0;
@@ -164,15 +164,15 @@ void EnhancedAscendMemoryManager::Finalize() {
   } else {
     median = allocCosts_[totalSize >> 1];
   }
-  LOG_OUT << "EnhancedAscendMemoryManager median : " << median << "ns.";
+  RT_VLOG(VL_HARDWARE) << "EnhancedAscendMemoryManager median : " << median << "ns.";
 
   double sum = std::accumulate(allocCosts_.begin(), allocCosts_.end(), 0.0);
   double mean = sum / totalSize;
-  LOG_OUT << "EnhancedAscendMemoryManager mean : " << mean << "ns.";
+  RT_VLOG(VL_HARDWARE) << "EnhancedAscendMemoryManager mean : " << mean << "ns.";
 
   const double costHighWater = 1800;
   if (median > costHighWater || mean > costHighWater) {
-    LOG_OUT << "EnhancedAscendMemoryManager check failed, median : " << median << ", mean : " << mean;
+    RT_VLOG(VL_HARDWARE) << "EnhancedAscendMemoryManager check failed, median : " << median << ", mean : " << mean;
   }
 }
 
@@ -182,7 +182,7 @@ void *EnhancedAscendMemoryManager::MallocMemFromMemPool(size_t size, bool fromPe
   auto ret = AscendMemoryManager::MallocMemFromMemPool(size, fromPersistentMem, needRecycle, streamId);
   auto cost = GetCurrentTick() - startTick;
   (void)allocCosts_.emplace_back(cost);
-  LOG_OUT << "Malloc memory cost : " << cost << "ns.";
+  RT_VLOG(VL_HARDWARE) << "Malloc memory cost : " << cost << "ns.";
   return ret;
 }
 }  // namespace ascend

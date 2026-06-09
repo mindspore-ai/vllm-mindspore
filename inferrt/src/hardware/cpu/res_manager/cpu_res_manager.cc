@@ -24,14 +24,14 @@
 namespace mrt {
 namespace device {
 namespace cpu {
-void CPUResManager::Initialize() { LOG_OUT << "Unimplemented interface."; }
+void CPUResManager::Initialize() { RT_VLOG(VL_HARDWARE) << "Unimplemented interface."; }
 
-void CPUResManager::Destroy() { LOG_OUT << "Unimplemented interface."; }
+void CPUResManager::Destroy() { RT_VLOG(VL_HARDWARE) << "Unimplemented interface."; }
 
 void *CPUResManager::AllocateMemory(size_t size, uint32_t streamId) const {
   void *ptr = std::malloc(size);
   if (ptr == nullptr) {
-    LOG_ERROR << "Memory allocate failed";
+    RT_GLOG(ERROR) << "Memory allocate failed";
     return nullptr;
   }
   return ptr;
@@ -44,12 +44,12 @@ void CPUResManager::FreeMemory(void *ptr) const {
 
 void CPUResManager::FreePartMemorys(const std::vector<void *> &freeAddrs, const std::vector<void *> &keepAddrs,
                                     const std::vector<size_t> &keepAddrSizes) const {
-  LOG_OUT << "Unimplemented interface.";
+  RT_VLOG(VL_HARDWARE) << "Unimplemented interface.";
   return;
 }
 
 bool CPUResManager::AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const {
-  LOG_ERROR << "Not support async copy for CPU platform";
+  RT_GLOG(ERROR) << "Not support async copy for CPU platform";
   return false;
 }
 
@@ -58,7 +58,7 @@ bool CPUResManager::SyncCopy(void *dst, const void *src, uint64_t size, CopyType
   CHECK_IF_NULL(src);
   auto ret = memcpy_s(dst, size, src, size);
   if (ret != EOK) {
-    LOG_ERROR << "Call memcpy_s failed, ret:" << ret;
+    RT_GLOG(ERROR) << "Call memcpy_s failed, ret:" << ret;
     return false;
   }
   return true;

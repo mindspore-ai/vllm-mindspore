@@ -26,14 +26,6 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
 endif()
 
-function(check_debug_log_out)
-  get_filename_component(CURRENT_FOLDER ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-  if("${DEBUG_LOG_OUT_${CURRENT_FOLDER}}" STREQUAL "on")
-    message("-- Enable log out for source in ${CMAKE_CURRENT_SOURCE_DIR}")
-    add_definitions(-DDEBUG_LOG_OUT)
-  endif()
-endfunction()
-
 if(ENABLE_TORCH_FRONT)
   add_compile_definitions(ENABLE_TORCH_FRONT)
   execute_process(COMMAND python -c "import torch; print(torch.compiled_with_cxx11_abi())"
@@ -56,6 +48,7 @@ set(MRT_DIALECT_JSON_SOURCE
 include(${TOP_DIR}/cmake/utils.cmake)
 include(${TOP_DIR}/cmake/securec.cmake)
 include(${TOP_DIR}/cmake/nlohmann_json.cmake)
+include(${TOP_DIR}/cmake/glog.cmake)
 include(${TOP_DIR}/cmake/dvm.cmake)
 include(${TOP_DIR}/cmake/torch_npu.cmake)
 

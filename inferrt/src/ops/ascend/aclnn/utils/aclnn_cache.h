@@ -78,17 +78,15 @@ class CacheEntryManager : public ir::RefCounted {
       cacheMap_.erase(cacheList_.back()->GetHashId());
       cacheList_.pop_back();
     }
-    LOG_OUT << "Add cache entry, hashId: " << hashId << ", cacheSize: " << cacheList_.size();
   }
 
   CacheEntryPtr GetCacheEntry(uint64_t hashId) {
     if (cacheCapacity_ == 0 || hashId == 0) {
-      LOG_OUT << "Get cache entry skipped, cacheCapacity: " << cacheCapacity_ << ", hashId: " << hashId;
+      RT_VLOG(VL_OPS) << "Get cache entry skipped, cacheCapacity: " << cacheCapacity_ << ", hashId: " << hashId;
       return nullptr;
     }
     auto it = cacheMap_.find(hashId);
     if (it != cacheMap_.end()) {
-      LOG_OUT << "Get cache entry, hashId: " << hashId << ", cacheSize: " << cacheList_.size();
       return *it->second;
     }
     return nullptr;
@@ -105,7 +103,6 @@ using CacheEntryManagerPtr = ir::IntrusivePtr<CacheEntryManager>;
 // Update tensor address
 template <typename T>
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const T &value, size_t *irIndex, size_t *tensorIndex) {
-  LOG_OUT << "UpdateAddr for non tensor type, index: " << *irIndex;
   ++(*irIndex);
 }
 
@@ -152,7 +149,7 @@ inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const std::vector<ir::Te
 inline void UpdateAddr(const CacheEntryPtr &cacheEntry, const ir::TuplePtr &tuple, size_t *irIndex,
                        size_t *tensorIndex) {
   if (tuple == nullptr || tuple->Size() == 0) {
-    LOG_OUT << "tuple is empty";
+    RT_VLOG(VL_OPS) << "tuple is empty";
     ++(*irIndex);
     return;
   }
@@ -176,13 +173,13 @@ inline void UpdateAclTensorAddr(aclTensor *tensor, size_t *irIndex, size_t *tens
                                 void *tensorAddr) {
   static const auto aclSetTensorAddr = GET_ACLNN_COMMON_META_FUNC(aclSetTensorAddr);
   if (aclSetTensorAddr == nullptr) {
-    LOG_EXCEPTION << "aclSetTensorAddr is nullptr";
+    RT_GLOG(EXCEPTION) << "aclSetTensorAddr is nullptr";
     return;
   }
   auto ret = aclSetTensorAddr(executor, *tensorIndex, tensor, tensorAddr);
   if (ret != 0) {
-    LOG_EXCEPTION << "Call aclSetTensorAddr failed, index: " << *irIndex << ", tensorIndex: " << *tensorIndex
-                  << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
+    RT_GLOG(EXCEPTION) << "Call aclSetTensorAddr failed, index: " << *irIndex << ", tensorIndex: " << *tensorIndex
+                       << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
   }
 }
 
@@ -191,14 +188,15 @@ inline void UpdateAclTensorListAddr(aclTensorList *tensorList, size_t *irIndex, 
                                     size_t *relativeIndex, aclOpExecutor *executor, void *tensorAddr) {
   static const auto aclSetDynamicTensorAddr = GET_ACLNN_COMMON_META_FUNC(aclSetDynamicTensorAddr);
   if (aclSetDynamicTensorAddr == nullptr) {
-    LOG_EXCEPTION << "aclSetDynamicTensorAddr is nullptr";
+    RT_GLOG(EXCEPTION) << "aclSetDynamicTensorAddr is nullptr";
     return;
   }
   auto ret = aclSetDynamicTensorAddr(executor, *irIndex, *relativeIndex, tensorList, tensorAddr);
   if (ret != 0) {
-    LOG_EXCEPTION << "Call aclSetDynamicTensorAddr failed, index: " << *irIndex << ", relativeIndex: " << *relativeIndex
-                  << ", tensorIndex: " << (tensorIndex == nullptr ? "null" : std::to_string(*tensorIndex))
-                  << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
+    RT_GLOG(EXCEPTION) << "Call aclSetDynamicTensorAddr failed, index: " << *irIndex
+                       << ", relativeIndex: " << *relativeIndex
+                       << ", tensorIndex: " << (tensorIndex == nullptr ? "null" : std::to_string(*tensorIndex))
+                       << ", tensorAddr: " << tensorAddr << ", ret: " << ret;
   }
 }
 
@@ -274,7 +272,7 @@ class CacheProcessor {
       return;
     }
     isInitialized = true;
-    LOG_OUT << "Initializing tensor address updaters for tuple of size: " << tuple_size;
+    RT_VLOG(VL_OPS) << "Initializing tensor address updaters for tuple of size: " << tuple_size;
 
     BuildTensorAddrUpdaters(std::make_index_sequence<tuple_size>{});
   }
@@ -314,26 +312,18 @@ class CacheProcessor {
         }
         break;
       default:
-        LOG_EXCEPTION << "Invalid cache release type: " << static_cast<int>(type);
+        RT_GLOG(EXCEPTION) << "Invalid cache release type: " << static_cast<int>(type);
         break;
     }
   }
 
   void UpdateTensorAddr(size_t *irIndex, size_t *tensorIndex, size_t *relativeIndex, void *tensorAddr) {
-    LOG_OUT << "index: " << *irIndex << ", updaters size: " << tensorAddrUpdatersMap_.size()
-            << ", tensorIndex: " << (tensorIndex == nullptr ? "null" : std::to_string(*tensorIndex))
-            << ", relativeIndex: " << (relativeIndex == nullptr ? "null" : std::to_string(*relativeIndex))
-            << ", tensorAddr: " << tensorAddr;
-
     // Use the static map for efficient lookup, no need lookup in the future
     auto it = tensorAddrUpdatersMap_.find(*irIndex);
     if (it != tensorAddrUpdatersMap_.end()) {
       it->second(convertedParams_, executor_, irIndex, tensorIndex, relativeIndex, tensorAddr);
     } else {
-      LOG_EXCEPTION << "No updater found for index: " << *irIndex << ", available indices: ";
-      for (const auto &pair : tensorAddrUpdatersMap_) {
-        LOG_OUT << pair.first << " ";
-      }
+      RT_GLOG(EXCEPTION) << "No updater found for index: " << *irIndex << ", available indices: ";
     }
   }
 

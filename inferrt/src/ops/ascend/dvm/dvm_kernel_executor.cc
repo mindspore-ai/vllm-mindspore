@@ -49,7 +49,7 @@ bool GetEnvBoolOrDefault(const char *name, bool default_value) {
     return false;
   }
 
-  LOG_ERROR << "Invalid env '" << name << "'='" << s << "', using default " << default_value;
+  RT_GLOG(ERROR) << "Invalid env '" << name << "'='" << s << "', using default " << default_value;
   return default_value;
 }
 
@@ -66,12 +66,12 @@ bool InitDvmLibrary() {
     bool enable_tuning = GetEnvBoolOrDefault("MRT_DVM_ONLINE_TUNING", kDefaultOnlineTuning);
     if (enable_deterministic && enable_tuning) {
       enable_tuning = false;
-      LOG_ERROR << "MRT_DVM_DETERMINISTIC is enabled, forcing MRT_DVM_ONLINE_TUNING=false";
+      RT_GLOG(ERROR) << "MRT_DVM_DETERMINISTIC is enabled, forcing MRT_DVM_ONLINE_TUNING=false";
     }
     dvm::SetDeterministic(enable_deterministic);
     dvm::SetOnlineTuning(enable_tuning);
     initialized = true;
-    LOG_OUT << "DVM library initialized";
+    RT_VLOG(VL_OPS) << "DVM library initialized";
   }
   return initialized;
 }
@@ -94,17 +94,17 @@ static std::vector<ir::TensorPtr> ExtractOutputTensors(const ir::Value *output) 
     outs.reserve(tup->Size());
     for (const auto &item : *tup) {
       if (item == nullptr) {
-        LOG_EXCEPTION << "DvmKernelExecutor: output tuple contains null element";
+        RT_GLOG(EXCEPTION) << "DvmKernelExecutor: output tuple contains null element";
       }
       if (!item->IsTensor()) {
-        LOG_EXCEPTION << "DvmKernelExecutor: output tuple must contain only tensors";
+        RT_GLOG(EXCEPTION) << "DvmKernelExecutor: output tuple must contain only tensors";
       }
       outs.push_back(item->ToTensor());
     }
     return outs;
   }
-  LOG_EXCEPTION << "DvmKernelExecutor: output must be a Tensor or Tuple-of-Tensors, but got tag="
-                << static_cast<int>(output->GetTag());
+  RT_GLOG(EXCEPTION) << "DvmKernelExecutor: output must be a Tensor or Tuple-of-Tensors, but got tag="
+                     << static_cast<int>(output->GetTag());
   return {};
 }
 
@@ -118,10 +118,10 @@ DvmKernelExecutor::DvmKernelExecutor(dvm::KernelType kernelType)
 
   // Initialize kernel with specified type
   kernel_.Reset(kernelType_);
-  LOG_OUT << "DvmKernelExecutor created with kernel type: " << static_cast<int>(kernelType_);
+  RT_VLOG(VL_OPS) << "DvmKernelExecutor created with kernel type: " << static_cast<int>(kernelType_);
 }
 
-DvmKernelExecutor::~DvmKernelExecutor() { LOG_OUT << "DvmKernelExecutor destroyed"; }
+DvmKernelExecutor::~DvmKernelExecutor() { RT_VLOG(VL_OPS) << "DvmKernelExecutor destroyed"; }
 
 void DvmKernelExecutor::EnsureShapeRefsInitialized(size_t numInputs, size_t numOutputs) {
   const size_t expected = numInputs + numOutputs;  // inputs + output(s)
@@ -129,7 +129,7 @@ void DvmKernelExecutor::EnsureShapeRefsInitialized(size_t numInputs, size_t numO
     // Once the kernel graph is built, DVM may keep pointers to ShapeRef objects.
     // Do NOT reallocate/move ShapeRefs after that point.
     if (shapeRefs_.size() != expected) {
-      LOG_EXCEPTION << "ShapeRef count mismatch. Expected " << expected << ", got " << shapeRefs_.size();
+      RT_GLOG(EXCEPTION) << "ShapeRef count mismatch. Expected " << expected << ", got " << shapeRefs_.size();
     }
     return;
   }
@@ -157,11 +157,11 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
 
   if (shapeRefs_.size() != inputs.size() + numOutputs) {
     // Defensive: avoid writing out of bounds.
-    LOG_EXCEPTION << "UpdateShapeRefs skipped due to ShapeRef size mismatch";
+    RT_GLOG(EXCEPTION) << "UpdateShapeRefs skipped due to ShapeRef size mismatch";
     return;
   }
 
-  LOG_OUT << "UpdateShapeRefs: processing " << inputs.size() << " inputs";
+  RT_VLOG(VL_OPS) << "UpdateShapeRefs: processing " << inputs.size() << " inputs";
 
   // Update input shapes in-place.
   //
@@ -174,7 +174,7 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
   for (size_t i = 0; i < inputs.size(); ++i) {
     const auto &tensor = inputs[i]->ToTensor();
     if (tensor == nullptr) {
-      LOG_ERROR << "Input value is not a tensor";
+      RT_GLOG(ERROR) << "Input value is not a tensor";
       shapesStorage_[i].clear();
       shapeRefs_[i] = shapesStorage_[i];  // refresh pointers/size (data may be null)
     } else {
@@ -186,7 +186,7 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
         if (d < shape.size() - 1) shapeStr += ", ";
       }
       shapeStr += "]";
-      LOG_OUT << "Input[" << i << "] shape: " << shapeStr;
+      RT_VLOG(VL_OPS) << "Input[" << i << "] shape: " << shapeStr;
 
       if (shapesStorage_[i].empty()) {
         // First initialization (allowed to allocate).
@@ -194,9 +194,9 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
       } else if (shapesStorage_[i].size() != shape.size()) {
         // Rank change would require resizing/reallocation which can invalidate
         // cached pointers inside DVM. Fail fast with a readable error.
-        LOG_EXCEPTION << "DVM dyn-shape rank change is not supported. " << "Input[" << i << "] rank changed from "
-                      << shapesStorage_[i].size() << " to " << shape.size() << ". " << "Old shape=" << shapesStorage_[i]
-                      << ", new shape=" << shape;
+        RT_GLOG(EXCEPTION) << "DVM dyn-shape rank change is not supported. " << "Input[" << i << "] rank changed from "
+                           << shapesStorage_[i].size() << " to " << shape.size() << ". "
+                           << "Old shape=" << shapesStorage_[i] << ", new shape=" << shape;
       } else {
         // In-place update (no reallocation).
         for (size_t d = 0; d < shape.size(); ++d) {
@@ -217,7 +217,7 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
     const size_t idx = inputs.size() + o;
     const ir::TensorPtr outTensor = (o < outTensors.size()) ? outTensors[o] : nullptr;
     if (outTensor == nullptr) {
-      LOG_ERROR << "Output[" << o << "] value is not a tensor (or empty tuple)";
+      RT_GLOG(ERROR) << "Output[" << o << "] value is not a tensor (or empty tuple)";
       shapesStorage_[idx].clear();
       shapeRefs_[idx] = shapesStorage_[idx];
       continue;
@@ -231,15 +231,15 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
       if (d < outShape.size() - 1) outShapeStr += ", ";
     }
     outShapeStr += "]";
-    LOG_OUT << "Output[" << o << "] shape: " << outShapeStr;
+    RT_VLOG(VL_OPS) << "Output[" << o << "] shape: " << outShapeStr;
 
     if (shapesStorage_[idx].empty()) {
       // First initialization (allowed to allocate).
       shapesStorage_[idx].assign(outShape.begin(), outShape.end());
     } else if (shapesStorage_[idx].size() != outShape.size()) {
-      LOG_EXCEPTION << "DVM dyn-shape rank change is not supported. " << "Output[" << o << "] rank changed from "
-                    << shapesStorage_[idx].size() << " to " << outShape.size() << ". "
-                    << "Old shape=" << shapesStorage_[idx] << ", new shape=" << outShape;
+      RT_GLOG(EXCEPTION) << "DVM dyn-shape rank change is not supported. " << "Output[" << o << "] rank changed from "
+                         << shapesStorage_[idx].size() << " to " << outShape.size() << ". "
+                         << "Old shape=" << shapesStorage_[idx] << ", new shape=" << outShape;
     } else {
       for (size_t d = 0; d < outShape.size(); ++d) {
         shapesStorage_[idx][d] = outShape[d];
@@ -248,7 +248,7 @@ void DvmKernelExecutor::UpdateShapeRefs(const std::vector<const ir::Value *> &in
     shapeRefs_[idx] = shapesStorage_[idx];
   }
 
-  LOG_OUT << "Updated shape refs: " << shapeRefs_.size() << " shapes";
+  RT_VLOG(VL_OPS) << "Updated shape refs: " << shapeRefs_.size() << " shapes";
 }
 
 int DvmKernelExecutor::BuildKernel(
@@ -258,7 +258,7 @@ int DvmKernelExecutor::BuildKernel(
     buildFunc,
   const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   if (isKernelBuilt_) {
-    LOG_OUT << "Kernel already built, skipping rebuild";
+    RT_VLOG(VL_OPS) << "Kernel already built, skipping rebuild";
     return 0;
   }
 
@@ -274,31 +274,31 @@ int DvmKernelExecutor::BuildKernel(
 
   // Validate that NDObjects were properly recorded
   if (inputNDObjects_.size() != inputs.size()) {
-    LOG_ERROR << "BuildFunc did not record correct number of input NDObjects. " << "Expected " << inputs.size()
-              << ", got " << inputNDObjects_.size();
+    RT_GLOG(ERROR) << "BuildFunc did not record correct number of input NDObjects. " << "Expected " << inputs.size()
+                   << ", got " << inputNDObjects_.size();
     return -1;
   }
 
   if (outputNDObjects_.empty()) {
-    LOG_ERROR << "BuildFunc did not record any output NDObjects";
+    RT_GLOG(ERROR) << "BuildFunc did not record any output NDObjects";
     return -1;
   }
 
   isKernelBuilt_ = true;
-  LOG_OUT << "DVM kernel graph built successfully with " << inputNDObjects_.size() << " inputs, "
-          << outputNDObjects_.size() << " outputs";
+  RT_VLOG(VL_OPS) << "DVM kernel graph built successfully with " << inputNDObjects_.size() << " inputs, "
+                  << outputNDObjects_.size() << " outputs";
   return 0;
 }
 
 int DvmKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector<const ir::Value *> &inputs,
                                         const ir::Value *output) {
   if (workspaceSize == nullptr) {
-    LOG_ERROR << "workspaceSize pointer is null";
+    RT_GLOG(ERROR) << "workspaceSize pointer is null";
     return -1;
   }
 
   if (!isKernelBuilt_) {
-    LOG_ERROR << "Kernel not built yet, call BuildKernel first";
+    RT_GLOG(ERROR) << "Kernel not built yet, call BuildKernel first";
     return -1;
   }
 
@@ -309,7 +309,7 @@ int DvmKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector
   // For static kernels, return cached result if available
   if (isStaticKernel && isCodeGenDone_) {
     *workspaceSize = cachedWorkspaceSize_;
-    LOG_OUT << "Returning cached workspace size: " << *workspaceSize;
+    RT_VLOG(VL_OPS) << "Returning cached workspace size: " << *workspaceSize;
     return 0;
   }
 
@@ -319,14 +319,14 @@ int DvmKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector
   }
 
   // Call DVM CodeGen
-  LOG_OUT << "Calling DVM CodeGen...";
-  LOG_OUT << "DVM kernel dump before CodeGen:\n" << kernel_.Dump();
+  RT_VLOG(VL_OPS) << "Calling DVM CodeGen...";
+  RT_VLOG(VL_OPS) << "DVM kernel dump before CodeGen:\n" << kernel_.Dump();
 
   // MindSpore does not rely on Infer() to "fix" static MatMul shapes; correct kernel type (*Mix)
   // is the real fix. We keep Infer() only for dynamic kernels for debugging/shape inference.
   if (isDynKernel) {
     kernel_.Infer();
-    LOG_OUT << "DVM kernel dump after Infer:\n" << kernel_.Dump();
+    RT_VLOG(VL_OPS) << "DVM kernel dump after Infer:\n" << kernel_.Dump();
   }
 
   uint64_t ws = kernel_.CodeGen();
@@ -334,7 +334,7 @@ int DvmKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector
   isCodeGenDone_ = true;
   *workspaceSize = static_cast<size_t>(ws);
 
-  LOG_OUT << "DVM CodeGen completed, workspace size: " << *workspaceSize;
+  RT_VLOG(VL_OPS) << "DVM CodeGen completed, workspace size: " << *workspaceSize;
   return 0;
 }
 
@@ -342,12 +342,12 @@ void DvmKernelExecutor::BuildRelocTable(const std::vector<const ir::Value *> &in
   (void)output;
   // Validate that kernel was built and NDObjects were recorded
   if (inputNDObjects_.size() != inputs.size()) {
-    LOG_ERROR << "Mismatch between recorded NDObjects and actual inputs. " << "NDObjects: " << inputNDObjects_.size()
-              << ", Inputs: " << inputs.size();
+    RT_GLOG(ERROR) << "Mismatch between recorded NDObjects and actual inputs. "
+                   << "NDObjects: " << inputNDObjects_.size() << ", Inputs: " << inputs.size();
   }
 
   if (outputNDObjects_.empty()) {
-    LOG_ERROR << "No output NDObjects recorded during kernel build";
+    RT_GLOG(ERROR) << "No output NDObjects recorded during kernel build";
   }
 
   // Build RelocTable using NDObject pointers from BuildKernel phase
@@ -357,20 +357,20 @@ void DvmKernelExecutor::BuildRelocTable(const std::vector<const ir::Value *> &in
   relocTable_.outputs = outputNDObjects_.data();
   relocTable_.outputs_size = outputNDObjects_.size();
 
-  LOG_OUT << "RelocTable built with " << relocTable_.inputs_size << " input NDObjects, " << relocTable_.outputs_size
-          << " output NDObjects";
+  RT_VLOG(VL_OPS) << "RelocTable built with " << relocTable_.inputs_size << " input NDObjects, "
+                  << relocTable_.outputs_size << " output NDObjects";
 }
 
 int DvmKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *stream,
                               const std::vector<const ir::Value *> &inputs, ir::Value *output) {
   (void)workspaceSize;
   if (!isKernelBuilt_) {
-    LOG_ERROR << "Kernel not built yet";
+    RT_GLOG(ERROR) << "Kernel not built yet";
     return -1;
   }
 
   if (!isCodeGenDone_) {
-    LOG_ERROR << "CodeGen not done yet, call GetWorkspaceSize first";
+    RT_GLOG(ERROR) << "CodeGen not done yet, call GetWorkspaceSize first";
     return -1;
   }
 
@@ -389,12 +389,12 @@ int DvmKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *strea
 
   auto outTensors = ExtractOutputTensors(output);
   if (outTensors.empty()) {
-    LOG_EXCEPTION << "DvmKernelExecutor::Launch: output is empty (expected at least one tensor)";
+    RT_GLOG(EXCEPTION) << "DvmKernelExecutor::Launch: output is empty (expected at least one tensor)";
   }
   if (!outputNDObjects_.empty() && outTensors.size() != outputNDObjects_.size()) {
-    LOG_EXCEPTION << "DvmKernelExecutor::Launch: output tensor count mismatch. Payload/build recorded "
-                  << outputNDObjects_.size() << " output NDObjects, but runtime output value has " << outTensors.size()
-                  << " tensors.";
+    RT_GLOG(EXCEPTION) << "DvmKernelExecutor::Launch: output tensor count mismatch. Payload/build recorded "
+                       << outputNDObjects_.size() << " output NDObjects, but runtime output value has "
+                       << outTensors.size() << " tensors.";
   }
   outputAddrs.resize(outTensors.size());
   std::transform(outTensors.begin(), outTensors.end(), outputAddrs.begin(),
@@ -404,11 +404,11 @@ int DvmKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *strea
   int ret = kernel_.Launch(relocTable_, inputAddrs.data(), outputAddrs.data(), workspace, stream);
 
   if (ret != 0) {
-    LOG_ERROR << "DVM kernel launch failed with code: " << ret;
+    RT_GLOG(ERROR) << "DVM kernel launch failed with code: " << ret;
     return ret;
   }
 
-  LOG_OUT << "DVM kernel launched successfully";
+  RT_VLOG(VL_OPS) << "DVM kernel launched successfully";
   return 0;
 }
 

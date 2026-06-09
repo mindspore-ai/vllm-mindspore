@@ -37,7 +37,7 @@ size_t AscendVmmAdapter::GetRoundDownAlignSize(size_t inputSize) const {
 
 size_t AscendVmmAdapter::GetHandleSize(size_t inputSize) {
   if (inputSize % vmmAlignSize_ != 0) {
-    LOG_ERROR << "Input size must be multiple of 2MB, but got " << inputSize;
+    RT_GLOG(ERROR) << "Input size must be multiple of 2MB, but got " << inputSize;
   }
   return inputSize / vmmAlignSize_;
 }
@@ -60,11 +60,11 @@ void AscendVmmAdapter::ClearAllMemory() {
     }
     auto ret = CALL_ASCEND_API(aclrtUnmapMem, kv.first);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Unmap memory failed.";
+      RT_GLOG(ERROR) << "Unmap memory failed.";
     }
     ret = CALL_ASCEND_API(aclrtFreePhysical, kv.second);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Free physical memory failed.";
+      RT_GLOG(ERROR) << "Free physical memory failed.";
     }
   }
   while (!cachedHandleSets_.empty()) {
@@ -72,7 +72,7 @@ void AscendVmmAdapter::ClearAllMemory() {
     cachedHandleSets_.erase(cachedHandleSets_.begin());
     auto ret = CALL_ASCEND_API(aclrtFreePhysical, handle);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Free physical memory failed.";
+      RT_GLOG(ERROR) << "Free physical memory failed.";
     }
   }
   for (auto &addr : allReserveMems_) {
@@ -89,11 +89,11 @@ void MoveBackMappedHandle(std::map<DeviceMemPtr, aclrtDrvMemHandle> *mappedVmmHa
   for (const auto [address, handle] : *mappedVmmHandle) {
     auto ret = CALL_ASCEND_API(aclrtUnmapMem, address);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Unmap memory failed, address : " << address << ".";
+      RT_GLOG(ERROR) << "Unmap memory failed, address : " << address << ".";
     } else {
       auto iter = vmmMap->find(address);
       if (iter == vmmMap->end()) {
-        LOG_ERROR << "Find vmm map address : " << address << " failed.";
+        RT_GLOG(ERROR) << "Find vmm map address : " << address << " failed.";
       } else {
         iter->second = nullptr;
         cachedHandleSets_->insert(handle);
@@ -105,15 +105,15 @@ void MoveBackMappedHandle(std::map<DeviceMemPtr, aclrtDrvMemHandle> *mappedVmmHa
 
 size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr addr, const size_t maxSize) {
   CHECK_IF_NULL(addr);
-  LOG_OUT << "VMM MmapDeviceMem size:" << size << ", addr:" << addr
-          << ", cachedHandleSets_ size : " << cachedHandleSets_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "VMM MmapDeviceMem size:" << size << ", addr:" << addr
+                       << ", cachedHandleSets_ size : " << cachedHandleSets_.size() << ".";
   // use 0 temporarily
   auto local_rank_id = mrt::collective::CollectiveManager::Instance().local_rank_id();
   auto deviceId = local_rank_id;
 
   auto vmmStartAddr = FindVmmSegment(addr);
   if (vmmStartAddr == nullptr) {
-    LOG_ERROR << "Can not find the vmm segment.";
+    RT_GLOG(ERROR) << "Can not find the vmm segment.";
     return 0;
   }
   aclrtPhysicalMemProp prop = {};
@@ -132,7 +132,7 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
   for (size_t i = 0; i < handleSize; ++i) {
     auto newAddr = AddressOffset(vmmStartAddr, i * vmmAlignSize_);
     if (iter == vmmMap_.end() || iter->first != newAddr) {
-      LOG_ERROR << "Can not find the vmm segment.";
+      RT_GLOG(ERROR) << "Can not find the vmm segment.";
       return 0;
     }
     if (iter->second != nullptr) {
@@ -145,8 +145,8 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
       cachedHandleSets_.erase(cachedHandleSets_.begin());
     } else {
       if (physicalHandleSize_ * vmmAlignSize_ >= maxSize) {
-        LOG_OUT << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_ << ", maxSize : " << maxSize
-                << ", addr : " << addr << ", size : " << size << ".";
+        RT_VLOG(VL_HARDWARE) << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_
+                             << ", maxSize : " << maxSize << ", addr : " << addr << ", size : " << size << ".";
         MoveBackMappedHandle(&mappedVmmHandle, &vmmMap_, &cachedHandleSets_);
         return 0;
       }
@@ -156,28 +156,28 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
         size_t usedHandleSize = 0;
         for (const auto &[k, v] : vmmMap_) {
           if (v != nullptr) {
-            LOG_OUT << "Inuse handle address : " << k << ", handle : " << v << ".";
+            RT_VLOG(VL_HARDWARE) << "Inuse handle address : " << k << ", handle : " << v << ".";
             usedHandleSize += 1;
           }
         }
         usedHandleSize += cachedHandleSets_.size();
         // This may be a normal case at the memory usage boundary.
-        LOG_OUT << "Malloc physical memory failed, inuse physical memory handle size : " << usedHandleSize
-                << ", physicalHandleSize_ size : " << physicalHandleSize_ << ".";
+        RT_VLOG(VL_HARDWARE) << "Malloc physical memory failed, inuse physical memory handle size : " << usedHandleSize
+                             << ", physicalHandleSize_ size : " << physicalHandleSize_ << ".";
         MoveBackMappedHandle(&mappedVmmHandle, &vmmMap_, &cachedHandleSets_);
         return 0;
       } else {
         physicalHandleSize_++;
         if (physicalHandleSize_ * vmmAlignSize_ >= maxSize) {
-          LOG_OUT << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_
-                  << ", maxSize : " << maxSize << ".";
+          RT_VLOG(VL_HARDWARE) << "Mapped too much memory, physicalHandleSize_ : " << physicalHandleSize_
+                               << ", maxSize : " << maxSize << ".";
         }
       }
     }
 
     auto ret = CALL_ASCEND_API(aclrtMapMem, newAddr, vmmAlignSize_, 0, handle, 0);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Map memory failed.";
+      RT_GLOG(ERROR) << "Map memory failed.";
       cachedHandleSets_.insert(handle);
       MoveBackMappedHandle(&mappedVmmHandle, &vmmMap_, &cachedHandleSets_);
       return 0;
@@ -193,10 +193,10 @@ size_t AscendVmmAdapter::MmapDeviceMem(const size_t size, const DeviceMemPtr add
 size_t AscendVmmAdapter::AllocDeviceMem(size_t size, DeviceMemPtr *addr) {
   CHECK_IF_NULL(addr);
   size_t alignSize = GetRoundUpAlignSize(size);
-  LOG_OUT << "VMM AllocDeviceMem size:" << size << ", alignSize:" << alignSize;
+  RT_VLOG(VL_HARDWARE) << "VMM AllocDeviceMem size:" << size << ", alignSize:" << alignSize;
   auto ret = CALL_ASCEND_API(aclrtReserveMemAddress, addr, alignSize, 0, nullptr, 1);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Reserve memory address failed.";
+    RT_GLOG(ERROR) << "Reserve memory address failed.";
     return 0;
   }
   allReserveMems_.push_back(*addr);
@@ -210,14 +210,14 @@ size_t AscendVmmAdapter::AllocDeviceMem(size_t size, DeviceMemPtr *addr) {
 
 size_t AscendVmmAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_t size) {
   CHECK_IF_NULL(addr);
-  LOG_OUT << "Eager free device mem addr :" << addr << ", size :" << size
-          << ", cachedHandleSets_ size : " << cachedHandleSets_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Eager free device mem addr :" << addr << ", size :" << size
+                       << ", cachedHandleSets_ size : " << cachedHandleSets_.size() << ".";
   size_t retSize = 0;
   auto iter = vmmMap_.lower_bound(addr);
   if (iter == vmmMap_.end()) {
     // Memory less than 2MB may be at the end of a vmm segment, and it's a normal case.
     if (size >= vmmAlignSize_) {
-      LOG_ERROR << "Can not find the vmm segment.";
+      RT_GLOG(ERROR) << "Can not find the vmm segment.";
     }
     return 0;
   }
@@ -229,7 +229,7 @@ size_t AscendVmmAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_
       break;
     }
     if (iter == vmmMap_.end() || iter->first != vmmStartAddr) {
-      LOG_ERROR << "Can not find the vmm segment.";
+      RT_GLOG(ERROR) << "Can not find the vmm segment.";
       return 0;
     }
     if (iter->second == nullptr) {
@@ -240,7 +240,7 @@ size_t AscendVmmAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_
     }
     auto ret = CALL_ASCEND_API(aclrtUnmapMem, vmmStartAddr);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Unmap memory failed.";
+      RT_GLOG(ERROR) << "Unmap memory failed.";
       return 0;
     }
     cachedHandleSets_.insert(iter->second);
@@ -249,8 +249,8 @@ size_t AscendVmmAdapter::EagerFreeDeviceMem(const DeviceMemPtr addr, const size_
     vmmStartAddr = vmmEndAddr;
     retSize += vmmAlignSize_;
   }
-  LOG_OUT << "After eager free, cachedHandleSets_ size : " << cachedHandleSets_.size()
-          << ", expected free size : " << size << ", real size : " << retSize << ".";
+  RT_VLOG(VL_HARDWARE) << "After eager free, cachedHandleSets_ size : " << cachedHandleSets_.size()
+                       << ", expected free size : " << size << ", real size : " << retSize << ".";
   return retSize;
 }
 
@@ -259,7 +259,7 @@ size_t AscendVmmAdapter::EmptyCache() {
   for (auto iter = cachedHandleSets_.begin(); iter != cachedHandleSets_.end(); iter++) {
     auto ret = CALL_ASCEND_API(aclrtFreePhysical, *iter);
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Free physical memory failed.";
+      RT_GLOG(ERROR) << "Free physical memory failed.";
     }
   }
 
@@ -267,7 +267,8 @@ size_t AscendVmmAdapter::EmptyCache() {
   physicalHandleSize_ -= cacheHandleSize;
   emptySize += cacheHandleSize * vmmAlignSize_;
   cachedHandleSets_.clear();
-  LOG_OUT << "Empty cache size: " << emptySize << ", cached handle set size: " << cachedHandleSets_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Empty cache size: " << emptySize << ", cached handle set size: " << cachedHandleSets_.size()
+                       << ".";
   return emptySize;
 }
 }  // namespace ascend

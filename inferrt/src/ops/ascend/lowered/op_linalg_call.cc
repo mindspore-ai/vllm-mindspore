@@ -34,14 +34,14 @@ void OpLinalgCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   CHECK_IF_NULL(inputs[kInputMlirTextIndex]);
   mlirText_ = inputs[kInputMlirTextIndex]->ToString();
   if (mlirText_.empty()) {
-    LOG_EXCEPTION << "MLIR text is empty in linalg_call";
+    RT_GLOG(EXCEPTION) << "MLIR text is empty in linalg_call";
   }
 
   // 2. Create operator instance using LoweredOpHelper
   loweredOp_ = LoweredOpHelper::CreateFromMlirText(mlirText_);
   if (loweredOp_ == nullptr) {
-    LOG_EXCEPTION << "Failed to create Linalg operator from MLIR text. "
-                  << "Check if MLIR contains hacc.entry annotation.";
+    RT_GLOG(EXCEPTION) << "Failed to create Linalg operator from MLIR text. "
+                       << "Check if MLIR contains hacc.entry annotation.";
   }
 
   // 3. Extract actual inputs (excluding the first MLIR text parameter)
@@ -52,13 +52,13 @@ void OpLinalgCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   }
 
   // Note: AutoLoweredOp does not need explicit Init() call, initialization is done during construction
-  LOG_OUT << "OpLinalgCall initialized with MLIR text hash: " << std::hash<std::string>{}(mlirText_);
+  RT_VLOG(VL_OPS) << "OpLinalgCall initialized with MLIR text hash: " << std::hash<std::string>{}(mlirText_);
 }
 
 OpsErrorCode OpLinalgCall::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   (void)input;
   if (loweredOp_ == nullptr) {
-    LOG_ERROR << "loweredOp_ is null in OpLinalgCall::InferShape";
+    RT_GLOG(ERROR) << "loweredOp_ is null in OpLinalgCall::InferShape";
     return UNKNOWN_ERROR;
   }
   // Pass realInputs_ instead of input: input contains MLIR text, loweredOp_ only needs actual tensor inputs
@@ -72,7 +72,7 @@ OpsErrorCode OpLinalgCall::CalcWorkspace(const std::vector<const ir::Value *> &i
                                          size_t *workspaceSize) {
   (void)input;
   if (loweredOp_ == nullptr) {
-    LOG_ERROR << "loweredOp_ is null in OpLinalgCall::CalcWorkspace";
+    RT_GLOG(ERROR) << "loweredOp_ is null in OpLinalgCall::CalcWorkspace";
     return UNKNOWN_ERROR;
   }
   return loweredOp_->CalcWorkspace(realInputs_, output, workspaceSize);
@@ -82,7 +82,7 @@ OpsErrorCode OpLinalgCall::Launch(const std::vector<const ir::Value *> &input, v
                                   ir::Value *output, void *stream) {
   (void)input;
   if (loweredOp_ == nullptr) {
-    LOG_ERROR << "loweredOp_ is null in OpLinalgCall::Launch";
+    RT_GLOG(ERROR) << "loweredOp_ is null in OpLinalgCall::Launch";
     return UNKNOWN_ERROR;
   }
   return loweredOp_->Launch(realInputs_, workspace, workspaceSize, output, stream);

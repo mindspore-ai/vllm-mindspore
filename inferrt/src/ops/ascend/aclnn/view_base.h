@@ -56,15 +56,17 @@ class AclnnViewBase : public Operator {
       } else if (output->IsTuple()) {
         outputTensor = (*output->ToTuple())[outputIndex]->ToTensor();
       } else {
-        LOG_EXCEPTION << "Unsupported output type for ref input. outputIndex: " << outputIndex
-                      << ", inputIndex: " << inputIndex << ", output: " << *output;
+        RT_GLOG(EXCEPTION) << "Unsupported output type for ref input. outputIndex: " << outputIndex
+                           << ", inputIndex: " << inputIndex << ", output: " << *output;
       }
 
       // Check if storage pointers match
       if (inputTensor->GetStorage()->Data() != outputTensor->GetStorage()->Data()) {
-        LOG_EXCEPTION << "Storage mismatch: Output tensor does not share the same storage pointer as input tensor."
-                      << "outputIndex: " << outputIndex << ", output storage: " << outputTensor->GetStorage()->Data()
-                      << ", inputIndex: " << inputIndex << ", input storage: " << inputTensor->GetStorage()->Data();
+        RT_GLOG(EXCEPTION) << "Storage mismatch: Output tensor does not share the same storage pointer as input tensor."
+                           << "outputIndex: " << outputIndex
+                           << ", output storage: " << outputTensor->GetStorage()->Data()
+                           << ", inputIndex: " << inputIndex
+                           << ", input storage: " << inputTensor->GetStorage()->Data();
       }
     }
   }

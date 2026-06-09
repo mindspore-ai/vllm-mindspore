@@ -73,11 +73,11 @@ const std::map<std::string, SocVersion> kAscendSocVersionMap = {
 const SocVersion &GetSocVersion() {
   auto socVersion = GetAscendSocVersion();
   if (socVersion == nullptr) {
-    LOG_EXCEPTION << "Get soc version failed.";
+    RT_GLOG(EXCEPTION) << "Get soc version failed.";
   }
   auto it = kAscendSocVersionMap.find(socVersion);
   if (it == kAscendSocVersionMap.end()) {
-    LOG_EXCEPTION << "Unsupported soc version: " << std::string(socVersion);
+    RT_GLOG(EXCEPTION) << "Unsupported soc version: " << std::string(socVersion);
   }
   return it->second;
 }
@@ -88,10 +88,10 @@ void AscendDeviceContext::InitializeForAclop() const {
     return;
   }
 
-  LOG_OUT << "Start initializing for acl.";
+  RT_VLOG(VL_HARDWARE) << "Start initializing for acl.";
   LoadAscendApiSymbols();
 
-  LOG_OUT << "End initializing for acl.";
+  RT_VLOG(VL_HARDWARE) << "End initializing for acl.";
 }
 
 void AscendDeviceContext::Initialize() {
@@ -100,7 +100,7 @@ void AscendDeviceContext::Initialize() {
     return;
   }
 
-  LOG_OUT << "Start initializing device context.";
+  RT_VLOG(VL_HARDWARE) << "Start initializing device context.";
   LoadAscendApiSymbols();
 
   CHECK_IF_NULL(deviceResManager_);
@@ -110,7 +110,7 @@ void AscendDeviceContext::Initialize() {
   pid_ = getpid();  // set the pid when first initialize
 
   config::ascend::OpPrecisionConf::Instance().SetSocVersion(GetSocVersion());
-  LOG_OUT << "End initializing device context.";
+  RT_VLOG(VL_HARDWARE) << "End initializing device context.";
 }
 
 void AscendDeviceContext::Destroy() {
@@ -119,7 +119,8 @@ void AscendDeviceContext::Destroy() {
     // The device context is copied by the dataset independent process, but does not need to be released
     // in the dataset independent process.
     // The device context is copied from main process by fork
-    LOG_OUT << "The device context is not initialized by current process, it doesn't need to be destroyed.";
+    RT_VLOG(VL_HARDWARE)
+      << "The device context is not initialized by current process, it doesn't need to be destroyed.";
     return;
   }
 

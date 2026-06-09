@@ -24,7 +24,7 @@ namespace runtime {
 KernelLaunchGroupBuilder::KernelLaunchGroupBuilder(const ir::GraphPtr &graph) : Builder(graph) {}
 
 std::unique_ptr<Executor> KernelLaunchGroupBuilder::BuildExecutor() {
-  LOG_OUT << "Begin build kernel launch group executor.";
+  RT_VLOG(VL_RUNTIME) << "Begin build kernel launch group executor.";
   SetupOpRunners();
 
   CheckGroupLaunchRequirements();
@@ -36,7 +36,7 @@ std::unique_ptr<Executor> KernelLaunchGroupBuilder::BuildExecutor() {
     opRunners_, deviceContexts_, opRunnerGroups_, serialLaunchOps_, graphInputTensors_,
     graphInputTensorsWithDynamicShape_, graphOutputs_, parallelDispatchNum_, parallelSliceNum_, GetGraphOutput());
   executor->Initialize();
-  LOG_OUT << "End build kernel launch group executor.";
+  RT_VLOG(VL_RUNTIME) << "End build kernel launch group executor.";
   return executor;
 }
 
@@ -45,9 +45,10 @@ void KernelLaunchGroupBuilder::CheckGroupLaunchRequirements() const {
     return opRunner.GetDevice().type == hardware::DeviceType::CPU;
   });
   if (it != opRunners_->end()) {
-    LOG_EXCEPTION << "Find CPU op: " << it->GetOpName()
-                  << ". The kernel group launch(parallel launch) feature can not work in this case. Please eliminate "
-                     "heterogeneous(CPU) ops or disable kernel group launch feature.";
+    RT_GLOG(EXCEPTION)
+      << "Find CPU op: " << it->GetOpName()
+      << ". The kernel group launch(parallel launch) feature can not work in this case. Please eliminate "
+         "heterogeneous(CPU) ops or disable kernel group launch feature.";
   }
 }
 
@@ -57,30 +58,30 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
 
   auto kernelLaunchThreadNumStr = GetEnv(kernelLaunchThreadNum);
   if (!IsPositiveInteger(kernelLaunchThreadNumStr)) {
-    LOG_EXCEPTION << "Invalid kernel launch thread number: " << kernelLaunchThreadNumStr;
+    RT_GLOG(EXCEPTION) << "Invalid kernel launch thread number: " << kernelLaunchThreadNumStr;
   }
 
   parallelDispatchNum_ = std::stoull(kernelLaunchThreadNumStr);
   if (parallelDispatchNum_ < 1) {
-    LOG_EXCEPTION << "Invalid thread num: " << parallelDispatchNum_
-                  << " for kernel launch group, please check the `thread_num` value of env: "
-                     "MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
+    RT_GLOG(EXCEPTION) << "Invalid thread num: " << parallelDispatchNum_
+                       << " for kernel launch group, please check the `thread_num` value of env: "
+                          "MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
   }
-  LOG_OUT << "The parallel dispatch thread number: " << parallelDispatchNum_;
+  RT_VLOG(VL_RUNTIME) << "The parallel dispatch thread number: " << parallelDispatchNum_;
 
   auto kernelLaunchGroupNumStr = GetEnv(kernelLaunchGroupNum);
   if (!IsPositiveInteger(kernelLaunchGroupNumStr)) {
-    LOG_EXCEPTION << "Invalid kernel launch group number: " << kernelLaunchGroupNumStr;
+    RT_GLOG(EXCEPTION) << "Invalid kernel launch group number: " << kernelLaunchGroupNumStr;
   }
   uint64_t totalKernelGroupNum = std::stoull(kernelLaunchGroupNumStr);
   parallelSliceNum_ = totalKernelGroupNum / parallelDispatchNum_;
   if (parallelSliceNum_ < 1) {
-    LOG_EXCEPTION << "Invalid kernel group num: " << totalKernelGroupNum
-                  << " from env: MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM"
-                  << ", kernel group num must be greater than or equal to thread num: " << parallelDispatchNum_
-                  << " from env: MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
+    RT_GLOG(EXCEPTION) << "Invalid kernel group num: " << totalKernelGroupNum
+                       << " from env: MS_INFERRT_KERNEL_LAUNCH_GROUP_NUM"
+                       << ", kernel group num must be greater than or equal to thread num: " << parallelDispatchNum_
+                       << " from env: MS_INFERRT_KERNEL_LAUNCH_THREAD_NUM";
   }
-  LOG_OUT << "The kernel group per thread: " << parallelSliceNum_;
+  RT_VLOG(VL_RUNTIME) << "The kernel group per thread: " << parallelSliceNum_;
 
   CHECK_IF_FAIL(opRunnerGroups_ == nullptr);
   opRunnerGroups_ = std::make_shared<std::vector<std::pair<OpRunner *, size_t>>>();
@@ -89,8 +90,8 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
   size_t totalKernelNum = opRunners_->size();
   CHECK_IF_FAIL(totalKernelNum > 0);
   size_t kernelNumPerDispatcher = totalKernelNum / (parallelDispatchNum_ * parallelSliceNum_);
-  LOG_OUT << "Total kernel num: " << opRunners_->size();
-  LOG_OUT << "The kernel num per parallel slice: " << kernelNumPerDispatcher;
+  RT_VLOG(VL_RUNTIME) << "Total kernel num: " << opRunners_->size();
+  RT_VLOG(VL_RUNTIME) << "The kernel num per parallel slice: " << kernelNumPerDispatcher;
   OpRunner *begin = &(opRunners_->front());
   for (size_t i = 0; i < opRunnerGroups_->size(); i++) {
     if (i < opRunnerGroups_->size() - 1) {
@@ -99,7 +100,7 @@ void KernelLaunchGroupBuilder::PartitionKernelLaunchGroups() {
       size_t remainingOpNum = opRunners_->size() - kernelNumPerDispatcher * (opRunnerGroups_->size() - 1);
       (*opRunnerGroups_)[i] = {begin + i * kernelNumPerDispatcher, remainingOpNum};
     }
-    LOG_OUT << "The op runner group[" << i << "] op num: " << (*opRunnerGroups_)[i].second;
+    RT_VLOG(VL_RUNTIME) << "The op runner group[" << i << "] op num: " << (*opRunnerGroups_)[i].second;
   }
 
   // TODO:  // NOLINT(readability/todo)

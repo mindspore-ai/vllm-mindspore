@@ -78,10 +78,10 @@ inline aclTensor *Convert(const ir::TensorPtr &tensor) {
     }
   }
 
-  LOG_OUT << "Create aclTensor, viewShape=" << tensor->Shape() << ", strides=" << tensor->Strides()
-          << ", StorageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
-          << ", storageDims=" << storageDims
-          << ", format=" << ir::FormatEnumToStr(static_cast<ir::MemoryFormat>(format));
+  RT_VLOG(VL_OPS) << "Create aclTensor, viewShape=" << tensor->Shape() << ", strides=" << tensor->Strides()
+                  << ", StorageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
+                  << ", storageDims=" << storageDims
+                  << ", format=" << ir::FormatEnumToStr(static_cast<ir::MemoryFormat>(format));
 
   return aclCreateTensor(tensor->Shape().data(), tensor->Dim(), aclDtype, tensor->Strides().data(),
                          tensor->StorageOffset(), format, storageDims.data(), storageDims.size(),
@@ -97,7 +97,7 @@ inline aclTensor *Convert(const std::optional<ir::TensorPtr> &tensorOpt) {
 
 inline aclTensorList *Convert(const std::vector<ir::TensorPtr> &tensorList) {
   if (tensorList.empty()) {
-    LOG_OUT << "tensorList is empty";
+    RT_VLOG(VL_OPS) << "tensorList is empty";
   }
   static const auto aclCreateTensorList = GET_ACLNN_COMMON_META_FUNC(aclCreateTensorList);
   std::vector<aclTensor *> aclTensorList;

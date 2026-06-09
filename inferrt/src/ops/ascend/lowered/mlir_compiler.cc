@@ -100,7 +100,7 @@ std::string ComputeHash(const std::string &mlirContent) {
 bool ReadFileContent(const std::string &filePath, std::string *content) {
   std::ifstream file(filePath);
   if (!file.is_open()) {
-    LOG_ERROR << "Failed to open file: " << filePath;
+    RT_GLOG(ERROR) << "Failed to open file: " << filePath;
     return false;
   }
 
@@ -115,7 +115,7 @@ bool ReadFileContent(const std::string &filePath, std::string *content) {
 bool WriteFileContent(const std::string &filePath, const std::string &content) {
   std::ofstream file(filePath);
   if (!file.is_open()) {
-    LOG_ERROR << "Failed to write file: " << filePath;
+    RT_GLOG(ERROR) << "Failed to write file: " << filePath;
     return false;
   }
 
@@ -129,7 +129,7 @@ bool ExecuteCommand(const std::string &command, std::string *output, int *exitCo
   // Open pipe to command
   FILE *pipe = popen((command + " 2>&1").c_str(), "r");
   if (pipe == nullptr) {
-    LOG_ERROR << "Failed to execute command: " << command;
+    RT_GLOG(ERROR) << "Failed to execute command: " << command;
     *exitCode = -1;
     return false;
   }
@@ -152,21 +152,21 @@ bool RunBishengirOpt(const std::string &inputFile, const std::string &outputFile
   std::ostringstream cmd;
   cmd << bishengirOptPath << " " << inputFile << " --hfusion-convert-generic-to-named" << " -o " << outputFile;
 
-  LOG_OUT << "Bishengir opt command: " << cmd.str();
+  RT_VLOG(VL_OPS) << "Bishengir opt command: " << cmd.str();
 
   std::string output;
   int exitCode;
   if (!ExecuteCommand(cmd.str(), &output, &exitCode)) {
-    LOG_ERROR << "Failed to execute bishengir-opt";
+    RT_GLOG(ERROR) << "Failed to execute bishengir-opt";
     return false;
   }
 
   if (exitCode != 0) {
-    LOG_ERROR << "bishengir-opt failed with exit code " << exitCode << ":\n" << output;
+    RT_GLOG(ERROR) << "bishengir-opt failed with exit code " << exitCode << ":\n" << output;
     return false;
   }
 
-  LOG_OUT << "bishengir-opt completed: " << outputFile;
+  RT_VLOG(VL_OPS) << "bishengir-opt completed: " << outputFile;
   return true;
 }
 
@@ -175,7 +175,7 @@ bool RunBishengirCompile(const std::string &linalgFile, const std::string &outpu
   // Get SoC name from ACL interface
   const char *socName = mrt::device::ascend::GetAscendSocVersion();
   if (socName == nullptr) {
-    LOG_ERROR << "Failed to get SoC name from ACL";
+    RT_GLOG(ERROR) << "Failed to get SoC name from ACL";
     return false;
   }
 
@@ -185,21 +185,21 @@ bool RunBishengirCompile(const std::string &linalgFile, const std::string &outpu
       << " --enable-auto-multi-buffer=true" << " --target=" << socName << " --enable-bin-relocation=false" << " -o "
       << outputSo;
 
-  LOG_OUT << "Bishengir compile command: " << cmd.str();
+  RT_VLOG(VL_OPS) << "Bishengir compile command: " << cmd.str();
 
   std::string output;
   int exitCode;
   if (!ExecuteCommand(cmd.str(), &output, &exitCode)) {
-    LOG_ERROR << "Failed to execute bishengir-compile";
+    RT_GLOG(ERROR) << "Failed to execute bishengir-compile";
     return false;
   }
 
   if (exitCode != 0) {
-    LOG_ERROR << "bishengir-compile failed with exit code " << exitCode << ":\n" << output;
+    RT_GLOG(ERROR) << "bishengir-compile failed with exit code " << exitCode << ":\n" << output;
     return false;
   }
 
-  LOG_OUT << "bishengir-compile completed: " << outputSo;
+  RT_VLOG(VL_OPS) << "bishengir-compile completed: " << outputSo;
   return true;
 }
 
@@ -211,7 +211,7 @@ bool ExtractFunctionNames(const std::string &mlirText, std::string *entryName) {
 
   if (pos == std::string::npos) {
     entryName->clear();
-    LOG_ERROR << "Failed to find 'func.func @' pattern in MLIR";
+    RT_GLOG(ERROR) << "Failed to find 'func.func @' pattern in MLIR";
     return false;
   }
 
@@ -231,12 +231,12 @@ bool ExtractFunctionNames(const std::string &mlirText, std::string *entryName) {
 
   if (pos > start) {
     *entryName = mlirText.substr(start, pos - start);
-    LOG_OUT << "Extracted function name: " << *entryName;
+    RT_VLOG(VL_OPS) << "Extracted function name: " << *entryName;
     return true;
   }
 
   entryName->clear();
-  LOG_ERROR << "Failed to extract function name from MLIR";
+  RT_GLOG(ERROR) << "Failed to extract function name from MLIR";
   return false;
 }
 
@@ -247,7 +247,7 @@ CompileResult CompileFromText(const CompileRequest &request) {
 
   if (request.mlirText.empty()) {
     result.errorMessage = "Empty MLIR text";
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
@@ -255,7 +255,7 @@ CompileResult CompileFromText(const CompileRequest &request) {
   std::string entryName;
   if (!internal::ExtractFunctionNames(request.mlirText, &entryName)) {
     result.errorMessage = "Failed to extract function name from MLIR";
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
@@ -268,12 +268,12 @@ CompileResult CompileFromText(const CompileRequest &request) {
   int ret = system(mkdirCmd.c_str());
   if (ret != 0) {
     result.errorMessage = "Failed to create cache directory: " + compilationCacheDir;
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
-  LOG_OUT << "Compiling MLIR text (function: " << entryName << ", id: " << uniqueId << ")";
-  LOG_OUT << "Cache directory: " << compilationCacheDir;
+  RT_VLOG(VL_OPS) << "Compiling MLIR text (function: " << entryName << ", id: " << uniqueId << ")";
+  RT_VLOG(VL_OPS) << "Cache directory: " << compilationCacheDir;
 
   // Create temporary files in the unique cache directory
   std::string inputFile = compilationCacheDir + "/" + entryName + "_" + uniqueId + "_input.mlir";
@@ -282,7 +282,7 @@ CompileResult CompileFromText(const CompileRequest &request) {
   // Write MLIR text to file
   if (!internal::WriteFileContent(inputFile, request.mlirText)) {
     result.errorMessage = "Failed to write MLIR text to file";
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
@@ -290,14 +290,14 @@ CompileResult CompileFromText(const CompileRequest &request) {
   std::string optOutputFile = compilationCacheDir + "/" + entryName + "_" + uniqueId + "_opt.mlir";
   if (!internal::RunBishengirOpt(inputFile, optOutputFile, request.bishengirOptPath)) {
     result.errorMessage = "bishengir-opt failed";
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
   // Run bishengir-compile on the optimized MLIR
   if (!internal::RunBishengirCompile(optOutputFile, outputSo, request.bishengirCompilePath)) {
     result.errorMessage = "bishengir-compile failed";
-    LOG_ERROR << result.errorMessage;
+    RT_GLOG(ERROR) << result.errorMessage;
     return result;
   }
 
@@ -313,16 +313,16 @@ CompileResult CompileFromText(const CompileRequest &request) {
 
   // Set function names
   result.entryName = entryName;
-  LOG_OUT << "Entry function: " << result.entryName;
+  RT_VLOG(VL_OPS) << "Entry function: " << result.entryName;
 
   // Clean up intermediate files if not keeping them
   if (!request.keepIntermediateFiles) {
     unlink(inputFile.c_str());
     unlink(optOutputFile.c_str());
   } else {
-    LOG_OUT << "Intermediate files kept for debugging:";
-    LOG_OUT << "  Input: " << inputFile;
-    LOG_OUT << "  Optimized: " << optOutputFile;
+    RT_VLOG(VL_OPS) << "Intermediate files kept for debugging:";
+    RT_VLOG(VL_OPS) << "  Input: " << inputFile;
+    RT_VLOG(VL_OPS) << "  Optimized: " << optOutputFile;
   }
 
   // Fill result
@@ -330,7 +330,7 @@ CompileResult CompileFromText(const CompileRequest &request) {
   result.cacheDir = compilationCacheDir;  // Return the cache directory path
   result.soPath = actualSo;               // Use the actual .so path with "lib" prefix
 
-  LOG_OUT << "MLIR compilation successful: " << actualSo;
+  RT_VLOG(VL_OPS) << "MLIR compilation successful: " << actualSo;
   return result;
 }
 

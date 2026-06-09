@@ -38,7 +38,7 @@ const int thread_level = 0;
 template <typename Function, typename... Args>
 auto RunAscendApi(Function f, int line, const char *callF, const char *funcName, Args... args) {
   if (f == nullptr) {
-    LOG_ERROR << funcName << " is null.";
+    RT_GLOG(ERROR) << funcName << " is null.";
   }
 
   if constexpr (std::is_same_v<std::invoke_result_t<decltype(f), Args...>, int>) {
@@ -52,7 +52,7 @@ auto RunAscendApi(Function f, int line, const char *callF, const char *funcName,
 template <typename Function>
 auto RunAscendApi(Function f, int line, const char *callF, const char *funcName) {
   if (f == nullptr) {
-    LOG_ERROR << funcName << " is null.";
+    RT_GLOG(ERROR) << funcName << " is null.";
   }
   if constexpr (std::is_same_v<std::invoke_result_t<decltype(f)>, int>) {
     auto ret = f();

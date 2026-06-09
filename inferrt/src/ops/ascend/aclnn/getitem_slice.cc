@@ -32,7 +32,7 @@ OpsErrorCode AclnnGetItemSlice::CalcWorkspace(const std::vector<const ir::Value 
   auto dst = output->ToTensor();
   skipLaunch_ = std::any_of(dst->Shape().begin(), dst->Shape().end(), [](int64_t shape) { return shape == 0; });
   if (skipLaunch_) {
-    LOG_OUT << "For GetItemSlice, the dst shape is " << dst->Shape() << " which contains 0, skipping launch.";
+    RT_VLOG(VL_OPS) << "For GetItemSlice, the dst shape is " << dst->Shape() << " which contains 0, skipping launch.";
     return SUCCESS;
   }
 
@@ -59,9 +59,9 @@ OpsErrorCode AclnnGetItemSlice::CalcWorkspace(const std::vector<const ir::Value 
     auto srcSize = std::accumulate(shapes.begin(), shapes.end(), 1, std::multiplies<int64_t>());
     auto dstSize = std::accumulate(dstShape.begin(), dstShape.end(), 1, std::multiplies<int64_t>());
     if (srcSize != dstSize) {
-      LOG_EXCEPTION << "For GetItemSlice, the src shape " << src->Shape() << " cannot be slice to dst shape "
-                    << dstShape << ". With starts: " << starts_ << ", ends: " << ends_ << ", axes: " << axes_
-                    << ", steps: " << steps_;
+      RT_GLOG(EXCEPTION) << "For GetItemSlice, the src shape " << src->Shape() << " cannot be slice to dst shape "
+                         << dstShape << ". With starts: " << starts_ << ", ends: " << ends_ << ", axes: " << axes_
+                         << ", steps: " << steps_;
     }
 
     std::vector<int64_t> strides(shapes.size());

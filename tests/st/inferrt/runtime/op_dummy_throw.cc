@@ -37,7 +37,7 @@ class DummyThrowOp : public Operator {
   OpsErrorCode Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                       ir::Value *output, void *stream) override {
     if (++launchCount_ > 1) {
-      LOG_EXCEPTION << "DummyThrowOp intentionally throws in second Launch for testing";
+      RT_GLOG(EXCEPTION) << "DummyThrowOp intentionally throws in second Launch for testing";
     }
     return SUCCESS;
   }

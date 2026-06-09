@@ -88,7 +88,7 @@ class LockFreeRingQueue {
       if (!alive_.load(std::memory_order_acquire)) return false;
 
       if (!running_.load(std::memory_order_acquire)) {
-        LOG_ERROR << "The queue is in pause status, can not push task.";
+        RT_GLOG(ERROR) << "The queue is in pause status, can not push task.";
         return false;
       }
 
@@ -139,7 +139,7 @@ class LockFreeRingQueue {
     }
     if (currentTail == UINT64_MAX) {
       // This is a safety check, it requires continuous pushing for millions of years to trigger an overflow.
-      LOG_EXCEPTION << "The queue is overflow and push task failed.";
+      RT_GLOG(EXCEPTION) << "The queue is overflow and push task failed.";
     }
 
     if (!tail_.compare_exchange_weak(currentTail, currentTail + 1, std::memory_order_acq_rel,

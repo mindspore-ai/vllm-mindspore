@@ -83,9 +83,9 @@ void KernelLaunchGroupExecutor::Run(bool isDynamic) {
 }
 
 void KernelLaunchGroupExecutor::Initialize() {
-  LOG_OUT << "Begin initialize";
+  RT_VLOG(VL_RUNTIME) << "Begin initialize";
   if (initialized_) {
-    LOG_EXCEPTION << "KernelLaunchGroupExecutor has been initialized, can not support multi graph.";
+    RT_GLOG(EXCEPTION) << "KernelLaunchGroupExecutor has been initialized, can not support multi graph.";
   }
   PipelineExecutor::Initialize();
 
@@ -93,7 +93,7 @@ void KernelLaunchGroupExecutor::Initialize() {
     streams_.resize(parallelDispatchNum_);
     for (size_t i = 0; i < parallelDispatchNum_; i++) {
       if (!deviceContext_->deviceResManager_->CreateStream(&(streams_[i].first))) {
-        LOG_EXCEPTION << "Create stream failed.";
+        RT_GLOG(EXCEPTION) << "Create stream failed.";
       }
       streams_[i].second = deviceContext_->deviceResManager_->GetStream(streams_[i].first);
       CHECK_IF_NULL(streams_[i].second);
@@ -142,7 +142,7 @@ void KernelLaunchGroupExecutor::Initialize() {
   }
 
   initialized_ = true;
-  LOG_OUT << "End initialize";
+  RT_VLOG(VL_RUNTIME) << "End initialize";
 }
 
 void KernelLaunchGroupExecutor::UpdateInputTensors() {
@@ -157,7 +157,7 @@ bool KernelLaunchGroupExecutor::CheckInputShapeChange() {
   bool shapeChange = false;
   CHECK_IF_NULL(graphInputTensorsWithDynamicShape_);
   auto &graphInputTensorsWithDynamicShape = *graphInputTensorsWithDynamicShape_;
-  LOG_OUT << "Dynamic input tensor number: " << graphInputTensorsWithDynamicShape.size();
+  RT_VLOG(VL_RUNTIME) << "Dynamic input tensor number: " << graphInputTensorsWithDynamicShape.size();
 
   // Disable parallel dispatch for static shape case.
   if (graphInputTensorsWithDynamicShape.empty()) {
@@ -172,7 +172,7 @@ bool KernelLaunchGroupExecutor::CheckInputShapeChange() {
       shape = tensor->Shape();
     }
   }
-  LOG_OUT << "Input tensor shape changed: " << shapeChange;
+  RT_VLOG(VL_RUNTIME) << "Input tensor shape changed: " << shapeChange;
   return shapeChange;
 }
 
@@ -196,7 +196,7 @@ void KernelLaunchGroupExecutor::ResetTensorCacheMemory() {
 }
 
 void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
-  LOG_OUT << "Begin pipeline executor run.";
+  RT_VLOG(VL_RUNTIME) << "Begin pipeline executor run.";
   auto &asyncTaskQueueManager = AsyncTaskQueueManager::GetInstance();
   asyncTaskQueueManager.ContinueAll();
 
@@ -211,10 +211,10 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
       opRunner.UpdateTensors();
       // Do infer shape and calculate workspace size in infer queue.
       if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-        LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+        RT_GLOG(EXCEPTION) << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
       if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-        LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+        RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
 
       // Push async launch task into launch queue.
@@ -222,7 +222,7 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
         opRunner.AllocateMemory();
         RecordMemory(&opRunner, opRunner.GetOutput());
         if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-          LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+          RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
         }
         opRunner.FreeMemory();
       };
@@ -236,7 +236,7 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
   asyncTaskQueueManager.PauseAll();
 
   memoryCache_.MergeBlocks();
-  LOG_OUT << "End pipeline executor run.";
+  RT_VLOG(VL_RUNTIME) << "End pipeline executor run.";
 }
 
 void KernelLaunchGroupExecutor::RecordMemory(OpRunner *opRunner, const ir::Value *value) {
@@ -286,7 +286,7 @@ void KernelLaunchGroupExecutor::RecordMemory(OpRunner *opRunner, const ir::Value
 
 void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
   if (index >= parallelDispatchNum_) {
-    LOG_EXCEPTION << "Invalid index: " << index << ", expected less than: " << parallelDispatchNum_;
+    RT_GLOG(EXCEPTION) << "Invalid index: " << index << ", expected less than: " << parallelDispatchNum_;
   }
   deviceContext_->deviceResManager_->BindDeviceToCurrentThread(false);
   size_t realStreamId = streams_[index].first;
@@ -316,7 +316,7 @@ void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
       SetOutputAndWsCacheMemory(opRunner);
       SetInputCacheMemory(opRunner);
       if (auto errNo = opRunner->Launch(realStream) != ops::SUCCESS) {
-        LOG_EXCEPTION << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+        RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
       }
     }
 
@@ -332,7 +332,7 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
     CHECK_IF_NULL(opRunner);
     auto iter = serialLaunchKernelsToEvents_.find(opRunner);
     if (iter == serialLaunchKernelsToEvents_.end()) {
-      LOG_EXCEPTION << "Not find event for operator  : " << opRunner->GetOpName();
+      RT_GLOG(EXCEPTION) << "Not find event for operator  : " << opRunner->GetOpName();
     }
 
     opRunner->UpdateTensors();
@@ -347,7 +347,7 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
     // TODO: force resize. // NOLINT(readability/todo)
 
     if (auto errNo = opRunner->Launch(mainStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
     }
 
     auto &recordEvent = eventArray[1];
@@ -357,7 +357,7 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
 }
 
 void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
-  LOG_OUT << "Begin parallel dispatch kernels";
+  RT_VLOG(VL_RUNTIME) << "Begin parallel dispatch kernels";
 
   // Record a event to default stream to notify parallel launch kernels execute on other stream.
   void *mainStream = deviceContext_->deviceResManager_->GetCurrentStream();
@@ -400,7 +400,7 @@ void KernelLaunchGroupExecutor::ParallelDispatchKernels() {
     e->RecordEvent(streams_[i].first);
     e->WaitEventWithoutReset(0);
   }
-  LOG_OUT << "End parallel dispatch kernels";
+  RT_VLOG(VL_RUNTIME) << "End parallel dispatch kernels";
 }
 
 void KernelLaunchGroupExecutor::SetOutputAndWsCacheMemory(OpRunner *opRunner) {
@@ -410,7 +410,7 @@ void KernelLaunchGroupExecutor::SetOutputAndWsCacheMemory(OpRunner *opRunner) {
   CHECK_IF_NULL(allKernelBlockInfo);
   const auto &iter = allKernelBlockInfo->find(opRunner);
   if (iter == allKernelBlockInfo->end()) {
-    LOG_OUT << "Not found kernel block info for kernel: " << opRunner->GetOpName();
+    RT_VLOG(VL_RUNTIME) << "Not found kernel block info for kernel: " << opRunner->GetOpName();
   } else {
     const auto &kernelMemBlocks = iter->second;
     const auto &mergeBlocksWithDeviceContext = memoryCache_.GetMergeBlocks();

@@ -40,11 +40,11 @@ static const std::map<ir::DataType::Type, aclDataType> kDataTypeToAclDataTypeMap
 aclDataType Convert(ir::DataType::Type dtype) {
   auto iter = kDataTypeToAclDataTypeMap.find(dtype);
   if (iter == kDataTypeToAclDataTypeMap.end()) {
-    LOG_EXCEPTION << "Invalid dtype: " << dtype;
+    RT_GLOG(EXCEPTION) << "Invalid dtype: " << dtype;
   }
   auto ret = iter->second;
   if (ret == ACL_DT_UNDEFINED) {
-    LOG_EXCEPTION << "Invalid dtype: " << dtype;
+    RT_GLOG(EXCEPTION) << "Invalid dtype: " << dtype;
   }
   return ret;
 }
@@ -69,7 +69,7 @@ aclScalar *Convert(const ir::Value *value) {
   if (value->IsBool()) {
     return CreateAclScalar(value->ToBool(), ACL_BOOL);
   }
-  LOG_EXCEPTION << "Invalid value, value: " << value << ", type: " << TagToString(value->GetTag());
+  RT_GLOG(EXCEPTION) << "Invalid value, value: " << value << ", type: " << TagToString(value->GetTag());
   return nullptr;
 }
 }  // namespace ops

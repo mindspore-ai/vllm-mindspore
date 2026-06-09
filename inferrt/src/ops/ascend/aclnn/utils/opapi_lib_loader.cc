@@ -70,7 +70,7 @@ void LoadOpApiLib() {
   auto customPaths = GetEnv("ASCEND_CUSTOM_OPP_PATH");
   std::vector<std::string> customPathVec;
   if (!customPaths.empty()) {
-    LOG_OUT << "ASCEND_CUSTOM_OPP_PATH: " << customPaths;
+    RT_VLOG(VL_OPS) << "ASCEND_CUSTOM_OPP_PATH: " << customPaths;
 
     std::stringstream ss(customPaths);
     std::string path;
@@ -90,7 +90,7 @@ void LoadOpApiLib() {
   for (const auto &customLibPath : customPathVec) {
     auto customHandler = GetOpApiLibHandler(customLibPath);
     if (customHandler != nullptr) {
-      LOG_OUT << "Load cust open api lib " << customLibPath << " success";
+      RT_VLOG(VL_OPS) << "Load cust open api lib " << customLibPath << " success";
       (void)libHandlers.emplace(customHandler, customLibPath);
     }
   }
@@ -101,12 +101,12 @@ void LoadOpApiLib() {
   auto opApiLibPath = ascendPath + kNameOpApiLib;
   auto handler = GetOpApiLibHandler(opApiLibPath);
   if (handler != nullptr) {
-    LOG_OUT << "Load lib " << opApiLibPath << " success";
+    RT_VLOG(VL_OPS) << "Load lib " << opApiLibPath << " success";
     (void)libHandlers.emplace(handler, opApiLibPath);
   }
   LoadCommonMetaFuncApi();
   isLoaded = true;
-  LOG_OUT << "Load opapi lib success";
+  RT_VLOG(VL_OPS) << "Load opapi lib success";
 }
 
 void *GetAclnnOpApiFunc(const char *apiName) {
@@ -114,7 +114,7 @@ void *GetAclnnOpApiFunc(const char *apiName) {
   static thread_local std::unordered_map<std::string, void *> opapiCache;
   auto iter = opapiCache.find(std::string(apiName));
   if (iter != opapiCache.end()) {
-    LOG_OUT << "OpApi " << apiName << " hit cache";
+    RT_VLOG(VL_OPS) << "OpApi " << apiName << " hit cache";
     return iter->second;
   }
   std::shared_lock<std::shared_mutex> readLock(rwOpApiMutex);
@@ -126,11 +126,11 @@ void *GetAclnnOpApiFunc(const char *apiName) {
     auto apiFunc = GetOpApiFuncFromLib(libHandler.first, libHandler.second.c_str(), apiName);
     if (apiFunc != nullptr) {
       (void)opapiCache.emplace(std::string(apiName), apiFunc);
-      LOG_OUT << "Get OpApiFunc [" << apiName << "] from " << libHandler.second;
+      RT_VLOG(VL_OPS) << "Get OpApiFunc [" << apiName << "] from " << libHandler.second;
       return apiFunc;
     }
   }
-  LOG_OUT << "Dlsym " << apiName << " failed";
+  RT_VLOG(VL_OPS) << "Dlsym " << apiName << " failed";
   (void)opapiCache.emplace(std::string(apiName), nullptr);
   return nullptr;
 }
@@ -145,7 +145,7 @@ void AclnnInit() {
   auto ret = aclnnInit(nullptr);
   CHECK_IF_FAIL(ret == 0);
   isAclnnInit = true;
-  LOG_OUT << "Aclnn init success";
+  RT_VLOG(VL_OPS) << "Aclnn init success";
 }
 
 void AclnnFinalize() {
@@ -157,7 +157,7 @@ void AclnnFinalize() {
   auto ret = aclnnFinalize();
   CHECK_IF_FAIL(ret == 0);
   isAclnnInit = false;
-  LOG_OUT << "Aclnn finalize success";
+  RT_VLOG(VL_OPS) << "Aclnn finalize success";
 }
 
 }  // namespace ops

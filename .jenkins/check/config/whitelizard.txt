@@ -4,6 +4,10 @@
 #    file_path:function_name1, function_name2
 #
 
-vllm-mindspore/inferrt/src/ops/ascend/aclnn/aclnn_fused_infer_attention_score.cc:CalcWorkspace, Launch
+# python files
 vllm-mindspore/inferrt/python/ms_inferrt/torch/fx_backend.py:_create_args
 vllm-mindspore/inferrt/python/ms_inferrt/torch/symbolic_shape.py:convert_sympy_expr_to_symbolic_expr
+
+# cpp files
+vllm-mindspore/inferrt/src/ops/ascend/aclnn/aclnn_fused_infer_attention_score.cc:CalcWorkspace, Launch
+vllm-mindspore/inferrt/src/common/logger.cc:mrt::common::MakeDirectory

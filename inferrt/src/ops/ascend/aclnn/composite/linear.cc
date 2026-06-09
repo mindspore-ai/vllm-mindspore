@@ -62,11 +62,11 @@ std::vector<int64_t> AclnnLinear::CalculateStorageShapeForNZ(const std::vector<i
 
   // Ensure at least 2 dimensions
   if (viewShape.size() == 0) {
-    LOG_EXCEPTION << "viewShape size is 0, but which should be >= 2";
+    RT_GLOG(EXCEPTION) << "viewShape size is 0, but which should be >= 2";
     return {1, 1, 16, 16};
   }
   if (viewShape.size() == 1) {
-    LOG_EXCEPTION << "viewShape size is 1, but which should be >= 2";
+    RT_GLOG(EXCEPTION) << "viewShape size is 1, but which should be >= 2";
     return {1, viewShape[0], 16, 16};
   }
 
@@ -180,7 +180,7 @@ OpsErrorCode AclnnLinear::CalcWorkspace(const std::vector<const ir::Value *> &in
   if (isBiasNone_) {
     if (isWeightNz_) {  // only support matmul(x1, x2), x1-2DTensor, x2-4DTensor
       if (xRank_ != kIndex2) {
-        LOG_EXCEPTION << "only support x1-2DTensor in NZ scene for MatMul";
+        RT_GLOG(EXCEPTION) << "only support x1-2DTensor in NZ scene for MatMul";
       }
       executorMatmulNz_->GetWorkspaceSize(reinterpret_cast<uint64_t *>(workspaceSize), xTensor, weightTransposeTensor_,
                                           output->ToTensor(), cubeMathType_);
@@ -228,7 +228,7 @@ OpsErrorCode AclnnLinear::CalcWorkspace(const std::vector<const ir::Value *> &in
                                        cubeMathType_);
     } else {
       // Case 4: Matmul first, then add bias separately
-      LOG_EXCEPTION << "Not support linear with bias.";
+      RT_GLOG(EXCEPTION) << "Not support linear with bias.";
       std::vector<int64_t> matmulShape = xShape;
       matmulShape[xRank_ - 1] = weightTransposeShape[wRank - 1];
 
@@ -326,7 +326,7 @@ ir::ValuePtr AclnnLinear::CreateScalarValueOne(ir::DataType dtype) {
     case ir::DataType::Bool:
       return ir::MakeIntrusive<ir::Value>(true);
     default:
-      LOG_EXCEPTION << "Unsupported data type for scalar value: " << dtype.ToString();
+      RT_GLOG(EXCEPTION) << "Unsupported data type for scalar value: " << dtype.ToString();
       // Fallback to int64_t
       return ir::MakeIntrusive<ir::Value>(static_cast<int64_t>(1));
   }

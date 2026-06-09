@@ -24,7 +24,7 @@ OpsErrorCode AtbLinear::CalcWorkspace(const std::vector<const ir::Value *> &inpu
                                       size_t *workspace_size) {
   CHECK_IF_NULL(workspace_size);
   if (inputs.size() < 2) {
-    LOG_ERROR << "Invalid parameters for AtbLinear::CalcWorkspace, input size: " << inputs.size();
+    RT_GLOG(ERROR) << "Invalid parameters for AtbLinear::CalcWorkspace, input size: " << inputs.size();
     return OpsErrorCode::INVALID_PARAM;
   }
 
@@ -50,7 +50,6 @@ OpsErrorCode AtbLinear::CalcWorkspace(const std::vector<const ir::Value *> &inpu
 
 OpsErrorCode AtbLinear::Launch(const std::vector<const ir::Value *> &inputs, void *workspace, size_t workspaceSize,
                                ir::Value *output, void *stream) {
-  LOG_OUT << " Start launch " << op_name_;
   CHECK_IF_NULL(stream);
   return LaunchAtb(param_setter_.variant_pack, workspace, workspaceSize, static_cast<aclrtStream>(stream));
 }

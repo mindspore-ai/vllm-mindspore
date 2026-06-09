@@ -80,10 +80,10 @@ std::optional<std::vector<int64_t>> CalculateViewStrides(const std::vector<int64
 
 void CheckViewMetaDataChangeForFormat(const ir::TensorPtr &inputTensorPtr, const std::vector<int64_t> &newShape) {
   if (!IsTensorBaseFormat(inputTensorPtr) && IsDefiniteTensorWhenMetaDataChanges(inputTensorPtr, newShape)) {
-    LOG_EXCEPTION << "Current tensor format " << ir::FormatEnumToStr(inputTensorPtr->Format())
-                  << " does not support view metadata change when the view target shape has " << newShape.size()
-                  << " dimensions"
-                  << ". The view operation is rejected to avoid implicit format conversion.";
+    RT_GLOG(EXCEPTION) << "Current tensor format " << ir::FormatEnumToStr(inputTensorPtr->Format())
+                       << " does not support view metadata change when the view target shape has " << newShape.size()
+                       << " dimensions"
+                       << ". The view operation is rejected to avoid implicit format conversion.";
   }
 }
 
@@ -110,12 +110,12 @@ int64_t DynamicDimWrap(int64_t dim, int64_t dimPostExpr, bool wrapScalar) {
   }
   if (dimPostExpr == 0) {
     if (!wrapScalar) {
-      LOG_EXCEPTION << "dim value specified as " << dim << ", but tensor has no dimensions";
+      RT_GLOG(EXCEPTION) << "dim value specified as " << dim << ", but tensor has no dimensions";
     }
     return DynamicDimWrap(dim, 1, false);
   }
-  LOG_EXCEPTION << "Dimension out of range (expected to be in range of [" << -dimPostExpr << ", " << dimPostExpr
-                << "), but got " << dim << ")";
+  RT_GLOG(EXCEPTION) << "Dimension out of range (expected to be in range of [" << -dimPostExpr << ", " << dimPostExpr
+                     << "), but got " << dim << ")";
   return -1;
 }
 
@@ -149,7 +149,7 @@ std::vector<std::pair<uint32_t, uint32_t>> GenerateOutputInputRefPair(const ir::
   } else if (output->IsTensor()) {
     result.emplace_back(0, 0);
   } else {
-    LOG_EXCEPTION << "Output is not a tensor or tuple";
+    RT_GLOG(EXCEPTION) << "Output is not a tensor or tuple";
   }
 
   return result;

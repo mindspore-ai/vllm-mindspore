@@ -21,7 +21,7 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode OpAllReduce::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  LOG_OUT << "HcclAllReduce InferShape";
+  RT_VLOG(VL_OPS) << "HcclAllReduce InferShape";
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto outputShape = input0Shape;

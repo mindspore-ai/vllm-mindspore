@@ -30,8 +30,8 @@ void SplitSizeInputsCheck(const std::vector<int64_t> &splitSize, const int64_t &
                     "For SplitWithSize, the size of splitSize should > 0, but got" + std::to_string(splitSize.size()));
   const int64_t sumSplitSize = std::accumulate(splitSize.begin(), splitSize.end(), 0);
   if (sumSplitSize != tensorShape[axis]) {
-    LOG_EXCEPTION << "For 'SplitWithSize',  the sum of splitSize should be equal to " << tensorShape[axis]
-                  << "(input.shape[" << axis << "]), but got splitSize: " << splitSize;
+    RT_GLOG(EXCEPTION) << "For 'SplitWithSize',  the sum of splitSize should be equal to " << tensorShape[axis]
+                       << "(input.shape[" << axis << "]), but got splitSize: " << splitSize;
   }
 }
 

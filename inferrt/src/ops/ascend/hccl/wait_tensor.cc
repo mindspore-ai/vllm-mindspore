@@ -28,7 +28,7 @@ namespace mrt {
 namespace ops {
 
 OpsErrorCode HcclWaitTensor::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  LOG_OUT << "WaitTensor InferShape";
+  RT_VLOG(VL_OPS) << "WaitTensor InferShape";
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto &outputTensor = output->ToTensor();
   auto &outputShape = outputTensor->Shape();

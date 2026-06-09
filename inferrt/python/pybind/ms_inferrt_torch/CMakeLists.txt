@@ -1,8 +1,7 @@
-check_debug_log_out()
 
 # Add ms_inferrt_torch nanobind sub module
 nanobind_add_module(_ms_inferrt_torch pybind_torch.cc)
-target_link_libraries(_ms_inferrt_torch PUBLIC inferrt ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
+target_link_libraries(_ms_inferrt_torch PUBLIC mrt_common inferrt ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY})
 
 if(ENABLE_ASCEND)
   if(DEFINED ENV{ASCEND_CUSTOM_PATH})

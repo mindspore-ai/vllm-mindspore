@@ -54,8 +54,6 @@ AclnnLayerNorm::AclnnLayerNorm() { executor_ = std::make_unique<AclnnExecutor>("
 
 OpsErrorCode AclnnLayerNorm::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                            size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [layer_norm]";
-
   ir::TensorPtr yOut;
   std::optional<ir::TensorPtr> meanOut;
   std::optional<ir::TensorPtr> rstdOut;
@@ -71,8 +69,6 @@ OpsErrorCode AclnnLayerNorm::CalcWorkspace(const std::vector<const ir::Value *> 
 
 OpsErrorCode AclnnLayerNorm::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                     ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [layer_norm]";
-
   ir::TensorPtr yOut;
   std::optional<ir::TensorPtr> meanOut;
   std::optional<ir::TensorPtr> rstdOut;

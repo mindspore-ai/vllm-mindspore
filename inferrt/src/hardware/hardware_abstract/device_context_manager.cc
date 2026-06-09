@@ -65,7 +65,7 @@ DeviceContextManager &DeviceContextManager::GetInstance() {
 }
 
 void DeviceContextManager::Register(const std::string &deviceName, DeviceContextCreator &&deviceContextCreator) {
-  LOG_OUT << "Register device context creator for device: " << deviceName;
+  RT_VLOG(VL_HARDWARE) << "Register device context creator for device: " << deviceName;
   if (deviceContextCreators_.find(deviceName) == deviceContextCreators_.end()) {
     (void)deviceContextCreators_.emplace(deviceName, deviceContextCreator);
   }
@@ -74,9 +74,9 @@ void DeviceContextManager::Register(const std::string &deviceName, DeviceContext
 void DeviceContextManager::ClearDeviceContexts() {
   multiStreamControllers_.clear();
   for (auto &iter : deviceContexts_) {
-    LOG_OUT << "Release device " << iter.first;
+    RT_VLOG(VL_HARDWARE) << "Release device " << iter.first;
     if (iter.second == nullptr) {
-      LOG_ERROR << "device context is null";
+      RT_GLOG(ERROR) << "device context is null";
     }
     iter.second->Destroy();
   }
@@ -85,22 +85,22 @@ void DeviceContextManager::ClearDeviceContexts() {
 }
 
 void DeviceContextManager::ChildAfterFork() {
-  LOG_OUT << "DeviceContextManager reinitialize after fork.";
-  LOG_OUT << "Clear deviceContexts_.";
+  RT_VLOG(VL_HARDWARE) << "DeviceContextManager reinitialize after fork.";
+  RT_VLOG(VL_HARDWARE) << "Clear deviceContexts_.";
   deviceContexts_.clear();
-  LOG_OUT << "DeviceContextManager reinitialize after fork done.";
+  RT_VLOG(VL_HARDWARE) << "DeviceContextManager reinitialize after fork done.";
 }
 
 void DeviceContextManager::BindDeviceCtx() const {
   for (auto &iter : deviceContexts_) {
     if (iter.second == nullptr) {
-      LOG_ERROR << "device context is null";
+      RT_GLOG(ERROR) << "device context is null";
     }
     if (iter.second->deviceResManager_ == nullptr) {
-      LOG_ERROR << "device res manager is null";
+      RT_GLOG(ERROR) << "device res manager is null";
     }
     if (!iter.second->deviceResManager_->BindDeviceToCurrentThread(true)) {
-      LOG_ERROR << "Bind device failed";
+      RT_GLOG(ERROR) << "Bind device failed";
     }
   }
 }
@@ -119,27 +119,27 @@ DeviceContext *DeviceContextManager::GetOrCreateDeviceContext(const DeviceContex
   if (creatorIter != deviceContextCreators_.end()) {
     deviceContext = (creatorIter->second)(deviceContextKey);
     if (deviceContext == nullptr) {
-      LOG_ERROR << "Create device context failed, device context key: " << deviceContextKeyStr;
+      RT_GLOG(ERROR) << "Create device context failed, device context key: " << deviceContextKeyStr;
       return nullptr;
     }
     deviceContext->Initialize();
     if (deviceContext->deviceResManager_ == nullptr) {
-      LOG_ERROR << "Create device res manager failed, device context key: " << deviceContextKeyStr;
+      RT_GLOG(ERROR) << "Create device res manager failed, device context key: " << deviceContextKeyStr;
       return nullptr;
     }
     deviceContexts_[deviceContextKeyStr] = deviceContext;
     backendToDeviceContext_[name] = deviceContext;
     multiStreamControllers_[name] = std::make_shared<MultiStreamController>(deviceContext->deviceResManager_.get());
   } else {
-    LOG_EXCEPTION << "Create device context failed, please make sure target device:" << name
-                  << " is available, error message of loading plugins: " << GetErrorMsg();
+    RT_GLOG(EXCEPTION) << "Create device context failed, please make sure target device:" << name
+                       << " is available, error message of loading plugins: " << GetErrorMsg();
   }
   return deviceContext.get();
 }
 
 DeviceContextPtr DeviceContextManager::GetDeviceContext(const std::string &deviceTarget) {
   if (backendToDeviceContext_.count(deviceTarget) == 0) {
-    LOG_OUT << "Device context of device " << deviceTarget << " is not created yet.";
+    RT_VLOG(VL_HARDWARE) << "Device context of device " << deviceTarget << " is not created yet.";
     return nullptr;
   }
   return backendToDeviceContext_[deviceTarget];
@@ -150,16 +150,16 @@ MultiStreamControllerPtr &DeviceContextManager::GetMultiStreamController(const s
   if (iter != multiStreamControllers_.end()) {
     return iter->second;
   }
-  LOG_ERROR << "Found multi stream controller failed, and try to initialize, deviceName : " << deviceName << ".";
+  RT_GLOG(ERROR) << "Found multi stream controller failed, and try to initialize, deviceName : " << deviceName << ".";
   uint32_t deviceId = mrt::collective::CollectiveManager::Instance().local_rank_id();
   DeviceContextKey hostKey = {deviceName, deviceId};
   const auto &realDeviceContext = GetOrCreateDeviceContext(hostKey);
   if (realDeviceContext == nullptr) {
-    LOG_ERROR << "get or create device context failed";
+    RT_GLOG(ERROR) << "get or create device context failed";
   }
   auto &&iterAgain = multiStreamControllers_.find(deviceName);
   if (iterAgain == multiStreamControllers_.end()) {
-    LOG_ERROR << "Get multi stream controller failed, deviceName : " << deviceName << ".";
+    RT_GLOG(ERROR) << "Get multi stream controller failed, deviceName : " << deviceName << ".";
   }
   return iterAgain->second;
 }
@@ -169,11 +169,11 @@ void DeviceContextManager::WaitTaskFinishOnDevice() const {
     auto deviceContext = item.second;
     try {
       if (deviceContext != nullptr && !deviceContext->deviceResManager_->SyncAllStreams()) {
-        LOG_ERROR << "SyncStream failed";
+        RT_GLOG(ERROR) << "SyncStream failed";
         return;
       }
     } catch (const std::exception &ex) {
-      LOG_ERROR << "SyncStream failed, exception:" << ex.what();
+      RT_GLOG(ERROR) << "SyncStream failed, exception:" << ex.what();
       return;
     }
   }
@@ -183,7 +183,7 @@ void DeviceContextManager::SyncAllStreams() const {
   for (const auto &item : deviceContexts_) {
     auto deviceContext = item.second;
     if (deviceContext != nullptr && !deviceContext->deviceResManager_->SyncAllStreams()) {
-      LOG_ERROR << "SyncStream failed, device info: " << deviceContext->GetDeviceContextKey().ToString();
+      RT_GLOG(ERROR) << "SyncStream failed, device info: " << deviceContext->GetDeviceContextKey().ToString();
     }
   }
 }
@@ -198,7 +198,7 @@ void DeviceContextManager::LoadPlugin() {
 
   DIR *dir = opendir(dynamicLibLoader_.GetDynamicLibFilePath().c_str());
   if (dir == nullptr) {
-    LOG_ERROR << "Open plugin dir failed, plugin path:" << dynamicLibLoader_.GetDynamicLibFilePath();
+    RT_GLOG(ERROR) << "Open plugin dir failed, plugin path:" << dynamicLibLoader_.GetDynamicLibFilePath();
     dlopenErrorMsg_ << "Open plugin dir failed, plugin path:" << dynamicLibLoader_.GetDynamicLibFilePath() << std::endl;
     return;
   }
@@ -221,7 +221,7 @@ void DeviceContextManager::LoadPlugin() {
 
   for (const auto &targetPluginFile : pluginFiles) {
     if (!dynamicLibLoader_.LoadDynamicLib(targetPluginFile, &dlopenErrorMsg_)) {
-      LOG_ERROR << "Load " << targetPluginFile << " plugin file failed, error message: " << dlopenErrorMsg_.str();
+      RT_GLOG(ERROR) << "Load " << targetPluginFile << " plugin file failed, error message: " << dlopenErrorMsg_.str();
     }
   }
 

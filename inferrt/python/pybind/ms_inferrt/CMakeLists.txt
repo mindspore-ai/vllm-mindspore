@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 # Add ms_inferrt_api nanobind sub module
 nanobind_add_module(_ms_inferrt_api pybind_api.cc)

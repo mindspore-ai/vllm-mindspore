@@ -35,7 +35,7 @@ OpsErrorCode AtbReshapeAndCache::CalcWorkspace(const std::vector<const ir::Value
                                                size_t *workspace_size) {
   CHECK_IF_NULL(workspace_size);
   if (inputs.size() < 5) {
-    LOG_ERROR << "Invalid parameters for AtbReshapeAndCache::CalcWorkspace, input size: " << inputs.size();
+    RT_GLOG(ERROR) << "Invalid parameters for AtbReshapeAndCache::CalcWorkspace, input size: " << inputs.size();
     return OpsErrorCode::INVALID_PARAM;
   }
   auto old_hash = current_hash_id_;
@@ -83,7 +83,6 @@ OpsErrorCode AtbReshapeAndCache::CalcWorkspace(const std::vector<const ir::Value
 
 OpsErrorCode AtbReshapeAndCache::Launch(const std::vector<const ir::Value *> &inputs, void *workspace,
                                         size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << " Start launch " << op_name_;
   CHECK_IF_NULL(stream);
   return LaunchAtb(param_setter_.variant_pack, workspace, workspaceSize, static_cast<aclrtStream>(stream));
 }

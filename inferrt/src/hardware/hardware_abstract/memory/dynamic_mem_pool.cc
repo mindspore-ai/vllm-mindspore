@@ -46,7 +46,7 @@ const std::string &DynamicMemBufStatusToString(DynamicMemBufStatus status) { ret
 
 bool EventBase::RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId, const DeviceEventPtr &event) {
   if (event == nullptr) {
-    LOG_ERROR << "Event is null.";
+    RT_GLOG(ERROR) << "Event is null.";
   }
   if (events_ == nullptr) {
     events_ = std::make_shared<std::unordered_map<uint32_t, std::shared_ptr<std::list<TaskIdOnStreamEvent>>>>();
@@ -59,7 +59,7 @@ bool EventBase::RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId, const
   } else {
     eventList = iter->second;
     if (eventList == nullptr) {
-      LOG_ERROR << "Event list is null.";
+      RT_GLOG(ERROR) << "Event list is null.";
     }
   }
   (void)eventList->emplace_back(taskIdOnStream, event);
@@ -76,7 +76,7 @@ bool EventBase::WaitEvent(uint32_t taskIdOnStream, uint32_t userStreamId) {
   }
   auto &eventList = iter->second;
   if (eventList == nullptr) {
-    LOG_ERROR << "Event list is null.";
+    RT_GLOG(ERROR) << "Event list is null.";
   }
   // Pop all element in list that not bigger than taskIdOnStream.
   while (!eventList->empty() && eventList->front().first <= taskIdOnStream) {
@@ -99,7 +99,7 @@ bool EventBase::SyncAllEvents() {
   for (auto iter = events_->begin(); iter != events_->end();) {
     auto &eventList = iter->second;
     if (eventList == nullptr) {
-      LOG_ERROR << "Event list is null.";
+      RT_GLOG(ERROR) << "Event list is null.";
     }
     for (auto listIter = eventList->begin(); listIter != eventList->end();) {
       auto &event = listIter->second;
@@ -113,7 +113,7 @@ bool EventBase::SyncAllEvents() {
       // list is empty, erase list in map.
       iter = events_->erase(iter);
     } else {
-      LOG_ERROR << "Event list is not empty.";
+      RT_GLOG(ERROR) << "Event list is not empty.";
     }
   }
   return events_->empty();

@@ -28,14 +28,14 @@ namespace ops {
 // Set the value of symVars with operands, such that symExpr in output can be evaluated later.
 OpsErrorCode OpEvalSymbolicExpr::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   if (input.size() < 1) {
-    LOG_EXCEPTION << "OpEvalSymbolicExpr: input size must be at least 1";
+    RT_GLOG(EXCEPTION) << "OpEvalSymbolicExpr: input size must be at least 1";
   }
 
   size_t numOperands = input.size() - 1;
   auto symVars = input[numOperands]->ToTuple();
 
   if (symVars->Size() != numOperands) {
-    LOG_EXCEPTION << "OpEvalSymbolicExpr: symVars size must be equal to numOperands";
+    RT_GLOG(EXCEPTION) << "OpEvalSymbolicExpr: symVars size must be equal to numOperands";
   }
 
   for (size_t i = 0; i < numOperands; ++i) {

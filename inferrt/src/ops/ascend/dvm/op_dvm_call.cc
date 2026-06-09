@@ -51,7 +51,7 @@ inline dvm::KernelType KernelTypeFromString(std::string_view kernel_type) {
   };
   const auto it = kKernelTypeMap.find(kernel_type);
   if (it == kKernelTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported kernel_type in DVM payload: " << kernel_type;
+    RT_GLOG(EXCEPTION) << "Unsupported kernel_type in DVM payload: " << kernel_type;
   }
   return it->second;
 }
@@ -81,20 +81,20 @@ inline dvm::ShapeRef *SelectTargetShapeRef(BuildCtx *ctx, const DvmInstruction &
   if (inst.shape_ref_output_pos >= 0) {
     if (ctx->outputShapeRefs == nullptr ||
         static_cast<size_t>(inst.shape_ref_output_pos) >= ctx->outputShapeRefs->size()) {
-      LOG_EXCEPTION << "shape_ref.output_pos out of range: " << inst.shape_ref_output_pos;
+      RT_GLOG(EXCEPTION) << "shape_ref.output_pos out of range: " << inst.shape_ref_output_pos;
     }
     return (*ctx->outputShapeRefs)[static_cast<size_t>(inst.shape_ref_output_pos)];
   }
   if (inst.shape_ref_input_pos >= 0) {
     if (ctx->inputShapeRefs == nullptr ||
         static_cast<size_t>(inst.shape_ref_input_pos) >= ctx->inputShapeRefs->size()) {
-      LOG_EXCEPTION << "shape_ref.input_pos out of range: " << inst.shape_ref_input_pos;
+      RT_GLOG(EXCEPTION) << "shape_ref.input_pos out of range: " << inst.shape_ref_input_pos;
     }
     return (*ctx->inputShapeRefs)[static_cast<size_t>(inst.shape_ref_input_pos)];
   }
   if (!inst.shape_ref_dims.empty()) {
     if (ctx->constShapeDims == nullptr || ctx->constShapeRefs == nullptr) {
-      LOG_EXCEPTION << "Const ShapeRef arena is not initialized";
+      RT_GLOG(EXCEPTION) << "Const ShapeRef arena is not initialized";
     }
     ctx->constShapeDims->push_back(inst.shape_ref_dims);
     dvm::ShapeRef ref;
@@ -105,7 +105,7 @@ inline dvm::ShapeRef *SelectTargetShapeRef(BuildCtx *ctx, const DvmInstruction &
   }
 
   // No target shape specified: treat as schema error (keep behavior strict).
-  LOG_EXCEPTION << "Missing attrs.shape_ref for shape-driven op (idx=" << inst.result_idx << ")";
+  RT_GLOG(EXCEPTION) << "Missing attrs.shape_ref for shape-driven op (idx=" << inst.result_idx << ")";
   return nullptr;
 }
 
@@ -119,7 +119,7 @@ inline bool IsValidResultIdx(const std::vector<dvm::NDObject *> &values, int32_t
 
 inline void Fail(BuildCtx *ctx, const char *msg) {
   ctx->ok = false;
-  LOG_ERROR << msg;
+  RT_GLOG(ERROR) << msg;
 }
 
 inline bool RequireValidResultIdx(BuildCtx *ctx, int32_t idx, const char *error_msg) {
@@ -141,7 +141,7 @@ inline bool RequireValidValueRefs(BuildCtx *ctx, std::initializer_list<int32_t> 
 inline bool CheckResult(BuildCtx *ctx, dvm::NDObject *obj, const char *op_name) {
   if (obj == nullptr) {
     ctx->ok = false;
-    LOG_ERROR << op_name << " returned null pointer (op failed)";
+    RT_GLOG(ERROR) << op_name << " returned null pointer (op failed)";
     return false;
   }
   return true;
@@ -218,8 +218,8 @@ bool HandleReduce(const DvmInstruction &inst, BuildCtx *ctx) {
   axes_ref.size = inst.aux_params.size();
   auto *src = (*ctx->values)[static_cast<size_t>(inst.operand_idxs[0])];
 
-  LOG_OUT << "Reduce op: src=" << src << ", axes_size=" << axes_ref.size
-          << ", first_axis=" << (axes_ref.size > 0 ? axes_ref.data[0] : -1);
+  RT_VLOG(VL_OPS) << "Reduce op: src=" << src << ", axes_size=" << axes_ref.size
+                  << ", first_axis=" << (axes_ref.size > 0 ? axes_ref.data[0] : -1);
 
   auto *obj = ctx->k->Reduce(inst.aux_int, src, &axes_ref, inst.aux_flags[0]);
   if (!CheckResult(ctx, obj, "Reduce")) return false;
@@ -243,7 +243,7 @@ bool HandleReshape(const DvmInstruction &inst, BuildCtx *ctx) {
   auto *src = (*ctx->values)[static_cast<size_t>(inst.operand_idxs[0])];
   auto *shapeRef = SelectTargetShapeRef(ctx, inst);
   if (shapeRef == nullptr) {
-    LOG_EXCEPTION << "Reshape missing output ShapeRef (result_idx=" << inst.result_idx << ")";
+    RT_GLOG(EXCEPTION) << "Reshape missing output ShapeRef (result_idx=" << inst.result_idx << ")";
   }
   auto *obj = ctx->k->Reshape(src, shapeRef);
   if (!CheckResult(ctx, obj, "Reshape")) return false;
@@ -257,7 +257,7 @@ bool HandleBroadcast(const DvmInstruction &inst, BuildCtx *ctx) {
   auto *src = (*ctx->values)[static_cast<size_t>(inst.operand_idxs[0])];
   auto *shapeRef = SelectTargetShapeRef(ctx, inst);
   if (shapeRef == nullptr) {
-    LOG_EXCEPTION << "Broadcast missing output ShapeRef (result_idx=" << inst.result_idx << ")";
+    RT_GLOG(EXCEPTION) << "Broadcast missing output ShapeRef (result_idx=" << inst.result_idx << ")";
   }
   auto *obj = ctx->k->Broadcast(src, shapeRef);
   if (!CheckResult(ctx, obj, "Broadcast")) return false;
@@ -328,16 +328,16 @@ const std::array<BuildHandler, kOpCodeCount> kBuildHandlerByOp = {
 
 void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   if (inputs.empty()) {
-    LOG_EXCEPTION << "Input list is empty in dvm_call";
+    RT_GLOG(EXCEPTION) << "Input list is empty in dvm_call";
   }
 
   if (!inputs[0]->IsString()) {
-    LOG_EXCEPTION << "First input of dvm_call must be a string payload";
+    RT_GLOG(EXCEPTION) << "First input of dvm_call must be a string payload";
   }
 
   payload_ = inputs[0]->ToString();
   if (payload_.empty()) {
-    LOG_EXCEPTION << "DVM payload is empty in dvm_call";
+    RT_GLOG(EXCEPTION) << "DVM payload is empty in dvm_call";
   }
 
   // Store real inputs for future use (skipping the payload string at index 0)
@@ -348,7 +348,7 @@ void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Val
 
   // Parse JSON payload
   DvmKernelPayload parsedPayload = ParseDvmPayload(payload_);
-  LOG_OUT << "[OpDvmCall] Parsed payload with " << parsedPayload.instructions.size() << " instructions";
+  RT_VLOG(VL_OPS) << "[OpDvmCall] Parsed payload with " << parsedPayload.instructions.size() << " instructions";
 
   // Define buildFunc that interprets OpCode and builds DVM kernel graph
   // NOTE: Some DVM ops (e.g., Reduce) take a ShapeRef* for axes/dims and the DVM
@@ -376,7 +376,7 @@ void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Val
     for (const auto &inst : parsedPayload.instructions) {
       const auto op_idx = static_cast<size_t>(inst.opcode);
       if (op_idx >= kBuildHandlerByOp.size() || kBuildHandlerByOp[op_idx] == nullptr) {
-        LOG_EXCEPTION << "Unhandled OpCode: " << static_cast<int>(inst.opcode) << ", inst.idx=" << inst.result_idx;
+        RT_GLOG(EXCEPTION) << "Unhandled OpCode: " << static_cast<int>(inst.opcode) << ", inst.idx=" << inst.result_idx;
       }
       BuildCtx ctx;
       ctx.k = &k;
@@ -402,7 +402,7 @@ void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Val
     inputObjs->reserve(parsedPayload.input_indices.size());
     for (int32_t idx : parsedPayload.input_indices) {
       if (!IsValidValueRef(values, idx)) {
-        LOG_EXCEPTION << "Invalid input_indices entry in DVM payload: " << idx;
+        RT_GLOG(EXCEPTION) << "Invalid input_indices entry in DVM payload: " << idx;
       }
       inputObjs->push_back(values[static_cast<size_t>(idx)]);
     }
@@ -411,13 +411,13 @@ void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Val
     outputObjs->reserve(parsedPayload.output_indices.size());
     for (int32_t idx : parsedPayload.output_indices) {
       if (!IsValidValueRef(values, idx)) {
-        LOG_EXCEPTION << "Invalid output_indices entry in DVM payload: " << idx;
+        RT_GLOG(EXCEPTION) << "Invalid output_indices entry in DVM payload: " << idx;
       }
       outputObjs->push_back(values[static_cast<size_t>(idx)]);
     }
 
-    LOG_OUT << "[OpDvmCall] Built kernel graph with " << inputObjs->size() << " inputs, " << outputObjs->size()
-            << " outputs";
+    RT_VLOG(VL_OPS) << "[OpDvmCall] Built kernel graph with " << inputObjs->size() << " inputs, " << outputObjs->size()
+                    << " outputs";
   };
 
   // Decide kernel type.
@@ -431,20 +431,21 @@ void OpDvmCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Val
                 [](const auto &inst) { return inst.opcode == kMatMul || inst.opcode == kGroupedMatMul; });
   if (hasMatMul) {
     if (kernelType == dvm::kStaticShape) {
-      LOG_OUT << "[OpDvmCall] kernel_type='" << parsedPayload.kernel_type
-              << "' but MatMul found; upgrading to static_mix";
+      RT_VLOG(VL_OPS) << "[OpDvmCall] kernel_type='" << parsedPayload.kernel_type
+                      << "' but MatMul found; upgrading to static_mix";
       kernelType = dvm::kStaticMix;
     } else if (kernelType == dvm::kDynShape) {
-      LOG_OUT << "[OpDvmCall] kernel_type='" << parsedPayload.kernel_type << "' but MatMul found; upgrading to dyn_mix";
+      RT_VLOG(VL_OPS) << "[OpDvmCall] kernel_type='" << parsedPayload.kernel_type
+                      << "' but MatMul found; upgrading to dyn_mix";
       kernelType = dvm::kDynMix;
     }
   }
-  LOG_OUT << "[OpDvmCall] Using DVM kernel type enum=" << static_cast<int>(kernelType);
+  RT_VLOG(VL_OPS) << "[OpDvmCall] Using DVM kernel type enum=" << static_cast<int>(kernelType);
 
   dvmOp_ = std::make_unique<DvmOp>(kernelType, buildFunc);
   dvmOp_->Init(realInputs_, output);
 
-  LOG_OUT << "[OpDvmCall] Initialized DvmOp with parsed payload";
+  RT_VLOG(VL_OPS) << "[OpDvmCall] Initialized DvmOp with parsed payload";
 }
 
 OpsErrorCode OpDvmCall::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
@@ -480,7 +481,7 @@ OpsErrorCode OpDvmCall::Launch(const std::vector<const ir::Value *> &input, void
   if (dvmOp_) {
     return dvmOp_->Launch(realInputs_, workspace, workspaceSize, output, stream);
   }
-  LOG_EXCEPTION << "OpDvmCall::Launch: dvmOp_ is not initialized";
+  RT_GLOG(EXCEPTION) << "OpDvmCall::Launch: dvmOp_ is not initialized";
   return OpsErrorCode::UNKNOWN_ERROR;
 }
 

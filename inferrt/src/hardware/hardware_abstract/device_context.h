@@ -184,13 +184,13 @@ class MRT_EXPORT DeviceResManager {
   // to optimize the communication performance.
   virtual std::vector<void *> AllocateContinuousMemory(const std::vector<size_t> &sizeList,
                                                        uint32_t streamId = kDefaultStreamIndex) const {
-    LOG_ERROR << "Unimplemented interface.";
+    RT_GLOG(ERROR) << "Unimplemented interface.";
     return {};
   }
 
   // Create a stream with assigning a stream id, the assigned stream id will be written to the parameter '*streamId'.
   virtual bool CreateStream(size_t *streamId) const {
-    LOG_ERROR << "Unimplemented interface: 'CreateStream'.";
+    RT_GLOG(ERROR) << "Unimplemented interface: 'CreateStream'.";
     *streamId = kSizeZero;
     return false;
   }
@@ -321,7 +321,7 @@ class DeviceInterface<> : public DeviceContext {
  protected:
   void CheckUnset(const void *ptr, const std::string &error_msg) const {
     if (ptr != nullptr) {
-      LOG_ERROR << error_msg;
+      RT_GLOG(ERROR) << error_msg;
     }
   }
 };

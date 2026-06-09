@@ -1,9 +1,9 @@
-check_debug_log_out()
 
 file(GLOB OPS_CUSTOM_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 add_library(ops_ascend_custom SHARED ${OPS_CUSTOM_SRC_FILES})
 
 target_link_libraries(ops_ascend_custom PRIVATE
+        mrt_common
         ops_base_obj
         ops_utils
         hardware_ascend

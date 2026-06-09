@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 #Collect all source files
 file(GLOB OPS_LOWERED_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
@@ -12,6 +11,7 @@ include_directories(${LLVM_INCLUDE_DIRS})
 
 #Link dependencies
 target_link_libraries(ops_ascend_lowered PRIVATE
+    mrt_common
     hardware_ascend
     kernel
     mrt::securec

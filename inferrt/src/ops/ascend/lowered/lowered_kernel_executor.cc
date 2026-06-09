@@ -53,7 +53,7 @@ LoweredKernelCacheEntry::~LoweredKernelCacheEntry() {
 LoweredKernelExecutor::LoweredKernelExecutor(const KernelSpec *spec)
     : spec_(spec), cacheDir_(""), keepIntermediateFiles_(false), currentEntry_(nullptr) {
   if (spec_ == nullptr) {
-    LOG_EXCEPTION << "KernelSpec pointer is null";
+    RT_GLOG(EXCEPTION) << "KernelSpec pointer is null";
   }
 
   // Read keepIntermediateFiles from environment variable
@@ -66,12 +66,12 @@ LoweredKernelExecutor::LoweredKernelExecutor(const KernelSpec *spec)
 LoweredKernelExecutor::~LoweredKernelExecutor() {
   if (!cacheDir_.empty()) {
     if (keepIntermediateFiles_) {
-      LOG_OUT << "Keeping compilation cache directory for debugging: " << cacheDir_;
+      RT_VLOG(VL_OPS) << "Keeping compilation cache directory for debugging: " << cacheDir_;
     } else {
       std::string rmCmd = "rm -rf " + cacheDir_;
       int ret = system(rmCmd.c_str());
       (void)ret;
-      LOG_OUT << "Cleaned up cache directory: " << cacheDir_;
+      RT_VLOG(VL_OPS) << "Cleaned up cache directory: " << cacheDir_;
     }
   }
 }
@@ -122,7 +122,7 @@ std::string LoweredKernelExecutor::GenerateCacheKey(const std::vector<const ir::
 
 LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
   if (spec_ == nullptr) {
-    LOG_ERROR << "Kernel spec is null";
+    RT_GLOG(ERROR) << "Kernel spec is null";
     return nullptr;
   }
 
@@ -133,7 +133,7 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
 
   // Check if we need to compile MLIR first
   if (mutableSpec->NeedsCompilation()) {
-    LOG_OUT << "Kernel needs compilation from MLIR";
+    RT_VLOG(VL_OPS) << "Kernel needs compilation from MLIR";
 
     // Prepare compilation request
     MlirCompiler::CompileRequest request = MlirCompiler::internal::InitializeDefaultRequest();
@@ -143,7 +143,7 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
     // Compile MLIR to .so
     MlirCompiler::CompileResult result = MlirCompiler::CompileFromText(request);
     if (!result.success) {
-      LOG_ERROR << "MLIR compilation failed: " << result.errorMessage;
+      RT_GLOG(ERROR) << "MLIR compilation failed: " << result.errorMessage;
       return nullptr;
     }
 
@@ -155,40 +155,40 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
     mutableSpec->entry = result.entryName;
     mutableSpec->id = result.entryName;  // Set operator name from compiled entry
 
-    LOG_OUT << "MLIR compilation successful:";
-    LOG_OUT << "  - operator: " << mutableSpec->id;
-    LOG_OUT << "  - cache dir: " << result.cacheDir;
-    LOG_OUT << "  - .so path: " << result.soPath;
-    LOG_OUT << "  - entry: " << result.entryName;
+    RT_VLOG(VL_OPS) << "MLIR compilation successful:";
+    RT_VLOG(VL_OPS) << "  - operator: " << mutableSpec->id;
+    RT_VLOG(VL_OPS) << "  - cache dir: " << result.cacheDir;
+    RT_VLOG(VL_OPS) << "  - .so path: " << result.soPath;
+    RT_VLOG(VL_OPS) << "  - entry: " << result.entryName;
   } else {
-    LOG_OUT << "Kernel already compiled, using cached binary: " << mutableSpec->kernelLibPath;
+    RT_VLOG(VL_OPS) << "Kernel already compiled, using cached binary: " << mutableSpec->kernelLibPath;
   }
 
   // Check if spec is ready to load
   if (!mutableSpec->IsReadyToLoad()) {
-    LOG_ERROR << "Kernel spec is not ready to load (missing .so path)";
+    RT_GLOG(ERROR) << "Kernel spec is not ready to load (missing .so path)";
     return nullptr;
   }
 
   // Load dynamic library
   entry->dlHandle = dlopen(mutableSpec->kernelLibPath.c_str(), RTLD_LAZY);
   if (entry->dlHandle == nullptr) {
-    LOG_ERROR << "dlopen failed for " << mutableSpec->kernelLibPath << ": " << dlerror();
+    RT_GLOG(ERROR) << "dlopen failed for " << mutableSpec->kernelLibPath << ": " << dlerror();
     return nullptr;
   }
 
-  LOG_OUT << "Loaded kernel library: " << mutableSpec->kernelLibPath;
+  RT_VLOG(VL_OPS) << "Loaded kernel library: " << mutableSpec->kernelLibPath;
 
   // Load Host API function
   using HostApiRawFunc = void (*)(uint32_t, void *, void *, void **);
   auto *hostApiRaw = reinterpret_cast<HostApiRawFunc>(dlsym(entry->dlHandle, mutableSpec->entry.c_str()));
   if (hostApiRaw == nullptr) {
-    LOG_ERROR << "dlsym failed for Host API function " << mutableSpec->entry << ": " << dlerror();
+    RT_GLOG(ERROR) << "dlsym failed for Host API function " << mutableSpec->entry << ": " << dlerror();
     return nullptr;
   }
   entry->hostApiFunc = hostApiRaw;
 
-  LOG_OUT << "Loaded Host API function: " << mutableSpec->entry;
+  RT_VLOG(VL_OPS) << "Loaded Host API function: " << mutableSpec->entry;
 
   // For dynamic shape kernels, load tiling functions
   if (mutableSpec->IsDynamicShape()) {
@@ -197,10 +197,10 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
     using GetTilingSizeRawFunc = int64_t (*)();
     auto *getTilingSizeRaw = reinterpret_cast<GetTilingSizeRawFunc>(dlsym(entry->dlHandle, tilingSizeFuncName.c_str()));
     if (getTilingSizeRaw == nullptr) {
-      LOG_OUT << "Tiling size function not found: " << tilingSizeFuncName << ", assuming no tiling needed";
+      RT_VLOG(VL_OPS) << "Tiling size function not found: " << tilingSizeFuncName << ", assuming no tiling needed";
     } else {
       entry->getTilingSize = getTilingSizeRaw;
-      LOG_OUT << "Loaded tiling size function: " << tilingSizeFuncName;
+      RT_VLOG(VL_OPS) << "Loaded tiling size function: " << tilingSizeFuncName;
     }
 
     // Load tiling function
@@ -208,10 +208,10 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
     using TilingRawFunc = void (*)(void **);
     auto *tilingRaw = reinterpret_cast<TilingRawFunc>(dlsym(entry->dlHandle, tilingFuncName.c_str()));
     if (tilingRaw == nullptr) {
-      LOG_OUT << "Tiling function not found: " << tilingFuncName;
+      RT_VLOG(VL_OPS) << "Tiling function not found: " << tilingFuncName;
     } else {
       entry->tilingFunc = tilingRaw;
-      LOG_OUT << "Loaded tiling function: " << tilingFuncName;
+      RT_VLOG(VL_OPS) << "Loaded tiling function: " << tilingFuncName;
     }
   }
 
@@ -221,13 +221,13 @@ LoweredCacheEntryPtr LoweredKernelExecutor::LoadKernel() {
 int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &inputs, const ir::Value *output,
                                          LoweredKernelCacheEntry *entry) {
   if (entry == nullptr) {
-    LOG_ERROR << "Cache entry is null";
+    RT_GLOG(ERROR) << "Cache entry is null";
     return -1;
   }
 
   // Check if tiling is needed
   if (!entry->getTilingSize || !entry->tilingFunc) {
-    LOG_OUT << "No tiling computation needed (functions not available)";
+    RT_VLOG(VL_OPS) << "No tiling computation needed (functions not available)";
     // TODO(dev): Use device upper limit as default value
     entry->blockDim = 40;  // Default blockDim
     return 0;
@@ -235,11 +235,11 @@ int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &i
 
   // Get tiling struct size
   entry->tilingStructSize = entry->getTilingSize();
-  LOG_OUT << "Tiling struct size: " << entry->tilingStructSize;
+  RT_VLOG(VL_OPS) << "Tiling struct size: " << entry->tilingStructSize;
 
   if (entry->tilingStructSize <= 0) {
-    LOG_ERROR << "Invalid tiling struct size: " << entry->tilingStructSize
-              << " (expected positive value when tiling functions exist)";
+    RT_GLOG(ERROR) << "Invalid tiling struct size: " << entry->tilingStructSize
+                   << " (expected positive value when tiling functions exist)";
     return -1;
   }
 
@@ -278,23 +278,23 @@ int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &i
   tilingArgs.push_back(reinterpret_cast<void *>(1));
 
   // Call tiling function
-  LOG_OUT << "Calling tiling function with " << tilingArgs.size() << " args";
+  RT_VLOG(VL_OPS) << "Calling tiling function with " << tilingArgs.size() << " args";
   entry->tilingFunc(tilingArgs.data());
-  LOG_OUT << "Tiling computation completed, tilingKey: " << entry->tilingKey;
+  RT_VLOG(VL_OPS) << "Tiling computation completed, tilingKey: " << entry->tilingKey;
 
   // Extract blockDim from tiling data
   // Assumes layout: [tile_m, tile_n, blockDim, ...]
   if (entry->tilingStructSize >= 3) {
     entry->blockDim = static_cast<uint32_t>(entry->tilingData[2]);
-    LOG_OUT << "Extracted blockDim from tiling data: " << entry->blockDim;
+    RT_VLOG(VL_OPS) << "Extracted blockDim from tiling data: " << entry->blockDim;
   } else {
     entry->blockDim = 8;
-    LOG_OUT << "Using default blockDim: " << entry->blockDim;
+    RT_VLOG(VL_OPS) << "Using default blockDim: " << entry->blockDim;
   }
 
   // Validate blockDim range [1, 40]
   if (entry->blockDim < 1 || entry->blockDim > 40) {
-    LOG_OUT << "blockDim " << entry->blockDim << " out of range [1, 40], clamping";
+    RT_VLOG(VL_OPS) << "blockDim " << entry->blockDim << " out of range [1, 40], clamping";
     entry->blockDim = std::min(std::max(entry->blockDim, 1u), 40u);
   }
 
@@ -302,7 +302,7 @@ int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &i
   size_t tilingDataSize = entry->tilingStructSize * sizeof(int64_t);
   aclError error = aclrtMalloc(&entry->dTilingData, tilingDataSize, ACL_MEM_MALLOC_HUGE_FIRST);
   if (error != ACL_RT_SUCCESS) {
-    LOG_ERROR << "Failed to allocate device memory for tiling data, error=" << error;
+    RT_GLOG(ERROR) << "Failed to allocate device memory for tiling data, error=" << error;
     return -1;
   }
 
@@ -310,11 +310,11 @@ int LoweredKernelExecutor::ComputeTiling(const std::vector<const ir::Value *> &i
   error = aclrtMemcpy(entry->dTilingData, tilingDataSize, entry->tilingData.data(), tilingDataSize,
                       ACL_MEMCPY_HOST_TO_DEVICE);
   if (error != ACL_RT_SUCCESS) {
-    LOG_ERROR << "Failed to copy tiling data to device, error=" << error;
+    RT_GLOG(ERROR) << "Failed to copy tiling data to device, error=" << error;
     return -1;
   }
 
-  LOG_OUT << "Tiling data copied to device";
+  RT_VLOG(VL_OPS) << "Tiling data copied to device";
 
   // Set workspace size (tiling data size)
   entry->workspaceSize = tilingDataSize;
@@ -410,7 +410,7 @@ void LoweredKernelExecutor::BuildKernelArgs(const std::vector<const ir::Value *>
 int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::vector<const ir::Value *> &inputs,
                                             const ir::Value *output) {
   if (workspaceSize == nullptr) {
-    LOG_ERROR << "workspaceSize is null";
+    RT_GLOG(ERROR) << "workspaceSize is null";
     return -1;
   }
 
@@ -420,18 +420,18 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
   // Check cache
   auto it = cache_.find(cacheKey);
   if (it != cache_.end()) {
-    LOG_OUT << "Cache hit for key: " << cacheKey;
+    RT_VLOG(VL_OPS) << "Cache hit for key: " << cacheKey;
     currentEntry_ = it->second.get();
     *workspaceSize = currentEntry_->workspaceSize;
     return 0;
   }
 
-  LOG_OUT << "Cache miss for key: " << cacheKey;
+  RT_VLOG(VL_OPS) << "Cache miss for key: " << cacheKey;
 
   // Load kernel
   auto entry = LoadKernel();
   if (entry == nullptr) {
-    LOG_ERROR << "Failed to load kernel";
+    RT_GLOG(ERROR) << "Failed to load kernel";
     return -1;
   }
 
@@ -439,7 +439,7 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
   if (spec_->IsDynamicShape()) {
     int ret = ComputeTiling(inputs, output, entry.get());
     if (ret != 0) {
-      LOG_ERROR << "Failed to compute tiling";
+      RT_GLOG(ERROR) << "Failed to compute tiling";
       return ret;
     }
   } else {
@@ -453,7 +453,7 @@ int LoweredKernelExecutor::GetWorkspaceSize(size_t *workspaceSize, const std::ve
   currentEntry_ = cache_[cacheKey].get();
 
   *workspaceSize = currentEntry_->workspaceSize;
-  LOG_OUT << "Workspace size: " << *workspaceSize;
+  RT_VLOG(VL_OPS) << "Workspace size: " << *workspaceSize;
 
   return 0;
 }
@@ -470,13 +470,13 @@ int LoweredKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *s
     if (it != cache_.end()) {
       entry = it->second.get();
     } else {
-      LOG_ERROR << "Cache entry not found for Launch (GetWorkspaceSize should be called first)";
+      RT_GLOG(ERROR) << "Cache entry not found for Launch (GetWorkspaceSize should be called first)";
       return -1;
     }
   }
 
   if (entry->hostApiFunc == nullptr) {
-    LOG_ERROR << "Host API function is null";
+    RT_GLOG(ERROR) << "Host API function is null";
     return -1;
   }
 
@@ -484,13 +484,13 @@ int LoweredKernelExecutor::Launch(void *workspace, size_t workspaceSize, void *s
   std::vector<void *> kernelArgs;
   BuildKernelArgs(inputs, output, entry, &kernelArgs);
 
-  LOG_OUT << "Launching kernel with " << kernelArgs.size() << " args, blockDim=" << entry->blockDim;
+  RT_VLOG(VL_OPS) << "Launching kernel with " << kernelArgs.size() << " args, blockDim=" << entry->blockDim;
 
   // Call Host API function
   // Signature: void host_api(uint32_t blockDim, void* l2ctrl, void* stream, void** args)
   entry->hostApiFunc(entry->blockDim, nullptr, stream, kernelArgs.data());
 
-  LOG_OUT << "Kernel launched successfully";
+  RT_VLOG(VL_OPS) << "Kernel launched successfully";
 
   return 0;
 }

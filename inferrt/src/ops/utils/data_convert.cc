@@ -92,7 +92,7 @@ inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 
   auto iter = kMemoryFormatToAclFormatMap.find(format);
   if (iter == kMemoryFormatToAclFormatMap.end()) {
-    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    RT_GLOG(EXCEPTION) << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
     return ACL_FORMAT_UNDEFINED;
   }
 
@@ -103,7 +103,7 @@ inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 ir::DataType FromTorchDType(const at::ScalarType &type) {
   auto iter = kAtScalarTypeToDataTypeMap.find(type);
   if (iter == kAtScalarTypeToDataTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported at::ScalarType" << type << "for conversion to ir::DataType";
+    RT_GLOG(EXCEPTION) << "Unsupported at::ScalarType" << type << "for conversion to ir::DataType";
     return ir::DataType::Unknown;
   }
 
@@ -113,7 +113,7 @@ ir::DataType FromTorchDType(const at::ScalarType &type) {
 at::ScalarType ToTorchDType(ir::DataType type) {
   auto iter = kDataTypeToAtScalarTypeMap.find(type);
   if (iter == kDataTypeToAtScalarTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
+    RT_GLOG(EXCEPTION) << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
     return at::kFloat;
   }
 
@@ -131,7 +131,7 @@ hardware::Device FromTorchDevice(const at::Device &device) {
       deviceType = hardware::DeviceType::NPU;
       break;
     default:
-      LOG_EXCEPTION << "Unsupported torch::Device " << device.str() << " for conversion to hardware::Device";
+      RT_GLOG(EXCEPTION) << "Unsupported torch::Device " << device.str() << " for conversion to hardware::Device";
   }
   return hardware::Device(deviceType, device.index());
 }
@@ -148,8 +148,8 @@ at::Device ToTorchDevice(const hardware::Device device) {
       break;
 #endif
     default:
-      LOG_EXCEPTION << "Unsupported hardware::DeviceType " << hardware::GetDeviceNameByType(device.type)
-                    << " for conversion to torch::Device";
+      RT_GLOG(EXCEPTION) << "Unsupported hardware::DeviceType " << hardware::GetDeviceNameByType(device.type)
+                         << " for conversion to torch::Device";
   }
   return at::Device(deviceType, device.index);
 }
@@ -165,7 +165,7 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake) {
     } else if (dim.maybe_as_int().has_value()) {
       (void)shape.emplace_back(dim.maybe_as_int().value());
     } else {
-      LOG_EXCEPTION << "Dynamic shape with non-int dimension is not supported";
+      RT_GLOG(EXCEPTION) << "Dynamic shape with non-int dimension is not supported";
     }
   }
 
@@ -181,9 +181,10 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake) {
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   if (!tensor->IsContiguous() && !IsTensorBaseFormat(tensor)) {
-    LOG_EXCEPTION << "Custom call input does not support non-contiguous tensor with non-base memory format, format: "
-                  << ir::FormatEnumToStr(tensor->Format()) << ", shape: " << tensor->Shape()
-                  << ", strides: " << tensor->Strides() << ", storageOffset: " << tensor->StorageOffset();
+    RT_GLOG(EXCEPTION)
+      << "Custom call input does not support non-contiguous tensor with non-base memory format, format: "
+      << ir::FormatEnumToStr(tensor->Format()) << ", shape: " << tensor->Shape() << ", strides: " << tensor->Strides()
+      << ", storageOffset: " << tensor->StorageOffset();
   }
   auto storage = tensor->GetStorage();
   void *dataPtr = storage->Data();
@@ -219,7 +220,7 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     }
 #endif
     default:
-      LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
+      RT_GLOG(EXCEPTION) << "Unsupported DeviceType " << atDevice.str();
   }
   return at::Tensor{};
 }
@@ -242,9 +243,9 @@ void CheckOutputInputRef(const std::vector<const ir::Value *> &input, const ir::
     const auto *inputStorageData = input[0]->ToTensor()->GetStorage()->Data();
     void *outputStorageData = GetFirstTensorStorageData(output);
     if (outputStorageData == inputStorageData) {
-      LOG_EXCEPTION << "Custom/Python Call: Operator " << opName << " does not support reference. "
-                    << "Input[0] Storage Data: " << inputStorageData << ", "
-                    << "Output Storage Data: " << outputStorageData;
+      RT_GLOG(EXCEPTION) << "Custom/Python Call: Operator " << opName << " does not support reference. "
+                         << "Input[0] Storage Data: " << inputStorageData << ", "
+                         << "Output Storage Data: " << outputStorageData;
     }
   }
 }
@@ -261,7 +262,7 @@ bool IsTorchTensorStandardLayout(const at::Tensor &atTensor) {
       return IsBaseFormat(static_cast<ir::MemoryFormat>(at_npu::native::get_npu_format(atTensor)));
 #endif
     default:
-      LOG_EXCEPTION << "Unsupported DeviceType " << atTensor.device().str();
+      RT_GLOG(EXCEPTION) << "Unsupported DeviceType " << atTensor.device().str();
   }
   return false;
 }
@@ -275,10 +276,10 @@ void UpdateTensorFromTorch(const ir::TensorPtr &tensor, const at::Tensor &atTens
     tensor->SetStrides(atTensor.strides().vec());
     tensor->SetStorageOffset(atTensor.storage_offset());
     tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(atTensor));
-    LOG_OUT << "Update tensor from torch, format=" << ir::FormatEnumToStr(tensor->Format())
-            << ", strides=" << tensor->Strides() << ", storageOffset=" << tensor->StorageOffset()
-            << ", storageShape=" << tensor->StorageShape() << ", isView=" << atTensor.is_view()
-            << " at.tensor.shape: " << atTensor.sizes();
+    RT_VLOG(VL_OPS) << "Update tensor from torch, format=" << ir::FormatEnumToStr(tensor->Format())
+                    << ", strides=" << tensor->Strides() << ", storageOffset=" << tensor->StorageOffset()
+                    << ", storageShape=" << tensor->StorageShape() << ", isView=" << atTensor.is_view()
+                    << " at.tensor.shape: " << atTensor.sizes();
   }
 #else
   (void)tensor;

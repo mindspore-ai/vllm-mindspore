@@ -130,8 +130,8 @@ Value &Value::operator=(Value &&other) noexcept {
     // change the tag. This matches the semantics of copy-assignment: the tag
     // must be the same.
     if (tag_ != other.tag_) {
-      LOG_EXCEPTION << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
-                    << ", other tag: " << TagToString(other.tag_);
+      RT_GLOG(EXCEPTION) << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
+                         << ", other tag: " << TagToString(other.tag_);
     }
 
     switch (tag_) {
@@ -166,8 +166,8 @@ Value &Value::operator=(Value &&other) noexcept {
 Value &Value::operator=(const Value &other) {
   if (this != &other) {
     if (tag_ != other.tag_) {
-      LOG_EXCEPTION << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
-                    << ", other tag: " << TagToString(other.tag_);
+      RT_GLOG(EXCEPTION) << "Cannot assign Value with different tag. Current tag: " << TagToString(tag_)
+                         << ", other tag: " << TagToString(other.tag_);
     }
     switch (tag_) {
       case Tag::Tensor:
@@ -198,10 +198,10 @@ Value &Value::operator=(const Value &other) {
   return *this;
 }
 
-#define CHECK_TAG(expected)                                                                  \
-  if (tag_ != expected) {                                                                    \
-    LOG_EXCEPTION << "Bad Value access, value: " << *this << ", type: " << TagToString(tag_) \
-                  << ", expected type: " << TagToString(expected);                           \
+#define CHECK_TAG(expected)                                                                       \
+  if (tag_ != expected) {                                                                         \
+    RT_GLOG(EXCEPTION) << "Bad Value access, value: " << *this << ", type: " << TagToString(tag_) \
+                       << ", expected type: " << TagToString(expected);                           \
   }
 
 const TensorPtr &Value::ToTensor() const {

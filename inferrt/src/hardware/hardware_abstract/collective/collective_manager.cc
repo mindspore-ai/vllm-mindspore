@@ -43,7 +43,7 @@ bool CollectiveManager::IsGroupExist(const std::string &groupName) {
 
 std::shared_ptr<CommunicationGroup> CollectiveManager::GetCommunicationGroup(const std::string &groupName) {
   if (communicationGroups.find(groupName) == communicationGroups.end()) {
-    LOG_EXCEPTION << "can not find group for given group name " << groupName;
+    RT_GLOG(EXCEPTION) << "can not find group for given group name " << groupName;
     return nullptr;
   }
   return communicationGroups[groupName];
@@ -51,7 +51,7 @@ std::shared_ptr<CommunicationGroup> CollectiveManager::GetCommunicationGroup(con
 
 uint32_t CollectiveManager::GetGroupRank(const std::string &groupName) {
   if (communicationGroups.find(groupName) == communicationGroups.end()) {
-    LOG_ERROR << "can not find group for given group name " << groupName;
+    RT_GLOG(ERROR) << "can not find group for given group name " << groupName;
     return false;
   }
   return communicationGroups[groupName]->group_rank();
@@ -59,7 +59,7 @@ uint32_t CollectiveManager::GetGroupRank(const std::string &groupName) {
 
 uint32_t CollectiveManager::GetGroupSize(const std::string &groupName) {
   if (communicationGroups.find(groupName) == communicationGroups.end()) {
-    LOG_ERROR << "can not find group for given group name " << groupName;
+    RT_GLOG(ERROR) << "can not find group for given group name " << groupName;
     return false;
   }
   return communicationGroups[groupName]->group_size();

@@ -85,7 +85,7 @@ OpsErrorCode AtbBase::GetWorkspaceSize(AtbCacheEntry &entry, atb::VariantPack &v
   uint64_t ws_size = 0;
   auto ret = entry.op->Setup(variant_pack, ws_size, GetAtbContext(stream));
   if (ret != 0) {
-    LOG_ERROR << "ATB Setup failed, ret: " << ret;
+    RT_GLOG(ERROR) << "ATB Setup failed, ret: " << ret;
     return OpsErrorCode::UNKNOWN_ERROR;
   }
 
@@ -101,7 +101,7 @@ OpsErrorCode AtbBase::LaunchAtb(atb::VariantPack variant_pack, void *workspace_p
   auto ret =
     op_->Execute(variant_pack, reinterpret_cast<uint8_t *>(workspace_ptr), workspace_size, GetAtbContext(stream));
   if (ret != 0) {
-    LOG_ERROR << "ATB Execute failed, ret: " << ret;
+    RT_GLOG(ERROR) << "ATB Execute failed, ret: " << ret;
     return OpsErrorCode::UNKNOWN_ERROR;
   }
   return OpsErrorCode::SUCCESS;

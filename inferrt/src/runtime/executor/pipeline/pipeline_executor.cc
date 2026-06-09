@@ -86,7 +86,7 @@ void PipelineExecutor::TryWaitLastRunFinish() {
 }
 
 void PipelineExecutor::Run(bool isDynamic) {
-  LOG_OUT << "Begin pipeline executor run.";
+  RT_VLOG(VL_RUNTIME) << "Begin pipeline executor run.";
   TryWaitLastRunFinish();
 
   auto &launchOpFunc = ops::OpAsync::GetLaunchOpFunc();
@@ -95,7 +95,7 @@ void PipelineExecutor::Run(bool isDynamic) {
     for (auto iter = deviceContexts_.begin(); iter != deviceContexts_.end(); ++iter) {
       oss << " " << hardware::GetDeviceNameByType(iter->first);
     }
-    LOG_EXCEPTION << "Device" << oss.str() << " does not suppprt pipeline executor.";
+    RT_GLOG(EXCEPTION) << "Device" << oss.str() << " does not suppprt pipeline executor.";
   }
 
   auto bindTask = [this]() -> int {
@@ -116,11 +116,11 @@ void PipelineExecutor::Run(bool isDynamic) {
 
     opRunner.UpdateTensors();
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateMemory();
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateWorkspaceMemory();
     opRunner.FreeMemory();
@@ -131,7 +131,7 @@ void PipelineExecutor::Run(bool isDynamic) {
 
     auto launchTask = [&opRunner]() -> int {
       if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-        LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+        RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
       return 0;
     };
@@ -146,7 +146,7 @@ void PipelineExecutor::Run(bool isDynamic) {
   };
   launchOpFunc("launch_kernels_finish", launchKernelsFinish, false);
 
-  LOG_OUT << "End pipeline executor run.";
+  RT_VLOG(VL_RUNTIME) << "End pipeline executor run.";
 }
 }  // namespace runtime
 }  // namespace mrt

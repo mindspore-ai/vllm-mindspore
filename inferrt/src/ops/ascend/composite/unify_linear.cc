@@ -30,7 +30,7 @@ UnifyLinear::UnifyLinear() : use_atb_linear_(false), atb_loaded_(false), atb_han
   auto soc = mrt::device::ascend::GetAscendSocVersion();
   if (soc != nullptr) {
     const std::string socName(soc);
-    LOG_OUT << "Soc version: " << socName;
+    RT_VLOG(VL_OPS) << "Soc version: " << socName;
     if (socName.rfind("Ascend310", 0) == 0 || socName.rfind("ASCEND310", 0) == 0) {
       use_atb_linear_ = true;
     }
@@ -52,17 +52,17 @@ std::unique_ptr<Operator> UnifyLinear::CreateLinearOperator() {
           void *atb_linear_ptr = create_func();
           if (atb_linear_ptr != nullptr) {
             atb_loaded_ = true;
-            LOG_OUT << "Device is Ascend 310 series, successfully loaded AtbLinear operator.";
+            RT_VLOG(VL_OPS) << "Device is Ascend 310 series, successfully loaded AtbLinear operator.";
             return std::unique_ptr<Operator>(static_cast<Operator *>(atb_linear_ptr));
           }
         }
       }
     }
 
-    LOG_OUT << "Failed to load AtbLinear for Ascend 310, falling back to AclnnLinear. Error: " << errMsg.str();
+    RT_VLOG(VL_OPS) << "Failed to load AtbLinear for Ascend 310, falling back to AclnnLinear. Error: " << errMsg.str();
   }
 
-  LOG_OUT << "Using AclnnLinear operator.";
+  RT_VLOG(VL_OPS) << "Using AclnnLinear operator.";
   return std::make_unique<AclnnLinear>();
 }
 

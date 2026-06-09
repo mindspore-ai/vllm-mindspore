@@ -66,8 +66,8 @@ void MemoryCache::MergeBlocks() {
     auto &deviceContext = item.first;
     auto &kernelMemoryTraceBlocks = item.second;
     MergeBlocksForSameDeviceContext(&kernelMemoryTraceBlocks, &((*mergedMemoryTraceBlocks_)[deviceContext]));
-    LOG_OUT << "The number of merged blocks is " << (*mergedMemoryTraceBlocks_)[deviceContext].size()
-            << ", device: " << deviceContext->GetDeviceContextKey().deviceName_;
+    RT_VLOG(VL_RUNTIME) << "The number of merged blocks is " << (*mergedMemoryTraceBlocks_)[deviceContext].size()
+                        << ", device: " << deviceContext->GetDeviceContextKey().deviceName_;
   }
 }
 
@@ -78,7 +78,7 @@ void MemoryCache::MergeBlocksForSameDeviceContext(std::vector<KernelMemoryTraceB
   mergedMemoryTraceBlocks->clear();
 
   if (kernelMemoryTraceBlocks->empty()) {
-    LOG_OUT << "No block to merge.";
+    RT_VLOG(VL_RUNTIME) << "No block to merge.";
     return;
   }
 
@@ -109,9 +109,9 @@ void MemoryCache::MergeBlocksForSameDeviceContext(std::vector<KernelMemoryTraceB
     const auto &memBlock = (*mergedMemoryTraceBlocks)[kernelMemBlock->memoryTraceBlockIndex_];
     CHECK_IF_NULL(memBlock);
     if (kernelMemBlock->start_ < memBlock->start_) {
-      LOG_EXCEPTION << "Invalid memory block, block start: " << kernelMemBlock->start_
-                    << ", block end: " << kernelMemBlock->end_ << ", mem block start: " << memBlock->start_
-                    << ", mem block end: " << memBlock->end_;
+      RT_GLOG(EXCEPTION) << "Invalid memory block, block start: " << kernelMemBlock->start_
+                         << ", block end: " << kernelMemBlock->end_ << ", mem block start: " << memBlock->start_
+                         << ", mem block end: " << memBlock->end_;
     }
 
     kernelMemBlock->offsetInMemoryTraceBlock_ = kernelMemBlock->start_ - memBlock->start_;

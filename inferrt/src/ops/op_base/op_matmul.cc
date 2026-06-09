@@ -22,7 +22,7 @@ namespace mrt {
 namespace ops {
 OpsErrorCode OpMatMul::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   if (input.size() != kInputSize2) {
-    LOG_ERROR << "Expect input size is 2 for AtenMatMul, but got: " << input.size();
+    RT_GLOG(ERROR) << "Expect input size is 2 for AtenMatMul, but got: " << input.size();
     return INVALID_INPUT_NUM;
   }
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();

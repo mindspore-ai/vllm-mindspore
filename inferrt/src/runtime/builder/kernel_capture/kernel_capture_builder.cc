@@ -25,7 +25,7 @@ namespace runtime {
 KernelCaptureBuilder::KernelCaptureBuilder(const ir::GraphPtr &graph) : Builder(graph) {}
 
 std::unique_ptr<Executor> KernelCaptureBuilder::BuildExecutor() {
-  LOG_OUT << "Begin build kernel capture executor.";
+  RT_VLOG(VL_RUNTIME) << "Begin build kernel capture executor.";
 
   // Setup OpRunners for the base graph
   SetupOpRunners();
@@ -34,7 +34,7 @@ std::unique_ptr<Executor> KernelCaptureBuilder::BuildExecutor() {
   // Initialize the executor
   kernelCaptureExecutor->Initialize(graph_);
 
-  LOG_OUT << "End build kernel capture executor.";
+  RT_VLOG(VL_RUNTIME) << "End build kernel capture executor.";
   return kernelCaptureExecutor;
 }
 

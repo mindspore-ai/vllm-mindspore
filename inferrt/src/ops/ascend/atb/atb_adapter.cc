@@ -48,7 +48,7 @@ aclDataType ConvertToAclDataType(ir::DataType::Type type) {
     return it->second;
   }
 
-  LOG_EXCEPTION << "Failed to convert data type " << static_cast<int>(type) << " to ACL data type";
+  RT_GLOG(EXCEPTION) << "Failed to convert data type " << static_cast<int>(type) << " to ACL data type";
   return ACL_DT_UNDEFINED;
 }
 
@@ -73,7 +73,7 @@ aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 
   auto iter = kMemoryFormatToAclFormatMap.find(format);
   if (iter == kMemoryFormatToAclFormatMap.end()) {
-    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    RT_GLOG(EXCEPTION) << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
     return ACL_FORMAT_UNDEFINED;
   }
 
@@ -118,7 +118,7 @@ atb::Tensor GetAtbTensor(const ir::Value *value) {
   }
 
   if (!tensor->IsContiguous()) {
-    LOG_EXCEPTION << "Only contiguous tensor is supported in atb now.";
+    RT_GLOG(EXCEPTION) << "Only contiguous tensor is supported in atb now.";
   }
 
   return atb_tensor;
@@ -172,7 +172,7 @@ void ParamSetter::Update(const std::vector<const ir::Value *> &inputs, const ir:
 
   for (size_t i = 0; i < input_ids.size(); ++i) {
     if (input_ids[i] >= inputs.size()) {
-      LOG_EXCEPTION << "Input index out of range: " << input_ids[i];
+      RT_GLOG(EXCEPTION) << "Input index out of range: " << input_ids[i];
     }
     auto tensor = inputs[input_ids[i]]->ToTensor();
     CHECK_IF_NULL(tensor);
@@ -190,7 +190,7 @@ void ParamSetter::Update(const std::vector<const ir::Value *> &inputs, const ir:
 
   for (size_t i = 0; i < output_ids.size(); ++i) {
     if (output_ids[i] >= output_tensors.size()) {
-      LOG_EXCEPTION << "Output index out of range: " << output_ids[i];
+      RT_GLOG(EXCEPTION) << "Output index out of range: " << output_ids[i];
     }
     UpdateAddress(output_tensors[output_ids[i]].get(), &(variant_pack.outTensors[i]));
   }
@@ -206,11 +206,11 @@ atb::Context *AtbContextManager::GetContext(const aclrtStream &stream) {
   if (atb_context == nullptr) {
     auto create_status = atb::CreateContext(&atb_context);
     if (create_status != 0) {
-      LOG_EXCEPTION << "Create atb context failed.";
+      RT_GLOG(EXCEPTION) << "Create atb context failed.";
     }
     auto set_status = atb_context->SetExecuteStream(stream);
     if (set_status != 0) {
-      LOG_EXCEPTION << "Set atb context stream failed.";
+      RT_GLOG(EXCEPTION) << "Set atb context stream failed.";
     }
   }
   return atb_context;

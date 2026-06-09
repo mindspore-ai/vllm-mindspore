@@ -322,7 +322,7 @@ void ProfilerAnalyzer::AnalyzeOpSummaryData(std::unordered_map<std::string, Prof
 void ProfilerAnalyzer::DumpJsonData() {
   std::ofstream jsonFile(jsonFileName_);
   if (!jsonFile.is_open()) {
-    LOG_ERROR << "Failed to open json file: " << jsonFileName_;
+    RT_GLOG(ERROR) << "Failed to open json file: " << jsonFileName_;
     return;
   }
 
@@ -340,7 +340,7 @@ void ProfilerAnalyzer::DumpJsonData() {
 void ProfilerAnalyzer::DumpSummaryData(size_t step) {
   std::ofstream summaryFile(summaryInfoFileName_, std::ios::app);
   if (!summaryFile.is_open()) {
-    LOG_ERROR << "Failed to open summary file: " << summaryInfoFileName_;
+    RT_GLOG(ERROR) << "Failed to open summary file: " << summaryInfoFileName_;
     return;
   }
 
@@ -418,7 +418,7 @@ void ProfilerAnalyzer::DumpSummaryData(size_t step) {
 void ProfilerAnalyzer::DumpDetailData(size_t step, const ProfilerDataSpan &span) {
   std::ofstream detailFile(detailInfoFileName_, std::ios::app);
   if (!detailFile.is_open()) {
-    LOG_ERROR << "Failed to open detail file: " << detailInfoFileName_;
+    RT_GLOG(ERROR) << "Failed to open detail file: " << detailInfoFileName_;
     return;
   }
 

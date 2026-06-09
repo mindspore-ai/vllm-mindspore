@@ -67,7 +67,7 @@ class MRT_EXPORT AtbBase : public Operator {
     if (entry.op == nullptr) {
       auto ret = atb::CreateOperation(param, &entry.op);
       if (ret != 0) {
-        LOG_EXCEPTION << "Failed to create ATB operation " << op_name_ << ", ret: " << ret;
+        RT_GLOG(EXCEPTION) << "Failed to create ATB operation " << op_name_ << ", ret: " << ret;
       }
     }
     op_ = entry.op;

@@ -50,14 +50,14 @@ class PassManager {
 
   static PassManager &Instance() {
     static PassManager instance;
-    LOG_OUT << "PassManager instance: '" << &instance << "'";
+    RT_VLOG(VL_OPTIMIZE) << "PassManager instance: '" << &instance << "'";
     return instance;
   }
 
   void Run(ir::GraphPtr graph, const TensorCreator &creator);
 
   void AddPass(const std::string &name, const NodePass &pass) {
-    LOG_OUT << "Add pass '" << name << "'";
+    RT_VLOG(VL_OPTIMIZE) << "Add pass '" << name << "'";
     (void)passes_.emplace_back(std::make_pair(name, const_cast<NodePass *>(&pass)));
   }
 
@@ -105,7 +105,7 @@ class PassManager {
 class PassRegister {
  public:
   PassRegister(const std::string &name, const NodePass &pass) {
-    LOG_OUT << "Register pass '" << name;
+    RT_VLOG(VL_OPTIMIZE) << "Register pass '" << name;
     PassManager::Instance().AddPass(name, pass);
   }
 };

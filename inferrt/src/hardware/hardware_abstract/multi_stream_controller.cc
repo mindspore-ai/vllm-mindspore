@@ -56,10 +56,12 @@ class TaskIdOnStreamManager {
 
   void Resize(uint32_t stream_size) {
     if (initialized_ && stream_size <= initialize_size_) {
-      LOG_OUT << "Task id on stream manager has already initialized, current size : " << initialize_size_ << ".";
+      RT_VLOG(VL_HARDWARE) << "Task id on stream manager has already initialized, current size : " << initialize_size_
+                           << ".";
       return;
     }
-    LOG_OUT << "Task id on stream manager initialize : " << initialized_ << ", stream_size : " << stream_size << ".";
+    RT_VLOG(VL_HARDWARE) << "Task id on stream manager initialize : " << initialized_
+                         << ", stream_size : " << stream_size << ".";
     uint32_t min_stream_size = 2;
     initialize_size_ = std::max(stream_size, min_stream_size);
     generator_.resize(initialize_size_);
@@ -82,7 +84,7 @@ class TaskIdOnStreamManager {
 
   inline int64_t Launch(uint32_t streamId) {
     if (streamId >= generator_.size()) {
-      LOG_OUT << "Launch stream id : " << streamId << " failed, generator_ size : " << generator_.size();
+      RT_VLOG(VL_HARDWARE) << "Launch stream id : " << streamId << " failed, generator_ size : " << generator_.size();
       generator_.resize(streamId + 1);
       status_.resize(streamId + 1);
       for (auto &vec : status_) {
@@ -118,7 +120,7 @@ class EventPool {
 
   // Get event from pool, event was wrapper by shared_ptr.
   DeviceEventPtr Get() {
-    LOG_OUT << "Event pool get start.";
+    RT_VLOG(VL_HARDWARE) << "Event pool get start.";
     LockGuard lock(lock_);
     DeviceEvent *event = nullptr;
     // Try to create event firstly before reached core size.
@@ -138,7 +140,7 @@ class EventPool {
       while (iter != events_.end()) {
         auto event_in_list = *iter;
         if (event_in_list == nullptr) {
-          LOG_ERROR << "exception : event in list is nullptr, events_ size : " << events_.size() << ".";
+          RT_GLOG(ERROR) << "exception : event in list is nullptr, events_ size : " << events_.size() << ".";
         }
         if (event_in_list->QueryEvent()) {
           event = event_in_list;
@@ -156,18 +158,18 @@ class EventPool {
         event = created_event.get();
         size_++;
       } else {
-        LOG_ERROR << "Get event failed.";
+        RT_GLOG(ERROR) << "Get event failed.";
       }
     }
-    LOG_OUT << "Get event, events_ size : " << events_.size() << ", event : " << event << ".";
+    RT_VLOG(VL_HARDWARE) << "Get event, events_ size : " << events_.size() << ", event : " << event << ".";
 
     auto event_ptr = std::shared_ptr<DeviceEvent>(event, [&](DeviceEvent *e) {
       LockGuard lock(lock_);
       if (!expired_) {
-        LOG_OUT << "Return event : " << e << ".";
+        RT_VLOG(VL_HARDWARE) << "Return event : " << e << ".";
         events_.push_back(e);
       } else {
-        LOG_OUT << "Return event : " << e << "failed.";
+        RT_VLOG(VL_HARDWARE) << "Return event : " << e << "failed.";
       }
     });
     return event_ptr;
@@ -188,7 +190,7 @@ using EventPoolPtr = std::shared_ptr<EventPool>;
 
 MultiStreamController::MultiStreamController(DeviceResManager *deviceResBase) : deviceResBase_(deviceResBase) {
   if (deviceResBase_ == nullptr) {
-    LOG_ERROR << "deviceResBase_ is nullptr.";
+    RT_GLOG(ERROR) << "deviceResBase_ is nullptr.";
   }
   taskIdOnStreamManager_ = std::make_shared<TaskIdOnStreamManager>();
 }
@@ -196,10 +198,10 @@ MultiStreamController::MultiStreamController(DeviceResManager *deviceResBase) : 
 void MultiStreamController::Refresh() {
   LockGuard lock(lock_);
   auto stream_size = deviceResBase_->QueryStreamSize();
-  LOG_OUT << "Stream manager initialize, stream_size : " << stream_size << ".";
+  RT_VLOG(VL_HARDWARE) << "Stream manager initialize, stream_size : " << stream_size << ".";
   if (stream_size == 0) {
     // CPU has no concept of stream, stream size must be zero.
-    LOG_OUT << "Stream size is 0, will initialize with 2 streams.";
+    RT_VLOG(VL_HARDWARE) << "Stream size is 0, will initialize with 2 streams.";
     stream_size = kDefaultStreamRefreshSize;
   }
   taskIdOnStreamManager_->Resize(stream_size);
@@ -259,7 +261,7 @@ bool MultiStreamController::WaitEvent(int64_t taskIdOnStream, uint32_t userStrea
   LockGuard lock(lock_);
   // If update task id on stream failed, means task id on stream is elder one, no need to wait event on mem manager.
   if (!taskIdOnStreamManager_->Update(taskIdOnStream, userStreamId, memoryStreamId)) {
-    LOG_OUT << "Skip Wait Event.";
+    RT_VLOG(VL_HARDWARE) << "Skip Wait Event.";
     return false;
   }
   return deviceResBase_->WaitEvent(taskIdOnStream, userStreamId, memoryStreamId);
@@ -273,7 +275,7 @@ bool MultiStreamController::WaitEvent(int64_t taskIdOnStream, uint32_t userStrea
 bool MultiStreamController::DispatchRecordWaitEvent(uint32_t userStreamId, uint32_t memoryStreamId) {
   LockGuard lock(lock_);
   if (eventPool_ == nullptr) {
-    LOG_OUT << "Event pool is not initialized.";
+    RT_VLOG(VL_HARDWARE) << "Event pool is not initialized.";
     eventPool_ = std::make_shared<EventPool>([&]() {
       // Event in pool need to do synchronization between streams, need to enable blocking.
       return deviceResBase_->CreateRuntimeEvent(true, false);
@@ -314,10 +316,10 @@ bool MultiStreamController::SyncNotDefaultStreams() {
 
 bool MultiStreamController::WaitMultiStream(size_t wait_stream_id) {
   LockGuard lock(lock_);
-  LOG_OUT << "Wait multi stream on wait stream id : " << wait_stream_id << ".";
+  RT_VLOG(VL_HARDWARE) << "Wait multi stream on wait stream id : " << wait_stream_id << ".";
   const auto &streamIds = deviceResBase_->GetStreamIds();
   if (eventPool_ == nullptr) {
-    LOG_OUT << "Event pool is not initialized.";
+    RT_VLOG(VL_HARDWARE) << "Event pool is not initialized.";
     eventPool_ = std::make_shared<EventPool>([&]() {
       // Event in pool need to do synchronization between streams, need to enable blocking.
       return deviceResBase_->CreateRuntimeEvent(true, false);

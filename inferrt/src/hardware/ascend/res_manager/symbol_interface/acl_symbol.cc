@@ -26,12 +26,12 @@ void LoadAclApiSymbol(const std::string &ascendPath) {
   std::string aclPluginPath = ascendPath + "lib64/libascendcl.so";
   auto baseHandler = GetLibHandler(aclPluginPath);
   if (baseHandler == nullptr) {
-    LOG_OUT << "Dlopen " << aclPluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << aclPluginPath << " failed!" << dlerror();
     return;
   }
   aclInit_ = DlsymAscendFuncObj(aclInit, baseHandler);
   aclFinalize_ = DlsymAscendFuncObj(aclFinalize, baseHandler);
-  LOG_OUT << "Load acl base api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl base api success!";
 }
 
 void LoadSimulationAclApi() {

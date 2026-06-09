@@ -36,7 +36,6 @@ class CMakeBuild(build_ext):
         # Environment variable to CMake argument mappings
         env_mappings = {
             "DEBUG": None,  # Direct passthrough (no -D prefix)
-            "DEBUG_LOG_OUT": None,  # Direct passthrough (no -D prefix)
             "BUILD_TESTS": "BUILD_TESTS=on",
             "ENABLE_ASCEND": "ENABLE_ASCEND=on",
             "ENABLE_CPU": "ENABLE_CPU=on",

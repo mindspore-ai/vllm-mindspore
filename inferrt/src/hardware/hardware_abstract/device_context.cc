@@ -27,8 +27,8 @@ DeviceContextKey DeviceToDeviceContextKey(hardware::Device device) {
   uint32_t deviceId = static_cast<uint32_t>(std::max(static_cast<int32_t>(0), static_cast<int32_t>(device.index)));
   if (deviceId != collective::CollectiveManager::Instance().local_rank_id() &&
       device.type != mrt::hardware::DeviceType::CPU) {
-    LOG_EXCEPTION << "Device id: " << deviceId << " is not equal to CollectiveManager local_rank_id: "
-                  << collective::CollectiveManager::Instance().local_rank_id();
+    RT_GLOG(EXCEPTION) << "Device id: " << deviceId << " is not equal to CollectiveManager local_rank_id: "
+                       << collective::CollectiveManager::Instance().local_rank_id();
   }
   return {hardware::GetDeviceNameByType(device.type), deviceId};
 }

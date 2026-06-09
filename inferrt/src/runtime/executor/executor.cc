@@ -19,6 +19,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
+#include <iomanip>
 #include <mutex>
 #include <memory>
 #include <iostream>
@@ -133,7 +134,7 @@ GraphExecutor::~GraphExecutor() {
 
 // Start building graph.
 void GraphExecutor::BeginGraph(const std::string &name) {
-  LOG_OUT << "Begin graph building";
+  RT_VLOG(VL_RUNTIME) << "Begin graph building";
   CHECK_IF_FAIL(graph_ == nullptr);
   graph_ = ir::MakeIntrusive<ir::Graph>();
   name_ = name;
@@ -141,12 +142,12 @@ void GraphExecutor::BeginGraph(const std::string &name) {
 
 // Finish building graph.
 void GraphExecutor::EndGraph() {
-  LOG_OUT << "End graph building";
+  RT_VLOG(VL_RUNTIME) << "End graph building";
   CHECK_IF_NULL(graph_);
 }
 
 void GraphExecutor::OptGraph() {
-  LOG_OUT << "Opt graph";
+  RT_VLOG(VL_RUNTIME) << "Opt graph";
   CHECK_IF_NULL(graph_);
   // clang-format off
   pass::TensorCreator tensorCreator =
@@ -175,7 +176,7 @@ void GraphExecutor::BuildKernels() {
 
 // Add a parameter node for graph.
 ir::NodePtr GraphExecutor::AddParameterNode(const ir::ValuePtr &value) {
-  LOG_OUT << "Add parameter node: " << value;
+  RT_VLOG(VL_RUNTIME) << "Add parameter node: " << value;
   auto node = ir::MakeIntrusive<ir::Node>();
   node->op = ops::Op_End;
   node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
@@ -186,7 +187,7 @@ ir::NodePtr GraphExecutor::AddParameterNode(const ir::ValuePtr &value) {
 
 // Add an input node for graph.
 ir::NodePtr GraphExecutor::AddInputNode(const ir::ValuePtr &value) {
-  LOG_OUT << "Add input node: " << value;
+  RT_VLOG(VL_RUNTIME) << "Add input node: " << value;
   auto node = ir::MakeIntrusive<ir::Node>();
   node->op = ops::Op_End;
   node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
@@ -197,7 +198,7 @@ ir::NodePtr GraphExecutor::AddInputNode(const ir::ValuePtr &value) {
 
 // Add a value node.
 ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
-  LOG_OUT << "Add value node: " << value;
+  RT_VLOG(VL_RUNTIME) << "Add value node: " << value;
   auto node = ir::MakeIntrusive<ir::Node>();
   node->op = ops::Op_End;
   node->output = value == nullptr ? ir::MakeIntrusive<ir::Value>() : value;
@@ -208,8 +209,8 @@ ir::NodePtr GraphExecutor::AddValueNode(const ir::ValuePtr &value) {
 
 // Add an operation node.
 ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> &inputs, const ir::ValuePtr &output) {
-  LOG_OUT << "Add operation node";
-  LOG_OUT << "operation input size: " << inputs.size();
+  RT_VLOG(VL_RUNTIME) << "Add operation node";
+  RT_VLOG(VL_RUNTIME) << "operation input size: " << inputs.size();
   auto node = ir::MakeIntrusive<ir::Node>();
   CHECK_IF_NULL(node);
   node->op = op;
@@ -222,7 +223,7 @@ ir::NodePtr GraphExecutor::AddOpNode(ops::Op op, const std::vector<ir::NodePtr> 
 
 // Add return node.
 void GraphExecutor::AddReturnNode(const ir::NodePtr &node) {
-  LOG_OUT << "Add return node: " << node;
+  RT_VLOG(VL_RUNTIME) << "Add return node: " << node;
   CHECK_IF_NULL(graph_);
   CHECK_IF_NULL(node);
   auto returnNode = ir::MakeIntrusive<ir::Node>();
@@ -256,7 +257,7 @@ void GraphExecutor::RunNode(ir::NodePtr node) {
 
   auto iter = kernels_.find(node);
   if (iter == kernels_.end()) {
-    LOG_ERROR << "kernel not found: " << node;
+    RT_GLOG(ERROR) << "kernel not found: " << node;
     exit(EXIT_FAILURE);
   }
   auto kernel = iter->second;
@@ -269,7 +270,7 @@ void GraphExecutor::RunNode(ir::NodePtr node) {
   }
 
   if (auto it = opsOutputValueFromInputIndex.find(node->op); it != opsOutputValueFromInputIndex.end()) {
-    LOG_OUT << "Skip launch kernel for node" << node;
+    RT_VLOG(VL_RUNTIME) << "Skip launch kernel for node" << node;
     auto outputTensor = node->output->ToTensor();
     auto inputStorage = node->inputs[it->second]->output->ToTensor()->GetStorage();
     node->output = ir::MakeIntrusive<ir::Value>(
@@ -307,9 +308,9 @@ void GraphExecutor::RecordTensorRefCount() {
 // Run the built graph.
 void GraphExecutor::RunGraph(bool isDynamic) {
   CHECK_IF_NULL(executor_);
-  LOG_OUT << "Start run graph: " << name_ << ", isDynamic: " << isDynamic;
+  RT_VLOG(VL_RUNTIME) << "Start run graph: " << name_ << ", isDynamic: " << isDynamic;
   executor_->Run(isDynamic);
-  LOG_OUT << "End run graph: " << name_;
+  RT_VLOG(VL_RUNTIME) << "End run graph: " << name_;
 }
 
 ir::ValuePtr GraphExecutor::GetOutput() const { return executor_->GetOutput(); }
@@ -317,7 +318,7 @@ ir::ValuePtr GraphExecutor::GetOutput() const { return executor_->GetOutput(); }
 #ifdef DUMP
 // Run the built graph.
 std::string GraphExecutor::DumpGraph(bool printStdout) {
-  LOG_OUT << "Run graph";
+  RT_VLOG(VL_RUNTIME) << "Run graph";
   CHECK_IF_NULL(graph_);
 
   auto fnOutputGraph = [this](std::ostream &outStream) {
@@ -377,7 +378,7 @@ std::string GraphExecutor::DumpGraph(bool printStdout) {
       }
 
       if (nodeNumMap_.count(tensorNode) == 0) {
-        LOG_ERROR << "Failed to find tensor number for " << tensorNode;
+        RT_GLOG(ERROR) << "Failed to find tensor number for " << tensorNode;
         exit(EXIT_FAILURE);
       }
       outStream << "  %" << nodeNumMap_[tensorNode];
@@ -424,11 +425,11 @@ void Executor::Run(bool isDynamic) {
     OpRunner &opRunner = opRunners[i];
     opRunner.UpdateTensors();
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateMemory();
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateWorkspaceMemory();
     opRunner.FreeMemory();
@@ -438,7 +439,7 @@ void Executor::Run(bool isDynamic) {
     }
 
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
   }
 }

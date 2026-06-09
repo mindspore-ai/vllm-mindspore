@@ -68,7 +68,7 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
       py::module_ mod = py::module_::import(moduleName.c_str());
       py::object func = mod.attr(funcName.c_str());
       if (func.is_none()) {
-        LOG_EXCEPTION << "attribute '" + funcName + "' is None";
+        RT_GLOG(EXCEPTION) << "attribute '" + funcName + "' is None";
       }
       return func.cast<py::function>();
     }
@@ -79,7 +79,7 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
     }
 
     if (subModuleName.empty()) {
-      LOG_EXCEPTION << "invalid moduleName: " << moduleName;
+      RT_GLOG(EXCEPTION) << "invalid moduleName: " << moduleName;
       return {};
     }
 
@@ -87,11 +87,11 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
     py::object subMod = torchOps.attr(subModuleName.c_str());
     auto func = subMod.attr(funcName.c_str());
     if (func.is_none()) {
-      LOG_EXCEPTION << "attribute '" + funcName + "' is None";
+      RT_GLOG(EXCEPTION) << "attribute '" + funcName + "' is None";
     }
     return func.cast<py::function>();
   } catch (const std::exception &e) {
-    LOG_EXCEPTION << "Failed to get Python callable [" + moduleName + "." << funcName + "]: " << e.what();
+    RT_GLOG(EXCEPTION) << "Failed to get Python callable [" + moduleName + "." << funcName + "]: " << e.what();
     return {};
   }
 }
@@ -99,11 +99,11 @@ py::function GetPythonCallable(const std::string &moduleName, const std::string 
 void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor, const std::string &logPrefix,
                           device::DeviceContext *devCtx) {
   if (!IsTorchTensorStandardLayout(atenTensor)) {
-    LOG_EXCEPTION << logPrefix + " output is not in standard layout.";
+    RT_GLOG(EXCEPTION) << logPrefix + " output is not in standard layout.";
   }
   std::vector<int64_t> atenShape(atenTensor.sizes().begin(), atenTensor.sizes().end());
   if (atenShape != irTensor->Shape()) {
-    LOG_EXCEPTION << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;
+    RT_GLOG(EXCEPTION) << logPrefix << " shape mismatch, expect " << irTensor->Shape() << ", but got " << atenShape;
   }
 
   void *src = atenTensor.data_ptr();
@@ -112,7 +112,7 @@ void AttachAtenTensorCopy(const at::Tensor &atenTensor, ir::TensorPtr &irTensor,
   auto launchTask = [dst, src, numBytes, devCtx]() -> int {
     auto stream = devCtx->deviceResManager_->GetCurrentStream();
     if (!devCtx->deviceResManager_->AsyncCopy(dst, src, numBytes, device::CopyType::D2D, stream)) {
-      LOG_EXCEPTION << "PythonCall device-to-device copy failed.";
+      RT_GLOG(EXCEPTION) << "PythonCall device-to-device copy failed.";
       return UNKNOWN_ERROR;
     }
     return SUCCESS;
@@ -132,12 +132,12 @@ OpsErrorCode CopyTensorOutput(py::handle pyElem, ir::Value *irElem, const std::s
   try {
     aten = pyElem.cast<at::Tensor>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " is not a torch.Tensor";
+    RT_GLOG(EXCEPTION) << logPrefix << " is not a torch.Tensor";
     return UNKNOWN_ERROR;
   }
   ir::TensorPtr irTensor = const_cast<ir::TensorPtr &>(irElem->ToTensor());
   if (!irTensor) {
-    LOG_EXCEPTION << logPrefix << " output tensor pointer is null.";
+    RT_GLOG(EXCEPTION) << logPrefix << " output tensor pointer is null.";
     return UNKNOWN_ERROR;
   }
   AttachAtenTensorCopy(aten, irTensor, logPrefix, devCtx);
@@ -149,7 +149,7 @@ OpsErrorCode CopyIntOutput(py::handle pyElem, ir::Value *irElem, const std::stri
   try {
     v = pyElem.cast<int64_t>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " cannot convert to int64";
+    RT_GLOG(EXCEPTION) << logPrefix << " cannot convert to int64";
     return UNKNOWN_ERROR;
   }
   *irElem = ir::Value(v);
@@ -161,7 +161,7 @@ OpsErrorCode CopyDoubleOutput(py::handle pyElem, ir::Value *irElem, const std::s
   try {
     v = pyElem.cast<double>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " cannot convert to double";
+    RT_GLOG(EXCEPTION) << logPrefix << " cannot convert to double";
     return UNKNOWN_ERROR;
   }
   *irElem = ir::Value(v);
@@ -173,7 +173,7 @@ OpsErrorCode CopyBoolOutput(py::handle pyElem, ir::Value *irElem, const std::str
   try {
     v = pyElem.cast<bool>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " cannot convert to bool";
+    RT_GLOG(EXCEPTION) << logPrefix << " cannot convert to bool";
     return UNKNOWN_ERROR;
   }
   *irElem = ir::Value(v);
@@ -185,7 +185,7 @@ OpsErrorCode CopyStringOutput(py::handle pyElem, ir::Value *irElem, const std::s
   try {
     v = pyElem.cast<std::string>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " cannot convert to string";
+    RT_GLOG(EXCEPTION) << logPrefix << " cannot convert to string";
     return UNKNOWN_ERROR;
   }
   *irElem = ir::Value(std::move(v));
@@ -194,7 +194,7 @@ OpsErrorCode CopyStringOutput(py::handle pyElem, ir::Value *irElem, const std::s
 
 OpsErrorCode CopyNoneOutput(py::handle pyElem, const std::string &logPrefix) {
   if (!pyElem.is_none()) {
-    LOG_EXCEPTION << logPrefix << " expects None but got non-None";
+    RT_GLOG(EXCEPTION) << logPrefix << " expects None but got non-None";
     return UNKNOWN_ERROR;
   }
   return SUCCESS;
@@ -205,7 +205,7 @@ OpsErrorCode CopySymbolOutput(py::handle pyElem, ir::Value *irElem, const std::s
   try {
     v = pyElem.cast<int64_t>();
   } catch (...) {
-    LOG_EXCEPTION << logPrefix << " cannot convert to int64 for Symbol output";
+    RT_GLOG(EXCEPTION) << logPrefix << " cannot convert to int64 for Symbol output";
     return UNKNOWN_ERROR;
   }
   *irElem = ir::Value(ir::MakeIntrusive<ir::SymbolicConst>(v));
@@ -218,13 +218,13 @@ OpsErrorCode CopyPyElemToIrOutput(py::handle pyElem, ir::Value *irElem, const st
 OpsErrorCode CopyTupleOutput(py::handle pyElem, ir::Value *irElem, const std::string &logPrefix,
                              device::DeviceContext *devCtx) {
   if (!py::isinstance<py::tuple>(pyElem)) {
-    LOG_EXCEPTION << logPrefix << " expects Python tuple";
+    RT_GLOG(EXCEPTION) << logPrefix << " expects Python tuple";
     return UNKNOWN_ERROR;
   }
   py::tuple pyTup = pyElem.cast<py::tuple>();
   const auto &irTup = irElem->ToTuple();
   if (irTup->Size() != pyTup.size()) {
-    LOG_EXCEPTION << logPrefix << " tuple size mismatch: expect " << irTup->Size() << ", got " << pyTup.size();
+    RT_GLOG(EXCEPTION) << logPrefix << " tuple size mismatch: expect " << irTup->Size() << ", got " << pyTup.size();
     return UNKNOWN_ERROR;
   }
   for (size_t j = 0; j < pyTup.size(); ++j) {
@@ -258,7 +258,7 @@ OpsErrorCode CopyPyElemToIrOutput(py::handle pyElem, ir::Value *irElem, const st
     case ir::Value::Tag::Symbol:
       return CopySymbolOutput(pyElem, irElem, logPrefix);
     default:
-      LOG_EXCEPTION << logPrefix << " unsupported IR output tag";
+      RT_GLOG(EXCEPTION) << logPrefix << " unsupported IR output tag";
       return UNKNOWN_ERROR;
   }
 }
@@ -277,7 +277,7 @@ const OpPythonCall::ConvertFunc OpPythonCall::kInputConverterTable[] = {
 };
 
 void OpPythonCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
-  LOG_OUT << "Input size: " << inputs.size();
+  RT_VLOG(VL_OPS) << "Input size: " << inputs.size();
   SetOpType(OpType::PythonCallOp);
   moduleName_ = inputs[kInputModuleNameIndex]->ToString();
   opName_ = inputs[kInputFuncNameIndex]->ToString();
@@ -345,7 +345,7 @@ py::object OpPythonCall::ConvertTupleToPy(const ir::Value *value) {
     if (tagIdx < kConverterCount) {
       pyList[i] = (this->*kInputConverterTable[tagIdx])(elem);
     } else {
-      LOG_EXCEPTION << "Invalid tuple element tag: " << static_cast<int>(elem->GetTag());
+      RT_GLOG(EXCEPTION) << "Invalid tuple element tag: " << static_cast<int>(elem->GetTag());
     }
   }
   return std::move(pyList);
@@ -354,7 +354,7 @@ py::object OpPythonCall::ConvertTupleToPy(const ir::Value *value) {
 OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
   if (Py_IsInitialized() == 0) {
-    LOG_EXCEPTION << "Python interpreter is not initialized.";
+    RT_GLOG(EXCEPTION) << "Python interpreter is not initialized.";
     return UNKNOWN_ERROR;
   }
 
@@ -368,14 +368,14 @@ OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &i
     if (tagIdx < kConverterCount) {
       pyArgs[i] = (this->*kInputConverterTable[tagIdx])(inputs_[i]);
     } else {
-      LOG_EXCEPTION << "Invalid input tag: " << tagIdx << " at index " << i;
+      RT_GLOG(EXCEPTION) << "Invalid input tag: " << tagIdx << " at index " << i;
     }
   }
 
-  LOG_OUT << "input size: " << pyArgs.size();
+  RT_VLOG(VL_OPS) << "input size: " << pyArgs.size();
 
   if (pyFunc_.is_none()) {
-    LOG_EXCEPTION << "Python function object is null, func name: " << opName_;
+    RT_GLOG(EXCEPTION) << "Python function object is null, func name: " << opName_;
     return UNKNOWN_ERROR;
   }
 
@@ -383,7 +383,7 @@ OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &i
   try {
     result = inputs_.empty() ? pyFunc_() : pyFunc_(*pyArgs);
   } catch (const std::exception &e) {
-    LOG_EXCEPTION << "Python function call failed: " << e.what();
+    RT_GLOG(EXCEPTION) << "Python function call failed: " << e.what();
     return UNKNOWN_ERROR;
   }
 
@@ -395,19 +395,19 @@ OpsErrorCode OpPythonCall::CalcWorkspace(const std::vector<const ir::Value *> &i
 
 OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *output) {
   if (!output || output->IsNone()) {
-    LOG_OUT << "PythonCall op " << opName_ << " has no output tensor; ";
+    RT_VLOG(VL_OPS) << "PythonCall op " << opName_ << " has no output tensor; ";
     return SUCCESS;
   }
 
   if (py::isinstance<py::tuple>(result)) {
     if (!output->IsTuple()) {
-      LOG_EXCEPTION << "PythonCall op " << opName_ << " expects tuple but IR output is not tuple.";
+      RT_GLOG(EXCEPTION) << "PythonCall op " << opName_ << " expects tuple but IR output is not tuple.";
     }
     py::tuple tup = result.cast<py::tuple>();
     const auto &irTup = output->ToTuple();
     if (irTup->Size() != tup.size()) {
-      LOG_EXCEPTION << "PythonCall op " << opName_ << " tuple size mismatch: expect " << irTup->Size() << ", got "
-                    << tup.size();
+      RT_GLOG(EXCEPTION) << "PythonCall op " << opName_ << " tuple size mismatch: expect " << irTup->Size() << ", got "
+                         << tup.size();
     }
     for (size_t i = 0; i < tup.size(); ++i) {
       auto ret = CopyPyElemToIrOutput(tup[i], (*irTup)[i].get(),
@@ -416,7 +416,8 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
         return ret;
       }
     }
-    LOG_OUT << "PythonCall op " << opName_ << " zero-copy attached " << tup.size() << " elements into output tuple.";
+    RT_VLOG(VL_OPS) << "PythonCall op " << opName_ << " zero-copy attached " << tup.size()
+                    << " elements into output tuple.";
     return SUCCESS;
   }
 
@@ -425,7 +426,7 @@ OpsErrorCode OpPythonCall::PostprocessOutputs(py::handle result, ir::Value *outp
   if (ret != SUCCESS) {
     return ret;
   }
-  LOG_OUT << "PythonCall op " << opName_ << " copied single output to IR.";
+  RT_VLOG(VL_OPS) << "PythonCall op " << opName_ << " copied single output to IR.";
   return SUCCESS;
 }
 

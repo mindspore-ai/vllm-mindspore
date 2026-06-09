@@ -40,7 +40,7 @@ bool IsCustomCallOp(const OpRunner &opRunner) {
 void GraphCaptureManager::Initialize(const std::vector<OpRunner> &opRunners,
                                      const device::DeviceContext *expected_device_context) {
   FindSupportCaptureKernelPositions(opRunners, expected_device_context);
-  LOG_OUT << "Single op number : " << singleOpPos_;
+  RT_VLOG(VL_RUNTIME) << "Single op number : " << singleOpPos_;
   InitializeSingleOpUpdateResources(expected_device_context);
 }
 
@@ -65,16 +65,17 @@ bool GraphCaptureManager::CheckKernelSupportCapture(const OpRunner &opRunner,
   // Check if the op runner's device context matches the expected one
   if (hardware::GetDeviceNameByType(opRunner.GetDevice().type) !=
       expected_device_context->GetDeviceContextKey().deviceName_) {
-    LOG_EXCEPTION << "Capture graph mode can not support different device kernel: " << opRunner.GetOpName()
-                  << ", device type: " << hardware::GetDeviceNameByType(opRunner.GetDevice().type);
+    RT_GLOG(EXCEPTION) << "Capture graph mode can not support different device kernel: " << opRunner.GetOpName()
+                       << ", device type: " << hardware::GetDeviceNameByType(opRunner.GetDevice().type);
     return false;
   }
 
   // Check if the op needs dynamic shape update (not supported in capture mode)
   // For now, we'll skip this check since the method may not exist
   if (opRunner.GetOperator()->NeedUpdateOutputShapeAfterLaunch()) {
-    LOG_EXCEPTION << "Capture graph mode can not support computed depend kernel(whose shape need update after launch): "
-                  << opRunner.GetOpName();
+    RT_GLOG(EXCEPTION)
+      << "Capture graph mode can not support computed depend kernel(whose shape need update after launch): "
+      << opRunner.GetOpName();
     return false;
   }
 
@@ -92,7 +93,7 @@ bool GraphCaptureManager::CheckKernelSupportCapture(const OpRunner &opRunner,
     std::transform(lower_op.begin(), lower_op.end(), lower_op.begin(), ::tolower);
 
     if (op_name == lower_op) {
-      LOG_OUT << "Not capturing op: " << not_capture_op;
+      RT_VLOG(VL_RUNTIME) << "Not capturing op: " << not_capture_op;
       return false;
     }
   }
@@ -106,7 +107,7 @@ bool GraphCaptureManager::CheckKernelSupportCapture(const OpRunner &opRunner,
 bool GraphCaptureManager::FindSupportCaptureKernelPositions(const std::vector<OpRunner> &opRunners,
                                                             const device::DeviceContext *expected_device_context) {
   if (!capture_kernel_range_positions_.empty()) {
-    LOG_ERROR << "GraphCaptureManager has already initialized.";
+    RT_GLOG(ERROR) << "GraphCaptureManager has already initialized.";
     return false;
   }
   init_ = true;
@@ -145,10 +146,10 @@ bool GraphCaptureManager::FindSupportCaptureKernelPositions(const std::vector<Op
   }
 
   capture_graph_num_ = capture_kernel_range_positions_.size();
-  LOG_OUT << "Capture graph num: " << capture_graph_num_;
+  RT_VLOG(VL_RUNTIME) << "Capture graph num: " << capture_graph_num_;
 
   auto executor_size = executors_.size();
-  LOG_OUT << "Dump executor info for capture graph: ";
+  RT_VLOG(VL_RUNTIME) << "Dump executor info for capture graph: ";
   for (size_t i = 0; i < executor_size; i++) {
     std::string executor_mode = (executors_[i].first == CAPTURE_GRAPH ? "capture graph" : "kernel");
     std::ostringstream executor_mode_info;
@@ -159,16 +160,16 @@ bool GraphCaptureManager::FindSupportCaptureKernelPositions(const std::vector<Op
     } else {
       executor_mode_info << "executor order:[" << std::to_string(executors_[i].second) << "]";
     }
-    LOG_OUT << "The executor[" << i << "] is " << executor_mode << ", " << executor_mode_info.str();
+    RT_VLOG(VL_RUNTIME) << "The executor[" << i << "] is " << executor_mode << ", " << executor_mode_info.str();
   }
 
   return capture_graph_num_ > 0;
 }
 
 void GraphCaptureManager::CreateCaptureGraph(const device::DeviceContext *device_context, bool fullGraphMode) {
-  LOG_OUT << "fullGraphMode: " << fullGraphMode;
+  RT_VLOG(VL_RUNTIME) << "fullGraphMode: " << fullGraphMode;
   if (fullGraphMode) {
-    LOG_OUT << "Cur shape: " << shape_key_;
+    RT_VLOG(VL_RUNTIME) << "Cur shape: " << shape_key_;
     auto capture_graph = device_context->deviceResManager_->CreateCaptureGraph();
     CHECK_IF_NULL(capture_graph);
     capture_graphs_[shape_key_].emplace_back(capture_graph);
@@ -190,7 +191,7 @@ bool GraphCaptureManager::LaunchAllKernelsWithCapture(std::vector<OpRunner> &opR
 CaptureGraphPtr GraphCaptureManager::GetCurrentFullGraph() const {
   auto capture_graph_it = capture_graphs_.find(shape_key_);
   if (capture_graph_it == capture_graphs_.end() || capture_graph_it->second.empty()) {
-    LOG_ERROR << "No capture graphs initialized for shape key: " << shape_key_;
+    RT_GLOG(ERROR) << "No capture graphs initialized for shape key: " << shape_key_;
     return nullptr;
   }
 
@@ -206,15 +207,15 @@ void GraphCaptureManager::ExecuteCaptureOpsNeedNotUpdate(std::vector<OpRunner> &
     auto &opRunner = opRunners[j];
     opRunner.UpdateTensors();
     if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateMemory();
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateWorkspaceMemory();
     if (auto errNo = opRunner.Launch(captureStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     if (IsCustomCallOp(opRunner)) {
       WaitLaunchTaskFinish();
@@ -232,10 +233,10 @@ void GraphCaptureManager::ExecuteCaptureOpNeedUpdate(OpRunner &opRunner, void *c
   CHECK_IF_NULL(waitEvent);
 
   opRunner.UpdateTensors();
-  LOG_OUT << "Begin launch single op: " << opRunner.GetOpName()
-          << ", executor index: " << singleOpPos_[single_op_index];
+  RT_VLOG(VL_RUNTIME) << "Begin launch single op: " << opRunner.GetOpName()
+                      << ", executor index: " << singleOpPos_[single_op_index];
   if (auto errNo = opRunner.InferShape() != ops::SUCCESS) {
-    LOG_EXCEPTION << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    RT_GLOG(EXCEPTION) << "Infer shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
   }
 
   waitEvent->set_wait_stream(captureStream);
@@ -245,16 +246,16 @@ void GraphCaptureManager::ExecuteCaptureOpNeedUpdate(OpRunner &opRunner, void *c
   capture_graph->CaptureTaskGrpBegin(captureStream);
   opRunner.AllocateMemory();
   if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-    LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
   }
   opRunner.AllocateWorkspaceMemory();
   if (auto errNo = opRunner.Launch(captureStream) != ops::SUCCESS) {
-    LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
   }
   if (IsCustomCallOp(opRunner)) {
     // Custom call ops don't use InferRT updateStream_ to launch in update phase.
-    LOG_EXCEPTION << "Not support update custom op in AclGraph fullgraph mode, got a costom op: "
-                  << opRunner.GetOpName();
+    RT_GLOG(EXCEPTION) << "Not support update custom op in AclGraph fullgraph mode, got a costom op: "
+                       << opRunner.GetOpName();
   }
   opRunner.FreeMemory();
 
@@ -262,18 +263,18 @@ void GraphCaptureManager::ExecuteCaptureOpNeedUpdate(OpRunner &opRunner, void *c
 }
 
 bool GraphCaptureManager::LaunchAllKernelsWithCaptureFullGraph(std::vector<OpRunner> &opRunners, void *captureStream) {
-  LOG_OUT << "Begin launch all kernels with full graph capture, shape key: " << shape_key_;
+  RT_VLOG(VL_RUNTIME) << "Begin launch all kernels with full graph capture, shape key: " << shape_key_;
 
   auto cur_capture_graph = GetCurrentFullGraph();
   CHECK_IF_NULL(cur_capture_graph);
 
   if (!cur_capture_graph->CaptureBegin(captureStream)) {
-    LOG_ERROR << "Capture graph failed";
+    RT_GLOG(ERROR) << "Capture graph failed";
     return false;
   }
 
-  LOG_OUT << "Begin full graph capture for shape key: " << shape_key_;
-  LOG_OUT << "Begin launch all kernels with capture graph.";
+  RT_VLOG(VL_RUNTIME) << "Begin full graph capture for shape key: " << shape_key_;
+  RT_VLOG(VL_RUNTIME) << "Begin launch all kernels with capture graph.";
 
   size_t singleOpCnt = 0;
   for (size_t i = 0; i < executors_.size(); i++) {
@@ -281,7 +282,7 @@ bool GraphCaptureManager::LaunchAllKernelsWithCaptureFullGraph(std::vector<OpRun
     if (executor.first == CAPTURE_GRAPH) {
       size_t start = capture_kernel_range_positions_[executor.second].first;
       size_t end = capture_kernel_range_positions_[executor.second].second;
-      LOG_OUT << "Begin captrue graph, executor index: " << i << ", range[" << start << ", " << end << "].";
+      RT_VLOG(VL_RUNTIME) << "Begin captrue graph, executor index: " << i << ", range[" << start << ", " << end << "].";
       ExecuteCaptureOpsNeedNotUpdate(opRunners, start, end, captureStream);
       continue;
     }
@@ -290,17 +291,17 @@ bool GraphCaptureManager::LaunchAllKernelsWithCaptureFullGraph(std::vector<OpRun
     ExecuteCaptureOpNeedUpdate(opRunner, captureStream, cur_capture_graph.get(), singleOpCnt);
     singleOpCnt++;
   }
-  LOG_OUT << "End launch all kernels with capture graph.";
+  RT_VLOG(VL_RUNTIME) << "End launch all kernels with capture graph.";
 
   cur_capture_graph->CaptureEnd(captureStream);
-  LOG_OUT << "End full graph capture for shape key: " << shape_key_;
-  LOG_OUT << "End launch all kernels with full graph capture.";
+  RT_VLOG(VL_RUNTIME) << "End full graph capture for shape key: " << shape_key_;
+  RT_VLOG(VL_RUNTIME) << "End launch all kernels with full graph capture.";
   return true;
 }
 
 bool GraphCaptureManager::LaunchAllKernelsWithReplayFullGraph(std::vector<OpRunner> &opRunners, void *executeStream,
                                                               void *updateStream) {
-  LOG_OUT << "Begin launch all kernels with replay graph.";
+  RT_VLOG(VL_RUNTIME) << "Begin launch all kernels with replay graph.";
   CHECK_IF_FAIL(capture_graphs_[shape_key_].size() == 1);
   auto &cur_capture_graph = capture_graphs_[shape_key_][0];  // Use first capture graph for full graph mode
   CHECK_IF_NULL(cur_capture_graph);
@@ -312,18 +313,18 @@ bool GraphCaptureManager::LaunchAllKernelsWithReplayFullGraph(std::vector<OpRunn
 
     auto &opRunner = opRunners[singleOpPos_[i]];
     if (auto errNo = opRunner.CalcWorkspace() != ops::SUCCESS) {
-      LOG_EXCEPTION << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "CalcWorkspace shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     opRunner.AllocateWorkspaceMemory();
     if (auto errNo = opRunner.Launch(updateStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      RT_GLOG(EXCEPTION) << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     if (IsCustomCallOp(opRunner)) {
       // Custom call ops don't use InferRT updateStream_ to launch in update phase, and Python call op maybe need copy
       // output from torch tensor to inferrt tensor, the src tensor ptr has been captured in aclgraph, use new allocated
       // output torch tenor memory is not correct.
-      LOG_EXCEPTION << "Not support update custom op in AclGraph fullgraph mode, got a costom op: "
-                    << opRunner.GetOpName();
+      RT_GLOG(EXCEPTION) << "Not support update custom op in AclGraph fullgraph mode, got a costom op: "
+                         << opRunner.GetOpName();
     }
     opRunner.FreeWorkspaceMemory();
 
@@ -334,12 +335,12 @@ bool GraphCaptureManager::LaunchAllKernelsWithReplayFullGraph(std::vector<OpRunn
     waitEvent->RecordEvent();
   }
 
-  LOG_OUT << "End launch all kernels with replay graph.";
+  RT_VLOG(VL_RUNTIME) << "End launch all kernels with replay graph.";
   return true;
 }
 
 void GraphCaptureManager::RecordGraphOutputKernelInfo(const OpRunner &opRunner, size_t index) {
-  LOG_OUT << "Record current kernel: " << opRunner.GetOpName();
+  RT_VLOG(VL_RUNTIME) << "Record current kernel: " << opRunner.GetOpName();
 
   // This is a simplified implementation - in a real scenario, we would extract
   // output tensors and record their device pointers, sizes, and shapes

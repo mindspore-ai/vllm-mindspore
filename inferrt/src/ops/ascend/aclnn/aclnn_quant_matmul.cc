@@ -45,15 +45,15 @@ OpsErrorCode AclnnQuantMatmul::CalcWorkspace(const std::vector<const ir::Value *
   bool isW8A8 = x1_->Dtype() == ir::DataType::Int8 && x2_->Dtype() == ir::DataType::Int8;
 
   if (!isW8A8) {
-    LOG_EXCEPTION << "Op quant_matmul only supports W8A8 (Int8 x Int8) for now, got x1 dtype: "
-                  << x1_->Dtype().ToString() << ", x2 dtype: " << x2_->Dtype().ToString();
+    RT_GLOG(EXCEPTION) << "Op quant_matmul only supports W8A8 (Int8 x Int8) for now, got x1 dtype: "
+                       << x1_->Dtype().ToString() << ", x2 dtype: " << x2_->Dtype().ToString();
   }
 
   auto outputDtype = output->ToTensor()->Dtype();
   if (scale_->Dtype() == ir::DataType::Float32 && pertokenScale_ == nullptr && outputDtype != ir::DataType::BFloat16 &&
       outputDtype != ir::DataType::Int32) {
-    LOG_EXCEPTION << "Op quant_matmul does not support Float32 scale, null pertokenScale, and output dtype: "
-                  << outputDtype.ToString();
+    RT_GLOG(EXCEPTION) << "Op quant_matmul does not support Float32 scale, null pertokenScale, and output dtype: "
+                       << outputDtype.ToString();
   }
 
   ir::MemoryFormat weightFormat = x2_->Format();

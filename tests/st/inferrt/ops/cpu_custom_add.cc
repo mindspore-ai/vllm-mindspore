@@ -34,12 +34,12 @@ class CpuCustomAddOperator : public CPUCustomOperator {
     const T *in1 = static_cast<const T *>(input1_data);
     const T *in2 = static_cast<const T *>(input2_data);
     T *out = static_cast<T *>(output_data);
-    
+
     // Perform element-wise addition
     for (size_t i = 0; i < tensor_size; ++i) {
       out[i] = in1[i] + in2[i];
     }
-    
+
     return SUCCESS;
   }
 
@@ -47,44 +47,44 @@ class CpuCustomAddOperator : public CPUCustomOperator {
                       ir::Value *output, void *stream) override {
     // Check input parameters
     if (input.size() != 2) {
-      LOG_ERROR << "CpuCustomAddOp expects 2 inputs, got " << input.size();
+      RT_GLOG(ERROR) << "CpuCustomAddOp expects 2 inputs, got " << input.size();
       return INVALID_INPUT_NUM;
     }
-    
+
     // Get input and output tensors
     auto input1 = input[0]->ToTensor();
     auto input2 = input[1]->ToTensor();
     auto output_tensor = output->ToTensor();
-    
+
     if (!input1 || !input2 || !output_tensor) {
-      LOG_ERROR << "Failed to convert values to tensors";
+      RT_GLOG(ERROR) << "Failed to convert values to tensors";
       return INVALID_PARAM;
     }
-    
+
     // Get tensor data and size
     const void *input1_data = input1->DataPtr();
     const void *input2_data = input2->DataPtr();
     void *output_data = output_tensor->DataPtr();
-    
+
     if (!input1_data || !input2_data || !output_data) {
-      LOG_ERROR << "Null tensor data pointer";
+      RT_GLOG(ERROR) << "Null tensor data pointer";
       return INVALID_PARAM;
     }
-    
+
     // Get tensor shape
     auto tensor_shape = input1->Shape();
     if (tensor_shape != input2->Shape() || tensor_shape != output_tensor->Shape()) {
-      LOG_ERROR << "Tensor shape mismatch";
+      RT_GLOG(ERROR) << "Tensor shape mismatch";
       return INVALID_PARAM;
     }
-    
+
     // Perform element-wise addition based on data type
     ir::DataType dtype = input1->Dtype();
     if (dtype != input2->Dtype() || dtype != output_tensor->Dtype()) {
-      LOG_ERROR << "Tensor dtype mismatch";
+      RT_GLOG(ERROR) << "Tensor dtype mismatch";
       return INVALID_PARAM;
     }
-    
+
     auto tensor_size = input1->Numel();
     switch (dtype) {
       case ir::DataType::Float32:
@@ -96,7 +96,7 @@ class CpuCustomAddOperator : public CPUCustomOperator {
       case ir::DataType::Int64:
         return AddImpl<int64_t>(input1_data, input2_data, output_data, tensor_size);
       default:
-        LOG_ERROR << "Unsupported data type for CpuCustomAddOp: " << dtype.ToString();
+        RT_GLOG(ERROR) << "Unsupported data type for CpuCustomAddOp: " << dtype.ToString();
         return INVALID_PARAM;
     }
     return SUCCESS;

@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 include(FetchContent)
 if(ENABLE_GITEE)

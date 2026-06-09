@@ -29,7 +29,7 @@ target_include_directories(mrt_profiler PRIVATE
 )
 
 # Link with dependencies
-target_link_libraries(mrt_profiler PRIVATE mrt::json)
+target_link_libraries(mrt_profiler PRIVATE mrt_common mrt::json)
 set_target_properties(mrt_profiler PROPERTIES
   INSTALL_RPATH "$ORIGIN"
   BUILD_WITH_INSTALL_RPATH TRUE

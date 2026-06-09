@@ -7,11 +7,9 @@ set -e
 usage()
 {
   echo "Usage:"
-  echo "bash build.sh [-D] [-d [lexer,parser,compiler,vm,tensor,ops,pass,runtime,py]] [-i] [-h]"
+  echo "bash build.sh [-D] [-i] [-h]"
   echo ""
   echo "Options:"
-  echo "    -d Enable log print of modules, separated by comma(eg. -d parser,compiler),"
-  echo "       default off"
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
@@ -34,21 +32,12 @@ process_options()
     export BUILD_OPT=0 # Default disable optimizer for now
     export BUILD_JOBS=8 
 
-    while getopts 'Dd:hitf:b:eOj:s:' OPT; do
+    while getopts 'Dhitf:b:eOj:s:' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
                 # -D
                 export DEBUG="-DDEBUG=on";;
-            d)
-                # Enable log out for modules.
-                # -d lexer,parser,compiler,vm,ir,rt,dapy
-                IFS=',' read -ra OPTARGS <<< "$OPTARG"
-                for ARG in "${OPTARGS[@]}"
-                do
-                    export DEBUG_LOG_OUT="$DEBUG_LOG_OUT -DDEBUG_LOG_OUT_$ARG=on"
-                done
-                ;;
             i) export INC_BUILD=1;;
             t) export BUILD_TESTS=1;;
             O) export BUILD_OPT=1;;

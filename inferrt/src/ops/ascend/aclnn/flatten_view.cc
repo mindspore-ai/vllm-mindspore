@@ -44,15 +44,16 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
   startDim = DynamicDimWrap(startDim, dimSize);
   endDim = DynamicDimWrap(endDim, dimSize);
   if (startDim > endDim) {
-    LOG_EXCEPTION << "flatten() has invalid args: start_dim cannot come after end_dim";
+    RT_GLOG(EXCEPTION) << "flatten() has invalid args: start_dim cannot come after end_dim";
   }
 
   const auto newStrides = CalculateViewStrides(curShape, curStrides, inferredShape);
   if (!newStrides.has_value()) {
-    LOG_EXCEPTION << "Flatten encountered unsupported non-contiguous input tensor. output shape: " << inferredShape
-                  << ", flatten dims: [" << startDim << ", " << endDim << "], input shape: " << curShape
-                  << ", input stride: " << curStrides
-                  << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
+    RT_GLOG(EXCEPTION)
+      << "Flatten encountered unsupported non-contiguous input tensor. output shape: " << inferredShape
+      << ", flatten dims: [" << startDim << ", " << endDim << "], input shape: " << curShape
+      << ", input stride: " << curStrides
+      << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
   }
   UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, newStrides.value(),
                        inputTensorPtr->StorageOffset());

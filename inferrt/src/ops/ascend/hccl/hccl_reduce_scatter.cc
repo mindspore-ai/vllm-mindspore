@@ -36,7 +36,6 @@ void HcclReduceScatter::Init(const std::vector<const ir::Value *> &input, const 
 
 OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                               size_t *workspaceSize) {
-  LOG_OUT << "HcclReduceScatter CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
   auto rankSize = input[kIndex2]->ToInt();
   auto inputTensor = input[kIndex0]->ToTensor();
@@ -52,7 +51,6 @@ OpsErrorCode HcclReduceScatter::CalcWorkspace(const std::vector<const ir::Value 
 
 OpsErrorCode HcclReduceScatter::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                        size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "HcclReduceScatter launch";
   auto outTensor = output->ToTensor();
 
   auto hcclResult = HcclAdapter::GetInstance().HcclReduceScatter(
@@ -60,7 +58,7 @@ OpsErrorCode HcclReduceScatter::Launch(const std::vector<const ir::Value *> &inp
     hcclKernel_.hcclDataType_, hcclOpType_, stream, hcclKernel_.comm_);
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcclReduceScatter failed, hccl_result: " << hcclResult;
+    RT_GLOG(ERROR) << "HcclReduceScatter failed, hccl_result: " << hcclResult;
   }
 
   return SUCCESS;

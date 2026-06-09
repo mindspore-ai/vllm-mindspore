@@ -43,7 +43,6 @@ void AclnnArgsort::Init(const std::vector<const ir::Value *> &input, const ir::V
 
 OpsErrorCode AclnnArgsort::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [argsort]";
   CHECK_IF_FAIL(input.size() == kInputSize);
   CHECK_IF_NULL(output);
   CHECK_IF_NULL(workspaceSize);
@@ -66,7 +65,8 @@ OpsErrorCode AclnnArgsort::CalcWorkspace(const std::vector<const ir::Value *> &i
   const auto &valuesTensor = (*outputTuple)[kOutputValuesIndex]->ToTensor();
   const auto &indicesTensor = (*outputTuple)[kOutputIndicesIndex]->ToTensor();
 
-  LOG_OUT << "AclnnArgsort::CalcWorkspace: dim=" << dim << ", descending=" << descending << ", stable=" << stable;
+  RT_VLOG(VL_OPS) << "AclnnArgsort::CalcWorkspace: dim=" << dim << ", descending=" << descending
+                  << ", stable=" << stable;
   executor_->GetWorkspaceSize(reinterpret_cast<uint64_t *>(workspaceSize), inTensor, stable, dim, descending,
                               valuesTensor, indicesTensor);
 
@@ -75,7 +75,6 @@ OpsErrorCode AclnnArgsort::CalcWorkspace(const std::vector<const ir::Value *> &i
 
 OpsErrorCode AclnnArgsort::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                   ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [argsort]";
   CHECK_IF_FAIL(input.size() == kInputSize);
   CHECK_IF_NULL(output);
   CHECK_IF_FAIL(output->IsTuple());

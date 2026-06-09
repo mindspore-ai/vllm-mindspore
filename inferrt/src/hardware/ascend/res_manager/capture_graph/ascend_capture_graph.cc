@@ -32,11 +32,11 @@ AscendCaptureGraph::~AscendCaptureGraph() {
 #if defined(__linux__)
   if (finish_capture_graph_ && model_ri_) {
     if (!device::ascend::AscendStreamMng::GetInstance().SyncAllStreams()) {
-      LOG_ERROR << "Sync All streams failed";
+      RT_GLOG(ERROR) << "Sync All streams failed";
     }
     auto ret = CALL_ASCEND_API(aclmdlRIDestroy, model_ri_);
     if (ret != ACL_ERROR_NONE) {
-      LOG_OUT << "aclmdlRIDestroy failed, ret:" << ret;
+      RT_VLOG(VL_HARDWARE) << "aclmdlRIDestroy failed, ret:" << ret;
     }
   }
 #endif
@@ -44,7 +44,7 @@ AscendCaptureGraph::~AscendCaptureGraph() {
 
 bool AscendCaptureGraph::CaptureBegin(void *stream) {
   if (finish_capture_graph_) {
-    LOG_ERROR << "Already capture a graph.";
+    RT_GLOG(ERROR) << "Already capture a graph.";
     return false;
   }
 
@@ -52,7 +52,7 @@ bool AscendCaptureGraph::CaptureBegin(void *stream) {
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureBegin, capture_stream_, mode_);
   if (ret != ACL_ERROR_NONE) {
-    LOG_ERROR << "aclmdlRICaptureBegin failed, ret:" << ret;
+    RT_GLOG(ERROR) << "aclmdlRICaptureBegin failed, ret:" << ret;
     return false;
   }
   CaptureGetInfo(stream);
@@ -64,16 +64,16 @@ void AscendCaptureGraph::CaptureGetInfo(void *stream) {
   CHECK_IF_NULL(stream);
   CHECK_IF_NULL(capture_stream_);
   if (stream != capture_stream_) {
-    LOG_EXCEPTION << "The current stream is not in capture status.";
+    RT_GLOG(EXCEPTION) << "The current stream is not in capture status.";
   }
 #if defined(__linux__)
   aclmdlRICaptureStatus status;
   auto ret = CALL_ASCEND_API(aclmdlRICaptureGetInfo, capture_stream_, &status, &model_ri_);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRICaptureGetInfo failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureGetInfo failed, ret:" << ret;
   }
   if (status != aclmdlRICaptureStatus::ACL_MODEL_RI_CAPTURE_STATUS_ACTIVE) {
-    LOG_EXCEPTION << "aclmdlRICaptureGetInfo got wrong status: " << status;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureGetInfo got wrong status: " << status;
   }
 #endif
 }
@@ -81,12 +81,12 @@ void AscendCaptureGraph::CaptureGetInfo(void *stream) {
 void AscendCaptureGraph::CaptureEnd(void *stream) {
   CHECK_IF_NULL(stream);
   if (stream != capture_stream_) {
-    LOG_EXCEPTION << "The current stream is not in capture status.";
+    RT_GLOG(EXCEPTION) << "The current stream is not in capture status.";
   }
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureEnd, capture_stream_, &model_ri_);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRICaptureEnd failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureEnd failed, ret:" << ret;
   }
 
   finish_capture_graph_ = true;
@@ -100,7 +100,7 @@ void AscendCaptureGraph::ExecuteCaptureGraph(void *stream) {
 
   auto ret = CALL_ASCEND_API(aclmdlRIExecuteAsync, model_ri_, stream);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRIExecuteAsync failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRIExecuteAsync failed, ret:" << ret;
   }
 #endif
 }
@@ -108,12 +108,12 @@ void AscendCaptureGraph::ExecuteCaptureGraph(void *stream) {
 void AscendCaptureGraph::CaptureTaskGrpBegin(void *stream) {
   CHECK_IF_NULL(stream);
   if (stream != capture_stream_) {
-    LOG_EXCEPTION << "The current stream is not in capture status.";
+    RT_GLOG(EXCEPTION) << "The current stream is not in capture status.";
   }
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureTaskGrpBegin, stream);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRICaptureTaskGrpBegin failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureTaskGrpBegin failed, ret:" << ret;
   }
 #endif
 }
@@ -121,12 +121,12 @@ void AscendCaptureGraph::CaptureTaskGrpBegin(void *stream) {
 void AscendCaptureGraph::CaptureTaskGrpEnd(void *stream, void **task_grp) {
   CHECK_IF_NULL(stream);
   if (stream != capture_stream_) {
-    LOG_EXCEPTION << "The current stream is not in capture status.";
+    RT_GLOG(EXCEPTION) << "The current stream is not in capture status.";
   }
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureTaskGrpEnd, stream, task_grp);
   if (task_grp == nullptr) {
-    LOG_EXCEPTION << "aclmdlRICaptureTaskGrpEnd failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureTaskGrpEnd failed, ret:" << ret;
   }
 #endif
 }
@@ -136,7 +136,7 @@ void AscendCaptureGraph::CaptureTaskUpdateBegin(void *updateStream, void *task_g
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureTaskUpdateBegin, updateStream, task_grp);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRICaptureTaskUpdateBegin failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureTaskUpdateBegin failed, ret:" << ret;
   }
 #endif
 }
@@ -146,7 +146,7 @@ void AscendCaptureGraph::CaptureTaskUpdateEnd(void *updateStream) {
 #if defined(__linux__)
   auto ret = CALL_ASCEND_API(aclmdlRICaptureTaskUpdateEnd, updateStream);
   if (ret != ACL_ERROR_NONE) {
-    LOG_EXCEPTION << "aclmdlRICaptureTaskUpdateEnd failed, ret:" << ret;
+    RT_GLOG(EXCEPTION) << "aclmdlRICaptureTaskUpdateEnd failed, ret:" << ret;
   }
 #endif
 }

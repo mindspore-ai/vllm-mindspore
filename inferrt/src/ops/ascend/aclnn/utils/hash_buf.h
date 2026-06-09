@@ -35,7 +35,7 @@ inline void MemcpyToBuf(const void *data, size_t size) {
     return;
   }
   if (MS_UNLIKELY(static_cast<uint64_t>(gHashOffset) > SIZE_MAX - size)) {
-    LOG_ERROR << "Hash buf is overflow.";
+    RT_GLOG(ERROR) << "Hash buf is overflow.";
     return;
   }
   if (gHashOffset + size >= gHashBufSize) {
@@ -44,7 +44,7 @@ inline void MemcpyToBuf(const void *data, size_t size) {
   }
   auto ret = memcpy_sp(gHashBuf + gHashOffset, gHashBufSize - gHashOffset, data, size);
   if (ret != EOK) {
-    LOG_EXCEPTION << "Failed to memcpy!";
+    RT_GLOG(EXCEPTION) << "Failed to memcpy!";
   }
   gHashOffset += size;
 }

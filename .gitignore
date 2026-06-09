@@ -35,6 +35,7 @@ Makefile
 .clangd
 .cursor
 .codex
+.agents
 CODEBUDDY.md
 
 # Python files

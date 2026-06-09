@@ -21,16 +21,16 @@ void TestDeviceResource() {
   mrt::device::DeviceContextKey deviceContextKey{"CPU", 0};
   auto deviceContext = std::make_shared<mrt::device::cpu::CPUDeviceContext>(deviceContextKey);
   if (deviceContext == nullptr) {
-    LOG_ERROR << "Get device context failed.";
+    RT_GLOG(ERROR) << "Get device context failed.";
   }
   if (deviceContext->deviceResManager_ == nullptr) {
-    LOG_ERROR << "Get device res manager failed.";
+    RT_GLOG(ERROR) << "Get device res manager failed.";
   }
   deviceContext->Initialize();
 
   // Test allocate memory.
   auto ptr = deviceContext->deviceResManager_->AllocateMemory(8);
-  LOG_ERROR << "ptr:" << ptr;
+  RT_GLOG(ERROR) << "ptr:" << ptr;
 
   // Free ptr and destroy event.
   deviceContext->deviceResManager_->FreeMemory(ptr);

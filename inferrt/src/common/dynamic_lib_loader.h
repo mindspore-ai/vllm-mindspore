@@ -30,7 +30,7 @@ class DA_API DynamicLibLoader {
   DynamicLibLoader() {
     filePath_ = GetFilePathFromDlInfo();
     if (filePath_.empty()) {
-      LOG_ERROR << "Get dynamic library file path by dladdr failed";
+      RT_GLOG(ERROR) << "Get dynamic library file path by dladdr failed";
     }
   }
   explicit DynamicLibLoader(const std::string &&filePath) : filePath_(std::move(filePath)) {}
