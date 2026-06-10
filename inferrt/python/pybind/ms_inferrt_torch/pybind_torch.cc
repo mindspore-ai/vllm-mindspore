@@ -349,12 +349,20 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
   // Track only the remaining accessible bytes from data_ptr() to the end of the underlying storage to keep view
   // bounds valid.
   const auto storageBytes = at_tensor.storage().nbytes();
-  const auto offsetBytes = static_cast<size_t>(at_tensor.storage_offset() * at_tensor.element_size());
-  if (offsetBytes > storageBytes) {
-    LOG_EXCEPTION << "storage_offset exceeds storage size: offsetBytes=" << offsetBytes
-                  << ", storageBytes=" << storageBytes;
+  if (at_tensor.numel() > 0) {
+    const auto offsetBytes = static_cast<size_t>(at_tensor.storage_offset()) * at_tensor.element_size();
+    if (offsetBytes >= storageBytes) {
+      LOG_EXCEPTION << "storage_offset reaches or exceeds storage size: offsetBytes=" << offsetBytes
+                    << ", storageBytes=" << storageBytes << ", shape=" << tensor->Shape()
+                    << ", dtype=" << tensor->Dtype().ToString() << ", storageOffset=" << tensor->StorageOffset()
+                    << ", storageShape=" << tensor->StorageShape();
+    }
+    tensor->GetStorage()->Resize(storageBytes - offsetBytes);
+  } else {
+    // Empty tensors may legally carry a storage_offset beyond the underlying storage. Since data_ptr() is never
+    // dereferenced for zero elements, keep the original storage size and let Tensor::DataPtr() expose nullptr.
+    tensor->GetStorage()->Resize(storageBytes);
   }
-  tensor->GetStorage()->Resize(storageBytes - offsetBytes);
 }
 
 // Install a lazy updater that reads the current value of a Python-side tensor handle on each invocation.

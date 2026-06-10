@@ -192,14 +192,20 @@ class Tensor : public RefCounted {
    * @return A const void pointer to the data.
    */
   const void *DataPtr() const {
-    return static_cast<const char *>(storage_->Data()) + storageOffset_ * dtype_.GetSize();
+    if (numel_ == 0) {
+      return nullptr;
+    }
+    CHECK_IF_NULL(storage_->Data());
+    const auto offsetBytes = static_cast<size_t>(storageOffset_) * dtype_.GetSize();
+    CHECK_IF_FAIL(offsetBytes < storage_->SizeBytes());
+    return static_cast<const char *>(storage_->Data()) + offsetBytes;
   }
   /**
    * @brief Gets a raw pointer to the tensor's data.
    * This pointer takes into account the storage offset.
    * @return A void pointer to the data.
    */
-  void *DataPtr() { return static_cast<char *>(storage_->Data()) + storageOffset_ * dtype_.GetSize(); }
+  void *DataPtr() { return const_cast<void *>(static_cast<const Tensor *>(this)->DataPtr()); }
   /**
    * @brief Sets the data type of the tensor.
    * @param dtype The new data type to set.
