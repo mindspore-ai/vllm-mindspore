@@ -4,10 +4,7 @@ CI environment restriction: CPU-only testing available
 Note: Disabling NPU backends to prevent torch_npu related import errors
 """
 # pylint: disable=wrong-import-position, ungrouped-imports
-import os
-os.environ["USE_NPU"] = "0"
-os.environ["USE_ASCEND"] = "0"
-os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 
 import pytest
 import torch

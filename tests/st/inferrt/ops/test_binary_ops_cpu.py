@@ -14,9 +14,7 @@
 """Tests for binary operations with scalar inputs on CPU."""
 # pylint: disable=wrong-import-position, ungrouped-imports
 import os
-os.environ["USE_NPU"] = "0"
-os.environ["USE_ASCEND"] = "0"
-os.environ["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
+
 os.environ["TASK_QUEUE_ENABLE"] = "0"
 
 import pytest
