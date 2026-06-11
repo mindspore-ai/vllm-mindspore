@@ -35,6 +35,7 @@ OpsErrorCode Empty::Launch(const std::vector<const ir::Value *> &input, void *wo
 }
 
 MRT_REG_OP(empty, Empty, Ascend);
+MRT_REG_OP(empty_like, Empty, Ascend);
 MRT_REG_OP(new_empty, Empty, Ascend);
 }  // namespace ops
 }  // namespace mrt
