@@ -1405,6 +1405,7 @@ _OP_MAP = {
     "squeeze": Op.squeeze_view,
     "unsqueeze": Op.unsqueeze_view,
     "narrow": Op.narrow_view,
+    "select": Op.select_view,
     "unbind": Op.unbind_view,
     "neg": Op.neg,
     "square": Op.square,

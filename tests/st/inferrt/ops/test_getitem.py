@@ -137,6 +137,26 @@ def test_torch_select_valid_metadata():
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_tensor_select_method_valid_metadata():
+    """
+    Feature: Test Tensor.select method valid index
+    Description: Verify x.select lowers to select_view and preserves eager metadata
+    Expectation: The result and observable view metadata are consistent with eager mode
+    """
+
+    def func(x):
+        return x.select(1, 2)
+
+    compiled_op = torch.compile(func, backend=backend)
+    x = torch.randn(2, 4, 3).npu()
+    out = compiled_op(x)
+    expected = func(x)
+    assert tuple(out.shape) == tuple(expected.shape)
+    assert tuple(out.stride()) == tuple(expected.stride())
+    AssertRtolEqual(out, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_tensor_getitem_slice_then_select_metadata():
     """
     Feature: Test slice/select view metadata

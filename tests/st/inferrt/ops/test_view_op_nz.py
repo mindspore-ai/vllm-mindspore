@@ -35,6 +35,7 @@ LINEAR_VIEW_CASES = [
     ("slice", (12, 16)),
     ("getitem_slice", (12, 16)),
     ("select", (1, 8, 16)),
+    ("select_method", (1, 8, 16)),
     ("narrow", (12, 16)),
     ("squeeze", (1, 8, 16)),
     ("unsqueeze", (8, 16)),
@@ -44,7 +45,7 @@ LINEAR_VIEW_CASES = [
     ("unbind", (1, 8, 16)),
 ]
 QUANT_MATMUL_SHAPES = [(8, 16, 32), (4, 32, 48), (3, 16, 64)]
-QUANT_MATMUL_VIEW_CASES = ["permute", "view", "reshape", "flatten", "squeeze", "select", "unbind"]
+QUANT_MATMUL_VIEW_CASES = ["permute", "view", "reshape", "flatten", "squeeze", "select", "select_method", "unbind"]
 
 dynamo_config.cache_size_limit = 64
 
@@ -82,6 +83,8 @@ def _apply_linear_nz_view(input_tensor, case):
         return input_tensor[2:10, :]
     if case == "select":
         return torch.select(input_tensor, 0, 0)
+    if case == "select_method":
+        return input_tensor.select(0, 0)
     if case == "narrow":
         return torch.narrow(input_tensor, 0, 2, 8)
     if case == "squeeze":
@@ -111,7 +114,7 @@ def _make_quant_matmul_nz_weight_view_inputs(case, shape):
         x2_src = weight_nz.t()
     elif case in ("view", "reshape", "flatten"):
         x2_src = weight_nz.view(2, k // 2, n)
-    elif case in ("squeeze", "select", "unbind"):
+    elif case in ("squeeze", "select", "select_method", "unbind"):
         x2_src = weight_nz.unsqueeze(0)
     else:
         raise ValueError(f"unsupported NZ quant_matmul view case: {case}")
@@ -134,6 +137,8 @@ def _apply_quant_matmul_nz_weight_view(x2_src, case, shape):
         return x2_src.squeeze(0)
     if case == "select":
         return torch.select(x2_src, 0, 0)
+    if case == "select_method":
+        return x2_src.select(0, 0)
     if case == "unbind":
         return torch.unbind(x2_src, 0)[0]
     raise ValueError(f"unsupported NZ quant_matmul view case: {case}")
@@ -190,4 +195,26 @@ def test_nz_weight_view_output_consumed_by_quant_matmul_matches_eager(case, shap
     expected_output = func(x1, x2_src, scale)
     compiled_func = torch.compile(func, backend=fx_backend, fullgraph=True)
     compiled_output = compiled_func(x1, x2_src, scale)
+    torch.testing.assert_close(compiled_output, expected_output)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_nz_select_method_view_output_consumed_by_linear_matches_eager():
+    """
+    Feature: NZ Tensor.select method view output consumed by linear
+    Description: Verify x.select lowers to select_view before a following NZ-weight linear
+    Expectation: Compiled output is numerically consistent with torch_npu eager output
+    """
+
+    def func(input_tensor, weight):
+        view = input_tensor.select(0, 0)
+        return F.linear(view, weight)
+
+    x = torch.randn(1, 4, 16, dtype=torch.bfloat16).npu()
+    weight = _make_nz_tensor((6, 16), dtype=torch.bfloat16)
+    expected_output = func(x, weight)
+    compiled_func = torch.compile(func, backend=fx_backend, fullgraph=True)
+    compiled_output = compiled_func(x, weight)
+
+    assert tuple(compiled_output.shape) == tuple(expected_output.shape)
     torch.testing.assert_close(compiled_output, expected_output)

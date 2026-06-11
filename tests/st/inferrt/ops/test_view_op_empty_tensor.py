@@ -112,6 +112,10 @@ def _select_empty_result_from_zero_storage(x):
     return torch.select(x, 0, 2)
 
 
+def _select_method_empty_result_from_zero_storage(x):
+    return x.select(0, 2)
+
+
 def _unbind_empty_outputs(x):
     return torch.unbind(x, 0)
 
@@ -142,6 +146,11 @@ _SINGLE_OUTPUT_CASES = [
     ("slice_zero_length_nonzero_offset_step", lambda: _arange((4, 5)), _slice_zero_length_nonzero_offset_step),
     ("slice_empty_input_with_step", lambda: _empty((0, 5)), _slice_empty_input_with_step),
     ("select_empty_result_from_zero_storage", lambda: _empty((4, 0, 5)), _select_empty_result_from_zero_storage),
+    (
+        "select_method_empty_result_from_zero_storage",
+        lambda: _empty((4, 0, 5)),
+        _select_method_empty_result_from_zero_storage,
+    ),
 ]
 
 _TUPLE_OUTPUT_CASES = [
