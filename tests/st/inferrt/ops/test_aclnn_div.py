@@ -48,3 +48,74 @@ def test_div(shape):
     result_compile_op = compile_op(tensor_x, tensor_y).detach().cpu().numpy()
 
     AssertRtolEqual(result_operate, result_compile_op)
+
+def aten_div_dynamic_op(x, y):
+    b = x.size(0)
+    return torch.ops.aten.div.Tensor(x[:b], y[:b])
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128), (2, 4, 8), (1, 8, 16, 32)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_aten_div_dynamic(shape, dtype):
+    """
+Feature: Test aten div with dynamic shapes.
+    Description: Test aten.div.Tensor with various shapes.
+    Expectation: The result matches eager mode.
+    """
+    compiled_op = torch.compile(aten_div_dynamic_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = aten_div_dynamic_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)
+
+def div_dynamic_op(x, y):
+    b = x.size(0)
+    return x[:b] / y[:b]
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128), (2, 4, 8), (1, 8, 16, 32)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_div_dynamic(shape, dtype):
+    """
+Feature: Test div with dynamic shapes.
+    Description: Test torch.div with dynamic input slicing.
+    Expectation: The result matches eager mode.
+    """
+    compiled_op = torch.compile(div_dynamic_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = div_dynamic_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_div_static(shape, dtype):
+    """
+Feature: Test div with static shapes.
+    Description: Test torch.div with fixed shapes.
+    Expectation: The result matches eager mode.
+    """
+    def div_static_op(x, y):
+        return torch.div(x, y)
+
+    compiled_op = torch.compile(div_static_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(0.5, 2, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = div_static_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)

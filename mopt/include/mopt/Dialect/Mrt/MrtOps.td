@@ -675,6 +675,28 @@ def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
   let genAclnnOp = "aclnnEqTensor";
 }
 
+
+def Mrt_EqScalarOp : Mrt_Op<"eq_scalar", [Pure]> {
+  let summary = "Element-wise equality comparison with scalar";
+  let description = [{
+    Element-wise equality comparison of a tensor and a scalar.
+    Returns a boolean tensor where each element is true if the corresponding element equals the scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnEqScalar";
+}
+
 def Mrt_ExpandOp : Mrt_Op<"expand", [Pure]> {
   let summary = "expand operation";
   let description = [{
@@ -1286,6 +1308,27 @@ def Mrt_Matmul : Mrt_Op<"matmul", [Pure]> {
   let summary = "aclnnMatmul";
   let description = [{
     Performs matrix multiplication of two tensors (supports 1D to 6D tensor).
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    MrtAnyTensor:$other
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+}
+
+
+def Mrt_BatchMatmulOp : Mrt_Op<"batch_matmul", [Pure]> {
+  let summary = "Batch matrix multiplication";
+  let description = [{
+    Performs batched matrix multiplication of two 3D tensors.
+    Both input tensors must be 3D with shape (b, n, m) and (b, m, k).
+    The result has shape (b, n, k).
   }];
 
   let arguments = (ins
