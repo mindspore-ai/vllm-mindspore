@@ -160,6 +160,11 @@ _TUPLE_OUTPUT_CASES = [
     ("chunk_empty_input", lambda: _empty((0, 5)), _chunk_empty_input),
 ]
 
+_SPLIT_EMPTY_COMPILE_BACKENDS = [
+    ("inductor", None),
+    ("inferrt", backend),
+]
+
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize(
@@ -205,3 +210,32 @@ def test_empty_tensor_tuple_output_view_metadata(case_name: str, input_builder: 
     actual = compiled_func(npu_x)
     _assert_output_matches(npu_expected, actual)
     _assert_output_matches(cpu_expected, actual)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend_name,compile_backend", _SPLIT_EMPTY_COMPILE_BACKENDS, ids=["inductor", "inferrt"])
+def test_torch_compile_split_empty_dim_raises_before_backend(backend_name, compile_backend):
+    """
+    Feature: torch.compile empty split failure coverage
+    Description: Verify split(int) on an empty split dimension fails during Dynamo FakeTensor tracing
+    Expectation: The known PyTorch decomposition error is raised before backend execution
+    """
+    del backend_name
+
+    def func(x):
+        return torch.split(x, 2, dim=0)
+
+    x = torch.empty(0, 6, dtype=torch.float16).npu()
+    if compile_backend is None:
+        compiled_func = torch.compile(func, fullgraph=True)
+    else:
+        compiled_func = torch.compile(func, backend=compile_backend, fullgraph=True)
+
+    # torch.compile evaluates aten.split.Tensor with FakeTensor before invoking the selected backend.
+    # For dim_size == 0 and split_size > 0, PyTorch's decomposition builds an empty split_sizes list
+    # and then writes split_sizes[-1], so both default inductor and InferRT backends see the same error.
+    with pytest.raises(RuntimeError, match="list assignment index out of range"):
+        compiled_func(x)
+    # Keep the stream drained after the expected host-side exception. This avoids leaving InferRT's
+    # default async launch thread active if a future code path reaches backend execution before failing.
+    torch.npu.synchronize()
