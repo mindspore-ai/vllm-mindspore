@@ -161,7 +161,13 @@ def binary_scalar_pre_flatten_hook(node):
 
 # pylint: disable=unused-argument
 def embedding_hook(node, input_nodes, executor):
-    """swap the first and second param position."""
+    """Normalize embedding param order to backend (weight, indices).
+    F.embedding(indices, weight) -> swap to (weight, indices).
+    aten.embedding.default(weight, indices, ...) -> no swap, strip extras.
+    """
+    target_name = str(node.target)
+    if "aten.embedding" in target_name:
+        return input_nodes[:2]
     return [input_nodes[1], input_nodes[0]]
 
 
@@ -764,6 +770,7 @@ def _init_pre_flatten_hooks():
     """register hooks for pre-flatten argument adjustment"""
     register_pre_flatten_hook(Op.add_scalar, binary_scalar_pre_flatten_hook)
     register_pre_flatten_hook(Op.mul_scalar, binary_scalar_pre_flatten_hook)
+    register_pre_flatten_hook(Op.eq_scalar, binary_scalar_pre_flatten_hook)
 
 
 def leaky_relu_arg_hook(node, flat_args, executor):
@@ -1176,7 +1183,11 @@ def fill_op_hook(op, node, input_nodes, executor):
     if isinstance(node.args[-1], (int, float)):
         return Op.inplace_fill_scalar
     return Op.inplace_fill_tensor
-
+def eq_func_hook(op, node, input_nodes, executor):
+    """Get the eq op for torch.eq function - detects scalar vs tensor."""
+    if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
+        return Op.eq_scalar
+    return Op.eq
 
 def _init_ops_mapping_hooks():
     """Register ops mapping hooks for torch ops."""
@@ -1189,6 +1200,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.inplace_copy, copy_op_hook)
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
+    register_ops_mapping_hook(Op.eq, eq_func_hook)
     register_ops_mapping_hook(Op.add, add_op_hook)
     register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
@@ -1329,6 +1341,14 @@ _OP_MAP = {
     aten.empty_like: Op.empty_like,
     aten.empty_like.default: Op.empty_like,
     aten.expand.default: Op.expand,
+    aten.add.Tensor: Op.add,
+    aten.bmm.default: Op.batch_matmul,
+    aten.cat.default: Op.cat,
+    aten.clone.default: Op.clone,
+    aten.div.Tensor: Op.div,
+    aten.embedding.default: Op.embedding,
+    aten.eq.Scalar: Op.eq_scalar,
+    aten.eq.Tensor: Op.eq,
     aten.index_put_.default: Op.index_put,
     aten.index_copy_.default: Op.inplace_index_copy,
     aten.add_.Scalar: Op.inplace_add,

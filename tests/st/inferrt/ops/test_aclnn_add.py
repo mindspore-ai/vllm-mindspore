@@ -91,3 +91,75 @@ def test_add_int32(shape, op_func, alpha):
     """
     compiled_op = torch.compile(op_func, backend=backend)
     add_forward(np.int32, shape, alpha, compiled_op)
+
+def aten_add_dynamic_op(x1, x2):
+    b = x1.size(0)
+    return torch.ops.aten.add.Tensor(x1[:b], x2[:b])
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128), (2, 4, 8), (1, 8, 16, 32)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_aten_add_dynamic(shape, dtype):
+    """
+Feature: Test aten add with dynamic shapes.
+    Description: Test aten.add.Tensor with various shapes.
+    Expectation: The result matches eager mode.
+    """
+    compiled_op = torch.compile(aten_add_dynamic_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(-1, 1, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(-1, 1, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = aten_add_dynamic_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)
+
+def add_dynamic_op(x1, x2):
+    b = x1.size(0)
+    return torch.add(x1[:b], x2[:b])
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128), (2, 4, 8), (1, 8, 16, 32)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_add_dynamic(shape, dtype):
+    """
+Feature: Test add with dynamic shapes.
+    Description: Test torch.add with dynamic input slicing.
+    Expectation: The result matches eager mode.
+    """
+    compiled_op = torch.compile(add_dynamic_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(-1, 1, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(-1, 1, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = add_dynamic_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)
+
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float16])
+def test_add_static(shape, dtype):
+    """
+Feature: Test add with static shapes.
+    Description: Test torch.add with fixed shapes.
+    Expectation: The result matches eager mode.
+    """
+    def add_static_op(x1, x2):
+        return torch.add(x1, x2)
+
+    compiled_op = torch.compile(add_static_op, backend=backend)
+    prec = 0.001 if dtype == np.float16 else 0.0001
+    cpu_input0 = np.random.uniform(-1, 1, shape).astype(dtype)
+    cpu_input1 = np.random.uniform(-1, 1, shape).astype(dtype)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+    npu_input1 = torch.from_numpy(cpu_input1).npu()
+    cpu_output = add_static_op(torch.from_numpy(cpu_input0), torch.from_numpy(cpu_input1)).detach().numpy()
+    npu_output = compiled_op(npu_input0, npu_input1).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output, npu_output, prec)
