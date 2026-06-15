@@ -41,6 +41,7 @@ from ms_inferrt.torch.getitem_impl import getitem_process
 from ms_inferrt.torch.setitem_impl import setitem_process
 from ms_inferrt.torch.decompose_impl import _decompose_ops_with_fake_mode
 from ms_inferrt.torch.copy_elimination import eliminate_redundant_copy_
+from ms_inferrt.torch.full_decomposition import decompose_full_
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -747,6 +748,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.reduce_sum, reduce_sum_arg_hook)
     register_arg_mapping_hook(Op.squeeze_view, squeeze_arg_hook)
     register_arg_mapping_hook(Op.reduce_mean, reduce_sum_arg_hook)
+    register_arg_mapping_hook(Op.index_tensor, index_tensor_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -798,6 +800,28 @@ def index_put_arg_hook(node, flat_args, executor):
     # Ensure unsafe exists (position 4)
     if len(args) < 5:
         args.append(False)
+
+    return args
+
+
+# pylint: disable=unused-argument
+def index_tensor_arg_hook(node, flat_args, executor):
+    """
+    Normalize aten.index.Tensor indices by removing None placeholders.
+
+    aten.index.Tensor schema:
+      self, indices
+    """
+    args = list(flat_args)
+    if len(args) < 2:
+        return args
+
+    indices = args[1]
+    if isinstance(indices, (list, tuple)):
+        normalized_indices = list(indices)
+        while normalized_indices and normalized_indices[-1] is None:
+            normalized_indices.pop()
+        args[1] = normalized_indices
 
     return args
 
@@ -1116,6 +1140,14 @@ def lt_op_hook(op, node, input_nodes, executor):
 
 
 # pylint: disable=unused-argument
+def le_op_hook(op, node, input_nodes, executor):
+    """Get the le op for a given node."""
+    if _is_scalar_arg(node.args[-1]):
+        return Op.le_scalar
+    return Op.le
+
+
+# pylint: disable=unused-argument
 def add_op_hook(op, node, input_nodes, executor):
     """Get the add op for a given node."""
     if _is_scalar_arg(node.args[0]) or _is_scalar_arg(node.args[1]):
@@ -1172,7 +1204,7 @@ def inplace_add_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def copy_op_hook(op, node, input_nodes, executor):
     """Get the copy op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.inplace_fill_scalar
     return Op.inplace_copy
 
@@ -1180,7 +1212,7 @@ def copy_op_hook(op, node, input_nodes, executor):
 # pylint: disable=unused-argument
 def fill_op_hook(op, node, input_nodes, executor):
     """Get the fill op for a given node."""
-    if isinstance(node.args[-1], (int, float)):
+    if _is_scalar_arg(node.args[-1]):
         return Op.inplace_fill_scalar
     return Op.inplace_fill_tensor
 def eq_func_hook(op, node, input_nodes, executor):
@@ -1201,6 +1233,7 @@ def _init_ops_mapping_hooks():
     register_ops_mapping_hook(Op.ge, ge_op_hook)
     register_ops_mapping_hook(Op.lt, lt_op_hook)
     register_ops_mapping_hook(Op.eq, eq_func_hook)
+    register_ops_mapping_hook(Op.le, le_op_hook)
     register_ops_mapping_hook(Op.add, add_op_hook)
     register_ops_mapping_hook(Op.sub, sub_op_hook)
     register_ops_mapping_hook(Op.mul, mul_op_hook)
@@ -1282,6 +1315,7 @@ _OP_MAP = {
     torch.bitwise_or: Op.bitwise_or_tensor,
     torch.gt: Op.gt,
     torch.ge: Op.ge,
+    torch.mm: Op.mm,
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
@@ -1306,8 +1340,18 @@ _OP_MAP = {
     torch.square: Op.square,
     torch.pow: Op.pow_scalar,
     torch.rsqrt: Op.rsqrt,
+    torch.exp: Op.exp,
     aten.rsqrt: Op.rsqrt,
     aten.rsqrt.default: Op.rsqrt,
+    aten.exp: Op.exp,
+    aten.exp.default: Op.exp,
+    aten.index.Tensor: Op.index_tensor,
+    aten.le.Tensor: Op.le,
+    aten.le.Scalar: Op.le,
+    aten.mm.default: Op.mm,
+    aten.mul.Tensor: Op.mul,
+    aten.neg.default: Op.neg,
+    aten.sum.dim_IntList: Op.reduce_sum,
     torch.relu: Op.relu,
     torch.sigmoid: Op.sigmoid,
     torch.empty: Op.empty,
@@ -2306,6 +2350,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     if is_enable_dump_ir():
         write_gm_graph(gm, graph_id, get_ir_file_name())
     eliminate_redundant_copy_(gm)
+    decompose_full_(gm)
     _decompose_ops_with_fake_mode(gm)
     _init_pre_flatten_hooks()
     _init_arg_mapping_hooks()

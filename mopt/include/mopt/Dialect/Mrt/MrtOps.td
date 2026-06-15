@@ -654,6 +654,25 @@ def Mrt_EmptyOp : Mrt_Op<"empty", [
   }];
 }
 
+def Mrt_ExpOp : Mrt_Op<"exp", [Pure]> {
+  let summary = "aclnnExp";
+  let description = [{
+    Computes the exponential of each input tensor element.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnExp";
+}
+
 def Mrt_EqOp : Mrt_Op<"eq", [Pure]> {
   let summary = "Element-wise equality comparison";
   let description = [{
@@ -1133,6 +1152,27 @@ def Mrt_LeOp : Mrt_Op<"le", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnLeTensor";
+}
+
+def Mrt_LeScalarOp : Mrt_Op<"le_scalar", [Pure]> {
+  let summary = "Tensor less-than-or-equal-to scalar comparison";
+  let description = [{
+    Tensor less-than-or-equal-to scalar comparison.
+    Returns a boolean tensor where each element is true if the corresponding element in self is less than or equal to the scalar.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$self,
+    Mrt_ScalarType:$other
+  );
+
+  let results = (outs MrtAnyTensor:$out);
+
+  let assemblyFormat = [{
+    $self `,` $other attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnLeScalar";
 }
 
 def Mrt_LinalgCallOp : Mrt_Op<"linalg_call"> {
@@ -1778,6 +1818,25 @@ def Mrt_NeOp : Mrt_Op<"ne", [Pure]> {
   }];
 
   let genAclnnOp = "aclnnNeTensor";
+}
+
+def Mrt_NegOp : Mrt_Op<"neg", [Pure]> {
+  let summary = "aclnnNeg";
+  let description = [{
+    Computes the negative of each input tensor element.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$input
+  );
+
+  let results = (outs MrtAnyTensor:$result);
+
+  let assemblyFormat = [{
+    $input attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnNeg";
 }
 
 def Mrt_PermuteOp : Mrt_Op<"permute", [Pure]> {

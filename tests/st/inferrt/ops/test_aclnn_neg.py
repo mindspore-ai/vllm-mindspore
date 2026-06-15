@@ -26,6 +26,11 @@ def op_func(x):
     return torch.neg(x)
 
 
+def aten_neg_default(x):
+    """golden for aten.neg.default"""
+    return torch.ops.aten.neg.default(x)
+
+
 def get_op_func_compiled():
     """neg op compiled"""
     def custom_op_func(x):
@@ -49,3 +54,19 @@ def test_neg(shape, dtype):
     npu_output = op_func_compiled(npu_input)
     npu_output_cpu = npu_output.cpu()
     AssertRtolEqual(cpu_output, npu_output_cpu)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+def test_aten_neg_default(dtype):
+    """
+    Feature: Test aten.neg.default
+    Description: Verify exact aten neg overload through fx_backend.
+    Expectation: The result is correct
+    """
+    cpu_input = torch.rand((8, 16), dtype=dtype)
+    npu_input = cpu_input.npu()
+    cpu_output = aten_neg_default(cpu_input)
+    op_func_compiled = torch.compile(aten_neg_default, backend=backend)
+    npu_output = op_func_compiled(npu_input)
+    AssertRtolEqual(cpu_output, npu_output.cpu())
