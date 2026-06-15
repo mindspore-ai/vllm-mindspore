@@ -19,6 +19,7 @@ import torch
 from torch_npu.testing.common_utils import create_common_tensor
 
 from ms_inferrt.torch import fx_mlir_backend as backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
@@ -107,3 +108,22 @@ def test_reshape_noncontiguous_view_incompatible(shape, transform_pattern, targe
     op_func_compiled = torch.compile(func, backend=backend, fullgraph=True)
     with pytest.raises(RuntimeError, match=_VIEW_ERR):
         op_func_compiled(transformed_npu)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_reshape():
+    """
+    Feature: Test aten.reshape via fx_backend
+    Description: Test aten.reshape interface (torch.ops.aten.reshape.default) with fx_backend backend
+    Expectation: The result matches torch reference
+    """
+    def aten_reshape_func(x, shape):
+        return torch.ops.aten.reshape.default(x, shape)
+
+    op_func_compiled = torch.compile(aten_reshape_func, backend=fx_backend)
+    x = torch.randn(2, 3, 4, dtype=torch.float32).npu()
+    shape = (6, 4)
+    npu_out = op_func_compiled(x, shape)
+    cpu_out = torch.ops.aten.reshape.default(x.cpu(), shape)
+    AssertRtolEqual(cpu_out, npu_out.detach().cpu())
+    assert npu_out.device.type == "npu"
