@@ -195,7 +195,9 @@ class Tensor : public RefCounted {
     if (numel_ == 0) {
       return nullptr;
     }
-    CHECK_IF_NULL(storage_->Data());
+    if (storage_->Data() == nullptr) {
+      return nullptr;
+    }
     const auto offsetBytes = static_cast<size_t>(storageOffset_) * dtype_.GetSize();
     CHECK_IF_FAIL(offsetBytes < storage_->SizeBytes());
     return static_cast<const char *>(storage_->Data()) + offsetBytes;
