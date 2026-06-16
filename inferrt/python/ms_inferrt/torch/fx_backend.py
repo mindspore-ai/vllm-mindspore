@@ -36,6 +36,7 @@ from ms_inferrt.torch.utils import (
     set_device_context,
     update_runtime_inputs,
     is_op_registered_by_custom_or_torch,
+    get_tensor_arg_dtype,
 )
 from ms_inferrt.torch.getitem_impl import getitem_process
 from ms_inferrt.torch.setitem_impl import setitem_process
@@ -749,6 +750,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.squeeze_view, squeeze_arg_hook)
     register_arg_mapping_hook(Op.reduce_mean, reduce_sum_arg_hook)
     register_arg_mapping_hook(Op.index_tensor, index_tensor_arg_hook)
+    register_arg_mapping_hook(Op.amax, amax_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -763,7 +765,9 @@ def _init_arg_mapping_hooks():
     # Normalize torch.rms_norm argument layout to backend Op.rms_norm layout.
     register_arg_mapping_hook(Op.rms_norm, rms_norm_arg_hook)
     register_arg_mapping_hook(Op.arange, arange_arg_hook)
+    register_arg_mapping_hook(Op.iota, iota_arg_hook)
     register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
+    register_arg_mapping_hook(Op.log_softmax, log_softmax_arg_hook)
     # Normalize torch.layer_norm / torch.nn.functional.layer_norm to backend Op.norm layout.
     register_arg_mapping_hook(Op.norm, layer_norm_arg_hook)
 
@@ -781,6 +785,62 @@ def leaky_relu_arg_hook(node, flat_args, executor):
     if len(args) < 2:
         args.append(0.01)
     return args
+
+
+def log_softmax_arg_hook(node, flat_args, executor):
+    """
+    Normalize log_softmax frontend variants to backend Op.log_softmax layout.
+
+    ACLNN consumes only [self, dim]. PyTorch's dtype / half_to_float
+    arguments also change the input computation dtype, so reject promotion
+    until an explicit cast is lowered before log_softmax.
+    """
+    args = list(flat_args)
+    if len(args) < 2:
+        raise ValueError(f"Unexpected log_softmax argument count after schema flatten: {len(args)}")
+
+    if node.target == aten._log_softmax.default:  # pylint: disable=protected-access
+        half_to_float = args[2] if len(args) > 2 else False
+        if half_to_float:
+            raise ValueError(
+                "log_softmax half_to_float=True requires casting the input tensor first, "
+                "which is not supported yet"
+            )
+        return args[:2]
+
+    dtype_arg = args[2] if len(args) > 2 else None
+    if dtype_arg is not None:
+        input_dtype = get_tensor_arg_dtype(args[0])
+        if input_dtype is not None and dtype_arg != input_dtype:
+            raise ValueError(
+                f"log_softmax dtype={dtype_arg} requires casting the input tensor from "
+                f"{input_dtype} first, which is not supported yet"
+            )
+    return args[:2]
+
+
+def amax_arg_hook(node, flat_args, executor):
+    """
+    Normalize amax arguments.
+
+    PyTorch uses dim=[] as all-dimension reduction. aclnnAmax expects the
+    concrete dimension list, so expand [] to [0, ..., rank - 1].
+    """
+    args = list(flat_args)
+    if len(args) < 3:
+        raise ValueError(f"Unexpected amax argument count after schema flatten: {len(args)}")
+
+    self_arg = args[0]
+    dim = args[1]
+    example = self_arg.meta.get("example_value", None) if isinstance(self_arg, Node) else self_arg
+
+    if dim is None or (isinstance(dim, (list, tuple)) and len(dim) == 0):
+        rank = int(example.dim()) if hasattr(example, "dim") else 0
+        args[1] = list(range(rank))
+    elif isinstance(dim, int):
+        args[1] = [dim]
+
+    return args[:3]
 
 
 def index_put_arg_hook(node, flat_args, executor):
@@ -861,6 +921,26 @@ def arange_arg_hook(node, flat_args, executor):
             new_args.append(orig_kwargs[k])
 
     return new_args
+
+
+def iota_arg_hook(node, flat_args, executor):
+    """
+    Normalize prims.iota arguments to backend Op.iota layout.
+
+    The torch schema is:
+      prims.iota(length, *, start, step, dtype, device, requires_grad)
+    Op.iota consumes only length/start/step and gets output dtype/device from
+    torch meta output. requires_grad=True is not supported.
+    """
+    args = list(flat_args)
+    if len(args) < 6:
+        raise ValueError(f"Unexpected prims.iota argument count after schema flatten: {len(args)}")
+
+    requires_grad = args[5]
+    if requires_grad:
+        raise ValueError("prims.iota requires_grad=True is not supported")
+
+    return args[:3]
 
 
 def rms_norm_arg_hook(node, flat_args, executor):
@@ -1333,6 +1413,7 @@ _OP_MAP = {
     torch.cat: Op.cat,
     torch.stack: Op.stack,
     torch.sum: Op.reduce_sum,
+    torch.amax: Op.amax,
     torch.mean: Op.reduce_mean,
     torch.clone: Op.clone,
     torch.index_select: Op.index_select,
@@ -1341,6 +1422,7 @@ _OP_MAP = {
     torch.pow: Op.pow_scalar,
     torch.rsqrt: Op.rsqrt,
     torch.exp: Op.exp,
+    torch.log_softmax: Op.log_softmax,
     aten.rsqrt: Op.rsqrt,
     aten.rsqrt.default: Op.rsqrt,
     aten.exp: Op.exp,
@@ -1362,6 +1444,7 @@ _OP_MAP = {
     torch.layer_norm: Op.norm,
     torch.ops.aten.alias.default: Op.alias,
     aten.view.default: Op.view,
+    aten.reshape.default: Op.view,
     aten.permute.default: Op.permute_view,
     aten.transpose.int: Op.permute_view,
     aten.t.default: Op.permute_view,
@@ -1399,14 +1482,17 @@ _OP_MAP = {
     aten.arange: Op.arange,
     aten.arange.default: Op.arange,
     aten.arange.start: Op.arange,
+    torch.ops.prims.iota.default: Op.iota,
+    aten.amax.default: Op.amax,
     aten.mean: Op.reduce_mean,
     aten.mean.dim: Op.reduce_mean,
     aten.pow: Op.pow_scalar,
     aten.pow.Tensor_Scalar: Op.pow_scalar,
     aten.pow.Tensor_Tensor: Op.pow_tensor,
+    aten._log_softmax.default: Op.log_softmax,
+    aten.log_softmax.int: Op.log_softmax,
     aten.softmax: Op.softmax,
     aten.softmax.int: Op.softmax,
-    aten.reshape.default: Op.view,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -1418,6 +1504,7 @@ _OP_MAP = {
     torch.nn.functional.gelu: Op.gelu,
     torch.nn.functional.silu: Op.silu,
     torch.nn.functional.leaky_relu: Op.leaky_relu,
+    torch.nn.functional.log_softmax: Op.log_softmax,
     torch.nn.functional.softmax: Op.softmax,
     torch.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
@@ -1492,6 +1579,7 @@ _OP_MAP = {
     "masked_fill_": Op.inplace_masked_fill_tensor,
     "masked_fill": Op.masked_fill_tensor,
     "softmax": Op.softmax,
+    "log_softmax": Op.log_softmax,
     "fill_": Op.inplace_fill_tensor,
     "index_select": Op.index_select,
     "bitwise_or": Op.bitwise_or_tensor,
@@ -1504,6 +1592,7 @@ _OP_MAP = {
     "chunk": Op.split_with_size_view,
     "flatten": Op.flatten_view,
     "sum": Op.reduce_sum,
+    "amax": Op.amax,
     "mean": Op.reduce_mean,
     "pow": Op.pow_scalar,
     "argsort": Op.argsort,
@@ -1559,6 +1648,7 @@ def _convert_operator_to_torch_op(op):
     """Convert python operator to torch operator."""
     operator_map = {
         torch.nn.functional.layer_norm: torch.layer_norm,
+        torch.nn.functional.log_softmax: torch.log_softmax,
         operator.add: torch.add,
         operator.iadd: "add_",
         operator.sub: torch.sub,

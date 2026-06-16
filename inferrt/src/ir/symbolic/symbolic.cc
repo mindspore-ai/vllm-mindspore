@@ -23,7 +23,7 @@ namespace mrt {
 namespace ir {
 
 int64_t SymbolicVar::Evaluate() const {
-  if (value_ < 0) {
+  if (!hasValue_) {
     LOG_EXCEPTION << "Symbolic variable " << name_ << " has no value.";
   }
   return value_;
@@ -79,7 +79,9 @@ SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeI
 
 SymbolicExprPtr SymbolicVar::DeepCopy() const {
   auto copy = MakeIntrusive<SymbolicVar>(name_);
-  copy->SetValue(value_);
+  if (hasValue_) {
+    copy->SetValue(value_);
+  }
   return copy;
 }
 

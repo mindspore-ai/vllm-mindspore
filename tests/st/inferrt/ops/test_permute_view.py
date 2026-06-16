@@ -111,6 +111,24 @@ def _assert_view_matches_eager(input_tensor: torch.Tensor, eager_out: torch.Tens
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_permute_default_to_permute_view():
+    """
+    Feature: aten.permute.default lowered to permute_view
+    Description: Verify aten.permute.default executes through the built-in fx_backend permute_view path
+    Expectation: The result and view metadata match eager mode
+    """
+    x = _make_input("ND", False, BASE_SHAPE)
+
+    def func(input_tensor):
+        return torch.ops.aten.permute.default(input_tensor, [2, 0, 1])
+
+    eager_out = func(x)
+    compiled_func = torch.compile(func, backend=backend, fullgraph=True)
+    compiled_out = compiled_func(x)
+    _assert_view_matches_eager(x, eager_out, compiled_out)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("fmt", ["ND", "NZ"])
 @pytest.mark.parametrize("non_contiguous", [False, True], ids=["contiguous", "non_contiguous"])
 @pytest.mark.parametrize("shape", TEST_SHAPES_2D, ids=["shape_16x32", "shape_24x40"])

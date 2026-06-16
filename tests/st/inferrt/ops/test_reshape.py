@@ -18,6 +18,7 @@ import torch
 
 from torch_npu.testing.common_utils import create_common_tensor
 
+from ms_inferrt.torch import backend as fx_backend
 from ms_inferrt.torch import fx_mlir_backend as backend
 from ms_inferrt.torch.fx_backend import backend as fx_backend
 
@@ -64,6 +65,24 @@ def test_reshape():
     ]
     op_func_compiled = torch.compile(op_func, backend=backend)
     reshape_forward(shape_format, op_func_compiled)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_reshape_default_to_view():
+    """
+    Feature: Test aten.reshape.default lowering
+    Description: Verify aten.reshape.default is lowered to InferRT view op through fx_backend
+    Expectation: The result is correct
+    """
+    x = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4).npu()
+
+    def func(input_tensor):
+        return torch.ops.aten.reshape.default(input_tensor, [6, 4])
+
+    eager_out = func(x)
+    compiled_func = torch.compile(func, backend=fx_backend, fullgraph=True)
+    compiled_out = compiled_func(x)
+    torch.testing.assert_close(compiled_out, eager_out)
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
