@@ -3,6 +3,7 @@
 from typing import Tuple
 import torch
 from torch.fx.node import Argument, Node
+from torch._subclasses.fake_tensor import FakeTensor
 from ms_inferrt.ir import Op
 from ms_inferrt.torch.utils import tuple_indices_to_slice_arg
 
@@ -48,6 +49,17 @@ def tuple_getitem(x, indices):
     # operation: Op.tuple_getitem(x, indices)
     return Op.tuple_getitem, [x, indices]
 
+
+def _is_tensor_node(node):
+    """Check if an FX node represents a tensor (by .type or example_value being FakeTensor)."""
+    if not isinstance(node, torch.fx.node.Node):
+        return False
+    if node.type == torch.Tensor:
+        return True
+    example_val = node.meta.get("example_value")
+    return isinstance(example_val, FakeTensor)
+
+
 # pylint: disable=unused-argument
 def getitem_process(node, input_nodes):
     """Handle getitem node."""
@@ -59,11 +71,7 @@ def getitem_process(node, input_nodes):
         return tuple_getitem(input_nodes[0], input_nodes[1])
 
     # input is tensor
-    is_tensor_node = isinstance(input_nodes[0], torch.fx.node.Node)
-    example_val = input_nodes[0].meta.get("example_value") if is_tensor_node else None
-    # pylint: disable=protected-access
-    if is_tensor_node and (input_nodes[0].type == torch.Tensor or
-                           isinstance(example_val, torch._subclasses.FakeTensor)):
+    if _is_tensor_node(input_nodes[0]):
         idx_type = type(input_nodes[1])
         if idx_type is int:
             return _tensor_getitem_by_number(input_nodes[0], input_nodes[1])
@@ -71,7 +79,28 @@ def getitem_process(node, input_nodes):
             return _tensor_getitem_by_slice(input_nodes[0], input_nodes[1])
         if idx_type is tuple:
             return _tensor_getitem_by_tuple(input_nodes[0], input_nodes[1])
-        if isinstance(input_nodes[1], torch.fx.node.Node) and input_nodes[0].type == torch.Tensor:
+        if isinstance(input_nodes[1], torch.fx.node.Node):
             return _tensor_getitem_by_tensor(input_nodes[0], input_nodes[1])
-        raise ValueError(f"Unsupported getitem indices type: {idx_type}")
-    raise ValueError(f"Unsupported getitem input type: {type(input_nodes[0])}")
+        input_node = input_nodes[0]
+        index_node = input_nodes[1]
+        node_name = getattr(input_node, "name", None)
+        raise ValueError(
+            "getitem indices type unsupported."
+            f"Expected index types: int, slice, tuple, or Node. "
+            f"Actual index type: {idx_type}. "
+            f"node={node_name}, input_type={type(input_node)}, index_value={index_node}"
+        )
+    input0 = input_nodes[0]
+    if isinstance(input0, torch.fx.node.Node):
+        node_type = input0.type
+        example_val = input0.meta.get("example_value")
+        example_val_type = type(example_val)
+    else:
+        node_type = None
+        example_val_type = None
+    raise ValueError(
+        "getitem input[0] unsupported. "
+        "Expected: list, tuple, or Node (with type==Tensor or FakeTensor example_value). "
+        f"Actual input[0] type: {type(input0)}, value: {input0}, "
+        f"node_type={node_type}, example_value_type={example_val_type}"
+    )
