@@ -42,6 +42,22 @@ def test_silu():
 
 
 @arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_silu_default():
+    """
+    Feature: Test aten.silu.default via fx_backend
+    Description: Directly call torch.ops.aten.silu.default
+    Expectation: Result matches reference
+    """
+    cpu_input0 = np.random.uniform(-10, 10, [1, 70, 2048]).astype(np.float32)
+    npu_input0 = torch.from_numpy(cpu_input0).npu()
+
+    cpu_output0 = op_func(cpu_input0)
+    op_func_compiled = torch.compile(torch.ops.aten.silu.default, backend=backend)
+    npu_output0 = op_func_compiled(npu_input0).detach().cpu().numpy()
+    AssertRtolEqual(cpu_output0, npu_output0)
+
+
+@arg_mark(plat_marks=["platform_ascend"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_silu_fp16():
     """
     Feature: Test aclnn silu

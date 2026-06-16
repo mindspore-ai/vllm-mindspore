@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from ms_inferrt.torch import fx_mlir_backend as backend
+from ms_inferrt.torch.fx_backend import backend as fx_backend
 
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
@@ -89,3 +90,27 @@ def test_sub_int32(shape, op_func, alpha):
     """
     op_func_compiled = torch.compile(op_func, backend=backend)
     sub_forward(np.int32, shape, alpha, op_func_compiled)
+
+
+
+def sub_aten_tensor(x, y):
+    """torch.ops.aten.sub.Tensor style"""
+    return torch.ops.aten.sub.Tensor(x, y)
+
+
+def sub_torch_sub(x, y):
+    """torch.sub style"""
+    return torch.sub(x, y)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("shape", [(128, 256)])
+@pytest.mark.parametrize("op_func", [sub_aten_tensor, sub_torch_sub])
+def test_sub_tensor_fp32(shape, op_func):
+    """
+    Feature: Test aten.sub.Tensor via fx_backend
+    Description: Explicit coverage for aten.sub.Tensor and torch.sub call styles
+    Expectation: The result is correct
+    """
+    op_func_compiled = torch.compile(op_func, backend=fx_backend)
+    sub_forward(np.float32, shape, 1.0, op_func_compiled)

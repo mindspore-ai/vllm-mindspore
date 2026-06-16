@@ -41,3 +41,24 @@ def test_softmax():
     cpu_out = np.exp(cpu_x - np.max(cpu_x, axis=-1, keepdims=True))
     cpu_out = cpu_out / np.sum(cpu_out, axis=-1, keepdims=True)
     AssertRtolEqual(cpu_out, npu_out)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_softmax_default():
+    """
+    Feature: Test aten._softmax.default via fx_backend
+    Description: Directly call torch.ops.aten._softmax.default
+    Expectation: Result matches reference
+    """
+    cpu_x = np.random.uniform(-1, 1, [1, 8, 70, 70]).astype(np.float32)
+    npu_x = torch.from_numpy(cpu_x).npu()
+
+    def _softmax_impl(x):
+        # pylint: disable=protected-access
+        return torch.ops.aten._softmax.default(x, -1, False)
+
+    op_func_compiled = torch.compile(_softmax_impl, backend=backend)
+    npu_out = op_func_compiled(npu_x).detach().cpu().numpy()
+    cpu_out = np.exp(cpu_x - np.max(cpu_x, axis=-1, keepdims=True))
+    cpu_out = cpu_out / np.sum(cpu_out, axis=-1, keepdims=True)
+    AssertRtolEqual(cpu_out, npu_out)

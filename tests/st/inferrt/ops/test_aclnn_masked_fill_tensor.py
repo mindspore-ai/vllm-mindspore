@@ -47,6 +47,26 @@ def test_masked_fill_tensor(dtype):
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
+def test_aten_masked_fill_scalar(dtype):
+    """
+    Feature: Test aten.masked_fill.Scalar via fx_backend
+    Description: Directly call torch.ops.aten.masked_fill.Scalar
+    Expectation: Result matches reference
+    """
+    masked_fill_func_compiled = torch.compile(
+        torch.ops.aten.masked_fill.Scalar, backend=backend
+    )
+
+    x = torch.randn([1, 8, 70, 70], dtype=dtype).npu()
+    mask = torch.randint(0, 2, [1, 8, 70, 70], dtype=torch.bool).npu()
+    value = 10.0
+    output = masked_fill_func_compiled(x, mask, value)
+    expected = torch.masked_fill(x, mask, value)
+    AssertRtolEqual(output, expected)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("dtype", (torch.float16, torch.float32))
 def test_inplace_masked_fill_tensor(dtype):
     """
     Feature: Test aclnn inplace_masked_fill_tensor

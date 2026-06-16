@@ -751,6 +751,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.reduce_mean, reduce_sum_arg_hook)
     register_arg_mapping_hook(Op.index_tensor, index_tensor_arg_hook)
     register_arg_mapping_hook(Op.amax, amax_arg_hook)
+    register_arg_mapping_hook(Op.var_mean, var_mean_arg_hook)
     # dtype cast-style tensor methods
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
@@ -1164,6 +1165,38 @@ def reduce_sum_arg_hook(node, flat_args, executor):
 
 
 # pylint: disable=unused-argument
+def var_mean_arg_hook(node, flat_args, executor):
+    """Normalize arguments for var_mean to backend schema [input, dim, correction, keepdim]."""
+    args = list(flat_args)
+    kwargs = node.kwargs if node is not None else {}
+
+    input_arg = args[0] if args else None
+    dim = kwargs.get("dim", args[1] if len(args) > 1 else None)
+    correction = kwargs.get("correction", args[2] if len(args) > 2 else None)
+    keepdim = kwargs.get("keepdim", args[3] if len(args) > 3 else None)
+
+    if correction is None:
+        correction = 1
+    if keepdim is None:
+        keepdim = False
+
+    # Normalize dim: None or [] -> all dims; scalar -> wrap in list
+    if dim is None or (isinstance(dim, (list, tuple)) and len(dim) == 0):
+        example = input_arg.meta.get("example_value", None) if isinstance(input_arg, Node) else input_arg
+        if hasattr(example, "dim"):
+            try:
+                dim = list(range(int(example.dim())))
+            except Exception:  # pylint: disable=broad-exception-caught
+                dim = []
+        else:
+            dim = []
+    elif not isinstance(dim, (list, tuple)):
+        dim = [dim]
+
+    return [input_arg, list(dim), int(correction), bool(keepdim)]
+
+
+# pylint: disable=unused-argument
 def split_ops_hook(op, node, input_nodes, executor):
     """
     Hook to determine which split op to use for a given FX node.
@@ -1440,6 +1473,8 @@ _OP_MAP = {
     torch.empty_like: Op.empty_like,
     torch.zeros: Op.zeros,
     torch.arange: Op.arange,
+    torch.tril: Op.tril,
+    torch.topk: Op.topk,
     torch.select: Op.select_view,
     torch.layer_norm: Op.norm,
     torch.ops.aten.alias.default: Op.alias,
@@ -1484,6 +1519,13 @@ _OP_MAP = {
     aten.arange.start: Op.arange,
     torch.ops.prims.iota.default: Op.iota,
     aten.amax.default: Op.amax,
+    aten.tril: Op.tril,
+    aten.topk: Op.topk,
+    aten.topk.default: Op.topk,
+    aten.sub.Tensor: Op.sub,
+    aten.var_mean.correction: Op.var_mean,
+    aten.where.self: Op.where,
+    torch.ops.prims.convert_element_type.default: Op.cast,
     aten.mean: Op.reduce_mean,
     aten.mean.dim: Op.reduce_mean,
     aten.pow: Op.pow_scalar,
@@ -1493,6 +1535,12 @@ _OP_MAP = {
     aten.log_softmax.int: Op.log_softmax,
     aten.softmax: Op.softmax,
     aten.softmax.int: Op.softmax,
+    aten._softmax.default: Op.softmax,
+    aten.log_softmax: Op.log_softmax,
+    aten.masked_fill.Scalar: Op.masked_fill_scalar,
+    aten.native_layer_norm.default: Op.norm,
+    aten.silu.default: Op.silu,
+    aten.stack.default: Op.stack,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -1580,6 +1628,9 @@ _OP_MAP = {
     "masked_fill": Op.masked_fill_tensor,
     "softmax": Op.softmax,
     "log_softmax": Op.log_softmax,
+    "topk": Op.topk,
+    "where": Op.where,
+    "var_mean": Op.var_mean,
     "fill_": Op.inplace_fill_tensor,
     "index_select": Op.index_select,
     "bitwise_or": Op.bitwise_or_tensor,
@@ -1597,6 +1648,7 @@ _OP_MAP = {
     "pow": Op.pow_scalar,
     "argsort": Op.argsort,
     "new_empty": Op.new_empty,
+    "tril": Op.tril,
 }
 
 if TORCH_NPU_INSTALLED:

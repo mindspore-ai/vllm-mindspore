@@ -53,7 +53,6 @@ def test_layer_norm(backend):
 
     AssertRtolEqual(cpu_output_np, npu_output_np)
 
-
 def _make_layer_norm_fx_case(case):
     """Create a layer_norm callable and inputs for the requested FX backend case."""
     input_tensor = torch.randn((2, 4), dtype=torch.float16).npu()
@@ -131,3 +130,25 @@ def test_layer_norm_fx_backend_frontend_and_arg_variants(case):
     compiled_output = op_func_compiled(*inputs)
 
     torch.testing.assert_close(compiled_output, eager_output, rtol=1e-3, atol=1e-3)
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+def test_aten_native_layer_norm_default():
+    """
+    Feature: Test aten.native_layer_norm.default via fx_backend
+    Description: Directly call torch.ops.aten.native_layer_norm.default
+    Expectation: Result matches reference (output, mean, rstd)
+    """
+    input_tensor = torch.randn((1, 70, 2048), dtype=torch.float32).npu()
+    weight = torch.randn((2048,), dtype=torch.float32).npu()
+    bias = torch.randn((2048,), dtype=torch.float32).npu()
+
+    def native_ln(x, w, b):
+        return torch.ops.aten.native_layer_norm.default(x, [2048], w, b, 1e-5)
+
+    eager_out = native_ln(input_tensor, weight, bias)
+    op_func_compiled = torch.compile(native_ln, backend=fx_backend, fullgraph=True)
+    compiled_out = op_func_compiled(input_tensor, weight, bias)
+
+    for e, c in zip(eager_out, compiled_out):
+        torch.testing.assert_close(c, e, rtol=1e-3, atol=1e-3)
