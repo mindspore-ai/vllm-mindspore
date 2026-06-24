@@ -23,7 +23,7 @@ from ms_inferrt.torch import fx_mlir_backend as backend
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
 
-_VIEW_ERR = r"View shape .* is not compatible"
+_VIEW_ERR = r"View encountered unsupported non-contiguous input tensor"
 
 
 # pylint: disable=redefined-builtin
@@ -81,7 +81,7 @@ def test_reshape_noncontiguous_view_incompatible(shape, transform_pattern, targe
                  reshape (implemented via view.cc) rejects non-view-compatible stride geometry.
                  Dynamo FakeTensor does NOT intercept reshape (eager always succeeds), so the
                  error comes from InferRT at runtime.
-    Expectation: InferRT raises RuntimeError "View shape ... is not compatible"
+    Expectation: InferRT raises RuntimeError for unsupported non-contiguous input.
     """
     self_tensor = torch.rand(shape, dtype=torch.bfloat16)
 

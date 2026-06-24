@@ -17,7 +17,7 @@ from tests.ops_utils import AssertRtolEqual
 # rather than falling back to eager mode.
 dynamo_config.cache_size_limit = 64
 
-_FLATTEN_VIEW_ERR = r"Flatten (view|output) shape .* is not compatible"
+_FLATTEN_VIEW_ERR = r"Flatten encountered unsupported non-contiguous input tensor"
 
 
 def op_func(input_self_tensor, start_dim = 0, end_idx = -1):
