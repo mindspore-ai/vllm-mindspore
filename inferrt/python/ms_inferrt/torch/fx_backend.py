@@ -2391,8 +2391,13 @@ def _try_handle_symbolic_only_op(node, executor, env, sym_mgr) -> bool:
     """
     target = node.target
 
-    # torch.sym_sum: produce a symbolic Value directly.
-    if getattr(target, "__name__", None) == "sym_sum" or target is getattr(torch, "sym_sum", None):
+    # torch.sym_sum / torch.sym_min: produce a symbolic Value directly.
+    target_name = getattr(target, "__name__", None)
+    if (
+        target_name in ("sym_sum", "sym_min")
+        or target is getattr(torch, "sym_sum", None)
+        or target is getattr(torch, "sym_min", None)
+    ):
         example_value = node.meta.get("example_value", None)
         output_value = sym_mgr.from_torch_with_sym(example_value)
         env[node] = executor.add_value_node(output_value)

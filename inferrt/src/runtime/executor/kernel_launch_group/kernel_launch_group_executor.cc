@@ -222,7 +222,7 @@ void KernelLaunchGroupExecutor::RunWithRecordCacheMemory() {
         opRunner.AllocateMemory();
         RecordMemory(&opRunner, opRunner.GetOutput());
         if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-          LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+          LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
         }
         opRunner.FreeMemory();
       };
@@ -316,7 +316,7 @@ void KernelLaunchGroupExecutor::DispatchParallelLaunchKernels(size_t index) {
       SetOutputAndWsCacheMemory(opRunner);
       SetInputCacheMemory(opRunner);
       if (auto errNo = opRunner->Launch(realStream) != ops::SUCCESS) {
-        LOG_EXCEPTION << "Launch shape failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+        LOG_EXCEPTION << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
       }
     }
 
@@ -347,7 +347,7 @@ void KernelLaunchGroupExecutor::DispatchSerialLaunchKernels() {
     // TODO: force resize. // NOLINT(readability/todo)
 
     if (auto errNo = opRunner->Launch(mainStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
+      LOG_EXCEPTION << "Launch failed for operator " << opRunner->GetOpName() << "Errno: " << errNo;
     }
 
     auto &recordEvent = eventArray[1];

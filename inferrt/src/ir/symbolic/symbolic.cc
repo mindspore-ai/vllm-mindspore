@@ -15,6 +15,7 @@
  */
 
 #include <cmath>
+#include <algorithm>
 
 #include "common/common.h"
 #include "ir/symbolic/symbolic.h"
@@ -65,6 +66,12 @@ int64_t SymbolicMod::Evaluate() const {
   return lhsVal % rhsVal;
 }
 
+int64_t SymbolicMin::Evaluate() const {
+  auto lhsVal = lhs_->Evaluate();
+  auto rhsVal = rhs_->Evaluate();
+  return std::min(lhsVal, rhsVal);
+}
+
 SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicAdd>(lhs, rhs); }
 
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMul>(lhs, rhs); }
@@ -76,6 +83,8 @@ SymbolicExprPtr operator%(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return Mak
 SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicFloorDiv>(lhs, rhs); }
 
 SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicCeilDiv>(lhs, rhs); }
+
+SymbolicExprPtr Min(SymbolicExprPtr lhs, SymbolicExprPtr rhs) { return MakeIntrusive<SymbolicMin>(lhs, rhs); }
 
 SymbolicExprPtr SymbolicVar::DeepCopy() const {
   auto copy = MakeIntrusive<SymbolicVar>(name_);
