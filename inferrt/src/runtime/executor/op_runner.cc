@@ -160,6 +160,12 @@ void OpRunner::UpdateRefNodeOutputMetadata() {
   ForEachRefTensorPair([this](uint32_t outputIndex, uint32_t inputIndex, const ir::TensorPtr &inputTensor,
                               const ir::TensorPtr &outputTensor) {
     if (inputTensor->Shape() != outputTensor->Shape()) {
+      // View-like ref operators update output metadata separately. When shapes differ, reusing input strides may be
+      // inaccurate.
+      LOG_OUT << "Skip generic ref metadata sync for op[" << GetOpName()
+              << "] because input and output shapes differ, outputIndex: " << outputIndex
+              << ", inputIndex: " << inputIndex << ", output shape: " << outputTensor->Shape()
+              << ", input shape: " << inputTensor->Shape();
       return;
     }
     if (operator_->NeedLaunch() && (!ops::IsTensorBaseFormat(inputTensor) || !ops::IsTensorBaseFormat(outputTensor))) {

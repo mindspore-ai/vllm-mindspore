@@ -38,8 +38,10 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
     UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, strides.value());
     return;
   }
-  LOG_EXCEPTION << "View shape " << viewShapeArg << " (inferred as " << inferredShape
-                << ") is not compatible with input tensor's shape " << curShape << " and stride " << curStrides;
+  LOG_EXCEPTION << "View encountered unsupported non-contiguous input tensor. output shape: " << viewShapeArg
+                << " (inferred as " << inferredShape << "), input shape: " << curShape
+                << ", input stride: " << curStrides
+                << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
 }
 }  // namespace
 

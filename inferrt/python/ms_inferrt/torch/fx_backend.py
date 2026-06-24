@@ -1761,6 +1761,7 @@ _VIEW_OP_SWITCH_NAMES = {
     "chunk": frozenset(("chunk",)),
 }
 
+# Disabling view ops only applies to entries with a registered non-view fallback.
 _VIEW_OP_FALLBACKS = {
     Op.permute_view: Op.permute,
     Op.split_with_size_view: Op.split_with_size,

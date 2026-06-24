@@ -49,8 +49,10 @@ void UpdateOutputViewInfo(const ir::TensorPtr &inputTensorPtr, const ir::TensorP
 
   const auto newStrides = CalculateViewStrides(curShape, curStrides, inferredShape);
   if (!newStrides.has_value()) {
-    LOG_EXCEPTION << "Flatten output shape " << inferredShape << " from flatten(" << startDim << ", " << endDim
-                  << ") is not compatible with input tensor's shape " << curShape << " and stride " << curStrides;
+    LOG_EXCEPTION << "Flatten encountered unsupported non-contiguous input tensor. output shape: " << inferredShape
+                  << ", flatten dims: [" << startDim << ", " << endDim << "], input shape: " << curShape
+                  << ", input stride: " << curStrides
+                  << ". Consider calling .contiguous() on the input tensor at the corresponding operator call site.";
   }
   UpdateTensorViewInfo(inputTensorPtr, outputTensorPtr, inferredShape, newStrides.value(),
                        inputTensorPtr->StorageOffset());
