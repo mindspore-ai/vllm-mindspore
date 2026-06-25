@@ -31,10 +31,11 @@ def test_copy_tensor_dynamic_shape(dtype):
 
     dst2 = torch.randn([12, 13, 14], dtype=dtype).npu()
     src2 = torch.randn([12, 13, 14], dtype=dtype).npu()
-    copy_func_compiled(dst2, src2)
+    ret1 = copy_func_compiled(dst2, src2)
     expected2_dst = torch.randn([12, 13, 14], dtype=dtype).npu()
-    expected2_dst.copy_(src2)
+    ret2 = expected2_dst.copy_(src2)
     AssertRtolEqual(dst2, expected2_dst)
+    AssertRtolEqual(ret1, ret2)
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
