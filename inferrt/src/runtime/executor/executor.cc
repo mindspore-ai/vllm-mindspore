@@ -145,10 +145,10 @@ void GraphExecutor::EndGraph() {
   CHECK_IF_NULL(graph_);
 }
 
-// Finish building graph.
 void GraphExecutor::OptGraph() {
   LOG_OUT << "Opt graph";
   CHECK_IF_NULL(graph_);
+  // clang-format off
   pass::TensorCreator tensorCreator =
     std::bind((ir::NodePtr(GraphExecutor::*)(ops::Op, const std::vector<ir::NodePtr> &, const ir::ValuePtr &)) &
                 GraphExecutor::AddOpNode,
@@ -438,7 +438,7 @@ void Executor::Run(bool isDynamic) {
     }
 
     if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
   }
 }

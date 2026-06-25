@@ -102,6 +102,12 @@ class SymbolicShapeManager:
             lhs, rhs = expr.args
             return (self.convert_sympy_expr_to_symbolic_expr(lhs) % self.convert_sympy_expr_to_symbolic_expr(rhs))
 
+        # Handle Min explicitly to avoid exact-type lookup misses across sympy runtimes.
+        if (getattr(expr, "func", None) is sympy.Min or getattr(getattr(expr, "func", None), "__name__",
+                                                                None) == "Min" or type(expr).__name__ == "Min"):
+            converted_args = [self.convert_sympy_expr_to_symbolic_expr(arg) for arg in expr.args]
+            return reduce(lambda a, b: a.__min__(b), converted_args)
+
         # Convert basic symbolic ops
         op = self._SYMPY_EXPR_TO_SYMBOLIC_OP.get(type(expr))
         if op:

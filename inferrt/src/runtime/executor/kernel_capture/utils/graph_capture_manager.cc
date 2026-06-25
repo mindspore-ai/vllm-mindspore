@@ -214,7 +214,7 @@ void GraphCaptureManager::ExecuteCaptureOpsNeedNotUpdate(std::vector<OpRunner> &
     }
     opRunner.AllocateWorkspaceMemory();
     if (auto errNo = opRunner.Launch(captureStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     if (IsCustomCallOp(opRunner)) {
       WaitLaunchTaskFinish();
@@ -249,7 +249,7 @@ void GraphCaptureManager::ExecuteCaptureOpNeedUpdate(OpRunner &opRunner, void *c
   }
   opRunner.AllocateWorkspaceMemory();
   if (auto errNo = opRunner.Launch(captureStream) != ops::SUCCESS) {
-    LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+    LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
   }
   if (IsCustomCallOp(opRunner)) {
     // Custom call ops don't use InferRT updateStream_ to launch in update phase.
@@ -316,7 +316,7 @@ bool GraphCaptureManager::LaunchAllKernelsWithReplayFullGraph(std::vector<OpRunn
     }
     opRunner.AllocateWorkspaceMemory();
     if (auto errNo = opRunner.Launch(updateStream) != ops::SUCCESS) {
-      LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+      LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
     }
     if (IsCustomCallOp(opRunner)) {
       // Custom call ops don't use InferRT updateStream_ to launch in update phase, and Python call op maybe need copy

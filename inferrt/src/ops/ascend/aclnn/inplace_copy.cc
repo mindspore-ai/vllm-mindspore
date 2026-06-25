@@ -63,6 +63,9 @@ OpsErrorCode AclnnInplaceCopy::Launch(const std::vector<const ir::Value *> &inpu
     }
     // For D2D copy, if both src and dst are contiguous, use direct async copy for better performance
     size_t srcSize = src->Numel() * static_cast<size_t>(dst->Dtype().GetSize());
+    if (srcSize == 0) {
+      return SUCCESS;
+    }
     auto ret = res_manager_->AsyncCopy(dst->DataPtr(), src->DataPtr(), srcSize, copyMode_, stream);
 
     if (!ret) {

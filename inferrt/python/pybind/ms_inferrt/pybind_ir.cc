@@ -94,7 +94,8 @@ NB_MODULE(_ms_inferrt_ir, m) {  // #lizard forgives
     .def("__truediv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a / b; })
     .def("__mod__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return a % b; })
     .def("__floordiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::FloorDiv(a, b); })
-    .def("__ceildiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::CeilDiv(a, b); });
+    .def("__ceildiv__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::CeilDiv(a, b); })
+    .def("__min__", [](const ir::SymbolicExprPtr &a, const ir::SymbolicExprPtr &b) { return ir::Min(a, b); });
 
   nb::class_<ir::SymbolicVar, ir::SymbolicExpr>(m, "SymbolicVar", nb::dynamic_attr())
     .def(nb::new_([](const std::string &name) { return ir::MakeIntrusive<ir::SymbolicVar>(name); }), nb::arg("name"))

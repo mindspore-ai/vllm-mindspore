@@ -131,7 +131,7 @@ void PipelineExecutor::Run(bool isDynamic) {
 
     auto launchTask = [&opRunner]() -> int {
       if (auto errNo = opRunner.Launch() != ops::SUCCESS) {
-        LOG_EXCEPTION << "Launch shape failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
+        LOG_EXCEPTION << "Launch failed for operator " << opRunner.GetOpName() << "Errno: " << errNo;
       }
       return 0;
     };

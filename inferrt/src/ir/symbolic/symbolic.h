@@ -41,6 +41,7 @@ class SymbolicExpr : public RefCounted {
     FloorDiv,
     CeilDiv,
     Mod,
+    Min,
   };
 
   explicit SymbolicExpr(Kind kind) : kind_(kind) {}
@@ -171,6 +172,16 @@ class SymbolicMod : public SymbolicBinaryOp {
   static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Mod; }
 };
 
+class SymbolicMin : public SymbolicBinaryOp {
+ public:
+  SymbolicMin(SymbolicExprPtr lhs, SymbolicExprPtr rhs) : SymbolicBinaryOp(Kind::Min, lhs, rhs) {}
+  int64_t Evaluate() const override;
+  std::string ToString() const override { return "min(" + lhs_->ToString() + ", " + rhs_->ToString() + ")"; }
+  SymbolicExprPtr DeepCopy() const override { return MakeIntrusive<SymbolicMin>(lhs_->DeepCopy(), rhs_->DeepCopy()); }
+
+  static bool classof(const SymbolicExpr *e) { return e->GetKind() == Kind::Min; }
+};
+
 // A helper to create symbolic expressions
 SymbolicExprPtr operator+(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr operator*(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
@@ -178,6 +189,7 @@ SymbolicExprPtr operator/(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr operator%(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr FloorDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 SymbolicExprPtr CeilDiv(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
+SymbolicExprPtr Min(SymbolicExprPtr lhs, SymbolicExprPtr rhs);
 
 }  // namespace ir
 }  // namespace mrt
