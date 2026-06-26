@@ -351,7 +351,7 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
     auto deleter = data_ptr.get_deleter();
     auto *data_to_release = data_ptr.release_context();
     auto *data = data_ptr.get();
-    outTensor->GetStorage()->SetDataPtrFromAten(data, data_to_release, deleter);
+    outTensor->GetStorage()->SetDataPtrFromAten(data, data_to_release, deleter, tensor.storage().nbytes());
     UpdateTensorFromTorch(outTensor, tensor);
   } else if (ivalue.isList()) {
     auto &tuple = output->ToTuple();

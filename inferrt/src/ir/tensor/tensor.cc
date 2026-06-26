@@ -256,6 +256,7 @@ std::ostream &operator<<(std::ostream &os, const Tensor &tensor) {
   }
   os << ", numel: " << tensor.Numel();
   os << ", strides: " << ShapeToString(tensor.Strides());
+  os << ", contiguous=" << (tensor.IsContiguous() ? "true" : "false");
   os << ", dtype=" << tensor.Dtype().ToString();
   os << ", storageShape: " << ShapeToString(tensor.StorageShape());
   os << ", offset: " << tensor.StorageOffset();

@@ -100,16 +100,7 @@ class MRT_EXPORT Storage : public RefCounted {
     data_ = data;
   }
 
-  void SetDataPtrFromAten(void *data, void *data_to_release, const DeleterFn &&deleter) {
-    if (data_ && ownsData_) {
-      FreeMemory();  // free old memory
-    }
-    data_ = data;
-    dataToRelease_ = data_to_release;
-    deleter_ = std::move(deleter);
-    fromAten_ = true;
-    ownsData_ = true;
-  }
+  void SetDataPtrFromAten(void *data, void *data_to_release, const DeleterFn &&deleter, size_t sizeBytes);
 
   DeleterFn GetDeleter() const { return deleter_; }
 
