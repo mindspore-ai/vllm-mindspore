@@ -1893,6 +1893,43 @@ def _is_shape_sequence(arg):
     return False
 
 
+# Tensor methods / call targets whose Python API accepts unpacked scalar dims after input,
+# while torch schema expects one int[]/SymInt[] argument.
+# Example: tensor.new_zeros(2, 3) -> tensor.new_zeros((2, 3)).
+# Add new ops to the matching whitelist below.
+_VARARG_DIM_METHODS = frozenset({
+    "view",
+    "reshape",
+    "repeat",
+    "permute",
+    "new_empty",
+    "new_zeros",
+    "expand",
+})
+
+_VARARG_DIM_FUNCS = frozenset({
+    torch.functional.einsum,
+})
+
+
+def _is_vararg_dim_op(target) -> bool:
+    """Return True if target may pass dims as unpacked scalars after input."""
+    return target in _VARARG_DIM_METHODS or target in _VARARG_DIM_FUNCS
+
+
+def _pack_vararg_dims(target, args):
+    """
+    Pack unpacked scalar dims into one sequence for schema matching.
+
+    Example: tensor.view(2, 3) -> tensor.view((2, 3)).
+    """
+    if len(args) < 2 or not _is_vararg_dim_op(target):
+        return args
+    if _is_shape_sequence(args[1]):
+        return args
+    return [args[0], args[1:]]
+
+
 def _argument_to_real_value(value_type, value, arg_len):
     """
     Convert a torch fx value to its real value.
@@ -2121,12 +2158,7 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
     kwargs = node.kwargs
     arg_idx = 0
 
-    # Special handling for view operation: PyTorch's view() accepts variable-length arguments,
-    # allowing the shape to be specified as unpacked integers.
-    if (node.target in ["view", "reshape", "repeat", "permute", "new_empty", "expand"]
-            or node.target is torch.functional.einsum) \
-            and not _is_shape_sequence(args[1]):
-        args = [args[0], args[1:]]
+    args = _pack_vararg_dims(node.target, args)
 
     # Some factory ops (e.g. torch.empty) accept varargs size in Python,
     # while schema expects a single int[]/SymInt[] positional argument.
