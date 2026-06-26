@@ -98,5 +98,17 @@ void *Storage::Release() {
   return p;
 }
 
+void Storage::SetDataPtrFromAten(void *data, void *data_to_release, const DeleterFn &&deleter, size_t sizeBytes) {
+  if (data_ && ownsData_) {
+    FreeMemory();  // free old memory
+  }
+  data_ = data;
+  dataToRelease_ = data_to_release;
+  deleter_ = std::move(deleter);
+  fromAten_ = true;
+  ownsData_ = true;
+  sizeBytes_ = sizeBytes;
+}
+
 }  // namespace ir
 }  // namespace mrt
