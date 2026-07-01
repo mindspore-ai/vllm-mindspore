@@ -54,10 +54,10 @@ set(TOP_DIR "${PROJECT_SOURCE_DIR}/..")
 # Torch-MLIR Integration (build alongside mopt)
 # ===========================================================================
 
-include(${TOP_DIR}/cmake/torch_mlir.cmake)
-
 include(MLIRDetectPythonEnv)
 mlir_configure_python_dev_packages()
+
+include(${TOP_DIR}/cmake/torch_mlir.cmake)
 
 set(TORCHMLIR_SOURCE_DIR "${TORCHMLIR_SOURCE_DIR}" CACHE PATH "Path to Torch-MLIR sources")
 
