@@ -15,7 +15,6 @@
 """
 utils for converting between torch and ms_inferrt.ir.
 """
-import os
 from typing import Any, List, Tuple, Optional
 
 import torch
@@ -46,19 +45,10 @@ def _extract_global_comm_info():
     """Extract distributed communication information (rank, world_size)."""
     rank = dist.get_rank() if dist.is_initialized() else 0
     world_size = dist.get_world_size()
-    local_rank = rank
-    ray_local_devices = os.getenv('RAY_LOCAL_VISIBLE_DEVICES')
-    if ray_local_devices:
-        device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
-        print(f"Device list: {device_list}")
-        rank = device_list[0] if len(device_list) == 1 else device_list[rank]
-        ascend_rt_visible_devices = os.getenv('ASCEND_RT_VISIBLE_DEVICES')
-        local_rank = 0 if (len(device_list) == 1 and ascend_rt_visible_devices
-                           and len(ascend_rt_visible_devices.split(',')) == 1) else rank
 
     CollectiveManager.instance().set_global_rank_id(rank)
     # TODO: Multi-machine scenario needs verification, current implementation only supports single machine with 8 NPUs
-    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_local_rank_id(torch.npu.current_device())
     CollectiveManager.instance().set_global_rank_size(world_size)
 
 
@@ -71,20 +61,10 @@ def _set_communication_info(ptd):
     group_rank = dist.get_rank(pg)
     rank_list = dist.get_process_group_ranks(pg)
 
-    local_rank = rank
-    ray_local_devices = os.getenv('RAY_LOCAL_VISIBLE_DEVICES')
-    if ray_local_devices:
-        device_list = [int(device.strip()) for device in ray_local_devices.split(',')]
-        print(f"Device list: {device_list}")
-        rank = device_list[0] if len(device_list) == 1 else device_list[rank]
-        ascend_rt_visible_devices = os.getenv('ASCEND_RT_VISIBLE_DEVICES')
-        local_rank = 0 if (len(device_list) == 1 and ascend_rt_visible_devices
-                           and len(ascend_rt_visible_devices.split(',')) == 1) else rank
-
     hccl_comm_handle = pg._get_backend(torch.device("npu")).get_hccl_comm(rank)
 
     CollectiveManager.instance().set_global_rank_id(rank)
-    CollectiveManager.instance().set_local_rank_id(local_rank)
+    CollectiveManager.instance().set_local_rank_id(torch.npu.current_device())
     CollectiveManager.instance().set_global_rank_size(world_size)
 
     CollectiveManager.instance().create_communication_group(
