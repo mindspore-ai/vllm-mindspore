@@ -2456,20 +2456,20 @@ def _sort_schemas_by_match_preference(
         custom_kwargs: Optional custom kwargs from pre_flatten_hook
 
     Returns:
-        Schemas sorted by (missing_required, extra_inputs), best match first
+        Schemas sorted by (missing_required, extra_inputs, none_default_unmatched), best match first
     """
     num_input_args = len(custom_args) if custom_args is not None else len(node.args)
     input_kwargs = custom_kwargs if custom_kwargs is not None else node.kwargs
     input_kwarg_names = set(input_kwargs.keys())
 
     def schema_priority(schema):
-        """Calculate match priority: (missing_required, extra_inputs).
+        """Calculate match priority: (missing_required, extra_inputs, none_default_unmatched).
 
-        Lower is better. A schema with all required params matched (0, x) is preferred.
+        Lower is better.
+        - missing_required: unmatched params without default_value attribute
+        - extra_inputs: extra kwargs that don't match any param
+        - none_default_unmatched: unmatched params that have default_value is None
         """
-        def has_no_default(arg):
-            return not hasattr(arg, 'default_value') or arg.default_value is None
-
         # Split schema params
         positional = [a for a in schema.arguments if not a.kwarg_only]
 
@@ -2490,13 +2490,19 @@ def _sort_schemas_by_match_preference(
         # 3. Count missing required params (unmatched and no default)
         missing_required = sum(
             1 for a in schema.arguments
-            if a.name not in matched and has_no_default(a)
+            if a.name not in matched and not hasattr(a, 'default_value')
         )
 
-        # 4. Extra inputs that don't match any param
+        # 4. Check if there is any unmatched param with default_value is None (只统计有没有，不统计数量)
+        none_default_unmatched = int(any(
+            a.name not in matched and hasattr(a, 'default_value') and a.default_value is None
+            for a in schema.arguments
+        ))
+
+        # 5. Extra inputs that don't match any param
         extra_inputs = len(extra_kwargs)
 
-        return (missing_required, extra_inputs)
+        return (missing_required, extra_inputs, none_default_unmatched)
 
     return sorted(schemas, key=schema_priority)
 
