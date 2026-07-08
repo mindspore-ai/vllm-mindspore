@@ -188,3 +188,23 @@ def test_aten_ldexp_cache_miss(backend):
     assert torch.allclose(z1, expected1), "First call result mismatch"
     assert torch.allclose(z2, expected2), "Cache miss call (shape [4,32]) result mismatch"
     assert torch.allclose(z3, expected3), "Cache miss call (shape [8,8]) result mismatch"
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
+@pytest.mark.parametrize("backend", (fx_backend, ))
+def test_aten_max_tensor_method(backend):
+    """
+    Feature: Test tensor.max() method without arguments
+    Description: Verify x.max() correctly matches aten::max(Tensor self) schema and produces correct result
+    Expectation: The compiled result matches the eager mode result
+    """
+
+    def func(x):
+        return x.max()
+
+    compiled_func = torch.compile(func, backend=backend)
+    shape = (2, 3)
+    x = torch.arange(shape[0] * shape[1], dtype=torch.float32).reshape(shape).npu()
+    expected = func(x)
+    result = compiled_func(x)
+    assert torch.allclose(result, expected), f"tensor.max() result mismatch: expected {expected}, got {result}"

@@ -148,17 +148,19 @@ def _is_scalar_arg(arg):
 
 def binary_scalar_pre_flatten_hook(node):
     """Pre-flatten hook to swap scalar and tensor arguments before schema matching.
-    
-    For operations like add and mul, when the first argument is a scalar and the 
-    second is a tensor (e.g., 2 + x), swap them to match the expected schema 
+
+    For operations like add and mul, when the first argument is a scalar and the
+    second is a tensor (e.g., 2 + x), swap them to match the expected schema
     (tensor, scalar) order. This ensures correct schema matching in _flatten_args.
+
+    Returns (custom_args, custom_kwargs) tuple.
     """
     if _is_scalar_arg(node.args[0]) and not _is_scalar_arg(node.args[1]):
         new_args = (node.args[1], node.args[0]) + node.args[2:]
         print(f"Pre-flatten hook: swapping args for {node.target}, "
               f"old args: {node.args}, new args: {new_args}")
-        return new_args
-    return node.args
+        return new_args, dict(node.kwargs)
+    return node.args, dict(node.kwargs)
 
 
 # pylint: disable=unused-argument
@@ -448,6 +450,14 @@ def float_hook(node, input_nodes, executor):
 def int_hook(node, input_nodes, executor):
     """cast to int32."""
     return [input_nodes[0], torch.int32]
+
+
+# pylint: disable=unused-argument
+def size_hook(node, input_nodes, executor):
+    """Ensure size always receives 2 inputs (tensor, dim_or_None)."""
+    if len(input_nodes) == 1:
+        return [input_nodes[0], None]
+    return input_nodes
 
 
 # pylint: disable=unused-argument
@@ -756,6 +766,8 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook("long", long_hook)
     register_arg_mapping_hook("float", float_hook)
     register_arg_mapping_hook("int", int_hook)
+    register_arg_mapping_hook("size", size_hook)
+    register_arg_mapping_hook(Op.size, size_hook)
     # chunk lowering
     register_arg_mapping_hook(torch.chunk, chunk_arg_hook)
     register_arg_mapping_hook(aten.chunk.default, chunk_arg_hook)
@@ -775,9 +787,15 @@ def _init_arg_mapping_hooks():
 
 def _init_pre_flatten_hooks():
     """register hooks for pre-flatten argument adjustment"""
+    register_pre_flatten_hook(Op.add, binary_scalar_pre_flatten_hook)
     register_pre_flatten_hook(Op.add_scalar, binary_scalar_pre_flatten_hook)
+    register_pre_flatten_hook(Op.mul, binary_scalar_pre_flatten_hook)
     register_pre_flatten_hook(Op.mul_scalar, binary_scalar_pre_flatten_hook)
+    register_pre_flatten_hook(Op.eq, binary_scalar_pre_flatten_hook)
     register_pre_flatten_hook(Op.eq_scalar, binary_scalar_pre_flatten_hook)
+    register_pre_flatten_hook(Op.var_mean, var_mean_pre_flatten_hook)
+    register_pre_flatten_hook(Op.reduce_sum, reduce_mean_sum_pre_flatten_hook)
+    register_pre_flatten_hook(Op.reduce_mean, reduce_mean_sum_pre_flatten_hook)
 
 
 def leaky_relu_arg_hook(node, flat_args, executor):
@@ -1164,6 +1182,59 @@ def reduce_sum_arg_hook(node, flat_args, executor):
     return [self_arg, dims, keepdim, dtype]
 
 
+def var_mean_pre_flatten_hook(node):
+    """Pre-flatten hook for var_mean: move dim from kwargs to positional and wrap scalar dim in list.
+
+    Returns (custom_args, custom_kwargs) so that 'dim' is removed from kwargs entirely.
+    """
+    args = list(node.args) if node is not None else []
+    kwargs = dict(node.kwargs) if node is not None else {}  # copy to avoid mutating original
+
+    input_arg = args[0] if args else None
+    dim = kwargs.pop("dim", args[1] if len(args) > 1 else None)
+
+    if dim is None or (isinstance(dim, (list, tuple)) and len(dim) == 0):
+        example = input_arg.meta.get("example_value", None) if isinstance(input_arg, Node) else input_arg
+        if hasattr(example, "dim"):
+            try:
+                dim = list(range(int(example.dim())))
+            except Exception:  # pylint: disable=broad-exception-caught
+                dim = []
+        else:
+            dim = []
+    elif not isinstance(dim, (list, tuple)):
+        dim = [dim]
+
+    return [input_arg, list(dim)], kwargs
+
+
+def reduce_mean_sum_pre_flatten_hook(node):
+    """Pre-flatten hook for reduce_mean/reduce_sum: move dim/keepdim from kwargs to positional and wrap scalar dim in list."""
+    args = list(node.args) if node is not None else []
+    kwargs = dict(node.kwargs) if node is not None else {}
+
+    input_arg = args[0] if args else None
+    dim = kwargs.pop("dim", args[1] if len(args) > 1 else None)
+    keepdim = kwargs.pop("keepdim", args[2] if len(args) > 2 else None)
+
+    if keepdim is None:
+        keepdim = False
+
+    if dim is None or (isinstance(dim, (list, tuple)) and len(dim) == 0):
+        example = input_arg.meta.get("example_value", None) if isinstance(input_arg, Node) else input_arg
+        if hasattr(example, "dim"):
+            try:
+                dim = list(range(int(example.dim())))
+            except Exception:  # pylint: disable=broad-exception-caught
+                dim = []
+        else:
+            dim = []
+    elif not isinstance(dim, (list, tuple)):
+        dim = [dim]
+
+    return [input_arg, list(dim), bool(keepdim)], kwargs
+
+
 # pylint: disable=unused-argument
 def var_mean_arg_hook(node, flat_args, executor):
     """Normalize arguments for var_mean to backend schema [input, dim, correction, keepdim]."""
@@ -1541,6 +1612,7 @@ _OP_MAP = {
     aten.native_layer_norm.default: Op.norm,
     aten.silu.default: Op.silu,
     aten.stack.default: Op.stack,
+    aten.relu.default: Op.relu,
     torch.ops._c10d_functional.all_gather_into_tensor: Op.all_gather,
     torch.ops._c10d_functional.all_reduce: Op.all_reduce,
     torch.ops._c10d_functional.reduce_scatter_tensor: Op.reduce_scatter,
@@ -1970,6 +2042,65 @@ def _get_example_value_if_node(value: Any) -> Any:
     return value
 
 
+def _format_type_for_error(value: Any) -> str:
+    """Format the type of a value for schema mismatch error messages."""
+    if isinstance(value, Node):
+        example = value.meta.get("example_value", None)
+        if example is not None:
+            return _format_type_for_error(example)
+        return "node"
+    if isinstance(value, torch.Tensor):
+        return "tensor"
+    if isinstance(value, (int, float, bool, complex, str)):
+        return type(value).__name__
+    sym_int_cls = getattr(torch, "SymInt", None)
+    if sym_int_cls is not None and isinstance(value, sym_int_cls):
+        return "SymInt"
+    sym_float_cls = getattr(torch, "SymFloat", None)
+    if sym_float_cls is not None and isinstance(value, sym_float_cls):
+        return "SymFloat"
+    sym_bool_cls = getattr(torch, "SymBool", None)
+    if sym_bool_cls is not None and isinstance(value, sym_bool_cls):
+        return "SymBool"
+    return type(value).__name__
+
+
+def _format_value_detail_for_error(value: Any) -> str:
+    """Format the concrete value of an argument for error messages."""
+    if isinstance(value, Node):
+        example = value.meta.get("example_value", None)
+        if isinstance(example, torch.Tensor):
+            return f"tensor({value.name})"
+        if example is not None:
+            return repr(example)
+        return f"node({value.name})"
+    if isinstance(value, torch.Tensor):
+        return f"tensor({tuple(value.shape)})"
+    return repr(value)
+
+
+def _format_fx_inputs_for_error(args, kwargs, label: str = "FX") -> List[str]:
+    """Format FX node args/kwargs as separate type and value lines for error messages."""
+    arg_types = ", ".join(_format_type_for_error(a) for a in args)
+    arg_values = ", ".join(_format_value_detail_for_error(a) for a in args)
+    lines = [
+        f"{label} input types: ({arg_types})",
+        f"{label} input values: ({arg_values})",
+    ]
+    if kwargs:
+        kw_types = ", ".join(
+            f"{k}={_format_type_for_error(v)}" for k, v in kwargs.items()
+        )
+        kw_values = ", ".join(
+            f"{k}={_format_value_detail_for_error(v)}" for k, v in kwargs.items()
+        )
+        lines.extend([
+            f"{label} kwarg types: {{{kw_types}}}",
+            f"{label} kwarg values: {{{kw_values}}}",
+        ])
+    return lines
+
+
 class _SymTypeInfo(NamedTuple):
     schema_int_types: Tuple[Any, ...]
     schema_float_types: Tuple[Any, ...]
@@ -2072,6 +2203,12 @@ def _check_runtime_value_against_type(value_type, runtime_v: Any) -> bool:
     if "MemoryFormat" in type_name:
         return isinstance(runtime_v, torch.memory_format)
 
+    # Complex number type - check for Python complex or complex tensor
+    if isinstance(value_type, torch.ComplexType):
+        return isinstance(runtime_v, (complex,)) or (
+            isinstance(runtime_v, torch.Tensor) and runtime_v.dtype in (torch.complex64, torch.complex128)
+        )
+
     # For other unknown types: to avoid incorrectly filtering schemas, we treat them as compatible
     # and let higher-level logic further disambiguate if needed.
     return True
@@ -2097,12 +2234,12 @@ def _is_value_compatible_with_type(value_type, value: Any) -> bool:
                 return True
             if isinstance(example_value, (list, tuple)):
                 return all(_is_value_compatible_with_type(elem_type, v) for v in example_value)
-            return _is_value_compatible_with_type(elem_type, example_value)
+            return False
         if isinstance(value, (list, tuple)):
             if not value:
                 return True
             return all(_is_value_compatible_with_type(elem_type, v) for v in value)
-        return _is_value_compatible_with_type(elem_type, value)
+        return False
 
     runtime_v = _get_example_value_if_node(value)
     if runtime_v is None:
@@ -2138,7 +2275,7 @@ def _all_explicit_fx_inputs_are_scalars(args: Any, kwargs: Dict[str, Any]) -> bo
     return True
 
 
-def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> List[Argument]:
+def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None, custom_kwargs=None) -> List[Argument]:
     """
     Create a list of Argument objects from a torch fx node.
 
@@ -2146,14 +2283,17 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
         schema (torch.FunctionSchema): The schema of the node.
         node (torch.fx.Node): The FX node whose arguments should be created.
         custom_args: Optional custom args to use instead of node.args.
+        custom_kwargs: Optional custom kwargs to use instead of node.kwargs.
 
     Returns:
-        List[Argument]: A list of Argument objects in the node's arguments, preserving order.
-        Bool: Whether the arguments are valid.
+        (flat_args, found, mismatch_reason)
+        - flat_args: list of Argument objects (partial on failure)
+        - found: True if schema matched successfully
+        - mismatch_reason: str describing why it failed, or None on success
     """
     flat_args = []
     args = custom_args if custom_args is not None else node.args
-    kwargs = node.kwargs
+    kwargs = custom_kwargs if custom_kwargs is not None else node.kwargs
     arg_idx = 0
 
     args = _pack_vararg_dims(node.target, args)
@@ -2170,19 +2310,26 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
         args = [list(args)]
 
     if len(args) + len(kwargs) > len(schema.arguments):
-        return flat_args, False
+        return flat_args, False, (
+            f"schema expects {len(schema.arguments)} args, but got {len(args) + len(kwargs)}"
+        )
 
     skip_type_compat_check = _all_explicit_fx_inputs_are_scalars(args, kwargs)
 
-    for arg in args:
+    for i, arg in enumerate(args):
         if schema.arguments[arg_idx].kwarg_only:
-            return flat_args, False
+            return flat_args, False, (
+                f"kwarg-only param '{schema.arguments[arg_idx].name}' at positional arg[{i}]"
+            )
 
         # Additional type compatibility check to narrow down overloads.
         if not skip_type_compat_check and not _is_value_compatible_with_type(
                 schema.arguments[arg_idx].real_type, arg
         ):
-            return flat_args, False
+            got_type = _format_type_for_error(arg)
+            return flat_args, False, (
+                f"input[{arg_idx}] expects [{schema.arguments[arg_idx].real_type}], but got [{got_type}]"
+            )
 
         real_arg = _argument_to_real_value(
             schema.arguments[arg_idx].real_type, arg, schema.arguments[arg_idx].N
@@ -2198,7 +2345,10 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
             if not skip_type_compat_check and not _is_value_compatible_with_type(
                     argument.real_type, kw_value
             ):
-                return flat_args, False
+                got_type = _format_type_for_error(kw_value)
+                return flat_args, False, (
+                    f"kwarg '{argument.name}' expects [{argument.real_type}], but got [{got_type}]"
+                )
 
             real_arg = _argument_to_real_value(
                 argument.real_type, kw_value, argument.N
@@ -2208,11 +2358,15 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None) -> 
         elif hasattr(argument, "default_value"):
             flat_args.append(argument.default_value)
         else:
-            return flat_args, False
+            return flat_args, False, (
+                f"missing required param '{argument.name}'"
+            )
 
     if consumed_kwargs != len(kwargs):
-        return flat_args, False
-    return flat_args, True
+        extra = set(kwargs.keys()) - {a.name for a in schema.arguments}
+        return flat_args, False, f"unexpected kwargs: {extra}"
+
+    return flat_args, True, None
 
 
 def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
@@ -2270,6 +2424,87 @@ def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
     return None, None
 
 
+def _sort_schemas_by_match_preference(
+    schemas: List[torch._C.FunctionSchema],
+    node: Node,
+    custom_args: Optional[List[Any]] = None,
+    custom_kwargs: Optional[Dict[str, Any]] = None
+) -> List[torch._C.FunctionSchema]:
+    """
+    Sort schemas by match likelihood to minimize default value filling.
+
+    Prioritizes schemas that can fully consume all input arguments with minimal
+    unmatched required parameters (those without default values).
+
+    Sorting criteria (lower is better):
+    1. missing_required: Number of schema parameters that are unmatched AND have no default.
+       A value of 0 means the schema can fully match all inputs without needing
+       to fill any required parameters with implicit values.
+    2. extra_inputs: Number of input kwargs that don't match any schema parameter.
+       Lower is better to avoid unused inputs.
+
+    Matching rules:
+    - Positional inputs match schema's positional params by position (first N).
+    - Keyword inputs match any schema param by name (kwarg_only or positional).
+
+    Args:
+        schemas: List of candidate function schemas from PyTorch
+        node: The FX node (used to get original args/kwargs when custom_* not provided)
+        custom_args: Optional custom args from pre_flatten_hook
+        custom_kwargs: Optional custom kwargs from pre_flatten_hook
+
+    Returns:
+        Schemas sorted by (missing_required, extra_inputs, none_default_unmatched), best match first
+    """
+    num_input_args = len(custom_args) if custom_args is not None else len(node.args)
+    input_kwargs = custom_kwargs if custom_kwargs is not None else node.kwargs
+    input_kwarg_names = set(input_kwargs.keys())
+
+    def schema_priority(schema):
+        """Calculate match priority: (missing_required, extra_inputs, none_default_unmatched).
+
+        Lower is better.
+        - missing_required: unmatched params without default_value attribute
+        - extra_inputs: extra kwargs that don't match any param
+        - none_default_unmatched: unmatched params that have default_value is None
+        """
+        # Split schema params
+        positional = [a for a in schema.arguments if not a.kwarg_only]
+
+        # Track matched param names
+        matched = set()
+        extra_kwargs = input_kwarg_names.copy()
+
+        # 1. Match positional inputs to positional params (by position)
+        for i in range(min(num_input_args, len(positional))):
+            matched.add(positional[i].name)
+
+        # 2. Match remaining kwargs to any param by name (kwarg_only or positional)
+        for a in schema.arguments:
+            if a.name not in matched and a.name in extra_kwargs:
+                matched.add(a.name)
+                extra_kwargs.discard(a.name)
+
+        # 3. Count missing required params (unmatched and no default)
+        missing_required = sum(
+            1 for a in schema.arguments
+            if a.name not in matched and not hasattr(a, 'default_value')
+        )
+
+        # 4. Check if there is any unmatched param with default_value is None (只统计有没有，不统计数量)
+        none_default_unmatched = int(any(
+            a.name not in matched and hasattr(a, 'default_value') and a.default_value is None
+            for a in schema.arguments
+        ))
+
+        # 5. Extra inputs that don't match any param
+        extra_inputs = len(extra_kwargs)
+
+        return (missing_required, extra_inputs, none_default_unmatched)
+
+    return sorted(schemas, key=schema_priority)
+
+
 def _flatten_args(op: Op, node: Node) -> List[Argument]:
     """
     Flatten the arguments of a given FX node into a flat list of Argument objects.
@@ -2293,21 +2528,41 @@ def _flatten_args(op: Op, node: Node) -> List[Argument]:
 
     pre_flatten_hook = get_pre_flatten_hook(op) or get_pre_flatten_hook(node.target)
     custom_args = None
+    custom_kwargs = None
     if pre_flatten_hook is not None:
-        custom_args = pre_flatten_hook(node)
+        custom_args, custom_kwargs = pre_flatten_hook(node)
+
+    # Sort schemas to prioritize exact matches over those requiring default value fills
+    sorted_schemas = _sort_schemas_by_match_preference(schemas, node, custom_args, custom_kwargs)
 
     found = False
-    for schema in schemas:
-        flat_args, found = _create_args(schema, node, custom_args)
+    mismatch_reasons = []
+    for schema in sorted_schemas:
+        flat_args, found, reason =  _create_args(schema, node, custom_args, custom_kwargs)
+        mismatch_reasons.append(reason or "matched")
         if found:
             break
+
     if not found:
-        schemas_str = "\n".join(f"  Schema[{idx}]: {schema}" for idx, schema in enumerate(schemas))
-        err_msg = (
-            f"Failed to find a valid schema for {node.target} with arguments {node.args} and kwargs {node.kwargs}. "
-            f"All schemas tried:\n{schemas_str}"
+        effective_args = custom_args if custom_args is not None else node.args
+        effective_kwargs = custom_kwargs if custom_kwargs is not None else node.kwargs
+        mismatch_lines = [
+            f"  [{idx + 1}] {schema} — {mismatch_reasons[idx]}"
+            for idx, schema in enumerate(sorted_schemas)
+        ]
+        err_parts = [
+            f"No matching schema found for operator: Op.{op.name} (torch_op={op_name})",
+            *_format_fx_inputs_for_error(node.args, node.kwargs),
+        ]
+        if pre_flatten_hook is not None:
+            err_parts.append("Schema matching inputs (after pre_flatten_hook):")
+            err_parts.extend(
+                _format_fx_inputs_for_error(effective_args, effective_kwargs, label="Matching")
+            )
+        err_parts.append(
+            f"Tried {len(sorted_schemas)} schemas:\n" + "\n".join(mismatch_lines)
         )
-        raise ValueError(err_msg)
+        raise ValueError("\n".join(err_parts))
     return op_name, flat_args
 
 
