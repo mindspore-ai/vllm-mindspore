@@ -1836,8 +1836,6 @@ def _get_op(target):
             node_module = target.__module__
             if node_module.startswith("torch._ops.ms_inferrt_dvm"):
                 return Op.dvm_call
-            if node_module.startswith("torch._ops.vllm"):
-                return Op.python_call
 
     return Op.custom_call
 
