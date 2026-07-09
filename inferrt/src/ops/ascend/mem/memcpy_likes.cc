@@ -33,10 +33,10 @@ OpsErrorCode MemcpyOpBase::CalcWorkspace(const std::vector<const ir::Value *> &i
   const auto &outTensor = output->ToTensor();
   if (!inputTensor->IsContiguous() || inputTensor->StorageOffset() != 0 || !IsTensorBaseFormat(inputTensor) ||
       !IsTensorBaseFormat(outTensor)) {
-    LOG_EXCEPTION << "memcpy_likes operator does not support non-standard tensor memory layout, "
-                  << "but got strides: " << inputTensor->Strides() << ", offset: " << inputTensor->StorageOffset()
-                  << ", inputTensor format: " << FormatEnumToStr(inputTensor->Format())
-                  << ", outTensor format: " << FormatEnumToStr(outTensor->Format());
+    RT_GLOG(EXCEPTION) << "memcpy_likes operator does not support non-standard tensor memory layout, "
+                       << "but got strides: " << inputTensor->Strides() << ", offset: " << inputTensor->StorageOffset()
+                       << ", inputTensor format: " << FormatEnumToStr(inputTensor->Format())
+                       << ", outTensor format: " << FormatEnumToStr(outTensor->Format());
   }
 
   return SUCCESS;

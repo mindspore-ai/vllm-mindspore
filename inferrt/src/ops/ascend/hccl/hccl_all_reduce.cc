@@ -37,7 +37,6 @@ void HcclAllReduce::Init(const std::vector<const ir::Value *> &input, const ir::
 
 OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                           size_t *workspaceSize) {
-  LOG_OUT << "HcclAllReduce CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
   auto inputTensor = input[kIndex0]->ToTensor();
   HcomUtil::CheckHcclInputContiguous(inputTensor, "HcclAllReduce");
@@ -52,7 +51,6 @@ OpsErrorCode HcclAllReduce::CalcWorkspace(const std::vector<const ir::Value *> &
 
 OpsErrorCode HcclAllReduce::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                    ir::Value *output, void *stream) {
-  LOG_OUT << "HcclAllReduce launch";
   auto outTensor = output->ToTensor();
 
   auto hcclResult = HcclAdapter::GetInstance().HcclAllReduce(
@@ -60,7 +58,7 @@ OpsErrorCode HcclAllReduce::Launch(const std::vector<const ir::Value *> &input, 
     hcclKernel_.hcclDataType_, hcclOpType_, stream, hcclKernel_.comm_);
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcclAllReduce failed, hcclResult: " << hcclResult;
+    RT_GLOG(ERROR) << "HcclAllReduce failed, hcclResult: " << hcclResult;
   }
 
   return SUCCESS;

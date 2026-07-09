@@ -23,6 +23,7 @@ target_link_libraries(ops_ascend_dvm PRIVATE mrt::dvm)
 
 # Link with other dependencies
 target_link_libraries(ops_ascend_dvm PRIVATE
+    mrt_common
     hardware_ascend
     kernel
     mrt::securec

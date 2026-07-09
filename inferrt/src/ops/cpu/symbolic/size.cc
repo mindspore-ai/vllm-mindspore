@@ -28,15 +28,15 @@ OpsErrorCode Size::InferShape(const std::vector<const ir::Value *> &input, ir::V
   // For now we implement the common case: `size(tensor, dim) -> i64`.
   // This is required by dynamic-shape graphs where expand/view shapes are built from `mrt.size`.
   if (input.size() != kInputSize2) {
-    LOG_ERROR << "Size::InferShape expects 2 inputs, but got: " << input.size();
+    RT_GLOG(ERROR) << "Size::InferShape expects 2 inputs, but got: " << input.size();
     return INVALID_INPUT_NUM;
   }
   if (!input[kIndex0] || !input[kIndex0]->IsTensor()) {
-    LOG_ERROR << "Size::InferShape expects input[0] to be a tensor";
+    RT_GLOG(ERROR) << "Size::InferShape expects input[0] to be a tensor";
     return INVALID_PARAM;
   }
   if (!input[kIndex1]) {
-    LOG_ERROR << "Size::InferShape expects input[1] (dim) not null";
+    RT_GLOG(ERROR) << "Size::InferShape expects input[1] (dim) not null";
     return INVALID_PARAM;
   }
 

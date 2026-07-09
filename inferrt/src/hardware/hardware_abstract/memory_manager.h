@@ -56,7 +56,7 @@ class MRT_EXPORT MemoryManager {
   static size_t GetCommunicationAlignSize(size_t inputSize);
 
   virtual size_t GetAvailableMemSize() {
-    LOG_ERROR << "Return default 0 mem size!";
+    RT_GLOG(ERROR) << "Return default 0 mem size!";
     return 0;
   }
 
@@ -64,28 +64,28 @@ class MRT_EXPORT MemoryManager {
                    const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                    const DeviceEventPtr &event) {
     if (GetMemoryPool() == nullptr) {
-      LOG_OUT << "memory pool is nullptr.";
+      RT_VLOG(VL_HARDWARE) << "memory pool is nullptr.";
       return false;
     }
     return GetMemoryPool()->RecordEvent(taskIdOnStream, userStreamId, memoryStreamAddresses, event);
   }
   bool WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
     if (GetMemoryPool() == nullptr) {
-      LOG_OUT << "memory pool is nullptr.";
+      RT_VLOG(VL_HARDWARE) << "memory pool is nullptr.";
       return false;
     }
     return GetMemoryPool()->WaitEvent(taskIdOnStream, userStreamId, memoryStreamId);
   }
   bool WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) {
     if (GetMemoryPool() == nullptr) {
-      LOG_OUT << "memory pool is nullptr.";
+      RT_VLOG(VL_HARDWARE) << "memory pool is nullptr.";
       return false;
     }
     return GetMemoryPool()->WaitEvent(taskIdOnStream, memoryStreamId);
   }
   bool SyncAllEvents() {
     if (GetMemoryPool() == nullptr) {
-      LOG_OUT << "memory pool is nullptr.";
+      RT_VLOG(VL_HARDWARE) << "memory pool is nullptr.";
       return false;
     }
     return GetMemoryPool()->SyncAllEvents();

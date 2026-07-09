@@ -30,14 +30,14 @@ void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
   opName_ = inputs[kInputIOpNameIndex]->ToString();
   size_t pos = opName_.find(".");
   if (pos == std::string::npos) {
-    LOG_EXCEPTION << "Invalid op name: " << opName_ << ". Op name must be in the format of ns.op_name.";
+    RT_GLOG(EXCEPTION) << "Invalid op name: " << opName_ << ". Op name must be in the format of ns.op_name.";
   }
   std::string opName = opName_.substr(pos + 1);
   operatorPtr_ = CreateCustomOperator(opName);
   SetOpType(OpType::CustomCallOp);
 #ifdef ENABLE_TORCH_FRONT
   if (operatorPtr_ == nullptr) {
-    LOG_OUT << "Custom op " << opName_ << " not registered. Try to create operator from torch.";
+    RT_VLOG(VL_OPS) << "Custom op " << opName_ << " not registered. Try to create operator from torch.";
     operatorPtr_ = std::make_shared<OpTorchCall>(opName_);
     SetOpType(OpType::TorchCallOp);
   }
@@ -53,7 +53,7 @@ void OpCustomCall::Init(const std::vector<const ir::Value *> &inputs, const ir::
 
 OpsErrorCode OpCustomCall::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   if (operatorPtr_ == nullptr) {
-    LOG_ERROR << "operatorPtr_ is null in OpCustomCall::InferShape";
+    RT_GLOG(ERROR) << "operatorPtr_ is null in OpCustomCall::InferShape";
     return UNKNOWN_ERROR;
   }
   return operatorPtr_->InferShape(input_, output);

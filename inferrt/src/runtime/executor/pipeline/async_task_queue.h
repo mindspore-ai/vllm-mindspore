@@ -72,13 +72,13 @@ class AsyncTaskQueue {
   template <typename... Args>
   void Push(Args &&...args) {
     if (!init_ || worker_ == nullptr) {
-      LOG_EXCEPTION << "The queue is not initialized before.";
+      RT_GLOG(EXCEPTION) << "The queue is not initialized before.";
     }
     if (!alive_) {
       return;
     }
     if (!tasksQueue_.Push(std::forward<Args>(args)...)) {
-      LOG_EXCEPTION << "Failed to push task to queue: " << name_;
+      RT_GLOG(EXCEPTION) << "Failed to push task to queue: " << name_;
     }
   }
 

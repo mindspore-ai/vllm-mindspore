@@ -78,7 +78,7 @@ void LoadAclMdlApiSymbol(const std::string &ascendPath) {
   std::string aclmdlPluginPath = ascendPath + "lib64/libascendcl.so";
   auto handler = GetLibHandler(aclmdlPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << aclmdlPluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << aclmdlPluginPath << " failed!" << dlerror();
     return;
   }
   aclmdlAddDatasetBuffer_ = DlsymAscendFuncObj(aclmdlAddDatasetBuffer, handler);
@@ -136,7 +136,7 @@ void LoadAclMdlApiSymbol(const std::string &ascendPath) {
   aclmdlRICaptureTaskUpdateEnd_ = DlsymAscendFuncObj(aclmdlRICaptureTaskUpdateEnd, handler);
 #endif
 
-  LOG_OUT << "Load acl mdl api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl mdl api success!";
 }
 
 void LoadSimulationAclMdlApi() {

@@ -23,14 +23,14 @@ namespace mrt::ops {
 
 std::unique_ptr<Operator> LoweredOpHelper::CreateFromMlirText(const std::string &mlir_text) {
   if (mlir_text.empty()) {
-    LOG_ERROR << "MLIR text is empty";
+    RT_GLOG(ERROR) << "MLIR text is empty";
     return nullptr;
   }
 
   try {
     return std::make_unique<AutoLoweredOp>(mlir_text);
   } catch (const std::exception &e) {
-    LOG_ERROR << "Failed to create AutoLoweredOp: " << e.what();
+    RT_GLOG(ERROR) << "Failed to create AutoLoweredOp: " << e.what();
     return nullptr;
   }
 }

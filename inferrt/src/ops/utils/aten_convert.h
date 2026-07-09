@@ -49,7 +49,7 @@ static const std::map<ir::DataType, at::ScalarType> kDataTypeToAtScalarTypeMap =
 inline at::ScalarType ToAtenDType(ir::DataType type) {
   auto iter = kDataTypeToAtScalarTypeMap.find(type);
   if (iter == kDataTypeToAtScalarTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
+    RT_GLOG(EXCEPTION) << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
     return at::kFloat;
   }
 
@@ -78,7 +78,7 @@ inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 
   auto iter = kMemoryFormatToAclFormatMap.find(format);
   if (iter == kMemoryFormatToAclFormatMap.end()) {
-    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    RT_GLOG(EXCEPTION) << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
     return ACL_FORMAT_UNDEFINED;
   }
 
@@ -103,7 +103,8 @@ inline at::Tensor ToAtenTensor(const ir::Value *value) {
     options = options.device(at::Device(at::kCPU, device.index));
     return at::from_blob(const_cast<void *>(tensor->DataPtr()), tensor->Shape(), options);
   }
-  LOG_EXCEPTION << "Unsupported DeviceType " << GetDeviceNameByType(device.type) << " for conversion to at::Tensor";
+  RT_GLOG(EXCEPTION) << "Unsupported DeviceType " << GetDeviceNameByType(device.type)
+                     << " for conversion to at::Tensor";
   return at::empty({}, options);
 }
 }  // namespace ops

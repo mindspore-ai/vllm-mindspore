@@ -83,17 +83,16 @@ AclnnMoeDistributeDispatchV2::AclnnMoeDistributeDispatchV2() {
 
 OpsErrorCode AclnnMoeDistributeDispatchV2::CalcWorkspace(const std::vector<const ir::Value *> &input,
                                                          const ir::Value *output, size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [moe_distribute_dispatch_v2]";
   auto &output_tuple = output->ToTuple();
 
   use_v4_ = executor_v4_ != nullptr;
   use_v3_ = !use_v4_ && executor_v3_ != nullptr;
   if (!use_v4_ && HasV4OnlyParam(input)) {
-    LOG_OUT << "aclnnMoeDistributeDispatchV4 is unavailable, but V4-only parameters are provided.";
+    RT_GLOG(ERROR) << "aclnnMoeDistributeDispatchV4 is unavailable, but V4-only parameters are provided.";
     return INVALID_PARAM;
   }
   if (!use_v4_ && !use_v3_ && HasV3OnlyParam(input)) {
-    LOG_OUT << "aclnnMoeDistributeDispatchV3 is unavailable, but V3-only parameters are provided.";
+    RT_GLOG(ERROR) << "aclnnMoeDistributeDispatchV3 is unavailable, but V3-only parameters are provided.";
     return INVALID_PARAM;
   }
   active_executor_ = use_v4_ ? executor_v4_.get() : (use_v3_ ? executor_v3_.get() : executor_v2_.get());
@@ -156,7 +155,6 @@ OpsErrorCode AclnnMoeDistributeDispatchV2::CalcWorkspace(const std::vector<const
 
 OpsErrorCode AclnnMoeDistributeDispatchV2::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                                   size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [moe_distribute_dispatch_v2]";
   auto &output_tuple = output->ToTuple();
 
   auto global_bs_real = input[kGlobalBsIdx]->ToInt();

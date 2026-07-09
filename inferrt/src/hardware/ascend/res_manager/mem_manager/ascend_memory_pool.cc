@@ -38,7 +38,7 @@ constexpr float kDefaultMemBlockIncreaseSize = 1.0;
 constexpr float kDefaultMemMaxSize = 1024.0;
 
 DefaultAscendMemoryPool::DefaultAscendMemoryPool() {
-  LOG_OUT << "DefaultAscendMemoryPool constructed.";
+  RT_VLOG(VL_HARDWARE) << "DefaultAscendMemoryPool constructed.";
   SetEnableVmm(AscendVmmAdapter::GetInstance().IsEnabled());
 }
 
@@ -56,12 +56,12 @@ size_t DefaultAscendMemoryPool::EmptyCache() {
     return releaseFreeSize;
   } else if (IsEnableEagerFree()) {
     auto ret = AbstractEnhancedDynamicMemPool::FreeIdleMemsByEagerFree();
-    LOG_OUT << "Eager free memory size is " << ret.second << ".";
+    RT_VLOG(VL_HARDWARE) << "Eager free memory size is " << ret.second << ".";
     releaseFreeSize += ret.second;
     return releaseFreeSize;
   }
 
-  LOG_OUT << "Vmm is not enabled, try to release free blocks.";
+  RT_VLOG(VL_HARDWARE) << "Vmm is not enabled, try to release free blocks.";
   // // disable ge kernel use two pointer mem adapter, not support free.
   // if (IsDisableGeKernel()) {
   //   return 0L;
@@ -84,24 +84,24 @@ void DefaultAscendMemoryPool::DisablePluggableAllocator() {
 
 DefaultEnhancedAscendMemoryPool::DefaultEnhancedAscendMemoryPool(const DefaultAscendMemoryPoolPtr &instance)
     : instance_(instance) {
-  LOG_OUT << "DefaultEnhancedAscendMemoryPool constructed.";
+  RT_VLOG(VL_HARDWARE) << "DefaultEnhancedAscendMemoryPool constructed.";
   instance_->SetEnableVmm(AscendVmmAdapter::GetInstance().IsEnabled());
 }
 
 void DefaultEnhancedAscendMemoryPool::ReleaseDeviceRes() {
-  LOG_OUT << "Start release device res.";
+  RT_VLOG(VL_HARDWARE) << "Start release device res.";
   instance_->ReleaseDeviceRes();
 }
 
 DeviceMemPtr DefaultEnhancedAscendMemoryPool::AllocTensorMem(size_t size, bool fromPersistentMem, bool needRecycle,
                                                              uint32_t streamId) {
   size_t alignSize = AlignMemorySize(size);
-  LOG_OUT << "Allocate tensor mem, size : " << size << ", alignSize : " << alignSize
-          << ", needRecycle : " << needRecycle << ".";
+  RT_VLOG(VL_HARDWARE) << "Allocate tensor mem, size : " << size << ", alignSize : " << alignSize
+                       << ", needRecycle : " << needRecycle << ".";
   LockGuard lock(instance_->lock());
   const auto [memBuf, allocator] = instance_->AllocMemBuf(alignSize, fromPersistentMem, streamId);
   if (memBuf == nullptr) {
-    LOG_OUT << "Allocate tensor mem, return nullptr.";
+    RT_VLOG(VL_HARDWARE) << "Allocate tensor mem, return nullptr.";
     // Dump mem pool state info and debug info when alloc tensor failed.
     DumpDynamicMemPoolStateInfo();
     DumpDynamicMemPoolDebugInfo();
@@ -115,14 +115,14 @@ DeviceMemPtr DefaultEnhancedAscendMemoryPool::AllocTensorMem(size_t size, bool f
   instance_->ReportMemoryPoolInfo();
   instance_->ReportMemoryPoolMallocInfoToMstx(deviceAddr, alignSize);
 
-  LOG_OUT << "Allocate tensor mem, return : " << memBuf->ToJson() << ", stat info : " << instance_->mem_stat().ToJson()
-          << ".";
+  RT_VLOG(VL_HARDWARE) << "Allocate tensor mem, return : " << memBuf->ToJson()
+                       << ", stat info : " << instance_->mem_stat().ToJson() << ".";
   return deviceAddr;
 }
 
 std::vector<DeviceMemPtr> DefaultEnhancedAscendMemoryPool::AllocContinuousTensorMem(const std::vector<size_t> &sizeList,
                                                                                     uint32_t streamId) {
-  LOG_OUT << "Alloc continuous tensor mem, stream id : " << streamId << ".";
+  RT_VLOG(VL_HARDWARE) << "Alloc continuous tensor mem, stream id : " << streamId << ".";
   const auto &continuousAddrs = instance_->AllocContinuousTensorMem(sizeList, streamId);
   if (continuousAddrs.size() != sizeList.size()) {
     return continuousAddrs;
@@ -134,7 +134,7 @@ std::vector<DeviceMemPtr> DefaultEnhancedAscendMemoryPool::AllocContinuousTensor
 }
 
 void DefaultEnhancedAscendMemoryPool::FreeTensorMem(const DeviceMemPtr &deviceAddr) {
-  LOG_OUT << "Free tensor mem, device addr : " << deviceAddr << ".";
+  RT_VLOG(VL_HARDWARE) << "Free tensor mem, device addr : " << deviceAddr << ".";
   LockGuard lock(instance_->lock());
   DoFreeTensorMem(deviceAddr);
 }
@@ -142,17 +142,17 @@ void DefaultEnhancedAscendMemoryPool::FreeTensorMem(const DeviceMemPtr &deviceAd
 bool DefaultEnhancedAscendMemoryPool::DoFreeTensorMem(const DeviceMemPtr &deviceAddr) {
   void *enhancedDeviceAddr = deviceAddr;
   bool ret = instance_->DoFreeTensorMem(deviceAddr);
-  LOG_OUT << "Do free tensor mem : " << enhancedDeviceAddr << ", return : " << ret << ".";
+  RT_VLOG(VL_HARDWARE) << "Do free tensor mem : " << enhancedDeviceAddr << ", return : " << ret << ".";
   return ret;
 }
 
 void DefaultEnhancedAscendMemoryPool::FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
                                                          const std::vector<DeviceMemPtr> &keepAddrs,
                                                          const std::vector<size_t> &keepAddrSizes) {
-  LOG_OUT << "Free part tensor mems.";
+  RT_VLOG(VL_HARDWARE) << "Free part tensor mems.";
   LockGuard lock(instance_->lock());
 
-  const auto keepMemBufs = instance_->DoFreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
+  (void)instance_->DoFreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
 }
 
 void DefaultEnhancedAscendMemoryPool::DefragMemory() {
@@ -161,8 +161,8 @@ void DefaultEnhancedAscendMemoryPool::DefragMemory() {
   } else {
     size_t vmmUsedSize = GetVmmUsedMemSize();
     if (vmmUsedSize > lastVmmUsedSize_) {
-      LOG_OUT << "Current vmm used size : " << vmmUsedSize
-              << " is bigger than last vmm used size : " << lastVmmUsedSize_ << ".";
+      RT_VLOG(VL_HARDWARE) << "Current vmm used size : " << vmmUsedSize
+                           << " is bigger than last vmm used size : " << lastVmmUsedSize_ << ".";
       lastVmmUsedSize_ = vmmUsedSize;
     }
   }
@@ -188,7 +188,7 @@ bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t taskIdOnStream, uint32_t
 
   auto memBufs_ = iter->second;
   for (const auto &memBuf : memBufs_) {
-    LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Wait event for : " << memBuf->ToJson() << ".";
     memBuf->WaitEvent(taskIdOnStream, userStreamId);
     // Remove event and try to free memory.
     if (memBuf->IsEventNotUsed()) {
@@ -214,7 +214,7 @@ bool DefaultEnhancedAscendMemoryPool::WaitEvent(int64_t taskIdOnStream, uint32_t
     }
     auto memBufs = streamPairMemBufs.second;
     for (const auto &memBuf : memBufs) {
-      LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "Wait event for : " << memBuf->ToJson() << ".";
       memBuf->WaitEvent(taskIdOnStream, userStream);
       // Remove event and try to free memory.
       if (memBuf->IsEventNotUsed()) {
@@ -262,12 +262,12 @@ void DefaultEnhancedAscendMemoryPool::SetRankIdGetter(const std::function<size_t
 }
 
 BestFitAscendMemoryPool::BestFitAscendMemoryPool() {
-  LOG_OUT << "BestFitAscendMemoryPool constructed, older memory allocator is enabled.";
+  RT_VLOG(VL_HARDWARE) << "BestFitAscendMemoryPool constructed, older memory allocator is enabled.";
   SetEnableVmm(AscendVmmAdapter::GetInstance().IsEnabled());
 }
 
 size_t BestFitAscendMemoryPool::EmptyCache() {
-  LOG_OUT << "Best fit memory pool is not supported empty cache.";
+  RT_VLOG(VL_HARDWARE) << "Best fit memory pool is not supported empty cache.";
   return 0L;
 }
 
@@ -308,7 +308,7 @@ AbstractAscendMemoryPoolSupport &AscendMemoryPool::GetInstance() {
 }
 
 void AscendMemoryPool::SetEnhancedMemoryPool(bool enable) {
-  LOG_OUT << "Set enhanced memory pool : " << enable << ".";
+  RT_VLOG(VL_HARDWARE) << "Set enhanced memory pool : " << enable << ".";
   if (enable) {
     pool_ = enhancedInstance_;
   } else {

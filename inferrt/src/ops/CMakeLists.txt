@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 if(ENABLE_ASCEND)
     if(DEFINED ENV{ASCEND_CUSTOM_PATH})

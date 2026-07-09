@@ -47,14 +47,14 @@ OpsErrorCode AclnnContiguous::Launch(const std::vector<const ir::Value *> &input
   auto srcSize = inputTensor->Numel() * inputTensor->Dtype().GetSize();
   auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
   if (srcSize > dstSize) {
-    LOG_EXCEPTION << "Unexpected input and output size mismatch, src size is " << srcSize << ", dst size is "
-                  << dstSize;
+    RT_GLOG(EXCEPTION) << "Unexpected input and output size mismatch, src size is " << srcSize << ", dst size is "
+                       << dstSize;
   }
   auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
                                                                          inputTensor->DataPtr(), dstSize, stream);
 
   if (!ret) {
-    LOG_ERROR << "Call aclrtMemcpyAsync in Op Contiguous failed";
+    RT_GLOG(ERROR) << "Call aclrtMemcpyAsync in Op Contiguous failed";
     return UNKNOWN_ERROR;
   }
   return SUCCESS;

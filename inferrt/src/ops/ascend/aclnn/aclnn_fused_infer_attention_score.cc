@@ -87,8 +87,6 @@ constexpr size_t kSoftmaxLseOutIdx = 1;
 
 OpsErrorCode AclnnFusedInferAttentionScore::CalcWorkspace(const std::vector<const ir::Value *> &input,
                                                           const ir::Value *output, size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [fused_infer_attention_score]";
-
   auto &output_tuple = output->ToTuple();
 
   executor_->GetWorkspaceSize(
@@ -117,8 +115,6 @@ OpsErrorCode AclnnFusedInferAttentionScore::CalcWorkspace(const std::vector<cons
 
 OpsErrorCode AclnnFusedInferAttentionScore::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                                    size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [fused_infer_attention_score]";
-
   auto &output_tuple = output->ToTuple();
 
   executor_->Launch(

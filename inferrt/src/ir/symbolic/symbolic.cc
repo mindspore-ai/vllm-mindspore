@@ -25,7 +25,7 @@ namespace ir {
 
 int64_t SymbolicVar::Evaluate() const {
   if (!hasValue_) {
-    LOG_EXCEPTION << "Symbolic variable " << name_ << " has no value.";
+    RT_GLOG(EXCEPTION) << "Symbolic variable " << name_ << " has no value.";
   }
   return value_;
 }
@@ -34,7 +34,7 @@ int64_t SymbolicFloorDiv::Evaluate() const {
   auto lhsVal = lhs_->Evaluate();
   auto rhsVal = rhs_->Evaluate();
   if (rhsVal == 0) {
-    LOG_EXCEPTION << "Division by zero in symbolic expression.";
+    RT_GLOG(EXCEPTION) << "Division by zero in symbolic expression.";
   }
   return static_cast<int64_t>(std::floor(static_cast<double>(lhsVal) / static_cast<double>(rhsVal)));
 }
@@ -43,7 +43,7 @@ int64_t SymbolicCeilDiv::Evaluate() const {
   auto lhsVal = lhs_->Evaluate();
   auto rhsVal = rhs_->Evaluate();
   if (rhsVal == 0) {
-    LOG_EXCEPTION << "Division by zero in symbolic expression.";
+    RT_GLOG(EXCEPTION) << "Division by zero in symbolic expression.";
   }
   return static_cast<int64_t>(std::ceil(static_cast<double>(lhsVal) / static_cast<double>(rhsVal)));
 }
@@ -52,7 +52,7 @@ int64_t SymbolicTrueDiv::Evaluate() const {
   auto lhsVal = lhs_->Evaluate();
   auto rhsVal = rhs_->Evaluate();
   if (rhsVal == 0) {
-    LOG_EXCEPTION << "Division by zero in symbolic expression.";
+    RT_GLOG(EXCEPTION) << "Division by zero in symbolic expression.";
   }
   return static_cast<int64_t>(static_cast<double>(lhsVal) / static_cast<double>(rhsVal));
 }
@@ -61,7 +61,7 @@ int64_t SymbolicMod::Evaluate() const {
   auto lhsVal = lhs_->Evaluate();
   auto rhsVal = rhs_->Evaluate();
   if (rhsVal == 0) {
-    LOG_EXCEPTION << "Modulo by zero in symbolic expression.";
+    RT_GLOG(EXCEPTION) << "Modulo by zero in symbolic expression.";
   }
   return lhsVal % rhsVal;
 }

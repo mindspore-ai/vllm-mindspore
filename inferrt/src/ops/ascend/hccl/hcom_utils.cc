@@ -28,7 +28,7 @@ inline int64_t LongMulWithOverflowCheck(int64_t a, int64_t b) {
   if (a != 0) {
     bool overflow = ((out / a) != b);
     if (overflow) {
-      LOG_EXCEPTION << "Mul: a(" << a << ") * b(" << b << ") result is overflow";
+      RT_GLOG(EXCEPTION) << "Mul: a(" << a << ") * b(" << b << ") result is overflow";
     }
   }
   return out;
@@ -38,7 +38,7 @@ inline size_t SizetMulWithOverflowCheck(size_t a, size_t b) {
   size_t out = a * b;
   if (a != 0) {
     if ((out / a) != b) {
-      LOG_EXCEPTION << "Mul: a(" << a << ") * b(" << b << ") result is overflow";
+      RT_GLOG(EXCEPTION) << "Mul: a(" << a << ") * b(" << b << ") result is overflow";
     }
   }
   return out;
@@ -49,7 +49,7 @@ inline size_t LongToSizeClipNeg(int64_t u) { return u < 0 ? 0 : static_cast<size
 ::HcclDataType HcomUtil::ConvertHcclType(DataType typeId) {
   auto iter = kConstOpHcomDataTypeMap.find(typeId);
   if (iter == kConstOpHcomDataTypeMap.end()) {
-    LOG_EXCEPTION << "HcomDataType can't support Current Ascend Data Type : " << typeId.ToString();
+    RT_GLOG(EXCEPTION) << "HcomDataType can't support Current Ascend Data Type : " << typeId.ToString();
   }
   return iter->second;
 }
@@ -74,7 +74,7 @@ bool HcomUtil::GetHcomTypeSize(const HcclDataType &dataType, uint32_t *size) {
   CHECK_IF_NULL(size);
   auto iter = kConstOpHcomDataTypeSizeMap.find(dataType);
   if (iter == kConstOpHcomDataTypeSizeMap.end()) {
-    LOG_ERROR << "HcomUtil::HcomDataTypeSize, No DataTypeSize!";
+    RT_GLOG(ERROR) << "HcomUtil::HcomDataTypeSize, No DataTypeSize!";
     return false;
   }
   *size = iter->second;
@@ -105,7 +105,7 @@ bool HcomUtil::GetHcomCount(const std::vector<HcclDataType> &dataTypeList,
     }
 
     if (!GetHcclOpSize(dataTypeList[i], shapeList[i], &inputSize)) {
-      LOG_ERROR << "Get GetHcclOpSize failed";
+      RT_GLOG(ERROR) << "Get GetHcclOpSize failed";
       return false;
     }
 
@@ -137,7 +137,7 @@ std::pair<uint64_t, ::HcclDataType> HcomUtil::GetHcclCountAndTypeFromTensor(cons
   uint64_t hcclCount = 0;
   constexpr size_t inputTensorSize = 1;
   if (!GetHcomCount({hcclType}, {shape}, inputTensorSize, rankSizeOpt, &hcclCount)) {
-    LOG_EXCEPTION << "GetHcomCount fail!";
+    RT_GLOG(EXCEPTION) << "GetHcomCount fail!";
   }
   return std::make_pair(hcclCount, hcclType);
 }
@@ -145,15 +145,15 @@ std::pair<uint64_t, ::HcclDataType> HcomUtil::GetHcclCountAndTypeFromTensor(cons
 void HcomUtil::CheckHcclInputContiguous(const ir::TensorPtr &tensor, const std::string &opName) {
   CHECK_IF_NULL(tensor);
   if (!tensor->IsContiguous()) {
-    LOG_EXCEPTION << opName << " does not support non-contiguous input tensor, shape: " << tensor->Shape()
-                  << ", strides: " << tensor->Strides();
+    RT_GLOG(EXCEPTION) << opName << " does not support non-contiguous input tensor, shape: " << tensor->Shape()
+                       << ", strides: " << tensor->Strides();
   }
 }
 
 CollectiveOpReduceType HcomUtil::GetCollectiveOpReduceType(const std::string &reduceOp) {
   auto iter = kConstOpCollectiveOpReduceTypeMap.find(reduceOp);
   if (iter == kConstOpCollectiveOpReduceTypeMap.end()) {
-    LOG_EXCEPTION << "HcomUtil::Get CollectiveOpReduceType fail, [" << reduceOp << "] not support!";
+    RT_GLOG(EXCEPTION) << "HcomUtil::Get CollectiveOpReduceType fail, [" << reduceOp << "] not support!";
   }
   return iter->second;
 }
@@ -161,7 +161,7 @@ CollectiveOpReduceType HcomUtil::GetCollectiveOpReduceType(const std::string &re
 HcclReduceOp HcomUtil::GetHcomReduceOpType(const std::string &reduceOp) {
   auto iter = kConstOpHcomReduceOpTypeMap.find(reduceOp);
   if (iter == kConstOpHcomReduceOpTypeMap.end()) {
-    LOG_EXCEPTION << "HcomUtil::Get HCOM_ATTR_REDUCE_TYPE fail, [" << reduceOp << "] not support!";
+    RT_GLOG(EXCEPTION) << "HcomUtil::Get HCOM_ATTR_REDUCE_TYPE fail, [" << reduceOp << "] not support!";
   }
   return iter->second;
 }

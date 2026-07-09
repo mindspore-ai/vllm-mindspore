@@ -167,7 +167,7 @@ void OpTorchCall::UpdateTorchTensor(at::Tensor &atTensor, const ir::TensorPtr &m
   const auto newStorageBytes = mrtTensor->GetStorage()->SizeBytes();
   const auto newStorageOffset = mrtTensor->StorageOffset();
   const auto newStorageShape = mrtTensor->StorageShape().empty() ? mrtTensor->Shape() : mrtTensor->StorageShape();
-  LOG_OUT << "newStorageShape[" << newStorageShape << "]";
+  RT_VLOG(VL_OPS) << "newStorageShape[" << newStorageShape << "]";
 
   bool metadataUnchanged =
     IsBasicMetadataUnchanged(atTensor, newDataPtr, newShape, newStrides, newStorageBytes, newStorageOffset);
@@ -266,7 +266,7 @@ void OpTorchCall::ConvertTupleToStack(const ir::TuplePtr tuple, torch::jit::Stac
   if (tagIdx < kTupleConverterCount && tupleConverterTable[tagIdx] != nullptr) {
     (this->*tupleConverterTable[tagIdx])(tuple, stack);
   } else {
-    LOG_EXCEPTION << "Unsupported tuple element type: " << *element;
+    RT_GLOG(EXCEPTION) << "Unsupported tuple element type: " << *element;
   }
 }
 
@@ -334,8 +334,8 @@ void OpTorchCall::ConvertNoneInputToStack(const ir::Value *value, torch::jit::St
 
 void OpTorchCall::ConvertInputsToStack(const std::vector<const ir::Value *> &inputs, torch::jit::Stack &stack) {
   if (inputs.size() != cachedInputConverters_.size()) {
-    LOG_EXCEPTION << "Input size mismatch: Init cached " << cachedInputConverters_.size()
-                  << " real inputs, but CalcWorkspace got " << inputs.size();
+    RT_GLOG(EXCEPTION) << "Input size mismatch: Init cached " << cachedInputConverters_.size()
+                       << " real inputs, but CalcWorkspace got " << inputs.size();
   }
 
   for (size_t i = 0; i < inputs.size(); ++i) {
@@ -358,7 +358,7 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
     CHECK_IF_NULL(tuple);
     auto list = ivalue.toList();
     if (list.size() != tuple->Size()) {
-      LOG_EXCEPTION << "List size not match tuple size";
+      RT_GLOG(EXCEPTION) << "List size not match tuple size";
     }
     for (size_t i = 0; i < list.size(); i++) {
       ToMrtTensor((*tuple)[i].get(), torch::jit::IValue{list.get(i)});
@@ -374,8 +374,8 @@ void OpTorchCall::ToMrtTensor(ir::Value *output, torch::jit::IValue &&ivalue) co
     // If output is none, like the aten.index_put op we just ignore it.
     return;
   } else {
-    LOG_EXCEPTION << "Output Only Support Tensor or List[Tensor], but got type: "
-                  << c10::typeKindToString(ivalue.type()->kind());
+    RT_GLOG(EXCEPTION) << "Output Only Support Tensor or List[Tensor], but got type: "
+                       << c10::typeKindToString(ivalue.type()->kind());
   }
 }
 
@@ -391,7 +391,7 @@ void OpTorchCall::ConvertStackToOutput(ir::Value *output, torch::jit::Stack &&st
 
   auto &tuple = output->ToTuple();
   if (tuple->Size() != stack.size()) {
-    LOG_EXCEPTION << "Tuple size not match stack size";
+    RT_GLOG(EXCEPTION) << "Tuple size not match stack size";
   }
   for (size_t i = 0; i < stack.size(); i++) {
     ToMrtTensor((*tuple)[i].get(), std::move(stack[i]));
@@ -473,7 +473,7 @@ std::string OpTorchCall::GetAvailableTorchOps() const {
 }
 
 void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
-  LOG_OUT << "Start init operator: " << qualifiedOpName_ << ", inputs: " << inputs.size();
+  RT_VLOG(VL_OPS) << "Start init operator: " << qualifiedOpName_ << ", inputs: " << inputs.size();
   auto ops = torch::jit::getAllOperatorsFor(torch::jit::Symbol::fromQualString(qualifiedOpName_));
   std::vector<std::pair<std::string, std::string>> schema_mismatch_reasons;
   for (auto &op : ops) {
@@ -494,7 +494,7 @@ void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::V
       error_msg << "  [" << (i + 1) << "] " << schema_mismatch_reasons[i].first << " — "
                 << schema_mismatch_reasons[i].second << "\n";
     }
-    LOG_EXCEPTION << error_msg.str();
+    RT_GLOG(EXCEPTION) << error_msg.str();
   }
 
   firstRun_ = true;
@@ -514,7 +514,7 @@ void OpTorchCall::Init(const std::vector<const ir::Value *> &inputs, const ir::V
     if (tagIdx < kInputConverterCount) {
       cachedInputConverters_.push_back(inputConverterTable[tagIdx]);
     } else {
-      LOG_EXCEPTION << "Invalid input tag: " << static_cast<int>(tag) << " at index " << i;
+      RT_GLOG(EXCEPTION) << "Invalid input tag: " << static_cast<int>(tag) << " at index " << i;
     }
   }
 }

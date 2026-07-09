@@ -49,12 +49,12 @@ bool NoAdditionalMemory() {
 size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool fromPersistentMem, bool needRecycle) {
   auto deviceFreeMemSize = free_mem_size();
   if (deviceFreeMemSize < size) {
-    LOG_OUT << "The device memory is not enough, the free memory size is " << deviceFreeMemSize
-            << ", but the alloc size is " << size;
-    LOG_OUT << "The dynamic memory pool total size is " << TotalMemStatistics() / kMBToByte << "M, total used size is "
-            << TotalUsedMemStatistics() / kMBToByte << "M, used peak size is " << UsedMemPeakStatistics() / kMBToByte
-            << "M.";
-    LOG_OUT << "Memory Statistics:" << AscendMemAdapter::GetInstance()->DevMemStatistics();
+    RT_VLOG(VL_HARDWARE) << "The device memory is not enough, the free memory size is " << deviceFreeMemSize
+                         << ", but the alloc size is " << size;
+    RT_VLOG(VL_HARDWARE) << "The dynamic memory pool total size is " << TotalMemStatistics() / kMBToByte
+                         << "M, total used size is " << TotalUsedMemStatistics() / kMBToByte << "M, used peak size is "
+                         << UsedMemPeakStatistics() / kMBToByte << "M.";
+    RT_VLOG(VL_HARDWARE) << "Memory Statistics:" << AscendMemAdapter::GetInstance()->DevMemStatistics();
     return 0;
   }
 
@@ -64,10 +64,11 @@ size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool f
   if (needRecycle) {
     allocMemUnitSize = kDynamicMemAllocUnitSize;
   }
-  LOG_OUT << "Get unit block size " << allocMemUnitSize;
+  RT_VLOG(VL_HARDWARE) << "Get unit block size " << allocMemUnitSize;
   allocMemSize = allocMemUnitSize;
 
   const bool isGraphRunMode = true;
+  // cppcheck-suppress knownConditionTrueFalse
   if (isGraphRunMode) {
     // Growing at adding alloc unit size
     while (allocMemSize < size) {
@@ -89,13 +90,13 @@ size_t AbstractAscendMemoryPoolSupport::CalMemBlockAllocSize(size_t size, bool f
 }
 
 size_t AbstractAscendMemoryPoolSupport::AllocDeviceMem(size_t size, DeviceMemPtr *addr) {
-  LOG_OUT << "Malloc Memory for Pool, size: " << size;
+  RT_VLOG(VL_HARDWARE) << "Malloc Memory for Pool, size: " << size;
   if (size == 0) {
-    LOG_ERROR << "Failed to alloc memory pool resource, the size is zero!";
+    RT_GLOG(ERROR) << "Failed to alloc memory pool resource, the size is zero!";
   }
   *addr = AscendMemAdapter::GetInstance()->MallocStaticDevMem(size);
   if (*addr == nullptr) {
-    LOG_ERROR << "Alloc device memory pool address is nullptr, failed to alloc memory pool resource!";
+    RT_GLOG(ERROR) << "Alloc device memory pool address is nullptr, failed to alloc memory pool resource!";
   }
   return size;
 }
@@ -127,7 +128,7 @@ size_t AbstractAscendMemoryPoolSupport::AllocDeviceMemByEagerFree(size_t size, D
   } else if (IsEnableEagerFree()) {
     return AscendGmemAdapter::GetInstance().AllocDeviceMem(size, addr);
   } else {
-    LOG_ERROR << "Eager free and VMM are both disabled.";
+    RT_GLOG(ERROR) << "Eager free and VMM are both disabled.";
     return 0;
   }
 }
@@ -138,7 +139,7 @@ size_t AbstractAscendMemoryPoolSupport::FreeDeviceMemByEagerFree(const DeviceMem
   } else if (IsEnableEagerFree()) {
     return AscendGmemAdapter::GetInstance().EagerFreeDeviceMem(addr, size);
   } else {
-    LOG_ERROR << "Eager free and VMM are both disabled.";
+    RT_GLOG(ERROR) << "Eager free and VMM are both disabled.";
     return 0;
   }
 }
@@ -151,21 +152,21 @@ size_t AbstractAscendMemoryPoolSupport::MmapDeviceMem(const size_t size, const D
   } else if (IsEnableEagerFree()) {
     auto ret = AscendGmemAdapter::GetInstance().MmapMemory(size, addr);
     if (ret == nullptr) {
-      LOG_ERROR << "Mmap memory failed.";
+      RT_GLOG(ERROR) << "Mmap memory failed.";
     }
     return size;
   }
-  LOG_ERROR << "Eager free and VMM are both disabled.";
+  RT_GLOG(ERROR) << "Eager free and VMM are both disabled.";
   return 0;
 }
 
 bool AbstractAscendMemoryPoolSupport::FreeDeviceMem(const DeviceMemPtr &addr) {
   CHECK_IF_NULL(addr);
   int64_t maxActual = ActualPeakStatistics();
-  LOG_OUT << "Max actual used memory size is " << maxActual;
+  RT_VLOG(VL_HARDWARE) << "Max actual used memory size is " << maxActual;
   AscendMemAdapter::GetInstance()->UpdateActualPeakMemory(maxActual);
   int64_t maxPeak = UsedMemPeakStatistics();
-  LOG_OUT << "Max peak used memory size is " << maxPeak;
+  RT_VLOG(VL_HARDWARE) << "Max peak used memory size is " << maxPeak;
   AscendMemAdapter::GetInstance()->UpdateUsedPeakMemory(maxPeak);
   // disable ge kernel use two pointer mem adapter, not support free.
   // if (!IsEnableVmm() && !IsEnableEagerFree() && !IsDisableGeKernel()) {

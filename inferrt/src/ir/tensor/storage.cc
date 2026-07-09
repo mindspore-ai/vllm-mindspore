@@ -49,14 +49,15 @@ void Storage::Resize(size_t sizeBytes) {
     return;
   }
   if (data_ != nullptr) {
-    LOG_EXCEPTION << "Device memory leak detected, device type: " << GetDeviceNameByType(device_.type);
+    RT_GLOG(EXCEPTION) << "Device memory leak detected, device type: " << GetDeviceNameByType(device_.type);
   }
 }
 
 void Storage::AllocateMemory() {
   if (ownsData_) {
-    LOG_EXCEPTION << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
-                  << GetDeviceNameByType(device_.type) << ", data: " << data_;
+    RT_GLOG(EXCEPTION)
+      << "Device memory has already been allocated, or a device memory leak has occurred, device type: "
+      << GetDeviceNameByType(device_.type) << ", data: " << data_;
   }
   data_ = alloc_.Allocate(sizeBytes_);
   CHECK_IF_NULL(data_);
@@ -65,14 +66,14 @@ void Storage::AllocateMemory() {
 
 void Storage::FreeMemory() {
   if (!ownsData_) {
-    LOG_EXCEPTION << "Can not free memory for a storage which doesn't own data, this Storage is used to "
-                     "reference memory passed in from external sources.";
+    RT_GLOG(EXCEPTION) << "Can not free memory for a storage which doesn't own data, this Storage is used to "
+                          "reference memory passed in from external sources.";
   }
 
   // Free memory from at::Tensor
   if (fromAten_) {
     if (deleter_ == nullptr) {
-      LOG_EXCEPTION << "Deleter function is null, can not free memory from aten.";
+      RT_GLOG(EXCEPTION) << "Deleter function is null, can not free memory from aten.";
     }
     deleter_(dataToRelease_);
     deleter_ = nullptr;
@@ -88,8 +89,9 @@ void Storage::FreeMemory() {
 
 void *Storage::Release() {
   if (!ownsData_) {
-    LOG_EXCEPTION << "Can not release memory to other from a storage which doesn't own data, this Storage is used to "
-                     "reference memory passed in from external sources.";
+    RT_GLOG(EXCEPTION)
+      << "Can not release memory to other from a storage which doesn't own data, this Storage is used to "
+         "reference memory passed in from external sources.";
   }
   void *p = data_;
   deleter_ = nullptr;

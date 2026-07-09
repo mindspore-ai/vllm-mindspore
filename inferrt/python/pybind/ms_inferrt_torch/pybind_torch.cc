@@ -132,7 +132,7 @@ std::vector<bool> ParseInputIsParameter(const nb::object &input_is_parameter, si
   if (nb::isinstance<nb::list>(input_is_parameter)) {
     auto list = nb::cast<nb::list>(input_is_parameter);
     if (list.size() != expected_size) {
-      LOG_EXCEPTION << "Expected " << expected_size << " parameter flags, but received " << list.size();
+      RT_GLOG(EXCEPTION) << "Expected " << expected_size << " parameter flags, but received " << list.size();
     }
     for (size_t i = 0; i < expected_size; ++i) {
       flags[i] = nb::cast<bool>(list[i]);
@@ -143,7 +143,7 @@ std::vector<bool> ParseInputIsParameter(const nb::object &input_is_parameter, si
   if (nb::isinstance<nb::tuple>(input_is_parameter)) {
     auto tuple = nb::cast<nb::tuple>(input_is_parameter);
     if (tuple.size() != expected_size) {
-      LOG_EXCEPTION << "Expected " << expected_size << " parameter flags, but received " << tuple.size();
+      RT_GLOG(EXCEPTION) << "Expected " << expected_size << " parameter flags, but received " << tuple.size();
     }
     for (size_t i = 0; i < expected_size; ++i) {
       flags[i] = nb::cast<bool>(tuple[i]);
@@ -151,7 +151,7 @@ std::vector<bool> ParseInputIsParameter(const nb::object &input_is_parameter, si
     return flags;
   }
 
-  LOG_EXCEPTION << "input_is_parameter must be a list, tuple, or None";
+  RT_GLOG(EXCEPTION) << "input_is_parameter must be a list, tuple, or None";
   return flags;
 }
 
@@ -164,7 +164,8 @@ std::vector<size_t> ParseNonParameterTensorIndices(const nb::object &indices_obj
 
   auto push_index = [&](size_t idx) {
     if (idx >= expected_size) {
-      LOG_EXCEPTION << "Non-parameter tensor input index out of range: " << idx << ", input size: " << expected_size;
+      RT_GLOG(EXCEPTION) << "Non-parameter tensor input index out of range: " << idx
+                         << ", input size: " << expected_size;
     }
     indices.emplace_back(idx);
   };
@@ -187,7 +188,7 @@ std::vector<size_t> ParseNonParameterTensorIndices(const nb::object &indices_obj
     return indices;
   }
 
-  LOG_EXCEPTION << "non_parameter_tensor_indices must be a list, tuple, or None";
+  RT_GLOG(EXCEPTION) << "non_parameter_tensor_indices must be a list, tuple, or None";
   return indices;
 }
 
@@ -262,7 +263,7 @@ void InitializeGraphInputIndices(GraphInputStaticCache *graph_cache, size_t expe
   std::vector<uint8_t> tensor_index_mask(expected_size, 0);
   for (const auto idx : graph_cache->tensor_input_indices) {
     if (idx >= expected_size) {
-      LOG_EXCEPTION << "Tensor input index out of range: " << idx << ", input size: " << expected_size;
+      RT_GLOG(EXCEPTION) << "Tensor input index out of range: " << idx << ", input size: " << expected_size;
     }
     tensor_index_mask[idx] = 1;
   }
@@ -319,7 +320,7 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
 
   auto device = tensor->GetDevice();
   if (device != FromTorchDevice(at_tensor.device())) {
-    LOG_EXCEPTION << "Device mismatch in update_tensor";
+    RT_GLOG(EXCEPTION) << "Device mismatch in update_tensor";
   }
 
 #ifdef ENABLE_TORCH_NPU
@@ -331,9 +332,10 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
     // to avoid double-counting the offset in Tensor::DataPtr()
     tensor->SetStorageOffset(0);
     tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(at_tensor));
-    LOG_OUT << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format()) << ", strides=" << tensor->Strides()
-            << ", storageOffset=" << tensor->StorageOffset() << ", storageShape=" << tensor->StorageShape()
-            << ", isView=" << at_tensor.is_view() << " at.tensor.shape: " << at_tensor.sizes();
+    RT_GLOG(INFO) << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format())
+                  << ", strides=" << tensor->Strides() << ", storageOffset=" << tensor->StorageOffset()
+                  << ", storageShape=" << tensor->StorageShape() << ", isView=" << at_tensor.is_view()
+                  << " at.tensor.shape: " << at_tensor.sizes();
   }
 #endif
 
@@ -352,10 +354,10 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
   if (at_tensor.numel() > 0) {
     const auto offsetBytes = static_cast<size_t>(at_tensor.storage_offset()) * at_tensor.element_size();
     if (offsetBytes >= storageBytes) {
-      LOG_EXCEPTION << "storage_offset reaches or exceeds storage size: offsetBytes=" << offsetBytes
-                    << ", storageBytes=" << storageBytes << ", shape=" << tensor->Shape()
-                    << ", dtype=" << tensor->Dtype().ToString() << ", storageOffset=" << tensor->StorageOffset()
-                    << ", storageShape=" << tensor->StorageShape();
+      RT_GLOG(EXCEPTION) << "storage_offset reaches or exceeds storage size: offsetBytes=" << offsetBytes
+                         << ", storageBytes=" << storageBytes << ", shape=" << tensor->Shape()
+                         << ", dtype=" << tensor->Dtype().ToString() << ", storageOffset=" << tensor->StorageOffset()
+                         << ", storageShape=" << tensor->StorageShape();
     }
     tensor->GetStorage()->Resize(storageBytes - offsetBytes);
   } else {
@@ -426,13 +428,13 @@ void UpdateTensorInputForCaptureOrReplay(const nb::list &param_nodes, const nb::
     }
   } else {
     if (!cached_tensor->defined()) {
-      LOG_EXCEPTION << "The cache tensor must be valid in replay phase.";
+      RT_GLOG(EXCEPTION) << "The cache tensor must be valid in replay phase.";
     }
     cached_tensor->copy_(runtime_tensor, /*non_blocking=*/true);
   }
 
   if (!mrt_node->output->IsTensor()) {
-    LOG_EXCEPTION << "Only support to staticize tensor input for copy, but got: " << mrt_node->output;
+    RT_GLOG(EXCEPTION) << "Only support to staticize tensor input for copy, but got: " << mrt_node->output;
   }
   // Bind the IR tensor to the stable cached tensor so the captured graph sees a fixed address.
   UpdateTensorWithTorchTensor(mrt_node->output->ToTensor(), cached_tensor);
@@ -506,7 +508,7 @@ inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 
   auto iter = kMemoryFormatToAclFormatMap.find(format);
   if (iter == kMemoryFormatToAclFormatMap.end()) {
-    LOG_EXCEPTION << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
+    RT_GLOG(EXCEPTION) << "Unsupported MemoryFormat " << format << " for conversion to aclFormat";
     return ACL_FORMAT_UNDEFINED;
   }
 
@@ -517,7 +519,7 @@ inline aclFormat ConvertMemoryFormatToAclFormat(ir::MemoryFormat format) {
 ir::DataType FromTorchDType(const at::ScalarType &type) {
   auto iter = kAtScalarTypeToDataTypeMap.find(type);
   if (iter == kAtScalarTypeToDataTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported at::ScalarType" << type << "for conversion to ir::DataType";
+    RT_GLOG(EXCEPTION) << "Unsupported at::ScalarType" << type << "for conversion to ir::DataType";
     return ir::DataType::Unknown;
   }
 
@@ -527,7 +529,7 @@ ir::DataType FromTorchDType(const at::ScalarType &type) {
 at::ScalarType ToTorchDType(ir::DataType type) {
   auto iter = kDataTypeToAtScalarTypeMap.find(type);
   if (iter == kDataTypeToAtScalarTypeMap.end()) {
-    LOG_EXCEPTION << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
+    RT_GLOG(EXCEPTION) << "Unsupported ir::DataType " << type << " for conversion to at::ScalarType";
     return at::kFloat;
   }
 
@@ -545,7 +547,7 @@ hardware::Device FromTorchDevice(const at::Device &device) {
       deviceType = hardware::DeviceType::NPU;
       break;
     default:
-      LOG_EXCEPTION << "Unsupported torch::Device " << device.str() << " for conversion to hardware::Device";
+      RT_GLOG(EXCEPTION) << "Unsupported torch::Device " << device.str() << " for conversion to hardware::Device";
   }
   return hardware::Device(deviceType, device.index());
 }
@@ -560,8 +562,8 @@ at::Device ToTorchDevice(const hardware::Device device) {
       deviceType = at::kPrivateUse1;
       break;
     default:
-      LOG_EXCEPTION << "Unsupported hardware::DeviceType " << hardware::GetDeviceNameByType(device.type)
-                    << " for conversion to torch::Device";
+      RT_GLOG(EXCEPTION) << "Unsupported hardware::DeviceType " << hardware::GetDeviceNameByType(device.type)
+                         << " for conversion to torch::Device";
   }
   return at::Device(deviceType, device.index);
 }
@@ -577,7 +579,7 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
     } else if (dim.maybe_as_int().has_value()) {
       (void)shape.emplace_back(dim.maybe_as_int().value());
     } else {
-      LOG_EXCEPTION << "Dynamic shape with non-int dimension is not supported";
+      RT_GLOG(EXCEPTION) << "Dynamic shape with non-int dimension is not supported";
     }
   }
 
@@ -593,12 +595,12 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
   // Need wait all ops launch task finish before launch async copy task for graph output to stream.
   mrt::WaitLaunchTaskFinish();
 
-  LOG_OUT << "Begin copy storage: " << srcStorage.get();
+  RT_GLOG(INFO) << "Begin copy storage: " << srcStorage.get();
   auto device = srcStorage->GetDevice();
   auto storage = ir::MakeIntrusive<ir::Storage>(srcStorage->SizeBytes(), device);
   CHECK_IF_NULL(storage);
   if (srcStorage->SizeBytes() == 0) {
-    LOG_OUT << "Skip copy for empty storage";
+    RT_GLOG(INFO) << "Skip copy for empty storage";
     return storage;
   }
   storage->AllocateMemory();
@@ -612,16 +614,16 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
     // CPU does not support async copy
     if (!deviceContext->deviceResManager_->SyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
                                                     mrt::device::CopyType::D2D)) {
-      LOG_EXCEPTION << "Async copy for output storage failed";
+      RT_GLOG(EXCEPTION) << "Async copy for output storage failed";
     }
   } else {
     if (!deviceContext->deviceResManager_->AsyncCopy(storage->Data(), srcStorage->Data(), srcStorage->SizeBytes(),
                                                      mrt::device::CopyType::D2D,
                                                      deviceContext->deviceResManager_->GetCurrentStream())) {
-      LOG_EXCEPTION << "Async copy for output storage failed";
+      RT_GLOG(EXCEPTION) << "Async copy for output storage failed";
     }
   }
-  LOG_OUT << "End copy storage: " << srcStorage.get();
+  RT_GLOG(INFO) << "End copy storage: " << srcStorage.get();
   return storage;
 }
 
@@ -629,8 +631,8 @@ ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
 at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
   CHECK_IF_NULL(tensor);
   if (!mrt::ops::IsTensorBaseFormat(tensor)) {
-    LOG_EXCEPTION << "Network output does not support non-base memory format: "
-                  << ir::FormatEnumToStr(tensor->Format());
+    RT_GLOG(EXCEPTION) << "Network output does not support non-base memory format: "
+                       << ir::FormatEnumToStr(tensor->Format());
   }
   // For input is used as output directly, should update tensor
   tensor->Update();
@@ -709,7 +711,7 @@ at::Tensor ToTorchTensor(const ir::TensorPtr &tensor) {
     }
 #endif
     default:
-      LOG_EXCEPTION << "Unsupported DeviceType " << atDevice.str();
+      RT_GLOG(EXCEPTION) << "Unsupported DeviceType " << atDevice.str();
   }
 }
 
@@ -736,7 +738,7 @@ void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h) {
       auto mrtTuple = mrtValue->ToTuple();
       auto pyTuple = nb::cast<nb::tuple>(h);
       if (mrtTuple->Size() != pyTuple.size()) {
-        LOG_EXCEPTION << "Expected " << mrtTuple->Size() << " items in tuple, but received " << pyTuple.size();
+        RT_GLOG(EXCEPTION) << "Expected " << mrtTuple->Size() << " items in tuple, but received " << pyTuple.size();
       }
       auto it = mrtTuple->begin();
       for (size_t i = 0; i < mrtTuple->Size(); ++i, ++it) {
@@ -764,7 +766,7 @@ void UpdateMrtValue(const ir::ValuePtr &mrtValue, nb::handle h) {
       return;
     }
     default:
-      LOG_EXCEPTION << "Unsupported Value Tag";
+      RT_GLOG(EXCEPTION) << "Unsupported Value Tag";
       return;
   }
 }
@@ -777,7 +779,7 @@ void BatchUpdateRuntimeInputs(const nb::list &paramNodes, const nb::tuple &newIn
                               const nb::object &inputIsParameter = nb::none(), const nb::object &graphKey = nb::none(),
                               const nb::object &nonParameterTensorIndices = nb::none()) {
   if (paramNodes.size() != newInputs.size()) {
-    LOG_EXCEPTION << "Expected " << paramNodes.size() << " inputs, but received " << newInputs.size();
+    RT_GLOG(EXCEPTION) << "Expected " << paramNodes.size() << " inputs, but received " << newInputs.size();
   }
 
   // Fast path: without AclGraph, simply update all inputs directly.
@@ -855,7 +857,7 @@ void SetDeviceContext() {
   deviceContext->deviceResManager_->SetCurrentStream(currentStream);
   auto ascend_allocator = [](size_t size) -> void * {
     void *cur_alloc = c10_npu::NPUCachingAllocator::raw_alloc(size);
-    LOG_OUT << "Memory allocated via PyTorch, new addr: " << cur_alloc;
+    RT_GLOG(INFO) << "Memory allocated via PyTorch, new addr: " << cur_alloc;
     return cur_alloc;
   };
   deviceContext->deviceResManager_->SetAllocator(ascend_allocator);

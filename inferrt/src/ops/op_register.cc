@@ -50,7 +50,7 @@ bool LoadOpLib(const std::string &opLibPrefix, std::stringstream *errMsg) {
   }
   for (const auto &opLibName : opLibs) {
     if (!dynamicLibLoader->LoadDynamicLib(opLibName, errMsg)) {
-      LOG_OUT << "Failed to load dynamic op library: " << opLibName;
+      RT_VLOG(VL_OPS) << "Failed to load dynamic op library: " << opLibName;
     }
   }
   (void)closedir(dir);
@@ -67,7 +67,7 @@ OpFactoryBase *OpFactoryBase::GetOpFactory(const std::string_view &name) {
 
 OpFactoryBase *OpFactoryBase::CreateOpFactory(const std::string_view &name, std::unique_ptr<OpFactoryBase> &&factory) {
   if (OpFactoryMap().find(name) != OpFactoryMap().end()) {
-    LOG_EXCEPTION << name << " already has an OpFactory, please check!";
+    RT_GLOG(EXCEPTION) << name << " already has an OpFactory, please check!";
   }
   (void)OpFactoryMap().emplace(name, std::move(factory));
   return GetOpFactory(name);

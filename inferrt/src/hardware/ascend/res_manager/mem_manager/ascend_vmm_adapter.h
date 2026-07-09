@@ -46,7 +46,7 @@ class MRT_EXPORT AscendVmmAdapter {
   AscendVmmAdapter() {
     vmmAlignSize_ = kDefaultAlignSize;
 
-    LOG_OUT << "VMM align size is " << vmmAlignSize_;
+    RT_VLOG(VL_HARDWARE) << "VMM align size is " << vmmAlignSize_;
   }
   ~AscendVmmAdapter() = default;
 
@@ -73,7 +73,7 @@ class MRT_EXPORT AscendVmmAdapter {
       return false;
     }
 
-    LOG_OUT << "VMM is enabled.";
+    RT_VLOG(VL_HARDWARE) << "VMM is enabled.";
     return true;
   }
 
@@ -92,13 +92,13 @@ class MRT_EXPORT AscendVmmAdapter {
     int num;
     std::string unit;
     if (!(ss >> num)) {
-      LOG_ERROR << "No valid number could be extracted from the string, " << str;
+      RT_GLOG(ERROR) << "No valid number could be extracted from the string, " << str;
     }
     if (!(ss >> unit) || unit != "MB") {
-      LOG_ERROR << "The unit of the string is not MB, " << str;
+      RT_GLOG(ERROR) << "The unit of the string is not MB, " << str;
     }
     if (ss.rdbuf()->in_avail() > 0) {
-      LOG_ERROR << "The string has extra characters, " << str;
+      RT_GLOG(ERROR) << "The string has extra characters, " << str;
     }
     return num;
   }
@@ -110,7 +110,7 @@ class MRT_EXPORT AscendVmmAdapter {
 
     std::ifstream ascendInstallFile(ascendInstallInfo);
     if (!ascendInstallFile.is_open()) {
-      LOG_OUT << "Open file " << ascendInstallInfo << " failed.";
+      RT_VLOG(VL_HARDWARE) << "Open file " << ascendInstallInfo << " failed.";
     } else {
       std::string line;
       while (std::getline(ascendInstallFile, line)) {
@@ -118,7 +118,7 @@ class MRT_EXPORT AscendVmmAdapter {
         if (pos != std::string::npos) {
           // Extract the path after "Driver_Install_Path_Param="
           driverPath = line.substr(pos + DRIVER_INSTALL_PATH_PARAM.length());
-          LOG_OUT << "Driver path is " << driverPath;
+          RT_VLOG(VL_HARDWARE) << "Driver path is " << driverPath;
           break;
         }
       }
@@ -138,7 +138,7 @@ class MRT_EXPORT AscendVmmAdapter {
     const std::string DRIVER_VERSION_PARAM = "Version=";
     std::ifstream driverVersionFile(driverVersionInfo);
     if (!driverVersionFile.is_open()) {
-      LOG_OUT << "Open file " << driverVersionInfo << " failed.";
+      RT_VLOG(VL_HARDWARE) << "Open file " << driverVersionInfo << " failed.";
     } else {
       std::string line;
       while (std::getline(driverVersionFile, line)) {
@@ -147,10 +147,10 @@ class MRT_EXPORT AscendVmmAdapter {
           // Extract the version after "Version="
           std::string driverVersion = line.substr(pos + DRIVER_VERSION_PARAM.length());
           auto splitVersion = splitString(driverVersion, '.');
-          LOG_OUT << "Driver version is " << driverVersion << ", major version is " << splitVersion[0];
+          RT_VLOG(VL_HARDWARE) << "Driver version is " << driverVersion << ", major version is " << splitVersion[0];
           if (splitVersion[0] < "24") {
-            LOG_OUT << "Driver version is less than 24.0.0, vmm is disabled by default, drvier_version: "
-                    << driverVersion;
+            RT_VLOG(VL_HARDWARE) << "Driver version is less than 24.0.0, vmm is disabled by default, drvier_version: "
+                                 << driverVersion;
             return false;
           }
           break;

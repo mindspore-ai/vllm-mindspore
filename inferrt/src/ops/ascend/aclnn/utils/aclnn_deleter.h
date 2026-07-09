@@ -85,12 +85,12 @@ void CallRelease(const Tuple &t, std::index_sequence<I...>) {
 inline void ReleaseExecutor(aclOpExecutor *executor) {
   static const auto aclDestroyAclOpExecutor = GET_ACLNN_COMMON_META_FUNC(aclDestroyAclOpExecutor);
   if (aclDestroyAclOpExecutor == nullptr) {
-    LOG_OUT << "aclDestroyAclOpExecutor is nullptr";
+    RT_VLOG(VL_OPS) << "aclDestroyAclOpExecutor is nullptr";
     return;
   }
   auto ret = aclDestroyAclOpExecutor(executor);
   if (ret != 0) {
-    LOG_EXCEPTION << "aclDestroyAclOpExecutor failed";
+    RT_GLOG(EXCEPTION) << "aclDestroyAclOpExecutor failed";
   }
 }
 

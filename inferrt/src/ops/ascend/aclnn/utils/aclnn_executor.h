@@ -44,13 +44,13 @@ class AclnnExecutor {
 
     const auto opApiFuncPtr = GET_ACLNN_OP_FUNC(opApiName_);
     if (opApiFuncPtr == nullptr) {
-      LOG_EXCEPTION << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
+      RT_GLOG(EXCEPTION) << "Api " << opApiName_ << " is not in " << kNameOpApiLib;
     }
     opApiFunc_ = reinterpret_cast<RunOpApiFunc>(opApiFuncPtr);
 
     opGetWorkspaceSizeApiFunc_ = GET_ACLNN_OP_FUNC(getWorkspaceSizeApiName_);
     if (opGetWorkspaceSizeApiFunc_ == nullptr) {
-      LOG_EXCEPTION << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
+      RT_GLOG(EXCEPTION) << "Api " << getWorkspaceSizeApiName_ << " is not in " << kNameOpApiLib;
     }
   }
   ~AclnnExecutor() = default;
@@ -68,18 +68,17 @@ class AclnnExecutor {
     auto hashId = CalcAclnnHash(opApiName_, args...);
     cacheEntry_ = cacheEntryManager_->GetCacheEntry(hashId);
     if (cacheEntry_ != nullptr) {
-      LOG_OUT << opApiName_ << " hit cache with hashId: " << hashId << "  op" << opApiName_;
       *workspaceSize = cacheEntry_->GetWorkspaceSize();
       return;
     }
 
-    LOG_OUT << opApiName_ << " miss cache with hashId: " << hashId << "  op" << opApiName_;
+    RT_VLOG(VL_OPS) << opApiName_ << " miss cache with hashId: " << hashId << "  op" << opApiName_;
     auto [convertedParams, opExecutor] = GenerateOpExecutor(workspaceSize, args...);
     if (CheckExecutorRepeatable(opExecutor)) {
       cacheEntry_ = ir::MakeIntrusive<CacheEntryImpl<CacheProcessor<decltype(convertedParams)>>>(
         CacheProcessor<decltype(convertedParams)>(hashId, std::move(convertedParams), opExecutor, *workspaceSize));
       cacheEntryManager_->AddCacheEntry(hashId, cacheEntry_);
-      LOG_OUT << opApiName_ << " cache the params with hashId: " << hashId;
+      RT_VLOG(VL_OPS) << opApiName_ << " cache the params with hashId: " << hashId;
       return;
     }
 
@@ -110,7 +109,7 @@ class AclnnExecutor {
     CHECK_IF_NULL(getWorkspaceSizeFunc);
     auto ret = CallOpApiFunc(getWorkspaceSizeFunc, convertedParams);
     if (ret != 0) {
-      LOG_EXCEPTION << "Call " << getWorkspaceSizeApiName_ << " failed, ret=" << ret;
+      RT_GLOG(EXCEPTION) << "Call " << getWorkspaceSizeApiName_ << " failed, ret=" << ret;
     }
     return std::make_tuple(convertedParams, opExecutor);
   }
@@ -118,24 +117,23 @@ class AclnnExecutor {
   bool CheckExecutorRepeatable(aclOpExecutor *executor) {
     static const auto aclSetAclOpExecutorRepeatable = GET_ACLNN_COMMON_META_FUNC(aclSetAclOpExecutorRepeatable);
     if (aclSetAclOpExecutorRepeatable == nullptr) {
-      LOG_OUT << "aclSetAclOpExecutorRepeatable is nullptr, which means the executor is not repeatable for op["
-              << opApiName_ << "]";
+      RT_VLOG(VL_OPS) << "aclSetAclOpExecutorRepeatable is nullptr, which means the executor is not repeatable for op["
+                      << opApiName_ << "]";
       return false;
     }
     auto ret = aclSetAclOpExecutorRepeatable(executor);
     if (ret != 0) {
-      LOG_OUT << "aclSetAclOpExecutorRepeatable failed, which means the executor is not repeatable for op["
-              << opApiName_ << "]";
+      RT_VLOG(VL_OPS) << "aclSetAclOpExecutorRepeatable failed, which means the executor is not repeatable for op["
+                      << opApiName_ << "]";
       return false;
     }
-    LOG_OUT << "Set executor repeatable for op[" << opApiName_ << "] success";
     return true;
   }
 
   void RunOpApi(void *workspace, size_t workspaceSize, aclOpExecutor *opExecutor, void *stream) {
     auto opApiFuncRet = opApiFunc_(workspace, workspaceSize, opExecutor, stream);
     if (opApiFuncRet != 0) {
-      LOG_EXCEPTION << "Call " << opApiName_ << " failed, ret=" << opApiFuncRet;
+      RT_GLOG(EXCEPTION) << "Call " << opApiName_ << " failed, ret=" << opApiFuncRet;
     }
   }
 

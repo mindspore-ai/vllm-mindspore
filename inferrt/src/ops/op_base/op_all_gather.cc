@@ -21,7 +21,7 @@
 namespace mrt {
 namespace ops {
 OpsErrorCode OpAllGather::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  LOG_OUT << "HcclAllGather InferShape";
+  RT_VLOG(VL_OPS) << "HcclAllGather InferShape";
 
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto rankSize = input[kIndex1]->ToInt();

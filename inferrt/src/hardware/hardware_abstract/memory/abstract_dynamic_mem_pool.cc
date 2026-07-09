@@ -43,7 +43,7 @@ MemBuf::MemBuf(size_t size, void *addr, uint32_t streamId, MemBlock *memBlock, M
 MemBuf::~MemBuf() {}
 
 MemBufAllocator::~MemBufAllocator() {
-  LOG_OUT << "MemBufAllocator[" << this << "] : " << BriefInfo() << " deconstruct.";
+  RT_VLOG(VL_HARDWARE) << "MemBufAllocator[" << this << "] : " << BriefInfo() << " deconstruct.";
   for (auto &memBlock : memBlocks_) {
     delete memBlock;
   }
@@ -60,25 +60,25 @@ MemBufAllocator::~MemBufAllocator() {
 }
 
 void MemBufAllocator::ReleaseDeviceRes() {
-  LOG_OUT << "Release device resource for allocator, " << BriefInfo() << ", memBlocks_ size : " << memBlocks_.size()
-          << ".";
+  RT_VLOG(VL_HARDWARE) << "Release device resource for allocator, " << BriefInfo()
+                       << ", memBlocks_ size : " << memBlocks_.size() << ".";
   for (auto memBlock : memBlocks_) {
-    LOG_OUT << "Clean mem block : " << memBlock->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Clean mem block : " << memBlock->ToJson() << ".";
     (void)memBlockCleaner_(memBlock);
   }
   for (auto memBlock : memBlocks_) {
-    LOG_OUT << "Delete mem block : " << memBlock->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Delete mem block : " << memBlock->ToJson() << ".";
     delete memBlock;
   }
   memBlocks_.clear();
 
-  LOG_OUT << "Free mem buf size : " << freeMemBufs_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Free mem buf size : " << freeMemBufs_.size() << ".";
   for (auto memBuf : freeMemBufs_) {
     delete memBuf;
   }
   freeMemBufs_.clear();
 
-  LOG_OUT << "Eager free mem buf size : " << eagerFreeMemBufs_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Eager free mem buf size : " << eagerFreeMemBufs_.size() << ".";
   for (auto memBuf : eagerFreeMemBufs_) {
     delete memBuf;
   }
@@ -134,8 +134,9 @@ MemBuf *MemBufAllocator::SearchAvailableMemBuf(size_t size) {
     auto needMapSize = size - memBuf->size_;
     auto mappedSize = memMapper_(needMapSize, nextBuf->addr_);
     if (mappedSize != needMapSize) {
-      LOG_OUT << "Map mem buf : " << memBuf->ToJson() << ", next buf : " << nextBuf->ToJson() << ", size : " << size
-              << ", needMapSize : " << needMapSize << ", mappedSize : " << mappedSize << " failed.";
+      RT_VLOG(VL_HARDWARE) << "Map mem buf : " << memBuf->ToJson() << ", next buf : " << nextBuf->ToJson()
+                           << ", size : " << size << ", needMapSize : " << needMapSize
+                           << ", mappedSize : " << mappedSize << " failed.";
       return nullptr;
     }
     // Update mem buf.
@@ -184,12 +185,12 @@ bool MemBufAllocator::Free(MemBuf *memBuf, MemBufStatus targetStatus) {
     if (targetStatus == MemBufStatus::kMemBufIdle) {
       auto ret = freeMemBufs_.erase(prevBuf);
       if (ret == 0) {
-        LOG_ERROR << "Erase mem buf : " << memBuf->ToJson() << " prev buf " << prevBuf->ToJson() << " failed.";
+        RT_GLOG(ERROR) << "Erase mem buf : " << memBuf->ToJson() << " prev buf " << prevBuf->ToJson() << " failed.";
       }
     } else if (targetStatus == MemBufStatus::kMemBufEagerFree) {
       auto ret = eagerFreeMemBufs_.erase(prevBuf);
       if (ret == 0) {
-        LOG_ERROR << "Erase mem buf : " << memBuf->ToJson() << " prev buf " << prevBuf->ToJson() << " failed.";
+        RT_GLOG(ERROR) << "Erase mem buf : " << memBuf->ToJson() << " prev buf " << prevBuf->ToJson() << " failed.";
       }
     }
     delete prevBuf;
@@ -208,12 +209,12 @@ bool MemBufAllocator::Free(MemBuf *memBuf, MemBufStatus targetStatus) {
     if (targetStatus == MemBufStatus::kMemBufIdle) {
       auto ret = freeMemBufs_.erase(nextBuf);
       if (ret == 0) {
-        LOG_ERROR << "Erase next buf : " << nextBuf->ToJson() << " failed.";
+        RT_GLOG(ERROR) << "Erase next buf : " << nextBuf->ToJson() << " failed.";
       }
     } else if (targetStatus == MemBufStatus::kMemBufEagerFree) {
       auto ret = eagerFreeMemBufs_.erase(nextBuf);
       if (ret == 0) {
-        LOG_ERROR << "Erase next buf : " << nextBuf->ToJson() << " failed.";
+        RT_GLOG(ERROR) << "Erase next buf : " << nextBuf->ToJson() << " failed.";
       }
     }
     delete nextBuf;
@@ -242,7 +243,7 @@ MemBuf *MemBufAllocator::MallocExpandBlock(size_t size) {
     } else {
       (void)eagerFreeMemBufs_.emplace(candidate);
     }
-    LOG_OUT << "Candidate size: " << candidate->size_ << " is less than required size : " << size << ".";
+    RT_VLOG(VL_HARDWARE) << "Candidate size: " << candidate->size_ << " is less than required size : " << size << ".";
     return nullptr;
   }
 
@@ -250,14 +251,14 @@ MemBuf *MemBufAllocator::MallocExpandBlock(size_t size) {
 }
 
 void MemBufAllocator::Initialize(size_t size) {
-  LOG_OUT << "Initialize allocator : " << BriefInfo() << " with size : " << size << ".";
+  RT_VLOG(VL_HARDWARE) << "Initialize allocator : " << BriefInfo() << " with size : " << size << ".";
   if (enableEagerFree_ || MS_UNLIKELY(isCustomized_)) {
-    LOG_OUT << "Skip initialization of allocator, since vmm is enabled.";
+    RT_VLOG(VL_HARDWARE) << "Skip initialization of allocator, since vmm is enabled.";
     return;
   }
   MemBlock *memBlock = ExpandBlock(size);
   if (memBlock == nullptr) {
-    LOG_OUT << "Initialize allocator failed, size : " << size << ".";
+    RT_VLOG(VL_HARDWARE) << "Initialize allocator failed, size : " << size << ".";
     return;
   }
   MemBuf *memBuf =
@@ -276,11 +277,11 @@ const std::pair<size_t, size_t> MemBufAllocator::FreeIdleMemsByEagerFree() {
   // Do eager free on eager free mem bufs.
   size_t realFreeSize = 0;
   for (auto memBuf : eagerFreeMemBufs_) {
-    LOG_OUT << "Eager free mem buf : " << memBuf << ", details : " << memBuf->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Eager free mem buf : " << memBuf << ", details : " << memBuf->ToJson() << ".";
     realFreeSize += memEagerFreer_(memBuf->addr_, memBuf->size_);
   }
-  LOG_OUT << "Free idle mems by eager free, eagerFreeSize : " << eagerFreeSize << ", realFreeSize : " << realFreeSize
-          << ".";
+  RT_VLOG(VL_HARDWARE) << "Free idle mems by eager free, eagerFreeSize : " << eagerFreeSize
+                       << ", realFreeSize : " << realFreeSize << ".";
   return std::make_pair(eagerFreeSize, realFreeSize);
 }
 
@@ -297,10 +298,10 @@ size_t MemBufAllocator::ReleaseFreeBlocks() {
     }
     auto memBufIt = *it;
     if (memBufIt->addr_ == memBlock->addr_ && memBufIt->size_ == memBlock->size_) {
-      LOG_OUT << "Release mem block : " << memBlock->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "Release mem block : " << memBlock->ToJson() << ".";
       bool ret = memBlockCleaner_(memBlock);
       if (!ret) {
-        LOG_OUT << "Clean mem block : " << memBlock->ToJson() << " failed.";
+        RT_VLOG(VL_HARDWARE) << "Clean mem block : " << memBlock->ToJson() << " failed.";
         iter++;
         continue;
       }
@@ -323,8 +324,8 @@ MemBuf *MemBufAllocator::MapAndSplitMemBuf(MemBuf *candidate, size_t size) {
     size_t mapSize = (remainingSize >= kDynamicMemAlignSize) ? size : candidate->size_;
     auto mappedSize = memMapper_(mapSize, candidate->addr_);
     if (mappedSize != mapSize) {
-      LOG_OUT << "Mapped_size : " << mappedSize << " is not equal to required size : " << mapSize
-              << ", mem buf info : " << candidate->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "Mapped_size : " << mappedSize << " is not equal to required size : " << mapSize
+                           << ", mem buf info : " << candidate->ToJson() << ".";
       (void)eagerFreeMemBufs_.emplace(candidate);
       return nullptr;
     }
@@ -364,13 +365,13 @@ MemBuf *MemBufAllocator::MapAndSplitMemBuf(MemBuf *candidate, size_t size) {
 MemBlock *MemBufAllocator::ExpandBlock(size_t size) {
   MemBlock *memBlock = memBlockExpander_(size);
   if (memBlock == nullptr) {
-    LOG_OUT << "Expand block failed, expand size : " << size << ", memory is not enough.";
+    RT_VLOG(VL_HARDWARE) << "Expand block failed, expand size : " << size << ", memory is not enough.";
     return nullptr;
   }
 
   if (memBlock->size_ < size) {
-    LOG_OUT << "Expand block failed, expand size : " << memBlock->size_ << " is less than require size : " << size
-            << ".";
+    RT_VLOG(VL_HARDWARE) << "Expand block failed, expand size : " << memBlock->size_
+                         << " is less than require size : " << size << ".";
   }
 
   (void)memBlocks_.emplace_back(memBlock);
@@ -381,13 +382,13 @@ AbstractDynamicMemPool::AbstractDynamicMemPool() {}
 
 void AbstractDynamicMemPool::Initialize(size_t initSize, size_t increaseSize, size_t maxSize) {
   if (initSize == 0) {
-    LOG_OUT << "Skip initialization of memory pool since init size is not configured.";
+    RT_VLOG(VL_HARDWARE) << "Skip initialization of memory pool since init size is not configured.";
     return;
   }
 
   LockGuard lock(lock_);
-  LOG_OUT << "Initialize dynamic memory pool, init size : " << initSize << ", increase size : " << increaseSize
-          << ", max size : " << maxSize << ".";
+  RT_VLOG(VL_HARDWARE) << "Initialize dynamic memory pool, init size : " << initSize
+                       << ", increase size : " << increaseSize << ", max size : " << maxSize << ".";
   initSize_ = initSize >> 1;
   increaseSize_ = increaseSize;
   maxSize_ = maxSize;
@@ -403,8 +404,8 @@ void AbstractDynamicMemPool::ReleaseDeviceRes() {
   LockGuard lock(lock_);
   for (const auto &iter : streamPairMemBufs_) {
     auto size = iter.second.size();
-    LOG_OUT << "Event referred streamPairMemBufs_[" << iter.first.first << "-" << iter.first.second
-            << "], size : " << size << ".";
+    RT_VLOG(VL_HARDWARE) << "Event referred streamPairMemBufs_[" << iter.first.first << "-" << iter.first.second
+                         << "], size : " << size << ".";
   }
   // Clear map of address to mem buf.
   for (const auto &iter : addrMemBufAllocators_) {
@@ -413,7 +414,8 @@ void AbstractDynamicMemPool::ReleaseDeviceRes() {
   }
   addrMemBufAllocators_.clear();
 
-  LOG_OUT << "Release device resource for " << GetMemoryPoolType() << " : " << memStat_.ToReadableString() << ".";
+  RT_VLOG(VL_HARDWARE) << "Release device resource for " << GetMemoryPoolType() << " : " << memStat_.ToReadableString()
+                       << ".";
   for (const auto &streamIdAllocator : streamIdAllocators_) {
     const auto &allocator = streamIdAllocator.second;
     allocator->ReleaseDeviceRes();
@@ -473,7 +475,7 @@ std::pair<MemBuf *, MemBufAllocator *> AbstractDynamicMemPool::AllocMemBuf(size_
       if ((enableVmm_ || IsEnableEagerFree()) && MS_LIKELY(!enableCustomAllocator_)) {
         WaitPipelineHelper();
         if (!SyncAllStreams()) {
-          LOG_ERROR << "Sync all streams failed.";
+          RT_GLOG(ERROR) << "Sync all streams failed.";
           return std::make_pair(nullptr, nullptr);
         }
         (void)FreeIdleMemsByEagerFree();
@@ -492,7 +494,7 @@ std::pair<MemBuf *, MemBufAllocator *> AbstractDynamicMemPool::AllocMemBuf(size_
           }
 
           if (MS_UNLIKELY(memBuf == nullptr)) {
-            LOG_OUT << "Alloc tensor mem failed and try to sync all events to release memory.";
+            RT_VLOG(VL_HARDWARE) << "Alloc tensor mem failed and try to sync all events to release memory.";
             (void)DoSyncAllEvents();
             memBuf = allocator->Malloc(alignSize);
             if (MS_UNLIKELY(memBuf == nullptr)) {
@@ -549,14 +551,15 @@ std::vector<DeviceMemPtr> AbstractDynamicMemPool::AllocContinuousTensorMem(const
       } else {
         // Update last mem buf
         if (totalSize != sizeList[i]) {
-          LOG_OUT << "Remain size : " << totalSize << " is not equal to last size : " << sizeList[i] << ".";
+          RT_VLOG(VL_HARDWARE) << "Remain size : " << totalSize << " is not equal to last size : " << sizeList[i]
+                               << ".";
           newMemBuf->size_ = totalSize;
         }
       }
     }
   } else {
     // Unreachable routine.
-    LOG_ERROR << "Find addr : " << deviceAddr << " failed.";
+    RT_GLOG(ERROR) << "Find addr : " << deviceAddr << " failed.";
   }
 
   return deviceAddrList;
@@ -583,7 +586,7 @@ bool AbstractDynamicMemPool::DoFreeTensorMem(const DeviceMemPtr &deviceAddr) {
     }
   } else {
     // This may be normal case.
-    LOG_OUT << "Free tensor mem failed, can not find address : " << addr << ".";
+    RT_VLOG(VL_HARDWARE) << "Free tensor mem failed, can not find address : " << addr << ".";
   }
   return false;
 }
@@ -591,7 +594,7 @@ bool AbstractDynamicMemPool::DoFreeTensorMem(const DeviceMemPtr &deviceAddr) {
 MemBufAllocator *AbstractDynamicMemPool::GetMemBufAllocator(size_t size, bool fromPersistentMem, uint32_t streamId) {
   // Not use small pool.
   const AllocatorInfo key{streamId, fromPersistentMem, false};
-  LOG_OUT << "Get allocator, " << key.ToString() << ".";
+  RT_VLOG(VL_HARDWARE) << "Get allocator, " << key.ToString() << ".";
 
   MemBufAllocatorPtr allocator = nullptr;
 
@@ -610,7 +613,7 @@ MemBufAllocator *AbstractDynamicMemPool::GetMemBufAllocator(size_t size, bool fr
 void AbstractDynamicMemPool::FreePartTensorMems(const std::vector<DeviceMemPtr> &freeAddrs,
                                                 const std::vector<DeviceMemPtr> &keepAddrs,
                                                 const std::vector<size_t> &keepAddrSizes) {
-  LOG_OUT << "Free part tensor mems.";
+  RT_VLOG(VL_HARDWARE) << "Free part tensor mems.";
   LockGuard lock(lock_);
   (void)DoFreePartTensorMems(freeAddrs, keepAddrs, keepAddrSizes);
 }
@@ -626,7 +629,7 @@ std::vector<MemBuf *> AbstractDynamicMemPool::DoFreePartTensorMems(const std::ve
       (void)candidates.emplace(it->first, it->second);
     } else {
       // This is illegal routine, but level0 case entered.
-      LOG_OUT << "Find address : " << free_addr << " failed.";
+      RT_VLOG(VL_HARDWARE) << "Find address : " << free_addr << " failed.";
     }
   }
 
@@ -635,13 +638,13 @@ std::vector<MemBuf *> AbstractDynamicMemPool::DoFreePartTensorMems(const std::ve
     auto keepAddr = keepAddrs[i];
     std::uintptr_t keepAddrToSize = reinterpret_cast<std::uintptr_t>(keepAddr);
     if (processedKeepAddrs.count(keepAddrToSize) > 0) {
-      LOG_OUT << "Duplicate keep address : " << keepAddr << ".";
+      RT_VLOG(VL_HARDWARE) << "Duplicate keep address : " << keepAddr << ".";
       continue;
     }
     (void)processedKeepAddrs.insert(keepAddrToSize);
     auto &&it = candidates.upper_bound(keepAddr);
     if (it == candidates.begin()) {
-      LOG_OUT << "Locate keep addr : " << keepAddr << " failed.";
+      RT_VLOG(VL_HARDWARE) << "Locate keep addr : " << keepAddr << " failed.";
       continue;
     }
     auto iter = --it;
@@ -653,8 +656,8 @@ std::vector<MemBuf *> AbstractDynamicMemPool::DoFreePartTensorMems(const std::ve
     std::uintptr_t keepEnd = keepStart + keepAddrSizes[i];
     // Since free part tensor mem may double free keep addr, continue for these keep addrs.
     if (keepStart >= baseEnd) {
-      LOG_OUT << "Check range error, base start : " << baseStart << ", base end : " << baseEnd
-              << ", keep start : " << keepStart << ", keep end : " << keepEnd << ".";
+      RT_VLOG(VL_HARDWARE) << "Check range error, base start : " << baseStart << ", base end : " << baseEnd
+                           << ", keep start : " << keepStart << ", keep end : " << keepEnd << ".";
       continue;
     }
     // Split candidates. If keep start equal to base start, split mem buf into two parts, or three parts.
@@ -674,7 +677,7 @@ std::vector<MemBuf *> AbstractDynamicMemPool::DoFreePartTensorMems(const std::ve
       memBuf->size_ = prevRemainSize;
     }
     (void)memBufs.emplace_back(keepMemBuf);
-    LOG_OUT << "keepMemBuf : " << keepMemBuf->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "keepMemBuf : " << keepMemBuf->ToJson() << ".";
     // Process last mem buf.
     if (keepEnd < baseEnd) {
       void *lastAddr = static_cast<uint8_t *>(keepMemBuf->addr_) + keepMemBuf->size_;
@@ -683,16 +686,16 @@ std::vector<MemBuf *> AbstractDynamicMemPool::DoFreePartTensorMems(const std::ve
       lastMemBuf->Link(keepMemBuf, keepMemBuf->next_);
       (void)addrMemBufAllocators_.emplace(lastMemBuf->addr_, std::make_pair(lastMemBuf, allocator));
       if (candidates.count(lastMemBuf->addr_) > 0) {
-        LOG_OUT << "Duplicate address : " << lastMemBuf->addr_ << ".";
+        RT_VLOG(VL_HARDWARE) << "Duplicate address : " << lastMemBuf->addr_ << ".";
       }
-      LOG_OUT << "last mem buf : " << lastMemBuf->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "last mem buf : " << lastMemBuf->ToJson() << ".";
       (void)candidates.emplace(lastMemBuf->addr_, std::make_pair(lastMemBuf, allocator));
     }
   }
   for (const auto &candidate : candidates) {
     auto memBuf = candidate.second.first;
     if (!AbstractDynamicMemPool::DoFreeTensorMem(memBuf->addr_)) {
-      LOG_ERROR << "Free device address failed : " << memBuf->addr_ << ", memBuf : " << memBuf->ToJson() << ".";
+      RT_GLOG(ERROR) << "Free device address failed : " << memBuf->addr_ << ", memBuf : " << memBuf->ToJson() << ".";
     }
   }
   return memBufs;
@@ -703,20 +706,21 @@ MemBufAllocatorPtr AbstractDynamicMemPool::GenerateAllocator(const AllocatorInfo
   const auto streamId = allocatorKey.streamId;
   const auto isSmall = allocatorKey.use_small_pool;
 
-  LOG_OUT << "Generate allocator, " << allocatorKey.ToString() << ".";
+  RT_VLOG(VL_HARDWARE) << "Generate allocator, " << allocatorKey.ToString() << ".";
   std::function<MemBlock *(size_t)> memBlockExpander = [&, isPersistent = isPersistent,
                                                         streamId = streamId](size_t size) {
     size_t blockSize = CalMemBlockAllocSize(size, isPersistent);
     MemBlock *memBlock = nullptr;
     if (blockSize == 0) {
-      LOG_OUT << "Malloc mem block failed, is enable eager free : " << IsEnableEagerFree()
-              << ", is enable vmm : " << IsEnableVmm() << ", size : " << size << ", block size is  0.";
+      RT_VLOG(VL_HARDWARE) << "Malloc mem block failed, is enable eager free : " << IsEnableEagerFree()
+                           << ", is enable vmm : " << IsEnableVmm() << ", size : " << size << ", block size is  0.";
       return memBlock;
     }
     DeviceMemPtr addr = nullptr;
     size_t allocSize;
-    LOG_OUT << "Malloc mem block, is enable eager free : " << IsEnableEagerFree()
-            << ", is enable vmm : " << IsEnableVmm() << ", size : " << size << ", block size : " << blockSize << ".";
+    RT_VLOG(VL_HARDWARE) << "Malloc mem block, is enable eager free : " << IsEnableEagerFree()
+                         << ", is enable vmm : " << IsEnableVmm() << ", size : " << size
+                         << ", block size : " << blockSize << ".";
     if (IsEnableVmm() || IsEnableEagerFree()) {
       // Virtual address is unlimited.
       auto eagerFreeSize = std::max(blockSize, static_cast<size_t>(total_mem_size()));
@@ -725,7 +729,8 @@ MemBufAllocatorPtr AbstractDynamicMemPool::GenerateAllocator(const AllocatorInfo
     } else {
       allocSize = AllocDeviceMem(blockSize, &addr);
       if (allocSize < blockSize) {
-        LOG_OUT << "Alloc device mem failed, alloc size : " << allocSize << ", block size : " << blockSize << ".";
+        RT_VLOG(VL_HARDWARE) << "Alloc device mem failed, alloc size : " << allocSize << ", block size : " << blockSize
+                             << ".";
       }
     }
     if (allocSize == 0) {
@@ -733,7 +738,7 @@ MemBufAllocatorPtr AbstractDynamicMemPool::GenerateAllocator(const AllocatorInfo
     }
     memStat_.allocSize_ += allocSize;
     memBlock = new MemBlock(allocSize, addr, streamId);
-    LOG_OUT << "Malloc mem block : " << memBlock->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Malloc mem block : " << memBlock->ToJson() << ".";
     return memBlock;
   };
 
@@ -747,7 +752,7 @@ MemBufAllocatorPtr AbstractDynamicMemPool::GenerateAllocator(const AllocatorInfo
     return MmapDeviceMem(size, addr);
   };
   std::function<size_t(void *addr, const size_t size)> memEagerFreer = [&](void *addr, const size_t size) {
-    LOG_OUT << "Eager free addr : " << addr << ", size : " << size << ".";
+    RT_VLOG(VL_HARDWARE) << "Eager free addr : " << addr << ", size : " << size << ".";
     return FreeDeviceMemByEagerFree(addr, size);
   };
 
@@ -759,7 +764,8 @@ MemBufAllocatorPtr AbstractDynamicMemPool::GenerateAllocator(const AllocatorInfo
 bool AbstractDynamicMemPool::RecordEvent(int64_t taskIdOnStream, uint32_t userStreamId,
                                          const std::vector<std::pair<uint32_t, DeviceMemPtr>> &memoryStreamAddresses,
                                          const DeviceEventPtr &event) {
-  LOG_OUT << "Record event for task id on stream : " << taskIdOnStream << ", user stream id : " << userStreamId << ".";
+  RT_VLOG(VL_HARDWARE) << "Record event for task id on stream : " << taskIdOnStream
+                       << ", user stream id : " << userStreamId << ".";
   LockGuard lock(lock_);
   for (auto &[memoryStreamId, addr] : memoryStreamAddresses) {
     auto &&it = addrMemBufAllocators_.find(addr);
@@ -768,20 +774,20 @@ bool AbstractDynamicMemPool::RecordEvent(int64_t taskIdOnStream, uint32_t userSt
       if (memBuf->IsEventNotUsed()) {
         memStat_.usedByEventSize_ += memBuf->size_;
       }
-      LOG_OUT << "Record event for : " << memBuf->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "Record event for : " << memBuf->ToJson() << ".";
       (void)memBuf->RecordEvent(taskIdOnStream, userStreamId, event);
       (void)streamPairMemBufs_[std::make_pair(userStreamId, memoryStreamId)].emplace(memBuf);
     } else {
       // Output of somas sub graph may be used by somas sub graph inner node, address may not be kept in mem pool.
-      LOG_OUT << "Unknown address : " << addr << ".";
+      RT_VLOG(VL_HARDWARE) << "Unknown address : " << addr << ".";
     }
   }
   return true;
 }
 
 bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t userStreamId, uint32_t memoryStreamId) {
-  LOG_OUT << "Wait event for task id on stream : " << taskIdOnStream << ", user stream id : " << userStreamId
-          << ", memory stream id : " << memoryStreamId << ".";
+  RT_VLOG(VL_HARDWARE) << "Wait event for task id on stream : " << taskIdOnStream
+                       << ", user stream id : " << userStreamId << ", memory stream id : " << memoryStreamId << ".";
   LockGuard lock(lock_);
   auto key = std::make_pair(userStreamId, memoryStreamId);
   auto iter = streamPairMemBufs_.find(key);
@@ -791,7 +797,7 @@ bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t userStre
 
   auto memBufs_ = iter->second;
   for (const auto &memBuf : memBufs_) {
-    LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+    RT_VLOG(VL_HARDWARE) << "Wait event for : " << memBuf->ToJson() << ".";
     memBuf->WaitEvent(taskIdOnStream, userStreamId);
     // Remove event and try to free memory.
     if (memBuf->IsEventNotUsed()) {
@@ -809,8 +815,8 @@ bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t userStre
 }
 
 bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t memoryStreamId) {
-  LOG_OUT << "Wait event for task id on stream : " << taskIdOnStream << ", memory stream id : " << memoryStreamId
-          << ".";
+  RT_VLOG(VL_HARDWARE) << "Wait event for task id on stream : " << taskIdOnStream
+                       << ", memory stream id : " << memoryStreamId << ".";
   LockGuard lock(lock_);
   for (auto &streamPairMemBufs : streamPairMemBufs_) {
     const auto &[userStream, memoryStream] = streamPairMemBufs.first;
@@ -819,7 +825,7 @@ bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t memorySt
     }
     auto memBufs = streamPairMemBufs.second;
     for (const auto &memBuf : memBufs) {
-      LOG_OUT << "Wait event for : " << memBuf->ToJson() << ".";
+      RT_VLOG(VL_HARDWARE) << "Wait event for : " << memBuf->ToJson() << ".";
       memBuf->WaitEvent(taskIdOnStream, userStream);
       // Remove event and try to free memory.
       if (memBuf->IsEventNotUsed()) {
@@ -838,7 +844,7 @@ bool AbstractDynamicMemPool::WaitEvent(int64_t taskIdOnStream, uint32_t memorySt
 }
 
 bool AbstractDynamicMemPool::SyncAllEvents() {
-  LOG_OUT << "Sync all events, stream_pair_addresses_ size : " << streamPairMemBufs_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Sync all events, stream_pair_addresses_ size : " << streamPairMemBufs_.size() << ".";
   LockGuard lock(lock_);
   return DoSyncAllEvents();
 }
@@ -868,13 +874,14 @@ size_t AbstractDynamicMemPool::CalMemBlockAllocSize(size_t size, bool fromPersis
   auto deviceFreeMemSize = free_mem_size();
   // Make sure available mem is enough.
   if (deviceFreeMemSize < size) {
-    LOG_OUT << "Memory not enough: current free memory size[" << deviceFreeMemSize << "] is smaller than required size["
-            << size << "].";
+    RT_VLOG(VL_HARDWARE) << "Memory not enough: current free memory size[" << deviceFreeMemSize
+                         << "] is smaller than required size[" << size << "].";
     return 0;
   }
   auto unitSize = MemAllocUnitSize(fromPersistentMem);
   if (deviceFreeMemSize < unitSize) {
-    LOG_OUT << "Device memory size [" << deviceFreeMemSize << "] is smaller than unit size [" << unitSize << "].";
+    RT_VLOG(VL_HARDWARE) << "Device memory size [" << deviceFreeMemSize << "] is smaller than unit size [" << unitSize
+                         << "].";
   }
   // Calculate alloc size.
   size_t allocSize = unitSize;
@@ -885,32 +892,33 @@ size_t AbstractDynamicMemPool::CalMemBlockAllocSize(size_t size, bool fromPersis
 }
 
 void AbstractDynamicMemPool::DefragMemory() {
-  LOG_OUT << "Try to defrag memory.";
+  RT_VLOG(VL_HARDWARE) << "Try to defrag memory.";
   LockGuard lock(lock_);
 
   if (!enableVmm_) {
-    LOG_OUT << "Skip defrag memory since vmm is not enabled.";
+    RT_VLOG(VL_HARDWARE) << "Skip defrag memory since vmm is not enabled.";
     return;
   }
 
   if (eagerFreeCount_ == 0) {
-    LOG_OUT << "Exit defrag memory since eager free count is 0.";
+    RT_VLOG(VL_HARDWARE) << "Exit defrag memory since eager free count is 0.";
     return;
   }
   if (lastEagerFreeCount_ == eagerFreeCount_) {
-    LOG_OUT << "Exit defrag memory since last eager free count equals to eager free count : " << lastEagerFreeCount_
-            << ".";
+    RT_VLOG(VL_HARDWARE) << "Exit defrag memory since last eager free count equals to eager free count : "
+                         << lastEagerFreeCount_ << ".";
     return;
   }
 
-  LOG_OUT << "Defrag memory start.";
+  RT_VLOG(VL_HARDWARE) << "Defrag memory start.";
   WaitPipelineHelper();
   if (!SyncAllStreams()) {
-    LOG_ERROR << "Sync all streams failed.";
+    RT_GLOG(ERROR) << "Sync all streams failed.";
     return;
   }
   const auto [eagerFreeSize, realFreeSize] = FreeIdleMemsByEagerFree();
-  LOG_OUT << "Defrag memory, eagerFreeSize : " << eagerFreeSize << ", realFreeSize : " << realFreeSize << ".";
+  RT_VLOG(VL_HARDWARE) << "Defrag memory, eagerFreeSize : " << eagerFreeSize << ", realFreeSize : " << realFreeSize
+                       << ".";
   lastEagerFreeCount_ = eagerFreeCount_;
 }
 
@@ -961,11 +969,11 @@ std::string AbstractDynamicMemPool::DynamicMemPoolStateInfo() const {
 
 const std::pair<size_t, size_t> AbstractDynamicMemPool::FreeIdleMemsByEagerFree() {
   if (!IsEnableVmm() && !IsEnableEagerFree()) {
-    LOG_OUT << "FreeIdleMemsByEagerFree is not allowed since vmm is not enabled.";
+    RT_VLOG(VL_HARDWARE) << "FreeIdleMemsByEagerFree is not allowed since vmm is not enabled.";
     return std::make_pair(0L, 0L);
   }
 
-  LOG_OUT << "Free idle mems by eager free start, allocator size : " << streamIdAllocators_.size() << ".";
+  RT_VLOG(VL_HARDWARE) << "Free idle mems by eager free start, allocator size : " << streamIdAllocators_.size() << ".";
   eagerFreeCount_++;
 
   size_t totalEagerFreeSize = 0;
@@ -978,11 +986,11 @@ const std::pair<size_t, size_t> AbstractDynamicMemPool::FreeIdleMemsByEagerFree(
 
   size_t notFreeSize = totalEagerFreeSize > totalRealFreeSize ? (totalEagerFreeSize - totalRealFreeSize) : 0;
   if (totalRealFreeSize >= kGBToByte) {
-    LOG_OUT << "Eager free count : " << eagerFreeCount_ << ", free memory : " << totalEagerFreeSize
-            << ", real free : " << totalRealFreeSize << ", not free : " << notFreeSize << ".";
+    RT_VLOG(VL_HARDWARE) << "Eager free count : " << eagerFreeCount_ << ", free memory : " << totalEagerFreeSize
+                         << ", real free : " << totalRealFreeSize << ", not free : " << notFreeSize << ".";
   } else {
-    LOG_OUT << "Eager free count : " << eagerFreeCount_ << ", free memory : " << totalEagerFreeSize
-            << ", real free : " << totalRealFreeSize << ", not free : " << notFreeSize << ".";
+    RT_VLOG(VL_HARDWARE) << "Eager free count : " << eagerFreeCount_ << ", free memory : " << totalEagerFreeSize
+                         << ", real free : " << totalRealFreeSize << ", not free : " << notFreeSize << ".";
   }
 
   memStat_.eagerFreeSize_ += totalEagerFreeSize;
@@ -990,22 +998,22 @@ const std::pair<size_t, size_t> AbstractDynamicMemPool::FreeIdleMemsByEagerFree(
 }
 
 size_t AbstractDynamicMemPool::ReleaseFreeBlocks() {
-  LOG_OUT << "Release free blocks start.";
+  RT_VLOG(VL_HARDWARE) << "Release free blocks start.";
   size_t releaseSize = 0;
   for (auto &streamIdAllocator : streamIdAllocators_) {
     releaseSize += streamIdAllocator.second->ReleaseFreeBlocks();
   }
-  LOG_OUT << "Release free blocks size : " << releaseSize << ".";
+  RT_VLOG(VL_HARDWARE) << "Release free blocks size : " << releaseSize << ".";
   return releaseSize;
 }
 
 size_t AbstractDynamicMemPool::ReleaseCustomFreeBlocks() {
-  LOG_OUT << "Release custom free blocks start.";
+  RT_VLOG(VL_HARDWARE) << "Release custom free blocks start.";
   size_t releaseSize = 0;
   for (auto &customizedAllocator : customizedAllocators_) {
     releaseSize += customizedAllocator.second->ReleaseFreeBlocks();
   }
-  LOG_OUT << "Release custom free blocks size : " << releaseSize << ".";
+  RT_VLOG(VL_HARDWARE) << "Release custom free blocks size : " << releaseSize << ".";
   return releaseSize;
 }
 

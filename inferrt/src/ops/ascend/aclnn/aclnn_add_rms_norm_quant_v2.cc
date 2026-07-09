@@ -51,33 +51,31 @@ constexpr size_t kRmsNormOutIdx = 3;
 
 OpsErrorCode AclnnAddRmsNormQuantV2::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                                    size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [add_rms_norm_quant_v2]";
-
   // Parameter validation: scales2 must be None
   auto scales2_opt = GetOptionalTensor(input[kScales2OptionalIdx]);
   if (scales2_opt.has_value()) {
-    LOG_OUT << "Error: scales2 only support None.";
+    RT_GLOG(ERROR) << "Error: scales2 only support None.";
     return INVALID_PARAM;
   }
 
   // Parameter validation: zero_points2 must be None
   auto zero_points2_opt = GetOptionalTensor(input[kZeroPoints2OptionalIdx]);
   if (zero_points2_opt.has_value()) {
-    LOG_OUT << "Error: zero_points2 only support None.";
+    RT_GLOG(ERROR) << "Error: zero_points2 only support None.";
     return INVALID_PARAM;
   }
 
   // Parameter validation: axis must be -1
   auto axis_val = input[kAxisIdx]->ToInt();
   if (axis_val != -1) {
-    LOG_OUT << "Error: axis only support -1, but got " << axis_val << ".";
+    RT_GLOG(ERROR) << "Error: axis only support -1, but got " << axis_val << ".";
     return INVALID_PARAM;
   }
 
   // Parameter validation: div_mode must be True
   auto div_mode_val = input[kDivModeIdx]->ToBool();
   if (!div_mode_val) {
-    LOG_OUT << "Error: div_mode only support True.";
+    RT_GLOG(ERROR) << "Error: div_mode only support True.";
     return INVALID_PARAM;
   }
 
@@ -102,8 +100,6 @@ OpsErrorCode AclnnAddRmsNormQuantV2::CalcWorkspace(const std::vector<const ir::V
 
 OpsErrorCode AclnnAddRmsNormQuantV2::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                             size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [add_rms_norm_quant_v2]";
-
   auto &outputTuple = output->ToTuple();
 
   // Parameter order must match CalcWorkspace and ACLNN aclnnAddRmsNormQuantV2 interface

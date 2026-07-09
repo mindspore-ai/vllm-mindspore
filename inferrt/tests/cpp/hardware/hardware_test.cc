@@ -22,21 +22,21 @@ void TestDeviceResource() {
   mrt::device::DeviceContextKey deviceContextKey{"Ascend", 0};
   auto deviceContext = mrt::device::DeviceContextManager::GetInstance().GetOrCreateDeviceContext(deviceContextKey);
   if (deviceContext == nullptr) {
-    LOG_ERROR << "Get device context failed.";
+    RT_GLOG(ERROR) << "Get device context failed.";
   }
   if (deviceContext->deviceResManager_ == nullptr) {
-    LOG_ERROR << "Get device res manager failed.";
+    RT_GLOG(ERROR) << "Get device res manager failed.";
   }
   deviceContext->Initialize();
 
   // Test allocate memory.
   auto ptr = deviceContext->deviceResManager_->AllocateMemory(8);
-  LOG_ERROR << "ptr:" << ptr;
+  RT_GLOG(ERROR) << "ptr:" << ptr;
 
   // Test event and stream.
   size_t streamId = 1;
   if (!deviceContext->deviceResManager_->CreateStream(&streamId)) {
-    LOG_ERROR << "Create stream failed.";
+    RT_GLOG(ERROR) << "Create stream failed.";
   }
   std::vector<std::pair<uint32_t, mrt::device::DeviceMemPtr>> memoryStreamAddresses;
   memoryStreamAddresses.emplace_back(0, ptr);
@@ -44,19 +44,19 @@ void TestDeviceResource() {
   int64_t taskIdOnStream = 1;
   if (!deviceContext->deviceResManager_->RecordEvent(taskIdOnStream, SizeToUint(streamId), memoryStreamAddresses,
                                                      inputEvent)) {
-    LOG_ERROR << "Record event on stream failed.";
+    RT_GLOG(ERROR) << "Record event on stream failed.";
   }
   if (!deviceContext->deviceResManager_->WaitEvent(taskIdOnStream, SizeToUint(streamId))) {
-    LOG_ERROR << "Wait event failed.";
+    RT_GLOG(ERROR) << "Wait event failed.";
   }
   if (!deviceContext->deviceResManager_->SyncStream(0)) {
-    LOG_ERROR << "Sync stream failed.";
+    RT_GLOG(ERROR) << "Sync stream failed.";
   }
 
   // Free ptr and destroy event.
   deviceContext->deviceResManager_->FreeMemory(ptr);
   if (!deviceContext->deviceResManager_->DestroyAllEvents()) {
-    LOG_ERROR << "Destroy event failed.";
+    RT_GLOG(ERROR) << "Destroy event failed.";
   }
 }
 

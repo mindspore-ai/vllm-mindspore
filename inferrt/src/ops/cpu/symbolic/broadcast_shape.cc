@@ -59,8 +59,8 @@ std::vector<int64_t> BroadcastShapes(const std::vector<int64_t> &a, const std::v
       out.push_back(-1);
       continue;
     }
-    LOG_EXCEPTION << "BroadcastShape: incompatible shapes for broadcasting: " << ir::ShapeToString(a) << " and "
-                  << ir::ShapeToString(b);
+    RT_GLOG(EXCEPTION) << "BroadcastShape: incompatible shapes for broadcasting: " << ir::ShapeToString(a) << " and "
+                       << ir::ShapeToString(b);
   }
   return out;
 }
@@ -68,11 +68,11 @@ std::vector<int64_t> BroadcastShapes(const std::vector<int64_t> &a, const std::v
 
 OpsErrorCode BroadcastShape::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
   if (input.size() != kInputSize2) {
-    LOG_ERROR << "BroadcastShape::InferShape expects 2 inputs, but got: " << input.size();
+    RT_GLOG(ERROR) << "BroadcastShape::InferShape expects 2 inputs, but got: " << input.size();
     return INVALID_INPUT_NUM;
   }
   if (!input[kIndex0] || !input[kIndex0]->IsTensor() || !input[kIndex1] || !input[kIndex1]->IsTensor()) {
-    LOG_ERROR << "BroadcastShape::InferShape expects 2 tensor inputs";
+    RT_GLOG(ERROR) << "BroadcastShape::InferShape expects 2 tensor inputs";
     return INVALID_PARAM;
   }
 

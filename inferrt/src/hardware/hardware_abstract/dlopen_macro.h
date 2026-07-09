@@ -165,7 +165,7 @@ static T DlsymWithCast(void *handle, const char *symbol_name) {
   T symbol = reinterpret_cast<T>(GetProcAddress(reinterpret_cast<HINSTANCE__ *>(handle), symbol_name));
 #endif
   if (symbol == nullptr) {
-    LOG_ERROR << "DlsymAscend failed";
+    RT_GLOG(ERROR) << "DlsymAscend failed";
     return nullptr;
   }
   return symbol;
@@ -177,7 +177,7 @@ template <class T>
 static T DlsymAscend(void *handle, const char *symbol_name) {
   T symbol = reinterpret_cast<T>(reinterpret_cast<intptr_t>(dlsym(handle, symbol_name)));
   if (symbol == nullptr) {
-    LOG_ERROR << "DlsymAscend failed";
+    RT_GLOG(ERROR) << "DlsymAscend failed";
     return nullptr;
   }
   return symbol;

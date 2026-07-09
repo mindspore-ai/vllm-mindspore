@@ -103,15 +103,15 @@ std::string FindMrtDialectJsonPath() {
         return candidate;
       }
       // TODO(jiaorui): LOG LEVEL
-      LOG_OUT << "MrtDialect.json not found or unreadable at: " << candidate;
+      RT_VLOG(VL_OPS) << "MrtDialect.json not found or unreadable at: " << candidate;
     } else {
-      LOG_ERROR << "Cannot get lib directory from path (no directory separator): " << libPath;
+      RT_GLOG(ERROR) << "Cannot get lib directory from path (no directory separator): " << libPath;
     }
   } else {
-    LOG_ERROR << "dladdr failed or dli_fname is null, cannot resolve MrtDialect.json path";
+    RT_GLOG(ERROR) << "dladdr failed or dli_fname is null, cannot resolve MrtDialect.json path";
   }
 #else
-  LOG_ERROR << "findMrtDialectJsonPath is only supported on Linux and macOS";
+  RT_GLOG(ERROR) << "findMrtDialectJsonPath is only supported on Linux and macOS";
 #endif
   return "";
 }
@@ -119,14 +119,14 @@ std::string FindMrtDialectJsonPath() {
 void LoadMrtDialectJson(const std::string &path) {
   std::ifstream f(path);
   if (!f.is_open()) {
-    LOG_ERROR << "Cannot open MrtDialect.json: " << path;
+    RT_GLOG(ERROR) << "Cannot open MrtDialect.json: " << path;
     return;
   }
   json j;
   try {
     f >> j;
   } catch (const json::exception &e) {
-    LOG_ERROR << "Failed to parse MrtDialect.json: " << e.what();
+    RT_GLOG(ERROR) << "Failed to parse MrtDialect.json: " << e.what();
     return;
   }
   if (!j.is_object()) {

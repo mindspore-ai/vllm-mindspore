@@ -29,7 +29,7 @@ namespace mrt {
 namespace ops {
 
 OpsErrorCode HcclTensorCopy::InferShape(const std::vector<const ir::Value *> &input, ir::Value *output) {
-  LOG_OUT << "TensorCopy InferShape";
+  RT_VLOG(VL_OPS) << "TensorCopy InferShape";
   auto &input0Shape = input[kIndex0]->ToTensor()->Shape();
   auto &outputTensor = output->ToTensor();
   auto &outputShape = outputTensor->Shape();
@@ -45,7 +45,6 @@ OpsErrorCode HcclTensorCopy::CalcWorkspace(const std::vector<const ir::Value *> 
 
 OpsErrorCode HcclTensorCopy::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                     ir::Value *output, void *stream) {
-  LOG_OUT << "TensorCopy launch";
   auto srcTensor = input[kIndex1]->ToTensor();
   auto outTensor = input[kIndex0]->ToTensor();
   auto dstSize = outTensor->Numel() * outTensor->Dtype().GetSize();
@@ -54,7 +53,7 @@ OpsErrorCode HcclTensorCopy::Launch(const std::vector<const ir::Value *> &input,
   auto ret = mrt::device::ascend::AscendResManager::MemcpyDeviceToDevice(outTensor->DataPtr(), dstSize,
                                                                          srcTensor->DataPtr(), dstSize, stream);
   if (ret == false) {
-    LOG_ERROR << " call aclrtMemcpyAsync in Op TensorCopy failed";
+    RT_GLOG(ERROR) << " call aclrtMemcpyAsync in Op TensorCopy failed";
   }
 
   return SUCCESS;

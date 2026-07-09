@@ -87,7 +87,7 @@ void LoadAclRtApiSymbol(const std::string &ascendPath) {
   std::string aclrtPluginPath = ascendPath + "lib64/libascendcl.so";
   auto handler = GetLibHandler(aclrtPluginPath);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << aclrtPluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << aclrtPluginPath << " failed!" << dlerror();
     return;
   }
   aclrtCreateContext_ = DlsymAscendFuncObj(aclrtCreateContext, handler);
@@ -154,7 +154,7 @@ void LoadAclRtApiSymbol(const std::string &ascendPath) {
   aclrtMemSetPidToShareableHandle_ = DlsymAscendFuncObj(aclrtMemSetPidToShareableHandle, handler);
   aclrtMemImportFromShareableHandle_ = DlsymAscendFuncObj(aclrtMemImportFromShareableHandle, handler);
   aclrtGetLastError_ = DlsymAscendFuncObj(aclrtGetLastError, handler);
-  LOG_OUT << "Load acl rt api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl rt api success!";
 }
 
 void LoadSimulationRtApi() {

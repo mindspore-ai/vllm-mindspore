@@ -38,7 +38,7 @@ size_t ResolveCacheCapacity(const char *envName, size_t defaultCapacity, const c
       resolved = defaultCapacity;
     }
   }
-  LOG_OUT << cacheNameForLog << " cache capacity : " << resolved;
+  RT_VLOG(VL_OPS) << cacheNameForLog << " cache capacity : " << resolved;
   return resolved;
 }
 }  // namespace
@@ -88,7 +88,7 @@ MemoryFormat GetBaseFormat(MemoryFormat format) {
     case MemoryFormat::FORMAT_FRACTAL_Z_3D:
       return MemoryFormat::FORMAT_NCDHW;
     default:
-      LOG_EXCEPTION << "unknown format type: " << static_cast<int>(format);
+      RT_GLOG(EXCEPTION) << "unknown format type: " << static_cast<int>(format);
       return MemoryFormat::FORMAT_ND;
   }
 }
@@ -126,8 +126,10 @@ void CalBroadCastShape(const std::vector<int64_t> &xShape, const std::vector<int
     if (maxShape[dsti] == 1) {
       (*broadcastShape)[dsti] = minShape[i];
     } else if (maxShape[dsti] != minShape[i] && minShape[i] != 1) {
-      LOG_EXCEPTION << "xShape[" << xLength + i << "] or yShape[" << yLength + i << "] must be when they are not equal"
-                    << ", but got xShape=" << ir::ShapeToString(xShape) << ", yShape=" << ir::ShapeToString(yShape);
+      RT_GLOG(EXCEPTION) << "xShape[" << xLength + i << "] or yShape[" << yLength + i
+                         << "] must be when they are not equal"
+                         << ", but got xShape=" << ir::ShapeToString(xShape)
+                         << ", yShape=" << ir::ShapeToString(yShape);
     }
   }
 }

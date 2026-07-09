@@ -22,90 +22,90 @@ namespace mrt::ops {
 DvmOp::DvmOp(dvm::KernelType kernelType, BuildFunc buildFunc)
     : kernelType_(kernelType), buildFunc_(std::move(buildFunc)), executor_(nullptr), isInitialized_(false) {
   if (!buildFunc_) {
-    LOG_EXCEPTION << "Build function is null";
+    RT_GLOG(EXCEPTION) << "Build function is null";
   }
 
   // Create executor
   executor_ = std::make_unique<DvmKernelExecutor>(kernelType_);
 
-  LOG_OUT << "DvmOp created with kernel type: " << static_cast<int>(kernelType_);
+  RT_VLOG(VL_OPS) << "DvmOp created with kernel type: " << static_cast<int>(kernelType_);
 }
 
 void DvmOp::Init(const std::vector<const ir::Value *> &inputs, const ir::Value *output) {
   if (isInitialized_) {
-    LOG_OUT << "DvmOp already initialized, skipping";
+    RT_VLOG(VL_OPS) << "DvmOp already initialized, skipping";
     return;
   }
 
   if (executor_ == nullptr) {
-    LOG_EXCEPTION << "Executor is null in Init";
+    RT_GLOG(EXCEPTION) << "Executor is null in Init";
   }
 
-  LOG_OUT << "DvmOp::Init - building kernel graph";
+  RT_VLOG(VL_OPS) << "DvmOp::Init - building kernel graph";
 
   // Build kernel graph using user-provided function
   int ret = executor_->BuildKernel(buildFunc_, inputs, output);
   if (ret != 0) {
-    LOG_EXCEPTION << "Failed to build DVM kernel in Init, error code: " << ret;
+    RT_GLOG(EXCEPTION) << "Failed to build DVM kernel in Init, error code: " << ret;
   }
 
   isInitialized_ = true;
-  LOG_OUT << "DvmOp::Init completed successfully";
+  RT_VLOG(VL_OPS) << "DvmOp::Init completed successfully";
 }
 
 OpsErrorCode DvmOp::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                   size_t *workspaceSize) {
   if (executor_ == nullptr) {
-    LOG_ERROR << "Executor is null in CalcWorkspace";
+    RT_GLOG(ERROR) << "Executor is null in CalcWorkspace";
     return UNKNOWN_ERROR;
   }
 
   if (workspaceSize == nullptr) {
-    LOG_ERROR << "workspaceSize pointer is null";
+    RT_GLOG(ERROR) << "workspaceSize pointer is null";
     return INVALID_PARAM;
   }
 
   // Ensure kernel is built
   if (!isInitialized_) {
-    LOG_OUT << "DvmOp not initialized, calling Init";
+    RT_VLOG(VL_OPS) << "DvmOp not initialized, calling Init";
     Init(input, output);
   }
 
-  LOG_OUT << "DvmOp::CalcWorkspace - calling executor";
+  RT_VLOG(VL_OPS) << "DvmOp::CalcWorkspace - calling executor";
 
   // Delegate to executor
   int ret = executor_->GetWorkspaceSize(workspaceSize, input, output);
   if (ret != 0) {
-    LOG_ERROR << "DvmKernelExecutor::GetWorkspaceSize failed with code: " << ret;
+    RT_GLOG(ERROR) << "DvmKernelExecutor::GetWorkspaceSize failed with code: " << ret;
     return UNKNOWN_ERROR;
   }
 
-  LOG_OUT << "DvmOp::CalcWorkspace - workspace size: " << *workspaceSize;
+  RT_VLOG(VL_OPS) << "DvmOp::CalcWorkspace - workspace size: " << *workspaceSize;
   return SUCCESS;
 }
 
 OpsErrorCode DvmOp::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                            ir::Value *output, void *stream) {
   if (executor_ == nullptr) {
-    LOG_ERROR << "Executor is null in Launch";
+    RT_GLOG(ERROR) << "Executor is null in Launch";
     return UNKNOWN_ERROR;
   }
 
   if (!isInitialized_) {
-    LOG_ERROR << "DvmOp not initialized, call CalcWorkspace first";
+    RT_GLOG(ERROR) << "DvmOp not initialized, call CalcWorkspace first";
     return UNKNOWN_ERROR;
   }
 
-  LOG_OUT << "DvmOp::Launch - calling executor";
+  RT_VLOG(VL_OPS) << "DvmOp::Launch - calling executor";
 
   // Delegate to executor
   int ret = executor_->Launch(workspace, workspaceSize, stream, input, output);
   if (ret != 0) {
-    LOG_ERROR << "DvmKernelExecutor::Launch failed with code: " << ret;
+    RT_GLOG(ERROR) << "DvmKernelExecutor::Launch failed with code: " << ret;
     return UNKNOWN_ERROR;
   }
 
-  LOG_OUT << "DvmOp::Launch - success";
+  RT_VLOG(VL_OPS) << "DvmOp::Launch - success";
   return SUCCESS;
 }
 

@@ -46,7 +46,7 @@ OpsErrorCode AclnnInplaceCopy::CalcWorkspace(const std::vector<const ir::Value *
 
   if (copyMode_ != mrt::device::CopyType::D2D &&
       (dst->Dtype() != src->Dtype() || dst->Shape() != src->Shape() || !dst->IsContiguous() || !src->IsContiguous())) {
-    LOG_EXCEPTION << "InplaceCopy H2D/D2H/H2H don't support BroadCast, DtypeCast, discontiguous src/dst yet.";
+    RT_GLOG(EXCEPTION) << "InplaceCopy H2D/D2H/H2H don't support BroadCast, DtypeCast, discontiguous src/dst yet.";
   }
   return SUCCESS;
 }
@@ -69,7 +69,7 @@ OpsErrorCode AclnnInplaceCopy::Launch(const std::vector<const ir::Value *> &inpu
     auto ret = res_manager_->AsyncCopy(dst->DataPtr(), src->DataPtr(), srcSize, copyMode_, stream);
 
     if (!ret) {
-      LOG_ERROR << "Call aclrtMemcpyAsync in Op InplaceCopy failed";
+      RT_GLOG(ERROR) << "Call aclrtMemcpyAsync in Op InplaceCopy failed";
       return UNKNOWN_ERROR;
     }
     return SUCCESS;

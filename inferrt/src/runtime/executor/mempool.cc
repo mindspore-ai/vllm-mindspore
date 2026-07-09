@@ -82,7 +82,7 @@ void TensorDataRecycler::FreeUnusedNodes(ir::NodePtr node) {
 
 void TensorDataRecycler::IncreaseInner(ir::NodePtr node) {
   CHECK_IF_NULL(node);
-  LOG_OUT << "Increase refCount for node: " << node;
+  RT_VLOG(VL_RUNTIME) << "Increase refCount for node: " << node;
   ++refCounts_[node];
 }
 
@@ -91,18 +91,18 @@ void TensorDataRecycler::DecreaseInner(ir::NodePtr node) {
   std::lock_guard<std::mutex> lock(runningRefCountsMutex_);
   CHECK_IF_FAIL(runningRefCounts_.count(node) != 0);
   CHECK_IF_FAIL(runningRefCounts_[node] > 0);
-  LOG_OUT << "Decrease refCount for node: " << node;
+  RT_VLOG(VL_RUNTIME) << "Decrease refCount for node: " << node;
   --runningRefCounts_[node];
   if (runningRefCounts_[node] == 0) {
     CHECK_IF_NULL(memPool_);
-    LOG_OUT << "Free memory of node: " << node;
+    RT_VLOG(VL_RUNTIME) << "Free memory of node: " << node;
     memPool_->Free(node);
   }
 }
 
 void TensorDataRecycler::PrintRunningRefCounts() const {
   for (auto refCount : runningRefCounts_) {
-    LOG_OUT << "node: " << refCount.first << ", refCount: " << refCount.second;
+    RT_VLOG(VL_RUNTIME) << "node: " << refCount.first << ", refCount: " << refCount.second;
   }
 }
 

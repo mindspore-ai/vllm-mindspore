@@ -46,7 +46,7 @@ KernelLibRegistry::~KernelLibRegistry() {
 
 void KernelLibRegistry::Register(const std::string &name, const KernelLibCreator &&creator) {
   if (kernelLibCreators_.find(name) == kernelLibCreators_.end()) {
-    LOG_OUT << "KernelLibCreator for " << name << " registered.";
+    RT_VLOG(VL_OPS) << "KernelLibCreator for " << name << " registered.";
     (void)kernelLibCreators_.emplace(name, std::move(creator));
   }
 }
@@ -56,7 +56,7 @@ void KernelLibRegistry::Load(const std::string &path) {
     return;
   }
 
-  LOG_OUT << "Load kernel lib path: " << path;
+  RT_VLOG(VL_OPS) << "Load kernel lib path: " << path;
   void *handle;
   std::string errMsg = "";
 #ifndef _WIN32
@@ -69,7 +69,7 @@ void KernelLibRegistry::Load(const std::string &path) {
 #endif
 
   if (handle == nullptr) {
-    LOG_ERROR << "Load " + path + " failed, error: " + errMsg;
+    RT_GLOG(ERROR) << "Load " + path + " failed, error: " + errMsg;
     return;
   }
   (void)kernelLibHandles_.emplace(path, handle);
@@ -84,11 +84,11 @@ const KernelLib *KernelLibRegistry::Get(const std::string &name) {
     kernelLibs_[name] = kernelLib;
     return kernelLib;
   }
-  LOG_ERROR << "kernelLibCreators_: " << &kernelLibCreators_;
+  RT_GLOG(ERROR) << "kernelLibCreators_: " << &kernelLibCreators_;
   for (auto &pair : kernelLibCreators_) {
-    LOG_ERROR << "kernelLibCreators_: " << pair.first;
+    RT_GLOG(ERROR) << "kernelLibCreators_: " << pair.first;
   }
-  LOG_ERROR << "KernelLib " << name << " is not exist.";
+  RT_GLOG(ERROR) << "KernelLib " << name << " is not exist.";
   return nullptr;
 }
 

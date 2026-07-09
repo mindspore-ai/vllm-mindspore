@@ -37,8 +37,6 @@ constexpr size_t kDivModeIdx = 5;
 
 OpsErrorCode AclnnAscendQuantV3::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                                size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [aclnnAscendQuantV3]";
-
   auto xTensor = input[kSelfIdx]->ToTensor();
   auto scaleTensor = input[kScalesIdx]->ToTensor();
   auto offsetTensor = GetOptionalTensor(input[kZeroPointsIdx]);
@@ -47,7 +45,7 @@ OpsErrorCode AclnnAscendQuantV3::CalcWorkspace(const std::vector<const ir::Value
   // op plugin use: acl_op::npu_quantize
   div_mode_ = input[kDivModeIdx]->ToBool();
   if (div_mode_) {
-    LOG_ERROR << "divMode must be false for AclnnAscendQuantV3";
+    RT_GLOG(ERROR) << "divMode must be false for AclnnAscendQuantV3";
     return INVALID_PARAM;
   }
 
@@ -60,7 +58,7 @@ OpsErrorCode AclnnAscendQuantV3::CalcWorkspace(const std::vector<const ir::Value
   } else if (dtypeInput == ir::DataType::Type::QUInt4x2) {
     dst_type_ = ir::DataType::Type::Int32;
   } else {
-    LOG_ERROR << "Dtype must be QInt8 or QUInt4x2, but got: " << dtypeInput;
+    RT_GLOG(ERROR) << "Dtype must be QInt8 or QUInt4x2, but got: " << dtypeInput;
     return INVALID_PARAM;
   }
 
@@ -78,8 +76,6 @@ OpsErrorCode AclnnAscendQuantV3::CalcWorkspace(const std::vector<const ir::Value
 
 OpsErrorCode AclnnAscendQuantV3::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                         size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [aclnnAscendQuantV3]";
-
   auto xTensor = input[kSelfIdx]->ToTensor();
   auto scaleTensor = input[kScalesIdx]->ToTensor();
   auto offsetTensor = GetOptionalTensor(input[kZeroPointsIdx]);

@@ -42,7 +42,7 @@ DA_API void *GetAclnnOpApiFunc(const char *apiName);
 inline void *GetOpApiLibHandler(const std::string &libPath) {
   auto handler = dlopen(libPath.c_str(), RTLD_LAZY);
   if (handler == nullptr) {
-    LOG_OUT << "Dlopen " << libPath << " failed!" << dlerror();
+    RT_VLOG(VL_OPS) << "Dlopen " << libPath << " failed!" << dlerror();
   }
   return handler;
 }
@@ -51,7 +51,7 @@ inline void *GetOpApiFuncFromLib(void *handler, const char *libName, const char 
   CHECK_IF_NULL(handler);
   auto func = dlsym(handler, apiName);
   if (func == nullptr) {
-    LOG_OUT << "Dlsym " << apiName << " from " << libName << " failed!" << dlerror();
+    RT_VLOG(VL_OPS) << "Dlsym " << apiName << " from " << libName << " failed!" << dlerror();
   }
   return func;
 }
@@ -61,7 +61,7 @@ T LoadCommonMetaApi(const char *apiName) {
   for (auto &libHandler : libHandlers) {
     T apiFunc = reinterpret_cast<T>(GetOpApiFuncFromLib(libHandler.first, libHandler.second.c_str(), apiName));
     if (apiFunc == nullptr) {
-      LOG_OUT << "Get CommonMetaApi [" << apiName << "] failed, libPath: " << libHandler.second;
+      RT_VLOG(VL_OPS) << "Get CommonMetaApi [" << apiName << "] failed, libPath: " << libHandler.second;
     }
     return apiFunc;
   }

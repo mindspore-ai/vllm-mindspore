@@ -108,30 +108,31 @@ class OpFactory : public OpFactoryBase {
     std::stringstream errMsg;
     if constexpr (std::is_same_v<OpFactoryType, AscendOpFactory>) {
       if (!LoadOpLib("libops_ascend", &errMsg)) {
-        LOG_EXCEPTION << "Load Ascend Op Lib failed, error message: " << errMsg.str();
+        RT_GLOG(EXCEPTION) << "Load Ascend Op Lib failed, error message: " << errMsg.str();
       }
     } else {
       if constexpr (std::is_same_v<OpFactoryType, CPUOpFactory>) {
         if (!LoadOpLib("libops_cpu", &errMsg)) {
-          LOG_EXCEPTION << "Load CPU Op Lib failed, error message: " << errMsg.str();
+          RT_GLOG(EXCEPTION) << "Load CPU Op Lib failed, error message: " << errMsg.str();
         }
       } else if constexpr (std::is_same_v<OpFactoryType, UnknownOpFactory>) {
-        LOG_OUT << "Unknown Op Factory, skip load Op Lib, error message: " << errMsg.str();
+        RT_VLOG(VL_OPS) << "Unknown Op Factory, skip load Op Lib, error message: " << errMsg.str();
       } else {
-        LOG_EXCEPTION << "Got invalid OpFactoryType, only supports AscendOpFactory, CPUOpFactory and UnknownOpFactory.";
+        RT_GLOG(EXCEPTION)
+          << "Got invalid OpFactoryType, only supports AscendOpFactory, CPUOpFactory and UnknownOpFactory.";
       }
     }
 #ifdef ENABLE_TORCH_FRONT
     errMsg.str("");
     if (!LoadOpLib("libops_torch", &errMsg)) {
-      LOG_EXCEPTION << "Load torch Op Lib failed, error message: " << errMsg.str();
+      RT_GLOG(EXCEPTION) << "Load torch Op Lib failed, error message: " << errMsg.str();
     }
 #endif
   }
 
   void Register(const std::string &opName, CreatorFunc &&creator) {
     if (IsRegistered(opName)) {
-      LOG_EXCEPTION << "Repeat register for op " << opName;
+      RT_GLOG(EXCEPTION) << "Repeat register for op " << opName;
     }
     (void)opCreatorsMap_.emplace(opName, std::move(creator));
   }
@@ -187,7 +188,7 @@ inline std::unique_ptr<Operator> CreateOperator(const std::string &name, const h
   } else if (type == hardware::DeviceType::CPU) {
     return OpFactory<Operator, CPUOpFactory>::GetInstance().Create(name);
   } else {
-    LOG_EXCEPTION << "Got invalid device type, only supports CPU and NPU.";
+    RT_GLOG(EXCEPTION) << "Got invalid device type, only supports CPU and NPU.";
     return nullptr;
   }
 }

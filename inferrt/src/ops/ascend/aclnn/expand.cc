@@ -34,19 +34,19 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
   // For expand, output rank/shape is determined by the `size` operand, and `-1`
   // means "keep the corresponding input dimension" (PyTorch expand semantics).
   if (input.size() < 2) {
-    LOG_ERROR << "AclnnExpand::InferShape expects at least 2 inputs, but got: " << input.size();
+    RT_GLOG(ERROR) << "AclnnExpand::InferShape expects at least 2 inputs, but got: " << input.size();
     return INVALID_INPUT_NUM;
   }
   if (!input[0] || !input[0]->IsTensor()) {
-    LOG_ERROR << "AclnnExpand::InferShape expects input[0] to be a tensor";
+    RT_GLOG(ERROR) << "AclnnExpand::InferShape expects input[0] to be a tensor";
     return INVALID_PARAM;
   }
   if (!input[1] || !input[1]->IsTuple()) {
-    LOG_ERROR << "AclnnExpand::InferShape expects input[1] (size) to be a tuple<int>";
+    RT_GLOG(ERROR) << "AclnnExpand::InferShape expects input[1] (size) to be a tuple<int>";
     return INVALID_PARAM;
   }
   if (!output || !output->IsTensor()) {
-    LOG_ERROR << "AclnnExpand::InferShape expects output to be a tensor";
+    RT_GLOG(ERROR) << "AclnnExpand::InferShape expects output to be a tensor";
     return INVALID_PARAM;
   }
 
@@ -59,15 +59,16 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
   const auto &inShape = inTensor->Shape();
   const auto &size = input[1]->ToTuple()->ToIntList();
   if (size.empty()) {
-    LOG_ERROR << "AclnnExpand::InferShape got empty size";
+    RT_GLOG(ERROR) << "AclnnExpand::InferShape got empty size";
     return INVALID_PARAM;
   }
 
-  LOG_OUT << "AclnnExpand::InferShape: inShape=" << ir::ShapeToString(inShape) << ", size=" << ir::ShapeToString(size);
+  RT_VLOG(VL_OPS) << "AclnnExpand::InferShape: inShape=" << ir::ShapeToString(inShape)
+                  << ", size=" << ir::ShapeToString(size);
 
   // Align input shape to output rank (expand can prepend leading dims).
   if (inShape.size() > size.size()) {
-    LOG_EXCEPTION << "AclnnExpand::InferShape: input rank " << inShape.size() << " > target rank " << size.size();
+    RT_GLOG(EXCEPTION) << "AclnnExpand::InferShape: input rank " << inShape.size() << " > target rank " << size.size();
   }
   std::vector<int64_t> alignedIn(size.size(), 1);
   std::copy(inShape.begin(), inShape.end(), alignedIn.begin() + (size.size() - inShape.size()));
@@ -86,7 +87,7 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
     }
     // Broadcast legality: inDim must be 1 or equal to target.
     if (inDim != target && inDim != 1) {
-      LOG_EXCEPTION << "AclnnExpand::InferShape: cannot expand dim " << i << " from " << inDim << " to " << target;
+      RT_GLOG(EXCEPTION) << "AclnnExpand::InferShape: cannot expand dim " << i << " from " << inDim << " to " << target;
     }
     outShape.push_back(target);
   }
@@ -101,7 +102,6 @@ OpsErrorCode AclnnExpand::InferShape(const std::vector<const ir::Value *> &input
 
 OpsErrorCode AclnnExpand::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                         size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [expand]";
   // prefer resolved size from InferShape; fallback to raw input if empty
   const std::vector<int64_t> &size_to_use = resolved_size_.empty() ? input[1]->ToTuple()->ToIntList() : resolved_size_;
   executor_->GetWorkspaceSize(static_cast<uint64_t *>(workspaceSize), input[0]->ToTensor(), size_to_use,
@@ -111,7 +111,6 @@ OpsErrorCode AclnnExpand::CalcWorkspace(const std::vector<const ir::Value *> &in
 
 OpsErrorCode AclnnExpand::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                  ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [expand]";
   const std::vector<int64_t> &size_to_use = resolved_size_.empty() ? input[1]->ToTuple()->ToIntList() : resolved_size_;
   executor_->Launch(workspace, workspaceSize, stream, input[0]->ToTensor(), size_to_use, output->ToTensor());
   return SUCCESS;

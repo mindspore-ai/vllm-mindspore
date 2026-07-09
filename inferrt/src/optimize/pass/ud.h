@@ -43,10 +43,10 @@ class UserDef {
         // CHECK_IF_NULL(input);
         auto iter = users_.find(input);
         if (iter == users_.cend()) {
-          LOG_OUT << "Find " << input << " first user " << node << " at index " << j;
+          RT_VLOG(VL_OPTIMIZE) << "Find " << input << " first user " << node << " at index " << j;
           (void)users_.emplace(input, UserList({std::make_pair(node, j)}));
         } else {
-          LOG_OUT << "Find " << input << " user " << node << " at index " << j;
+          RT_VLOG(VL_OPTIMIZE) << "Find " << input << " user " << node << " at index " << j;
           (void)iter->second.emplace_back(std::make_pair(node, j));
         }
       }
@@ -83,7 +83,7 @@ class UserDef {
   bool DropNode(const ir::NodePtr owner, size_t index, const ir::NodePtr node) {
     auto iter = users_.find(node);
     if (iter == users_.cend()) {
-      LOG_ERROR << "'node' has no user.";
+      RT_GLOG(ERROR) << "'node' has no user.";
       return true;
     }
     (void)iter->second.remove(std::make_pair(owner, index));

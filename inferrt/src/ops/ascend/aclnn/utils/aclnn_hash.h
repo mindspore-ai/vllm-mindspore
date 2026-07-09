@@ -79,7 +79,7 @@ inline void GatherHash(const ir::ValuePtr &value) {
   } else if (value->IsString()) {
     GatherHash(value->ToString());
   } else {
-    LOG_EXCEPTION << "Invalid value type: " << value << " for hash from tuple";
+    RT_GLOG(EXCEPTION) << "Invalid value type: " << value << " for hash from tuple";
   }
 }
 

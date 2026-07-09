@@ -40,7 +40,7 @@ void LoadAclBaseApiSymbol(const std::string &ascendPath) {
   std::string aclbasePluginPath = "lib64/libascendcl.so";
   auto baseHandler = GetLibHandler(ascendPath + aclbasePluginPath);
   if (baseHandler == nullptr) {
-    LOG_OUT << "Dlopen " << aclbasePluginPath << " failed!" << dlerror();
+    RT_VLOG(VL_HARDWARE) << "Dlopen " << aclbasePluginPath << " failed!" << dlerror();
     return;
   }
   aclCreateDataBuffer_ = DlsymAscendFuncObj(aclCreateDataBuffer, baseHandler);
@@ -60,7 +60,7 @@ void LoadAclBaseApiSymbol(const std::string &ascendPath) {
   aclGetDataBufferAddr_ = DlsymAscendFuncObj(aclGetDataBufferAddr, baseHandler);
   aclGetTensorDescSize_ = DlsymAscendFuncObj(aclGetTensorDescSize, baseHandler);
   aclGetRecentErrMsg_ = DlsymAscendFuncObj(aclGetRecentErrMsg, baseHandler);
-  LOG_OUT << "Load acl base api success!";
+  RT_VLOG(VL_HARDWARE) << "Load acl base api success!";
 }
 
 void LoadSimulationAclBaseApi() {

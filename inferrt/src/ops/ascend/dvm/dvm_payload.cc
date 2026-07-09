@@ -174,7 +174,7 @@ T LookupByName(const std::array<MappingEntry<T>, N> &table, std::string_view nam
   if (it != table.end()) {
     return it->value;
   }
-  LOG_EXCEPTION << "Unknown " << what << ": " << name;
+  RT_GLOG(EXCEPTION) << "Unknown " << what << ": " << name;
 }
 
 template <typename T, size_t N>
@@ -189,7 +189,7 @@ std::string_view LookupByValue(const std::array<MappingEntry<T>, N> &table, T va
 DvmOpCode StringToOpCode(const std::string &op) {
   auto it = kOpCodeByName.find(std::string_view{op});
   if (it == kOpCodeByName.end()) {
-    LOG_EXCEPTION << "Unknown OpCode: " << op;
+    RT_GLOG(EXCEPTION) << "Unknown OpCode: " << op;
   }
   return it->second;
 }
@@ -209,7 +209,7 @@ const json *GetAttrsPtr(const json &inst_json) {
   const auto &attrs = inst_json["attrs"];
   if (attrs.is_null()) return nullptr;
   if (!attrs.is_object()) {
-    LOG_EXCEPTION << "Instruction 'attrs' must be an object";
+    RT_GLOG(EXCEPTION) << "Instruction 'attrs' must be an object";
   }
   return &attrs;
 }
@@ -218,10 +218,10 @@ void ParseInputsField(const json &inst_json, DvmInstruction *inst) {
   if (!inst_json.contains("inputs")) return;
   const auto &inputs = inst_json["inputs"];
   if (!inputs.is_array()) {
-    LOG_EXCEPTION << "Instruction 'inputs' must be an array";
+    RT_GLOG(EXCEPTION) << "Instruction 'inputs' must be an array";
   }
   if (inputs.size() > kMaxOperands) {
-    LOG_EXCEPTION << "Instruction 'inputs' length must be <= " << kMaxOperands;
+    RT_GLOG(EXCEPTION) << "Instruction 'inputs' length must be <= " << kMaxOperands;
   }
   for (size_t i = 0; i < inputs.size(); ++i) {
     inst->operand_idxs[i] = inputs[i].get<int32_t>();
@@ -239,7 +239,7 @@ void ParseLoad(const json &inst_json, DvmInstruction *inst) {
     inst->aux_int = StringToDType(inst_json["dtype"].get<std::string>());
     return;
   }
-  LOG_EXCEPTION << "Load instruction missing attrs.dtype";
+  RT_GLOG(EXCEPTION) << "Load instruction missing attrs.dtype";
 }
 
 void ParseStore(const json &inst_json, DvmInstruction *inst) {
@@ -358,7 +358,7 @@ void ParseCast(const json &inst_json, DvmInstruction *inst) {
     inst->aux_int = StringToDType(inst_json["dtype"].get<std::string>());
     return;
   }
-  LOG_EXCEPTION << "Cast instruction missing attrs.dtype";
+  RT_GLOG(EXCEPTION) << "Cast instruction missing attrs.dtype";
 }
 
 void ParseReshapeOrBroadcast(const json &inst_json, DvmInstruction *inst) {
@@ -384,7 +384,7 @@ void ParseReshapeOrBroadcast(const json &inst_json, DvmInstruction *inst) {
     const bool has_dims = sr.contains("dims");
     const int count = static_cast<int>(has_output_pos) + static_cast<int>(has_input_pos) + static_cast<int>(has_dims);
     if (count != 1) {
-      LOG_EXCEPTION << "shape_ref must specify exactly one of {output_pos, input_pos, dims}";
+      RT_GLOG(EXCEPTION) << "shape_ref must specify exactly one of {output_pos, input_pos, dims}";
     }
     if (has_output_pos) {
       inst->shape_ref_output_pos = sr["output_pos"].get<int32_t>();
@@ -592,7 +592,7 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
   // Non-throwing parse to avoid exception-based control-flow.
   auto j = json::parse(json_str, nullptr, false);
   if (j.is_discarded()) {
-    LOG_EXCEPTION << "Failed to parse DVM payload JSON";
+    RT_GLOG(EXCEPTION) << "Failed to parse DVM payload JSON";
   }
 
   // Parse version and kernel_type
@@ -606,14 +606,14 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
 
   // Parse instructions
   if (!j.contains("instructions")) {
-    LOG_EXCEPTION << "Missing 'instructions' field in DVM payload";
+    RT_GLOG(EXCEPTION) << "Missing 'instructions' field in DVM payload";
   }
 
   for (auto &inst_json : j["instructions"]) {
     DvmInstruction inst;
 
     if (!inst_json.contains("op") || !inst_json.contains("idx")) {
-      LOG_EXCEPTION << "Instruction missing 'op' or 'idx' field";
+      RT_GLOG(EXCEPTION) << "Instruction missing 'op' or 'idx' field";
     }
 
     std::string op = inst_json["op"].get<std::string>();
@@ -626,7 +626,7 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
     // Parse opcode-specific fields
     const auto op_idx = static_cast<size_t>(inst.opcode);
     if (op_idx >= kParseInstByOp.size() || kParseInstByOp[op_idx] == nullptr) {
-      LOG_EXCEPTION << "Unhandled OpCode: " << static_cast<int>(inst.opcode);
+      RT_GLOG(EXCEPTION) << "Unhandled OpCode: " << static_cast<int>(inst.opcode);
     }
     kParseInstByOp[op_idx](inst_json, &inst);
 
@@ -642,8 +642,8 @@ DvmKernelPayload ParseDvmPayload(const std::string &json_str) {
     payload.output_indices = j["output_indices"].get<std::vector<int32_t>>();
   }
 
-  LOG_OUT << "Parsed DVM payload: " << payload.instructions.size() << " instructions, " << payload.input_indices.size()
-          << " inputs, " << payload.output_indices.size() << " outputs";
+  RT_VLOG(VL_OPS) << "Parsed DVM payload: " << payload.instructions.size() << " instructions, "
+                  << payload.input_indices.size() << " inputs, " << payload.output_indices.size() << " outputs";
 
   return payload;
 }

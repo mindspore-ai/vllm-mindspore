@@ -69,6 +69,7 @@ class AclnnOpsGenerator(CodeGenerator):
         # Filters for inputs and outputs processing of aclnn ops
         self.gen_env.filters['arg_wrapper'] = self._arg_wrapper
         self.gen_env.filters['output_wrapper'] = self._output_wrapper
+        self.gen_env.filters['needs_output_tuple'] = self._needs_output_tuple
         self.gen_env.filters['is_output_in_ioref'] = self._is_output_in_ioref
 
     # pylint: disable=arguments-differ
@@ -144,6 +145,14 @@ class AclnnOpsGenerator(CodeGenerator):
             # Output 0 is in IORef, skip it
             return ""
         return ", " + _convert_type("output", result[0][0].get('def'))
+
+    def _needs_output_tuple(self, result: list) -> bool:
+        """Return true when generated output args need the multi-output tuple."""
+        if len(result) <= 1:
+            return False
+        ioref_pairs = getattr(self, '_current_ioref_pairs', [])
+        ioref_output_indices = {pair[0] for pair in ioref_pairs}
+        return any(idx not in ioref_output_indices for idx in range(len(result)))
 
     def _is_output_in_ioref(self, output_idx: int, ioref_pairs: list) -> bool:
         """Check if an output index is in IORef pairs."""

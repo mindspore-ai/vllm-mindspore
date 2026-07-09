@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 set(CONFIG_SRC_FILES
   device/ascend/op_precision_conf.cc

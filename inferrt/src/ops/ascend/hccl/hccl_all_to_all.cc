@@ -63,7 +63,6 @@ void GetAllToAllVParam(const ir::TuplePtr &sendNumelList, const ir::TuplePtr &re
 
 OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                          size_t *workspaceSize) {
-  LOG_OUT << "HcclAllToAll CalcWorkspace";
   const string &groupName = input[kIndex3]->ToString();
   auto rankSize = mrt::collective::CollectiveManager::Instance().GetGroupSize(groupName);
   HcclAdapter::GetInstance().InitHccl();
@@ -79,11 +78,9 @@ OpsErrorCode HcclAllToAll::CalcWorkspace(const std::vector<const ir::Value *> &i
 
 OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                   ir::Value *output, void *stream) {
-  LOG_OUT << "HcclAllToAll launch";
   auto outTensor = output->ToTensor();
   ::HcclResult hcclResult;
   if (useAllToAllV_) {
-    LOG_OUT << "HcclAllToAll launch AllToAllV Kernel";
     uint64_t strideOfDim0 = 1;
     auto &inputShape = input[kIndex0]->ToTensor()->Shape();
     for (size_t i = 1; i < inputShape.size(); ++i) {
@@ -95,7 +92,6 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
                                                           outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
                                                           stream, hcclKernel_.comm_);
   } else {
-    LOG_OUT << "HcclAllToAll launch AllToAll Kernel";
     HcclAllToAllParams params = {hcclKernel_.hcclCount_, hcclKernel_.hcclCount_};
     hcclResult = HcclAdapter::GetInstance().HcclAllToAll(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
                                                          outTensor->DataPtr(), params, hcclKernel_.hcclDataType_,
@@ -103,7 +99,7 @@ OpsErrorCode HcclAllToAll::Launch(const std::vector<const ir::Value *> &input, v
   }
 
   if (hcclResult != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcclAllToAll failed, hcclResult: " << hcclResult;
+    RT_GLOG(ERROR) << "HcclAllToAll failed, hcclResult: " << hcclResult;
     return LAUNCH_OP_FAILED;
   }
 

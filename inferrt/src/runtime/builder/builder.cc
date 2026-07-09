@@ -115,7 +115,7 @@ void Builder::RecordTensorUpdatePoint() {
     auto &tensors = item.second;
     auto iter = nodeToOpRunner_.find(node);
     if (iter == nodeToOpRunner_.end()) {
-      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+      RT_GLOG(EXCEPTION) << "Can not find OpRunner for op: " << ops::ToStr(node->op);
     }
     auto *opRunner = iter->second;
     opRunner->SetTensorsToUpdate(std::move(tensors));
@@ -152,13 +152,13 @@ void Builder::RecordStorageFreePoint() {
   ir::VisitAllTensors(graphOutput, [&](const ir::TensorPtr &tensor) {
     auto storage = tensor->GetStorage().get();
     CHECK_IF_NULL(storage);
-    LOG_OUT << "Record graph output Storage: " << storage;
+    RT_VLOG(VL_RUNTIME) << "Record graph output Storage: " << storage;
     (void)recordedStorages.insert(storage);
   });
 
   // Traverse in reverse execution order
   for (auto iter = graph_->nodes.rbegin(); iter != graph_->nodes.rend(); ++iter) {
-    LOG_OUT << "Node: " << *iter;
+    RT_VLOG(VL_RUNTIME) << "Node: " << *iter;
     auto currentNode = iter->get();
     CHECK_IF_NULL(currentNode);
     if (IsSkipBuildOpRunner(currentNode)) {
@@ -167,7 +167,7 @@ void Builder::RecordStorageFreePoint() {
 
     // Each op node is responsible for freeing the storage of its inputs.
     for (auto &inputNode : currentNode->inputs) {
-      LOG_OUT << "Input: " << inputNode;
+      RT_VLOG(VL_RUNTIME) << "Input: " << inputNode;
       ir::VisitAllTensors(inputNode->output, [&](const ir::TensorPtr &tensor) {
         auto storage = tensor->GetStorage().get();
         CHECK_IF_NULL(storage);
@@ -175,7 +175,7 @@ void Builder::RecordStorageFreePoint() {
         // First encounter, meaning current node is the last consumer
         // and is responsible for freeing the storage.
         if (recordedStorages.find(storage) == recordedStorages.end()) {
-          LOG_OUT << "Record node input Storage: " << storage;
+          RT_VLOG(VL_RUNTIME) << "Record node input Storage: " << storage;
           (void)recordedStorages.insert(storage);
           auto storageToOwnerIter = storageToOwner.find(storage);
           CHECK_IF_FAIL(storageToOwnerIter != storageToOwner.end());
@@ -193,7 +193,7 @@ void Builder::RecordStorageFreePoint() {
       auto storage = tensor->GetStorage().get();
       CHECK_IF_NULL(storage);
       if (recordedStorages.find(storage) == recordedStorages.end()) {
-        LOG_OUT << "Record node output Storage: " << storage;
+        RT_VLOG(VL_RUNTIME) << "Record node output Storage: " << storage;
         (void)recordedStorages.insert(storage);
         auto storageToOwnerIter = storageToOwner.find(storage);
         CHECK_IF_FAIL(storageToOwnerIter != storageToOwner.end());
@@ -222,7 +222,7 @@ void Builder::RecordStorageFreePoint() {
     auto &storages = item.second;
     auto iter = nodeToOpRunner_.find(node);
     if (iter == nodeToOpRunner_.end()) {
-      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+      RT_GLOG(EXCEPTION) << "Can not find OpRunner for op: " << ops::ToStr(node->op);
     }
     auto *opRunner = iter->second;
     opRunner->SetStoragesToFree(std::move(storages));
@@ -233,7 +233,7 @@ void Builder::RecordStorageFreePoint() {
     auto &storages = item.second;
     auto iter = nodeToOpRunner_.find(node);
     if (iter == nodeToOpRunner_.end()) {
-      LOG_EXCEPTION << "Can not find OpRunner for op: " << ops::ToStr(node->op);
+      RT_GLOG(EXCEPTION) << "Can not find OpRunner for op: " << ops::ToStr(node->op);
     }
     auto *opRunner = iter->second;
     opRunner->SetStoragesToAlloc(std::move(storages));
@@ -253,8 +253,8 @@ void Builder::CreateOpRunners() {
     auto device = GetOpDeviceType(node);
     auto operatorPtr = ops::CreateOperator(ops::ToStr(node->op), device.type);
     if (operatorPtr == nullptr) {
-      LOG_EXCEPTION << "Create operator for: " << ops::ToStr(node->op)
-                    << " failed, please register it on platform: " << hardware::GetDeviceNameByType(device.type);
+      RT_GLOG(EXCEPTION) << "Create operator for: " << ops::ToStr(node->op)
+                         << " failed, please register it on platform: " << hardware::GetDeviceNameByType(device.type);
     }
     std::vector<const ir::Value *> inputs;
     for (auto &input : node->inputs) {

@@ -46,7 +46,7 @@ static OpsErrorCode GetPagedAttentionParam(const std::vector<const ir::Value *> 
   // query, key_cache, value_cache, num_kv_heads, num_heads, scale_value,
   // block_table, context_lens, out, workspace
   if (inputs.size() < kWorkspaceIdx + 1) {
-    LOG_ERROR << "Invalid parameters for AtbPagedAttention, input size: " << inputs.size();
+    RT_GLOG(ERROR) << "Invalid parameters for AtbPagedAttention, input size: " << inputs.size();
     return OpsErrorCode::INVALID_PARAM;
   }
   // Read scalar parameters: num_kv_heads, num_heads, scale_value.
@@ -107,7 +107,6 @@ OpsErrorCode AtbPagedAttention::CalcWorkspace(const std::vector<const ir::Value 
 
 OpsErrorCode AtbPagedAttention::Launch(const std::vector<const ir::Value *> &inputs, void *workspace,
                                        size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << " Start launch " << op_name_;
   CHECK_IF_NULL(stream);
   return LaunchAtb(param_setter_.variant_pack, workspace, workspaceSize, static_cast<aclrtStream>(stream));
 }
@@ -116,4 +115,3 @@ MRT_REG_OP(paged_attention, AtbPagedAttention, Ascend);
 
 }  // namespace ops
 }  // namespace mrt
-

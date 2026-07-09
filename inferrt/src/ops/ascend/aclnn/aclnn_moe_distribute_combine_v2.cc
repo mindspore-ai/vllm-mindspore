@@ -82,16 +82,14 @@ AclnnMoeDistributeCombineV2::AclnnMoeDistributeCombineV2() {
 
 OpsErrorCode AclnnMoeDistributeCombineV2::CalcWorkspace(const std::vector<const ir::Value *> &input,
                                                         const ir::Value *output, size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [moe_distribute_combine_v2]";
-
   use_v4_ = executor_v4_ != nullptr;
   use_v3_ = !use_v4_ && executor_v3_ != nullptr;
   if (!use_v4_ && HasV4OnlyParam(input)) {
-    LOG_OUT << "aclnnMoeDistributeCombineV4 is unavailable, but V4-only parameters are provided.";
+    RT_GLOG(ERROR) << "aclnnMoeDistributeCombineV4 is unavailable, but V4-only parameters are provided.";
     return INVALID_PARAM;
   }
   if (!use_v4_ && !use_v3_ && HasV3OnlyParam(input)) {
-    LOG_OUT << "aclnnMoeDistributeCombineV3 is unavailable, but V3-only parameters are provided.";
+    RT_GLOG(ERROR) << "aclnnMoeDistributeCombineV3 is unavailable, but V3-only parameters are provided.";
     return INVALID_PARAM;
   }
   active_executor_ = use_v4_ ? executor_v4_.get() : (use_v3_ ? executor_v3_.get() : executor_v2_.get());
@@ -154,8 +152,6 @@ OpsErrorCode AclnnMoeDistributeCombineV2::CalcWorkspace(const std::vector<const 
 
 OpsErrorCode AclnnMoeDistributeCombineV2::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                                  size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [moe_distribute_combine_v2]";
-
   auto global_bs_real = input[kGlobalBsIdx]->ToInt();
   if (global_bs_real == 0) {
     global_bs_real = input[kExpertIdsIdx]->ToTensor()->Shape()[0] * input[kEpWorldSizeIdx]->ToInt();

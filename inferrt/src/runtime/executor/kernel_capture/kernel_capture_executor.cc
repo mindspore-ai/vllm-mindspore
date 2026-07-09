@@ -48,13 +48,13 @@ void KernelCaptureExecutor::Initialize(const ir::GraphPtr &graph) {
   if (useFullGraphMode_) {
     size_t streamID;
     if (!deviceContext_->deviceResManager_->CreateStream(&streamID)) {
-      LOG_EXCEPTION << "Create stream failed.";
+      RT_GLOG(EXCEPTION) << "Create stream failed.";
     }
     updateStream_ = deviceContext_->deviceResManager_->GetStream(streamID);
   }
   size_t captureStreamID;
   if (!deviceContext_->deviceResManager_->CreateStream(&captureStreamID)) {
-    LOG_EXCEPTION << "Create stream failed.";
+    RT_GLOG(EXCEPTION) << "Create stream failed.";
   }
   // captureStream_ = deviceContext_->deviceResManager_->GetStream(captureStreamID);
   // CHECK_IF_NULL(captureStream_);
@@ -81,7 +81,7 @@ void KernelCaptureExecutor::Run(bool isDynamic) {
   // Check if we have a cached graph for this shape
   if (graphCaptureManager_.HasCapturedGraph()) {
     KernelCaptureExecutorManager::GetInstance().SetInReplay(true);
-    LOG_OUT << "Replaying captured graph for shape key: " << currentShapeKey_;
+    RT_VLOG(VL_RUNTIME) << "Replaying captured graph for shape key: " << currentShapeKey_;
     auto &cachedBuilder = builderRecorder_[currentShapeKey_];
     CHECK_IF_NULL(cachedBuilder);
     graphCaptureManager_.LaunchAllKernelsWithReplayFullGraph(*(cachedBuilder->GetOpRunners()), currentStream,
@@ -91,11 +91,11 @@ void KernelCaptureExecutor::Run(bool isDynamic) {
     // Check if we're in capture period
     if (KernelCaptureExecutorManager::GetInstance().InCapture()) {
       // Case 5.1: Need to capture new graph
-      LOG_OUT << "Capturing new graph for shape key: " << currentShapeKey_;
+      RT_VLOG(VL_RUNTIME) << "Capturing new graph for shape key: " << currentShapeKey_;
 
       // Create a copy of the graph for capture
       auto copiedGraph = graph_->DeepCopy();
-      // LOG_OUT << "Copied graph for capture ";
+      // RT_VLOG(VL_RUNTIME) << "Copied graph for capture ";
       // Create a new kernel capture builder for the copied graph to generate new op runners
       auto captureBuilder = std::make_unique<KernelCaptureBuilder>(copiedGraph);
       captureBuilder->SetupOpRunners();
@@ -124,7 +124,7 @@ void KernelCaptureExecutor::Run(bool isDynamic) {
         graphCaptureManager_.LaunchAllKernelsWithCapture(*captureOpRunners);
       }
     } else {
-      LOG_OUT << "Pipeline run graph for shape key: " << currentShapeKey_;
+      RT_VLOG(VL_RUNTIME) << "Pipeline run graph for shape key: " << currentShapeKey_;
       PipelineExecutor::Run(true);
       SetOutput(Executor::GetOutput());
     }

@@ -41,8 +41,6 @@ constexpr int64_t kInt32OutputType = 3;
 
 OpsErrorCode AclnnDynamicQuantV2::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                                 size_t *workspaceSize) {
-  LOG_OUT << "Begin CalcWorkspace for op [aclnnDynamicQuantV2]";
-
   auto xTensor = input[kInputIdx]->ToTensor();
   auto smoothScalesTensor = GetOptionalTensor(input[kSmoothScalesIdx]);
   auto groupIndexTensor = GetOptionalTensor(input[kGroupIndexIdx]);
@@ -56,7 +54,7 @@ OpsErrorCode AclnnDynamicQuantV2::CalcWorkspace(const std::vector<const ir::Valu
     } else if (dtypeInput == ir::DataType::Type::QUInt4x2) {
       outputType_ = kInt32OutputType;
     } else {
-      LOG_ERROR << "Dtype must be QInt8, Int8 or QUInt4x2, but got: " << dtypeInput;
+      RT_GLOG(ERROR) << "Dtype must be QInt8, Int8 or QUInt4x2, but got: " << dtypeInput;
       return INVALID_PARAM;
     }
   }
@@ -65,11 +63,11 @@ OpsErrorCode AclnnDynamicQuantV2::CalcWorkspace(const std::vector<const ir::Valu
   auto yOutTensor = (*outputTuple)[kYOutIdx]->ToTensor();
   auto scaleOutTensor = (*outputTuple)[kScaleOutIdx]->ToTensor();
 
-  std::optional<ir::TensorPtr> offsetOutTensor = std::nullopt;
+  std::optional<ir::TensorPtr> offsetOutTensor;
   if (outputTuple->Size() > kOffsetOutIdx) {
     auto offsetVal = (*outputTuple)[kOffsetOutIdx];
     if (offsetVal->IsTensor()) {
-      offsetOutTensor = std::optional(offsetVal->ToTensor());
+      offsetOutTensor.emplace(offsetVal->ToTensor());
     }
   }
 
@@ -81,8 +79,6 @@ OpsErrorCode AclnnDynamicQuantV2::CalcWorkspace(const std::vector<const ir::Valu
 
 OpsErrorCode AclnnDynamicQuantV2::Launch(const std::vector<const ir::Value *> &input, void *workspace,
                                          size_t workspaceSize, ir::Value *output, void *stream) {
-  LOG_OUT << "Begin Launch for op [aclnnDynamicQuantV2]";
-
   auto xTensor = input[kInputIdx]->ToTensor();
   auto smoothScalesTensor = GetOptionalTensor(input[kSmoothScalesIdx]);
   auto groupIndexTensor = GetOptionalTensor(input[kGroupIndexIdx]);
@@ -91,11 +87,11 @@ OpsErrorCode AclnnDynamicQuantV2::Launch(const std::vector<const ir::Value *> &i
   auto yOutTensor = (*outputTuple)[kYOutIdx]->ToTensor();
   auto scaleOutTensor = (*outputTuple)[kScaleOutIdx]->ToTensor();
 
-  std::optional<ir::TensorPtr> offsetOutTensor = std::nullopt;
+  std::optional<ir::TensorPtr> offsetOutTensor;
   if (outputTuple->Size() > kOffsetOutIdx) {
     auto offsetVal = (*outputTuple)[kOffsetOutIdx];
     if (offsetVal->IsTensor()) {
-      offsetOutTensor = std::optional(offsetVal->ToTensor());
+      offsetOutTensor.emplace(offsetVal->ToTensor());
     }
   }
 

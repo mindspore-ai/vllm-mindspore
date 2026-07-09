@@ -1,4 +1,3 @@
-check_debug_log_out()
 
 if(DEFINED ENV{ASCEND_CUSTOM_PATH})
     set(ASCEND_PATH $ENV{ASCEND_CUSTOM_PATH})
@@ -15,7 +14,7 @@ find_library(HCCL hccl
 file(GLOB_RECURSE OPS_HCCL_SRC_FILES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cc")
 
 add_library(ops_ascend_hccl SHARED ${OPS_HCCL_SRC_FILES})
-target_link_libraries(ops_ascend_hccl PRIVATE ops_base_obj hardware_ascend kernel mrt::securec ${HCCL})
+target_link_libraries(ops_ascend_hccl PRIVATE mrt_common ops_base_obj hardware_ascend kernel mrt::securec ${HCCL})
 
 set_target_properties(ops_ascend_hccl PROPERTIES
   INSTALL_RPATH "$ORIGIN"

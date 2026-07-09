@@ -33,7 +33,6 @@ namespace mrt {
 namespace ops {
 OpsErrorCode HcclAllGather::CalcWorkspace(const std::vector<const ir::Value *> &input, const ir::Value *output,
                                           size_t *workspaceSize) {
-  LOG_OUT << "HcclAllGather CalcWorkspace";
   HcclAdapter::GetInstance().InitHccl();
   auto inputTensor = input[kIndex0]->ToTensor();
   HcomUtil::CheckHcclInputContiguous(inputTensor, "HcclAllGather");
@@ -48,13 +47,11 @@ OpsErrorCode HcclAllGather::CalcWorkspace(const std::vector<const ir::Value *> &
 
 OpsErrorCode HcclAllGather::Launch(const std::vector<const ir::Value *> &input, void *workspace, size_t workspaceSize,
                                    ir::Value *output, void *stream) {
-  LOG_OUT << "HcclAllGather launch";
-
   auto hccl_result = HcclAdapter::GetInstance().HcclAllGather(const_cast<void *>(input[kIndex0]->ToTensor()->DataPtr()),
                                                               output->ToTensor()->DataPtr(), hcclKernel_.hcclCount_,
                                                               hcclKernel_.hcclDataType_, stream, hcclKernel_.comm_);
   if (hccl_result != ::HcclResult::HCCL_SUCCESS) {
-    LOG_ERROR << "HcomAllGather failed, hccl_result: " << hccl_result;
+    RT_GLOG(ERROR) << "HcomAllGather failed, hccl_result: " << hccl_result;
   }
 
   return SUCCESS;

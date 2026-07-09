@@ -23,9 +23,9 @@ namespace mrt {
 namespace runtime {
 ops::OpsErrorCode OpRunner::InferShape() {
   if (isDynamicShape_) {
-    LOG_OUT << "Begin InferShape for op[" << ops::ToStr(opName_) << "], inputs=" << input_;
+    RT_VLOG(VL_RUNTIME) << "Begin InferShape for op[" << ops::ToStr(opName_) << "], inputs=" << input_;
     auto ret = operator_->InferShape(input_, output_);
-    LOG_OUT << "End InferShape for op[" << ops::ToStr(opName_) << "]";
+    RT_VLOG(VL_RUNTIME) << "End InferShape for op[" << ops::ToStr(opName_) << "]";
     return ret;
   }
 
@@ -33,13 +33,13 @@ ops::OpsErrorCode OpRunner::InferShape() {
 }
 
 ops::OpsErrorCode OpRunner::CalcWorkspace() {
-  LOG_OUT << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", output=" << *output_
-          << ", workspaceSize=" << workspaceSize_;
+  RT_VLOG(VL_RUNTIME) << "Begin CalcWorkspace for op[" << ops::ToStr(opName_) << "], inputs=" << input_
+                      << ", output=" << *output_ << ", workspaceSize=" << workspaceSize_;
   if (!operator_->GetOutputInputRefPairs().empty()) {
     UpdateRefNodeOutputMetadata();
   }
   auto ret = operator_->CalcWorkspace(input_, output_, &workspaceSize_);
-  LOG_OUT << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
+  RT_VLOG(VL_RUNTIME) << "End CalcWorkspace for op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
@@ -48,19 +48,21 @@ ops::OpsErrorCode OpRunner::Launch() {
   if (device_.type != hardware::DeviceType::CPU) {
     CHECK_IF_NULL(stream);
   }
-  LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
-          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
+  RT_VLOG(VL_RUNTIME) << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_
+                      << ", workspace=" << workspace_ << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_
+                      << ", stream=" << stream;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
-  LOG_OUT << "End launch op[" << ops::ToStr(opName_) << "]";
+  RT_VLOG(VL_RUNTIME) << "End launch op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
 ops::OpsErrorCode OpRunner::Launch(void *stream) {
   CHECK_IF_NULL(stream);
-  LOG_OUT << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_ << ", workspace=" << workspace_
-          << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_ << ", stream=" << stream;
+  RT_VLOG(VL_RUNTIME) << "Begin launch op[" << ops::ToStr(opName_) << "], inputs=" << input_
+                      << ", workspace=" << workspace_ << ", workspaceSize=" << workspaceSize_ << ", output=" << *output_
+                      << ", stream=" << stream;
   auto ret = operator_->Launch(input_, workspace_, workspaceSize_, output_, stream);
-  LOG_OUT << "End launch op[" << ops::ToStr(opName_) << "]";
+  RT_VLOG(VL_RUNTIME) << "End launch op[" << ops::ToStr(opName_) << "]";
   return ret;
 }
 
@@ -81,10 +83,9 @@ void OpRunner::AllocateMemory() {
   // Allocate memory for output tensor.
   for (auto &storage : storagesToAlloc_) {
     if (storage->CheckOwnsData()) {
-      LOG_EXCEPTION << "Memory leak for output of operator: " << GetOpName();
+      RT_GLOG(EXCEPTION) << "Memory leak for output of operator: " << GetOpName();
     }
     storage->AllocateMemory();
-    LOG_OUT << "alloc storage: " << storage;
   }
 }
 
@@ -98,7 +99,6 @@ void OpRunner::AllocateWorkspaceMemory() {
 void OpRunner::FreeMemory() {
   // Free input tensors that were marked to free.
   for (auto &storage : storagesToFree_) {
-    LOG_OUT << "Cur free storage: " << storage;
     storage->FreeMemory();
   }
 
@@ -138,8 +138,9 @@ void OpRunner::ForEachRefTensorPair(const RefTensorPairCallback &callback) const
       CHECK_IF_FAIL(output->IsTensor());
       outputTensor = output->ToTensor();
     } else {
-      LOG_EXCEPTION << "Ref output of op[" << GetOpName() << "] must be tensor or tuple, outputIndex=" << outputIndex
-                    << ", inputIndex=" << inputIndex << ", output info: " << *output_;
+      RT_GLOG(EXCEPTION) << "Ref output of op[" << GetOpName()
+                         << "] must be tensor or tuple, outputIndex=" << outputIndex << ", inputIndex=" << inputIndex
+                         << ", output info: " << *output_;
     }
     CHECK_IF_NULL(outputTensor);
     callback(outputIndex, inputIndex, inputTensor, outputTensor);
@@ -149,8 +150,8 @@ void OpRunner::ForEachRefTensorPair(const RefTensorPairCallback &callback) const
 void OpRunner::UpdateRefNodeOutputValue() {
   ForEachRefTensorPair([this](uint32_t outputIndex, uint32_t inputIndex, const ir::TensorPtr &inputTensor,
                               const ir::TensorPtr &outputTensor) {
-    LOG_OUT << "Update op[" << GetOpName() << "] output value, outputIndex: " << outputIndex
-            << ", inputIndex: " << inputIndex;
+    RT_VLOG(VL_RUNTIME) << "Update op[" << GetOpName() << "] output value, outputIndex: " << outputIndex
+                        << ", inputIndex: " << inputIndex;
     outputTensor->SetStorage(inputTensor->GetStorage());
     outputTensor->SetOwnsStorage(false);
   });
@@ -162,21 +163,21 @@ void OpRunner::UpdateRefNodeOutputMetadata() {
     if (inputTensor->Shape() != outputTensor->Shape()) {
       // View-like ref operators update output metadata separately. When shapes differ, reusing input strides may be
       // inaccurate.
-      LOG_OUT << "Skip generic ref metadata sync for op[" << GetOpName()
-              << "] because input and output shapes differ, outputIndex: " << outputIndex
-              << ", inputIndex: " << inputIndex << ", output shape: " << outputTensor->Shape()
-              << ", input shape: " << inputTensor->Shape();
+      RT_VLOG(VL_RUNTIME) << "Skip generic ref metadata sync for op[" << GetOpName()
+                          << "] because input and output shapes differ, outputIndex: " << outputIndex
+                          << ", inputIndex: " << inputIndex << ", output shape: " << outputTensor->Shape()
+                          << ", input shape: " << inputTensor->Shape();
       return;
     }
     if (operator_->NeedLaunch() && (!ops::IsTensorBaseFormat(inputTensor) || !ops::IsTensorBaseFormat(outputTensor))) {
-      LOG_EXCEPTION << "Ref-like operator " << GetOpName()
-                    << " does not support special-format ref metadata sync. The generic ref metadata path only "
-                    << "syncs strides and storageOffset, but special formats may also require format/storageShape "
-                    << "updates. outputIndex: " << outputIndex << ", inputIndex: " << inputIndex
-                    << ", input format: " << ir::FormatEnumToStr(inputTensor->Format())
-                    << ", output format: " << ir::FormatEnumToStr(outputTensor->Format())
-                    << ", input storageShape: " << inputTensor->StorageShape()
-                    << ", output storageShape: " << outputTensor->StorageShape();
+      RT_GLOG(EXCEPTION) << "Ref-like operator " << GetOpName()
+                         << " does not support special-format ref metadata sync. The generic ref metadata path only "
+                         << "syncs strides and storageOffset, but special formats may also require format/storageShape "
+                         << "updates. outputIndex: " << outputIndex << ", inputIndex: " << inputIndex
+                         << ", input format: " << ir::FormatEnumToStr(inputTensor->Format())
+                         << ", output format: " << ir::FormatEnumToStr(outputTensor->Format())
+                         << ", input storageShape: " << inputTensor->StorageShape()
+                         << ", output storageShape: " << outputTensor->StorageShape();
     }
     outputTensor->SetStrides(inputTensor->Strides());
     outputTensor->SetStorageOffset(inputTensor->StorageOffset());

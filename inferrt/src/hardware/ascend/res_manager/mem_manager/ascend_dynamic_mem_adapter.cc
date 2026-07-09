@@ -32,37 +32,37 @@ constexpr size_t kMBToByte = 1024 << 10;
 uint8_t *AscendDynamicMemAdapter::MallocStaticDevMem(size_t size, const std::string &tag) {
   std::lock_guard<std::mutex> locker(mutex_);
   if (hasAllocSize + size > LongToSize(maxAvailableMsHbmSize_)) {
-    LOG_ERROR << "No enough memory to allocate, hasAllocSize:" << hasAllocSize << ", size:" << size
-              << ", max_available_ms_moc_size:" << maxAvailableMsHbmSize_;
+    RT_GLOG(ERROR) << "No enough memory to allocate, hasAllocSize:" << hasAllocSize << ", size:" << size
+                   << ", max_available_ms_moc_size:" << maxAvailableMsHbmSize_;
   }
   auto addr = MallocFromRts(size);
   if (addr != nullptr) {
     hasAllocSize += size;
     (void)staticMemoryBlocks_.emplace(addr, std::make_shared<MemoryBlock>(addr, size, tag));
-    LOG_OUT << "MallocStaticDevMem success, size:" << size << ", tag:" << tag;
+    RT_VLOG(VL_HARDWARE) << "MallocStaticDevMem success, size:" << size << ", tag:" << tag;
   }
   return addr;
 }
 
 bool AscendDynamicMemAdapter::FreeStaticDevMem(void *addr) {
-  LOG_OUT << "FreeStaticDevMem addr:" << addr << ".";
+  RT_VLOG(VL_HARDWARE) << "FreeStaticDevMem addr:" << addr << ".";
   std::lock_guard<std::mutex> locker(mutex_);
   if (addr == nullptr) {
-    LOG_ERROR << "addr is nullptr.";
+    RT_GLOG(ERROR) << "addr is nullptr.";
     return false;
   }
   auto &&iter = staticMemoryBlocks_.find(addr);
   if (iter == staticMemoryBlocks_.end()) {
-    LOG_ERROR << "addr is not in static memory blocks, addr:" << addr << ".";
+    RT_GLOG(ERROR) << "addr is not in static memory blocks, addr:" << addr << ".";
     return false;
   }
   auto memBlock = iter->second;
   auto ret = FreeToRts(memBlock->memPtr, memBlock->memSize);
   if (!ret) {
-    LOG_ERROR << "Free memory failed.";
+    RT_GLOG(ERROR) << "Free memory failed.";
     return false;
   }
-  LOG_OUT << "Free memory success, addr:" << addr << ", size:" << memBlock->memSize << ".";
+  RT_VLOG(VL_HARDWARE) << "Free memory success, addr:" << addr << ", size:" << memBlock->memSize << ".";
   hasAllocSize -= memBlock->memSize;
   staticMemoryBlocks_.erase(addr);
   return true;
@@ -74,7 +74,7 @@ bool AscendDynamicMemAdapter::Initialize() {
   }
   (void)AscendMemAdapter::Initialize();
   initialized_ = true;
-  LOG_OUT << "Ascend Memory Adapter initialize success, Memory Statistics:" << DevMemStatistics();
+  RT_VLOG(VL_HARDWARE) << "Ascend Memory Adapter initialize success, Memory Statistics:" << DevMemStatistics();
   return true;
 }
 
@@ -83,10 +83,11 @@ bool AscendDynamicMemAdapter::DeInitialize() {
     if (blk->memPtr != nullptr) {
       auto ret = FreeToRts(blk->memPtr, blk->memSize);
       if (!ret) {
-        LOG_ERROR << "Free memory failed.";
+        RT_GLOG(ERROR) << "Free memory failed.";
         return false;
       }
-      LOG_OUT << "Free memory success, addr:" << addr << ", size:" << blk->memSize << ", tag:" << blk->memTag;
+      RT_VLOG(VL_HARDWARE) << "Free memory success, addr:" << addr << ", size:" << blk->memSize
+                           << ", tag:" << blk->memTag;
     }
   }
   (void)AscendMemAdapter::DeInitialize();
@@ -99,11 +100,11 @@ bool AscendDynamicMemAdapter::DeInitialize() {
 uint64_t AscendDynamicMemAdapter::FreeDevMemSize() const { return maxAvailableMsHbmSize_ - hasAllocSize; }
 
 uint8_t *AscendDynamicMemAdapter::MallocDynamicDevMem(size_t size, const std::string &) {
-  LOG_ERROR << "MallocDynamicDevMem is disabled.";
+  RT_GLOG(ERROR) << "MallocDynamicDevMem is disabled.";
   return nullptr;
 }
 
-void AscendDynamicMemAdapter::ResetDynamicMemory() { LOG_ERROR << "ResetDynamicMemory is disabled."; }
+void AscendDynamicMemAdapter::ResetDynamicMemory() { RT_GLOG(ERROR) << "ResetDynamicMemory is disabled."; }
 
 std::string AscendDynamicMemAdapter::DevMemStatistics() const {
   std::ostringstream oss;
@@ -119,7 +120,7 @@ std::string AscendDynamicMemAdapter::DevMemStatistics() const {
 }
 
 size_t AscendDynamicMemAdapter::GetDynamicMemUpperBound(void *minStaticAddr) const {
-  LOG_ERROR << "GetDynamicMemUpperBound is disabled.";
+  RT_GLOG(ERROR) << "GetDynamicMemUpperBound is disabled.";
   return 0;
 }
 }  // namespace ascend

@@ -70,7 +70,7 @@ aclrtMemcpyKind CopyTypeToAclType(CopyType copyType) {
     case CopyType::H2H:
       return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_HOST;
     default:
-      LOG_EXCEPTION << "Invalid copy type:" << static_cast<int>(copyType);
+      RT_GLOG(EXCEPTION) << "Invalid copy type:" << static_cast<int>(copyType);
       return aclrtMemcpyKind::ACL_MEMCPY_HOST_TO_HOST;
   }
 }
@@ -114,7 +114,7 @@ void AscendResManager::Destroy() {
 
   AscendStreamMng::GetInstance().DestroyAllRtEvents();
   if (!AscendStreamMng::GetInstance().DestroyAllStreams()) {
-    LOG_ERROR << "Fail to destroy all streams when reset device.";
+    RT_GLOG(ERROR) << "Fail to destroy all streams when reset device.";
   }
   // Release memory.
   if (memManager_ != nullptr) {
@@ -260,7 +260,7 @@ bool AscendResManager::BindDeviceToCurrentThread(bool forceBind) const {
   std::call_once(isSet, [this]() {
     auto ret = CALL_ASCEND_API(aclrtSetDevice, static_cast<int32_t>(deviceId_));
     if (ret != ACL_SUCCESS) {
-      LOG_ERROR << "Device " << deviceId_ << " call aclrtSetDevice failed, ret:" << static_cast<int>(ret);
+      RT_GLOG(ERROR) << "Device " << deviceId_ << " call aclrtSetDevice failed, ret:" << static_cast<int>(ret);
     }
   });
 
@@ -275,7 +275,7 @@ bool AscendResManager::BindDeviceToCurrentThread(bool forceBind) const {
 
 bool AscendResManager::CreateStream(size_t *streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   AscendStreamMng::GetInstance().CreateStream(streamId);
@@ -284,7 +284,7 @@ bool AscendResManager::CreateStream(size_t *streamId) const {
 
 bool AscendResManager::CreateStreamWithPriority(size_t *streamId, int32_t priority) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   AscendStreamMng::GetInstance().CreateStreamWithFlags(streamId, ACL_STREAM_FAST_LAUNCH | ACL_STREAM_FAST_SYNC,
@@ -294,7 +294,7 @@ bool AscendResManager::CreateStreamWithPriority(size_t *streamId, int32_t priori
 
 bool AscendResManager::DestroyStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   AscendStreamMng::GetInstance().DestroyStream(streamId);
@@ -315,7 +315,7 @@ void AscendResManager::set_single_op_multi_stream_enable(bool singleOpMultiStrea
 
 void *AscendResManager::GetStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return nullptr;
   }
   return AscendStreamMng::GetInstance().GetStream(streamId);
@@ -323,7 +323,7 @@ void *AscendResManager::GetStream(size_t streamId) const {
 
 void AscendResManager::SetCurrentStreamId(size_t streamId) {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return;
   }
   AscendStreamMng::GetInstance().set_current_stream(streamId);
@@ -331,7 +331,7 @@ void AscendResManager::SetCurrentStreamId(size_t streamId) {
 
 size_t AscendResManager::GetCurrentStreamId() const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return SIZE_MAX;
   }
   return AscendStreamMng::GetInstance().current_stream();
@@ -348,14 +348,14 @@ void AscendResManager::BindCurrentStream() {
     bindStreamFunc_();
     return;
   }
-  LOG_EXCEPTION << "Stream binding function is not configured, cannot bind current stream.";
+  RT_GLOG(EXCEPTION) << "Stream binding function is not configured, cannot bind current stream.";
 }
 
 void AscendResManager::SetBindStreamFunc(const BindStreamFunc &bindStreamFunc) { bindStreamFunc_ = bindStreamFunc; }
 
 bool AscendResManager::QueryStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   return AscendStreamMng::GetInstance().QueryStream(streamId);
@@ -363,7 +363,7 @@ bool AscendResManager::QueryStream(size_t streamId) const {
 
 bool AscendResManager::SyncStream(size_t streamId) const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   return AscendStreamMng::GetInstance().SyncStream(streamId);
@@ -376,7 +376,7 @@ bool AscendResManager::SyncAllStreams(bool syncDevice) const {
 
 bool AscendResManager::SyncNotDefaultStreams() const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return false;
   }
   return AscendStreamMng::GetInstance().SyncNotDefaultStreams();
@@ -384,7 +384,7 @@ bool AscendResManager::SyncNotDefaultStreams() const {
 
 size_t AscendResManager::DefaultStream() const {
   if (!BindDeviceToCurrentThread(false)) {
-    LOG_ERROR << "Bind context to current thread failed";
+    RT_GLOG(ERROR) << "Bind context to current thread failed";
     return SIZE_MAX;
   }
   return AscendStreamMng::GetInstance().default_stream_id();
@@ -398,7 +398,7 @@ size_t AscendResManager::DefaultStream() const {
 //  and the created events can not be used for timing and synchronization.
 DeviceEventPtr AscendResManager::CreateRuntimeEvent(bool enableBlocking, bool enableRecordWait) {
   if (!enableBlocking && !enableRecordWait) {
-    LOG_ERROR << "Bad parameters, enableBlocking is false and enableRecordWait is false.";
+    RT_GLOG(ERROR) << "Bad parameters, enableBlocking is false and enableRecordWait is false.";
   }
 
   uint32_t flag = 0;
@@ -433,13 +433,13 @@ DeviceEventPtr AscendResManager::CreateEventWithFlag(bool enableTiming, bool ext
 bool AscendResManager::DestroyEvent(const DeviceEventPtr &event) {
   CHECK_IF_NULL(event);
   if (!event->DestroyEvent()) {
-    LOG_ERROR << "Destroy Event failed.";
+    RT_GLOG(ERROR) << "Destroy Event failed.";
     return false;
   }
   std::lock_guard<std::mutex> lock(deviceEventsMutex_);
   const auto &iter = std::find(deviceEvents_.begin(), deviceEvents_.end(), event);
   if (iter == deviceEvents_.end()) {
-    LOG_OUT << "Can't find specified device event.";
+    RT_VLOG(VL_HARDWARE) << "Can't find specified device event.";
     return false;
   }
   (void)deviceEvents_.erase(iter);
@@ -456,7 +456,7 @@ bool AscendResManager::DestroyAllEvents() {
   (void)std::for_each(device_events_inner.begin(), device_events_inner.end(), [this](const auto &event) {
     CHECK_IF_NULL(event);
     if (!event->DestroyEvent()) {
-      LOG_ERROR << "Destroy Event failed.";
+      RT_GLOG(ERROR) << "Destroy Event failed.";
     }
   });
   deviceEvents_.clear();
@@ -468,7 +468,7 @@ void *AscendResManager::GetCopyDataStream() const {
   if (copyOutDataStream == nullptr) {
     size_t copyStreamId;
     AscendStreamMng::GetInstance().CreateStream(&copyStreamId);
-    LOG_OUT << "Create ascend copy data stream, stream id: " << copyStreamId;
+    RT_VLOG(VL_HARDWARE) << "Create ascend copy data stream, stream id: " << copyStreamId;
     copyOutDataStream = AscendStreamMng::GetInstance().GetStream(copyStreamId);
     AscendStreamMng::GetInstance().SetCopyOutStream(copyOutDataStream);
   }
@@ -500,10 +500,10 @@ bool AscendResManager::LaunchCallback(std::function<void(void)> callbackFunc, si
   auto blockType = isBlock ? aclrtCallbackBlockType::ACL_CALLBACK_BLOCK : aclrtCallbackBlockType::ACL_CALLBACK_NO_BLOCK;
   auto callbackFuncPtr = new Callback(callbackFunc);
   aclError ret = CALL_ASCEND_API(aclrtLaunchCallback, AclrtLaunchCallback, callbackFuncPtr, blockType, stream);
-  LOG_OUT << "Launch callback for streamId : " << streamId << ", ret : " << ret << ".";
+  RT_VLOG(VL_HARDWARE) << "Launch callback for streamId : " << streamId << ", ret : " << ret << ".";
   if (ret) {
     delete callbackFuncPtr;
-    LOG_ERROR << "Launch callback for streamId : " << streamId << " failed, ret : " << ret << ".";
+    RT_GLOG(ERROR) << "Launch callback for streamId : " << streamId << " failed, ret : " << ret << ".";
     if (SyncStream(streamId)) {
       callbackFunc();
       return true;
@@ -523,11 +523,11 @@ void AscendResManager::ResetStreamAndCtx() const {
 
 bool AscendResManager::AsyncCopy(void *dst, const void *src, uint64_t size, CopyType kind, void *stream) const {
   CHECK_IF_NULL(stream);
-  LOG_OUT << "dst: " << dst << " src: " << src << " size: " << size << " stream: " << stream;
+  RT_VLOG(VL_HARDWARE) << "dst: " << dst << " src: " << src << " size: " << size << " stream: " << stream;
   auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, size, src, size, CopyTypeToAclType(kind), stream);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret) << " dst:" << dst << " src:" << src
-              << " size:" << size << " kind:" << static_cast<int>(kind) << " stream:" << stream;
+    RT_GLOG(ERROR) << "Call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret) << " dst:" << dst << " src:" << src
+                   << " size:" << size << " kind:" << static_cast<int>(kind) << " stream:" << stream;
     return false;
   }
   return true;
@@ -536,7 +536,7 @@ bool AscendResManager::AsyncCopy(void *dst, const void *src, uint64_t size, Copy
 bool AscendResManager::SyncCopy(void *dst, const void *src, uint64_t size, CopyType kind) const {
   auto ret = CALL_ASCEND_API(aclrtMemcpy, dst, size, src, size, CopyTypeToAclType(kind));
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << "Call aclrtMemcpy failed, ret:" << static_cast<int>(ret);
+    RT_GLOG(ERROR) << "Call aclrtMemcpy failed, ret:" << static_cast<int>(ret);
     return false;
   }
   return true;
@@ -546,7 +546,7 @@ bool AscendResManager::MemcpyDeviceToDevice(void *dst, size_t dst_size, const vo
                                             aclrtStream stream) {
   auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, dst_size, src, src_size, ACL_MEMCPY_DEVICE_TO_DEVICE, stream);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    RT_GLOG(ERROR) << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
     return false;
   }
   return true;
@@ -556,7 +556,7 @@ bool AscendResManager::MemcpyDeviceToHost(void *dst, size_t dst_size, const void
                                           aclrtStream stream) {
   auto ret = CALL_ASCEND_API(aclrtMemcpyAsync, dst, dst_size, src, src_size, ACL_MEMCPY_DEVICE_TO_HOST, stream);
   if (ret != ACL_SUCCESS) {
-    LOG_ERROR << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
+    RT_GLOG(ERROR) << " call aclrtMemcpyAsync failed, ret:" << static_cast<int>(ret);
     return false;
   }
   return true;

@@ -38,8 +38,8 @@ int8_t GetCubeMathType() {
   uint8_t cubeMathTypeIndex = (static_cast<uint8_t>(opPrecisionConf.IsAllowMatmulHF32()) << 1) +
                               static_cast<uint8_t>(opPrecisionConf.IsAllowFP32ToFP16());
   if (cubeMathTypeIndex >= AclCubeMathTypeArraySize) {
-    LOG_OUT << "Invalid cubeMathType index: " << cubeMathTypeIndex
-            << ", set AclCubeMathType to ALLOW_FP32_DOWN_PRECISION";
+    RT_VLOG(VL_OPS) << "Invalid cubeMathType index: " << cubeMathTypeIndex
+                    << ", set AclCubeMathType to ALLOW_FP32_DOWN_PRECISION";
     return static_cast<int8_t>(AclCubeMathType::ALLOW_FP32_DOWN_PRECISION);
   }
   return static_cast<int8_t>(AclCubeMathTypeArray[cubeMathTypeIndex]);
