@@ -43,6 +43,7 @@ from ms_inferrt.torch.setitem_impl import setitem_process
 from ms_inferrt.torch.decompose_impl import _decompose_ops_with_fake_mode
 from ms_inferrt.torch.copy_elimination import eliminate_redundant_copy_
 from ms_inferrt.torch.full_decomposition import decompose_full_
+from ms_inferrt.torch.dvm_adapter import lower_compiled_kernel_dvm_node
 
 try:
     import torch_npu  # pylint: disable=import-outside-toplevel,unused-import
@@ -102,6 +103,11 @@ def get_dvm_payload(op_name: str) -> str:
     return _DVM_OP_REGISTRY.get(op_name)
 
 
+def _get_node_meta_value(node: Node):
+    """Return tensor/scalar metadata from FX nodes produced by Dynamo or TDC."""
+    return node.meta.get("example_value", None)
+
+
 def register_arg_mapping_hook(op, hook_func):
     _ARG_MAPPING_HOOKS[op] = hook_func
 
@@ -141,7 +147,7 @@ def _is_scalar_arg(arg):
     if isinstance(arg, Node):
         if arg.target == "item":
             return True
-        if isinstance(arg.meta.get("example_value", None), (int, float, bool, torch.SymInt)):
+        if isinstance(_get_node_meta_value(arg), (int, float, bool, torch.SymInt)):
             return True
     return False
 
@@ -629,7 +635,7 @@ def dequant_swiglu_quant_op_hook(op, node, input_nodes, executor):
 def _extract_tensor_example(arg, err_msg: str):
     """Resolve a tensor example_value from an FX node or eager value."""
     if isinstance(arg, Node):
-        arg = arg.meta.get("example_value", None)
+        arg = _get_node_meta_value(arg)
     if not isinstance(arg, torch.Tensor):
         raise RuntimeError(err_msg)
     return arg
@@ -1503,6 +1509,7 @@ _OP_MAP = {
     torch.matmul: Op.matmul,
     torch.masked_fill: Op.masked_fill_tensor,
     torch.reshape: Op.view,
+    torch.as_strided: Op.as_strided_view,
     torch.t: Op.permute_view,
     torch.permute: Op.permute_view,
     torch.transpose: Op.permute_view,
@@ -1551,6 +1558,7 @@ _OP_MAP = {
     torch.ops.aten.alias.default: Op.alias,
     aten.view.default: Op.view,
     aten.reshape.default: Op.view,
+    aten.as_strided.default: Op.as_strided_view,
     aten.permute.default: Op.permute_view,
     aten.transpose.int: Op.permute_view,
     aten.t.default: Op.permute_view,
@@ -1573,6 +1581,8 @@ _OP_MAP = {
     aten.copy_.default: Op.inplace_copy,
     aten.empty_like: Op.empty_like,
     aten.empty_like.default: Op.empty_like,
+    aten.empty_strided: Op.empty_strided,
+    aten.empty_strided.default: Op.empty_strided,
     aten.expand.default: Op.expand,
     aten.add.Tensor: Op.add,
     aten.bmm.default: Op.batch_matmul,
@@ -1693,6 +1703,7 @@ _OP_MAP = {
     "square": Op.square,
     "rsqrt": Op.rsqrt,
     "view": Op.view,  # view is often used like reshape
+    "as_strided": Op.as_strided_view,
     "expand": Op.expand,
     "copy_": Op.inplace_copy,
     "index_copy_": Op.inplace_index_copy,
@@ -1805,6 +1816,7 @@ _DISABLE_VIEW_OPS_ENV = "MS_INFERRT_DISABLE_VIEW_OPS"
 
 _VIEW_OP_SWITCH_NAMES = {
     Op.view: frozenset(("view", "reshape")),
+    Op.as_strided_view: frozenset(("as_strided",)),
     Op.permute_view: frozenset(("permute_view",)),
     Op.flatten_view: frozenset(("flatten",)),
     Op.slice_view: frozenset(("slice",)),
@@ -1926,7 +1938,7 @@ def _check_and_fallback_op_by_backend_support(
     Returns:
         The same op if supported, or Op.custom_call when unsupported or on check failure.
     """
-    if op in (Op.custom_call, Op.python_call, Op.dvm_call, Op.make_tuple):
+    if op in (Op.custom_call, Op.python_call, Op.dvm_call, Op.dvm_call_v2, Op.make_tuple):
         return op
     if not hasattr(op, "name"):
         return op
@@ -2038,7 +2050,7 @@ def _get_example_value_if_node(value: Any) -> Any:
     Otherwise, return the value itself.
     """
     if isinstance(value, torch.fx.Node):
-        return value.meta.get("example_value", None)
+        return _get_node_meta_value(value)
     return value
 
 
@@ -2229,7 +2241,7 @@ def _is_value_compatible_with_type(value_type, value: Any) -> bool:
     if isinstance(value_type, torch.ListType):
         elem_type = value_type.getElementType()
         if isinstance(value, torch.fx.Node):
-            example_value = value.meta.get("example_value", None)
+            example_value = _get_node_meta_value(value)
             if example_value is None:
                 return True
             if isinstance(example_value, (list, tuple)):
@@ -2258,7 +2270,7 @@ def _all_explicit_fx_inputs_are_scalars(args: Any, kwargs: Dict[str, Any]) -> bo
 
     for a in args:
         if isinstance(a, Node):
-            ev = a.meta.get("example_value", None)
+            ev = _get_node_meta_value(a)
             if ev is None or not isinstance(ev, scalar_types):
                 return False
         elif not isinstance(a, scalar_types):
@@ -2266,7 +2278,7 @@ def _all_explicit_fx_inputs_are_scalars(args: Any, kwargs: Dict[str, Any]) -> bo
 
     for v in kwargs.values():
         if isinstance(v, Node):
-            ev = v.meta.get("example_value", None)
+            ev = _get_node_meta_value(v)
             if ev is None or not isinstance(ev, scalar_types):
                 return False
         elif not isinstance(v, scalar_types):
@@ -2590,7 +2602,7 @@ def _map_args(
 
 def _handle_input_node(node, executor, sym_mgr, env):
     """Handle input node processing."""
-    example_value = node.meta.get("example_value", None)
+    example_value = _get_node_meta_value(node)
     output_value = sym_mgr.from_torch_with_sym(example_value)
     if isinstance(example_value, torch.nn.Parameter):
         env[node] = executor.add_parameter_node(output_value)
@@ -2603,7 +2615,7 @@ def _handle_input_nodes(input_nodes, executor, env, sym_mgr):
     non_symbol_input_nodes = []
     # handle sym int input nodes first to register symbols for later reference
     for node in input_nodes:
-        if isinstance(node.meta.get("example_value"), torch.SymInt):
+        if isinstance(_get_node_meta_value(node), torch.SymInt):
             _handle_input_node(node, executor, sym_mgr, env)
         else:
             non_symbol_input_nodes.append(node)
@@ -2684,7 +2696,7 @@ def _try_handle_symbolic_only_op(node, executor, env, sym_mgr) -> bool:
         or target is getattr(torch, "sym_sum", None)
         or target is getattr(torch, "sym_min", None)
     ):
-        example_value = node.meta.get("example_value", None)
+        example_value = _get_node_meta_value(node)
         output_value = sym_mgr.from_torch_with_sym(example_value)
         env[node] = executor.add_value_node(output_value)
         return True
@@ -2694,6 +2706,16 @@ def _try_handle_symbolic_only_op(node, executor, env, sym_mgr) -> bool:
 
 def _handle_call_node(node, executor, env, sym_mgr):
     """Handle call_function/call_method node processing."""
+    if lower_compiled_kernel_dvm_node(
+        node,
+        executor,
+        env,
+        sym_mgr,
+        _get_node_meta_value,
+        _add_tuple_getitem_node,
+    ):
+        return
+
     op = _get_op(node.target)
     if op is None:
         raise NotImplementedError(f"Unsupported op: {node.target}")
@@ -2709,7 +2731,7 @@ def _handle_call_node(node, executor, env, sym_mgr):
 
     op, input_nodes = _prepare_call_args(op, node, executor, env, sym_mgr)
 
-    example_value = node.meta.get("example_value", None)
+    example_value = _get_node_meta_value(node)
     output_value = sym_mgr.from_torch_with_sym(example_value)
 
     original_op = op
@@ -2829,7 +2851,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     # - input_is_parameter: per-input flag so parameters are excluded from staticization
     # - non_parameter_tensor_indices: explicit indices of non-parameter tensor inputs
     graph_key = id(executor)
-    input_example_values = [node.meta.get("example_value", None) for node in fx_input_nodes]
+    input_example_values = [_get_node_meta_value(node) for node in fx_input_nodes]
     input_is_parameter = [
         isinstance(v, torch.nn.Parameter) for v in input_example_values
     ]
