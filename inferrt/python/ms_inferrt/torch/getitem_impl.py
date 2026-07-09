@@ -67,7 +67,8 @@ def getitem_process(node, input_nodes):
         return tuple_getitem(input_nodes[0], input_nodes[1])
 
     if isinstance(input_nodes[0], torch.fx.node.Node) and \
-       isinstance(input_nodes[0].meta.get("example_value"), (list, tuple)):
+       (isinstance(input_nodes[0].meta.get("example_value"), (list, tuple)) or \
+       isinstance(input_nodes[0].meta.get("val"), (list, tuple))):
         return tuple_getitem(input_nodes[0], input_nodes[1])
 
     # input is tensor
