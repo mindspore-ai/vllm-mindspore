@@ -56,6 +56,18 @@ def test_check_all_reduce_op():
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="allcards", essential_mark="essential")
+def test_check_broadcast_op():
+    """
+    Feature: Check npu_define broadcast op launch
+    Description: Check torchair-style npu_define.broadcast op launch with cache
+    Expectation: The result is correct
+    """
+    cmd = f"torchrun --nproc_per_node=2 {_SCRIPT_PATH} test_broadcast"
+    return_code = os.system(cmd)
+    assert return_code == 0
+
+
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="allcards", essential_mark="essential")
 def test_check_all_to_all_single_op():
     """
     Feature: Check all_to_all_single op launch

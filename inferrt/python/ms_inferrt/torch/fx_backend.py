@@ -33,6 +33,7 @@ from ms_inferrt.torch.utils import (
     from_torch,
     to_torch,
     get_collective_info_from_torch,
+    canonicalize_npu_define_broadcast_args,
     set_device_context,
     update_runtime_inputs,
     is_op_registered_by_custom_or_torch,
@@ -787,6 +788,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.iota, iota_arg_hook)
     register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
     register_arg_mapping_hook(Op.log_softmax, log_softmax_arg_hook)
+    register_arg_mapping_hook(Op.broadcast, broadcast_arg_hook)
     # Normalize torch.layer_norm / torch.nn.functional.layer_norm to backend Op.norm layout.
     register_arg_mapping_hook(Op.norm, layer_norm_arg_hook)
 
@@ -842,6 +844,12 @@ def log_softmax_arg_hook(node, flat_args, executor):
                 f"{input_dtype} first, which is not supported yet"
             )
     return args[:2]
+
+
+def broadcast_arg_hook(node, flat_args, executor):
+    """Normalize torchair npu_define.broadcast args to backend broadcast args."""
+    del node, executor
+    return canonicalize_npu_define_broadcast_args(flat_args)
 
 
 def amax_arg_hook(node, flat_args, executor):
@@ -1902,6 +1910,14 @@ def _maybe_disable_view_op(op, target):
     return op
 
 
+def _get_qualified_op_name(target):
+    if isinstance(target, OpOverload):
+        return target._schema.name
+    if isinstance(target, OpOverloadPacket):
+        return target._qualified_op_name
+    return None
+
+
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
     if isinstance(target, str):
@@ -1912,6 +1928,8 @@ def _get_op(target):
         op = _OP_MAP.get(target)
         if op is not None:
             return op
+        if _get_qualified_op_name(target) == "npu_define::broadcast":
+            return Op.broadcast
         # For torch ops that are not in _OP_MAP, try to get their name
         # and look up in the Op enum. This is more generic.
         if hasattr(target, "__name__"):
