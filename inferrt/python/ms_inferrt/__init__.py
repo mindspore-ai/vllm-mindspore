@@ -11,8 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# pylint: disable=missing-docstring
+# pylint: disable=missing-docstring,import-outside-toplevel,wrong-import-position
 
-from ms_inferrt import ops
+from ms_inferrt.torch.fx_wrapper import install_torch_npu_fx_wrapper
 
-__all__ = ['ops']
+
+install_torch_npu_fx_wrapper()
+
+from ms_inferrt import ops  # pylint: disable=wrong-import-position
+
+__all__ = ['ops', 'install_torch_npu_fx_wrapper']

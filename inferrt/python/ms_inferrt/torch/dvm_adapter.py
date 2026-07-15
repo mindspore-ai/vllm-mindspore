@@ -155,12 +155,12 @@ def _get_compiled_kernel_name(compiled_kernel) -> Optional[str]:
 
 
 def _resolve_compiled_kernel_from_side_table(kernel_idx: int):
-    """Look up a compiled kernel from torch_dispatch_capture's side table."""
+    """Look up a compiled kernel from the active fx_wrapper side table."""
     try:
-        module = importlib.import_module("torch_dispatch_capture.v4.compiled_kernel_hop")
+        module = importlib.import_module("ms_inferrt.torch.fx_wrapper")
     except ImportError as exc:
         raise RuntimeError(
-            "compiled_kernel_wrapper_mutation requires torch_dispatch_capture.v4.compiled_kernel_hop"
+            "compiled_kernel_wrapper_mutation requires ms_inferrt.torch.fx_wrapper"
         ) from exc
     return module.compiled_kernel_side_table.get_kernel(kernel_idx)
 

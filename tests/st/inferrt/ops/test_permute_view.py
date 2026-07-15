@@ -197,6 +197,7 @@ def test_disable_movedim_view_fallback_keeps_aclnn_error(monkeypatch):
     try:
         with pytest.raises(RuntimeError, match="aclnnPermuteGetWorkspaceSize"):
             compiled_func(x)
+        torch_npu.npu.synchronize()
     finally:
         torch.compiler.reset()
 
