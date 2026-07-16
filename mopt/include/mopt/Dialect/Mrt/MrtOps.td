@@ -2504,6 +2504,46 @@ def Mrt_SliceViewOp : Mrt_Op<"slice_view", [Pure]> {
   }];
 }
 
+def Mrt_CrossEntropyLossOp : Mrt_Op<"cross_entropy_loss", [Pure]> {
+  let summary = "aclnnCrossEntropyLoss";
+  let description = [{
+    Computes the cross-entropy loss between input logits and class-index targets.
+
+    This is the direct ACLNN equivalent of torch.nn.functional.cross_entropy:
+      loss_n = -weight[y_n] * log(exp(x_{n,y_n}) / sum_c exp(x_{n,c})) * 1{y_n != ignoreIndex}
+
+    Supported options: weight, ignore_index, reduction ("none"/"mean"/"sum"),
+    label_smoothing. log_prob is produced for backward; zloss outputs are currently
+    unsupported by the underlying CANN implementation and are not consumed.
+  }];
+
+  let arguments = (ins
+    MrtAnyTensor:$x,
+    MrtAnyTensor:$y,
+    MrtOptional<MrtAnyTensor>:$weight,
+    Mrt_StringType:$reduction,
+    Mrt_I64Type:$ignore_index,
+    Mrt_F64Type:$label_smoothing,
+    Mrt_F64Type:$lse_square_scale_for_zloss,
+    Mrt_BooleanType:$return_zloss
+  );
+
+  let results = (outs
+    MrtAnyTensor:$loss,
+    MrtAnyTensor:$log_prob,
+    MrtAnyTensor:$zloss,
+    MrtAnyTensor:$lse_for_zloss
+  );
+
+  let assemblyFormat = [{
+    $x `,` $y `,` $weight `,` $reduction `,` $ignore_index `,` $label_smoothing `,`
+    $lse_square_scale_for_zloss `,` $return_zloss
+    attr-dict `:` functional-type(operands, results)
+  }];
+
+  let genAclnnOp = "aclnnCrossEntropyLoss";
+}
+
 def Mrt_SoftmaxOp : Mrt_Op<"softmax", [Pure]> {
   let summary = "Softmax activation function";
   let description = [{
