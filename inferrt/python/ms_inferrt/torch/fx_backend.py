@@ -83,6 +83,10 @@ _OUTPUT_MAPPING_HOOKS = {}
 
 _PRE_FLATTEN_HOOKS = {}
 
+_CUSTOM_CALL_ALIASES = {}
+
+_CUSTOM_CALL_ARG_REWRITES = {}
+
 # Registry for dvm ops: maps op_name -> payload_json
 # todo(lmy) remove dvm op when ms_inferrt backend is ready
 _DVM_OP_REGISTRY = {}
@@ -138,6 +142,36 @@ def register_pre_flatten_hook(op, hook_func):
 
 def get_pre_flatten_hook(op):
     return _PRE_FLATTEN_HOOKS.get(op)
+
+
+def register_custom_call_alias(
+        source_op_name: str,
+        target_op_name: str,
+        arg_rewrite=None,
+) -> None:
+    """Redirect a custom-call node to a runtime operator with optional argument rewriting."""
+    if not source_op_name or not target_op_name:
+        raise ValueError("Custom-call alias names must not be empty")
+
+    existing_target = _CUSTOM_CALL_ALIASES.get(source_op_name)
+    if existing_target is not None and existing_target != target_op_name:
+        raise ValueError(
+            f"Custom-call alias '{source_op_name}' is already registered as "
+            f"'{existing_target}'"
+        )
+    _CUSTOM_CALL_ALIASES[source_op_name] = target_op_name
+    if arg_rewrite is not None:
+        _CUSTOM_CALL_ARG_REWRITES[source_op_name] = arg_rewrite
+
+
+def get_custom_call_alias(op_name: str) -> str:
+    """Return the runtime target registered for a custom-call node."""
+    return _CUSTOM_CALL_ALIASES.get(op_name, op_name)
+
+
+def get_custom_call_arg_rewrite(op_name: str):
+    """Return the argument rewrite registered for a custom-call node."""
+    return _CUSTOM_CALL_ARG_REWRITES.get(op_name)
 
 
 def _is_scalar_arg(arg):
@@ -2646,6 +2680,15 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
         flat_node_args = [module_name, op_name] + flat_node_args
 
     if op == Op.custom_call:
+        source_op_name = op_name
+        arg_rewrite = get_custom_call_arg_rewrite(source_op_name)
+        if arg_rewrite is not None:
+            flat_node_args = arg_rewrite(node, flat_node_args)
+        op_name = get_custom_call_alias(op_name)
+        if op_name != source_op_name and not is_op_registered_by_custom_or_torch(op_name):
+            raise RuntimeError(
+                f"Custom-call alias target '{op_name}' for '{source_op_name}' is not registered"
+            )
         if not is_op_registered_by_custom_or_torch(op_name):
             print(f"Unregistered custom/torch op: {op_name}, fallback to python_call")
             module_name = node.target.__module__
