@@ -21,6 +21,7 @@ import torch
 from torch import distributed as dist
 import torch.distributed.distributed_c10d as c10d
 from torch._C._distributed_c10d import _resolve_process_group
+from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Node
 
 from ms_inferrt import _ms_inferrt_torch
@@ -41,10 +42,20 @@ _DIST_OP_LIST = [
     torch.ops._c10d_functional.all_to_all_single,
 ]
 
+NPU_DEFINE_BROADCAST_OP_NAME = "npu_define::broadcast"
+
 
 def _get_qualified_op_name(target):
-    if hasattr(target, "_schema") and hasattr(target._schema, "name"):
+    """Get the qualified op name from a torch op target (OpOverload, OpOverloadPacket, or callable)."""
+    if isinstance(target, OpOverload):
         return target._schema.name
+    if isinstance(target, OpOverloadPacket):
+        return target._qualified_op_name
+
+    schema = getattr(target, "_schema", None)
+    if hasattr(schema, "name"):
+        return schema.name
+
     if hasattr(target, "_qualified_op_name"):
         return target._qualified_op_name
     return None
@@ -104,6 +115,11 @@ def _extract_and_setup_npu_define_broadcast_group(node_args):
     _set_communication_info_for_group(pg, group_name)
 
 
+_NPU_DEFINE_COLLECTIVE_HANDLERS = {
+    NPU_DEFINE_BROADCAST_OP_NAME: _extract_and_setup_npu_define_broadcast_group,
+}
+
+
 def get_collective_info_from_torch(gm: torch.fx.GraphModule):
     """
     Extract communication info from fx graph and set to CollectiveManager.
@@ -114,8 +130,10 @@ def get_collective_info_from_torch(gm: torch.fx.GraphModule):
             if node.op in ("call_function", "call_method"):
                 if node.target in _DIST_OP_LIST:
                     _extract_and_setup_comm_groups(node.args)
-                elif _get_qualified_op_name(node.target) == "npu_define::broadcast":
-                    _extract_and_setup_npu_define_broadcast_group(node.args)
+                else:
+                    handler = _NPU_DEFINE_COLLECTIVE_HANDLERS.get(_get_qualified_op_name(node.target))
+                    if handler is not None:
+                        handler(node.args)
 
 
 def canonicalize_npu_define_broadcast_args(flat_args):

@@ -34,6 +34,8 @@ from ms_inferrt.torch.utils import (
     to_torch,
     get_collective_info_from_torch,
     canonicalize_npu_define_broadcast_args,
+    NPU_DEFINE_BROADCAST_OP_NAME,
+    _get_qualified_op_name,
     set_device_context,
     update_runtime_inputs,
     is_op_registered_by_custom_or_torch,
@@ -1767,6 +1769,8 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_quantize: Op.npu_quantize,
         torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
         torch.ops.npu.npu_dynamic_quant: Op.npu_dynamic_quant,
+        torch.ops.npu.npu_transpose_batchmatmul: Op.npu_transpose_batchmatmul,
+        "npu.npu_transpose_batchmatmul": Op.npu_transpose_batchmatmul,
         torch.ops.npu.npu_interleave_rope: Op.interleave_rope,
     }
     _OP_MAP.update(_NPU_OP_MAP)
@@ -1787,6 +1791,11 @@ if TORCH_NPU_INSTALLED:
     _register_atb_op("_npu_paged_attention", Op.paged_attention)
     _register_atb_op("_npu_reshape_and_cache", Op.reshape_and_cache)
     _OP_MAP.update(_ATB_OP_MAP)
+
+
+_QUALIFIED_OP_MAP = {
+    NPU_DEFINE_BROADCAST_OP_NAME: Op.broadcast,
+}
 
 
 def _convert_operator_to_torch_op(op):
@@ -1910,14 +1919,6 @@ def _maybe_disable_view_op(op, target):
     return op
 
 
-def _get_qualified_op_name(target):
-    if isinstance(target, OpOverload):
-        return target._schema.name
-    if isinstance(target, OpOverloadPacket):
-        return target._qualified_op_name
-    return None
-
-
 def _get_op(target):
     """Get the corresponding Op enum for a given target."""
     if isinstance(target, str):
@@ -1928,8 +1929,11 @@ def _get_op(target):
         op = _OP_MAP.get(target)
         if op is not None:
             return op
-        if _get_qualified_op_name(target) == "npu_define::broadcast":
-            return Op.broadcast
+        qualified_op_name = _get_qualified_op_name(target)
+        if qualified_op_name is not None:
+            op = _QUALIFIED_OP_MAP.get(qualified_op_name)
+            if op is not None:
+                return op
         # For torch ops that are not in _OP_MAP, try to get their name
         # and look up in the Op enum. This is more generic.
         if hasattr(target, "__name__"):
