@@ -162,6 +162,7 @@ bash tests/ut/runtest.sh cpp
 
 | Variable | Purpose |
 | --- | --- |
+| `MS_INFERRT_DISABLE_CAST_ELIMINATION` | Disable no-op cast elimination when set to `1`. The pass is enabled by default. |
 | `MS_INFERRT_DISABLE_VIEW_OPS` | Disable the zero-copy implementation of specific view operators and fall back to the non-view path, for debugging and comparison. Accepts a comma-separated list of operator names, or `all`. See the [view feature guide](./docs/inferrt_view.md) |
 | `MS_INFERRT_DEV_DUMP_IR` | When set to `1`, dumps the compiled IR for debugging |
 
