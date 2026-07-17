@@ -67,7 +67,14 @@ else()
     elseif(NOT EXISTS "${DVM_TORCH_NPU_PYBIND_API}")
         set(_dvm_v2_disable_reason "torch-npu DVM pybind header was not found at ${DVM_TORCH_NPU_PYBIND_API}")
     else()
-        set(_build_dvm_v2 TRUE)
+        file(STRINGS "${DVM_TORCH_NPU_PYBIND_API}" _dvm_torch_npu_shape_refs REGEX "ShapeRefs[ \t]*\\(")
+        if("${_dvm_torch_npu_shape_refs}" STREQUAL "")
+            set(_dvm_v2_disable_reason
+                "torch-npu DVM pybind header does not provide DynKernelPy::ShapeRefs required by dvm_call_v2: "
+                "${DVM_TORCH_NPU_PYBIND_API}")
+        else()
+            set(_build_dvm_v2 TRUE)
+        endif()
     endif()
 endif()
 

@@ -13,19 +13,20 @@
 # limitations under the License.
 
 """Runtime regression test for DVM softmax kernels executed by InferRT."""
+# pylint: disable=wrong-import-position
 
 import math
 import os
 
-import pytest
+os.environ["TORCHINDUCTOR_NPU_BACKEND"] = "dvm"
+
+import ms_inferrt  # pylint: disable=unused-import
 import torch
+import torch._inductor.config as inductor_config
 from torch import nn
 
-from ms_inferrt.torch.fx_backend import backend as fx_backend
 from tests.mark_utils import arg_mark
 from tests.ops_utils import AssertRtolEqual
-
-os.environ["TORCHINDUCTOR_NPU_BACKEND"] = "dvm"
 
 
 class AttnSoftmaxRepro(nn.Module):
@@ -67,12 +68,12 @@ def test_dvm_softmax_runtime():
     key = torch.randn(1, heads, kv, head_dim, device=device)
     value = torch.randn(1, heads, kv, head_dim, device=device)
     model = AttnSoftmaxRepro(head_dim).to(device)
-    tdcv4 = pytest.importorskip("torch_dispatch_capture.v4")
-
     with torch.no_grad():
         expected = model(query, key, value)
 
-    with torch.no_grad(), tdcv4.enable_device_with_fusion(device, fx_backend):
+    with torch.no_grad(), inductor_config.patch(
+        {"fx_wrapper": True, "size_asserts": False, "alignment_asserts": False}
+    ):
         compiled_model = torch.compile(model, backend="inductor", dynamic=True)
         output = compiled_model(query, key, value)
         torch.npu.synchronize()
