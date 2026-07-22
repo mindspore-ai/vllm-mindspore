@@ -73,8 +73,8 @@ def test_split_with_size(shape):
 def test_split_tensor_view_deepseek_indexer_pattern(seq_len):
     """
     Feature: Test split_tensor_view in DeepSeek indexer-like pattern
-    Description: Verify view -> split(int, dim=1) -> two linear branches matches CPU eager mode
-    Expectation: Compiled NPU result matches CPU eager result
+    Description: Verify view -> split(int, dim=1) -> two linear branches matches NPU eager mode
+    Expectation: Compiled NPU result matches NPU eager result
     """
 
     def func(input_tensor, weight):
@@ -90,7 +90,7 @@ def test_split_tensor_view_deepseek_indexer_pattern(seq_len):
     input_tensor = cpu_input.npu()
     weight = cpu_weight.npu()
 
-    eager_out = func(cpu_input, cpu_weight)
+    eager_out = func(input_tensor, weight)
     compiled_func = torch.compile(func, backend=fx_backend, fullgraph=True)
     compiled_out = compiled_func(input_tensor, weight)
 

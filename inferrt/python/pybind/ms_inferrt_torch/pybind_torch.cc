@@ -312,12 +312,8 @@ std::shared_ptr<GraphInputStaticCache> GetOrCreateGraphCache(uintptr_t graph_key
   return graph_cache_slot;
 }
 
-// Update an IR tensor's metadata and data pointer from a PyTorch tensor.
-void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor) {
-  ir::DataType type = FromTorchDType(at_tensor.scalar_type());
-  std::vector<int64_t> shape(at_tensor.sizes().begin(), at_tensor.sizes().end());
-  void *data = at_tensor.data_ptr();
-
+// Update tensor metadata from a PyTorch tensor.
+void UpdateMetadataFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor) {
   auto device = tensor->GetDevice();
   if (device != FromTorchDevice(at_tensor.device())) {
     RT_GLOG(EXCEPTION) << "Device mismatch in update_tensor";
@@ -328,28 +324,22 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
     auto npuFormat = at_npu::native::get_npu_format(at_tensor);
     tensor->SetFormat(static_cast<ir::MemoryFormat>(npuFormat));
     tensor->SetStrides(at_tensor.strides().vec());
-    // data_ptr() returns the offset-adjusted pointer, so set storage_offset to 0
-    // to avoid double-counting the offset in Tensor::DataPtr()
+    // data_ptr() already includes the storage offset, so keep the IR offset at 0
+    // to avoid double-counting in Tensor::DataPtr().
     tensor->SetStorageOffset(0);
     tensor->SetStorageShape(at_npu::native::get_npu_storage_sizes(at_tensor));
-    RT_GLOG(INFO) << "Update tensor, format=" << ir::FormatEnumToStr(tensor->Format())
+    RT_GLOG(INFO) << "Update tensor metadata from torch, format=" << ir::FormatEnumToStr(tensor->Format())
                   << ", strides=" << tensor->Strides() << ", storageOffset=" << tensor->StorageOffset()
                   << ", storageShape=" << tensor->StorageShape() << ", isView=" << at_tensor.is_view()
                   << " at.tensor.shape: " << at_tensor.sizes();
   }
+#else
+  (void)at_tensor;
 #endif
+}
 
-  tensor->SetOwnsStorage(false);
-  tensor->SetDtype(type);
-  tensor->SetShape(std::move(shape));
-  tensor->Resize();
-  // PyTorch may return nullptr from data_ptr() for 0-element tensors; that is valid.
-  if (at_tensor.numel() > 0) {
-    CHECK_IF_NULL(data);
-  }
-  tensor->UpdateData(data);
-  // Track only the remaining accessible bytes from data_ptr() to the end of the underlying storage to keep view
-  // bounds valid.
+// Update tensor storage size from a PyTorch tensor.
+void UpdateStorageSizeFromTorch(ir::Tensor *tensor, const at::Tensor &at_tensor) {
   const auto storageBytes = at_tensor.storage().nbytes();
   if (at_tensor.numel() > 0) {
     const auto offsetBytes = static_cast<size_t>(at_tensor.storage_offset()) * at_tensor.element_size();
@@ -361,10 +351,29 @@ void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor
     }
     tensor->GetStorage()->Resize(storageBytes - offsetBytes);
   } else {
-    // Empty tensors may legally carry a storage_offset beyond the underlying storage. Since data_ptr() is never
-    // dereferenced for zero elements, keep the original storage size and let Tensor::DataPtr() expose nullptr.
+    // Empty tensors may legally carry a storage_offset beyond the underlying storage.
+    // data_ptr() is never dereferenced for zero elements, so keep the full storage size.
     tensor->GetStorage()->Resize(storageBytes);
   }
+}
+
+// Update an IR tensor's metadata and data pointer from a PyTorch tensor.
+void UpdateTensorFromTorchTensor(ir::Tensor *tensor, const at::Tensor &at_tensor) {
+  ir::DataType type = FromTorchDType(at_tensor.scalar_type());
+  std::vector<int64_t> shape(at_tensor.sizes().begin(), at_tensor.sizes().end());
+  void *data = at_tensor.data_ptr();
+
+  tensor->SetOwnsStorage(false);
+  tensor->SetDtype(type);
+  tensor->SetShape(std::move(shape));
+  tensor->Resize();
+  // PyTorch may return nullptr from data_ptr() for 0-element tensors; that is valid.
+  if (at_tensor.numel() > 0) {
+    CHECK_IF_NULL(data);
+  }
+  tensor->UpdateData(data);
+  UpdateMetadataFromTorchTensor(tensor, at_tensor);
+  UpdateStorageSizeFromTorch(tensor, at_tensor);
 }
 
 // Install a lazy updater that reads the current value of a Python-side tensor handle on each invocation.
@@ -585,10 +594,17 @@ ir::TensorPtr FromTorchTensor(const at::Tensor &tensor, bool isFake = false) {
 
   auto device = FromTorchDevice(tensor.device());
   if (isFake) {
+    // FakeTensor is used here only as a compile-time shape/dtype/device carrier.
+    // Current fake-tensor call sites do not consume IR layout metadata such as
+    // strides, storage offset, or storage shape.
     return ir::MakeIntrusive<ir::Tensor>(shape, type, device);
-  } else {
-    return ir::MakeIntrusive<ir::Tensor>(tensor.data_ptr(), shape, type, device);
   }
+
+  auto mrtTensor = ir::MakeIntrusive<ir::Tensor>(tensor.data_ptr(), shape, type, device);
+  mrtTensor->SetOwnsStorage(false);
+  UpdateMetadataFromTorchTensor(mrtTensor.get(), tensor);
+  UpdateStorageSizeFromTorch(mrtTensor.get(), tensor);
+  return mrtTensor;
 }
 
 ir::StoragePtr CopyStorage(const ir::StoragePtr &srcStorage) {
