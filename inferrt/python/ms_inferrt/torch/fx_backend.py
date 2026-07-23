@@ -33,6 +33,9 @@ from ms_inferrt.torch.utils import (
     from_torch,
     to_torch,
     get_collective_info_from_torch,
+    canonicalize_npu_define_broadcast_args,
+    NPU_DEFINE_BROADCAST_OP_NAME,
+    _get_qualified_op_name,
     set_device_context,
     update_runtime_inputs,
     is_op_registered_by_custom_or_torch,
@@ -821,6 +824,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.iota, iota_arg_hook)
     register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
     register_arg_mapping_hook(Op.log_softmax, log_softmax_arg_hook)
+    register_arg_mapping_hook(Op.broadcast, broadcast_arg_hook)
     # Normalize torch.layer_norm / torch.nn.functional.layer_norm to backend Op.norm layout.
     register_arg_mapping_hook(Op.norm, layer_norm_arg_hook)
 
@@ -876,6 +880,12 @@ def log_softmax_arg_hook(node, flat_args, executor):
                 f"{input_dtype} first, which is not supported yet"
             )
     return args[:2]
+
+
+def broadcast_arg_hook(node, flat_args, executor):
+    """Normalize torchair npu_define.broadcast args to backend broadcast args."""
+    del node, executor
+    return canonicalize_npu_define_broadcast_args(flat_args)
 
 
 def amax_arg_hook(node, flat_args, executor):
@@ -1793,6 +1803,8 @@ if TORCH_NPU_INSTALLED:
         torch.ops.npu.npu_quantize: Op.npu_quantize,
         torch.ops.npu.npu_quant_matmul: Op.quant_matmul,
         torch.ops.npu.npu_dynamic_quant: Op.npu_dynamic_quant,
+        torch.ops.npu.npu_transpose_batchmatmul: Op.npu_transpose_batchmatmul,
+        "npu.npu_transpose_batchmatmul": Op.npu_transpose_batchmatmul,
         torch.ops.npu.npu_interleave_rope: Op.interleave_rope,
     }
     _OP_MAP.update(_NPU_OP_MAP)
@@ -1813,6 +1825,11 @@ if TORCH_NPU_INSTALLED:
     _register_atb_op("_npu_paged_attention", Op.paged_attention)
     _register_atb_op("_npu_reshape_and_cache", Op.reshape_and_cache)
     _OP_MAP.update(_ATB_OP_MAP)
+
+
+_QUALIFIED_OP_MAP = {
+    NPU_DEFINE_BROADCAST_OP_NAME: Op.broadcast,
+}
 
 
 def _convert_operator_to_torch_op(op):
@@ -1946,6 +1963,11 @@ def _get_op(target):
         op = _OP_MAP.get(target)
         if op is not None:
             return op
+        qualified_op_name = _get_qualified_op_name(target)
+        if qualified_op_name is not None:
+            op = _QUALIFIED_OP_MAP.get(qualified_op_name)
+            if op is not None:
+                return op
         # For torch ops that are not in _OP_MAP, try to get their name
         # and look up in the Op enum. This is more generic.
         if hasattr(target, "__name__"):

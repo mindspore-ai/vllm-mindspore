@@ -19,12 +19,50 @@ import pytest
 import torch
 from torch import nn
 import torch.distributed as dist
+import torch.distributed.distributed_c10d as c10d
 
 from ms_inferrt.collective import CollectiveManager
 from ms_inferrt.torch import backend
 
 
 BACKEND_HCCL = "hccl"
+_NPU_DEFINE_LIB = None
+
+
+def _get_npu_define_lib():
+    try:
+        return torch.library.Library("npu_define", "DEF")
+    except Exception:  # pylint: disable=broad-exception-caught
+        return torch.library.Library("npu_define", "FRAGMENT")
+
+
+def _register_npu_define_broadcast_op():
+    """Register a torchair-compatible npu_define.broadcast op for this test process."""
+    global _NPU_DEFINE_LIB  # pylint: disable=global-statement
+    if _NPU_DEFINE_LIB is not None:
+        return
+
+    _NPU_DEFINE_LIB = _get_npu_define_lib()
+    op_schema = "broadcast(Tensor self, int? src, str tag, int[] ranks, int group_size, int? group_src=None) -> Tensor"
+    try:
+        _NPU_DEFINE_LIB.define(op_schema)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+    def broadcast_impl(input_tensor, src, tag, ranks, group_size, group_src=None):
+        pg = c10d._find_or_create_pg_by_ranks_and_tag(  # pylint: disable=protected-access
+            tag, list(ranks), int(group_size))
+        root = c10d._canonicalize_group_rank(pg, src, group_src)  # pylint: disable=protected-access
+        output = input_tensor.clone()
+        dist.broadcast(output, group=pg, group_src=root)
+        return output
+
+    def broadcast_meta(input_tensor, src, tag, ranks, group_size, group_src=None):
+        del src, tag, ranks, group_size, group_src
+        return torch.empty_like(input_tensor)
+
+    _NPU_DEFINE_LIB.impl("broadcast", broadcast_impl, "PrivateUse1")
+    _NPU_DEFINE_LIB.impl("broadcast", broadcast_meta, "Meta")
 
 
 def setup_distributed():
@@ -205,6 +243,52 @@ def test_all_reduce():
 
     world_size = dist.get_world_size(new_pg)
     output = compiled_model(tensor_in, new_pg)
+
+    check_group_info(new_pg)
+    check_op_output_with_mul(output, expect_out)
+    dist.destroy_process_group()
+
+
+def test_broadcast():
+    """
+    Feature: Check npu_define broadcast op launch
+    Description: Check torchair-style npu_define.broadcast lowers to InferRT collective broadcast
+    Expectation: The result is correct
+    """
+
+    class SimpleNetwork(nn.Module):
+        """Simple network for testing npu_define.broadcast operation."""
+
+        def __init__(self, tag, ranks):
+            super().__init__()
+            self.tag = tag
+            self.ranks = ranks
+
+        def forward(self, tensor_in):
+            output = torch.ops.npu_define.broadcast(
+                tensor_in, 0, self.tag, self.ranks, len(self.ranks), None
+            )
+            return torch.mul(output, output)
+
+    _register_npu_define_broadcast_op()
+    setup_distributed()
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    world_size = dist.get_world_size()
+    group_list = list(range(world_size))
+    new_pg = dist.new_group(group_list)
+
+    model = SimpleNetwork(new_pg.group_name, group_list).npu()
+    tensor_in = torch.arange(world_size * 2, dtype=torch.int64).npu() + (rank + 1) * 10
+    expect_out = tensor_in.clone()
+    dist.broadcast(expect_out, group=new_pg, group_src=0)
+
+    compiled_model = torch.compile(
+        model,
+        backend=backend,
+        fullgraph=True,
+    )
+
+    output = compiled_model(tensor_in)
 
     check_group_info(new_pg)
     check_op_output_with_mul(output, expect_out)

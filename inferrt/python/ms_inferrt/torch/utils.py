@@ -19,7 +19,9 @@ from typing import Any, List, Tuple, Optional
 
 import torch
 from torch import distributed as dist
+import torch.distributed.distributed_c10d as c10d
 from torch._C._distributed_c10d import _resolve_process_group
+from torch._ops import OpOverload, OpOverloadPacket
 from torch.fx.node import Node
 
 from ms_inferrt import _ms_inferrt_torch
@@ -40,6 +42,24 @@ _DIST_OP_LIST = [
     torch.ops._c10d_functional.all_to_all_single,
 ]
 
+NPU_DEFINE_BROADCAST_OP_NAME = "npu_define::broadcast"
+
+
+def _get_qualified_op_name(target):
+    """Get the qualified op name from a torch op target (OpOverload, OpOverloadPacket, or callable)."""
+    if isinstance(target, OpOverload):
+        return target._schema.name
+    if isinstance(target, OpOverloadPacket):
+        return target._qualified_op_name
+
+    schema = getattr(target, "_schema", None)
+    if hasattr(schema, "name"):
+        return schema.name
+
+    if hasattr(target, "_qualified_op_name"):
+        return target._qualified_op_name
+    return None
+
 
 def _extract_global_comm_info():
     """Extract distributed communication information (rank, world_size)."""
@@ -55,6 +75,11 @@ def _extract_global_comm_info():
 def _set_communication_info(ptd):
     """Get communication info from torch and set to CollectiveManager for a given process group."""
     pg = _resolve_process_group(ptd)
+    _set_communication_info_for_group(pg, f"{ptd}")
+
+
+def _set_communication_info_for_group(pg, group_name):
+    """Get communication info from torch and set to CollectiveManager for a named process group."""
     rank = dist.get_rank() if dist.is_initialized() else 0
     world_size = dist.get_world_size()
 
@@ -68,7 +93,7 @@ def _set_communication_info(ptd):
     CollectiveManager.instance().set_global_rank_size(world_size)
 
     CollectiveManager.instance().create_communication_group(
-        f"{ptd}", rank_list, group_rank, hccl_comm_handle
+        group_name, rank_list, group_rank, hccl_comm_handle
     )
 
 
@@ -77,6 +102,22 @@ def _extract_and_setup_comm_groups(node_args):
     if CollectiveManager.instance().is_group_exist(f"{ptd_arg}"):
         return
     _set_communication_info(ptd_arg)
+
+
+def _extract_and_setup_npu_define_broadcast_group(node_args):
+    tag = node_args[2]
+    ranks = list(node_args[3])
+    group_size = int(node_args[4])
+    group_name = str(tag)
+    if CollectiveManager.instance().is_group_exist(group_name):
+        return
+    pg = c10d._find_or_create_pg_by_ranks_and_tag(tag, ranks, group_size)
+    _set_communication_info_for_group(pg, group_name)
+
+
+_NPU_DEFINE_COLLECTIVE_HANDLERS = {
+    NPU_DEFINE_BROADCAST_OP_NAME: _extract_and_setup_npu_define_broadcast_group,
+}
 
 
 def get_collective_info_from_torch(gm: torch.fx.GraphModule):
@@ -89,6 +130,23 @@ def get_collective_info_from_torch(gm: torch.fx.GraphModule):
             if node.op in ("call_function", "call_method"):
                 if node.target in _DIST_OP_LIST:
                     _extract_and_setup_comm_groups(node.args)
+                else:
+                    handler = _NPU_DEFINE_COLLECTIVE_HANDLERS.get(_get_qualified_op_name(node.target))
+                    if handler is not None:
+                        handler(node.args)
+
+
+def canonicalize_npu_define_broadcast_args(flat_args):
+    """Normalize torchair npu_define.broadcast args to [tensor, root_group_rank, group_name]."""
+    if len(flat_args) < 5:
+        raise ValueError(f"npu_define.broadcast expects at least 5 args, but got {len(flat_args)}")
+    tensor, src, tag, ranks, group_size = flat_args[:5]
+    group_src = flat_args[5] if len(flat_args) > 5 else None
+    ranks = list(ranks)
+    group_size = int(group_size)
+    pg = c10d._find_or_create_pg_by_ranks_and_tag(tag, ranks, group_size)
+    root = c10d._canonicalize_group_rank(pg, src, group_src)
+    return [tensor, root, str(tag)]
 
 
 def from_torch(obj: Any) -> Value:

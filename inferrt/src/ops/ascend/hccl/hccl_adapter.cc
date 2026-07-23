@@ -52,6 +52,7 @@ void HcclAdapter::InitPlugin() {
     RT_GLOG(EXCEPTION) << "Dlopen " << kHcclPluginFileName << " failed, result = " << GetDlErrorMsg();
   }
 
+  launchHcclBroadcast_ = DlsymFuncObj(HcclBroadcast, pluginHandle_);
   launchHcclAllReduce_ = DlsymFuncObj(HcclAllReduce, pluginHandle_);
   launchHcclReduceScatter_ = DlsymFuncObj(HcclReduceScatter, pluginHandle_);
   launchHcclAllGather_ = DlsymFuncObj(HcclAllGather, pluginHandle_);
@@ -171,6 +172,9 @@ bool HcclAdapter::FinalizeHccl() {
 
 HcclResult HcclAdapter::HcclBroadcast(void *buf, uint64_t count, HcclDataType dataType, uint32_t root,
                                       aclrtStream stream, HcclComm hcclComm) const {
+  CHECK_SYMBOL_NULL(launchHcclBroadcast_);
+  CHECK_IF_NULL(hcclComm);
+  CHECK_IF_NULL(buf);
   HcclResult ret = launchHcclBroadcast_(buf, count, dataType, root, hcclComm, stream);
 
   return ret;
