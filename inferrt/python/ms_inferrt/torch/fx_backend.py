@@ -825,6 +825,7 @@ def _init_arg_mapping_hooks():
     register_arg_mapping_hook(Op.leaky_relu, leaky_relu_arg_hook)
     register_arg_mapping_hook(Op.log_softmax, log_softmax_arg_hook)
     register_arg_mapping_hook(Op.broadcast, broadcast_arg_hook)
+    register_arg_mapping_hook(Op.cross_entropy_loss, cross_entropy_loss_arg_hook)
     # Normalize torch.layer_norm / torch.nn.functional.layer_norm to backend Op.norm layout.
     register_arg_mapping_hook(Op.norm, layer_norm_arg_hook)
 
@@ -840,6 +841,7 @@ def _init_pre_flatten_hooks():
     register_pre_flatten_hook(Op.var_mean, var_mean_pre_flatten_hook)
     register_pre_flatten_hook(Op.reduce_sum, reduce_mean_sum_pre_flatten_hook)
     register_pre_flatten_hook(Op.reduce_mean, reduce_mean_sum_pre_flatten_hook)
+    register_pre_flatten_hook(Op.cross_entropy_loss, cross_entropy_loss_pre_flatten_hook)
 
 
 def leaky_relu_arg_hook(node, flat_args, executor):
@@ -886,6 +888,211 @@ def broadcast_arg_hook(node, flat_args, executor):
     """Normalize torchair npu_define.broadcast args to backend broadcast args."""
     del node, executor
     return canonicalize_npu_define_broadcast_args(flat_args)
+
+
+def cross_entropy_loss_arg_hook(node, flat_args, executor):
+    """
+    Normalize cross_entropy_loss arguments to backend Op.cross_entropy_loss layout.
+
+    Backend aclnnCrossEntropyLoss consumes:
+      [x, target, weight, reduction, ignore_index, label_smoothing,
+       lse_square_scale_for_zloss, return_zloss]
+
+    PyTorch's reduction is an int enum (0/1/2) or string, while the ACLNN op
+    expects a string ('none'/'mean'/'sum'). lse_square_scale_for_zloss and
+    return_zloss are fixed to their disabled defaults.
+    """
+    args = list(flat_args)
+    if len(args) < 2:
+        raise ValueError(
+            f"Unexpected cross_entropy_loss argument count after schema flatten: {len(args)}"
+        )
+
+    weight = args[2] if len(args) > 2 else None
+    reduction = args[3] if len(args) > 3 else 1
+    if isinstance(reduction, Node):
+        reduction = reduction.meta.get("example_value", reduction)
+    ignore_index = args[4] if len(args) > 4 else -100
+    if isinstance(ignore_index, Node):
+        ignore_index = ignore_index.meta.get("example_value", ignore_index)
+    label_smoothing = args[5] if len(args) > 5 else 0.0
+    if isinstance(label_smoothing, Node):
+        label_smoothing = label_smoothing.meta.get("example_value", label_smoothing)
+
+    target_arg = node.args[1]
+    target_example = None
+    if isinstance(target_arg, Node):
+        target_example = target_arg.meta.get("example_value", None)
+    elif isinstance(target_arg, torch.Tensor):
+        target_example = target_arg
+    if target_example is not None and target_example.dtype.is_floating_point:
+        raise ValueError(
+            "cross_entropy_loss only supports class-index targets; "
+            "soft-label/probability targets are not supported by aclnnCrossEntropyLoss"
+        )
+
+    if reduction in (0, "none"):
+        reduction_str = "none"
+    elif reduction in (1, "mean"):
+        reduction_str = "mean"
+    elif reduction in (2, "sum"):
+        reduction_str = "sum"
+    else:
+        raise ValueError(f"cross_entropy_loss reduction={reduction} is not supported")
+
+    if weight is not None and not isinstance(weight, (torch.Tensor, Node)):
+        raise ValueError(
+            f"cross_entropy_loss weight must be a tensor or None, got {type(weight)}"
+        )
+
+    return [
+        args[0],
+        args[1],
+        weight,
+        reduction_str,
+        ignore_index,
+        label_smoothing,
+        0.0,
+        False,
+    ]
+
+
+def _flatten_cross_entropy_inputs(logits_node, logits_example, target_node, target_example, executor, sym_mgr):
+    """
+    Flatten multi-dimensional (or 1D) logits/target to the 2D/1D layout expected by
+    aclnnCrossEntropyLoss: logits (batch_size, num_classes), target (batch_size,).
+
+    For multi-dimensional logits (N, C, D1, D2, ...), we first permute to
+    (N, D1, D2, ..., C) so that the class dimension becomes the last axis, then
+    reshape to (N*D1*D2*..., C). The target is reshaped to (N*D1*D2*...,).
+
+    Returns (logits_node, target_node, batch_size, num_classes, needs_reshape).
+    """
+    logits_dim = logits_example.dim()
+    if logits_dim == 2:
+        return (
+            logits_node,
+            target_node,
+            int(logits_example.shape[0]),
+            int(logits_example.shape[1]),
+            False,
+        )
+
+    num_classes = int(logits_example.shape[1])
+    if logits_dim == 1:
+        batch_size = 1
+    else:
+        try:
+            batch_size = int(logits_example.numel() // num_classes)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise ValueError(
+                "cross_entropy_loss with multi-dimensional logits requires a static total element count"
+            ) from exc
+
+    if logits_dim > 2:
+        # Permute from (N, C, D1, D2, ...) to (N, D1, D2, ..., C).
+        perm = [0] + list(range(2, logits_dim)) + [1]
+        permute_example = logits_example.permute(perm)
+        permute_value = sym_mgr.from_torch_with_sym(permute_example)
+        perm_value = sym_mgr.from_torch_with_sym(perm)
+        perm_node = executor.add_value_node(perm_value)
+        logits_node = executor.add_op_node(
+            Op.permute, [logits_node, perm_node], permute_value
+        )
+        flattened_logits_example = permute_example.reshape(batch_size, num_classes)
+    else:
+        # 1D logits (C,): expand to (1, C).
+        flattened_logits_example = logits_example.reshape(batch_size, num_classes)
+
+    flattened_logits_value = sym_mgr.from_torch_with_sym(flattened_logits_example)
+    logits_shape_value = sym_mgr.from_torch_with_sym([batch_size, num_classes])
+    logits_shape_node = executor.add_value_node(logits_shape_value)
+    logits_node = executor.add_op_node(
+        Op.view, [logits_node, logits_shape_node], flattened_logits_value
+    )
+
+    # Reshape target to (batch_size,).
+    flattened_target_example = target_example.reshape(batch_size)
+    flattened_target_value = sym_mgr.from_torch_with_sym(flattened_target_example)
+    target_shape_value = sym_mgr.from_torch_with_sym([batch_size])
+    target_shape_node = executor.add_value_node(target_shape_value)
+    target_node = executor.add_op_node(
+        Op.view, [target_node, target_shape_node], flattened_target_value
+    )
+
+    return logits_node, target_node, batch_size, num_classes, True
+
+
+def cross_entropy_loss_output_hook(node, op, input_nodes, executor, sym_mgr):
+    """
+    Adapt Op.cross_entropy_loss tuple output for torch cross_entropy_loss semantics.
+
+    Backend aclnnCrossEntropyLoss returns (loss, log_prob, zloss, lse_for_zloss).
+    Only the loss output is consumed by the forward graph; zloss-related outputs
+    are disabled via lse_square_scale_for_zloss=0 and return_zloss=false.
+
+    Multi-dimensional logits are flattened to 2D (batch, classes) before calling
+    the ACLNN op, and the per-sample loss is reshaped back to the original target
+    shape when reduction is "none".
+    """
+    logits_example = _extract_tensor_example(
+        node.args[0],
+        "cross_entropy_loss logits example_value must be a tensor",
+    )
+    target_example = _extract_tensor_example(
+        node.args[1],
+        "cross_entropy_loss target example_value must be a tensor",
+    )
+
+    loss_example = node.meta.get("example_value", None)
+    if loss_example is None:
+        raise ValueError("cross_entropy_loss output example_value must be set")
+
+    logits_node = input_nodes[0]
+    target_node = input_nodes[1]
+    logits_node, target_node, batch_size, num_classes, needs_reshape = _flatten_cross_entropy_inputs(
+        logits_node, logits_example, target_node, target_example, executor, sym_mgr
+    )
+
+    # Determine reduction from the original FX node (pre-flatten hook normalized
+    # string to int, but the original node still carries the string kwarg).
+    reduction = node.kwargs.get("reduction") if node.kwargs else None
+    if reduction is None:
+        reduction = node.args[3] if len(node.args) > 3 else 1
+    if isinstance(reduction, Node):
+        reduction = reduction.meta.get("example_value", reduction)
+
+    device = logits_example.device
+    if reduction in (0, "none"):
+        op_loss_example = torch.zeros((batch_size,), dtype=logits_example.dtype, device=device)
+    else:
+        op_loss_example = torch.zeros((), dtype=logits_example.dtype, device=device)
+
+    op_log_prob_example = torch.zeros((batch_size, num_classes), dtype=logits_example.dtype, device=device)
+    op_zloss_example = torch.zeros_like(op_loss_example)
+    op_lse_for_zloss_example = torch.zeros_like(op_loss_example)
+
+    tuple_output = sym_mgr.from_torch_with_sym(
+        (op_loss_example, op_log_prob_example, op_zloss_example, op_lse_for_zloss_example)
+    )
+    tuple_node = executor.add_op_node(
+        op, [logits_node, target_node] + list(input_nodes[2:]), tuple_output
+    )
+
+    # Project the loss output (index 0).
+    loss_output = sym_mgr.from_torch_with_sym(op_loss_example)
+    loss_node = _add_tuple_getitem_node(executor, sym_mgr, tuple_node, 0, loss_output)
+
+    # Reshape the per-sample loss back to the original target shape when needed.
+    if needs_reshape and reduction in (0, "none"):
+        loss_shape_value = sym_mgr.from_torch_with_sym(list(loss_example.shape))
+        loss_shape_node = executor.add_value_node(loss_shape_value)
+        final_loss_value = sym_mgr.from_torch_with_sym(loss_example)
+        loss_node = executor.add_op_node(
+            Op.view, [loss_node, loss_shape_node], final_loss_value
+        )
+
+    return loss_node
 
 
 def amax_arg_hook(node, flat_args, executor):
@@ -1285,6 +1492,32 @@ def reduce_mean_sum_pre_flatten_hook(node):
     return [input_arg, list(dim), bool(keepdim)], kwargs
 
 
+def cross_entropy_loss_pre_flatten_hook(node):
+    """
+    Pre-flatten hook for cross_entropy_loss: normalize kwargs before ATen schema matching.
+
+    torch.nn.functional.cross_entropy accepts reduction as a string ('none'/'mean'/'sum'),
+    but the aten::cross_entropy_loss schema expects an int enum (0/1/2). Convert the string
+    here so that schema matching succeeds; the arg hook will later convert it back to the
+    string expected by the MRT cross_entropy_loss op (aclnnCrossEntropyLoss).
+    """
+    args = list(node.args) if node is not None else []
+    kwargs = dict(node.kwargs) if node is not None else {}
+
+    if "reduction" in kwargs and isinstance(kwargs["reduction"], str):
+        reduction_str = kwargs["reduction"]
+        if reduction_str == "none":
+            kwargs["reduction"] = 0
+        elif reduction_str == "mean":
+            kwargs["reduction"] = 1
+        elif reduction_str == "sum":
+            kwargs["reduction"] = 2
+        else:
+            raise ValueError(f"cross_entropy_loss reduction={reduction_str} is not supported")
+
+    return args, kwargs
+
+
 # pylint: disable=unused-argument
 def var_mean_arg_hook(node, flat_args, executor):
     """Normalize arguments for var_mean to backend schema [input, dim, correction, keepdim]."""
@@ -1482,6 +1715,7 @@ def _init_output_mapping_hooks():
     """Register output mapping hooks for runtime ops."""
     register_output_mapping_hook(Op.argsort, argsort_output_hook)
     register_output_mapping_hook(Op.rms_norm, rms_norm_output_hook)
+    register_output_mapping_hook(Op.cross_entropy_loss, cross_entropy_loss_output_hook)
     register_output_mapping_hook(Op.moe_distribute_dispatch_v2, moe_distribute_dispatch_v2_output_hook)
 
 
@@ -1663,6 +1897,8 @@ _OP_MAP = {
     aten.softmax.int: Op.softmax,
     aten._softmax.default: Op.softmax,
     aten.log_softmax: Op.log_softmax,
+    aten.cross_entropy_loss: Op.cross_entropy_loss,
+    aten.cross_entropy_loss.default: Op.cross_entropy_loss,
     aten.masked_fill.Scalar: Op.masked_fill_scalar,
     aten.native_layer_norm.default: Op.norm,
     aten.silu.default: Op.silu,
@@ -1680,6 +1916,7 @@ _OP_MAP = {
     torch.nn.functional.silu: Op.silu,
     torch.nn.functional.leaky_relu: Op.leaky_relu,
     torch.nn.functional.log_softmax: Op.log_softmax,
+    torch.nn.functional.cross_entropy: Op.cross_entropy_loss,
     torch.nn.functional.softmax: Op.softmax,
     torch.softmax: Op.softmax,
     torch.nn.functional.layer_norm: Op.norm,
@@ -1837,6 +2074,7 @@ def _convert_operator_to_torch_op(op):
     operator_map = {
         torch.nn.functional.layer_norm: torch.layer_norm,
         torch.nn.functional.log_softmax: torch.log_softmax,
+        torch.nn.functional.cross_entropy: aten.cross_entropy_loss,
         operator.add: torch.add,
         operator.iadd: "add_",
         operator.sub: torch.sub,
