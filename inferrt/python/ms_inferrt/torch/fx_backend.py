@@ -15,6 +15,7 @@
 """
 A simple torch.fx backend that converts a GraphModule to a ms_inferrt GraphExecutor.
 """
+import inspect
 import os
 import operator
 from datetime import datetime
@@ -2678,6 +2679,25 @@ def _create_args(schema: torch.FunctionSchema, node: Node, custom_args=None, cus
     return flat_args, True, None
 
 
+def _get_target_display_name(target, default_name=None) -> str:
+    """
+    Return a human-readable name for an operator target.
+
+    Falls back to the provided ``default_name`` if available, otherwise tries
+    ``__module__ + __qualname__`` / ``__module__ + __name__`` / ``__name__``,
+    and finally ``str(target)``.
+    """
+    if default_name is not None:
+        return default_name
+    if hasattr(target, "__module__") and hasattr(target, "__qualname__"):
+        return f"{target.__module__}.{target.__qualname__}"
+    if hasattr(target, "__module__") and hasattr(target, "__name__"):
+        return f"{target.__module__}.{target.__name__}"
+    if hasattr(target, "__name__"):
+        return target.__name__
+    return str(target)
+
+
 def _get_op_schemas(target) -> Optional[List[torch._C.FunctionSchema]]:
     """
     Retrieve torch schema(s) for a given op target. Returns None if unavailable.
@@ -2933,14 +2953,73 @@ def _handle_get_attr_node(node, gm, executor, env):
     env[node] = executor.add_value_node(from_torch(attr_val))
 
 
+def _normalize_python_call_args(node: Node, flat_args: List[Any]) -> List[Any]:
+    """
+    Normalize arguments for a python_call node based on the target Python callable's signature.
+
+    The C++ python_call op invokes the target function via ``*args``, so the returned list must
+    match the positional parameter order of the function signature. This function:
+      - Binds ``node.args`` / ``node.kwargs`` using ``inspect.signature``;
+      - Fills in default values for missing parameters;
+      - Performs basic arity and positional/keyword compatibility validation.
+
+    If the signature cannot be obtained (e.g. for some C extension functions), ``flat_args`` is
+    returned unchanged.
+    """
+    target = node.target
+    try:
+        sig = inspect.signature(target)
+    except (ValueError, TypeError):
+        return flat_args
+
+    try:
+        bound = sig.bind(*node.args, **node.kwargs)
+        bound.apply_defaults()
+    except TypeError as e:
+        raise TypeError(
+            f"Failed to bind arguments for python_call target {target}: {e}"
+        ) from e
+
+    normalized = []
+    for param in sig.parameters.values():
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            normalized.extend(bound.arguments.get(param.name, ()))
+        elif param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            normalized.append(bound.arguments[param.name])
+        elif param.kind == inspect.Parameter.KEYWORD_ONLY:
+            if param.name in node.kwargs or param.default is inspect.Parameter.empty:
+                raise TypeError(
+                    f"python_call target {target} has keyword-only argument "
+                    f"'{param.name}' which cannot be passed positionally"
+                )
+        elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            if node.kwargs:
+                raise TypeError(
+                    f"python_call target {target} accepts **kwargs which cannot be "
+                    f"passed positionally"
+                )
+
+    return normalized
+
+
+def _build_python_call_args(node: Node, flat_args: List[Any]) -> List[Any]:
+    """
+    Normalize arguments based on the Python callable signature and prepend the [module_name, op_name] prefix.
+    """
+    module_name = node.target.__module__
+    op_name = node.target.__name__
+    return [module_name, op_name] + _normalize_python_call_args(node, flat_args)
+
+
 def _prepare_call_args(op, node, executor, env, sym_mgr):
     """Prepare arguments for call_function/call_method nodes."""
     op_name, flat_node_args = _flatten_args(op, node)
 
     if op == Op.python_call:
-        module_name = node.target.__module__
-        op_name = node.target.__name__
-        flat_node_args = [module_name, op_name] + flat_node_args
+        flat_node_args = _build_python_call_args(node, flat_node_args)
 
     if op == Op.custom_call:
         source_op_name = op_name
@@ -2953,10 +3032,9 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
                 f"Custom-call alias target '{op_name}' for '{source_op_name}' is not registered"
             )
         if not is_op_registered_by_custom_or_torch(op_name):
-            print(f"Unregistered custom/torch op: {op_name}, fallback to python_call")
-            module_name = node.target.__module__
-            op_name = node.target.__name__
-            flat_node_args = [module_name, op_name] + flat_node_args
+            target_name = _get_target_display_name(node.target, op_name)
+            print(f"Unregistered custom/torch op: {target_name} (op_name={op_name}), fallback to python_call")
+            flat_node_args = _build_python_call_args(node, flat_node_args)
             op = Op.python_call
         else:
             op_name = op_name.replace("::", ".")
@@ -2975,9 +3053,7 @@ def _prepare_call_args(op, node, executor, env, sym_mgr):
     elif op == Op.setitem:
         op, flat_node_args = setitem_process(node, flat_node_args)
         if op == Op.python_call:
-            module_name = node.target.__module__
-            op_name = node.target.__name__
-            flat_node_args = [module_name, op_name] + flat_node_args
+            flat_node_args = _build_python_call_args(node, flat_node_args)
 
     hook_func = get_arg_mapping_hook(op) or get_arg_mapping_hook(node.target)
     if hook_func is not None:
