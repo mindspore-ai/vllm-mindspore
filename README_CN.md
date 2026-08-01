@@ -162,6 +162,7 @@ bash tests/ut/runtest.sh cpp
 
 | 变量 | 作用 |
 | --- | --- |
+| `MS_INFERRT_DISABLE_CAST_ELIMINATION` | 置为 `1` 时关闭 no-op cast 消除，该 pass 默认开启。 |
 | `MS_INFERRT_DISABLE_VIEW_OPS` | 关闭指定 view 算子的零拷贝实现，回退到非 view 路径，用于排障与对比。取值为逗号分隔的算子名，或 `all`。详见 [view 特性使用说明](./docs/inferrt_view.md) |
 | `MS_INFERRT_DEV_DUMP_IR` | 置为 `1` 时 dump 编译生成的 IR，便于调试 |
 

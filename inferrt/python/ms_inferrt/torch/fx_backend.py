@@ -45,6 +45,7 @@ from ms_inferrt.torch.utils import (
 from ms_inferrt.torch.getitem_impl import getitem_process
 from ms_inferrt.torch.setitem_impl import setitem_process
 from ms_inferrt.torch.decompose_impl import _decompose_ops_with_fake_mode
+from ms_inferrt.torch.cast_elimination import eliminate_noop_casts_
 from ms_inferrt.torch.copy_elimination import eliminate_redundant_copy_
 from ms_inferrt.torch.full_decomposition import decompose_full_
 from ms_inferrt.torch.dvm_adapter import lower_compiled_kernel_dvm_node
@@ -3186,6 +3187,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     _remove_matched_nodes(gm, _OP_MATCHERS)
     if is_enable_dump_ir():
         write_gm_graph(gm, graph_id, get_ir_file_name())
+    eliminate_noop_casts_(gm)
     eliminate_redundant_copy_(gm)
     decompose_full_(gm)
     _decompose_ops_with_fake_mode(gm)
