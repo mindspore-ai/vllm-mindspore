@@ -1,5 +1,6 @@
 """Setup script for InferRT Python package."""
 
+import datetime
 import os
 import shutil
 import subprocess
@@ -107,7 +108,24 @@ class BuildPyWithExt(build_py):
         self.run_command("build_ext")
 
 
+def get_short_commit_id():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode("utf-8").strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
+
+
+build_date = datetime.datetime.now().strftime("%Y%m%d")
+commit_id = get_short_commit_id()
+
+
 setup(
+    description=(
+        f"InferRT - High-performance inference runtime for machine learning models. "
+        f"(built {build_date}, commit {commit_id})."
+    ),
     cmdclass={
         "build_ext": CMakeBuild,
         "build_py": BuildPyWithExt,
