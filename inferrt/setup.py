@@ -117,11 +117,19 @@ def get_short_commit_id():
         return "unknown"
 
 
+def get_version_str():
+    ver = "0.1"
+    if int(os.environ.get('BUILD_PUBLISH_PKG', '0')) == 1:
+        return ver
+    return f'{ver}.dev+{get_short_commit_id()}'
+
+
 build_date = datetime.datetime.now().strftime("%Y%m%d")
 commit_id = get_short_commit_id()
 
 
 setup(
+    version=f"{get_version_str()}",
     description=(
         f"InferRT - High-performance inference runtime for machine learning models. "
         f"(built {build_date}, commit {commit_id})."
