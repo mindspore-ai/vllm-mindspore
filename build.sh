@@ -13,6 +13,7 @@ usage()
   echo "    -h Print usage"
   echo "    -i Enable increment building, default off"
   echo "    -D Debug version, default release version"
+  echo "    -P Build publishable package, the package name does not include git commit id"
   echo "    -t Build and run tests, default off"
   echo "    -f Enable frontend, default compile all frontend"
   echo "    -b Enable backend, default compile cpu backend"
@@ -30,14 +31,16 @@ process_options()
     export ENABLE_MINDSPORE_FRONT=1
     export ENABLE_TORCH_FRONT=1
     export BUILD_OPT=0 # Default disable optimizer for now
-    export BUILD_JOBS=8 
+    export BUILD_JOBS=8
+    export BUILD_PUBLISH_PKG=0
 
-    while getopts 'Dhitf:b:eOj:s:' OPT; do
+    while getopts 'DPhitf:b:eOj:s:' OPT; do
         case $OPT in
             D)
                 # Debug version or not.
                 # -D
                 export DEBUG="-DDEBUG=on";;
+            P) export BUILD_PUBLISH_PKG=1;;
             i) export INC_BUILD=1;;
             t) export BUILD_TESTS=1;;
             O) export BUILD_OPT=1;;
