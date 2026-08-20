@@ -44,7 +44,7 @@ def inplace_copy_non_contiguous_op(dst, src):
     return dst_permuted
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (64, 128), (256, 512)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_inplace_copy_tensor_tensor(shape, dtype):
@@ -54,7 +54,6 @@ def test_inplace_copy_tensor_tensor(shape, dtype):
     Expectation: The result is correct and dst is modified in-place
     """
     compiled_op = torch.compile(inplace_copy_op, backend=backend)
-    prec = 0.001 if dtype == np.float16 else 0.0001
 
     cpu_dst = np.random.uniform(-1, 1, shape).astype(dtype)
     cpu_src = np.random.uniform(0.5, 2, shape).astype(dtype)
@@ -69,10 +68,10 @@ def test_inplace_copy_tensor_tensor(shape, dtype):
 
     npu_output = compiled_op(npu_dst, npu_src)
 
-    AssertRtolEqual(cpu_output.detach().numpy(), npu_output.detach().cpu().numpy(), prec)
+    AssertRtolEqual(cpu_output.detach().numpy(), npu_output.detach().cpu().numpy())
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(4, 8), (16, 32), (2, 4, 8)])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_inplace_copy_different_shapes(dtype, shape):
@@ -82,7 +81,6 @@ def test_inplace_copy_different_shapes(dtype, shape):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(inplace_copy_op, backend=backend)
-    prec = 0.001 if dtype in (torch.float16, torch.bfloat16) else 0.0001
 
     dst_npu = torch.randn(shape, dtype=dtype).npu()
     src_npu = torch.randn(shape, dtype=dtype).npu()
@@ -93,7 +91,7 @@ def test_inplace_copy_different_shapes(dtype, shape):
     expected = inplace_copy_op(dst_ref, src_ref)
 
     npu_output = compiled_op(dst_npu, src_npu)
-    AssertRtolEqual(expected.detach().cpu().numpy(), npu_output.detach().cpu().numpy(), prec)
+    AssertRtolEqual(expected.detach().cpu(), npu_output.detach().cpu())
 
 
 @arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
@@ -106,7 +104,6 @@ def test_inplace_copy_dynamic(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(inplace_copy_op_dynamic, backend=backend)
-    prec = 0.001 if dtype == np.float16 else 0.0001
 
     cpu_dst = np.random.uniform(-1, 1, shape).astype(dtype)
     cpu_src = np.random.uniform(0.5, 2, shape).astype(dtype)
@@ -119,10 +116,10 @@ def test_inplace_copy_dynamic(shape, dtype):
     cpu_output = inplace_copy_op_dynamic(cpu_dst_ref, cpu_src_ref).detach().numpy()
 
     npu_output = compiled_op(npu_dst, npu_src).detach().cpu().numpy()
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_inplace_copy_non_contiguous(dtype):
     """
@@ -132,7 +129,6 @@ def test_inplace_copy_non_contiguous(dtype):
     """
     shape = (4, 8)
     compiled_op = torch.compile(inplace_copy_non_contiguous_op, backend=backend)
-    prec = 0.001 if dtype in (torch.float16, torch.bfloat16) else 0.0001
 
     dst_npu = torch.randn(shape, dtype=dtype).npu()
     src_npu = torch.randn(shape, dtype=dtype).npu()
@@ -143,10 +139,10 @@ def test_inplace_copy_non_contiguous(dtype):
     expected = inplace_copy_non_contiguous_op(dst_ref, src_ref)
 
     npu_output = compiled_op(dst_npu, src_npu)
-    AssertRtolEqual(expected.detach().cpu().numpy(), npu_output.detach().cpu().numpy(), prec)
+    AssertRtolEqual(expected.detach().cpu(), npu_output.detach().cpu())
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("shape", [(1, 8), (2, 4, 8), (1, 8, 16, 32)])
 def test_inplace_copy_edge_shapes(dtype, shape):
@@ -156,7 +152,6 @@ def test_inplace_copy_edge_shapes(dtype, shape):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(inplace_copy_op, backend=backend)
-    prec = 0.001 if dtype in (torch.float16, torch.bfloat16) else 0.0001
 
     dst_npu = torch.randn(shape, dtype=dtype).npu()
     src_npu = torch.randn(shape, dtype=dtype).npu()
@@ -166,4 +161,4 @@ def test_inplace_copy_edge_shapes(dtype, shape):
     expected = inplace_copy_op(dst_ref, src_ref)
 
     npu_output = compiled_op(dst_npu, src_npu)
-    AssertRtolEqual(expected.detach().cpu().numpy(), npu_output.detach().cpu().numpy(), prec)
+    AssertRtolEqual(expected.detach().cpu(), npu_output.detach().cpu())

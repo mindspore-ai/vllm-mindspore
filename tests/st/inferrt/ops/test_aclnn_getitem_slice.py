@@ -105,13 +105,6 @@ def slice_dynamic_multi_dim_op(x):
 # Helper
 # ============================================================================
 
-def _get_prec(dtype):
-    """Get precision tolerance based on dtype."""
-    if dtype in (np.float16, np.bfloat16):
-        return 0.001
-    return 0.0001
-
-
 def _to_np_dtype(torch_dtype):
     """Convert torch dtype to numpy dtype."""
     mapping = {
@@ -127,7 +120,7 @@ def _to_np_dtype(torch_dtype):
 # Static shape tests
 # ============================================================================
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(16,), (32,), (64,)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_basic(shape, dtype):
@@ -137,7 +130,6 @@ def test_getitem_slice_basic(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_basic_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -145,10 +137,10 @@ def test_getitem_slice_basic(shape, dtype):
     cpu_output = slice_basic_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (16, 32), (64, 128)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_2d_basic(shape, dtype):
@@ -158,7 +150,6 @@ def test_getitem_slice_2d_basic(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_basic_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -166,10 +157,10 @@ def test_getitem_slice_2d_basic(shape, dtype):
     cpu_output = slice_basic_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (16, 32)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_with_step(shape, dtype):
@@ -179,7 +170,6 @@ def test_getitem_slice_with_step(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_with_step_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -187,10 +177,10 @@ def test_getitem_slice_with_step(shape, dtype):
     cpu_output = slice_with_step_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (16, 32)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_negative_indices(shape, dtype):
@@ -200,7 +190,6 @@ def test_getitem_slice_negative_indices(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_negative_indices_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -208,10 +197,10 @@ def test_getitem_slice_negative_indices(shape, dtype):
     cpu_output = slice_negative_indices_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_multi_dim(dtype):
     """
@@ -221,7 +210,6 @@ def test_getitem_slice_multi_dim(dtype):
     """
     shape = (8, 16)
     compiled_op = torch.compile(slice_multi_dim_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -229,10 +217,10 @@ def test_getitem_slice_multi_dim(dtype):
     cpu_output = slice_multi_dim_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_3d(dtype):
     """
@@ -242,7 +230,6 @@ def test_getitem_slice_3d(dtype):
     """
     shape = (4, 8, 16)
     compiled_op = torch.compile(slice_3d_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -250,10 +237,10 @@ def test_getitem_slice_3d(dtype):
     cpu_output = slice_3d_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_4d(dtype):
     """
@@ -263,7 +250,6 @@ def test_getitem_slice_4d(dtype):
     """
     shape = (2, 4, 8, 16)
     compiled_op = torch.compile(slice_4d_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -271,10 +257,10 @@ def test_getitem_slice_4d(dtype):
     cpu_output = slice_4d_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_full_dim_with_step(dtype):
     """
@@ -284,7 +270,6 @@ def test_getitem_slice_full_dim_with_step(dtype):
     """
     shape = (8, 16)
     compiled_op = torch.compile(slice_full_dim_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -292,14 +277,14 @@ def test_getitem_slice_full_dim_with_step(dtype):
     cpu_output = slice_full_dim_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
 # ============================================================================
 # Dynamic shape tests
 # ============================================================================
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8,), (4, 8), (16, 32), (64, 128), (2, 4, 8)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_dynamic(shape, dtype):
@@ -309,7 +294,6 @@ def test_getitem_slice_dynamic(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_dynamic_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -317,10 +301,10 @@ def test_getitem_slice_dynamic(shape, dtype):
     cpu_output = slice_dynamic_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(4, 8), (16, 32), (64, 128)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_dynamic_2d(shape, dtype):
@@ -330,7 +314,6 @@ def test_getitem_slice_dynamic_2d(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_dynamic_2d_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -338,10 +321,10 @@ def test_getitem_slice_dynamic_2d(shape, dtype):
     cpu_output = slice_dynamic_2d_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(4, 8), (16, 32)])
 @pytest.mark.parametrize("dtype", [np.float32, np.float16])
 def test_getitem_slice_dynamic_multi_dim(shape, dtype):
@@ -351,7 +334,6 @@ def test_getitem_slice_dynamic_multi_dim(shape, dtype):
     Expectation: The result is correct
     """
     compiled_op = torch.compile(slice_dynamic_multi_dim_op, backend=backend)
-    prec = _get_prec(dtype)
 
     cpu_input = np.random.uniform(-1, 1, shape).astype(dtype)
     npu_input = torch.from_numpy(cpu_input).npu()
@@ -359,14 +341,14 @@ def test_getitem_slice_dynamic_multi_dim(shape, dtype):
     cpu_output = slice_dynamic_multi_dim_op(torch.from_numpy(cpu_input)).detach().numpy()
     npu_output = compiled_op(npu_input).detach().cpu().numpy()
 
-    AssertRtolEqual(cpu_output, npu_output, prec)
+    AssertRtolEqual(cpu_output, npu_output)
 
 
 # ============================================================================
 # bfloat16 tests
 # ============================================================================
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 @pytest.mark.parametrize("shape", [(8, 16), (16, 32)])
 def test_getitem_slice_bfloat16(shape):
     """
@@ -389,7 +371,7 @@ def test_getitem_slice_bfloat16(shape):
     AssertRtolEqual(expected.detach().cpu(), npu_output.detach().cpu(), 0.001)
 
 
-@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level1", card_mark="onecard", essential_mark="essential")
+@arg_mark(plat_marks=["platform_ascend910b"], level_mark="level0", card_mark="onecard", essential_mark="essential")
 def test_getitem_slice_int32():
     """
     Feature: Test aclnn getitem_slice with int32
