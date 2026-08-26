@@ -3246,6 +3246,7 @@ def backend(gm: GraphModule, example_inputs: List[torch.Tensor]):
     ]
 
     def compiled_callable(*inputs: torch.Tensor):
+        _debug_print("[InferRT] Run graph", graph_id)
         set_device_context()
         update_runtime_inputs(
             ms_inferrt_input_nodes,
