@@ -16,6 +16,8 @@
 
 import os
 
+import pytest
+
 from tests.mark_utils import arg_mark
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,6 +47,10 @@ def test_moe_distribute_combine_v2_basic():
     level_mark="level0",
     card_mark="allcards",
     essential_mark="essential",
+)
+@pytest.mark.skip(
+    reason="New CANN rejects tp_world_size>=2 for MoeDistributeDispatchV2/CombineV2 (must be < 2). "
+    "See https://gitcode.com/mindspore/fxrt/issues/5"
 )
 def test_moe_distribute_combine_v2_with_tp():
     """
