@@ -1060,7 +1060,6 @@ class Phi4MMForCausalLM(NativeModel, SupportsLoRA, SupportsMultiModal):
     def _process_image_input(self, image_input: Phi4MMImagePixelInputs) -> List[ms.Tensor]:
         dtype = self.vision_encoder.parameters_dict()["img_projection.0.weight"].dtype
         pixel_values = image_input['data'].astype(dtype)
-        np.save("debug_pixel_values.npy", pixel_values.cpu().numpy())
         image_sizes = image_input['image_sizes']
         image_attention_mask = image_input['image_attention_mask']
         image_embeds = self.vision_encoder(pixel_values, image_sizes, image_attention_mask)

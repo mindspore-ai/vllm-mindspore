@@ -26,8 +26,6 @@
 
 from collections.abc import Iterable
 from typing import Optional
-import warnings
-
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
@@ -47,6 +45,7 @@ from vllm_mindspore.model_executor.layers.linear import (
     RowParallelLinear,
 )
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.distributed import get_tensor_model_parallel_world_size
 from vllm_mindspore.model_executor.model_loader.weight_utils import default_weight_loader
 
 
@@ -134,8 +133,11 @@ class Idefics2VisionAttention(nn.Cell):
         self.scale = self.head_dim ** -0.5
         self.dropout = config.attention_dropout
 
-        tp_size = 1
-        warnings.warn("Idefics2VisionAttention currently only supports tp_size=1.")
+        tp_size = get_tensor_model_parallel_world_size()
+        if tp_size != 1:
+            raise NotImplementedError(
+                "Idefics2VisionAttention currently only supports "
+                f"tensor_parallel_size=1, but got tp_size={tp_size}.")
         self.num_heads_per_partition = self.num_heads // tp_size
 
         self.qkv_proj = QKVParallelLinear(

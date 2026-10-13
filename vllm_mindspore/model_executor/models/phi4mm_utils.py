@@ -1220,7 +1220,7 @@ class NemoConvSubsampling(nn.Cell):
             if new_t == 0:
                 new_t = 1
 
-            x = self.channel_chunked_conv(self.conv[i * 3 + 2], new_c, x)
+            x = self.channel_chunked_conv_ms(self.conv[i * 3 + 2], new_c, x)
             
             chunks = mint.split(x, new_t, dim=2)
             x = mint.concat([self.conv[i * 3 + 3](chunk) for chunk in chunks], dim=2)
