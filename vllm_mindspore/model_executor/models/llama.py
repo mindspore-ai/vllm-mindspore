@@ -492,13 +492,7 @@ class LlamaForCausalLM(NativeModel, SupportsPP, SupportsLoRA):
                 self.unpadded_vocab_size,
                 self.config.hidden_size,
                 org_num_embeddings=self.config.vocab_size,
-                padding_size=(
-                    DEFAULT_VOCAB_PADDING_SIZE
-                    # We need bigger padding if using lora for kernel
-                    # compatibility
-                    # if not self.lora_config else
-                    # self.lora_config.lora_vocab_padding_size
-                    ),
+                padding_size=DEFAULT_VOCAB_PADDING_SIZE,
                 quant_config=quant_config,
                 prefix=maybe_prefix(prefix, "lm_head"),
             )

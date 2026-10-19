@@ -72,7 +72,6 @@ def _create_lora_modules(self):
         if not self._match_target_modules(module_name):
             continue
         # A temporary approach for multimodal models to support LoRA
-        # TODO: Remove this restriction
         if self._filter_unsupported_mm_module(module_name):
             logger.warning(
                 "Regarding multimodal models, vLLM currently only supports "
