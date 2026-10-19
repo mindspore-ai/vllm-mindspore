@@ -49,7 +49,7 @@ else:
 from mindspore import Tensor, nn, ops
 from vllm.config import VllmConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.model_executor.models.interfaces import SupportsPP
+from vllm.model_executor.models.interfaces import SupportsPP, SupportsLoRA
 from vllm.sequence import IntermediateTensors
 
 from vllm_mindspore.model_executor.layers.activation import SiluAndMul
@@ -183,6 +183,7 @@ class LlamaAttention(nn.Cell):
             base=rope_theta,
             rope_scaling=rope_scaling,
             is_neox_style=is_neox_style,
+            partial_rotary_factor=partial_rotary_factor,
         )
 
         if hasattr(config, "interleaved_sliding_window"):
@@ -325,8 +326,6 @@ class LlamaDecoderLayer(nn.Cell):
 
 
 class LlamaModel(nn.Cell):
-    SUPPORT_LORA = False
-    SUPPORT_PP = False
 
     def __init__(
         self,
@@ -339,12 +338,15 @@ class LlamaModel(nn.Cell):
         config = vllm_config.model_config.hf_config
         self.config = config
         self.padding_idx = config.pad_token_id
-        self.vocab_size = config.vocab_size
-        self.org_vocab_size = config.vocab_size
+        
         quant_config = vllm_config.quant_config
         self.quant_config = quant_config
         cache_config = vllm_config.cache_config  # noqa: F841
         lora_config = vllm_config.lora_config  # noqa: F841
+
+        lora_vocab = lora_config.lora_extra_vocab_size if lora_config else 0
+        self.vocab_size = config.vocab_size + lora_vocab
+        self.org_vocab_size = config.vocab_size
 
         if get_pp_group().is_first_rank or (config.tie_word_embeddings
                                             and get_pp_group().is_last_rank):
@@ -456,27 +458,41 @@ class LlamaModel(nn.Cell):
         return loaded_params
 
 
-class LlamaForCausalLM(NativeModel, SupportsPP):
+class LlamaForCausalLM(NativeModel, SupportsPP, SupportsLoRA):
+
+    packed_modules_mapping = {
+        "qkv_proj": ["q_proj", "k_proj", "v_proj"],
+        "gate_up_proj": ["gate_proj", "up_proj"]
+    }
+
+    # LoRA specific attributes
+    embedding_modules = {
+        "embed_tokens": "input_embeddings",
+        "lm_head": "output_embeddings"
+    }
+    embedding_padding_modules = ["lm_head"]
 
     def __init__(self, vllm_config, prefix: str = ""):
         super().__init__(vllm_config=vllm_config, prefix=prefix)
+
+        config = vllm_config.model_config.hf_config
+        lora_config = vllm_config.lora_config
+        self.config = config
+        self.lora_config = lora_config
 
         quant_config = vllm_config.quant_config
         self.model = LlamaModel(vllm_config=vllm_config)
 
         if get_pp_group().is_last_rank:
             self.unpadded_vocab_size = self.config.vocab_size
+            if lora_config:
+                self.unpadded_vocab_size += lora_config.lora_extra_vocab_size
 
             self.lm_head = ParallelLMHead(
                 self.unpadded_vocab_size,
                 self.config.hidden_size,
                 org_num_embeddings=self.config.vocab_size,
-                padding_size=(
-                    DEFAULT_VOCAB_PADDING_SIZE
-                    # We need bigger padding if using lora for kernel
-                    # compatibility
-                    if not self.lora_config else
-                    self.lora_config.lora_vocab_padding_size),
+                padding_size=DEFAULT_VOCAB_PADDING_SIZE,
                 quant_config=quant_config,
                 prefix=maybe_prefix(prefix, "lm_head"),
             )

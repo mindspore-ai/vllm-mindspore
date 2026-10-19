@@ -48,6 +48,74 @@ def register_module(self, module_name: str, module: "BaseLayerWithLoRA"):
     assert isinstance(module, BaseLayerWithLoRA)
     self.modules[module_name] = module
 
+from vllm_mindspore.lora.models import BaseLayerWithLoRA
+from vllm.lora.utils import from_layer, from_layer_logits_processor
+from vllm.model_executor.models.utils import PPMissingLayer
+from vllm.logger import init_logger
+from vllm.lora.utils import replace_submodule
+
+logger = init_logger(__name__)
+
+def _create_lora_modules(self):
+
+    def _parent_module(module_name: str) -> str:
+        # module name is a dot separated name.
+        # for example:
+        #  - given an input 'x.y.z' return 'x.y'
+        #  - given an input 'x' return ''
+        return module_name.rpartition('.')[0]
+
+    for module_name, module in self.model.named_modules(
+            remove_duplicate=False):
+        if isinstance(module, PPMissingLayer):
+            continue
+        if not self._match_target_modules(module_name):
+            continue
+        # A temporary approach for multimodal models to support LoRA
+        if self._filter_unsupported_mm_module(module_name):
+            logger.warning(
+                "Regarding multimodal models, vLLM currently only supports "
+                "adding LoRA to language model, %s will be ignored.",
+                module_name,
+            )
+            continue
+        parts = module_name.split(".")[-1]
+        packed_moduled_lst = self.packed_modules_mapping.get(parts, [])
+        new_module = replace_submodule(
+            self.model, module_name,
+            from_layer(module, self.lora_slots, self.lora_config,
+                        packed_moduled_lst, self.model.config))
+
+        # (yard1): TODO make this more robust
+        if "lm_head" in module_name:
+            logits_processor_module_name = 'logits_processor'
+            parent_module = _parent_module(module_name)
+            if parent_module:
+                logits_processor_module_name = (
+                    f"{parent_module}.{logits_processor_module_name}")
+
+            logits_processor_module = self.model.get_submodule(
+                logits_processor_module_name)
+
+            new_module = replace_submodule(
+                self.model, logits_processor_module_name,
+                from_layer_logits_processor(logits_processor_module,
+                                            module, self.lora_slots,
+                                            self.lora_config,
+                                            self.model.config))
+
+        # In some models, especially multimodal ones, layers with the same
+        # name may have different types, such as nn.Linear and
+        # ReplicatedLinear. The nn.Linear layers cannot be replaced with
+        # LoRA layers, leading to assertion error. The following check
+        # aims to prevent this error
+        if self.supports_mm and not isinstance(new_module,
+                                                BaseLayerWithLoRA):
+            continue
+        self.register_module(module_name, new_module)
+        self._register_packed_modules(module_name)
+        # All lora layers share the same punica_wrapper based on reference.
+        new_module.set_mapping(self.punica_wrapper)
 
 @classmethod  #type:ignore
 def from_lora_tensors(
