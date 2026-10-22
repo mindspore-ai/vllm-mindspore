@@ -66,7 +66,7 @@ Please refer to [Quick Start](https://www.mindspore.cn/vllm_mindspore/docs/en/ma
 
 ## Image build
 
-A Docker image for vLLM-MindSpore Plugin deployment can be built using the following command. Use the -a parameter to specify the corresponding Ascend device type. `device_type` indicates the device type: `910b` refers to the Atlas A2 series, and `310p` refers to the Atlas 300I Pro/Duo or Atlas 300V Pro series, default is `910b`:
+A Docker image for vLLM-MindSpore Plugin deployment can be built using the following command. Use the -a parameter to specify the corresponding Huawei Ascend device type. `device_type` indicates the device type: `910b` refers to the Atlas A2 series, and `310p` refers to the Atlas 300I Pro/Duo or Atlas 300V Pro series, default is `910b`:
 
 ```bash
 bash build_image.sh -a device_type
