@@ -1,6 +1,6 @@
 # MS-InferRT
 
-MS-InferRT is a lightweight, high-performance runtime for the inference phase. It lowers PyTorch graphs (via `torch.compile`) onto its own IR and runtime, executing them on Ascend / CPU backends. It focuses on inference latency and memory reuse, with native support for zero-copy view operators.
+MS-InferRT is a lightweight, high-performance runtime for the inference phase. It lowers PyTorch graphs (via `torch.compile`) onto its own IR and runtime, executing them on Huawei Ascend / CPU backends. It focuses on inference latency and memory reuse, with native support for zero-copy view operators.
 
 > 中文文档：[README_CN.md](./README_CN.md)
 
@@ -20,7 +20,7 @@ MS-InferRT is a lightweight, high-performance runtime for the inference phase. I
 The shortest path from source to a running inference example:
 
 ```bash
-# 1. Build the Ascend backend wheel (parallelism 64)
+# 1. Build the Huawei Ascend backend wheel (parallelism 64)
 bash build.sh -b ascend -j64
 
 # 2. Install the build output
@@ -36,13 +36,13 @@ For the CPU backend, replace `-b ascend` with `-b cpu` (or omit it; CPU is the d
 
 - GCC >= 9.0
 - Python 3.9+
-- Ascend backend requires a matching CANN release and `torch-npu`
+- Huawei Ascend backend requires a matching CANN release and `torch-npu`
 
 Runtime dependencies (`requirements_ascend.txt` / `requirements_cpu.txt`):
 
 ```text
 torch==2.9.0
-torch-npu==2.9.0   # Ascend backend only
+torch-npu==2.9.0   # Huawei Ascend backend only
 numpy>=1.26.0
 pyyaml
 ```
@@ -110,7 +110,7 @@ def model(x, y):
     return torch.relu(z)
 
 
-# For the Ascend backend, move tensors to npu; drop .npu() for the CPU backend
+# For the Huawei Ascend backend, move tensors to npu; drop .npu() for the CPU backend
 x = torch.randn(2, 8).npu()
 y = torch.randn(2, 8).npu()
 
@@ -130,10 +130,10 @@ Key points:
 ### System Tests (ST)
 
 ```bash
-# Default (Ascend and CPU)
+# Default (Huawei Ascend and CPU)
 bash tests/st/runtest.sh
 
-# Ascend only
+# Huawei Ascend only
 bash tests/st/runtest.sh ascend
 
 # CPU only
