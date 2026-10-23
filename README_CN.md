@@ -1,6 +1,6 @@
 # MS-InferRT
 
-MS-InferRT 是面向推理阶段的轻量、高性能运行时。它将 PyTorch 计算图（`torch.compile`）下沉到自有 IR 与运行时，在 Ascend / CPU 后端执行，重点优化推理时延与内存复用，并原生支持 view 类零拷贝算子。
+MS-InferRT 是面向推理阶段的轻量、高性能运行时。它将 PyTorch 计算图（`torch.compile`）下沉到自有 IR 与运行时，在 Huawei Ascend / CPU 后端执行，重点优化推理时延与内存复用，并原生支持 view 类零拷贝算子。
 
 > English version: [README.md](./README.md)
 
@@ -20,7 +20,7 @@ MS-InferRT 是面向推理阶段的轻量、高性能运行时。它将 PyTorch 
 从源码构建到跑通一个推理示例，最短路径如下：
 
 ```bash
-# 1. 构建 Ascend 后端 wheel 包（并发度 64）
+# 1. 构建 Huawei Ascend 后端 wheel 包（并发度 64）
 bash build.sh -b ascend -j64
 
 # 2. 安装构建产物
@@ -36,13 +36,13 @@ CPU 后端把 `-b ascend` 换成 `-b cpu`（或省略，默认即 CPU）。
 
 - GCC >= 9.0
 - Python 3.9+
-- Ascend 后端需安装匹配版本的 CANN 与 `torch-npu`
+- Huawei Ascend 后端需安装匹配版本的 CANN 与 `torch-npu`
 
 运行依赖（`requirements_ascend.txt` / `requirements_cpu.txt`）：
 
 ```text
 torch==2.9.0
-torch-npu==2.9.0   # 仅 Ascend 后端
+torch-npu==2.9.0   # 仅 Huawei Ascend 后端
 numpy>=1.26.0
 pyyaml
 ```
@@ -110,7 +110,7 @@ def model(x, y):
     return torch.relu(z)
 
 
-# Ascend 后端将张量放到 npu，CPU 后端去掉 .npu() 即可
+# Huawei Ascend 后端将张量放到 npu，CPU 后端去掉 .npu() 即可
 x = torch.randn(2, 8).npu()
 y = torch.randn(2, 8).npu()
 
@@ -130,10 +130,10 @@ print(out.shape)
 ### 系统测试（ST）
 
 ```bash
-# 默认（Ascend 与 CPU）
+# 默认（Huawei Ascend 与 CPU）
 bash tests/st/runtest.sh
 
-# 仅 Ascend
+# 仅 Huawei Ascend
 bash tests/st/runtest.sh ascend
 
 # 仅 CPU
